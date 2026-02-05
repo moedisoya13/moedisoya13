@@ -1,0 +1,42 @@
+@import "tailwindcss";
+
+/* Base Layer */
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    background-color: #f9fafb;
+    color: #111827;
+    min-height: 100vh;
+    font-family: system-ui, -apple-system, sans-serif;
+    line-height: 1.625;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-weight: 600;
+    line-height: 1.25;
+  }
+}
+
+/* Component Layer */
+@layer components {
+  /* Amount Display */
+  .amount {
+    font-family: ui-monospace, monospace;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .amount-lg {
+    font-size: 1.5rem;
+    letter-spacing: -0.025em;
+  }
+
+  .amount-xl {
+    font-size: 1.875rem;
+    letter-spacing: -0.025em;
+  }
+}
