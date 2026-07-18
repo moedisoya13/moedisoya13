@@ -1,0 +1,40 @@
+<!--
+  Compile-check shim for the WinForms app on non-Windows build hosts.
+
+  The Ubuntu/source-built .NET SDK ships without the WindowsDesktop SDK, so
+  src/Capsomnia cannot build on Linux even with EnableWindowsTargeting. This
+  project compiles the exact same sources against the Microsoft.WindowsDesktop.App
+  reference assemblies from NuGet, so `dotnet build` on Linux still type-checks
+  the GUI code. It produces no runnable output; ship builds come from
+  src/Capsomnia on Windows.
+-->
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Capsomnia.App</RootNamespace>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- CA1416: the sources are Windows-only by design; the real project targets net8.0-windows. -->
+    <NoWarn>$(NoWarn);CA1416</NoWarn>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\src\Capsomnia\**\*.cs" />
+    <Using Include="System.Windows.Forms" />
+    <Using Include="System.Drawing" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Capsomnia.Core\Capsomnia.Core.csproj" />
+    <PackageReference Include="Microsoft.WindowsDesktop.App.Ref" Version="8.0.29" GeneratePathProperty="true" ExcludeAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="$(PkgMicrosoft_WindowsDesktop_App_Ref)\ref\net8.0\*.dll" Private="false" />
+  </ItemGroup>
+
+</Project>
