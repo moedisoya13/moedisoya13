@@ -15,7 +15,12 @@
       "Bash(git add:*)",
       "Bash(git commit -m \"$\\(cat <<''EOF''\nfeat: 주택담보대출 비교 계산기 초기 버전\n\n- 최대 3개 은행 대출 조건 동시 비교\n- 원리금균등상환 방식 계산\n- 고정금리/변동금리 지원\n- 중도상환수수료 시뮬레이션\n- Tailwind CSS 기반 반응형 UI\n- Chart.js 상환 스케줄 시각화\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
       "Bash(npm cache clean:*)",
-      "Bash(git commit -m \"$\\(cat <<''EOF''\nfeat: 주택담보대출 비교 계산기 초기 버전\n\n- 최대 3개 은행 대출 조건 동시 비교\n- 원리금균등상환 방식 계산\n- 중도상환수수료 시뮬레이션\n- Tailwind CSS 반응형 UI\n- Chart.js 상환 스케줄 시각화\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")"
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nfeat: 주택담보대출 비교 계산기 초기 버전\n\n- 최대 3개 은행 대출 조건 동시 비교\n- 원리금균등상환 방식 계산\n- 중도상환수수료 시뮬레이션\n- Tailwind CSS 반응형 UI\n- Chart.js 상환 스케줄 시각화\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(dotnet --version)",
+      "Bash(git -C /home/user/moedisoya13 status --short --branch)",
+      "Read(//usr/share/**)",
+      "Bash(curl -sSL https://dot.net/v1/dotnet-install.sh -o /tmp/claude-0/-home-user-moedisoya13/0b69402b-8191-5dc5-8cdc-468e69ccfc36/scratchpad/dotnet-install.sh)",
+      "Bash(apt-get install *)"
     ]
   }
 }
