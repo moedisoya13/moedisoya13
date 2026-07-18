@@ -15,7 +15,7 @@ Like the original, this port makes no network requests, collects no telemetry, a
 Requirements:
 
 - Windows 10/11 (x64) laptop
-- [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) to build (the installer can bundle the runtime with `-SelfContained`)
+- [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) to build (the installer can bundle the runtime with `-SelfContained`)
 - An administrator account for installation
 
 Install from source:
@@ -56,7 +56,7 @@ The helper backs up your current lid-close setting before changing it and restor
 ```sh
 dotnet build Capsomnia.sln        # cross-platform: core, helper, tests, GUI compile check
 dotnet test Capsomnia.sln         # unit tests for parser / state machine / preferences / strings
-dotnet build src/Capsomnia        # the real WinForms app — requires a Windows .NET SDK
+dotnet build src/Capsomnia        # the real WinForms app — requires a Windows .NET 10 SDK
 ```
 
 The solution builds on Linux/macOS too: `tests/Capsomnia.App.CompileCheck` type-checks the GUI sources against the WindowsDesktop reference assemblies, since only a Windows SDK can produce the runnable `Capsomnia.exe`.

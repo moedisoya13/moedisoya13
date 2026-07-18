@@ -12,7 +12,7 @@
 
 [CmdletBinding()]
 param(
-    # Bundle the .NET runtime into the install so no .NET 8 Desktop Runtime is needed.
+    # Bundle the .NET runtime into the install so no .NET 10 Desktop Runtime is needed.
     [switch]$SelfContained
 )
 
