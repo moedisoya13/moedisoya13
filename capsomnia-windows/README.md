@@ -63,6 +63,14 @@ The solution builds on Linux/macOS too: `tests/Capsomnia.App.CompileCheck` type-
 
 ### Verifying on a real Windows machine
 
+After installing, run the automated checklist from an elevated PowerShell — it verifies the installation, then walks you through toggling Caps Lock and reports PASS/FAIL for each check:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\verify.ps1
+```
+
+Or manually:
+
 1. Turn Caps Lock **on** → `powercfg /requests` lists a SYSTEM request from Capsomnia, and `powercfg /query SCHEME_CURRENT SUB_BUTTONS LIDACTION` shows index `0x00000000` for AC and DC. Tray dot is green.
 2. Close the lid → the machine stays reachable (e.g. over SSH/RDP); with the display preference on, screens turn off.
 3. Turn Caps Lock **off** → the lid action indexes return to their previous values. Tray dot is gray.
