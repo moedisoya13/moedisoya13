@@ -1,4 +1,4 @@
-# Capsomnia for Windows — source installer.
+﻿# Capsomnia for Windows — source installer.
 # Windows counterpart of the original scripts/install.sh: builds the app,
 # installs it with the privileged lid-close helper, and enables start-at-login.
 #

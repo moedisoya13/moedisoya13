@@ -1,4 +1,4 @@
-# Capsomnia for Windows — uninstaller.
+﻿# Capsomnia for Windows — uninstaller.
 # Restores the lid-close action, removes the helper tasks, autostart entry,
 # installed files, and state. Run from an elevated PowerShell.
 

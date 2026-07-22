@@ -1,4 +1,4 @@
-# Capsomnia for Windows — on-device verification.
+﻿# Capsomnia for Windows — on-device verification.
 # Automates the README's "Verifying on a real Windows machine" checklist.
 # Run from an elevated PowerShell (powercfg /requests needs it):
 #   powershell -ExecutionPolicy Bypass -File scripts\verify.ps1
