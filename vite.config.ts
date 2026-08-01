@@ -12,6 +12,15 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
+    // mobile-collect/ 는 의존성 없는 자립형 키트로 node:test를 쓴다.
+    // 실행: cd mobile-collect && npm test
+    exclude: [
+      '**/node_modules/**',
+      '**/dist/**',
+      '**/cypress/**',
+      '**/.{idea,git,cache,output,temp}/**',
+      'mobile-collect/**',
+    ],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
