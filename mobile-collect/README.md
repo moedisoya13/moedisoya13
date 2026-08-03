@@ -102,6 +102,8 @@ cd mobile-collect
 npm test              # node --test, 의존성 설치 불필요
 npm run build:snippet # extract.js를 고쳤으면 반드시 실행
 npm run check:snippet # 스니펫이 최신인지 확인만
+npm run dump:markers  # extract.js의 차단 마커를 pc-side/markers.json으로 (PC측 확인 3용)
+npm run check:markers # markers.json이 최신인지 확인만
 ```
 
 `extract.js`(순수 함수)와 브라우저 래퍼를 분리한 것은 `parse.py` / `collect.py` 분리와 같은
@@ -117,3 +119,11 @@ npm run check:snippet # 스니펫이 최신인지 확인만
 
 이 폴더를 통째로 `NewPipe` 저장소 루트에 복사하면 됩니다. 의존성이 없어 그대로 동작합니다.
 PC측(Python)에서 확인·수정할 것은 **`pc-side/NOTES.md`**에 정리돼 있습니다.
+
+복사한 뒤 그 저장소 루트에서 이것부터 돌리세요 — 확인 1~3이 한 번에 끝납니다:
+
+```bash
+python mobile-collect/pc-side/check_pc_side.py
+```
+
+읽기 전용이고 표준 라이브러리만 씁니다. 종료코드 0=차이 없음 / 1=조치 필요 / 3=대상 못 찾음.

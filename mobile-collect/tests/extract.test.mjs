@@ -23,6 +23,7 @@ import {
   parseProductUrl,
 } from '../extract.js';
 import { OUTPUT_PATH, SOURCE_PATH, buildSnippet } from '../tools/build-snippet.mjs';
+import { MARKERS_PATH, buildMarkers } from '../tools/dump-markers.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const fixture = (name) => readFileSync(join(here, 'fixtures', name), 'utf8');
@@ -226,4 +227,30 @@ test('스니펫에는 export 문이 남아 있지 않다 (단축어에서 문법
   assert.equal(/^export /m.test(snippet), false);
   assert.equal(/^import /m.test(snippet), false);
   assert.ok(snippet.includes('completion(JSON.stringify('));
+});
+
+test('markers.json이 extract.js와 일치한다', () => {
+  const expected = buildMarkers();
+  const actual = readFileSync(MARKERS_PATH, 'utf8');
+  assert.equal(
+    actual,
+    expected,
+    'markers.json이 낡았습니다. `node mobile-collect/tools/dump-markers.mjs`로 다시 생성하세요.'
+  );
+});
+
+test('markers.json 스키마 고정 — check_pc_side.py가 이 모양을 읽는다', () => {
+  const markers = JSON.parse(readFileSync(MARKERS_PATH, 'utf8'));
+  assert.deepEqual(Object.keys(markers).sort(), [
+    '_generated',
+    'hard',
+    'minChars',
+    'soft',
+    'softThresholdChars',
+  ]);
+  assert.ok(Array.isArray(markers.hard) && markers.hard.every((m) => typeof m === 'string'));
+  assert.ok(Array.isArray(markers.soft) && markers.soft.every((m) => typeof m === 'string'));
+  // SOFT 임계값이 낮아지면 정상 수집이 조용히 버려진다 (pc-side/NOTES.md 확인 3).
+  assert.equal(markers.softThresholdChars, 2000);
+  assert.equal(markers.minChars, 500);
 });

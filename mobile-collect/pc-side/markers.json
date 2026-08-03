@@ -1,0 +1,17 @@
+{
+  "_generated": "자동 생성 파일 — 직접 고치지 말 것. 원본: mobile-collect/extract.js · 재생성: node mobile-collect/tools/dump-markers.mjs",
+  "hard": [
+    "Access Denied",
+    "Request Rejected",
+    "You don't have permission to access"
+  ],
+  "soft": [
+    "Reference #",
+    "접근이 거부",
+    "잘못된 접근",
+    "비정상적인 접근",
+    "일시적으로 이용이 제한"
+  ],
+  "softThresholdChars": 2000,
+  "minChars": 500
+}

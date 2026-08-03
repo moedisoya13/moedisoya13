@@ -7,6 +7,8 @@
   "scripts": {
     "test": "node --test tests/*.test.mjs",
     "build:snippet": "node tools/build-snippet.mjs",
-    "check:snippet": "node tools/build-snippet.mjs --check"
+    "check:snippet": "node tools/build-snippet.mjs --check",
+    "dump:markers": "node tools/dump-markers.mjs",
+    "check:markers": "node tools/dump-markers.mjs --check"
   }
 }
