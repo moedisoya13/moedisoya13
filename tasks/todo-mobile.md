@@ -37,25 +37,28 @@
 | A-1 | `mobile-collect/` 키트를 작업 브랜치로 병합 | fast-forward, 충돌 0 |
 | A-2 | **`pc-side/check_pc_side.py`** — PC측 확인 1~3 계측기 | 읽기 전용·표준 라이브러리만. 종료코드 0/1/3 |
 | A-3 | `tools/dump-markers.mjs` + `pc-side/markers.json` | `build-snippet.mjs`와 동일한 생성기+`--check` 패턴 |
-| A-4 | 드리프트 테스트 2건 추가 | **26건 → 28건**, 전부 통과 |
+| A-4 | 드리프트 테스트 4건 추가 | **26건 → 30건**, 전부 통과 |
 | A-5 | `shortcut/BUILD.md` 보강 | ⑧ iOS 버전 분기표, 액션별 `✔ 여기까지 됐으면`, 증거 체크리스트 |
 | A-6 | `shortcut/TROUBLESHOOT.md` 신규 | 증상 → 원인 → 조치 |
 | A-7 | 이 문서 + `tasks/goal-prompts.md` | |
+| A-9 | `shortcut/diagnose-body.js` — B-1 전용 진단 스니펫 | 같은 추출 코어, 출력만 요약. 생성물이라 드리프트 불가 |
 
 ### 검증된 것 (실측)
 
 ```
-mobile-collect  npm test          28 passed / 0 failed
+mobile-collect  npm test          30 passed / 0 failed
                 npm run check:snippet   최신 상태 확인됨 (exit 0)
                 npm run check:markers   최신 상태 확인됨 (exit 0)
 루트            npm test          48 passed (3 files)
                 npm run type-check      exit 0
 ```
 
-- **드리프트 그물 음성 확인**: `extract.js`의 마커를 한 줄 변조하니 테스트 3건이 실패하고
-  `check:markers`가 exit 1. 되돌리니 28건 전부 통과. → 그물이 실제로 작동합니다.
-- **계측기 3개 시나리오 검증**: 가짜 저장소로 `조치 필요(exit 1)` / `전부 일치(exit 0)` /
+- **드리프트 그물 음성 확인**: `extract.js`의 마커를 한 줄 변조하니 테스트 4건이 실패하고
+  `check:markers`가 exit 1. 되돌리니 30건 전부 통과. → 그물이 실제로 작동합니다.
+- **계측기 4개 시나리오 검증**: 가짜 저장소로 `조치 필요(exit 1)` / `전부 일치(exit 0)` / `거짓통과 방지(exit 1)` /
   `대상 없음(exit 3)` 모두 확인.
+- **진단 스니펫 실행 검증**: Node `vm`으로 픽스처 4종(정상·차단·렌더미완·예외)을 실제로 통과시켜
+  출력 모양을 확인했습니다. 브라우저 코드라 생성만으로는 확인이 안 되기 때문입니다.
 
 ### 계측기를 만들며 잡은 결함 2건
 

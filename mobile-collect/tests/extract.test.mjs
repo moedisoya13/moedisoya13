@@ -22,7 +22,13 @@ import {
   normalizeText,
   parseProductUrl,
 } from '../extract.js';
-import { OUTPUT_PATH, SOURCE_PATH, buildSnippet } from '../tools/build-snippet.mjs';
+import {
+  DIAGNOSE_PATH,
+  OUTPUT_PATH,
+  SOURCE_PATH,
+  buildDiagnose,
+  buildSnippet,
+} from '../tools/build-snippet.mjs';
 import { MARKERS_PATH, buildMarkers } from '../tools/dump-markers.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -227,6 +233,25 @@ test('스니펫에는 export 문이 남아 있지 않다 (단축어에서 문법
   assert.equal(/^export /m.test(snippet), false);
   assert.equal(/^import /m.test(snippet), false);
   assert.ok(snippet.includes('completion(JSON.stringify('));
+});
+
+test('진단 스니펫이 extract.js와 일치한다', () => {
+  const expected = buildDiagnose(readFileSync(SOURCE_PATH, 'utf8'));
+  const actual = readFileSync(DIAGNOSE_PATH, 'utf8');
+  assert.equal(
+    actual,
+    expected,
+    '진단 스니펫이 낡았습니다. `node mobile-collect/tools/build-snippet.mjs`로 다시 생성하세요.'
+  );
+});
+
+test('진단 스니펫도 붙여넣을 수 있는 평문이다', () => {
+  const diagnose = readFileSync(DIAGNOSE_PATH, 'utf8');
+  assert.equal(/^export /m.test(diagnose), false);
+  assert.equal(/^import /m.test(diagnose), false);
+  // 수집용과 같은 추출 코어를 쓴다 — 진단에서 본 것이 수집에서도 그대로 나온다.
+  assert.ok(diagnose.includes('buildCapture({ innerText: body, url: location.href })'));
+  assert.ok(diagnose.includes('완료') === false); // 요약만 돌려주고 파일은 만들지 않는다
 });
 
 test('markers.json이 extract.js와 일치한다', () => {

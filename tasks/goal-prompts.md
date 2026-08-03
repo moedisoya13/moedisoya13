@@ -40,7 +40,7 @@ Track A가 여전히 성한지 한 번에 확인합니다. 키트를 고친 뒤�
 
 ```
 /goal 다음 네 가지가 모두 대화에 출력으로 증명되면 완료: (1) mobile-collect/ 가 현재 브랜치에
-있고 git status가 clean, (2) cd mobile-collect && npm test 가 28건 이상 pass·0 fail 출력,
+있고 git status가 clean, (2) cd mobile-collect && npm test 가 30건 이상 pass·0 fail 출력,
 (3) npm run check:snippet 과 npm run check:markers 가 둘 다 최신 상태 확인 메시지로 종료,
 (4) 루트 npm test 48 pass 와 npm run type-check 무오류. 제약: extract.js의 BLOCK_MARKERS 값을
 바꾸지 말 것, shortcut/run-javascript-body.js 와 pc-side/markers.json 을 손으로 고치지 말 것
