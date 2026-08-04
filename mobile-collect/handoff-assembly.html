@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>쿠팡 판매가 수집 — 단축어 조립 인수인계</title>
+<style>
+  * { box-sizing: border-box; }
+  :root {
+    --bg: #ffffff; --fg: #1a1a1a; --muted: #5c6370; --line: #e2e5e9;
+    --card: #f7f8fa; --accent: #1f6feb; --ok: #1f7a3d; --no: #b03030;
+    --warn: #9a6700; --code-bg: #f4f5f7;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14161a; --fg: #e6e8eb; --muted: #9aa3ae; --line: #2b2f36;
+      --card: #1b1e24; --accent: #58a6ff; --ok: #4ec97a; --no: #ff7b72;
+      --warn: #d9a441; --code-bg: #1f232a;
+    }
+  }
+  :root[data-theme="light"] {
+    --bg: #ffffff; --fg: #1a1a1a; --muted: #5c6370; --line: #e2e5e9;
+    --card: #f7f8fa; --accent: #1f6feb; --ok: #1f7a3d; --no: #b03030;
+    --warn: #9a6700; --code-bg: #f4f5f7;
+  }
+  :root[data-theme="dark"] {
+    --bg: #14161a; --fg: #e6e8eb; --muted: #9aa3ae; --line: #2b2f36;
+    --card: #1b1e24; --accent: #58a6ff; --ok: #4ec97a; --no: #ff7b72;
+    --warn: #d9a441; --code-bg: #1f232a;
+  }
+
+  body {
+    background: var(--bg); color: var(--fg);
+    font: 16px/1.7 -apple-system, "Segoe UI", "Malgun Gothic", sans-serif;
+    margin: 0; padding: 2.5rem 1.25rem 5rem;
+  }
+  main { max-width: 54rem; margin: 0 auto; }
+  h1 { font-size: 1.9rem; line-height: 1.3; margin: 0 0 .4rem; letter-spacing: -.02em; }
+  h2 {
+    font-size: 1.3rem; margin: 3rem 0 1rem; padding-top: 1.4rem;
+    border-top: 1px solid var(--line); letter-spacing: -.01em;
+  }
+  h3 { font-size: 1.05rem; margin: 1.8rem 0 .6rem; }
+  p, li { margin: .5rem 0; }
+  ul, ol { padding-left: 1.3rem; }
+  code {
+    background: var(--code-bg); padding: .12em .4em; border-radius: 4px;
+    font: .875em/1.5 "Cascadia Mono", Consolas, monospace;
+  }
+  pre {
+    background: var(--code-bg); border: 1px solid var(--line); border-radius: 8px;
+    padding: .9rem 1rem; overflow-x: auto;
+    font: .84rem/1.6 "Cascadia Mono", Consolas, monospace;
+  }
+  pre code { background: none; padding: 0; }
+  .sub { color: var(--muted); margin: 0 0 2rem; font-size: .95rem; }
+  .card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 10px; padding: 1rem 1.2rem; margin: 1.2rem 0;
+  }
+  .card > :first-child { margin-top: 0; }
+  .card > :last-child { margin-bottom: 0; }
+  .verdict { border-left: 3px solid var(--accent); }
+  .danger { border-left: 3px solid var(--no); }
+  .now { border-left: 3px solid var(--warn); }
+  .scroll { overflow-x: auto; margin: 1rem 0; }
+  table { border-collapse: collapse; width: 100%; font-size: .92rem; }
+  th, td { text-align: left; padding: .5rem .7rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-weight: 600; color: var(--muted); font-size: .84rem; text-transform: uppercase; letter-spacing: .04em; }
+  .ok { color: var(--ok); font-weight: 600; }
+  .no { color: var(--no); font-weight: 600; }
+  .warn { color: var(--warn); font-weight: 600; }
+  .tag {
+    display: inline-block; font-size: .74rem; font-weight: 600; padding: .12em .5em;
+    border-radius: 20px; border: 1px solid var(--line); color: var(--muted);
+    vertical-align: middle; margin-left: .4rem;
+  }
+  .toc { columns: 2; column-gap: 2rem; font-size: .93rem; }
+  .toc a { color: var(--accent); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  @media (max-width: 34rem) { .toc { columns: 1; } h1 { font-size: 1.5rem; } }
+  footer { margin-top: 3rem; padding-top: 1.2rem; border-top: 1px solid var(--line); color: var(--muted); font-size: .87rem; }
+</style>
+</head>
+<body>
+
+<main>
+
+<h1>쿠팡 판매가 수집 — 단축어 조립 인수인계</h1>
+<p class="sub">
+  최종 갱신 2026-08-03 · 키트 테스트 30건 통과<br>
+  저장소 <code>moedisoya13/moedisoya13</code> · 브랜치 <code>claude/work-plan-goal-command-1ly1vw</code> ·
+  커밋 <code>9d5ea1a</code>
+</p>
+
+<div class="card">
+  <p><strong>먼저 읽을 것 —</strong> 이 문서는 선행 두 건의 <strong>세 번째</strong> 인수인계입니다.</p>
+  <ol>
+    <li><strong>원문</strong> 「쿠팡 판매가 수집 프로젝트 — 인수인계」 (2026-08-01) — 차단 조사·데스크톱 경로</li>
+    <li><strong>후속</strong> 「모바일(iPhone) 경로 인수인계」 (2026-08-02) —
+        저장소 사본 <code>mobile-collect/handoff-mobile.html</code></li>
+    <li><strong>이 문서</strong> — 단축어 조립과 첫 실기기 관측</li>
+  </ol>
+  <p>앞의 두 문서의 <strong>채택하지 않기로 한 것은 전부 그대로 유효</strong>합니다. 이 문서가 뒤집는 것은 없습니다.
+  다만 앞 문서의 <strong>추정 4건이 이번에 실측으로 바뀌었습니다</strong>(4절).</p>
+</div>
+
+<h2>목차</h2>
+<div class="toc">
+  <p><a href="#now">1. 지금 어디서 멈췄나</a></p>
+  <p><a href="#next">2. 다음 세션이 처음 할 일</a></p>
+  <p><a href="#assembly">3. 단축어 조립 현황과 남은 액션</a></p>
+  <p><a href="#found">4. 이번에 확정된 사실 (실측)</a></p>
+  <p><a href="#lessons">5. 안내 실패에서 얻은 교훈</a></p>
+  <p><a href="#repo">6. 저장소 상태와 새로 생긴 것</a></p>
+  <p><a href="#verify">7. 검증 방법</a></p>
+  <p><a href="#donot">8. 채택하지 않기로 한 것</a></p>
+  <p><a href="#unknown">9. 남은 불확실성</a></p>
+  <p><a href="#goal">10. <code>/goal</code> 조건문</a></p>
+</div>
+
+<h2 id="now">1. 지금 어디서 멈췄나 <span class="tag">여기서 이어서</span></h2>
+
+<div class="card now">
+  <p><strong>사용자가 아이폰에서 단축어를 조립하는 중입니다.</strong>
+  <strong>2단계(액션 ②③④)를 진행 중</strong>이고, 확인 스크린샷을 받지 못한 상태에서 세션이 끊겼습니다.</p>
+</div>
+
+<div class="scroll"><table>
+  <tr><th>단계</th><th>내용</th><th>상태</th></tr>
+  <tr>
+    <td>1단계</td>
+    <td>단축어 껍데기 + 액션 ① + 임시 액션으로 <strong>B-1 확인</strong></td>
+    <td class="ok">완료 — 결과는 4절</td>
+  </tr>
+  <tr>
+    <td><strong>2단계</strong></td>
+    <td>①의 코드를 <code>run-javascript-body.js</code>로 되돌리고 ②③④(사전·status·분기) 추가</td>
+    <td class="warn">진행 중 · 미확인</td>
+  </tr>
+  <tr><td>3단계</td><td>⑤⑥⑦ — 메뉴·상품키·텍스트</td><td class="no">미착수</td></tr>
+  <tr><td>4단계</td><td>⑧⑨ — 파일 저장·알림 + 실수집 검증</td><td class="no">미착수</td></tr>
+</table></div>
+
+<p><strong>사용자에게 마지막으로 안내한 것</strong> (2단계):</p>
+<ol>
+  <li>임시 액션(<code>클립보드에 복사</code>·<code>훑어보기</code>) 삭제</li>
+  <li>①의 코드를 <code>run-javascript-body.js</code>로 교체 (<code>diagnose-body.js</code> 아님)</li>
+  <li><code>사전 가져오기</code> → <code>사전 값 가져오기</code>(키 <code>status</code>) → <code>만약</code>(<code>ok</code>와 같음)</li>
+  <li>"그렇지 않으면" 쪽: <code>사전 값 가져오기</code>(키 <code>reason</code>) → <code>알림 표시</code> → <code>단축어 중단</code></li>
+</ol>
+<p>요청한 회신: <strong>액션 목록 전체 스크린샷</strong>(⑤~⑨를 어느 칸에 넣을지 판단하려면 필요),
+그리고 <strong>iOS 버전</strong>(설정 &gt; 일반 &gt; 정보).</p>
+
+<div class="card danger">
+  <p><strong>iOS 버전을 아직 받지 못했습니다.</strong> 4단계 <code>파일 저장</code>의 파일명 지정 방식이
+  버전마다 갈립니다(<code>shortcut/BUILD.md</code> ⑧의 분기표). <strong>먼저 물어보세요.</strong></p>
+</div>
+
+<h2 id="next">2. 다음 세션이 처음 할 일</h2>
+
+<div class="scroll"><table>
+  <tr><th>#</th><th>할 일</th><th>완료 판정</th></tr>
+  <tr>
+    <td>1</td>
+    <td>사용자에게 <strong>현재 액션 목록 스크린샷</strong>과 <strong>iOS 버전</strong>을 요청</td>
+    <td>화면을 보고 ⑤~⑨의 삽입 위치를 정함</td>
+  </tr>
+  <tr>
+    <td>2</td>
+    <td><strong>3단계 ⑤⑥⑦ 안내</strong> — 반드시 <code>만약</code>과 <code>그렇지 않으면</code> <strong>사이</strong>에</td>
+    <td>메뉴 3갈래 + <code>접미사</code>·<code>상품키</code> 변수 생성</td>
+  </tr>
+  <tr>
+    <td>3</td>
+    <td><strong>4단계 ⑧⑨ 안내</strong> — iOS 버전에 맞는 저장 분기 선택</td>
+    <td>iCloud Drive에 <code>8868816986.txt</code> 생성</td>
+  </tr>
+  <tr>
+    <td>4</td>
+    <td><strong>B-2 — 첫 실물 텍스트를 픽스처로 커밋</strong>
+        (<code>tests/fixtures/real_product.txt</code>, 받은 그대로)</td>
+    <td>픽스처 커밋 + <code>tests/fixtures/README.md</code>의 "전부 합성" 문구 갱신</td>
+  </tr>
+  <tr>
+    <td>5</td>
+    <td><strong>B-4 — PC측 확인 1~3</strong>:
+        <code>python mobile-collect/pc-side/check_pc_side.py</code></td>
+    <td>종료코드 0 (또는 지목된 곳 수정 후 0)</td>
+  </tr>
+  <tr>
+    <td>6</td>
+    <td><strong>B-5 — 파서 교정·CSV 검수</strong> (4와 5가 끝난 뒤에만)</td>
+    <td><code>--from-text</code>로 CSV 누적, <code>price</code> 혼동 없음</td>
+  </tr>
+</table></div>
+
+<div class="card danger">
+  <p><strong>순서를 지키세요.</strong> 4번(픽스처) 없이 6번(파서 교정)을 하지 마세요.
+  원문 §10의 버그 #3(<code>parse_sellers</code>가 상품명을 판매자로 지어냄)이 정확히
+  "실물을 안 보고 규칙을 넣어서" 생긴 일입니다. <strong>4절의 관측만 근거로 코드를 고치는 것도 안 됩니다</strong> —
+  발췌뿐이고 전문이 없습니다.</p>
+</div>
+
+<h2 id="assembly">3. 단축어 조립 현황과 남은 액션</h2>
+
+<p>전체 설계는 <code>mobile-collect/shortcut/BUILD.md</code>에 있습니다. 아래는 현황 요약입니다.</p>
+
+<div class="scroll"><table>
+  <tr><th>액션</th><th>내용</th><th>상태</th></tr>
+  <tr><td>—</td><td>공유 시트에 표시 · 받는 항목 <code>Safari 웹페이지</code> · 이름 <code>쿠팡 수집</code></td><td class="ok">완료</td></tr>
+  <tr><td>①</td><td>웹페이지에서 JavaScript 실행 — <code>run-javascript-body.js</code> 붙여넣기</td><td class="warn">교체 중</td></tr>
+  <tr><td>②</td><td>사전 가져오기 (Get Dictionary from Input)</td><td class="warn">진행 중</td></tr>
+  <tr><td>③</td><td>사전 값 가져오기 — 키 <code>status</code></td><td class="warn">진행 중</td></tr>
+  <tr><td>④</td><td>만약 <code>status</code> = <code>ok</code> / 아니면 <code>reason</code> 알림 + 중단</td><td class="warn">진행 중</td></tr>
+  <tr><td>⑤</td><td>메뉴에서 선택 → <code>접미사</code> 변수 (옵션=빈값 / 판매자=<code>_sellers</code> / 검색=<code>_search</code>)</td><td class="no">미착수</td></tr>
+  <tr><td>⑥</td><td>사전 값 <code>productId</code> → <code>상품키</code> 변수</td><td class="no">미착수</td></tr>
+  <tr><td>⑦</td><td>사전 값 <code>text</code></td><td class="no">미착수</td></tr>
+  <tr><td>⑧</td><td>파일 저장 → <code>/coupang-price/manual/[상품키][접미사].txt</code></td><td class="no">미착수</td></tr>
+  <tr><td>⑨</td><td>(선택) 알림 표시</td><td class="no">미착수</td></tr>
+</table></div>
+
+<div class="card danger">
+  <p><strong>가장 틀리기 쉬운 지점</strong> — ⑤~⑨는 <code>만약</code>과 <code>그렇지 않으면</code> <strong>사이</strong>에
+  들어가야 합니다. <code>만약 종료</code> 아래에 두면 <strong>차단일 때도 파일이 저장됩니다.</strong>
+  차단 페이지 텍스트가 CSV로 흘러드는 것을 막는 것이 ④ 분기의 존재 이유입니다.</p>
+</div>
+
+<h3>폰에서 복사할 주소</h3>
+<pre><code>raw.githubusercontent.com/moedisoya13/moedisoya13/refs/heads/
+claude/work-plan-goal-command-1ly1vw/mobile-collect/shortcut/run-javascript-body.js   ← 수집용
+                                          .../shortcut/diagnose-body.js               ← 진단용(임시)</code></pre>
+<p>둘 다 HTTP 200으로 열리는 것을 확인했습니다.</p>
+
+<h2 id="found">4. 이번에 확정된 사실 (실측) <span class="tag">B-1 완료</span></h2>
+
+<p>진단 스니펫으로 받은 <strong>이 프로젝트 최초의 실물 데이터</strong>입니다.
+앞 문서에서 추정으로 남아 있던 항목들이 여기서 판명됐습니다.</p>
+
+<pre><code>status = ok · chars = 30,602 · productId = 8868816986 · host = www.coupang.com
+"옵션" 2회 · "원" 361회 · "판매자" 48회</code></pre>
+
+<div class="scroll"><table>
+  <tr><th>밝혀진 것</th><th>내용과 의미</th></tr>
+  <tr>
+    <td><strong>m → www 리다이렉트</strong></td>
+    <td class="ok">확정. <code>m.coupang.com/vm/products/{id}</code>로 열어도 <code>www.coupang.com</code>이 됩니다.
+    <code>parseProductUrl</code>이 <code>/vp/</code> 형태도 처리하므로 <strong>키트 수정 불필요</strong>.
+    다만 <strong>모바일 전용 문구를 기대하면 안 됩니다</strong> — 폰에서 보는 www 페이지입니다</td>
+  </tr>
+  <tr>
+    <td class="no"><strong><code>판매자</code> 48회는 대부분 <code>판매자배송</code></strong></td>
+    <td>실측 발췌: <code>모레(목) 8/6 도착 예정 (판매자배송)</code>.
+    <code>판매자</code>를 구간 표시로 쓰면 <strong>48개의 오탐</strong>에 걸립니다.
+    <strong>버그 #3이 재발하는 정확한 조건</strong>입니다.
+    <code>SELLER_SECTION_MARKERS</code>는 <code>다른 판매자</code>처럼 더 긴 문구여야 하고
+    <code>판매자배송</code>은 명시적으로 제외해야 합니다</td>
+  </tr>
+  <tr>
+    <td><strong>옵션 구간 표시</strong></td>
+    <td>후보는 <code>옵션 선택</code>. 그 위에 <code>모든 옵션 보기</code> 링크가 따로 있습니다 —
+    <strong>사람이 누르지 않으면 옵션이 일부만 담깁니다.</strong> 수집 절차에 반영할 것</td>
+  </tr>
+  <tr>
+    <td class="no"><strong>가격 밀도 위험 실재</strong></td>
+    <td>첫 300자 안에만:
+    <code>6%</code> · <code>27,990원</code> · <code>(10g당 62원)</code> · <code>29,990원</code> ·
+    <code>2,000원</code> · <code>할인</code> · <code>1개 9,190원</code> … <code>5개 27,990원</code> ·
+    <code>2개 사면 4,390원 절약</code>. NOTES.md 확인 5의 경고가 <strong>추정이 아니라 실제</strong>였습니다</td>
+  </tr>
+  <tr>
+    <td><strong>옵션 라벨-가격 짝짓기</strong></td>
+    <td>선형 텍스트에서 자명하지 않습니다:
+    <code>180g × 3개</code> → <code>8,920원</code> → <code>(10g당 165원)</code> → <code>· 무료배송</code> → 배송예정일.
+    <strong>픽스처로 반드시 검증할 것</strong></td>
+  </tr>
+  <tr>
+    <td><strong>상품명이 문서와 다름</strong></td>
+    <td>문서 <code>그릭마일드 무가당 900g</code> vs 실제
+    <code>빙그레 요플레 그릭요거트 무가당 플레인, 5개, 900g</code>. <code>product_id</code>는 동일.
+    원문 §6의 <strong>"키는 상품명이 아니라 product_id"</strong> 원칙이 실제로 값을 했습니다</td>
+  </tr>
+  <tr>
+    <td><strong>로그아웃 수집 확인</strong></td>
+    <td>첫 줄이 <code>고객센터회원가입로그인</code> — 로그인 없이 정상 수집됩니다.
+    <strong>로그인한 채로 수집하지 마세요</strong></td>
+  </tr>
+</table></div>
+
+<div class="card danger">
+  <p><strong>전문(30,602자)은 아직 받지 못했습니다.</strong> 위는 전부 <strong>발췌</strong>입니다.
+  따라서 <strong>이것만 근거로 <code>parse.py</code>를 고치지 마세요.</strong>
+  픽스처는 ⑧(파일 저장)이 동작하면 나옵니다.</p>
+</div>
+
+<h2 id="lessons">5. 안내 실패에서 얻은 교훈 <span class="tag">반복하지 말 것</span></h2>
+
+<div class="card danger">
+  <p><strong>이번 세션에서 iOS UI 안내를 세 번 틀렸습니다.</strong> 전부 검색으로 확인할 수 있었는데
+  기억에 의존해 단언한 결과입니다. 같은 실수를 반복하지 마세요 —
+  <strong>액션 이름과 화면 위치는 찾아본 뒤에만 말하세요.</strong></p>
+</div>
+
+<div class="scroll"><table>
+  <tr><th>틀린 안내</th><th>실제</th></tr>
+  <tr>
+    <td>"우상단 <code>ⓘ</code>를 탭"</td>
+    <td class="ok"><code>ⓘ</code>는 <strong>편집 화면 하단 툴바</strong>에 있습니다.
+    <code>동작 검색</code> 시트가 하단을 덮고 있어 안 보였던 것입니다 —
+    <strong>시트를 아래로 쓸어내려 접으면</strong> 드러납니다</td>
+  </tr>
+  <tr>
+    <td>"∨ 메뉴에서 <code>세부사항</code>"</td>
+    <td class="ok">∨ 메뉴에는 <strong>이름 변경 · 아이콘 선택 · 복제 · 이동 · 홈 화면에 추가</strong>뿐입니다.
+    <code>세부사항</code>은 <strong>없습니다</strong>. 공유 시트 설정은 하단 <code>ⓘ</code> 안에 있습니다</td>
+  </tr>
+  <tr>
+    <td>"<code>결과 보기</code>(Quick Look) 추가"</td>
+    <td class="ok">한글 액션 이름은 <strong><code>훑어보기</code></strong>입니다.
+    다만 확인용으로는 <strong><code>클립보드에 복사</code></strong>가 낫습니다 —
+    결과를 텍스트 그대로 받을 수 있어 스크린샷보다 정확합니다</td>
+  </tr>
+</table></div>
+
+<p>확인된 UI 경로:</p>
+<ul>
+  <li><strong>이름 변경</strong> — 상단 <code>단축어 이름</code> 옆 <strong>∨</strong> → 이름 변경</li>
+  <li><strong>공유 시트에 표시</strong> — 하단 시트를 접고 → 하단 툴바 <strong>ⓘ</strong> → 공유 시트에 표시 → 받는 항목 유형</li>
+  <li><strong>스크립트 액션이 안 보일 때</strong> — 설정 &gt; 단축어 &gt; 고급</li>
+</ul>
+
+<h2 id="repo">6. 저장소 상태와 새로 생긴 것</h2>
+
+<pre><code>git fetch origin claude/work-plan-goal-command-1ly1vw
+git checkout claude/work-plan-goal-command-1ly1vw
+cd mobile-collect &amp;&amp; npm test      # 30 passed 면 키트는 그대로</code></pre>
+
+<p><code>mobile-collect/</code> 키트는 이제 <strong>작업 브랜치에 병합돼 있습니다</strong>
+(<code>claude/mobile-web-crawling-m7y0vf</code>에서 fast-forward). 이번 세션에서 추가된 것:</p>
+
+<div class="scroll"><table>
+  <tr><th>파일</th><th>역할</th></tr>
+  <tr>
+    <td><code>pc-side/check_pc_side.py</code></td>
+    <td><strong>PC측 확인 1~3 계측기.</strong> 쿠팡 저장소 루트에서 한 줄 실행하면 끝납니다.
+    표준 라이브러리만 · 읽기 전용 · 종료코드 0(차이 없음) / 1(조치 필요) / 3(대상 못 찾음).
+    확인 1은 판정하지 않고 <strong>근거를 인쇄</strong>하고, 확인 4·5는 <strong>의도적으로 하지 않습니다</strong></td>
+  </tr>
+  <tr>
+    <td><code>tools/dump-markers.mjs</code> → <code>pc-side/markers.json</code></td>
+    <td>차단 마커를 Python이 읽을 형식으로 뽑는 생성기. 확인 3을 <strong>집합 차분</strong>으로 결정화합니다.
+    Python에서 정규식으로 다시 파싱하면 규칙이 두 벌이 되므로 이 경로를 씁니다</td>
+  </tr>
+  <tr>
+    <td><code>shortcut/diagnose-body.js</code></td>
+    <td><strong>B-1 전용 임시 스니펫.</strong> 추출 코어는 수집용과 같고 출력만 요약합니다.
+    수집 경로에는 쓰지 않습니다(파일을 만들지 않음)</td>
+  </tr>
+  <tr>
+    <td><code>shortcut/TROUBLESHOOT.md</code></td>
+    <td>증상 → 원인 → 조치</td>
+  </tr>
+  <tr>
+    <td><code>tasks/todo-mobile.md</code> · <code>tasks/goal-prompts.md</code></td>
+    <td>작업 계획 본체와 <code>/goal</code> 조건문</td>
+  </tr>
+</table></div>
+
+<div class="card">
+  <p><strong>생성물은 손으로 고치지 마세요.</strong>
+  <code>run-javascript-body.js</code> · <code>diagnose-body.js</code> · <code>markers.json</code>은
+  전부 <code>extract.js</code> 하나에서 생성됩니다. 고쳤으면
+  <code>npm run build:snippet</code>과 <code>npm run dump:markers</code>를 돌리세요.
+  어긋나면 테스트가 실패합니다.</p>
+</div>
+
+<h3>계측기를 만들며 잡은 결함 2건</h3>
+<p>둘 다 <strong>거짓 보고</strong>를 내는 종류였습니다. 그대로 뒀으면 사용자가 잘못 고쳤을 것입니다.</p>
+<div class="scroll"><table>
+  <tr><th>증상</th><th>원인과 수정</th></tr>
+  <tr>
+    <td><code>SELLER_SECTION_MARKERS</code>가 차단 마커로 잡혀
+        <code>다른 판매자</code> 같은 정상 문구가 "차단 마커 차이"로 보고됨</td>
+    <td>상수 이름 힌트에 <code>MARKER</code>가 있었음 →
+        차단을 뜻하는 낱말(<code>BLOCK</code>/<code>DENIED</code>/<code>DENY</code>/<code>REJECT</code>)만 남김</td>
+  </tr>
+  <tr>
+    <td>확인 2가 <strong>거짓 통과</strong> — <code>_sellers</code> 접미사를 전혀 처리하지 않는 저장소도 통과</td>
+    <td><code>other_sellers</code>가 <code>_sellers</code>를 부분문자열로 포함하고, docstring 산문까지 리터럴로 잡힘 →
+        source 이름·docstring·공백 있는 리터럴 제외</td>
+  </tr>
+</table></div>
+
+<h2 id="verify">7. 검증 방법</h2>
+
+<pre><code># 키트 (의존성 설치 불필요)
+cd mobile-collect
+npm test               # 30 passed / 0 failed
+npm run check:snippet  # 스니펫 최신 상태 확인됨
+npm run check:markers  # markers.json 최신 상태 확인됨
+
+# 계측기 (대상이 없어도 안 죽는지)
+python mobile-collect/pc-side/check_pc_side.py --help
+python mobile-collect/pc-side/check_pc_side.py        # 쿠팡 저장소 밖이면 종료코드 3
+
+# 루트 프로젝트 무영향
+npm ci &amp;&amp; npm test -- --run   # 48 passed
+npm run type-check             # exit 0</code></pre>
+
+<p><strong>이번 세션에서 실제로 확인한 것</strong> (주장이 아니라 실행 결과):</p>
+<ul>
+  <li>드리프트 그물 음성 확인 — <code>extract.js</code>의 마커를 한 줄 변조하니 테스트 <strong>4건 실패</strong>,
+      <code>check:markers</code> exit 1. 되돌리니 30건 통과</li>
+  <li>계측기 4개 시나리오 — 조치 필요(1) / 전부 일치(0) / <strong>거짓 통과 방지</strong>(1) / 대상 없음(3)</li>
+  <li>진단 스니펫 — Node <code>vm</code>으로 픽스처 4종(정상·차단·렌더미완·예외)을 실제 실행해 출력 확인.
+      브라우저 코드라 생성만으로는 확인이 안 되기 때문입니다</li>
+</ul>
+
+<h2 id="donot">8. 채택하지 않기로 한 것 <span class="tag">계승 + 신규</span></h2>
+
+<div class="card danger">
+  <p><strong>선행 두 문서의 배제 목록은 전부 그대로 유효합니다.</strong>
+  지문 위조 · 스텔스 브라우저 · Akamai 센서 조작 · <code>_abck</code> 조작 · 인간 입력 시뮬레이션 ·
+  TLS/HTTP2 지문 위조 · 프록시 로테이션 · CAPTCHA 자동 해결 · 사용자 본인 프로필 사용 ·
+  LAN 직접 전송 · 자동 탭/스크롤 · 로그인 상태 수집.</p>
+  <p><strong>이번에 추가로 배제한 것:</strong></p>
+  <ul>
+    <li><strong><code>.claude/commands/goal.md</code> 생성</strong> — <code>/goal</code>은 Claude Code
+        <strong>기본 명령어</strong>입니다(v2.1.139+). 동명 파일은 기본 명령어를 가립니다</li>
+    <li><strong>메뉴 ⑤를 텍스트 자동분류로 대체</strong> — 액션을 9→6개로 줄일 수 있어 매력적이지만,
+        잘못 분류하면 <code>source</code>가 틀리고 → 중복 판정 키가 틀리고 → 버그 #2식 유실.
+        <strong>4절에서 <code>판매자배송</code> 오탐이 실제로 확인됐으므로 더욱 하면 안 됩니다.</strong>
+        픽스처 확보 후 재검토</li>
+    <li><strong>확인 4·5의 코드 변경을 미리 작성</strong> — <code>check_pc_side.py</code>도 확인 3에서 멈춥니다</li>
+    <li><strong><code>/goal</code>로 수집 루프를 돌리기</strong> — "사람이 탭할 때만"이라는 전제를 깨는 방향입니다</li>
+  </ul>
+  <p>읽기 전용입니다. 구매·장바구니·로그인은 건드리지 않습니다.</p>
+</div>
+
+<h2 id="unknown">9. 남은 불확실성</h2>
+
+<ul>
+  <li><strong>파서가 실제 텍스트에 맞는지 여전히 검증되지 않았습니다.</strong> 픽스처가 전부 합성이고,
+      실물은 발췌만 있습니다.</li>
+  <li><strong>옵션 라벨-가격 짝짓기</strong>가 선형 텍스트에서 자명하지 않습니다(4절).</li>
+  <li><strong>판매자 구간이 어떤 문구로 시작하는지 모릅니다.</strong> 사용자가 "다른 판매자" 목록을
+      열지 않은 상태의 캡처였습니다. <code>판매자배송</code> 오탐만 확인됐습니다.</li>
+  <li><strong><code>from_text.py</code>의 파일명 규칙</strong>은 여전히 모릅니다. 다만 이제
+      <strong>추측하지 않고 측정합니다</strong>(<code>check_pc_side.py</code>).
+      "모름"에서 "측정 대기"로 바뀐 항목입니다.</li>
+  <li><strong><code>check_pc_side.py</code>의 확인 1은 판정하지 않습니다.</strong> 근거만 인쇄합니다.
+      파일명 처리가 함수 형태가 아니면(예: 정규식 한 줄) 못 찾을 수 있습니다.</li>
+  <li><strong>iOS 버전 미확인</strong> — ⑧의 저장 분기를 고르려면 필요합니다.</li>
+  <li><strong>모달 배경 텍스트 문제(버그 #1)</strong>가 여기서 더 심할 수 있습니다.
+      <code>chars</code>가 30,602자로 큽니다.</li>
+  <li><strong>루트 <code>CLAUDE.md</code>가 실제와 어긋나 있습니다</strong> — Python/pytest/black 기준으로
+      쓰여 있으나 루트는 TypeScript/Vitest/React입니다. <code>mobile-collect/</code>는 의존성 0의
+      독립 키트라 영향받지 않지만, 이 파일을 읽는 세션이 잘못된 규칙을 따를 소지가 있습니다.
+      이번 범위 밖이라 손대지 않았습니다.</li>
+</ul>
+
+<h2 id="goal">10. <code>/goal</code> 조건문</h2>
+
+<p>전문은 <code>tasks/goal-prompts.md</code>에 있습니다. 설계 원칙만 옮깁니다.</p>
+
+<div class="card verdict">
+  <p><strong>평가자는 도구를 쓰지 않습니다.</strong> 명령을 돌리지도 파일을 읽지도 않고,
+  <strong>대화에 이미 드러난 것만</strong> 보고 판정합니다. 그래서 조건은
+  <strong>명령어 출력으로 증명 가능</strong>해야 합니다.</p>
+  <p>그리고 이 프로젝트의 남은 일은 대부분 <strong>사람 손이 있어야 끝납니다.</strong>
+  조건에 <strong>사람 대기 탈출구</strong>와 <strong>턴 상한</strong>을 넣지 않으면
+  조건이 영원히 충족되지 않아 토큰만 태웁니다.</p>
+</div>
+
+<footer>
+  <p>선행 문서: 「쿠팡 판매가 수집 프로젝트 — 인수인계」(2026-08-01) ·
+  「모바일(iPhone) 경로 인수인계」(2026-08-02, <code>mobile-collect/handoff-mobile.html</code>)</p>
+  <p>세부는 <code>mobile-collect/README.md</code> · <code>shortcut/BUILD.md</code> ·
+  <code>shortcut/TROUBLESHOOT.md</code> · <code>pc-side/NOTES.md</code> ·
+  <code>tasks/todo-mobile.md</code> · <code>tasks/goal-prompts.md</code>에 있습니다.</p>
+  <p>브랜치 <code>claude/work-plan-goal-command-1ly1vw</code> · 커밋 <code>9d5ea1a</code> 기준</p>
+</footer>
+
+</main>
+</body>
+</html>
