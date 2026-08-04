@@ -85,7 +85,7 @@ mobile-collect  npm test          30 passed / 0 failed
 
 | # | 할 일 | 막고 있는 것 | 완료 판정 |
 |---|---|---|---|
-| **B-1** | 단축어 ① + 결과 보기로 JSON 확인 → **증거 체크리스트 7줄 회신** (`shortcut/BUILD.md` §4) | 사용자 iPhone | `status: ok` · `chars` 수천 · `productId` = `8868816986` |
+| **B-1** | 단축어 ① + 클립보드 복사로 진단 결과 확인 → **그대로 붙여넣어 회신** (`shortcut/BUILD.md` §2-1) | 사용자 iPhone | `status: ok` · `chars` 수천 · `productId` = `8868816986` |
 | B-2 | 첫 실물 텍스트를 `tests/fixtures/real_*.txt`로 커밋 (개인정보만 제거, **받은 그대로**) | B-1 | 픽스처 커밋 + `tests/fixtures/README.md`의 "전부 합성" 문구 갱신 |
 | B-3 | 단축어 ②~⑨ 조립 | B-1 | iCloud Drive에 `8868816986.txt` 생성 |
 | B-4 | PC측 확인 1~3 — `python mobile-collect/pc-side/check_pc_side.py` | NewPipe 저장소 | 종료코드 0 (또는 지목된 곳 수정 후 0) |
