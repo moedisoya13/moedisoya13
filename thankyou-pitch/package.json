@@ -1,0 +1,21 @@
+{
+  "name": "thankyou-pitch-cinematic",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "「땡큐 피치」 주요 줄거리를 60초 Three.js 시네마틱으로 구현",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "verify": "node tools/verify.mjs"
+  },
+  "dependencies": {
+    "three": "^0.180.0"
+  },
+  "devDependencies": {
+    "playwright": "^1.49.0",
+    "vite": "^6.0.0",
+    "vite-plugin-singlefile": "^2.1.0"
+  }
+}

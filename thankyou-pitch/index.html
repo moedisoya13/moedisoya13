@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark" />
+    <title>땡큐 피치 — 3구 승부</title>
+    <meta
+      name="description"
+      content="만화 「땡큐 피치」의 주요 줄거리를 Three.js로 구현한 60초 시네마틱"
+    />
+  </head>
+  <body>
+    <canvas id="stage"></canvas>
+
+    <div id="overlay">
+      <div class="letterbox letterbox--top"></div>
+      <div class="letterbox letterbox--bottom"></div>
+
+      <!-- 좌상단: 챕터 라벨 -->
+      <div id="chapter-label">
+        <span class="chapter-label__no">CH.1</span>
+        <span class="chapter-label__title">소문</span>
+      </div>
+
+      <!-- 우상단: 남은 공 / 구속 / 카운트 -->
+      <div id="hud">
+        <div class="hud__block hud__block--pitches">
+          <div class="hud__caption">던질 수 있는 공</div>
+          <div class="hud__pips" id="hud-pips">
+            <span class="pip"></span><span class="pip"></span><span class="pip"></span>
+          </div>
+        </div>
+        <div class="hud__block hud__block--speed" id="hud-speed" hidden>
+          <div class="hud__value"><span id="hud-speed-value">0</span><em>km/h</em></div>
+          <div class="hud__pitchname" id="hud-pitch-name"></div>
+        </div>
+        <div class="hud__block hud__block--count" id="hud-count" hidden>
+          <div class="hud__caption">COUNT</div>
+          <div class="hud__value hud__value--count">
+            <span id="hud-strikes">0</span><em>S</em>
+          </div>
+        </div>
+      </div>
+
+      <!-- 하단 중앙: 자막 -->
+      <div id="subtitles" aria-live="polite"></div>
+
+      <!-- 엔딩 타이틀 카드 -->
+      <div id="title-card">
+        <div class="title-card__inner">
+          <div class="title-card__kicker">3구 승부, 다시 시작된다</div>
+          <h1 class="title-card__main">땡큐&nbsp;피치</h1>
+          <div class="title-card__sub">THANK YOU PITCH</div>
+          <div class="title-card__note">
+            원작: 스미요시 큐 『サンキューピッチ』 · Three.js 시네마틱 재구성
+          </div>
+        </div>
+      </div>
+
+      <!-- 화면 전체 플래시 -->
+      <div id="flash"></div>
+    </div>
+
+    <!-- 컨트롤 바 -->
+    <div id="controls">
+      <button id="btn-play" class="ctl ctl--icon" type="button" aria-label="일시정지" title="재생/일시정지 (Space)">
+        <svg viewBox="0 0 24 24" class="ico ico-pause" aria-hidden="true"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
+        <svg viewBox="0 0 24 24" class="ico ico-play" aria-hidden="true"><path d="M8 5.2v13.6a1 1 0 0 0 1.53.85l10.6-6.8a1 1 0 0 0 0-1.7L9.53 4.35A1 1 0 0 0 8 5.2Z"/></svg>
+      </button>
+
+      <button id="btn-replay" class="ctl ctl--icon" type="button" aria-label="처음부터" title="처음부터 (R)">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5V2L7 6l5 4V7a5 5 0 1 1-5 5H5a7 7 0 1 0 7-7Z"/></svg>
+      </button>
+
+      <div class="ctl__time"><span id="time-now">0:00</span> / <span id="time-total">1:02</span></div>
+
+      <div id="scrub" class="scrub" role="slider" tabindex="0"
+           aria-label="타임라인" aria-valuemin="0" aria-valuemax="62" aria-valuenow="0">
+        <div class="scrub__track">
+          <div class="scrub__marks" id="scrub-marks"></div>
+          <div class="scrub__fill" id="scrub-fill"></div>
+          <div class="scrub__knob" id="scrub-knob"></div>
+        </div>
+      </div>
+
+      <div id="chapters" class="chapters"></div>
+
+      <button id="btn-cc" class="ctl ctl--text is-on" type="button" title="자막 켜기/끄기 (C)">자막</button>
+      <button id="btn-sound" class="ctl ctl--text" type="button" title="사운드 켜기/끄기 (M)">사운드</button>
+    </div>
+
+    <div id="hint">Space 재생/정지 · ←/→ 5초 · 1~8 챕터 · M 사운드 · C 자막 · R 리플레이</div>
+
+    <noscript>
+      <div class="noscript">이 작품을 보려면 JavaScript와 WebGL이 필요합니다.</div>
+    </noscript>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
