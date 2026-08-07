@@ -20,9 +20,14 @@ three.js까지 전부 인라인된 단일 HTML 파일이라 서버도 CDN도 필
 cd thankyou-pitch
 npm install
 npm run dev      # 개발 서버
-npm run build    # dist/index.html 재생성
-npm run verify   # Playwright 검증 (콘솔 에러 + 챕터별 스냅샷)
+npm run build          # dist/index.html 재생성
+npm run verify         # Playwright 검증 (콘솔 에러 + 챕터별 스냅샷)
+npm run build:artifact # 문서 스켈레톤 안에 넣을 페이지 조각으로 변환
 ```
+
+`build:artifact`는 빌드 결과에서 `<title>`·`<style>`·본문 마크업·인라인 스크립트를 뽑아
+`<!doctype html><head>…</head><body>` 스켈레톤 안에 삽입할 수 있는 조각을 만듭니다.
+호스팅 페이지나 iframe에 그대로 끼워 넣을 때 씁니다.
 
 ## 조작
 
