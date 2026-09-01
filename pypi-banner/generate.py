@@ -15,14 +15,31 @@ import base64
 import json
 import pathlib
 import re
+import urllib.parse
 import urllib.request
 
 HERE = pathlib.Path(__file__).resolve().parent
 ASSETS = HERE / "assets"
-TEMPLATE = HERE / "card_template.html"
+PANEL_TEMPLATE = HERE / "card_template.html"
+MOCKUP_TEMPLATE = HERE / "mockup_template.html"
+
+# style -> (template, body class, element to shoot, viewport, transparent background)
+STYLES = {
+    "panel": (PANEL_TEMPLATE,  "",     ".card",  (1011, 638), False),
+    "card":  (MOCKUP_TEMPLATE, "flat", ".card",  (1011, 638), True),
+    "photo": (MOCKUP_TEMPLATE, "",     ".scene", (1420, 880), False),
+}
 
 CARD_W, CARD_H = 1011, 638          # 85.6 x 54 mm at 300 dpi
 SCALE = 2                            # -> 2022 x 1276 px
+
+# Fine PVC grain for the photo styles, as an inline SVG turbulence tile.
+NOISE_SVG = (
+    "<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'>"
+    "<filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.82' "
+    "numOctaves='4' stitchTiles='stitch'/></filter>"
+    "<rect width='100%' height='100%' filter='url(#n)'/></svg>"
+)
 
 CHROMIUM_CANDIDATES = [
     "/opt/pw-browsers/chromium-1194/chrome-linux/chrome",
@@ -49,8 +66,9 @@ def esc(s: str) -> str:
     return (s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"))
 
 
-def build_html(meta: dict, command: str) -> str:
-    html = TEMPLATE.read_text()
+def build_html(meta: dict, command: str, style: str) -> str:
+    template, body_class, _, _, _ = STYLES[style]
+    html = template.read_text()
     subs = {
         "__FONT_SS_REG__":  data_uri(ASSETS / "fonts/SourceSans3-Regular.ttf.woff2", "font/woff2"),
         "__FONT_SS_SEMI__": data_uri(ASSETS / "fonts/SourceSans3-Semibold.ttf.woff2", "font/woff2"),
@@ -63,6 +81,8 @@ def build_html(meta: dict, command: str) -> str:
         "__VERSION__":      esc(meta["version"]),
         "__SUMMARY__":      esc(meta["summary"]),
         "__COMMAND__":      esc(command),
+        "__BODYCLASS__":    body_class,
+        "__NOISE__":        "data:image/svg+xml," + urllib.parse.quote(NOISE_SVG),
     }
     for key, value in subs.items():
         html = html.replace(key, value)
@@ -72,9 +92,10 @@ def build_html(meta: dict, command: str) -> str:
     return html
 
 
-async def render(html: str, out: pathlib.Path) -> None:
+async def render(html: str, out: pathlib.Path, style: str) -> None:
     from playwright.async_api import async_playwright
 
+    _, _, selector, (vw, vh), transparent = STYLES[style]
     exe = next((p for p in CHROMIUM_CANDIDATES if pathlib.Path(p).exists()), None)
     out.parent.mkdir(parents=True, exist_ok=True)
     page_html = out.with_suffix(".html")
@@ -85,12 +106,13 @@ async def render(html: str, out: pathlib.Path) -> None:
                                                                     "--force-color-profile=srgb",
                                                                     "--font-render-hinting=none"])
         page = await browser.new_page(
-            viewport={"width": CARD_W, "height": CARD_H},
+            viewport={"width": vw, "height": vh},
             device_scale_factor=SCALE,
         )
         await page.goto(page_html.as_uri(), wait_until="load")
         await page.wait_for_function("document.documentElement.dataset.ready === '1'", timeout=15000)
-        await page.locator(".card").screenshot(path=str(out))
+        await page.locator(selector).screenshot(path=str(out),
+                                                omit_background=transparent)
         await browser.close()
 
 
@@ -102,6 +124,9 @@ def main() -> None:
     ap.add_argument("--summary", help="override the one-line summary")
     ap.add_argument("--version", dest="ver", help="override the version string")
     ap.add_argument("--command", help="override the install command")
+    ap.add_argument("--style", choices=sorted(STYLES), default="panel",
+                    help="panel: flat banner (default); card: die-cut card front on "
+                         "transparency; photo: lit studio shot of the physical card")
     args = ap.parse_args()
 
     meta = fetch_meta(args.package)
@@ -110,10 +135,12 @@ def main() -> None:
     if args.ver:
         meta["version"] = args.ver
     command = args.command or f"pip install {meta['name']}"
-    out = (args.out or HERE / "out" / f"{meta['name']}.png").resolve()
+    suffix = "" if args.style == "panel" else f"-{args.style}"
+    out = (args.out or HERE / "out" / f"{meta['name']}{suffix}.png").resolve()
 
-    asyncio.run(render(build_html(meta, command), out))
-    print(f"{out}  ({CARD_W * SCALE}x{CARD_H * SCALE})  {meta['name']} {meta['version']}")
+    asyncio.run(render(build_html(meta, command, args.style), out, args.style))
+    vw, vh = STYLES[args.style][3]
+    print(f"{out}  ({vw * SCALE}x{vh * SCALE})  {meta['name']} {meta['version']}  [{args.style}]")
 
 
 if __name__ == "__main__":
