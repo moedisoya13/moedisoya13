@@ -1,0 +1,25 @@
+{
+  "platform": "github",
+  "displayName": "GitHub",
+  "metaLabel": "REPOSITORY",
+  "source": "Primer (GitHub's own design system) primitives, dark theme — primer/primitives, src/tokens/base/color/dark/dark.json5 and src/tokens/functional/color/{bgColor,fgColor,borderColor}.json5 (github.com/primer/primitives). The brand mark colour (#181717) is GitHub's own published value from github.com/logos, via the simple-icons dataset (github.com/simple-icons/simple-icons, data/simple-icons.json — CC0, sourced by that project directly from each brand's own guidelines). Not sampled from a screenshot.",
+  "logo": "assets/github-mark.svg",
+  "watermark": "assets/github-mark.svg",
+  "watermarkNote": "GitHub's own Octocat mark, reused faint as the corner watermark (no separate glyph asset the way PyPI has package cubes).",
+  "colors": {
+    "gradientLight": {"hex": "#151B23", "token": "base.color.neutral.2", "role": "gradient light stop — Primer's dark-theme 'muted background' step"},
+    "base":          {"hex": "#0D1117", "token": "base.color.neutral.1", "role": "panel background — bgColor.default, GitHub's canonical dark canvas colour"},
+    "gradientDark":  {"hex": "#010409", "token": "base.color.black", "role": "gradient dark stop — Primer's true near-black"},
+    "chip":          {"hex": "#212830", "token": "base.color.neutral.3", "role": "clone-command chip background — bgColor.inset (code/inset background)"},
+    "text":          {"hex": "#F0F6FC", "token": "base.color.neutral.12", "role": "title, logo, command text — fgColor.default (dark)"},
+    "rule":          {"hex": "#3D444D", "token": "base.color.neutral.7", "role": "chip border — borderColor.default (dark)"},
+    "accent":        {"hex": "#4493F8", "token": "fgColor.accent (dark override)", "role": "left spine accent — Primer's own 'accent' link/interactive blue"},
+    "positive":      {"hex": "#3FB950", "token": "base.color.green.3 (fgColor.success, dark override)", "role": "optional — star/visibility dot; unused in the current layout, kept for reuse"}
+  },
+  "type": {
+    "display": "Source Sans 3",
+    "mono": "Source Code Pro",
+    "source": "GitHub's UI does not ship a distinctive brand webfont — Primer's typography tokens specify the system font stack (-apple-system, \"Segoe UI\", ... for text; ui-monospace, SFMono-Regular, ... for code), so this card reuses the same embedded Source Sans 3 / Source Code Pro as the PyPI card for visual consistency across platforms rather than mimicking a system stack that would render differently per viewer."
+  },
+  "logoUsageNote": "The Octocat mark is a GitHub trademark — use it to refer to GitHub itself, not to brand something else."
+}
