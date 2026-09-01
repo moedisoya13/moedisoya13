@@ -1,5 +1,5 @@
 ---
-name: project-card
+name: cardstrip
 description: >
   Generates a wide PNG "strip" banner for a project on PyPI or GitHub:
   platform logo, project/repo name, one-line summary or description, and
@@ -55,7 +55,7 @@ python3 scripts/generate.py https://github.com/<owner>/<repo>            # GitHu
 python3 scripts/generate.py <owner>/<repo> --platform github             # GitHub, explicit
 ```
 
-Always run this from inside `.claude/skills/project-card/` (or pass paths
+Always run this from inside `.claude/skills/cardstrip/` (or pass paths
 relative to it) so the script's own relative asset/reference lookups
 resolve. Metadata comes from each platform's own public API — PyPI's
 `https://pypi.org/pypi/<package>/json`, GitHub's

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Render a wide "strip" banner for a PyPI project or a GitHub repository.
 
-Part of the project-card skill (see ../SKILL.md). Metadata comes from each
+Part of the cardstrip skill (see ../SKILL.md). Metadata comes from each
 platform's own public API; the palette and type for a given platform are its
 own real design tokens, recorded with provenance in
 ../references/palette-<platform>.json (see references/ for the ones already
