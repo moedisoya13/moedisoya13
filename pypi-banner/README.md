@@ -6,29 +6,8 @@ Package Index's own colours and type.
 ![python-barcode card](out/python-barcode.png)
 
 ```
-python3 generate.py python-barcode                 # flat panel banner
-python3 generate.py python-barcode --style card    # die-cut card front, transparent corners
-python3 generate.py python-barcode --style photo   # lit studio shot of the physical card
+python3 generate.py python-barcode
 ```
-
-## Styles
-
-| `--style` | Output | Size |
-| --- | --- | --- |
-| `panel` (default) | flat banner, square corners | 2022 × 1276 |
-| `card` | card front die-cut to the ID-1 corner radius, transparent outside | 2022 × 1276 |
-| `photo` | the card as a physical object: tilted, lit, grounded by its shadow | 2840 × 1760 |
-
-![studio shot](out/python-barcode-photo.png)
-
-The `card` and `photo` styles add the things that make a card read as an object
-rather than a rectangle: the **3.18 mm corner radius** of ISO/IEC 7810 ID-1, an
-**EMV contact chip** and contactless glyph, a bevelled edge over a white-core
-sliver for the 0.76 mm thickness, a laminate specular sweep, and fine PVC grain.
-`photo` puts that on a lit seamless backdrop with a skewed contact shadow.
-
-It is a design mockup of a *package* card — no card number, expiry, issuer or
-network marks, and nothing that would read as a payment instrument.
 
 ## Geometry
 
@@ -57,7 +36,7 @@ Type is PyPI's too: **Source Sans 3** for the display text, **Source Code Pro**
 for the install command (`settings/_fonts.scss`). Both are embedded as woff2
 data URIs, so rendering needs no network.
 
-## Elements (all styles)
+## Elements
 
 1. **Platform** — PyPI logo + wordmark + "Python Package Index", version chip on the right.
 2. **Name** — shrink-to-fit, 86 px down to 42 px, so long project names never clip.
