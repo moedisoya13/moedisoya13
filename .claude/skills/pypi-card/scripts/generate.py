@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """Render a credit-card-sized panel banner for a PyPI project.
 
-Metadata comes from the PyPI JSON API; the palette and type are PyPI's own
-design tokens (see palette.json). Rendering is Chromium via Playwright at 2x,
-so the PNG is 300 dpi card geometry at 600 dpi output.
+Part of the pypi-card skill (see ../SKILL.md). Metadata comes from the PyPI
+JSON API; the palette and type are PyPI's own design tokens (see
+../references/palette.json). Rendering is Chromium via Playwright at 2x, so
+the PNG is 300 dpi card geometry at 600 dpi output.
 
-    python3 generate.py python-barcode -o out/python-barcode.png
+    python3 generate.py python-barcode -o python-barcode.png
 """
 from __future__ import annotations
 
@@ -18,8 +19,9 @@ import re
 import urllib.request
 
 HERE = pathlib.Path(__file__).resolve().parent
-ASSETS = HERE / "assets"
-TEMPLATE = HERE / "card_template.html"
+SKILL_ROOT = HERE.parent
+ASSETS = SKILL_ROOT / "assets"
+TEMPLATE = ASSETS / "card_template.html"
 
 CARD_W, CARD_H = 1011, 638          # 85.6 x 54 mm at 300 dpi
 SCALE = 2                            # -> 2022 x 1276 px
@@ -110,7 +112,7 @@ def main() -> None:
     if args.ver:
         meta["version"] = args.ver
     command = args.command or f"pip install {meta['name']}"
-    out = (args.out or HERE / "out" / f"{meta['name']}.png").resolve()
+    out = (args.out or pathlib.Path.cwd() / f"{meta['name']}.png").resolve()
 
     asyncio.run(render(build_html(meta, command), out))
     print(f"{out}  ({CARD_W * SCALE}x{CARD_H * SCALE})  {meta['name']} {meta['version']}")
