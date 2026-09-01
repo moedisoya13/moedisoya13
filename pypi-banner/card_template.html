@@ -1,0 +1,167 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>__NAME__ card</title>
+<style>
+  @font-face { font-family: "Source Sans 3"; font-weight: 400; src: url(__FONT_SS_REG__) format("woff2"); }
+  @font-face { font-family: "Source Sans 3"; font-weight: 600; src: url(__FONT_SS_SEMI__) format("woff2"); }
+  @font-face { font-family: "Source Sans 3"; font-weight: 700; src: url(__FONT_SS_BOLD__) format("woff2"); }
+  @font-face { font-family: "Source Code Pro"; font-weight: 400; src: url(__FONT_SCP_REG__) format("woff2"); }
+  @font-face { font-family: "Source Code Pro"; font-weight: 500; src: url(__FONT_SCP_MED__) format("woff2"); }
+
+  :root {
+    --blue:        #006dad;   /* $primary-color            */
+    --blue-light:  #0073b7;   /* $header-background-color  */
+    --blue-chip:   #005d93;   /* adjust($primary, -5%)     */
+    --blue-dark:   #004d7a;   /* $primary-color-dark       */
+    --rule:        rgba(255,255,255,.40); /* $transparent-white */
+    --yellow:      #ffd343;   /* $highlight-color          */
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { background: #fff; }
+
+  /* Credit card: 85.6 x 54 mm -> 1011 x 638 px at 300 dpi (rendered at 2x). */
+  .card {
+    position: relative;
+    width: 1011px;
+    height: 638px;
+    overflow: hidden;
+    background:
+      radial-gradient(120% 145% at 8% 0%, rgba(255,255,255,.10) 0%, rgba(255,255,255,0) 55%),
+      linear-gradient(145deg, var(--blue-light) 0%, var(--blue) 46%, var(--blue-dark) 100%);
+    font-family: "Source Sans 3", "Helvetica Neue", Arial, sans-serif;
+    color: #fff;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: geometricPrecision;
+  }
+
+  /* Python-yellow spine, taken from the logo + $highlight-color */
+  .card::before {
+    content: ""; position: absolute; inset: 0 auto 0 0; width: 12px;
+    background: var(--yellow);
+    z-index: 2;
+  }
+  .card::after {
+    content: ""; position: absolute; inset: 0 0 auto 0; height: 1px;
+    background: rgba(255,255,255,.14);
+  }
+  /* Package cubes, PyPI's own package glyph, as a quiet watermark */
+  .watermark {
+    position: absolute; right: 40px; bottom: 22px;
+    width: 292px; height: 277px; opacity: .085;
+    background: url(__CUBES__) no-repeat center / contain;
+  }
+
+  .inner {
+    position: relative; height: 100%;
+    padding: 50px 60px 52px 76px;
+    display: flex; flex-direction: column; justify-content: space-between;
+  }
+
+  /* ---------- platform row ---------- */
+  .platform { display: flex; align-items: center; gap: 16px; }
+  .platform img { width: 62px; height: 55px; display: block;
+                  filter: drop-shadow(0 2px 6px rgba(0,0,0,.28)); }
+  .platform .wordmark {
+    font-size: 33px; font-weight: 700; letter-spacing: .005em; line-height: 1;
+  }
+  .platform .index {
+    font-size: 14.5px; font-weight: 600; letter-spacing: .22em;
+    text-transform: uppercase; opacity: .72; line-height: 1; padding-top: 5px;
+  }
+  .platform .divider { width: 1px; height: 37px; background: var(--rule); opacity: .55; }
+
+  .version {
+    margin-left: auto; align-self: center;
+    font-family: "Source Code Pro", monospace; font-weight: 500;
+    font-size: 22px; line-height: 1;
+    padding: 10px 15px 9px;
+    border: 1px solid var(--rule); border-radius: 4px;
+    background: rgba(0,0,0,.10);
+  }
+
+  /* ---------- identity ---------- */
+  .name {
+    font-size: 86px; font-weight: 700; letter-spacing: -.018em; line-height: 1.02;
+    white-space: nowrap;
+  }
+  .summary {
+    margin-top: 18px;
+    font-size: 27.5px; font-weight: 400; line-height: 1.34;
+    opacity: .88; max-width: 800px;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  /* ---------- install ---------- */
+  .install { display: flex; align-items: stretch; }
+  .install .cmd {
+    font-family: "Source Code Pro", monospace; font-weight: 500;
+    font-size: 26px; line-height: 1;
+    padding: 16px 19px;
+    background: var(--blue-chip);
+    border: 1px dotted var(--rule);
+    white-space: nowrap;
+  }
+  .install .copy {
+    display: flex; align-items: center; justify-content: center;
+    width: 58px;
+    background: var(--blue-chip);
+    border: 1px dotted var(--rule); border-left: 0;
+  }
+  .install .copy svg { width: 24px; height: 24px; }
+</style>
+
+<div class="card">
+  <div class="watermark"></div>
+  <div class="inner">
+
+    <div class="platform">
+      <img src="__LOGO__" alt="">
+      <span class="wordmark">PyPI</span>
+      <span class="divider"></span>
+      <span class="index">Python Package Index</span>
+      <span class="version">__VERSION__</span>
+    </div>
+
+    <div class="identity">
+      <h1 class="name" id="name">__NAME__</h1>
+      <p class="summary">__SUMMARY__</p>
+    </div>
+
+    <div class="install">
+      <span class="cmd" id="cmd">__COMMAND__</span>
+      <span class="copy">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.9"
+             stroke-linecap="round" stroke-linejoin="round">
+          <rect x="9" y="9" width="12" height="12" rx="2"></rect>
+          <path d="M6 15H4.5A1.5 1.5 0 0 1 3 13.5v-9A1.5 1.5 0 0 1 4.5 3h9A1.5 1.5 0 0 1 15 4.5V6"></path>
+        </svg>
+      </span>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  /* Shrink-to-fit so long names and long commands never clip. */
+  function fit(el, max, min) {
+    const room = el.parentElement.clientWidth || el.clientWidth;
+    let size = max;
+    el.style.fontSize = size + "px";
+    while (el.scrollWidth > room && size > min) {
+      size -= 1;
+      el.style.fontSize = size + "px";
+    }
+  }
+  document.fonts.ready.then(() => {
+    fit(document.getElementById("name"), 86, 42);
+    const cmd = document.getElementById("cmd");
+    let s = 26;
+    cmd.style.fontSize = s + "px";
+    while (cmd.getBoundingClientRect().width > 770 && s > 15) {
+      s -= 1; cmd.style.fontSize = s + "px";
+    }
+    document.documentElement.dataset.ready = "1";
+  });
+</script>
