@@ -1,0 +1,24 @@
+{
+  "platform": "winget",
+  "displayName": "winget",
+  "metaLabel": "WINDOWS PACKAGE MANAGER",
+  "source": "Pixel-sampled directly from the official Windows Package Manager icon in microsoft/winget-cli, .github/images/WindowsPackageManager_Assets/ICO/PNG/_256.png (github.com/microsoft/winget-cli). No design-token/sass source exists for winget (it's a CLI, not a themed web app) and no separate SVG asset was published alongside the PNG in that repo at research time, so every hex below is a real sampled pixel from that authoritative icon rather than a screenshot of a rendered page or an invented value — see the (x,y) coordinates in each role's note. Package metadata (name, publisher, description, version) comes from microsoft/winget-pkgs, the same org's official community package-manifest repo.",
+  "logo": "assets/winget-icon.png",
+  "watermark": "assets/winget-icon.png",
+  "watermarkNote": "The icon's own package-with-arrow glyph, reused faint as the corner watermark (same pattern as the PyPI card's cubes).",
+  "colors": {
+    "gradientLight": {"hex": "#bc822a", "token": "icon second folder-tab band", "role": "gradient light stop", "note": "sampled at (128,32)"},
+    "base":          {"hex": "#9c640a", "token": "icon top folder-tab band", "role": "panel background", "note": "sampled at (128,12)"},
+    "gradientDark":  {"hex": "#634006", "token": "icon fold shadow, darkest opaque non-white pixel in the asset", "role": "gradient dark stop", "note": "sampled at (51,31) — found by scanning the whole 256x256 icon for the lowest-luminance opaque, non-white pixel"},
+    "chip":          {"hex": "#714808", "token": "icon fold-shadow transition band", "role": "install-command chip background", "note": "sampled at (128,30), the shadow gradient between the top and second folder-tab bands"},
+    "text":          {"hex": "#ffffff", "token": "n/a", "role": "title, logo halo, command text", "note": "the icon's own download arrow renders as near-white (#f9f9f9 sampled) — using pure white for text keeps it consistent with the PyPI/GitHub cards"},
+    "rule":          {"hex": "rgba(255,255,255,.4)", "token": "n/a", "role": "chip border / dividers", "note": "winget has no web design system to source a border token from (unlike PyPI's $transparent-white or GitHub's borderColor.default) — reuses the same semi-transparent-white convention as the PyPI card for hairlines on a colour panel"},
+    "accent":        {"hex": "#dbb272", "token": "icon main-body gradient, lightest point", "role": "left spine accent", "note": "sampled at (30,75) — the icon is monochromatic gold with no second brand hue, so the accent is the icon's own lightest tone rather than an unrelated colour"}
+  },
+  "type": {
+    "display": "Source Sans 3",
+    "mono": "Source Code Pro",
+    "source": "winget is a CLI with no branded webfont (its own terminal banner uses the console's font) — reuses the same embedded Source Sans 3 / Source Code Pro as the other cards for visual consistency."
+  },
+  "logoUsageNote": "The Windows Package Manager icon is a Microsoft asset — use it to refer to winget itself, not to brand something else."
+}

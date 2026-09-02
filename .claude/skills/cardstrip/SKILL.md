@@ -1,25 +1,28 @@
 ---
 name: cardstrip
 description: >
-  Generates a wide PNG "strip" banner for a project on PyPI or GitHub:
-  platform logo, project/repo name, one-line summary or description, and
-  the install/clone command — all drawn in that platform's own real colours
-  and type (not sampled from a screenshot; pulled from each platform's own
-  design-token source: PyPI's Warehouse sass, GitHub's Primer primitives).
-  Height is intrinsic to the content, so there's never dead space under a
-  short summary. Use this whenever the user asks for a project card,
-  badge, banner, poster, or thumbnail for a PyPI package or a GitHub
-  repository — phrasings like "PyPI 배너 만들어줘", "카드/배너 이미지 제작",
-  "make a project card for <package>", "generate a PyPI banner/card for
-  <package>", "이 라이브러리 홍보 이미지 만들어줘", "make a card for this GitHub
-  repo", "리포지토리 카드 만들어줘", or a bare github.com/owner/repo URL paired
-  with a request for a promo image. Also use it proactively whenever the
-  task is clearly "make a promo/share image for a PyPI package or GitHub
-  repo" even if the user doesn't say "card" or "banner" outright. Don't use
-  this for other registries (npm, crates.io, ...) until a matching
+  Generates a wide PNG "strip" banner for a project on PyPI, GitHub, or a
+  winget package: platform logo, project/package name, one-line summary or
+  description, and the install/clone command — all drawn in that
+  platform's own real colours and type (not sampled from a screenshot;
+  pulled from each platform's own design-token source: PyPI's Warehouse
+  sass, GitHub's Primer primitives, winget's own CLI icon). Height is
+  intrinsic to the content, so there's never dead space under a short
+  summary. Use this whenever the user asks for a project card, badge,
+  banner, poster, or thumbnail for a PyPI package, a GitHub repository, or
+  a winget package — phrasings like "PyPI 배너 만들어줘", "카드/배너 이미지
+  제작", "make a project card for <package>", "generate a PyPI banner/card
+  for <package>", "이 라이브러리 홍보 이미지 만들어줘", "make a card for this
+  GitHub repo", "리포지토리 카드 만들어줘", "winget 패키지 카드 만들어줘", a bare
+  github.com/owner/repo URL, or a dotted winget PackageIdentifier (e.g.
+  Git.Git, OpenJS.NodeJS.LTS) paired with a request for a promo image.
+  Also use it proactively whenever the task is clearly "make a promo/share
+  image for a PyPI package, GitHub repo, or winget package" even if the
+  user doesn't say "card" or "banner" outright. Don't use this for other
+  registries (npm, crates.io, ...) until a matching
   references/palette-<platform>.json exists for them (see below to add
   one), and don't use it for marketing graphics unrelated to a specific
-  PyPI project or GitHub repository.
+  PyPI project, GitHub repository, or winget package.
 ---
 
 # Project card
@@ -32,20 +35,27 @@ void and no clipping.
 
 ![PyPI example](assets/example-pypi.png)
 ![GitHub example](assets/example-github.png)
+![winget example](assets/example-winget.png)
 
 ## When to use this
 
 Trigger on any request for a promotional/share image, card, banner, badge,
-or thumbnail for **a specific PyPI package or GitHub repository**. Accept
-a bare package name, a PyPI URL, a `github.com/owner/repo` URL, or an
-`owner/repo` shorthand — the script auto-detects which platform from the
-input shape (see `detect_platform` in `scripts/generate.py`). If the name
-is unfamiliar or ambiguous (e.g. it doesn't resolve, or a GitHub profile
-was named instead of a repo), resolve it before rendering rather than
-guessing — a near-miss name fetches the wrong project silently. See the
-`korean-law-mcp` case in this skill's own history: given a GitHub
-*profile*, the right move was checking which of that user's pinned repos
-actually exists on PyPI, not rendering the first guess.
+or thumbnail for **a specific PyPI package, GitHub repository, or winget
+package**. Accept a bare package name, a PyPI URL, a `github.com/owner/repo`
+URL, an `owner/repo` shorthand, or a dotted winget `PackageIdentifier`
+(`Publisher.Package[.Suffix]`, e.g. `Git.Git`, `OpenJS.NodeJS.LTS`) — the
+script auto-detects PyPI vs. GitHub from the input shape (see
+`detect_platform` in `scripts/generate.py`), but **winget is never
+auto-detected**: pass `--platform winget` explicitly, because a dotted
+winget ID is syntactically indistinguishable from a real dotted PyPI
+package name (`zope.interface`, `ruamel.yaml`, ... are genuine PyPI
+packages). If the name is unfamiliar or ambiguous (e.g. it doesn't
+resolve, or a GitHub profile was named instead of a repo), resolve it
+before rendering rather than guessing — a near-miss name fetches the wrong
+project silently. See the `korean-law-mcp` case in this skill's own
+history: given a GitHub *profile*, the right move was checking which of
+that user's pinned repos actually exists on PyPI, not rendering the first
+guess.
 
 ## How to generate one
 
@@ -53,16 +63,22 @@ actually exists on PyPI, not rendering the first guess.
 python3 scripts/generate.py <package>                                    # PyPI, by name
 python3 scripts/generate.py https://github.com/<owner>/<repo>            # GitHub, by URL
 python3 scripts/generate.py <owner>/<repo> --platform github             # GitHub, explicit
+python3 scripts/generate.py Git.Git --platform winget                    # winget, always explicit
 ```
 
 Always run this from inside `.claude/skills/cardstrip/` (or pass paths
 relative to it) so the script's own relative asset/reference lookups
-resolve. Metadata comes from each platform's own public API — PyPI's
+resolve. Metadata comes from each platform's own public source — PyPI's
 `https://pypi.org/pypi/<package>/json`, GitHub's
-`https://api.github.com/repos/<owner>/<repo>` (unauthenticated, so subject
-to GitHub's public rate limit — fine for occasional use, not for batch
-generation). No network access is needed for rendering itself: fonts and
-logos are already bundled as data URIs.
+`https://api.github.com/repos/<owner>/<repo>`, winget's
+`microsoft/winget-pkgs` (the community manifest repo winget itself
+installs from — there's no separate "winget API": the script lists
+`manifests/<first-letter>/<Publisher>/<Package>/...` via the GitHub
+Contents API to find the newest version folder, then reads that version's
+`.locale.en-US.yaml` straight off `raw.githubusercontent.com`). All of
+this is unauthenticated, so subject to GitHub's public rate limit — fine
+for occasional use, not for batch generation. No network access is needed
+for rendering itself: fonts and logos are already bundled as data URIs.
 
 Useful overrides, e.g. to shorten an overlong summary or pin a specific
 command:
@@ -89,6 +105,12 @@ Requires `playwright` (Python) and a Chromium build:
 pip install playwright
 ```
 
+winget cards additionally need PyYAML, to parse the manifest files:
+
+```bash
+pip install pyyaml
+```
+
 For the browser: on a sandbox that already has one under
 `/opt/pw-browsers/`, no `playwright install` is needed — `generate.py`
 auto-detects it via `CHROMIUM_CANDIDATES` at the top of the script. If
@@ -111,6 +133,13 @@ screenshot. Each platform's tokens, with full provenance, live in
   `bgColor`/`fgColor`/`borderColor` functional tokens), plus the brand
   mark's official black (`#181717`, from github.com/logos via the
   simple-icons dataset). Canvas near-black `#0d1117`, accent blue `#4493f8`.
+- `references/palette-winget.json` — winget has no web design system to
+  pull a sass/CSS file from (it's a CLI), so every hex is pixel-sampled
+  directly from the official icon in `microsoft/winget-cli`
+  (`.github/images/WindowsPackageManager_Assets/ICO/PNG/_256.png`) — the
+  base tone, its lightest and darkest points, and a mid shadow band, each
+  at a documented (x,y) coordinate in the JSON. Gold `#9c640a`, deep umber
+  gradient stop `#634006`.
 
 **Before generating a card for a platform that doesn't have one of these
 files yet, extract its palette first** — don't invent colours or guess
@@ -156,7 +185,7 @@ file and platform metadata.
 
 - Top row: platform logo + wordmark + a short category label (from
   `metaLabel`), a chip on the right (version for PyPI, `★ star-count` for
-  GitHub).
+  GitHub, `v<version>` for winget).
 - Name: for GitHub, rendered as `owner/` (dimmed, regular weight) +
   `repo` (bold) — mirroring how GitHub itself displays a repo header. For
   PyPI, just the package name. Shrink-to-fit runs 74px down to 36px after
@@ -182,14 +211,17 @@ file and platform metadata.
   bottom-right.
 
 Edit the template directly for layout changes — it's plain HTML/CSS, no
-build step. Always re-render at least three cases after a layout edit: a
+build step. Always re-render at least four cases after a layout edit: a
 short name with a one-line summary (e.g. `requests`), a long name with a
-two-line summary (e.g. `opentelemetry-instrumentation-fastapi`), and a
-GitHub repo (which exercises the owner-prefix title and the star chip that
-PyPI cards don't have).
+two-line summary (e.g. `opentelemetry-instrumentation-fastapi`), a GitHub
+repo (which exercises the owner-prefix title and the star chip that PyPI
+cards don't have), and a winget package (which exercises the lightest,
+warmest panel of the three — check text contrast didn't quietly degrade if
+you touch the gradient stops).
 
 ## Trademarks
 
 Logos are each platform's own trademark (PyPI's is a PSF mark, GitHub's
-Octocat is a GitHub mark) — use them to refer to that platform/project
-itself, not to brand something else.
+Octocat is a GitHub mark, the winget package icon is a Microsoft asset) —
+use them to refer to that platform/project itself, not to brand something
+else.
