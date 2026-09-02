@@ -16,9 +16,11 @@ Rendering is Chromium via Playwright at 2x, so the PNG is crisp at ~2x CSS px.
 
 winget package IDs are never auto-detected (a dotted PyPI package name like
 "zope.interface" would collide) — always pass --platform winget for those.
-Comma-separate multiple targets to render them as tiles in one strip; all
-targets in a multi-render must resolve to the same platform (mixed-platform
-strips aren't supported — the whole panel is one platform's palette/logo).
+Comma-separate multiple targets to combine them into one card: names joined
+with ", " as the title, one combined install command (e.g. "winget install
+Git.Git OpenJS.NodeJS.LTS"). All targets in a multi-render must resolve to
+the same platform (mixed-platform strips aren't supported — the whole panel
+is one platform's palette/logo).
 """
 from __future__ import annotations
 
@@ -38,10 +40,6 @@ SKILL_ROOT = HERE.parent
 ASSETS = SKILL_ROOT / "assets"
 REFERENCES = SKILL_ROOT / "references"
 TEMPLATE = ASSETS / "card_template.html"
-TEMPLATE_MULTI = ASSETS / "card_template_multi.html"
-
-MIN_TILE_W = 340   # px; below this a tile's install command gets too cramped
-TILE_GAP = 40
 
 STRIP_W = 1080                       # fixed width; height is intrinsic to content
 RENDER_VIEWPORT_H = 1200             # generous — the element screenshot bounds
@@ -256,41 +254,29 @@ def build_html(platform: str, meta: dict, overrides: dict) -> str:
     return _fill(html, subs)
 
 
-def multi_card_width(count: int) -> int:
-    return max(STRIP_W, 130 + count * MIN_TILE_W + (count - 1) * TILE_GAP)
+def combine_meta(platform: str, package_ids: list[str], metas: list[dict]) -> dict:
+    """N packages folded into ONE card: names and (non-empty) summaries
+    joined with ", ", one install command covering every package — reuses
+    card_template.html as-is rather than a separate multi-package DOM,
+    since the fields are just strings either way."""
+    if platform == "github":
+        # no single valid "clone several repos" command exists; chain them
+        command = " && ".join(m["command"] for m in metas)
+    else:
+        verb = {"pypi": "pip install", "winget": "winget install"}[platform]
+        command = f"{verb} " + " ".join(package_ids)
+    return {
+        "name_prefix": "",
+        "name": ", ".join(m["name"] for m in metas),
+        "summary": ", ".join(s.rstrip(".") for s in (m["summary"] for m in metas) if s),
+        "chip_text": f"{len(metas)} packages",
+        "command": command,
+    }
 
 
-def build_html_multi(platform: str, metas: list[dict]) -> str:
-    """N packages as tiles in one strip. No per-target overrides here —
-    with several targets sharing one render, --summary/--chip/--command
-    can't unambiguously mean 'for which one', so main() rejects that
-    combination before this is called."""
-    palette = load_palette(platform)
-    html = TEMPLATE_MULTI.read_text()
-
-    tile_html = "\n".join(
-        f'''      <div class="tile">
-        <h2 class="tile-name">{esc(m["name_prefix"])}{esc(m["name"])}</h2>
-        <p class="tile-summary">{esc(m["summary"])}</p>
-        <div class="tile-install"><span class="cmd">{esc(m["command"])}</span></div>
-      </div>'''
-        for m in metas
-    )
-
-    subs = _palette_subs(palette)
-    subs.update({
-        "__CHIP_TEXT__": f"{len(metas)} packages",
-        "__CARD_W__":    str(multi_card_width(len(metas))),
-        "__TILES__":     tile_html,
-    })
-    return _fill(html, subs)
-
-
-async def render(html: str, out: pathlib.Path, viewport_w: int = STRIP_W) -> tuple[int, int]:
+async def render(html: str, out: pathlib.Path) -> tuple[int, int]:
     """Screenshot the (intrinsically-sized) .card element; return its
-    actual rendered pixel dimensions at the capture scale. viewport_w only
-    needs to be wider than STRIP_W for a multi-package render, whose card
-    width grows with the tile count."""
+    actual rendered pixel dimensions at the capture scale."""
     from playwright.async_api import async_playwright
 
     exe = next((p for p in CHROMIUM_CANDIDATES if pathlib.Path(p).exists()), None)
@@ -303,7 +289,7 @@ async def render(html: str, out: pathlib.Path, viewport_w: int = STRIP_W) -> tup
                                                                     "--force-color-profile=srgb",
                                                                     "--font-render-hinting=none"])
         page = await browser.new_page(
-            viewport={"width": viewport_w, "height": RENDER_VIEWPORT_H},
+            viewport={"width": STRIP_W, "height": RENDER_VIEWPORT_H},
             device_scale_factor=SCALE,
         )
         await page.goto(page_html.as_uri(), wait_until="load")
@@ -358,13 +344,13 @@ def main() -> None:
                               f"all the same way, or render separately.")
         platform = platforms[0]
         metas = [fetchers[platform](t) for t in resolved]
+        combined = combine_meta(platform, resolved, metas)
         out = (args.out or pathlib.Path.cwd() /
                f"{'+'.join(_slug(m['name']) for m in metas)}.png").resolve()
 
-        html = build_html_multi(platform, metas)
-        w, h = asyncio.run(render(html, out, viewport_w=multi_card_width(len(metas))))
-        names = ", ".join(f"{m['name_prefix']}{m['name']}" for m in metas)
-        print(f"{out}  ({w}x{h})  [{platform}] {names}")
+        html = build_html(platform, combined, overrides={})
+        w, h = asyncio.run(render(html, out))
+        print(f"{out}  ({w}x{h})  [{platform}] {combined['name']}")
         return
 
     platform, target = detect_platform(targets[0])

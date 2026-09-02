@@ -68,18 +68,23 @@ python3 scripts/generate.py Git.Git --platform winget                    # winge
 python3 scripts/generate.py "Git.Git,OpenJS.NodeJS.LTS" --platform winget  # multiple, one strip
 ```
 
-Comma-separate multiple targets to render them as tiles side by side in one
-strip instead of a separate image per package — handy for "here's what to
-install" round-ups. All targets in a multi-render must resolve to the same
-platform (the whole panel is one platform's palette/logo, so a mixed
-PyPI+GitHub strip is rejected with a clear error rather than guessing which
-one should win); pass `--platform` to force them all the same way if
-auto-detection would otherwise disagree. The strip's width grows with the
-tile count (each tile has a ~340px floor before its install command gets
-cramped) — height stays intrinsic exactly like the single-target card.
-`--name`/`--summary`/`--chip`/`--command` are single-target-only overrides
-and are rejected outright when more than one target is given, since it's
-ambiguous which package they'd apply to.
+Comma-separate multiple targets to fold them into one combined card instead
+of a separate image per package — handy for "here's what to install"
+round-ups. It reuses the exact same single-card template and layout, just
+with joined fields: the title becomes every package's name joined with
+`", "`, the summary the same for their descriptions, and the install row
+becomes one real, copy-pasteable command covering all of them — `pip
+install a b c` / `winget install a b c` (both accept multiple package
+arguments in one invocation), or `git clone a.git && git clone b.git` for
+GitHub, since a single `git clone` can't take more than one repo. The
+top-right chip shows a package count instead of a version/star-count. All
+targets in a multi-render must resolve to the same platform (the whole
+panel is one platform's palette/logo, so a mixed PyPI+GitHub strip is
+rejected with a clear error rather than guessing which one should win);
+pass `--platform` to force them all the same way if auto-detection would
+otherwise disagree. `--name`/`--summary`/`--chip`/`--command` are
+single-target-only overrides and are rejected outright when more than one
+target is given, since it's ambiguous which package they'd apply to.
 
 Always run this from inside `.claude/skills/cardstrip/` (or pass paths
 relative to it) so the script's own relative asset/reference lookups
@@ -196,7 +201,7 @@ changes; it's driven entirely by the `__COLOR_*__` and `__PLATFORM_NAME__`
 /`__META_LABEL__` placeholders that `build_html()` fills from the palette
 file and platform metadata.
 
-## Layout notes (`assets/card_template.html`, `assets/card_template_multi.html`)
+## Layout notes (`assets/card_template.html`)
 
 - Top row: platform logo + wordmark + a short category label (from
   `metaLabel`), a chip on the right (version for PyPI, `★ star-count` for
@@ -224,16 +229,16 @@ file and platform metadata.
   confirm neither dead space nor clipping crept back in.
 - Corner watermark: the platform's own mark, faint (`.085` opacity),
   bottom-right.
-- **Multi-package mode** (`card_template_multi.html`) is a separate
-  template, not a mode flag on the single-card one — the DOM shape
-  genuinely differs (N tiles in a row vs. one name/summary/install stack).
-  It shares the platform row, palette wiring, and watermark with the
-  single-card template (`_palette_subs()` in `generate.py` fills both from
-  the same dict, so they can't drift out of sync on how a palette is
-  wired), but the top-right chip shows a package count instead of a
-  version/star-count, and each tile gets its own smaller name (42px→22px
-  shrink range) + 1-line-clamped summary + install chip, separated by a
-  vertical rule.
+- **Multi-package mode** is not a separate template — `combine_meta()` in
+  `generate.py` folds N packages' fields into the same shape a single
+  target already produces (joined name/summary strings, one combined
+  install command) and hands that straight to `build_html()` /
+  `card_template.html`. Resist the urge to give it its own DOM (tiles,
+  columns, ...): every layout guarantee above (intrinsic height,
+  shrink-to-fit, the ellipsis safety-net) already works correctly for a
+  long joined string without any extra code, and a second template is
+  exactly the kind of thing that quietly drifts out of sync with the
+  first one.
 
 Edit the template directly for layout changes — it's plain HTML/CSS, no
 build step. Always re-render at least four cases after a layout edit: a
