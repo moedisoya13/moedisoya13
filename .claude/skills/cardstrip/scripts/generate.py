@@ -12,9 +12,13 @@ Rendering is Chromium via Playwright at 2x, so the PNG is crisp at ~2x CSS px.
     python3 generate.py https://github.com/SeoNaRu/nulnul-harness -o nulnul-harness.png
     python3 generate.py SeoNaRu/nulnul-harness --platform github -o nulnul-harness.png
     python3 generate.py Git.Git --platform winget -o git.png
+    python3 generate.py "Git.Git,OpenJS.NodeJS.LTS" --platform winget -o combo.png
 
 winget package IDs are never auto-detected (a dotted PyPI package name like
 "zope.interface" would collide) — always pass --platform winget for those.
+Comma-separate multiple targets to render them as tiles in one strip; all
+targets in a multi-render must resolve to the same platform (mixed-platform
+strips aren't supported — the whole panel is one platform's palette/logo).
 """
 from __future__ import annotations
 
@@ -34,6 +38,10 @@ SKILL_ROOT = HERE.parent
 ASSETS = SKILL_ROOT / "assets"
 REFERENCES = SKILL_ROOT / "references"
 TEMPLATE = ASSETS / "card_template.html"
+TEMPLATE_MULTI = ASSETS / "card_template_multi.html"
+
+MIN_TILE_W = 340   # px; below this a tile's install command gets too cramped
+TILE_GAP = 40
 
 STRIP_W = 1080                       # fixed width; height is intrinsic to content
 RENDER_VIEWPORT_H = 1200             # generous — the element screenshot bounds
@@ -194,17 +202,21 @@ def fetch_meta_winget(package_id: str) -> dict:
     }
 
 
-def build_html(platform: str, meta: dict, overrides: dict) -> str:
-    palette = load_palette(platform)
+def _fill(html: str, subs: dict) -> str:
+    for key, value in subs.items():
+        html = html.replace(key, value)
+    left = re.findall(r"__[A-Z_]+__", html)
+    if left:
+        raise SystemExit(f"unfilled placeholders: {sorted(set(left))}")
+    return html
+
+
+def _palette_subs(palette: dict) -> dict:
+    """Substitutions shared by both templates: fonts, logo/watermark, and
+    the palette's colour roles. Keeping this in one place means the two
+    templates can't quietly drift out of sync on how a palette is wired."""
     colors = palette["colors"]
-    html = TEMPLATE.read_text()
-
-    name = overrides.get("name") or meta["name"]
-    summary = overrides.get("summary") or meta["summary"]
-    chip_text = overrides.get("chip_text") or meta["chip_text"]
-    command = overrides.get("command") or meta["command"]
-
-    subs = {
+    return {
         "__FONT_SS_REG__":  data_uri(ASSETS / "fonts/SourceSans3-Regular.ttf.woff2", "font/woff2"),
         "__FONT_SS_SEMI__": data_uri(ASSETS / "fonts/SourceSans3-Semibold.ttf.woff2", "font/woff2"),
         "__FONT_SS_BOLD__": data_uri(ASSETS / "fonts/SourceSans3-Bold.ttf.woff2", "font/woff2"),
@@ -221,23 +233,64 @@ def build_html(platform: str, meta: dict, overrides: dict) -> str:
         "__COLOR_ACCENT__":         colors["accent"]["hex"],
         "__PLATFORM_NAME__": esc(palette["displayName"]),
         "__META_LABEL__":    esc(palette["metaLabel"]),
+    }
+
+
+def build_html(platform: str, meta: dict, overrides: dict) -> str:
+    palette = load_palette(platform)
+    html = TEMPLATE.read_text()
+
+    name = overrides.get("name") or meta["name"]
+    summary = overrides.get("summary") or meta["summary"]
+    chip_text = overrides.get("chip_text") or meta["chip_text"]
+    command = overrides.get("command") or meta["command"]
+
+    subs = _palette_subs(palette)
+    subs.update({
         "__CHIP_TEXT__":     esc(chip_text),
         "__NAME_PREFIX__":   esc(meta["name_prefix"]),
         "__NAME__":          esc(name),
         "__SUMMARY__":       esc(summary),
         "__COMMAND__":       esc(command),
-    }
-    for key, value in subs.items():
-        html = html.replace(key, value)
-    left = re.findall(r"__[A-Z_]+__", html)
-    if left:
-        raise SystemExit(f"unfilled placeholders: {sorted(set(left))}")
-    return html
+    })
+    return _fill(html, subs)
 
 
-async def render(html: str, out: pathlib.Path) -> tuple[int, int]:
+def multi_card_width(count: int) -> int:
+    return max(STRIP_W, 130 + count * MIN_TILE_W + (count - 1) * TILE_GAP)
+
+
+def build_html_multi(platform: str, metas: list[dict]) -> str:
+    """N packages as tiles in one strip. No per-target overrides here —
+    with several targets sharing one render, --summary/--chip/--command
+    can't unambiguously mean 'for which one', so main() rejects that
+    combination before this is called."""
+    palette = load_palette(platform)
+    html = TEMPLATE_MULTI.read_text()
+
+    tile_html = "\n".join(
+        f'''      <div class="tile">
+        <h2 class="tile-name">{esc(m["name_prefix"])}{esc(m["name"])}</h2>
+        <p class="tile-summary">{esc(m["summary"])}</p>
+        <div class="tile-install"><span class="cmd">{esc(m["command"])}</span></div>
+      </div>'''
+        for m in metas
+    )
+
+    subs = _palette_subs(palette)
+    subs.update({
+        "__CHIP_TEXT__": f"{len(metas)} packages",
+        "__CARD_W__":    str(multi_card_width(len(metas))),
+        "__TILES__":     tile_html,
+    })
+    return _fill(html, subs)
+
+
+async def render(html: str, out: pathlib.Path, viewport_w: int = STRIP_W) -> tuple[int, int]:
     """Screenshot the (intrinsically-sized) .card element; return its
-    actual rendered pixel dimensions at the capture scale."""
+    actual rendered pixel dimensions at the capture scale. viewport_w only
+    needs to be wider than STRIP_W for a multi-package render, whose card
+    width grows with the tile count."""
     from playwright.async_api import async_playwright
 
     exe = next((p for p in CHROMIUM_CANDIDATES if pathlib.Path(p).exists()), None)
@@ -250,7 +303,7 @@ async def render(html: str, out: pathlib.Path) -> tuple[int, int]:
                                                                     "--force-color-profile=srgb",
                                                                     "--font-render-hinting=none"])
         page = await browser.new_page(
-            viewport={"width": STRIP_W, "height": RENDER_VIEWPORT_H},
+            viewport={"width": viewport_w, "height": RENDER_VIEWPORT_H},
             device_scale_factor=SCALE,
         )
         await page.goto(page_html.as_uri(), wait_until="load")
@@ -262,27 +315,62 @@ async def render(html: str, out: pathlib.Path) -> tuple[int, int]:
         return round(box["width"] * SCALE), round(box["height"] * SCALE)
 
 
+def _slug(text: str) -> str:
+    return re.sub(r"[^\w.-]+", "-", text).strip("-") or "package"
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("target", help="PyPI project name, or a GitHub repo "
-                                    "(github.com/owner/repo URL or owner/repo shorthand)")
+    ap.add_argument("target", help="PyPI project name, a GitHub repo "
+                                    "(github.com/owner/repo URL or owner/repo shorthand), "
+                                    "or comma-separated targets to render as one multi-package strip")
     ap.add_argument("--platform", choices=["pypi", "github", "winget"],
                     help="override auto-detection (required for winget — "
-                    "package IDs are never auto-detected, see module docstring)")
+                    "package IDs are never auto-detected, see module docstring); "
+                    "applies to every target when comma-separated")
     ap.add_argument("-o", "--out", type=pathlib.Path, help="output PNG path")
-    ap.add_argument("--name", help="override the displayed name")
-    ap.add_argument("--summary", help="override the one-line summary/description")
+    ap.add_argument("--name", help="override the displayed name (single target only)")
+    ap.add_argument("--summary", help="override the one-line summary/description "
+                    "(single target only)")
     ap.add_argument("--chip", dest="chip_text", help="override the top-right chip "
-                    "text (version for pypi, star count for github)")
-    ap.add_argument("--command", help="override the install/clone command")
+                    "text — version for pypi, star count for github (single target only)")
+    ap.add_argument("--command", help="override the install/clone command (single target only)")
     args = ap.parse_args()
 
-    platform, target = detect_platform(args.target)
+    fetchers = {"pypi": fetch_meta_pypi, "github": fetch_meta_github, "winget": fetch_meta_winget}
+    targets = [t.strip() for t in args.target.split(",") if t.strip()]
+
+    if len(targets) > 1:
+        if any([args.name, args.summary, args.chip_text, args.command]):
+            raise SystemExit("--name/--summary/--chip/--command need a single target — "
+                              "with multiple comma-separated targets it's ambiguous which "
+                              "one they'd apply to")
+        platforms, resolved = [], []
+        for t in targets:
+            platform, target = (args.platform, t) if args.platform else detect_platform(t)
+            platforms.append(platform)
+            resolved.append(target)
+        if len(set(platforms)) > 1:
+            raise SystemExit(f"mixed platforms in one strip aren't supported — got "
+                              f"{dict(zip(targets, platforms))}; the whole panel is one "
+                              f"platform's palette/logo. Pass --platform to force them "
+                              f"all the same way, or render separately.")
+        platform = platforms[0]
+        metas = [fetchers[platform](t) for t in resolved]
+        out = (args.out or pathlib.Path.cwd() /
+               f"{'+'.join(_slug(m['name']) for m in metas)}.png").resolve()
+
+        html = build_html_multi(platform, metas)
+        w, h = asyncio.run(render(html, out, viewport_w=multi_card_width(len(metas))))
+        names = ", ".join(f"{m['name_prefix']}{m['name']}" for m in metas)
+        print(f"{out}  ({w}x{h})  [{platform}] {names}")
+        return
+
+    platform, target = detect_platform(targets[0])
     if args.platform:
         platform = args.platform
 
-    fetchers = {"pypi": fetch_meta_pypi, "github": fetch_meta_github, "winget": fetch_meta_winget}
     meta = fetchers[platform](target)
     overrides = {"name": args.name, "summary": args.summary,
                  "chip_text": args.chip_text, "command": args.command}
