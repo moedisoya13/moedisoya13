@@ -109,7 +109,7 @@
     background: var(--chip);
     border: 1px dotted var(--rule);
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    max-width: 780px; display: block;
+    max-width: 880px; display: block;
   }
   .install .copy {
     display: flex; align-items: center; justify-content: center;
@@ -164,10 +164,13 @@
   }
   document.fonts.ready.then(() => {
     fit(document.getElementById("name"), 74, 36);
+    /* Compare scrollWidth (content) against clientWidth (the max-width'd
+       box) — measuring the box itself can't work, since max-width caps it
+       and the loop would never run. Ellipsis stays the last-resort net. */
     const cmd = document.getElementById("cmd");
     let s = 24;
     cmd.style.fontSize = s + "px";
-    while (cmd.getBoundingClientRect().width > 800 && s > 14) {
+    while (cmd.scrollWidth > cmd.clientWidth && s > 14) {
       s -= 1; cmd.style.fontSize = s + "px";
     }
     document.documentElement.dataset.ready = "1";
