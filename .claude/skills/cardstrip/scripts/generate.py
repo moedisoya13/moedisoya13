@@ -54,6 +54,9 @@ CHROMIUM_CANDIDATES = [
 GITHUB_URL_RE = re.compile(
     r"^(?:https?://)?(?:www\.)?github\.com/([^/\s]+)/([^/\s]+?)(?:\.git)?/?$"
 )
+PYPI_URL_RE = re.compile(
+    r"^(?:https?://)?(?:www\.)?pypi\.org/(?:project|pypi)/([^/\s]+)/?"
+)
 OWNER_REPO_RE = re.compile(r"^([^/\s]+)/([^/\s]+?)(?:\.git)?$")
 
 
@@ -80,10 +83,16 @@ def load_palette(platform: str) -> dict:
 
 
 def detect_platform(target: str) -> tuple[str, str]:
-    """Return (platform, target) — target is a PyPI package name or 'owner/repo'."""
+    """Return (platform, target) — target is a PyPI package name or 'owner/repo'.
+
+    Project URLs are unwrapped to the bare identifier, so pasting the page
+    you were looking at works as well as typing the name."""
     m = GITHUB_URL_RE.match(target)
     if m:
         return "github", f"{m.group(1)}/{m.group(2)}"
+    m = PYPI_URL_RE.match(target)
+    if m:
+        return "pypi", m.group(1)
     if "/" in target and OWNER_REPO_RE.match(target):
         return "github", target
     return "pypi", target
@@ -91,8 +100,14 @@ def detect_platform(target: str) -> tuple[str, str]:
 
 def fetch_meta_pypi(package: str) -> dict:
     url = f"https://pypi.org/pypi/{package}/json"
-    with urllib.request.urlopen(url, timeout=30) as r:
-        info = json.load(r)["info"]
+    try:
+        with urllib.request.urlopen(url, timeout=30) as r:
+            info = json.load(r)["info"]
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            raise SystemExit(f"no such PyPI project: {package!r} "
+                              f"(checked {url})")
+        raise
     return {
         "name_prefix": "",
         "name": info["name"],
