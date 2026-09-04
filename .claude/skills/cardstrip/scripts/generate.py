@@ -51,6 +51,10 @@ CHROMIUM_CANDIDATES = [
     "/opt/pw-browsers/chromium/chrome-linux/chrome",
 ]
 
+HINT_OVERRIDE = ("\n\nTo render anyway without the lookup, supply the two fields it "
+                 "would have\nprovided: --summary \"...\" --chip \"...\" (the name and "
+                 "install/clone command\nare derived from the target itself).")
+
 GITHUB_URL_RE = re.compile(
     r"^(?:https?://)?(?:www\.)?github\.com/([^/\s]+)/([^/\s]+?)(?:\.git)?/?$"
 )
@@ -133,7 +137,8 @@ def fetch_meta_github(owner_repo: str) -> dict:
                               f"the unauthenticated rate limit (60 req/hr per IP); wait "
                               f"and retry, or (in a sandboxed environment that gates "
                               f"api.github.com behind repo attachment) check whether that "
-                              f"gate, not GitHub itself, is the actual blocker")
+                              f"gate, not GitHub itself, is the actual blocker."
+                              + HINT_OVERRIDE)
         raise
     stars = info.get("stargazers_count") or 0
     return {
@@ -182,7 +187,8 @@ def fetch_meta_winget(package_id: str) -> dict:
                               f"the unauthenticated rate limit (60 req/hr per IP); wait "
                               f"and retry, or (in a sandboxed environment that gates "
                               f"api.github.com behind repo attachment) check whether that "
-                              f"gate, not GitHub itself, is the actual blocker")
+                              f"gate, not GitHub itself, is the actual blocker."
+                              + HINT_OVERRIDE)
         raise
     versions = [e["name"] for e in entries if e["type"] == "dir"]
     if not versions:
@@ -213,6 +219,21 @@ def fetch_meta_winget(package_id: str) -> dict:
         "chip_text": f"v{version}",
         "command": f"winget install {package_id}",
     }
+
+
+def local_meta(platform: str, target: str) -> dict:
+    """Everything derivable from the identifier alone, with no network call.
+    Only `summary` and `chip_text` genuinely need a lookup — the name and the
+    install/clone command are already implied by what the user typed."""
+    if platform == "github":
+        owner, repo = target.split("/", 1)
+        return {"name_prefix": f"{owner}/", "name": repo, "summary": "",
+                "chip_text": "", "command": f"git clone https://github.com/{owner}/{repo}.git"}
+    if platform == "winget":
+        return {"name_prefix": "", "name": target.split(".")[-1], "summary": "",
+                "chip_text": "", "command": f"winget install {target}"}
+    return {"name_prefix": "", "name": target, "summary": "",
+            "chip_text": "", "command": f"pip install {target}"}
 
 
 def _fill(html: str, subs: dict) -> str:
@@ -372,9 +393,16 @@ def main() -> None:
     if args.platform:
         platform = args.platform
 
-    meta = fetchers[platform](target)
     overrides = {"name": args.name, "summary": args.summary,
                  "chip_text": args.chip_text, "command": args.command}
+    # Skip the lookup entirely when the two fields it exists to supply were
+    # both given — otherwise the overrides would be useless in exactly the
+    # case you need them (API rate-limited, offline, or a sandbox that gates
+    # api.github.com), since the fetch runs before they're ever applied.
+    if args.summary and args.chip_text:
+        meta = local_meta(platform, target)
+    else:
+        meta = fetchers[platform](target)
     out = (args.out or pathlib.Path.cwd() / f"{meta['name']}.png").resolve()
 
     html = build_html(platform, meta, overrides)

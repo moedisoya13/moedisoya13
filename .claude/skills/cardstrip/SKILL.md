@@ -90,7 +90,8 @@ Always run this from inside `.claude/skills/cardstrip/` (or pass paths
 relative to it) so the script's own relative asset/reference lookups
 resolve. Metadata comes from each platform's own public source — PyPI's
 `https://pypi.org/pypi/<package>/json`, GitHub's
-`https://api.github.com/repos/<owner>/<repo>`, winget's
+`https://api.github.com/repos/<owner>/<repo>` (see the override escape
+hatch above when that host is unreachable), winget's
 `microsoft/winget-pkgs` (the community manifest repo winget itself
 installs from — there's no separate "winget API": the script lists
 `manifests/<first-letter>/<Publisher>/<Package>/...` via the GitHub
@@ -110,6 +111,17 @@ python3 scripts/generate.py <target> -o <out.png> \
 
 Always pass `-o` to an explicit path — the default, when omitted, is
 `<name>.png` in the current working directory.
+
+**When the lookup isn't available**, pass both `--summary` and `--chip` and
+the script skips the metadata fetch entirely, deriving the name and the
+install/clone command from the target itself. That covers a rate-limited
+`api.github.com` (60 req/hr unauthenticated), an offline run, and sandboxes
+that gate GitHub hosts behind repo attachment — the environment this skill
+was built in does exactly that, so every GitHub and winget card here needs
+those two flags. Don't reach for a hand-written harness that imports
+`generate` and calls `build_html()`/`render()` directly: the flags produce a
+pixel-identical result through the real entry point, and a harness silently
+skips whatever the CLI does around it.
 
 After rendering, show the image to the user (read it back / attach it) so
 they can confirm it before you consider the task done. The shrink-to-fit
