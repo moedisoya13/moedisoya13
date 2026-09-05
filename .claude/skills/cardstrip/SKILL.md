@@ -1,28 +1,17 @@
 ---
 name: cardstrip
-description: >
-  Generates a wide PNG "strip" banner for a project on PyPI, GitHub, or a
-  winget package: platform logo, project/package name, one-line summary or
-  description, and the install/clone command — all drawn in that
-  platform's own real colours and type (not sampled from a screenshot;
-  pulled from each platform's own design-token source: PyPI's Warehouse
-  sass, GitHub's Primer primitives, winget's own CLI icon). Height is
-  intrinsic to the content, so there's never dead space under a short
-  summary. Use this whenever the user asks for a project card, badge,
-  banner, poster, or thumbnail for a PyPI package, a GitHub repository, or
-  a winget package — phrasings like "PyPI 배너 만들어줘", "카드/배너 이미지
-  제작", "make a project card for <package>", "generate a PyPI banner/card
-  for <package>", "이 라이브러리 홍보 이미지 만들어줘", "make a card for this
-  GitHub repo", "리포지토리 카드 만들어줘", "winget 패키지 카드 만들어줘", a bare
-  github.com/owner/repo URL, or a dotted winget PackageIdentifier (e.g.
-  Git.Git, OpenJS.NodeJS.LTS) paired with a request for a promo image.
-  Also use it proactively whenever the task is clearly "make a promo/share
-  image for a PyPI package, GitHub repo, or winget package" even if the
-  user doesn't say "card" or "banner" outright. Don't use this for other
-  registries (npm, crates.io, ...) until a matching
-  references/palette-<platform>.json exists for them (see below to add
-  one), and don't use it for marketing graphics unrelated to a specific
-  PyPI project, GitHub repository, or winget package.
+description: 'Generates a wide PNG "strip" banner for a PyPI package, GitHub repo,
+  or winget package: platform logo, project name, one-line summary, and the install/clone
+  command, drawn in that platform''s own real colours and type. Use it whenever
+  the user wants a project card, badge, banner, poster, or thumbnail for one of
+  those — phrasings like "PyPI 배너 만들어줘", "카드/배너 이미지 제작", "리포지토리 카드 만들어줘", "이 라이브러리
+  홍보 이미지 만들어줘", "make a project card for some-package", "make a card for this
+  GitHub repo", or a bare pypi.org/github.com URL or a dotted winget PackageIdentifier
+  (Git.Git, OpenJS.NodeJS.LTS) paired with a request for an image. Trigger it
+  proactively when the task is clearly "make a promo/share image" for such a project
+  even if the user never says "card" or "banner". Don''t use it for other registries
+  (npm, crates.io, ...) until a palette file for them exists under references/,
+  or for marketing graphics unrelated to a specific project.'
 ---
 
 # Project card
