@@ -1,0 +1,24 @@
+{
+  "platform": "pypi",
+  "displayName": "PyPI",
+  "metaLabel": "PYTHON PACKAGE INDEX",
+  "source": "PyPI (Warehouse) design tokens — warehouse/static/sass/settings/_colors.scss and blocks/{_banner,_project-header,_site-header}.scss (github.com/pypi/warehouse). Not sampled from a screenshot.",
+  "logo": "assets/pypi-logo.svg",
+  "watermark": "assets/white-cubes.svg",
+  "watermarkNote": "PyPI's own white-cubes package glyph.",
+  "colors": {
+    "gradientLight": {"hex": "#0073b7", "token": "$header-background-color", "role": "gradient light stop (lightness +2%)"},
+    "base":          {"hex": "#006dad", "token": "$primary-color", "role": "panel background — ~70% of PyPI's own header UI area"},
+    "gradientDark":  {"hex": "#004d7a", "token": "$primary-color-dark", "role": "gradient dark stop (lightness -10%)"},
+    "chip":          {"hex": "#005d93", "token": "adjust($primary-color, -5%)", "role": "install-command chip background (pip-instructions box)"},
+    "text":          {"hex": "#ffffff", "token": "$white", "role": "title, logo, command text"},
+    "rule":          {"hex": "rgba(255,255,255,.4)", "token": "$transparent-white", "role": "dotted rule / chip border"},
+    "accent":        {"hex": "#ffd343", "token": "$highlight-color", "role": "left spine accent — Python yellow, also in the PyPI logo"}
+  },
+  "type": {
+    "display": "Source Sans 3",
+    "mono": "Source Code Pro",
+    "source": "warehouse/static/sass/settings/_fonts.scss ($base-font-family, $code-font)"
+  },
+  "logoUsageNote": "The PyPI logo is a PSF trademark — use it to refer to PyPI itself, not to brand something else."
+}

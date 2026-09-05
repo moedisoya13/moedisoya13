@@ -1,0 +1,178 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>__NAME__ strip</title>
+<style>
+  @font-face { font-family: "Source Sans 3"; font-weight: 400; src: url(__FONT_SS_REG__) format("woff2"); }
+  @font-face { font-family: "Source Sans 3"; font-weight: 600; src: url(__FONT_SS_SEMI__) format("woff2"); }
+  @font-face { font-family: "Source Sans 3"; font-weight: 700; src: url(__FONT_SS_BOLD__) format("woff2"); }
+  @font-face { font-family: "Source Code Pro"; font-weight: 400; src: url(__FONT_SCP_REG__) format("woff2"); }
+  @font-face { font-family: "Source Code Pro"; font-weight: 500; src: url(__FONT_SCP_MED__) format("woff2"); }
+
+  :root {
+    /* Every value here is filled in from a references/palette-<platform>.json
+       entry — see that file for where each hex actually comes from. */
+    --gradient-light: __COLOR_GRADIENT_LIGHT__;
+    --base:            __COLOR_BASE__;
+    --gradient-dark:   __COLOR_GRADIENT_DARK__;
+    --chip:            __COLOR_CHIP__;
+    --text:            __COLOR_TEXT__;
+    --rule:            __COLOR_RULE__;
+    --accent:          __COLOR_ACCENT__;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { background: #fff; }
+
+  /* Strip, not a credit card: height is intrinsic to the content (platform
+     row, name, summary, install/clone row) — never a fixed box with a void
+     underneath a short summary, or clipping under a long one. */
+  .card {
+    position: relative;
+    width: 1080px;
+    overflow: hidden;
+    background:
+      radial-gradient(120% 160% at 8% 0%, rgba(255,255,255,.10) 0%, rgba(255,255,255,0) 55%),
+      linear-gradient(145deg, var(--gradient-light) 0%, var(--base) 46%, var(--gradient-dark) 100%);
+    font-family: "Source Sans 3", "Helvetica Neue", Arial, sans-serif;
+    color: var(--text);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: geometricPrecision;
+  }
+
+  .card::before {
+    content: ""; position: absolute; inset: 0 auto 0 0; width: 12px;
+    background: var(--accent);
+    z-index: 2;
+  }
+  .card::after {
+    content: ""; position: absolute; inset: 0 0 auto 0; height: 1px;
+    background: rgba(255,255,255,.14);
+  }
+  /* Faint corner watermark using the platform's own mark. */
+  .watermark {
+    position: absolute; right: 40px; bottom: 18px;
+    width: 260px; height: 247px; opacity: .085;
+    background: url(__WATERMARK__) no-repeat center / contain;
+  }
+
+  .inner {
+    padding: 42px 56px 44px 74px;
+  }
+
+  /* ---------- platform row ---------- */
+  .platform { display: flex; align-items: center; gap: 16px; height: 52px; }
+  .platform img { height: 50px; width: auto; display: block;
+                  filter: drop-shadow(0 2px 6px rgba(0,0,0,.28)); }
+  .platform .wordmark {
+    font-size: 32px; font-weight: 700; letter-spacing: .005em; line-height: 1;
+  }
+  .platform .index {
+    font-size: 14px; font-weight: 600; letter-spacing: .21em;
+    text-transform: uppercase; opacity: .72; line-height: 1; padding-top: 4px;
+  }
+  .platform .divider { width: 1px; height: 34px; background: var(--rule); opacity: .55; }
+
+  .chip-meta {
+    margin-left: auto; align-self: center;
+    font-family: "Source Code Pro", monospace; font-weight: 500;
+    font-size: 21px; line-height: 1;
+    padding: 9px 14px 8px;
+    border: 1px solid var(--rule); border-radius: 4px;
+    background: rgba(0,0,0,.14);
+    white-space: nowrap;
+  }
+
+  /* ---------- identity ---------- */
+  .identity { margin-top: 30px; }
+  .name {
+    font-size: 74px; font-weight: 700; letter-spacing: -.018em; line-height: 1.02;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    max-width: 100%; display: block;
+  }
+  .name .name-prefix {
+    font-weight: 400; opacity: .58; letter-spacing: -.01em;
+  }
+  .summary {
+    margin-top: 16px;
+    font-size: 25px; font-weight: 400; line-height: 1.32;
+    opacity: .88; max-width: 860px;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  /* ---------- install / clone ---------- */
+  .install { margin-top: 28px; display: flex; align-items: stretch; }
+  .install .cmd {
+    font-family: "Source Code Pro", monospace; font-weight: 500;
+    font-size: 24px; line-height: 1;
+    padding: 15px 18px;
+    background: var(--chip);
+    border: 1px dotted var(--rule);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    max-width: 880px; display: block;
+  }
+  .install .copy {
+    display: flex; align-items: center; justify-content: center;
+    width: 54px;
+    background: var(--chip);
+    border: 1px dotted var(--rule); border-left: 0;
+  }
+  .install .copy svg { width: 22px; height: 22px; stroke: var(--text); }
+</style>
+
+<div class="card">
+  <div class="watermark"></div>
+  <div class="inner">
+
+    <div class="platform">
+      <img src="__LOGO__" alt="">
+      <span class="wordmark">__PLATFORM_NAME__</span>
+      <span class="divider"></span>
+      <span class="index">__META_LABEL__</span>
+      <span class="chip-meta">__CHIP_TEXT__</span>
+    </div>
+
+    <div class="identity">
+      <h1 class="name" id="name"><span class="name-prefix">__NAME_PREFIX__</span>__NAME__</h1>
+      <p class="summary">__SUMMARY__</p>
+    </div>
+
+    <div class="install">
+      <span class="cmd" id="cmd">__COMMAND__</span>
+      <span class="copy">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.9"
+             stroke-linecap="round" stroke-linejoin="round">
+          <rect x="9" y="9" width="12" height="12" rx="2"></rect>
+          <path d="M6 15H4.5A1.5 1.5 0 0 1 3 13.5v-9A1.5 1.5 0 0 1 4.5 3h9A1.5 1.5 0 0 1 15 4.5V6"></path>
+        </svg>
+      </span>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  /* Shrink-to-fit so long names and long commands never clip. */
+  function fit(el, max, min) {
+    const room = el.parentElement.clientWidth || el.clientWidth;
+    let size = max;
+    el.style.fontSize = size + "px";
+    while (el.scrollWidth > room && size > min) {
+      size -= 1;
+      el.style.fontSize = size + "px";
+    }
+  }
+  document.fonts.ready.then(() => {
+    fit(document.getElementById("name"), 74, 36);
+    /* Compare scrollWidth (content) against clientWidth (the max-width'd
+       box) — measuring the box itself can't work, since max-width caps it
+       and the loop would never run. Ellipsis stays the last-resort net. */
+    const cmd = document.getElementById("cmd");
+    let s = 24;
+    cmd.style.fontSize = s + "px";
+    while (cmd.scrollWidth > cmd.clientWidth && s > 14) {
+      s -= 1; cmd.style.fontSize = s + "px";
+    }
+    document.documentElement.dataset.ready = "1";
+  });
+</script>
