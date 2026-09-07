@@ -58,18 +58,25 @@ https://localhost/?code=abcd1234EFGH...
 PowerShell 의 `curl` 은 `Invoke-WebRequest` 별칭이라 bash 문법이 깨집니다.
 `Invoke-RestMethod` 를 쓰세요.
 
-```powershell
-$RestApiKey   = "여기에_REST_API_키"
-$ClientSecret = "여기에_Client_Secret"   # 안 켰으면 이 줄과 아래 client_secret 줄 삭제
-$Code         = "여기에_인가코드"
+값은 `Read-Host` 로 입력받습니다. **인가 코드에는 하이픈이 섞여 있어서**, 스크립트에
+직접 붙여넣으면 따옴표를 빠뜨렸을 때 PowerShell 이 `-Xxxx` 를 파라미터로 오해하고
+`식 또는 문에서 예기치 않은 '-Xxxx' 토큰입니다` 로 죽습니다. `Read-Host` 는 입력을
+그대로 받으므로 그 함정이 없고, Client Secret 유무도 자동으로 처리됩니다.
 
-$res = Invoke-RestMethod -Method Post -Uri 'https://kauth.kakao.com/oauth/token' -Body @{
-    grant_type    = 'authorization_code'
-    client_id     = $RestApiKey
-    client_secret = $ClientSecret
-    redirect_uri  = 'https://localhost'
-    code          = $Code
+```powershell
+$RestApiKey   = Read-Host "REST API 키"
+$ClientSecret = Read-Host "Client Secret (안 켰으면 그냥 Enter)"
+$Code         = Read-Host "인가 코드"
+
+$body = @{
+    grant_type   = 'authorization_code'
+    client_id    = $RestApiKey
+    redirect_uri = 'https://localhost'
+    code         = $Code
 }
+if ($ClientSecret) { $body.client_secret = $ClientSecret }
+
+$res = Invoke-RestMethod -Method Post -Uri 'https://kauth.kakao.com/oauth/token' -Body $body
 
 # 콘솔 스크롤백에 토큰을 남기지 않고 바로 클립보드로
 $res.refresh_token | Set-Clipboard
@@ -79,8 +86,11 @@ Write-Host "refresh_token 을 클립보드에 복사했습니다."
 붙여넣은 뒤 흔적을 지웁니다:
 
 ```powershell
-Remove-Variable res, Code, RestApiKey, ClientSecret
+Remove-Variable res, body, Code, RestApiKey, ClientSecret
 ```
+
+> 변수에 값을 직접 적는 방식을 고집한다면 **반드시 큰따옴표로 감싸세요**:
+> `$Code = "abc-EbiWeEe..."` — 따옴표 없이 두면 위 오류가 납니다.
 
 ### bash / zsh (macOS · Linux)
 
