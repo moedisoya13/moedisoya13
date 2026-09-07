@@ -18,7 +18,10 @@ from .sources import SITE_NEW_URL, Item, collect, within
 from .summarize import summarize
 
 KST = dt.timezone(dt.timedelta(hours=9))
-MAX_ITEMS = kakao.MAX_LIST_ITEMS
+# 하루에 보낼 건수. 카카오 리스트 템플릿 한 통이 2~3건이라, 이 값이 3을 넘으면
+# 여러 통으로 나눠 보낸다(6건이면 3+3 으로 두 통, 알림도 두 번).
+# 분할은 kakao.chunk_sizes 가 알아서 하므로 이 숫자만 바꾸면 된다.
+MAX_ITEMS = 6
 WINDOW_HOURS = 24
 SEEN_LIMIT = 200
 
@@ -72,6 +75,23 @@ def write_digest(day: dt.date, items: list[Item], summaries: list[dict[str, str]
     return path
 
 
+def _preview(header: str, entries: list[dict[str, str]], log) -> None:
+    """발송하지 않고, 실제로 나갈 메시지들을 그대로 보여준다."""
+    sizes = kakao.chunk_sizes(len(entries))
+    log(f"메시지 {len(sizes)}통으로 나뉩니다: {sizes}")
+    offset = 0
+    for index, size in enumerate(sizes, start=1):
+        part = entries[offset : offset + size]
+        offset += size
+        part_header = header if len(sizes) == 1 else f"{header} ({index}/{len(sizes)})"
+        template = (
+            kakao.build_list_template(part_header, part)
+            if size >= kakao.MIN_LIST_ITEMS
+            else kakao.build_text_template(part_header, part)
+        )
+        log(json.dumps(template, ensure_ascii=False, indent=2))
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="긱뉴스 일일 다이제스트")
     parser.add_argument("--dry-run", action="store_true", help="발송하지 않고 결과만 출력")
@@ -102,14 +122,14 @@ def main(argv: list[str] | None = None) -> int:
     header = f"긱뉴스 {today.isoformat()}"
 
     if args.dry_run:
-        log("dry-run: 발송하지 않습니다. 만들어진 템플릿은 다음과 같습니다.")
-        log(json.dumps(kakao.build_list_template(header, entries), ensure_ascii=False, indent=2))
+        log("dry-run: 발송하지 않습니다. 만들어질 메시지는 다음과 같습니다.")
+        _preview(header, entries, log)
         return 0
 
     if rest_api_key is None or refresh_token is None:
         log("KAKAO_REST_API_KEY / KAKAO_REFRESH_TOKEN 이 없어 발송을 건너뜁니다 "
             "(시크릿을 등록하면 다음 실행부터 자동으로 보냅니다).")
-        log(json.dumps(kakao.build_list_template(header, entries), ensure_ascii=False, indent=2))
+        _preview(header, entries, log)
         return 0
 
     tokens = kakao.refresh_tokens(rest_api_key, refresh_token, from_env("KAKAO_CLIENT_SECRET"))
