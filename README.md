@@ -29,6 +29,10 @@ news.hada.io/rss/news  →  최근 24h 필터 · 중복 제거  →  Claude 요�
 
 카카오 토큰 발급과 시크릿 등록 절차는 **[docs/SETUP-KAKAO.md](docs/SETUP-KAKAO.md)** 에 있습니다.
 
+> **메시지는 오는데 항목을 눌러도 안 열린다면** 카카오 앱에 `https://news.hada.io` 도메인이
+> 등록되지 않은 것입니다. 카카오는 등록된 도메인으로만 메시지 링크를 열어줍니다.
+> [SETUP-KAKAO.md 2-1](docs/SETUP-KAKAO.md#2-1-링크-도메인-등록-빠뜨리면-링크가-안-열립니다) 참고.
+
 | Secret | 용도 | 없을 때 |
 |---|---|---|
 | `KAKAO_REST_API_KEY` | 발송 | 발송만 건너뛰고 정상 종료 |
