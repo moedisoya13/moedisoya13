@@ -1,0 +1,5 @@
+[tool.pytest.ini_options]
+# 테스트가 저장소 루트의 geeknews 패키지를 import 할 수 있게 한다.
+# 이걸 빼면 러너에서 ModuleNotFoundError 가 난다(로컬에서만 우연히 통과함).
+pythonpath = ["."]
+testpaths = ["tests"]
