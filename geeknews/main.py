@@ -112,7 +112,7 @@ def main(argv: list[str] | None = None) -> int:
         log(json.dumps(kakao.build_list_template(header, entries), ensure_ascii=False, indent=2))
         return 0
 
-    tokens = kakao.refresh_tokens(rest_api_key, refresh_token)
+    tokens = kakao.refresh_tokens(rest_api_key, refresh_token, from_env("KAKAO_CLIENT_SECRET"))
     kakao.send(tokens.access, header, entries, log)
 
     if tokens.new_refresh is not None:

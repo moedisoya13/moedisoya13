@@ -24,24 +24,79 @@
 https://kauth.kakao.com/oauth/authorize?client_id={REST_API_KEY}&redirect_uri=https://localhost&response_type=code&scope=talk_message
 ```
 
-동의하면 `https://localhost/?code=XXXXXXXX` 로 이동합니다.
-(페이지는 열리지 않아도 정상입니다.) 주소창의 **`code=` 뒤 값**을 복사합니다.
+### ⚠️ 여기서 브라우저가 "연결할 수 없음" 을 띄웁니다 — 정상입니다
+
+`https://localhost` 에는 서버가 없으니 페이지가 안 열리는 게 당연합니다.
+이 주소는 **인가 코드를 주소창으로 되돌려받기 위한 용도**일 뿐입니다.
+
+**에러 화면은 무시하고 주소창을 보세요.**
+
+```
+https://localhost/?code=abcd1234EFGH...
+```
+
+여기서 **`code=` 뒤의 값**을 복사합니다. (뒤에 `&` 가 붙어 있으면 `&` 앞까지만.)
+
+주소창에 `code=` 가 안 보인다면 그건 진짜 문제입니다:
+
+| 주소창 상태 | 원인 | 조치 |
+|---|---|---|
+| `error=invalid_request` 등 | Redirect URI 불일치 | 앱의 Redirect URI 가 **`https://localhost`** 인지 확인 (`http://`, 끝 슬래시 주의) |
+| 아직 `kauth.kakao.com/...` | 동의 미완료 | 동의 화면에서 "동의하고 계속하기" 클릭 |
+| `error=...consent...` | 동의항목 미설정 | `talk_message` 를 "이용 중 동의" 로 |
 
 ## 4. refresh_token 발급
 
-터미널에서 아래를 실행합니다. `{CODE}` 는 3번에서 복사한 값입니다.
+> **`client_secret` 이 필요한가요?**
+> 카카오 앱 **보안 → Client Secret** 의 "활성화 상태" 가 **사용함** 이면 필수입니다.
+> 사용 안 함이면 아래에서 `client_secret` 줄을 **지우세요** — 끈 앱에 빈 값을 보내면
+> 그것대로 거부됩니다. 켰다면 이 값은 이후 **매일 토큰 갱신에도 계속 필요**하므로
+> `KAKAO_CLIENT_SECRET` 시크릿으로도 등록해야 합니다.
+
+### PowerShell (Windows)
+
+PowerShell 의 `curl` 은 `Invoke-WebRequest` 별칭이라 bash 문법이 깨집니다.
+`Invoke-RestMethod` 를 쓰세요.
+
+```powershell
+$RestApiKey   = "여기에_REST_API_키"
+$ClientSecret = "여기에_Client_Secret"   # 안 켰으면 이 줄과 아래 client_secret 줄 삭제
+$Code         = "여기에_인가코드"
+
+$res = Invoke-RestMethod -Method Post -Uri 'https://kauth.kakao.com/oauth/token' -Body @{
+    grant_type    = 'authorization_code'
+    client_id     = $RestApiKey
+    client_secret = $ClientSecret
+    redirect_uri  = 'https://localhost'
+    code          = $Code
+}
+
+# 콘솔 스크롤백에 토큰을 남기지 않고 바로 클립보드로
+$res.refresh_token | Set-Clipboard
+Write-Host "refresh_token 을 클립보드에 복사했습니다."
+```
+
+붙여넣은 뒤 흔적을 지웁니다:
+
+```powershell
+Remove-Variable res, Code, RestApiKey, ClientSecret
+```
+
+### bash / zsh (macOS · Linux)
 
 ```bash
 curl -X POST 'https://kauth.kakao.com/oauth/token' \
   -d 'grant_type=authorization_code' \
   -d 'client_id={REST_API_KEY}' \
+  -d 'client_secret={CLIENT_SECRET}' \
   -d 'redirect_uri=https://localhost' \
   -d 'code={CODE}'
 ```
 
-응답의 **`refresh_token`** 값을 복사합니다. → `KAKAO_REFRESH_TOKEN`
+응답의 **`refresh_token`** 값이 `KAKAO_REFRESH_TOKEN` 에 넣을 값입니다.
 
-> 인가 코드는 1회용이며 곧 만료됩니다. 실패하면 3번부터 다시 하세요.
+> 인가 코드는 **1회용이고 몇 분 뒤 만료**됩니다. 응답에 `refresh_token` 없이 `error`
+> 만 있다면 코드가 만료됐거나 이미 쓰인 것입니다 — 3번부터 다시 하세요.
 
 ## 5. GitHub Secrets 등록
 
@@ -50,6 +105,7 @@ curl -X POST 'https://kauth.kakao.com/oauth/token' \
 | 이름 | 값 | 필수 |
 |---|---|---|
 | `KAKAO_REST_API_KEY` | 1번의 REST API 키 | 발송에 필요 |
+| `KAKAO_CLIENT_SECRET` | 앱의 Client Secret | Client Secret 을 켰다면 **필수** |
 | `KAKAO_REFRESH_TOKEN` | 4번의 refresh_token | 발송에 필요 |
 | `ANTHROPIC_API_KEY` | Anthropic API 키 | 요약에 필요 |
 | `GH_PAT` | fine-grained PAT | 선택 |

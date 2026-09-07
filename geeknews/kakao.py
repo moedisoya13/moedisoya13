@@ -38,21 +38,29 @@ class Tokens:
     new_refresh: SecretStr | None
 
 
-def refresh_tokens(rest_api_key: SecretStr, refresh_token: SecretStr) -> Tokens:
+def refresh_tokens(
+    rest_api_key: SecretStr,
+    refresh_token: SecretStr,
+    client_secret: SecretStr | None = None,
+) -> Tokens:
     """refresh_token 으로 단기 access_token 을 받는다.
 
     카카오는 refresh_token 잔여 유효기간이 1개월 미만일 때만 새 refresh_token 을
     함께 내려준다. 그 경우 호출부가 로테이션을 처리해야 한다.
+
+    client_secret 은 카카오 앱에서 'Client Secret 활성화 상태'를 '사용함'으로 둔
+    경우에만 필요하다. 켜 두고 보내지 않으면 갱신이 거부되므로, 값이 있을 때만
+    파라미터에 싣는다(꺼져 있는 앱에 빈 값을 보내면 그것대로 거부된다).
     """
-    resp = requests.post(
-        TOKEN_URL,
-        data={
-            "grant_type": "refresh_token",
-            "client_id": rest_api_key.reveal(),
-            "refresh_token": refresh_token.reveal(),
-        },
-        timeout=TIMEOUT_SECONDS,
-    )
+    payload_data = {
+        "grant_type": "refresh_token",
+        "client_id": rest_api_key.reveal(),
+        "refresh_token": refresh_token.reveal(),
+    }
+    if client_secret is not None:
+        payload_data["client_secret"] = client_secret.reveal()
+
+    resp = requests.post(TOKEN_URL, data=payload_data, timeout=TIMEOUT_SECONDS)
     if resp.status_code != 200:
         raise KakaoError(f"토큰 갱신 실패 status={resp.status_code} body={mask(resp.text)}")
 

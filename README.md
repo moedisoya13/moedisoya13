@@ -29,6 +29,7 @@ news.hada.io/rss/news  →  최근 24h 필터 · 중복 제거  →  Claude 요�
 |---|---|---|
 | `KAKAO_REST_API_KEY` | 발송 | 발송만 건너뛰고 정상 종료 |
 | `KAKAO_REFRESH_TOKEN` | 발송 | 발송만 건너뛰고 정상 종료 |
+| `KAKAO_CLIENT_SECRET` | 발송 | 앱에서 Client Secret 을 켰다면 **필수**, 껐다면 비워 둘 것 |
 | `ANTHROPIC_API_KEY` | 요약 | 원문을 잘라 쓰는 폴백 요약 |
 | `GH_PAT` (선택) | refresh_token 자동 로테이션 | 안내 이슈 생성으로 대체 |
 

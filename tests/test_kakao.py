@@ -94,3 +94,56 @@ def test_send_error_message_masks_token(monkeypatch):
         kakao.send(secret, "헤더", ENTRIES, logged.append)
     assert "leaky-token-abcdef" not in str(excinfo.value)
     assert not any("leaky-token-abcdef" in m for m in logged)
+
+
+class RecordingPost:
+    """requests.post 를 대신해 전송된 form 데이터를 붙잡는다."""
+
+    def __init__(self, payload):
+        self.payload = payload
+        self.sent = None
+
+    def __call__(self, url, data=None, timeout=None, **kwargs):
+        self.sent = data
+        return FakeResponse(200, self.payload)
+
+
+def test_refresh_tokens_omits_client_secret_when_absent(monkeypatch):
+    """Client Secret 을 끈 앱에 빈 값을 보내면 거부되므로 키 자체가 없어야 한다."""
+    post = RecordingPost({"access_token": "at-value"})
+    monkeypatch.setattr(kakao.requests, "post", post)
+
+    kakao.refresh_tokens(SecretStr("rest-key"), SecretStr("refresh-value"))
+    assert "client_secret" not in post.sent
+
+
+def test_refresh_tokens_sends_client_secret_when_given(monkeypatch):
+    post = RecordingPost({"access_token": "at-value"})
+    monkeypatch.setattr(kakao.requests, "post", post)
+
+    kakao.refresh_tokens(
+        SecretStr("rest-key"), SecretStr("refresh-value"), SecretStr("secret-value")
+    )
+    assert post.sent["client_secret"] == "secret-value"
+    assert post.sent["grant_type"] == "refresh_token"
+
+
+def test_refresh_tokens_surfaces_rotated_refresh_token(monkeypatch):
+    post = RecordingPost({"access_token": "at-value", "refresh_token": "new-refresh"})
+    monkeypatch.setattr(kakao.requests, "post", post)
+
+    tokens = kakao.refresh_tokens(SecretStr("rest-key"), SecretStr("old-refresh"))
+    assert tokens.new_refresh is not None
+    assert tokens.new_refresh.reveal() == "new-refresh"
+
+
+def test_refresh_tokens_error_masks_secret(monkeypatch):
+    secret = SecretStr("client-secret-leaky")
+
+    def failing_post(url, data=None, timeout=None, **kwargs):
+        return FakeResponse(401, None, text="bad request client-secret-leaky")
+
+    monkeypatch.setattr(kakao.requests, "post", failing_post)
+    with pytest.raises(kakao.KakaoError) as excinfo:
+        kakao.refresh_tokens(SecretStr("rest-key"), SecretStr("refresh-value"), secret)
+    assert "client-secret-leaky" not in str(excinfo.value)
