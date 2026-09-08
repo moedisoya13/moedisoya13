@@ -5,6 +5,12 @@
 #   보장하지 않고 통상 수 분~수십 분 지연되므로, 10분 앞당긴 UTC 23:40(KST 08:40)에
 #   걸어 실제 도착이 08:50 근처가 되도록 유도한다. 정확한 시각은 보장되지 않는다.
 #
+#   schedule 은 지연될 뿐 아니라 러너 부하가 높으면 그 회차가 통째로 버려진다.
+#   버려져도 재시도가 없어 그날 다이제스트가 조용히 사라지므로, 40분 뒤(UTC 00:20,
+#   KST 09:20)에 백업 스케줄을 하나 더 건다. 두 회차가 다 떠도 두 번 보내지는
+#   않는다 — geeknews.main 이 오늘자 digests/YYYY-MM-DD.md 가 있으면 즉시 끝낸다.
+#   (seen.json 은 '같은 글'만 막아서 이 역할을 못 한다. main.already_sent 참고.)
+#
 # 트리거는 schedule 과 workflow_dispatch 뿐이다. pull_request 트리거를 두지 않아
 # fork PR 에서 시크릿에 닿을 경로 자체를 만들지 않는다.
 #
@@ -16,11 +22,16 @@ name: geeknews-daily
 
 on:
   schedule:
-    - cron: '40 23 * * *'
+    - cron: '40 23 * * *'   # KST 08:40 — 1차
+    - cron: '20 0 * * *'    # KST 09:20 — 1차가 버려졌을 때만 실제로 일하는 백업
   workflow_dispatch:
     inputs:
       dry_run:
         description: '발송·커밋 없이 수집/요약 결과만 출력'
+        type: boolean
+        default: false
+      force:
+        description: '오늘자 다이제스트가 이미 있어도 다시 발송'
         type: boolean
         default: false
 
@@ -60,7 +71,7 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GH_PAT: ${{ secrets.GH_PAT }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: python -m geeknews.main ${{ inputs.dry_run && '--dry-run' || '' }}
+        run: python -m geeknews.main ${{ inputs.dry_run && '--dry-run' || '' }} ${{ inputs.force && '--force' || '' }}
 
       - name: Scan output for leaked secrets
         run: python scripts/scan_output.py

@@ -56,9 +56,27 @@ def save_seen(previous: list[str], added: list[str]) -> None:
     )
 
 
+def digest_path(day: dt.date) -> pathlib.Path:
+    return DIGEST_DIR / f"{day.isoformat()}.md"
+
+
+def already_sent(day: dt.date) -> bool:
+    """그날 다이제스트가 이미 나갔는지 본다.
+
+    아카이브 파일은 발송에 성공한 뒤에만 쓰이고 곧바로 커밋되므로, 파일의 존재가
+    곧 '오늘 몫은 이미 갔다'는 뜻이다. 백업 스케줄이 1차와 겹쳐도 두 번 보내지
+    않게 막는 것이 이 함수의 목적이다.
+
+    state/seen.json 으로는 대신할 수 없다. 그쪽은 '같은 글'만 막을 뿐이어서,
+    1차 이후 피드에 새 글이 올라와 있으면 백업 실행이 그 새 글들로 두 번째
+    묶음을 만들어 그대로 보내 버린다.
+    """
+    return digest_path(day).exists()
+
+
 def write_digest(day: dt.date, items: list[Item], summaries: list[dict[str, str]]) -> pathlib.Path:
     DIGEST_DIR.mkdir(parents=True, exist_ok=True)
-    path = DIGEST_DIR / f"{day.isoformat()}.md"
+    path = digest_path(day)
     lines = [f"# 긱뉴스 {day.isoformat()}", ""]
     for item, summary in zip(items, summaries):
         lines += [
@@ -95,10 +113,20 @@ def _preview(header: str, entries: list[dict[str, str]], log) -> None:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="긱뉴스 일일 다이제스트")
     parser.add_argument("--dry-run", action="store_true", help="발송하지 않고 결과만 출력")
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="오늘자 다이제스트가 이미 있어도 다시 보낸다(중복 발송 가드 해제)",
+    )
     args = parser.parse_args(argv)
 
     now = dt.datetime.now(dt.timezone.utc)
     today = now.astimezone(KST).date()
+
+    if already_sent(today) and not args.dry_run and not args.force:
+        log(f"오늘({today.isoformat()})자 다이제스트가 이미 있습니다. 중복 발송을 건너뜁니다 "
+            "(다시 보내려면 --force).")
+        return 0
 
     items = within(collect(log), hours=WINDOW_HOURS, now=now)
     log(f"최근 {WINDOW_HOURS}시간 항목: {len(items)}건")
