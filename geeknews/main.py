@@ -14,7 +14,7 @@ import sys
 
 from . import kakao, rotate
 from .secrets import from_env, mask
-from .sources import SITE_NEW_URL, Item, collect, within
+from .sources import SITE_NEW_URL, Item, collect, is_show_gn, within
 from .summarize import summarize
 
 KST = dt.timezone(dt.timedelta(hours=9))
@@ -56,6 +56,18 @@ def save_seen(previous: list[str], added: list[str]) -> None:
     )
 
 
+def prioritize(items: list[Item], limit: int) -> list[Item]:
+    """Show GN 을 앞에 깔고 남은 자리를 최신 글로 채운다.
+
+    Show GN 은 하루 1~5건으로 들쭉날쭉해서, 그것만 보내면 아예 못 보내는 날이
+    생긴다. 그래서 우선순위만 주고 분량은 최신 글로 채워 항상 limit 을 맞춘다.
+    두 그룹 모두 원래의 최신순을 유지한다.
+    """
+    show = [i for i in items if is_show_gn(i)]
+    rest = [i for i in items if not is_show_gn(i)]
+    return (show + rest)[:limit]
+
+
 def digest_path(day: dt.date) -> pathlib.Path:
     return DIGEST_DIR / f"{day.isoformat()}.md"
 
@@ -75,9 +87,14 @@ def already_sent(day: dt.date) -> bool:
 
 
 def write_digest(day: dt.date, items: list[Item], summaries: list[dict[str, str]]) -> pathlib.Path:
+    """그날의 아카이브를 남긴다.
+
+    --force 재발송이면 파일이 이미 있다. 이때 덮어쓰면 먼저 나간 메시지의 기록이
+    사라지므로, 구분선을 두고 이어 붙인다. 아카이브는 '실제로 나간 것'의 기록이다.
+    """
     DIGEST_DIR.mkdir(parents=True, exist_ok=True)
     path = digest_path(day)
-    lines = [f"# 긱뉴스 {day.isoformat()}", ""]
+    lines: list[str] = []
     for item, summary in zip(items, summaries):
         lines += [
             f"## {summary['title']}",
@@ -88,8 +105,14 @@ def write_digest(day: dt.date, items: list[Item], summaries: list[dict[str, str]
             f"- 출처: {item.source}",
             "",
         ]
-    lines.append(f"수집 페이지: {SITE_NEW_URL}")
-    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    if path.exists():
+        previous = path.read_text(encoding="utf-8").rstrip("\n")
+        body = previous + "\n\n---\n\n" + "\n".join(lines).rstrip("\n")
+    else:
+        body = "\n".join([f"# 긱뉴스 {day.isoformat()}", ""] + lines + [f"수집 페이지: {SITE_NEW_URL}"])
+
+    path.write_text(body + "\n", encoding="utf-8")
     return path
 
 
@@ -133,11 +156,13 @@ def main(argv: list[str] | None = None) -> int:
 
     seen = load_seen()
     seen_keys = set(seen)
-    fresh = [i for i in items if i.key not in seen_keys][:MAX_ITEMS]
+    fresh = prioritize([i for i in items if i.key not in seen_keys], MAX_ITEMS)
     if not fresh:
         log("새로 보낼 항목이 없습니다. 발송을 건너뜁니다.")
         return 0
-    log(f"발송 후보 {len(fresh)}건: " + " / ".join(i.title for i in fresh))
+    shown = sum(1 for i in fresh if is_show_gn(i))
+    log(f"발송 후보 {len(fresh)}건 (Show GN {shown}건 우선): "
+        + " / ".join(i.title for i in fresh))
 
     summaries = summarize(fresh, from_env("ANTHROPIC_API_KEY"), log)
     entries = [

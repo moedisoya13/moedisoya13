@@ -18,6 +18,7 @@ news.hada.io/rss/news  →  최근 24h 필터 · 중복 제거  →  Claude 요�
 |---|---|
 | 실행 시각 | 매일 **KST 08:40 목표** (`cron: 40 23 * * *`), 백업 **KST 09:20** (`cron: 20 0 * * *`) |
 | 분량 | 하루 **최대 6건** — 리스트 템플릿 **2통(3+3)**, 카톡 알림 2회 |
+| 선정 | **Show GN 우선**, 남은 자리는 최신 글로 채움 |
 | 요약 | Anthropic API (`claude-sonnet-5`), 제목 40자 / 요약 60자 |
 | 중복 방지 | `state/seen.json` 에 보낸 링크를 기록 (최근 200건) |
 | 기록 | `digests/YYYY-MM-DD.md` 로 커밋 |
@@ -42,6 +43,26 @@ news.hada.io/rss/news  →  최근 24h 필터 · 중복 제거  →  Claude 요�
 그대로 보내 버립니다.
 
 일부러 하루에 두 번 보내고 싶다면 `workflow_dispatch` 의 **force** 를 켜면 가드를 넘깁니다.
+
+## Show GN 우선 선정
+
+Show GN 글을 먼저 채우고, 남은 자리를 최신 글로 채웁니다(`geeknews/main.py` 의 `prioritize`).
+Show GN 만 보내지 않는 이유는 물량입니다 — 하루 1~5건으로 들쭉날쭉해서 그것만 보내면
+카톡이 아예 안 오는 날이 생깁니다. 우선순위만 주고 정원은 최신 글로 채웁니다.
+
+**판정은 제목 접두사(`Show GN:`)로 합니다.** 러너 실측(2026-09-08) 결과 다른 방법이 없습니다:
+
+| 시도 | 결과 |
+|---|---|
+| `/rss/show`, `/rss/showgn`, `/rss/show_gn`, `/rss/ask`, `/feed/show` | 404 — **Show 전용 피드는 없음** |
+| `/rss/news?type=show`, `?category=show` | 200 이지만 `/rss/news` 와 응답이 **바이트 단위로 동일**(45221). 쿼리를 무시함 |
+| `/show` (HTML) | 403 — `/new` 과 같은 CloudFront 차단 |
+| `/rss/news` 의 category/tag 요소 | **50건 중 0건** — 피드에 카테고리 정보가 없음 |
+| `/rss/news` 제목 접두사 | 50건 중 5건이 `Show GN:` 으로 시작 — 유일한 식별 수단 |
+
+> **한계 두 가지.** 작성자가 `Show GN:` 접두사를 빠뜨리면 놓칩니다. 그리고 `/rss/news` 는
+> 최신 50건만 담고 유통량이 하루 35건쯤이라 피드가 커버하는 기간이 **약 1.5일**입니다 —
+> 그보다 오래된 Show GN 글은 조회 기간을 늘려도 가져올 방법이 없습니다.
 
 ## 설정
 
@@ -77,6 +98,8 @@ Actions 러너에서 직접 측정한 결과(2026-09-07):
 | `https://news.hada.io/rss/topics` | 404 | 존재하지 않음 |
 | `https://feeds.hada.io/...` | DNS 조회 실패 | 존재하지 않는 호스트 |
 
+Show GN 관련 엔드포인트 실측은 [Show GN 우선 선정](#show-gn-우선-선정) 절의 표에 있습니다.
+
 `/new` 의 403 은 User-Agent 를 바꿔도(레포 UA / `Mozilla/5.0` / UA 없음) 동일했습니다.
 UA 문제가 아니라 CDN 단의 접근 차단이므로 **우회하지 않고** HTML 크롤링을 포기했습니다.
 사이트가 공식 RSS 를 제공하므로 그쪽만 씁니다.
@@ -99,4 +122,5 @@ pip install -r requirements-dev.txt
 pytest -q
 python -m geeknews.main --dry-run   # 발송 없이 수집·요약 결과와 템플릿 출력
 python -m geeknews.main --force     # 오늘자가 이미 있어도 다시 발송
+                                    # (아카이브는 덮어쓰지 않고 이어 붙는다)
 ```

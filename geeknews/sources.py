@@ -11,6 +11,18 @@
     UA 문제가 아니라 CDN 단의 접근 차단이다. 우회하지 않고 HTML 크롤링을 포기하며,
     사람이 눌러서 여는 링크로만 쓴다(SITE_NEW_URL).
 
+Show GN 관련 실측(Actions 러너, 2026-09-08):
+  - Show GN 전용 피드는 존재하지 않는다.
+    /rss/show, /rss/showgn, /rss/show_gn, /rss/ask, /feed/show 는 전부 404 다.
+    /rss/news?type=show 와 ?category=show 는 200 이지만 응답 바이트가 /rss/news 와
+    완전히 동일하다(45221) — 쿼리 파라미터를 무시한다.
+    /show HTML 은 /new 과 같이 CloudFront 가 403 을 돌려준다.
+  - /rss/news 의 entry 에는 category/tag 요소가 아예 없다(50건 중 0건).
+    카테고리를 알려주는 필드가 없으므로 남는 단서는 제목뿐이다.
+  - 실제로 50건 중 5건의 제목이 'Show GN:' 으로 시작했다. 이 접두사가 유일한
+    식별 수단이다(is_show_gn). 작성자가 접두사를 빠뜨리면 놓치는데, 피드가 주는
+    정보가 이것뿐이라 피할 수 없는 한계다.
+
 즉 실질적으로 쓸 수 있는 소스는 /rss/news 하나뿐이다.
 """
 
@@ -37,6 +49,8 @@ MAX_BYTES = 2 * 1024 * 1024
 # link 의 동일성 판정에서 떼어낼 트래킹 파라미터.
 _TRACKING_PARAMS = re.compile(r"^(utm_|fbclid$|gclid$|ref$|ref_src$)")
 _CONTROL_CHARS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+# Show GN 글의 제목 접두사. 전각 콜론도 함께 받는다.
+_SHOW_GN = re.compile(r"^\s*show\s*gn\s*[:：]", re.IGNORECASE)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -114,6 +128,15 @@ def parse_feed(body: bytes, source: str) -> list[Item]:
             )
         )
     return items
+
+
+def is_show_gn(item: Item) -> bool:
+    """Show GN 글인지 제목으로 판정한다.
+
+    피드에 category/tag 가 전혀 없어 제목 접두사가 유일한 단서다. 위 모듈
+    주석의 실측 근거 참고.
+    """
+    return bool(_SHOW_GN.match(item.title))
 
 
 def merge(groups: list[list[Item]]) -> list[Item]:
