@@ -98,3 +98,32 @@ def test_collect_survives_partial_feed_failure(monkeypatch):
     items = sources.collect(messages.append)
     assert items
     assert any("경고" in m for m in messages)
+
+
+def _titled(title: str) -> sources.Item:
+    return sources.Item(
+        title=title,
+        url="https://news.hada.io/topic?id=1",
+        body="",
+        published=None,
+        source="https://news.hada.io/rss/news",
+    )
+
+
+def test_is_show_gn_matches_real_titles():
+    # 러너 실측(2026-09-08)에서 실제로 나온 제목들.
+    assert sources.is_show_gn(_titled("Show GN: PolyView - 폴리마켓 공개 데이터를 한국어로"))
+    assert sources.is_show_gn(_titled("Show GN: VIBE-GAME ( AI 에게 일 시키고 )"))
+
+
+def test_is_show_gn_tolerates_spacing_and_case():
+    assert sources.is_show_gn(_titled("show gn: 소문자"))
+    assert sources.is_show_gn(_titled("ShowGN: 붙여쓴 경우"))
+    assert sources.is_show_gn(_titled("Show GN： 전각 콜론"))
+
+
+def test_is_show_gn_rejects_non_show_titles():
+    assert not sources.is_show_gn(_titled("가장 짧은 IPv6 주소"))
+    assert not sources.is_show_gn(_titled("Ask GN: 질문 글은 아니다"))
+    # 제목 중간에 나오는 것은 카테고리 표시가 아니다.
+    assert not sources.is_show_gn(_titled("어제 올라온 Show GN: 글을 보고"))
