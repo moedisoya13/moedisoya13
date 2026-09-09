@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>움직이는 그라데이션 배경 — reveal.js</title>
+
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/5.1.0/reset.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/5.1.0/reveal.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/5.1.0/theme/white.min.css">
+  <link rel="stylesheet" href="assets/gradient-bg.css">
+
+  <style>
+    :root {
+      --r-main-font: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard",
+                     "Noto Sans KR", "Malgun Gothic", sans-serif;
+      --r-heading-font: var(--r-main-font);
+      --r-main-color: #1c1b1a;
+      --r-heading-color: #111110;
+      --r-heading-text-transform: none;
+      --r-link-color: #3b5bdb;
+      --r-link-color-hover: #1c3fbd;
+    }
+
+    .reveal h1, .reveal h2 { letter-spacing: -0.02em; font-weight: 700; }
+    .reveal h1 { font-size: 2.1em; }
+    .reveal h2 { font-size: 1.4em; margin-bottom: 0.5em; }
+    .reveal p, .reveal li { line-height: 1.5; }
+    .reveal .panel li { font-size: 0.68em; margin-bottom: 0.3em; }
+    .reveal .muted { color: #57534e; font-size: 0.72em; }
+
+    /* 파스텔 위에서도 본문이 뜨도록 얇은 유리판을 깐다. 배경은 그대로 비친다. */
+    .reveal .panel {
+      display: inline-block;
+      padding: 1.1em 1.4em;
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.5);
+      backdrop-filter: blur(10px) saturate(1.15);
+      -webkit-backdrop-filter: blur(10px) saturate(1.15);
+      box-shadow: 0 1px 0 rgba(255, 255, 255, 0.9) inset, 0 10px 40px rgba(28, 27, 26, 0.08);
+      text-align: left;
+    }
+
+    .reveal pre {
+      box-shadow: none;
+      width: 100%;
+      font-size: 0.5em;
+    }
+    .reveal pre code {
+      border-radius: 12px;
+      padding: 1em 1.2em;
+      background: rgba(255, 255, 255, 0.72);
+      color: #1c1b1a;
+      max-height: none;
+    }
+
+    .reveal table { font-size: 0.5em; background: transparent; }
+    .reveal table td, .reveal table th { padding: 0.28em 0.7em 0.28em 0; }
+    .reveal table th { text-align: left; color: #57534e; font-weight: 600; }
+    .reveal table td code { font-size: 0.95em; }
+
+    .swatches { display: flex; gap: 12px; justify-content: center; margin-top: 0.6em; flex-wrap: wrap; }
+    .swatches button {
+      font: inherit;
+      font-size: 0.5em;
+      padding: 0.6em 1.1em;
+      border-radius: 999px;
+      border: 1px solid rgba(28, 27, 26, 0.14);
+      background: rgba(255, 255, 255, 0.75);
+      color: #1c1b1a;
+      cursor: pointer;
+    }
+    .swatches button:hover { background: #fff; }
+    .swatches button .dots { display: inline-flex; gap: 4px; margin-right: 8px; vertical-align: -2px; }
+    .swatches button .dots i { width: 10px; height: 10px; border-radius: 50%; display: block; }
+  </style>
+</head>
+<body>
+  <div class="reveal">
+    <div class="slides">
+
+      <section>
+        <div class="panel" style="text-align:center">
+          <h1>움직이는 그라데이션 배경</h1>
+          <p class="muted">
+            layered radial · Canvas 2D · reveal.js 플러그인<br>
+            슬라이드를 넘겨 보세요 — 배경이 슬라이드마다 다른 구성으로 넘어갑니다.
+          </p>
+        </div>
+      </section>
+
+      <section>
+        <h2>붙이는 법</h2>
+        <div class="panel">
+          <pre><code class="language-html">&lt;link rel="stylesheet" href="assets/gradient-bg.css"&gt;
+&lt;script src="assets/gradient-bg.js"&gt;&lt;/script&gt;
+
+&lt;script&gt;
+  Reveal.initialize({
+    plugins: [RevealGradientBackground],
+    gradientBackground: { speed: 1, count: 12 }
+  });
+&lt;/script&gt;</code></pre>
+          <p class="muted">
+            파일 두 개를 덱에 복사하고 플러그인 배열에 넣으면 끝입니다.
+            <code>gradientBackground</code> 는 전부 선택 항목입니다.
+          </p>
+        </div>
+      </section>
+
+      <section>
+        <h2>옵션</h2>
+        <div class="panel">
+          <table>
+            <tr><th>이름</th><th>기본값</th><th>하는 일</th></tr>
+            <tr><td><code>palette</code></td><td>CSS <code>--gbg-1..8</code></td><td>blob 에 쓸 색 목록</td></tr>
+            <tr><td><code>baseColor</code></td><td>CSS <code>--gbg-base</code></td><td>blob 아래 바닥색</td></tr>
+            <tr><td><code>count</code></td><td><code>12</code></td><td>겹쳐 깔 blob 개수</td></tr>
+            <tr><td><code>speed</code></td><td><code>1</code></td><td>드리프트 속도 배율</td></tr>
+            <tr><td><code>buffer</code></td><td><code>260</code></td><td>캔버스 짧은 변 px — 작을수록 뿌옇다</td></tr>
+            <tr><td><code>blend</code></td><td><code>source-over</code></td><td><code>multiply</code> / <code>lighter</code> 로 교체 가능</td></tr>
+            <tr><td><code>grain</code></td><td><code>0.035</code></td><td>그레인 오버레이 세기</td></tr>
+            <tr><td><code>transitionMs</code></td><td><code>1200</code></td><td>슬라이드 전환 크로스페이드 길이</td></tr>
+            <tr><td><code>reseedOnSlide</code></td><td><code>true</code></td><td>끄면 덱 전체가 한 배경으로 고정</td></tr>
+          </table>
+        </div>
+      </section>
+
+      <section>
+        <h2>팔레트 갈아 보기</h2>
+        <div class="panel" style="text-align:center">
+          <p class="muted">
+            팔레트는 CSS 변수라 <code>--gbg-*</code> 만 고쳐도 되고,
+            런타임에 <code>setPalette()</code> 로 바꿔도 됩니다.
+          </p>
+          <div class="swatches" id="swatches"></div>
+        </div>
+      </section>
+
+      <section>
+        <h2>어떻게 그리나</h2>
+        <div class="panel">
+          <ul>
+            <li><strong>radial gradient 타원 12장</strong>을 겹쳐 깐다 — 중심은 성긴 격자에 하나씩
+              놓고 셀 안에서 흔들어 빈 구석을 없앤다.</li>
+            <li>캔버스는 짧은 변 260px. CSS 가 화면 크기로 늘리고, 그 <strong>확대 보간이 곧 블러</strong>다.</li>
+            <li>위치는 시간의 순수 함수(사인 2개 합) — 탭을 다시 열어도 튀지 않는다.</li>
+            <li>전환은 blob 파라미터 보간. 색은 <strong>OkLab</strong> 에서 섞어야 중간색이 안 탁해진다.</li>
+          </ul>
+          <p class="muted">시드는 슬라이드 인덱스에서 나온다 — 돌아와도 같은 슬라이드는 같은 배경이다.</p>
+        </div>
+      </section>
+
+      <section>
+        <h2>덜 움직이게 / 인쇄</h2>
+        <div class="panel">
+          <ul>
+            <li><code>prefers-reduced-motion</code> 이면 드리프트를 멈추고 정지 프레임만 남긴다.</li>
+            <li>탭이 백그라운드거나 <kbd>B</kbd> 로 일시정지하면 렌더를 멈춘다.</li>
+            <li><code>?print-pdf</code> · 인쇄에서는 캔버스를 접고 정적 <code>radial-gradient</code> 로 갈음한다.</li>
+          </ul>
+          <p class="muted">
+            기법 출처: Justin Jay Wang, <em>Methods for random gradients</em> —
+            <a href="https://justinjay.wang/methods-for-random-gradients/">justinjay.wang</a>
+          </p>
+        </div>
+      </section>
+
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/5.1.0/reveal.min.js"></script>
+  <script src="assets/gradient-bg.js"></script>
+  <script>
+    Reveal.initialize({
+      hash: true,
+      transition: 'fade',
+      plugins: [RevealGradientBackground],
+      gradientBackground: {
+        count: 12,
+        speed: 1
+      }
+    });
+
+    // 팔레트 교체 데모 — 런타임 API 를 그대로 쓴다.
+    var PALETTES = {
+      '기본': ['#a8c0ff', '#ffb8d5', '#9fe5cd', '#ffd9a0', '#c9b6ff', '#a5dff2'],
+      '해질녘': ['#ffc38f', '#ff9fa8', '#f7b3d8', '#ffe0a0', '#d7a6ff', '#ffb3c6'],
+      '바다': ['#8ecfe8', '#7fd6c0', '#a9c6ff', '#b7ecd8', '#8fb3ea', '#c7ecf5']
+    };
+
+    var host = document.getElementById('swatches');
+    Object.keys(PALETTES).forEach(function (name) {
+      var colors = PALETTES[name];
+      var btn = document.createElement('button');
+      var dots = colors.slice(0, 4).map(function (c) {
+        return '<i style="background:' + c + '"></i>';
+      }).join('');
+      btn.innerHTML = '<span class="dots">' + dots + '</span>' + name;
+      btn.addEventListener('click', function () {
+        RevealGradientBackground.background.setPalette(colors);
+      });
+      host.appendChild(btn);
+    });
+  </script>
+</body>
+</html>
