@@ -17,6 +17,10 @@
 
   /* 그레인 세기. JS 의 grain 옵션이 레이어에 --gbg-grain-opacity 로 덮어쓴다. */
   --gbg-grain-opacity: 0.035;
+
+  /* 인쇄용 정적 배경 위에 덮는 베일. 화면 쪽 wash 옵션에 대응하는 값이라,
+     화면만 옅어지고 PDF 만 진해지는 일이 없게 한다. 어두운 팔레트면 덮어쓴다. */
+  --gbg-print-wash: rgba(255, 255, 255, 0.55);
 }
 
 /* reveal 테마는 .reveal-viewport 와 .backgrounds 에 --r-background-color 를 칠한다.
@@ -72,6 +76,7 @@
   .reveal-viewport,
   .reveal .slides section {
     background-image:
+      linear-gradient(var(--gbg-print-wash), var(--gbg-print-wash)),
       radial-gradient(60% 55% at 18% 22%, var(--gbg-1) 0%, transparent 70%),
       radial-gradient(55% 50% at 82% 18%, var(--gbg-2) 0%, transparent 70%),
       radial-gradient(65% 60% at 74% 82%, var(--gbg-3) 0%, transparent 70%),
@@ -87,6 +92,7 @@
 
 .print-pdf .reveal .slides section {
   background-image:
+    linear-gradient(var(--gbg-print-wash), var(--gbg-print-wash)),
     radial-gradient(60% 55% at 18% 22%, var(--gbg-1) 0%, transparent 70%),
     radial-gradient(55% 50% at 82% 18%, var(--gbg-2) 0%, transparent 70%),
     radial-gradient(65% 60% at 74% 82%, var(--gbg-3) 0%, transparent 70%),

@@ -10,7 +10,7 @@
  *   RevealGradientBackground  — reveal.js 플러그인 객체
  *
  * 설계 메모(왜 이렇게 짰는지):
- *   - 캔버스를 작게(짧은 변 ~220px) 잡고 CSS 로 화면 크기까지 늘린다. 브라우저의
+ *   - 캔버스를 작게(짧은 변 ~140px) 잡고 CSS 로 화면 크기까지 늘린다. 브라우저의
  *     GPU 바이리니어 보간이 곧 공짜 블러라, filter: blur() 를 매 프레임 먹이는 것보다
  *     압도적으로 싸다. blob 은 저주파라 이 정도 해상도에서 화질 손해가 없다.
  *   - blob 위치를 적분해서 누적하지 않고 시간 t 의 순수 함수(사인 2개 합)로 만든다.
@@ -30,7 +30,10 @@
     speed: 1,              // 드리프트 속도 배율 (1 = 아주 느림)
     seed: 1,               // 초기 시드
     grain: 0.035,          // 그레인 오버레이 불투명도 (CSS 가 그린다)
-    buffer: 260,           // 캔버스 짧은 변 픽셀 수 — 클수록 또렷, 작을수록 뿌옇다
+    buffer: 140,           // 캔버스 짧은 변 픽셀 수 — 클수록 또렷, 작을수록 뿌옇다
+    // 배경은 전경 텍스트에 자리를 내주는 쪽이 기본이다. 아래 둘이 그 손잡이다.
+    intensity: 0.35,       // blob 알파 배율. 1 이면 색이 제일 진하다
+    wash: 0.35,            // blob 위에 덮는 바닥색 베일 (0 이면 안 덮는다)
     transitionMs: 1200,    // 시드 교체 크로스페이드 길이
     fps: 30,               // 느린 배경이라 30fps 면 충분하다
     blend: 'source-over',  // 'multiply'(밝은 바탕에서 색이 진해짐) / 'lighter'(어두운 바탕)
@@ -241,6 +244,7 @@
     if (!palette.length) palette = ['#c7d2fe', '#a7f3d0', '#fbcfe8', '#fde68a', '#bfdbfe', '#ddd6fe'];
     var baseColor = opts.baseColor ||
       getComputedStyle(host).getPropertyValue('--gbg-base').trim() || '#f7f7f8';
+    var washRgb = parseColor(baseColor);
 
     layer.style.setProperty('--gbg-grain-opacity', String(opts.grain));
 
@@ -299,14 +303,15 @@
         var r = b.r * unit * (1 + 0.12 * Math.sin(b.fr * t + b.pr));
         var c = b.rgb;
         var head = 'rgba(' + (c[0] | 0) + ',' + (c[1] | 0) + ',' + (c[2] | 0) + ',';
+        var alpha = b.alpha * opts.intensity;
 
         ctx.save();
         ctx.translate(x, y);
         ctx.rotate(b.rot);
         ctx.scale(1, b.squash);
         var g = ctx.createRadialGradient(0, 0, 0, 0, 0, r);
-        g.addColorStop(0, head + b.alpha.toFixed(3) + ')');
-        g.addColorStop(0.45, head + (b.alpha * 0.55).toFixed(3) + ')');
+        g.addColorStop(0, head + alpha.toFixed(3) + ')');
+        g.addColorStop(0.45, head + (alpha * 0.55).toFixed(3) + ')');
         // 바깥 stop 은 반드시 같은 RGB 의 알파 0 이어야 한다. 'transparent' 는
         // rgba(0,0,0,0) 이라 캔버스가 검은색 쪽으로 보간해 회색 후광이 생긴다.
         g.addColorStop(1, head + '0)');
@@ -316,6 +321,27 @@
         ctx.fill();
         ctx.restore();
       }
+
+      drawWash();
+    }
+
+    // 바닥색 베일. 흰색을 박지 않고 baseColor 를 쓰므로 어두운 팔레트에서도
+    // '바탕색 쪽으로 물러나는' 동작이 그대로 성립한다.
+    // 중앙이 진하고 가장자리로 갈수록 옅어진다 — 텍스트가 앉는 가운데를 가장 많이
+    // 진정시키면서 화면 테두리의 색기는 남긴다.
+    function drawWash() {
+      if (!(opts.wash > 0)) return;
+      // blend 가 'lighter' 면 베일이 가산 합성돼 오히려 타 버린다. 반드시 되돌린다.
+      ctx.globalCompositeOperation = 'source-over';
+      var wc = washRgb;
+      var head = 'rgba(' + wc[0] + ',' + wc[1] + ',' + wc[2] + ',';
+      var g = ctx.createRadialGradient(
+        width / 2, height / 2, 0,
+        width / 2, height / 2, Math.max(width, height) * 0.72);
+      g.addColorStop(0, head + opts.wash.toFixed(3) + ')');
+      g.addColorStop(1, head + (opts.wash * 0.45).toFixed(3) + ')');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, width, height);
     }
 
     function frame() {
@@ -409,6 +435,7 @@
 
       setBaseColor: function (color) {
         baseColor = color;
+        washRgb = parseColor(color);
         renderOnce();
         return api;
       },

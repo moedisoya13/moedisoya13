@@ -84,7 +84,8 @@
           <h1>움직이는 그라데이션 배경</h1>
           <p class="muted">
             layered radial · Canvas 2D · reveal.js 플러그인<br>
-            슬라이드를 넘겨 보세요 — 배경이 슬라이드마다 다른 구성으로 넘어갑니다.
+            슬라이드를 넘겨 보세요 — 배경이 슬라이드마다 다른 구성으로 넘어갑니다.<br>
+            배경은 본문에 자리를 내주도록 옅게 잡혀 있습니다 (<code>intensity</code> · <code>wash</code>).
           </p>
         </div>
       </section>
@@ -117,12 +118,13 @@
             <tr><td><code>baseColor</code></td><td>CSS <code>--gbg-base</code></td><td>blob 아래 바닥색</td></tr>
             <tr><td><code>count</code></td><td><code>12</code></td><td>겹쳐 깔 blob 개수</td></tr>
             <tr><td><code>speed</code></td><td><code>1</code></td><td>드리프트 속도 배율</td></tr>
-            <tr><td><code>buffer</code></td><td><code>260</code></td><td>캔버스 짧은 변 px — 작을수록 뿌옇다</td></tr>
-            <tr><td><code>blend</code></td><td><code>source-over</code></td><td><code>multiply</code> / <code>lighter</code> 로 교체 가능</td></tr>
-            <tr><td><code>grain</code></td><td><code>0.035</code></td><td>그레인 오버레이 세기</td></tr>
+            <tr><td><code>intensity</code></td><td><code>0.35</code></td><td>blob 알파 배율 — 올리면 색이 진해진다</td></tr>
+            <tr><td><code>wash</code></td><td><code>0.35</code></td><td>바닥색 베일 — 가운데를 더 밝게 눌러 준다</td></tr>
+            <tr><td><code>buffer</code></td><td><code>140</code></td><td>캔버스 짧은 변 px — 작을수록 뿌옇다</td></tr>
             <tr><td><code>transitionMs</code></td><td><code>1200</code></td><td>슬라이드 전환 크로스페이드 길이</td></tr>
             <tr><td><code>reseedOnSlide</code></td><td><code>true</code></td><td>끄면 덱 전체가 한 배경으로 고정</td></tr>
           </table>
+          <p class="muted">나머지 옵션(<code>blend</code> · <code>grain</code> · <code>fps</code>)은 README 참고.</p>
         </div>
       </section>
 
@@ -143,7 +145,7 @@
           <ul>
             <li><strong>radial gradient 타원 12장</strong>을 겹쳐 깐다 — 중심은 성긴 격자에 하나씩
               놓고 셀 안에서 흔들어 빈 구석을 없앤다.</li>
-            <li>캔버스는 짧은 변 260px. CSS 가 화면 크기로 늘리고, 그 <strong>확대 보간이 곧 블러</strong>다.</li>
+            <li>캔버스는 짧은 변 140px. CSS 가 화면 크기로 늘리고, 그 <strong>확대 보간이 곧 블러</strong>다.</li>
             <li>위치는 시간의 순수 함수(사인 2개 합) — 탭을 다시 열어도 튀지 않는다.</li>
             <li>전환은 blob 파라미터 보간. 색은 <strong>OkLab</strong> 에서 섞어야 중간색이 안 탁해진다.</li>
           </ul>
