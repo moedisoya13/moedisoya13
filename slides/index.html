@@ -22,6 +22,7 @@
       --r-link-color-hover: #16265f;
     }
 
+    .reveal { word-break: keep-all; overflow-wrap: break-word; }
     .reveal h1, .reveal h2 { letter-spacing: -0.02em; font-weight: 700; text-wrap: balance; }
     .reveal h1 { font-size: 2em; }
     .reveal h2 { font-size: 1.35em; margin-bottom: 0.55em; }
@@ -88,7 +89,7 @@
     <div class="slides">
 
       <section>
-        <div class="wrap center">
+        <div class="wrap wrap--wide center">
           <h1>움직이는 그라데이션 배경</h1>
           <p class="muted">
             layered radial · Canvas 2D · reveal.js 플러그인<br>
@@ -138,7 +139,7 @@
 
       <section>
         <h2>팔레트 갈아 보기</h2>
-        <div class="wrap center">
+        <div class="wrap wrap--wide center">
           <p class="muted">
             팔레트는 CSS 변수라 <code>--gbg-*</code> 만 고쳐도 되고,
             런타임에 <code>setPalette()</code> 로 바꿔도 됩니다.
