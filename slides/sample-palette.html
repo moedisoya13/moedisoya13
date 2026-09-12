@@ -19,24 +19,28 @@
        크림은 밝아서 intensity 를 크게 올려도 본문 대비가 오히려 좋아진다.
        레몬 90% 구성이 8.5:1 이었고, 이 구성은 14:1 대다. */
     :root {
-      --gbg-palette:
-        #F7E26B, #F7EAC0, #FBF3DC, #F2D98C, #F7EAC0, #FBF3DC,
-        #F7E26B, #F7EAC0, #F2D98C, #FBF3DC, #F7EAC0, #F2D98C;
+      /* 선언하는 색은 공식 코드뿐이다. 배경의 밝은 단계는 새 색을 만들어 쓰는 게
+         아니라 알파(intensity)와 바닥색 베일(wash)로 만든다 — 화면에 깔리는
+         우유빛은 #F7E26B 가 지면색 위에 옅게 얹힌 결과다. */
+      --brand-yellow: #F7E26B;
+      --gbg-palette: #F7E26B;
+
+      /* 지면색. 브랜드 색이 아니라 종이에 해당한다. 공식 지면색이 따로 있으면
+         이 값만 바꾸면 배경 전체가 따라온다. */
       --gbg-base: #FBF6E9;
-      /* 인쇄 대체 배경도 같은 크림 램프로 */
-      --gbg-1: #F7EAC0;
-      --gbg-2: #F7E26B;
-      --gbg-3: #FBF3DC;
-      --gbg-5: #F2D98C;
       --gbg-print-wash: rgba(255, 253, 245, 0.42);
 
-      /* 전경 포인트로 남긴 브랜드 원색.
-         밝은 노랑 위에서 원색 빨강은 글자 대비가 3.8:1 밖에 안 나온다(AA 미달).
-         면적(밑줄·칩)에는 원색을 쓰고, 글자에는 어둡게 조인 ink 를 쓴다. */
-      --brand-red: #E60012;        /* 블록·면적 전용 */
-      --brand-red-ink: #9E000C;    /* 글자 전용 — 6.7:1 */
-      --brand-green: #3A7D2E;      /* 블록·면적 전용 */
-      --brand-green-ink: #27551F;  /* 글자 전용 — 6.8:1 */
+      /* 인쇄 대체 배경도 공식 노랑 하나로 깐다(레이어 크기만 다르다) */
+      --gbg-1: #F7E26B;
+      --gbg-2: #F7E26B;
+      --gbg-3: #F7E26B;
+      --gbg-5: #F7E26B;
+
+      /* 공식 원색. 밝은 노랑 위에서 #E60012 는 작은 글자 대비가 3.8:1 이라
+         본문으로 쓸 수 없다. 색을 어둡게 조이면 공식 코드가 아니게 되므로,
+         쓰는 자리를 바꾼다 — 면적(밑줄·칩)과 흰 칩 위의 글자로만 쓴다. */
+      --brand-red: #E60012;
+      --brand-green: #3A7D2E;
     }
 
     :root {
@@ -62,8 +66,16 @@
     .reveal .wrap--wide { max-width: 880px; }
     .reveal .center { text-align: center; }
 
-    /* 브랜드 빨강은 배경에서 빼고 전경 포인트로만 쓴다. 글자에는 ink 를 쓴다. */
-    .reveal .accent { color: var(--brand-red-ink); font-weight: 600; }
+    /* 공식 빨강 글자는 흰 칩 위에만 올린다 — 흰 바탕에서는 6.5:1 로 충분하다. */
+    .reveal .pill {
+      display: inline-block;
+      padding: 0.12em 0.5em;
+      border-radius: 999px;
+      background: #fff;
+      color: var(--brand-red);
+      font-weight: 700;
+      box-shadow: 0 1px 6px rgba(28, 27, 26, 0.1);
+    }
     .reveal .rule {
       width: 64px; height: 4px; border-radius: 2px;
       background: var(--brand-red);
@@ -87,19 +99,6 @@
     .reveal table td:first-child { white-space: nowrap; }
     .reveal table tr:not(:first-child) { border-top: 1px solid rgba(28, 27, 26, 0.1); }
 
-    /* 배경에 깔리는 크림 램프를 그대로 보여 주는 띠 */
-    .ramp { display: flex; gap: 0; justify-content: center; margin: 0.2em 0 0.5em; }
-    .ramp i {
-      display: block; width: 92px; height: 58px;
-      box-shadow: 0 4px 16px rgba(28, 27, 26, 0.1);
-    }
-    .ramp i:first-child { border-radius: 10px 0 0 10px; }
-    .ramp i:last-child { border-radius: 0 10px 10px 0; }
-    .ramp-caption {
-      font-size: 0.34em; color: #34302c;
-      font-variant-numeric: tabular-nums; letter-spacing: 0.02em;
-    }
-
     .chips { display: flex; gap: 16px; justify-content: center; margin-top: 0.5em; }
     .chips figure { margin: 0; }
     .chips i { display: block; width: 76px; height: 76px; border-radius: 12px;
@@ -116,16 +115,14 @@
         <div class="wrap wrap--wide center">
           <h1>크림 옐로우 배경</h1>
           <div class="rule" style="margin-left:auto;margin-right:auto"></div>
-          <div class="ramp">
-            <i style="background:#FBF3DC"></i>
-            <i style="background:#F7EAC0"></i>
-            <i style="background:#F2D98C"></i>
-            <i style="background:#F7E26B"></i>
+          <div class="chips">
+            <figure><i style="background:#F7E26B"></i><figcaption>#F7E26B</figcaption></figure>
+            <figure><i style="background:#E60012"></i><figcaption>#E60012</figcaption></figure>
+            <figure><i style="background:#3A7D2E"></i><figcaption>#3A7D2E</figcaption></figure>
           </div>
-          <p class="ramp-caption">#FBF3DC · #F7EAC0 · #F2D98C · #F7E26B</p>
           <p class="muted">
-            배경에 깔린 램프입니다. 브랜드 노랑 <strong>#F7E26B</strong> 를 밝기 단계로 펴서
-            우유빛에 가깝게 만들었습니다.
+            선언한 색은 공식 코드 셋뿐입니다. 화면을 덮은 우유빛은 새로 만든 색이 아니라
+            <strong>#F7E26B</strong> 가 지면색 위에 옅게 얹힌 결과입니다.
           </p>
         </div>
       </section>
@@ -135,11 +132,11 @@
         <div class="wrap">
           <div class="rule"></div>
           <ul>
-            <li>채도 높은 레몬을 낮은 알파로 넓게 깔면 채도가 먼저 빠집니다 —
-              화면이 <strong>올리브빛 회색</strong>으로 내려앉습니다.</li>
-            <li>우유빛 인상은 노랑의 <strong>양</strong>이 아니라 <strong>밝기와 낮은 채도</strong>에서
-              나옵니다. 같은 노랑을 단계로 펴야 합니다.</li>
-            <li>크림은 밝아서 색을 훨씬 진하게 써도 글자가 죽지 않습니다.</li>
+            <li>중성 회색 지면 위에 노랑을 옅게 깔면 채도가 먼저 빠져
+              <strong>올리브빛 회색</strong>으로 내려앉습니다. 지면색을 우유빛으로 바꾸는 것이 먼저입니다.</li>
+            <li>밝기 단계를 만들려고 <strong>새 색을 선언할 필요가 없습니다</strong> —
+              알파와 베일이 같은 일을 합니다. 공식 코드 하나로 충분합니다.</li>
+            <li>결과가 밝기 때문에 색을 진하게 써도 글자가 죽지 않습니다.</li>
           </ul>
         </div>
       </section>
@@ -150,12 +147,12 @@
           <div class="rule"></div>
           <table>
             <tr><th>구성</th><th>blob 알파</th><th>본문 최저 대비</th></tr>
-            <tr><td>원색 3색 (레몬 90%)</td><td><code>intensity 0.3</code></td><td>8.5 : 1</td></tr>
-            <tr><td><strong>크림 램프 (현재)</strong></td><td><code>intensity 0.7</code></td><td><strong>14 : 1 대</strong></td></tr>
+            <tr><td>3색 균등, 중성 지면</td><td><code>intensity 0.3</code></td><td>8.5 : 1</td></tr>
+            <tr><td><strong>공식 노랑 + 우유빛 지면</strong></td><td><code>intensity 0.55</code></td><td><strong>14 : 1 대</strong></td></tr>
           </table>
           <p class="muted">
-            알파를 두 배 넘게 올렸는데 대비는 오히려 올라갑니다. 크림 톤이 밝아서
-            생기는 여유이고, 이 여유가 곧 <span class="accent">배경을 더 과감하게 쓸 수 있는 폭</span>입니다.
+            알파를 올렸는데 대비는 오히려 올라갑니다. 우유빛 지면이 밝아서 생기는 여유이고,
+            이 여유가 곧 <span class="pill">배경을 과감하게 쓸 수 있는 폭</span>입니다.
           </p>
         </div>
       </section>
@@ -166,15 +163,11 @@
           <div class="rule"></div>
           <table>
             <tr><th>역할</th><th>색</th><th>이유</th></tr>
-            <tr><td>배경 면적</td><td>크림 램프 4단</td><td>넓게 깔려도 글자를 잡아먹지 않는다</td></tr>
-            <tr><td>전경 면적</td><td><code>#E60012</code></td><td>제목 밑줄·칩. 배경에 넣으면 분홍 구름이 된다</td></tr>
-            <tr><td>전경 글자</td><td><span class="accent">#9E000C</span></td><td>원색은 이 바탕에서 3.8:1 — 글자에는 한 단계 어둡게</td></tr>
-            <tr><td>보조 데이터</td><td style="color:var(--brand-green-ink)"><code>#27551F</code></td><td>그래프 계열색. 우유빛 배경에는 섞지 않는다</td></tr>
+            <tr><td>배경 면적</td><td><code>#F7E26B</code></td><td>알파 0.55 로 얹으면 우유빛이 된다</td></tr>
+            <tr><td>전경 면적</td><td><code>#E60012</code></td><td>제목 밑줄·칩·아이콘. 배경에 넣으면 분홍 구름이 된다</td></tr>
+            <tr><td>전경 글자</td><td><span class="pill">#E60012</span></td><td>흰 칩 위에서 6.5:1. 노랑 바탕에 직접 올리면 3.8:1 로 미달</td></tr>
+            <tr><td>데이터 계열</td><td><code>#3A7D2E</code></td><td>그래프 마크·범례. 우유빛 배경에는 섞지 않는다</td></tr>
           </table>
-          <div class="chips">
-            <figure><i style="background:#E60012"></i><figcaption>#E60012</figcaption></figure>
-            <figure><i style="background:#3A7D2E"></i><figcaption>#3A7D2E</figcaption></figure>
-          </div>
         </div>
       </section>
 
@@ -183,15 +176,14 @@
         <div class="wrap wrap--wide">
           <div class="rule"></div>
           <pre><code class="language-css">:root {
-  --gbg-palette:
-    #F7E26B, #F7EAC0, #FBF3DC, #F2D98C, #F7EAC0, #FBF3DC,
-    #F7E26B, #F7EAC0, #F2D98C, #FBF3DC, #F7EAC0, #F2D98C;
-  --gbg-base: #FBF6E9;
+  --gbg-palette: #F7E26B;   /* 공식 노랑 하나 */
+  --gbg-base:    #FBF6E9;   /* 지면색 — 브랜드 색 아님 */
 }</code></pre>
-          <pre><code class="language-js">gradientBackground: { intensity: 0.7, wash: 0.22 }</code></pre>
+          <pre><code class="language-js">gradientBackground: { intensity: 0.55, wash: 0.3 }</code></pre>
           <p class="muted">
-            더 차분하게 가려면 <code>intensity 0.55 / wash 0.3</code>,
-            표지만 더 진하게 가려면 슬라이드별로 올려도 됩니다.
+            더 진하게: <code>intensity 0.7 / wash 0.2</code> ·
+            더 차분하게: <code>intensity 0.4 / wash 0.35</code>.
+            어느 쪽이든 선언되는 색은 공식 코드 그대로입니다.
           </p>
         </div>
       </section>
@@ -201,7 +193,7 @@
           <h2>슬라이드를 넘겨 보세요</h2>
           <div class="rule" style="margin-left:auto;margin-right:auto"></div>
           <p class="muted">
-            같은 램프로 슬라이드마다 배치가 바뀝니다. 되돌아오면 같은 배경으로 복귀합니다 —
+            같은 색으로 슬라이드마다 배치가 바뀝니다. 되돌아오면 같은 배경으로 복귀합니다 —
             시드를 슬라이드 인덱스에서 뽑기 때문입니다.<br>
             자세한 내용은 <a href="index.html">기본 데모 덱</a> 과 <code>README.md</code> 참고.
           </p>
@@ -218,9 +210,9 @@
       hash: true,
       transition: 'fade',
       plugins: [RevealGradientBackground],
-      // 크림 램프는 밝아서 기본값(0.35/0.35)보다 훨씬 진하게 써도 된다.
-      // 알파를 올리고 베일을 줄이면 우유빛이 살아난다.
-      gradientBackground: { intensity: 0.7, wash: 0.22 }
+      // 팔레트는 CSS 의 --gbg-palette(공식 노랑 하나)에서 읽는다.
+      // 밝은 단계를 만들려고 새 색을 선언하지 않는다 — 알파와 베일이 그 일을 한다.
+      gradientBackground: { intensity: 0.55, wash: 0.3 }
     });
   </script>
 </body>
