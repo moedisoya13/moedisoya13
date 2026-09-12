@@ -11,17 +11,26 @@
   <link rel="stylesheet" href="assets/gradient-bg.css">
 
   <style>
-    /* 팔레트 교체는 이 세 줄이 전부다. JS 는 손대지 않는다.
+    /* 팔레트 교체는 이 두 줄이 전부다. JS 는 손대지 않는다.
        --gbg-1..8 을 낱개로 덮어쓰면 안 덮은 슬롯에 기본 파스텔이 남으므로
-       목록을 받는 --gbg-palette 를 쓴다. */
+       목록을 받는 --gbg-palette 를 쓴다.
+
+       비율은 목록에 같은 색을 여러 번 적어서 준다. blob 은 palette[i % 길이] 로
+       색을 받으므로, 아래 12칸이 blob 12장에 한 번씩 돌아 빨강 3 / 노랑 5 / 초록 4 가
+       된다. 균등 배분(4/4/4)에서 빨강 한 장을 노랑에 넘긴 구성이다.
+
+       픽셀 기준으로는 빨강 11% / 노랑 84% / 초록 6% 다(5장 평균). 균등 배분일 때는
+       빨강 38% 였다 — 빨강 blob 이 큰 자리에 몰려 있어서 개수보다 훨씬 크게 떨어진다. */
     :root {
-      --gbg-palette: #E60012, #F7E26B, #3A7D2E;
+      --gbg-palette:
+        #E60012, #F7E26B, #3A7D2E, #F7E26B, #3A7D2E, #F7E26B,
+        #E60012, #F7E26B, #3A7D2E, #F7E26B, #3A7D2E, #E60012;
       --gbg-base: #f6f4f1;
-      /* 인쇄 대체 배경도 같은 세 색을 쓰도록 맞춘다 */
+      /* 인쇄 대체 배경도 같은 비율에 맞춘다 — 네 자리 중 빨강은 하나뿐이다 */
       --gbg-1: #E60012;
       --gbg-2: #F7E26B;
       --gbg-3: #3A7D2E;
-      --gbg-5: #E60012;
+      --gbg-5: #F7E26B;
     }
 
     :root {
@@ -31,8 +40,8 @@
       --r-main-color: #17161a;
       --r-heading-color: #111110;
       --r-heading-text-transform: none;
-      --r-link-color: #21378f;
-      --r-link-color-hover: #16265f;
+      --r-link-color: #1b2d77;
+      --r-link-color-hover: #132050;
     }
 
     .reveal { word-break: keep-all; overflow-wrap: break-word; }
@@ -103,7 +112,10 @@
         <h2>교체는 세 줄</h2>
         <div class="wrap wrap--wide">
           <pre><code class="language-css">:root {
-  --gbg-palette: #E60012, #F7E26B, #3A7D2E;
+  /* 같은 색을 여러 번 적으면 그만큼 비율이 올라간다 */
+  --gbg-palette:
+    #E60012, #F7E26B, #3A7D2E, #F7E26B, #3A7D2E, #F7E26B,
+    #E60012, #F7E26B, #3A7D2E, #F7E26B, #3A7D2E, #E60012;
   --gbg-base: #f6f4f1;
 }</code></pre>
           <pre><code class="language-js">gradientBackground: { intensity: 0.3, wash: 0.45 }</code></pre>
@@ -141,10 +153,10 @@
             <tr><td><code>intensity: 1, wash: 0</code></td><td>표지처럼 배경이 주인공일 때</td></tr>
           </table>
           <p class="muted">
-            세 색뿐이라 blob 12장에 네 번씩 돌아갑니다(<code>palette[i % 3]</code>).
-            밝기 차가 큰 팔레트에서는 가장 어두운 색(여기서는 초록)이 옅은 바탕 위에서
-            회색빛으로 눌립니다. 초록을 더 보이게 하려면 밝은 톤으로 올리거나
-            <code>intensity</code> 를 키우세요.
+            blob 은 <code>palette[i % 길이]</code> 로 색을 받습니다. 목록에 같은 색을 여러 번
+            적으면 비율이 올라갑니다 — 이 덱은 12칸이 한 번씩 돌아 <strong>빨강 3 / 노랑 5 /
+            초록 4</strong> 입니다. 화면 픽셀로는 빨강 11% / 노랑 84% / 초록 6%,
+            균등 배분(4/4/4)일 때는 빨강이 38% 였습니다.
           </p>
         </div>
       </section>
