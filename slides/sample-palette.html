@@ -139,12 +139,11 @@
         <div class="wrap">
           <div class="rule"></div>
           <ul>
-            <li>중성 회색 지면 위에 노랑을 옅게 깔면 채도가 먼저 빠져
+            <li>중성 회색 지면 위에 노랑을 옅게 깔면 채도가 빠져
               <strong>올리브빛 회색</strong>이 됩니다. 지면색부터 우유빛으로 바꿉니다.</li>
-            <li>밝기 단계를 만들려고 <strong>새 색을 선언할 필요가 없습니다</strong> —
-              알파와 베일이 그 일을 합니다.</li>
-            <li><strong>단색이면 움직임이 눈에 안 잡힙니다.</strong> 명도차가 없으면
-              흐름을 볼 단서가 없어서, 초록 두 칸을 섞었습니다.</li>
+            <li>밝기 단계에 <strong>새 색이 필요 없습니다</strong> — 알파와 베일이 그 일을 합니다.</li>
+            <li>배경은 <strong>형태가 없을수록</strong> 글자에 자리를 내줍니다(<code>buffer 70</code>).</li>
+            <li><strong>단색이면 움직임이 안 보입니다.</strong> 초록 두 칸이 그 단서입니다.</li>
           </ul>
         </div>
       </section>
@@ -192,10 +191,11 @@
     #F7E26B, #F7E26B, #3A7D2E, #F7E26B, #F7E26B, #F7E26B;
   --gbg-base: #FBF6E9;      /* 지면색 — 브랜드 색 아님 */
 }</code></pre>
-          <pre><code class="language-js">gradientBackground: { intensity: 0.55, wash: 0.3 }</code></pre>
+          <pre><code class="language-js">gradientBackground: { intensity: 0.55, wash: 0.3, buffer: 70 }</code></pre>
           <p class="muted">
-            움직임을 더 키우려면 초록 칸을 늘립니다. 셋까지는 우유빛이 버티고,
-            넷부터는 올리브로 넘어갑니다.
+            <code>buffer</code> 는 흐림입니다 — 기본 140 에서 70 으로 내려 배경의 형태감을
+            절반으로 줄였습니다(엣지 에너지 −42%). 흐리게 해도 움직임은 그대로입니다.
+            움직임을 더 키우려면 초록 칸을 늘립니다 — 셋까지는 우유빛이 버팁니다.
             톤은 <code>intensity 0.7 / wash 0.2</code>(진하게) ·
             <code>0.4 / 0.35</code>(차분하게). 어느 쪽이든 색은 공식 코드 그대로입니다.
           </p>
@@ -226,7 +226,9 @@
       plugins: [RevealGradientBackground],
       // 팔레트는 CSS 의 --gbg-palette(공식 노랑 하나)에서 읽는다.
       // 밝은 단계를 만들려고 새 색을 선언하지 않는다 — 알파와 베일이 그 일을 한다.
-      gradientBackground: { intensity: 0.55, wash: 0.3 }
+      // buffer 를 낮추면 캔버스가 더 작아지고, CSS 확대 보간이 그만큼 더 번진다.
+      // 배경의 형태감을 죽여 전경 글자에 자리를 내주는 손잡이다.
+      gradientBackground: { intensity: 0.55, wash: 0.3, buffer: 70 }
     });
   </script>
 </body>
