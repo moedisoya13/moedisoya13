@@ -8,6 +8,7 @@ reveal.js 프레젠테이션 배경에 깔리는 **layered radial 애니메이�
 ```
 slides/
   index.html              데모 덱 — 브라우저로 그냥 열면 됩니다
+  sample-palette.html     3색 팔레트 적용 샘플 (#E60012 / #F7E26B / #3A7D2E)
   assets/gradient-bg.css  배경 레이어 스타일 + 팔레트(CSS 변수)
   assets/gradient-bg.js   생성기 (reveal 플러그인 + 스탠드얼론)
 ```
@@ -35,7 +36,7 @@ slides/
 
 | 이름 | 기본값 | 하는 일 |
 |---|---|---|
-| `palette` | CSS `--gbg-1..8` | blob 에 쓸 색 목록 |
+| `palette` | CSS `--gbg-palette` (없으면 `--gbg-1..8`) | blob 에 쓸 색 목록 |
 | `baseColor` | CSS `--gbg-base` | blob 아래 바닥색 |
 | `count` | `12` | 겹쳐 깔 blob 개수 |
 | `speed` | `1` | 드리프트 속도 배율 |
@@ -87,13 +88,35 @@ CSS 변수만 덮어쓰면 됩니다. JS 는 `palette` 옵션이 없을 때 이 
 
 ```css
 :root {
-  --gbg-base: #101014;
-  --gbg-1: #3b3f7a;
-  --gbg-2: #7a3b63;
-  --gbg-3: #2f6b6b;
-  --gbg-4: #6b5a2f;
+  --gbg-palette: #E60012, #F7E26B, #3A7D2E;
+  --gbg-base: #f6f4f1;
 }
 ```
+
+**`--gbg-palette` 를 쓰세요.** `--gbg-1..8` 을 낱개로 덮어쓰는 방식도 되지만, 덮어쓰지
+않은 슬롯에 이 라이브러리의 `:root` 값이 그대로 남습니다. 3색만 지정했는데 기본 파스텔
+3개가 섞여 6색이 깔리는 사고가 여기서 납니다. 목록을 받는 변수 하나면 그 함정이 없습니다.
+
+(인쇄·PDF 대체 배경은 정적 CSS 라 여전히 `--gbg-1`·`--gbg-2`·`--gbg-3`·`--gbg-5` 를
+읽습니다. 인쇄까지 색을 맞추려면 그 넷도 같이 지정하세요 — `sample-palette.html` 참고.)
+
+### 원색 팔레트를 쓸 때
+
+기본값 `intensity 0.35 / wash 0.35` 는 파스텔 기준입니다. 채도·명도가 센 원색은 같은
+설정에서 본문 뒤가 더 내려앉습니다. `sample-palette.html`(#E60012 / #F7E26B / #3A7D2E)
+에서 실측한 값입니다.
+
+| 설정 | 본문 최악 대비 |
+|---|---|
+| 기본값 그대로 | 5.4:1 |
+| `intensity: 0.3, wash: 0.45` | 6.3:1 |
+| 위 + 보조 텍스트 `#34302c` | **7.5:1** |
+
+배경을 더 씻어 내는 것보다 **보조 텍스트를 한 단계 어둡게** 잡는 편이 색을 덜 죽입니다.
+
+밝기 차가 큰 팔레트에서는 가장 어두운 색이 옅은 바탕 위에서 회색빛으로 눌립니다
+(위 샘플에서 초록이 그렇습니다 — 슬라이드에 따라 화면의 0~27% 만 차지합니다).
+그 색을 더 보이게 하려면 밝은 톤으로 올리거나 `intensity` 를 키우세요.
 
 어두운 팔레트에는 `blend: 'lighter'` 가 잘 맞습니다. 가산 혼합이라 blob 이 겹치는 자리가
 흰색으로 타기 쉬운데, 기본 `wash` 가 바닥색(여기서는 어두운 색) 쪽으로 눌러 주므로
@@ -144,3 +167,4 @@ python3 -m http.server 8000 --directory slides
 ```
 
 `file://` 로 열면 reveal 의 `hash: true` 가 동작하지 않을 수 있으니 서버로 여는 편이 낫습니다.
+3색 샘플은 같은 서버에서 `sample-palette.html` 로 열립니다.

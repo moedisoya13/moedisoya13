@@ -206,6 +206,22 @@
 
   function readCssPalette(el) {
     var cs = getComputedStyle(el);
+
+    // --gbg-palette 가 있으면 그것만 쓴다. --gbg-1..8 을 낱개로 덮어쓰는 방식은
+    // 덮어쓰지 않은 슬롯이 이 파일의 :root 값으로 남아, 3색만 지정했는데 6색이
+    // 깔리는 사고가 난다. 한 변수에 목록으로 주면 그 함정이 없다.
+    var list = cs.getPropertyValue('--gbg-palette').trim();
+    if (list) {
+      // rgb(0, 0, 0) 처럼 색 안에 쉼표가 있을 수 있어 괄호 밖 쉼표로만 자른다.
+      var parts = list.match(/(?:[^,(]|\([^)]*\))+/g) || [];
+      var picked = [];
+      for (var k = 0; k < parts.length; k++) {
+        var c = parts[k].trim();
+        if (c) picked.push(c);
+      }
+      if (picked.length) return picked;
+    }
+
     var colors = [];
     for (var i = 1; i <= 8; i++) {
       var v = cs.getPropertyValue('--gbg-' + i).trim();
