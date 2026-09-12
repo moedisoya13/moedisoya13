@@ -23,18 +23,23 @@
          아니라 알파(intensity)와 바닥색 베일(wash)로 만든다 — 화면에 깔리는
          우유빛은 #F7E26B 가 지면색 위에 옅게 얹힌 결과다. */
       --brand-yellow: #F7E26B;
-      --gbg-palette: #F7E26B;
+      /* 노랑 9 · 초록 3. 단색이면 흐름이 눈에 안 잡힌다 — 초록 세 칸이
+         명도차를 만들어 드리프트와 슬라이드 전환을 보이게 한다.
+         네 칸으로 늘리면 화면이 올리브로 넘어가 우유빛이 깨진다(실측). */
+      --gbg-palette:
+        #F7E26B, #F7E26B, #3A7D2E, #F7E26B, #F7E26B, #F7E26B,
+        #3A7D2E, #F7E26B, #F7E26B, #3A7D2E, #F7E26B, #F7E26B;
 
       /* 지면색. 브랜드 색이 아니라 종이에 해당한다. 공식 지면색이 따로 있으면
          이 값만 바꾸면 배경 전체가 따라온다. */
       --gbg-base: #FBF6E9;
       --gbg-print-wash: rgba(255, 253, 245, 0.42);
 
-      /* 인쇄 대체 배경도 공식 노랑 하나로 깐다(레이어 크기만 다르다) */
+      /* 인쇄 대체 배경도 같은 비율로 — 가장 작은 레이어(--gbg-5)에만 초록 */
       --gbg-1: #F7E26B;
       --gbg-2: #F7E26B;
       --gbg-3: #F7E26B;
-      --gbg-5: #F7E26B;
+      --gbg-5: #3A7D2E;
 
       /* 공식 원색. 밝은 노랑 위에서 #E60012 는 작은 글자 대비가 3.8:1 이라
          본문으로 쓸 수 없다. 색을 어둡게 조이면 공식 코드가 아니게 되므로,
@@ -122,7 +127,8 @@
           </div>
           <p class="muted">
             선언한 색은 공식 코드 셋뿐입니다. 화면을 덮은 우유빛은 새로 만든 색이 아니라
-            <strong>#F7E26B</strong> 가 지면색 위에 옅게 얹힌 결과입니다.
+            <strong>#F7E26B</strong> 가 지면색 위에 옅게 얹힌 결과이고,
+            <strong>#3A7D2E</strong> 세 칸이 그 위에서 흐름을 만듭니다.
           </p>
         </div>
       </section>
@@ -133,10 +139,11 @@
           <div class="rule"></div>
           <ul>
             <li>중성 회색 지면 위에 노랑을 옅게 깔면 채도가 먼저 빠져
-              <strong>올리브빛 회색</strong>으로 내려앉습니다. 지면색을 우유빛으로 바꾸는 것이 먼저입니다.</li>
+              <strong>올리브빛 회색</strong>이 됩니다. 지면색부터 우유빛으로 바꿉니다.</li>
             <li>밝기 단계를 만들려고 <strong>새 색을 선언할 필요가 없습니다</strong> —
-              알파와 베일이 같은 일을 합니다. 공식 코드 하나로 충분합니다.</li>
-            <li>결과가 밝기 때문에 색을 진하게 써도 글자가 죽지 않습니다.</li>
+              알파와 베일이 그 일을 합니다.</li>
+            <li><strong>단색이면 움직임이 눈에 안 잡힙니다.</strong> 명도차가 없으면
+              흐름을 볼 단서가 없어서, 초록 세 칸을 섞었습니다.</li>
           </ul>
         </div>
       </section>
@@ -146,13 +153,14 @@
         <div class="wrap wrap--wide">
           <div class="rule"></div>
           <table>
-            <tr><th>구성</th><th>blob 알파</th><th>본문 최저 대비</th></tr>
-            <tr><td>3색 균등, 중성 지면</td><td><code>intensity 0.3</code></td><td>8.5 : 1</td></tr>
-            <tr><td><strong>공식 노랑 + 우유빛 지면</strong></td><td><code>intensity 0.55</code></td><td><strong>14 : 1 대</strong></td></tr>
+            <tr><th>배경 구성</th><th>슬라이드 간 변화</th><th>본문 최저 대비</th></tr>
+            <tr><td>노랑 12 (단색)</td><td>4.1</td><td>14.5 : 1</td></tr>
+            <tr><td><strong>노랑 9 + 초록 3</strong></td><td><strong>14.5</strong></td><td><strong>10.9 : 1</strong></td></tr>
+            <tr><td>노랑 8 + 초록 4</td><td>20.3</td><td>9.0 : 1 · 올리브로 넘어감</td></tr>
           </table>
           <p class="muted">
-            알파를 올렸는데 대비는 오히려 올라갑니다. 우유빛 지면이 밝아서 생기는 여유이고,
-            이 여유가 곧 <span class="pill">배경을 과감하게 쓸 수 있는 폭</span>입니다.
+            변화 수치는 슬라이드 0 과 2 의 픽셀 차입니다. 초록 세 칸이 변화를
+            <span class="pill">3.5 배</span>로 키우면서도 본문 대비는 10:1 대를 지킵니다.
           </p>
         </div>
       </section>
@@ -164,9 +172,10 @@
           <table>
             <tr><th>역할</th><th>색</th><th>이유</th></tr>
             <tr><td>배경 면적</td><td><code>#F7E26B</code></td><td>알파 0.55 로 얹으면 우유빛이 된다</td></tr>
+            <tr><td>배경 보조</td><td><code>#3A7D2E</code></td><td>12칸 중 3칸. 명도차를 만들어 움직임을 보이게 한다</td></tr>
             <tr><td>전경 면적</td><td><code>#E60012</code></td><td>제목 밑줄·칩·아이콘. 배경에 넣으면 분홍 구름이 된다</td></tr>
             <tr><td>전경 글자</td><td><span class="pill">#E60012</span></td><td>흰 칩 위에서 6.5:1. 노랑 바탕에 직접 올리면 3.8:1 로 미달</td></tr>
-            <tr><td>데이터 계열</td><td><code>#3A7D2E</code></td><td>그래프 마크·범례. 우유빛 배경에는 섞지 않는다</td></tr>
+            <tr><td>데이터 계열</td><td><code>#3A7D2E</code></td><td>그래프 마크·범례에도 같은 색을 쓴다</td></tr>
           </table>
         </div>
       </section>
@@ -176,14 +185,16 @@
         <div class="wrap wrap--wide">
           <div class="rule"></div>
           <pre><code class="language-css">:root {
-  --gbg-palette: #F7E26B;   /* 공식 노랑 하나 */
-  --gbg-base:    #FBF6E9;   /* 지면색 — 브랜드 색 아님 */
+  --gbg-palette:            /* 노랑 9 · 초록 3 — 둘 다 공식 코드 */
+    #F7E26B, #F7E26B, #3A7D2E, #F7E26B, #F7E26B, #F7E26B,
+    #3A7D2E, #F7E26B, #F7E26B, #3A7D2E, #F7E26B, #F7E26B;
+  --gbg-base: #FBF6E9;      /* 지면색 — 브랜드 색 아님 */
 }</code></pre>
           <pre><code class="language-js">gradientBackground: { intensity: 0.55, wash: 0.3 }</code></pre>
           <p class="muted">
-            더 진하게: <code>intensity 0.7 / wash 0.2</code> ·
-            더 차분하게: <code>intensity 0.4 / wash 0.35</code>.
-            어느 쪽이든 선언되는 색은 공식 코드 그대로입니다.
+            움직임을 더 키우려면 초록 칸을 늘리고, 우유빛을 지키려면 셋에서 멈춥니다.
+            톤은 <code>intensity 0.7 / wash 0.2</code>(진하게) ·
+            <code>0.4 / 0.35</code>(차분하게). 어느 쪽이든 색은 공식 코드 그대로입니다.
           </p>
         </div>
       </section>
@@ -193,7 +204,7 @@
           <h2>슬라이드를 넘겨 보세요</h2>
           <div class="rule" style="margin-left:auto;margin-right:auto"></div>
           <p class="muted">
-            같은 색으로 슬라이드마다 배치가 바뀝니다. 되돌아오면 같은 배경으로 복귀합니다 —
+            같은 두 색으로 슬라이드마다 배치가 바뀝니다. 되돌아오면 같은 배경으로 복귀합니다 —
             시드를 슬라이드 인덱스에서 뽑기 때문입니다.<br>
             자세한 내용은 <a href="index.html">기본 데모 덱</a> 과 <code>README.md</code> 참고.
           </p>
