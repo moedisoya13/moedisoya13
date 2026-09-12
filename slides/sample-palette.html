@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>크림 옐로우 배경 — 기업 프레젠테이션 샘플</title>
+
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/5.1.0/reset.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/5.1.0/reveal.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/5.1.0/theme/white.min.css">
+  <link rel="stylesheet" href="assets/gradient-bg.css">
+
+  <style>
+    /* 브랜드 3색을 그대로 배경에 깔면 원하는 인상이 나오지 않는다.
+       채도 높은 레몬(#F7E26B)을 낮은 알파로 넓게 깔면 채도가 빠지면서
+       올리브빛 회색으로 내려앉는다. 배경에는 같은 노랑을 밝기만 단계로 편
+       '크림 램프'를 쓰고, 원색 빨강·초록은 전경 포인트로 남긴다.
+
+       크림은 밝아서 intensity 를 크게 올려도 본문 대비가 오히려 좋아진다.
+       레몬 90% 구성이 8.5:1 이었고, 이 구성은 14:1 대다. */
+    :root {
+      /* 선언하는 색은 공식 코드뿐이다. 배경의 밝은 단계는 새 색을 만들어 쓰는 게
+         아니라 알파(intensity)와 바닥색 베일(wash)로 만든다 — 화면에 깔리는
+         우유빛은 #F7E26B 가 지면색 위에 옅게 얹힌 결과다. */
+      --brand-yellow: #F7E26B;
+      /* 노랑 7 · 초록 5. 알파를 워터마크 수준까지 내리면 색이 옅어지면서 움직임도
+         같이 죽는다. 속도를 올리는 대신(흐름이 빨라지면 발표에 방해가 된다)
+         초록 칸을 늘려 명도차로 되살린다. 이 농도에서는 초록이 색으로 읽히지
+         않고 톤 차이로만 남는다 — 초록 노출 0%. */
+      --gbg-palette:
+        #F7E26B, #3A7D2E, #F7E26B, #3A7D2E, #F7E26B, #3A7D2E,
+        #F7E26B, #F7E26B, #3A7D2E, #F7E26B, #3A7D2E, #F7E26B;
+
+      /* 지면색. 브랜드 색이 아니라 종이에 해당한다. 공식 지면색이 따로 있으면
+         이 값만 바꾸면 배경 전체가 따라온다. */
+      --gbg-base: #FBF6E9;
+      --gbg-print-wash: rgba(255, 253, 245, 0.58);
+
+      /* 인쇄 대체 배경도 같은 비율(네 자리 중 둘이 초록)과 같은 농도로 */
+      --gbg-1: #F7E26B;
+      --gbg-2: #3A7D2E;
+      --gbg-3: #F7E26B;
+      --gbg-5: #3A7D2E;
+
+      /* 공식 원색. 밝은 노랑 위에서 #E60012 는 작은 글자 대비가 3.8:1 이라
+         본문으로 쓸 수 없다. 색을 어둡게 조이면 공식 코드가 아니게 되므로,
+         쓰는 자리를 바꾼다 — 면적(밑줄·칩)과 흰 칩 위의 글자로만 쓴다. */
+      --brand-red: #E60012;
+      --brand-green: #3A7D2E;
+    }
+
+    :root {
+      --r-main-font: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard",
+                     "Noto Sans KR", "Malgun Gothic", sans-serif;
+      --r-heading-font: var(--r-main-font);
+      --r-main-color: #17161a;
+      --r-heading-color: #111110;
+      --r-heading-text-transform: none;
+      --r-link-color: #1b2d77;
+      --r-link-color-hover: #132050;
+    }
+
+    .reveal { word-break: keep-all; overflow-wrap: break-word; }
+    .reveal h1, .reveal h2 { letter-spacing: -0.02em; font-weight: 700; text-wrap: balance; }
+    .reveal h1 { font-size: 2em; }
+    .reveal h2 { font-size: 1.35em; margin-bottom: 0.55em; }
+    .reveal p, .reveal li { line-height: 1.55; text-wrap: pretty; }
+    .reveal li { font-size: 0.72em; margin-bottom: 0.34em; }
+    .reveal .muted { color: #34302c; font-size: 0.68em; }
+
+    .reveal .wrap { max-width: 620px; margin: 0 auto; text-align: left; }
+    .reveal .wrap--wide { max-width: 880px; }
+    .reveal .center { text-align: center; }
+
+    /* 공식 빨강 글자는 흰 칩 위에만 올린다 — 흰 바탕에서는 6.5:1 로 충분하다. */
+    .reveal .pill {
+      display: inline-block;
+      padding: 0.12em 0.5em;
+      border-radius: 999px;
+      background: #fff;
+      color: var(--brand-red);
+      font-weight: 700;
+      box-shadow: 0 1px 6px rgba(28, 27, 26, 0.1);
+    }
+    .reveal .rule {
+      width: 64px; height: 4px; border-radius: 2px;
+      background: var(--brand-red);
+      margin: 0.9em auto 1.1em;
+    }
+    .reveal .wrap .rule { margin-left: 0; }
+
+    .reveal pre { box-shadow: none; width: 100%; font-size: 0.44em; }
+    .reveal pre code {
+      border-radius: 12px;
+      padding: 1em 1.2em;
+      background: rgba(255, 255, 255, 0.8);
+      border: 1px solid rgba(28, 27, 26, 0.08);
+      color: #15140f;
+      max-height: none;
+    }
+
+    .reveal table { font-size: 0.46em; background: transparent; width: 100%; }
+    .reveal table td, .reveal table th { padding: 0.34em 0.8em 0.34em 0; }
+    .reveal table th { text-align: left; color: #34302c; font-weight: 700; }
+    .reveal table td:first-child { white-space: nowrap; }
+    .reveal table tr:not(:first-child) { border-top: 1px solid rgba(28, 27, 26, 0.1); }
+
+    .chips { display: flex; gap: 16px; justify-content: center; margin-top: 0.5em; }
+    .chips figure { margin: 0; }
+    .chips i { display: block; width: 76px; height: 76px; border-radius: 12px;
+               box-shadow: 0 4px 16px rgba(28, 27, 26, 0.12); }
+    .chips figcaption { font-size: 0.3em; color: #34302c; margin-top: 0.6em;
+                        font-variant-numeric: tabular-nums; }
+  </style>
+</head>
+<body>
+  <div class="reveal">
+    <div class="slides">
+
+      <section>
+        <div class="wrap wrap--wide center">
+          <h1>크림 옐로우 배경</h1>
+          <div class="rule" style="margin-left:auto;margin-right:auto"></div>
+          <div class="chips">
+            <figure><i style="background:#F7E26B"></i><figcaption>#F7E26B</figcaption></figure>
+            <figure><i style="background:#E60012"></i><figcaption>#E60012</figcaption></figure>
+            <figure><i style="background:#3A7D2E"></i><figcaption>#3A7D2E</figcaption></figure>
+          </div>
+          <p class="muted">
+            선언한 색은 공식 코드 셋뿐입니다. 화면을 덮은 우유빛은 새로 만든 색이 아니라
+            <strong>#F7E26B</strong> 가 지면색 위에 옅게 얹힌 결과이고,
+            <strong>#3A7D2E</strong> 다섯 칸이 그 위에서 흐름을 만듭니다.
+          </p>
+        </div>
+      </section>
+
+      <section>
+        <h2>왜 원색을 그대로 안 깔았나</h2>
+        <div class="wrap">
+          <div class="rule"></div>
+          <ul>
+            <li>중성 회색 지면 위에 노랑을 옅게 깔면 채도가 빠져
+              <strong>올리브빛 회색</strong>이 됩니다. 지면색부터 우유빛으로 바꿉니다.</li>
+            <li>밝기 단계에 <strong>새 색이 필요 없습니다</strong> — 알파와 베일이 그 일을 합니다.</li>
+            <li>배경은 <strong>형태가 없을수록</strong> 글자에 자리를 내줍니다 — 워터마크 농도까지 내렸습니다.</li>
+            <li>옅게 하면 움직임도 같이 죽습니다. <strong>속도를 올리는 대신 초록 칸을 늘려</strong> 되살렸습니다.</li>
+          </ul>
+        </div>
+      </section>
+
+      <section>
+        <h2>색을 진하게 쓰면서 더 잘 읽힙니다</h2>
+        <div class="wrap wrap--wide">
+          <div class="rule"></div>
+          <table>
+            <tr><th>농도</th><th>배경 채도</th><th>슬라이드 간 변화</th><th>본문 대비</th></tr>
+            <tr><td>진하게 <code>0.55 / 0.3</code></td><td>50.4</td><td>14.9</td><td>10.2 : 1</td></tr>
+            <tr><td><strong>워터마크 <code>0.28 / 0.5</code> + 초록 5</strong></td><td><strong>27.2</strong></td><td><strong>7.8</strong></td><td><strong>12.3 : 1</strong></td></tr>
+            <tr><td>워터마크 · 초록 2 (되살리기 전)</td><td>30.0</td><td>7.7</td><td>13.8 : 1</td></tr>
+            <tr><td>단색 · 움직임 없음</td><td>57.5</td><td>4.1</td><td>14.6 : 1</td></tr>
+          </table>
+          <p class="muted">
+            배경 채도를 <span class="pill">−46%</span> 내렸는데 변화량은 단색 대비 1.9 배로
+            남았습니다. 같은 워터마크 농도라도 초록 칸을 늘리면 드리프트가 0.76 → 1.03 으로
+            올라갑니다 — 속도를 건드리지 않고 움직임을 지키는 방법입니다.
+          </p>
+        </div>
+      </section>
+
+      <section>
+        <h2>배경 색 · 전경 색</h2>
+        <div class="wrap wrap--wide">
+          <div class="rule"></div>
+          <table>
+            <tr><th>역할</th><th>색</th><th>이유</th></tr>
+            <tr><td>배경 면적</td><td><code>#F7E26B</code></td><td>알파 0.28 · 베일 0.5 로 워터마크 농도</td></tr>
+            <tr><td>배경 보조</td><td><code>#3A7D2E</code></td><td>12칸 중 5칸. 옅어서 색으로 안 읽히고 움직임만 남긴다</td></tr>
+            <tr><td>전경 면적</td><td><code>#E60012</code></td><td>제목 밑줄·칩·아이콘. 배경에 넣으면 분홍 구름이 된다</td></tr>
+            <tr><td>전경 글자</td><td><span class="pill">#E60012</span></td><td>흰 칩 위에서 6.5:1. 노랑 바탕에 직접 올리면 3.8:1 로 미달</td></tr>
+            <tr><td>데이터 계열</td><td><code>#3A7D2E</code></td><td>그래프 마크·범례에도 같은 색을 쓴다</td></tr>
+          </table>
+        </div>
+      </section>
+
+      <section>
+        <h2>설정</h2>
+        <div class="wrap wrap--wide">
+          <div class="rule"></div>
+          <pre><code class="language-css">:root {
+  --gbg-palette:            /* 노랑 10 · 초록 2 — 둘 다 공식 코드 */
+    #F7E26B, #F7E26B, #F7E26B, #3A7D2E, #F7E26B, #F7E26B,
+    #F7E26B, #F7E26B, #3A7D2E, #F7E26B, #F7E26B, #F7E26B;
+  --gbg-base: #FBF6E9;      /* 지면색 — 브랜드 색 아님 */
+}</code></pre>
+          <pre><code class="language-js">gradientBackground: { intensity: 0.28, wash: 0.5, buffer: 55 }</code></pre>
+          <p class="muted">
+            <code>buffer</code> 는 흐림입니다 — 기본 140 에서 70 으로 내려 배경의 형태감을
+            절반으로 줄였습니다(엣지 에너지 −42%). 흐리게 해도 움직임은 그대로입니다.
+            움직임을 더 키우려면 초록 칸을 늘립니다 — 셋까지는 우유빛이 버팁니다.
+            톤은 <code>intensity 0.7 / wash 0.2</code>(진하게) ·
+            <code>0.4 / 0.35</code>(차분하게). 어느 쪽이든 색은 공식 코드 그대로입니다.
+          </p>
+        </div>
+      </section>
+
+      <section>
+        <div class="wrap wrap--wide center">
+          <h2>슬라이드를 넘겨 보세요</h2>
+          <div class="rule" style="margin-left:auto;margin-right:auto"></div>
+          <p class="muted">
+            같은 두 색으로 슬라이드마다 배치가 바뀝니다. 되돌아오면 같은 배경으로 복귀합니다 —
+            시드를 슬라이드 인덱스에서 뽑기 때문입니다.<br>
+            자세한 내용은 <a href="index.html">기본 데모 덱</a> 과 <code>README.md</code> 참고.
+          </p>
+        </div>
+      </section>
+
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/5.1.0/reveal.min.js"></script>
+  <script src="assets/gradient-bg.js"></script>
+  <script>
+    Reveal.initialize({
+      hash: true,
+      transition: 'fade',
+      plugins: [RevealGradientBackground],
+      // 팔레트는 CSS 의 --gbg-palette(공식 노랑 하나)에서 읽는다.
+      // 밝은 단계를 만들려고 새 색을 선언하지 않는다 — 알파와 베일이 그 일을 한다.
+      // 워터마크 농도. 알파를 내리고(intensity) 베일을 올리고(wash)
+      // 캔버스를 더 줄여(buffer) 배경을 지면 쪽으로 밀어 넣는다.
+      // speed 는 기본값 그대로다 — 흐름이 빨라지면 발표에 방해가 된다.
+      gradientBackground: { intensity: 0.28, wash: 0.5, buffer: 55 }
+    });
+  </script>
+</body>
+</html>
