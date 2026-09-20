@@ -1,0 +1,859 @@
+<title>말하지 않는 모델 Jev</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">
+<style>
+  :root{
+    --bg:#F6F7F9; --panel:#FFFFFF; --panel-2:#EFF2F5; --inset:#F8FAFB;
+    --ink:#12161B; --ink-2:#58626E; --ink-3:#8B95A1;
+    --rule:#DCE1E7; --rule-2:#C3CBD4;
+    --jev:#2a78d6; --jev-soft:#E6F0FB;
+    --llm:#eb6834; --llm-soft:#FDEEE7;
+    --neutral-mark:#C3CBD4;
+    --shadow:0 1px 2px rgba(18,22,27,.05), 0 8px 24px -16px rgba(18,22,27,.18);
+    --sans:"IBM Plex Sans KR","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
+    --serif:"Gowun Batang","Nanum Myeongjo","Apple SD Gothic Neo",serif;
+    --mono:"IBM Plex Mono","SFMono-Regular",ui-monospace,Menlo,monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#0F1216; --panel:#161A20; --panel-2:#1C222A; --inset:#12161B;
+      --ink:#EDEFF2; --ink-2:#A6B0BC; --ink-3:#77828F;
+      --rule:#262D36; --rule-2:#39424D;
+      --jev:#3987e5; --jev-soft:#142236;
+      --llm:#d95926; --llm-soft:#2E1B11;
+      --neutral-mark:#39424D;
+      --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.7);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0F1216; --panel:#161A20; --panel-2:#1C222A; --inset:#12161B;
+    --ink:#EDEFF2; --ink-2:#A6B0BC; --ink-3:#77828F;
+    --rule:#262D36; --rule-2:#39424D;
+    --jev:#3987e5; --jev-soft:#142236;
+    --llm:#d95926; --llm-soft:#2E1B11;
+    --neutral-mark:#39424D;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.7);
+  }
+
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:var(--sans); font-size:16px; line-height:1.78;
+    -webkit-font-smoothing:antialiased;
+    padding-inline:20px; padding-block:0 72px;
+  }
+  .col{max-width:680px; margin-inline:auto;}
+  .wide{max-width:940px; margin-inline:auto;}
+
+  h1,h2,h3{font-family:var(--serif); font-weight:700; text-wrap:balance; line-height:1.3; margin:0;}
+  h1{font-size:clamp(34px,7.4vw,58px); letter-spacing:-.02em;}
+  h2{font-size:clamp(23px,4vw,30px); letter-spacing:-.01em;}
+  h3{font-size:18px; font-family:var(--sans); font-weight:600; letter-spacing:-.01em;}
+  p{margin:0;}
+  a{color:var(--jev); text-underline-offset:3px; text-decoration-thickness:1px;}
+  :focus-visible{outline:2px solid var(--jev); outline-offset:3px; border-radius:3px;}
+
+  .eyebrow{
+    font-family:var(--mono); font-size:11px; font-weight:500;
+    letter-spacing:.16em; text-transform:uppercase; color:var(--ink-3);
+  }
+  .mono{font-family:var(--mono); font-variant-numeric:tabular-nums;}
+
+  /* masthead */
+  .masthead{padding-block:64px 44px; display:flex; flex-direction:column; gap:22px;}
+  .lead{font-size:18px; color:var(--ink-2); max-width:34em;}
+  .lead strong{color:var(--ink); font-weight:600;}
+  .factrow{
+    display:grid; grid-template-columns:repeat(auto-fit,minmax(132px,1fr));
+    gap:1px; background:var(--rule); border:1px solid var(--rule); border-radius:8px; overflow:hidden;
+  }
+  .fact{background:var(--panel); padding:13px 15px; display:flex; flex-direction:column; gap:3px;}
+  .fact dt{font-family:var(--mono); font-size:10.5px; letter-spacing:.12em; text-transform:uppercase; color:var(--ink-3);}
+  .fact dd{margin:0; font-size:15px; font-weight:600; font-variant-numeric:tabular-nums;}
+
+  .keylegend{display:flex; flex-wrap:wrap; gap:8px 18px; align-items:center; font-size:13px; color:var(--ink-2);}
+  .keylegend span{display:inline-flex; align-items:center; gap:7px;}
+  .swatch{width:12px; height:12px; border-radius:3px; flex:none;}
+  .sw-jev{background:var(--jev);} .sw-llm{background:var(--llm);}
+  .sw-hollow{background:transparent; border:1.5px solid var(--neutral-mark);}
+
+  /* prose sections */
+  section{padding-block:40px 0;}
+  .prose{display:flex; flex-direction:column; gap:18px;}
+  .prose p{color:var(--ink-2);}
+  .prose p strong{color:var(--ink); font-weight:600;}
+  .sectionhead{display:flex; flex-direction:column; gap:10px; margin-bottom:22px;}
+
+  /* instrument panel */
+  .panel{
+    background:var(--panel); border:1px solid var(--rule); border-radius:12px;
+    box-shadow:var(--shadow); margin-block:30px; overflow:hidden;
+  }
+  .panel-top{
+    display:flex; flex-wrap:wrap; gap:6px 14px; align-items:baseline; justify-content:space-between;
+    padding:14px 18px; border-bottom:1px solid var(--rule); background:var(--panel-2);
+  }
+  .panel-top h3{font-size:15px;}
+  .panel-body{padding:20px 18px;}
+  .panel-note{
+    padding:12px 18px; border-top:1px solid var(--rule); background:var(--inset);
+    font-size:13px; color:var(--ink-2); line-height:1.6;
+  }
+
+  button{font-family:inherit; font-size:14px; cursor:pointer;}
+  .btn{
+    background:var(--ink); color:var(--bg); border:none; border-radius:7px;
+    padding:9px 17px; font-weight:600; letter-spacing:-.01em;
+    transition:opacity .15s ease;
+  }
+  .btn:hover{opacity:.85;}
+  .btn[disabled]{opacity:.4; cursor:default;}
+  .btn-ghost{
+    background:transparent; color:var(--ink); border:1px solid var(--rule-2);
+    border-radius:7px; padding:8px 14px; font-weight:500;
+  }
+  .btn-ghost:hover{border-color:var(--ink-3);}
+  .btn-ghost[aria-pressed="true"]{background:var(--ink); color:var(--bg); border-color:var(--ink);}
+
+  /* ── race ── */
+  .lanes{display:grid; grid-template-columns:1fr 1fr; gap:14px;}
+  @media (max-width:640px){.lanes{grid-template-columns:1fr;}}
+  .lane{border:1px solid var(--rule); border-radius:10px; overflow:hidden; display:flex; flex-direction:column;}
+  .lane-head{
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+    padding:10px 13px; border-bottom:1px solid var(--rule);
+  }
+  .lane-name{display:flex; align-items:center; gap:8px; font-weight:600; font-size:14px;}
+  .lane-clock{font-family:var(--mono); font-size:13px; font-weight:500; color:var(--ink-2); font-variant-numeric:tabular-nums;}
+  .lane--llm .lane-head{background:var(--llm-soft);}
+  .lane--jev .lane-head{background:var(--jev-soft);}
+  .lane-body{padding:13px; flex:1; min-height:224px; background:var(--inset);}
+  .stream{
+    font-family:var(--mono); font-size:12.5px; line-height:1.85; white-space:pre-wrap;
+    word-break:break-all; color:var(--ink); margin:0; min-height:150px;
+  }
+  .caret{display:inline-block; width:7px; height:15px; background:var(--llm); vertical-align:-2px; animation:blink .9s steps(2) infinite;}
+  @keyframes blink{50%{opacity:0;}}
+  .verdict{margin-top:10px; font-size:12.5px; line-height:1.55; color:var(--ink-2); min-height:34px;}
+  .verdict b{color:var(--ink); font-weight:600;}
+
+  .answers{display:flex; flex-direction:column; gap:9px;}
+  .answer{opacity:0;}
+  .answer.on{animation:pop .22s ease-out forwards;}
+  @keyframes pop{from{opacity:0; transform:translateY(4px);} to{opacity:1; transform:none;}}
+  .ans-top{display:flex; justify-content:space-between; gap:10px; align-items:baseline; font-size:12.5px;}
+  .ans-q{color:var(--ink-2);}
+  .ans-v{font-weight:600; font-family:var(--mono); font-size:12.5px;}
+  .meter{height:5px; border-radius:3px; background:var(--panel-2); margin-top:5px; overflow:hidden;}
+  .meter i{display:block; height:100%; border-radius:3px; background:var(--jev); width:0; transition:width .5s ease-out;}
+  .runbar{display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-bottom:16px;}
+  .speedchip{
+    font-family:var(--mono); font-size:11px; letter-spacing:.06em; color:var(--ink-2);
+    border:1px dashed var(--rule-2); border-radius:20px; padding:4px 11px;
+  }
+
+  /* ── format demo ── */
+  .twocol{display:grid; grid-template-columns:1fr 1fr; gap:14px;}
+  @media (max-width:640px){.twocol{grid-template-columns:1fr;}}
+  .card{border:1px solid var(--rule); border-radius:10px; padding:13px; background:var(--inset); display:flex; flex-direction:column; gap:10px;}
+  .card-label{display:flex; align-items:center; gap:8px; font-size:13px; font-weight:600;}
+  .payload{
+    font-family:var(--mono); font-size:12.5px; line-height:1.7; white-space:pre-wrap; word-break:break-all;
+    background:var(--panel); border:1px solid var(--rule); border-radius:7px; padding:11px; margin:0; min-height:92px; color:var(--ink);
+  }
+  .status{font-size:12.5px; line-height:1.55; display:flex; gap:7px; align-items:flex-start;}
+  .status .mark{font-family:var(--mono); font-weight:600; flex:none;}
+  .status.bad .mark{color:var(--llm);} .status.good .mark{color:var(--jev);}
+  .status.warn .mark{color:var(--ink-3);}
+  .scene-title{font-size:13px; color:var(--ink-2); margin-bottom:14px;}
+  .scene-title b{color:var(--ink); font-weight:600;}
+
+  /* ── confidence ── */
+  .gate-controls{display:flex; flex-direction:column; gap:14px; margin-bottom:18px;}
+  .sliderrow{display:flex; align-items:center; gap:14px; flex-wrap:wrap;}
+  .sliderrow label{font-size:13px; color:var(--ink-2); font-weight:500;}
+  input[type=range]{flex:1; min-width:180px; accent-color:var(--jev); height:22px;}
+  .thresh{font-family:var(--mono); font-size:19px; font-weight:600; font-variant-numeric:tabular-nums; min-width:64px;}
+  .dots{
+    display:grid; grid-template-columns:repeat(auto-fill,minmax(11px,1fr));
+    gap:3px; margin-block:16px;
+  }
+  .dot{aspect-ratio:1; border-radius:50%; background:transparent; border:1.4px solid var(--neutral-mark);}
+  .dot.auto{background:var(--jev); border-color:var(--jev);}
+  .dot.auto.wrong{background:var(--llm); border-color:var(--llm);}
+  .dot.wrong:not(.auto){border-color:var(--llm); border-style:dashed;}
+  .readouts{display:grid; grid-template-columns:repeat(auto-fit,minmax(128px,1fr)); gap:1px; background:var(--rule); border:1px solid var(--rule); border-radius:8px; overflow:hidden;}
+  .readout{background:var(--panel); padding:12px 14px;}
+  .readout dt{font-family:var(--mono); font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--ink-3);}
+  .readout dd{margin:0; font-size:22px; font-weight:600; font-variant-numeric:tabular-nums; line-height:1.4;}
+  .readout dd small{font-size:13px; font-weight:500; color:var(--ink-2);}
+
+  /* ── charts ── */
+  .chart{margin-bottom:24px;}
+  .chart:last-child{margin-bottom:0;}
+  .chart-title{font-size:14px; font-weight:600; margin-bottom:3px;}
+  .chart-sub{font-size:12.5px; color:var(--ink-3); margin-bottom:14px;}
+  .barrow{display:grid; grid-template-columns:minmax(72px,auto) 1fr minmax(84px,auto); gap:10px; align-items:center; margin-bottom:11px;}
+  .barrow:last-child{margin-bottom:0;}
+  .barname{font-size:12.5px; color:var(--ink-2); line-height:1.35;}
+  .bartrack{display:flex; align-items:center;}
+  .bar{height:14px; border-radius:4px; min-width:3px;}
+  .bar.jev{background:var(--jev);} .bar.llm{background:var(--llm);}
+  .bar-offset{height:14px; flex:none; border-right:2px solid var(--panel);}
+  .barval{font-family:var(--mono); font-size:12px; font-weight:500; color:var(--ink); white-space:nowrap; font-variant-numeric:tabular-nums; text-align:right;}
+  .axis{
+    display:flex; justify-content:space-between; gap:10px; margin-top:12px; padding-top:7px;
+    border-top:1px solid var(--rule);
+    font-family:var(--mono); font-size:10.5px; color:var(--ink-3); letter-spacing:.06em;
+  }
+  @media (max-width:520px){
+    .barrow{grid-template-columns:1fr auto; gap:6px 8px;}
+    .barname{grid-column:1 / -1;}
+    .barval{font-size:11.5px;}
+  }
+
+  .callout{
+    border-left:3px solid var(--llm); background:var(--llm-soft);
+    padding:14px 16px; border-radius:0 8px 8px 0; font-size:13.5px; line-height:1.7; color:var(--ink-2);
+  }
+  .callout b{color:var(--ink); font-weight:600;}
+
+  /* ── quiz ── */
+  .quiz{display:flex; flex-direction:column; gap:12px;}
+  .q{border:1px solid var(--rule); border-radius:10px; padding:14px; background:var(--inset);}
+  .q-text{font-size:14px; font-weight:500; margin-bottom:11px; line-height:1.6;}
+  .opts{display:flex; flex-wrap:wrap; gap:7px;}
+  .opt{
+    border:1px solid var(--rule-2); background:var(--panel); color:var(--ink);
+    border-radius:20px; padding:6px 14px; font-size:13px; font-weight:500;
+  }
+  .opt:hover:not([disabled]){border-color:var(--ink-3);}
+  .opt.right{background:var(--jev); border-color:var(--jev); color:#fff;}
+  .opt.wrong{background:var(--llm-soft); border-color:var(--llm); color:var(--ink);}
+  .opt[disabled]{cursor:default;}
+  .why{margin-top:11px; font-size:13px; line-height:1.65; color:var(--ink-2); border-top:1px dashed var(--rule); padding-top:10px;}
+  .score{font-family:var(--mono); font-size:13px; color:var(--ink-2); font-variant-numeric:tabular-nums;}
+
+  /* ── verdict table ── */
+  .ledger{display:grid; grid-template-columns:1fr 1fr; gap:14px;}
+  @media (max-width:640px){.ledger{grid-template-columns:1fr;}}
+  .ledger ul{margin:0; padding-left:0; list-style:none; display:flex; flex-direction:column; gap:10px;}
+  .ledger li{font-size:13.5px; line-height:1.65; color:var(--ink-2); display:flex; gap:9px;}
+  .ledger li .mark{font-family:var(--mono); font-weight:600; flex:none;}
+  .ledger .known li .mark{color:var(--jev);}
+  .ledger .unknown li .mark{color:var(--llm);}
+
+  .summary{
+    border:1px solid var(--rule); border-radius:12px; background:var(--panel);
+    padding:24px 22px; display:flex; flex-direction:column; gap:16px; box-shadow:var(--shadow);
+  }
+  .summary ol{margin:0; padding-left:1.3em; display:flex; flex-direction:column; gap:12px;}
+  .summary li{font-size:15px; line-height:1.7; color:var(--ink-2);}
+  .summary li b{color:var(--ink); font-weight:600;}
+
+  .sources{font-size:13px; line-height:1.9; color:var(--ink-2);}
+  .sources ul{margin:10px 0 0; padding-left:1.1em;}
+  .sources li{margin-bottom:3px;}
+  footer{margin-top:52px; padding-top:22px; border-top:1px solid var(--rule);}
+
+  @media (prefers-reduced-motion: reduce){
+    *{animation-duration:.01ms !important; transition-duration:.01ms !important;}
+  }
+</style>
+
+<header class="masthead col">
+  <div class="eyebrow">TypeSafe AI · System One · 2026</div>
+  <h1>말하지 않는 모델</h1>
+  <p class="lead">
+    2026년 9월 15일 공개된 <strong>Jev</strong>는 문장을 한 글자도 쓰지 않습니다.
+    상황을 읽고 <strong>정해진 형식의 답 하나와, 그 답을 얼마나 믿어도 되는지를 나타내는 숫자</strong>만 돌려줍니다.
+    챗봇과 같은 종류의 물건이 아니라, 소프트웨어가 직접 꽂아 쓰는 판단 부품에 가깝습니다.
+    아래 계기들을 직접 눌러 보면서 무엇이 다른지 확인해 보세요.
+  </p>
+  <dl class="factrow">
+    <div class="fact"><dt>모델</dt><dd>Jev 1.13</dd></div>
+    <div class="fact"><dt>응답 시간</dt><dd>70–500 ms</dd></div>
+    <div class="fact"><dt>입력 가격</dt><dd>$0.042 / 100만</dd></div>
+    <div class="fact"><dt>출력 가격</dt><dd>$0 (무료)</dd></div>
+    <div class="fact"><dt>맥락 한도</dt><dd>32K 토큰</dd></div>
+  </dl>
+  <div class="keylegend">
+    <span><i class="swatch sw-jev"></i>Jev (System One)</span>
+    <span><i class="swatch sw-llm"></i>기존 LLM (System Two)</span>
+    <span class="mono" style="color:var(--ink-3);">이 색 규칙은 페이지 전체에서 동일합니다</span>
+  </div>
+</header>
+
+<main>
+
+<!-- ════ 1. 작동 원리 ════ -->
+<section class="col">
+  <div class="sectionhead">
+    <div class="eyebrow">01 — 작동 원리</div>
+    <h2>한 글자씩 쓰느냐, 한 번에 고르느냐</h2>
+  </div>
+  <div class="prose">
+    <p>
+      우리가 아는 LLM은 <strong>다음 글자를 예측하는 기계</strong>입니다. 답을 통째로 아는 게 아니라
+      한 조각 쓰고, 그 조각을 다시 읽어서 다음 조각을 쓰고, 이걸 끝까지 반복합니다(자기회귀, autoregression).
+      그래서 답이 길어질수록 시간이 늘고, 결과는 결국 <strong>'글자 뭉치'</strong>라서 프로그램이 쓰려면 다시 뜯어 읽어야 합니다.
+    </p>
+    <p>
+      Jev는 이 반복 자체를 없앴습니다. 상황(state)과 <strong>미리 형식을 정해 둔 질문 목록</strong>을 함께 받아,
+      <strong>단 한 번의 계산으로 모든 질문의 답을 동시에</strong> 내놓습니다. 질문을 4개 하든 20개 하든 한 번에 처리되기 때문에
+      질문 수가 늘어도 시간과 비용이 거의 그대로입니다. 출력 토큰을 청구하지 않는 이유도 여기 있습니다 — 만들어 내는 토큰이 아예 없으니까요.
+    </p>
+  </div>
+</section>
+
+<div class="panel wide">
+  <div class="panel-top">
+    <h3>계기 A · 같은 일을 시켜 보기</h3>
+    <div class="eyebrow">실시간 비교</div>
+  </div>
+  <div class="panel-body">
+    <p class="scene-title">
+      들어온 상황 — <b>"결제가 두 번 됐어요. 카드사에 문의하라더니 판매처에서 처리하라고 하네요. 오늘 안에 환불 안 되면 소비자원 갑니다."</b>
+      여기서 알아내야 할 것: 우선순위 · 담당 부서 · 환불 가능 여부 · 이탈 위험도.
+    </p>
+    <div class="runbar">
+      <button class="btn" id="raceBtn">동시에 실행</button>
+      <span class="speedchip">실제 측정치를 4배속으로 재생</span>
+    </div>
+    <div class="lanes">
+      <div class="lane lane--llm">
+        <div class="lane-head">
+          <span class="lane-name"><i class="swatch sw-llm"></i>기존 LLM</span>
+          <span class="lane-clock" id="llmClock">0.0초</span>
+        </div>
+        <div class="lane-body">
+          <pre class="stream" id="llmStream"></pre>
+          <div class="verdict" id="llmVerdict"></div>
+        </div>
+      </div>
+      <div class="lane lane--jev">
+        <div class="lane-head">
+          <span class="lane-name"><i class="swatch sw-jev"></i>Jev</span>
+          <span class="lane-clock" id="jevClock">0.0초</span>
+        </div>
+        <div class="lane-body">
+          <div class="answers" id="jevAnswers"></div>
+          <div class="verdict" id="jevVerdict"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="panel-note">
+    왼쪽은 글자를 <b>순서대로</b> 만들어 냅니다 — 중간에 멈추면 아무것도 못 씁니다.
+    오른쪽은 네 개의 답이 <b>같은 순간에</b> 도착합니다. 막대는 그 답에 붙은 확률입니다.
+    (LLM 10초는 TypeSafe 벤치마크의 가장 빠른 쪽 기준이며, 느린 경우 38초까지 걸렸습니다.)
+  </div>
+</div>
+
+<!-- ════ 2. 출력의 형태 ════ -->
+<section class="col">
+  <div class="sectionhead">
+    <div class="eyebrow">02 — 결과물의 형태</div>
+    <h2>"형식은 절대 안 틀린다"가 "정답"은 아니다</h2>
+  </div>
+  <div class="prose">
+    <p>
+      LLM에게 "JSON으로만 답해"라고 시켜도 결과는 여전히 글자입니다. 백틱을 씌우거나, 없는 선택지를 지어내거나,
+      숫자 자리에 말을 넣기도 합니다. 그래서 실제 시스템에는 <strong>다시 물어보기·고쳐 읽기 같은 뒷수습 코드</strong>가 늘 붙습니다.
+    </p>
+    <p>
+      Jev의 답은 애초에 글자가 아니라 <strong>정해진 칸에 들어가는 값</strong>입니다. 세 가지 형태뿐입니다 —
+      <strong>예/아니오</strong>(확률), <strong>선택</strong>(정해진 보기 중 하나, 보기별 확률), <strong>점수</strong>(낮음·중간·높음처럼 순서가 있는 등급).
+      없는 보기를 고를 방법이 구조적으로 없으니 <strong>형식이 깨지는 일은 일어나지 않습니다.</strong>
+      다만 이건 "틀리지 않는다"와 다릅니다. <strong>보기 안에서 엉뚱한 걸 고를 수는 있습니다.</strong>
+    </p>
+  </div>
+</section>
+
+<div class="panel wide">
+  <div class="panel-top">
+    <h3>계기 B · 같은 질문, 다섯 번 받아 보기</h3>
+    <div class="eyebrow" id="sceneCount">상황 1 / 5</div>
+  </div>
+  <div class="panel-body">
+    <p class="scene-title">질문 — <b>"이 문의의 우선순위를 [낮음 · 보통 · 높음 · 긴급] 중에서 고르시오."</b></p>
+    <div class="runbar"><button class="btn" id="nextScene">다음 응답 받기</button></div>
+    <div class="twocol">
+      <div class="card">
+        <div class="card-label"><i class="swatch sw-llm"></i>기존 LLM이 돌려준 것</div>
+        <pre class="payload" id="llmPayload"></pre>
+        <div class="status" id="llmStatus"></div>
+      </div>
+      <div class="card">
+        <div class="card-label"><i class="swatch sw-jev"></i>Jev가 돌려준 것</div>
+        <pre class="payload" id="jevPayload"></pre>
+        <div class="status" id="jevStatus"></div>
+      </div>
+    </div>
+  </div>
+  <div class="panel-note">
+    5번째 상황을 꼭 보세요. Jev도 <b>틀립니다.</b> 다만 틀리는 방식이 다릅니다 —
+    프로그램을 멈추게 하는 <b>형식 오류</b>가 아니라, 사람도 헷갈릴 <b>판단 오류</b>이고,
+    그때 확률이 낮게 나오면 코드가 스스로 "이건 사람에게 넘기자"고 결정할 수 있습니다.
+  </div>
+</div>
+
+<!-- ════ 3. 확신도 ════ -->
+<section class="col">
+  <div class="sectionhead">
+    <div class="eyebrow">03 — 확신도와 보정</div>
+    <h2>"80%"라는 말이 진짜 80%여야 하는 이유</h2>
+  </div>
+  <div class="prose">
+    <p>
+      Jev의 답에는 항상 숫자가 붙습니다. 중요한 건 이 숫자가 <strong>말버릇이 아니라 실제 적중률과 맞아야</strong> 한다는 점입니다.
+      TypeSafe는 이걸 위해 <strong>RLCD</strong>(Reinforcement Learning for Calibrated Decisions, 보정된 결정을 위한 강화학습)라는
+      학습 방식을 쓴다고 밝혔습니다. 기존 모델의 RLHF가 <strong>사람이 더 좋아할 문장</strong>을 목표로 삼는다면,
+      RLCD는 <strong>확률이 실제 결과와 맞아떨어지는 것</strong>을 목표로 삼습니다.
+    </p>
+    <p>
+      보정(calibration)은 한 건에 대한 보증이 아니라 <strong>무더기에 대한 성질</strong>입니다.
+      "확신 80%로 내린 판단들을 모아 보면 그중 약 80%가 맞다"는 뜻이지, 이 한 건이 맞다는 뜻이 아닙니다.
+      이 성질이 지켜지면 사람이 할 일이 아주 단순해집니다 — <strong>어디서 자르고 어디서부터 사람이 볼지 숫자로 정하면 됩니다.</strong>
+    </p>
+  </div>
+</section>
+
+<div class="panel wide">
+  <div class="panel-top">
+    <h3>계기 C · 문턱을 직접 옮겨 보기</h3>
+    <div class="eyebrow">문의 240건</div>
+  </div>
+  <div class="panel-body">
+    <div class="gate-controls">
+      <div class="sliderrow">
+        <label for="thresh">자동 처리 문턱</label>
+        <input type="range" id="thresh" min="50" max="99" value="85" step="1">
+        <span class="thresh" id="threshVal">0.85</span>
+      </div>
+      <div class="sliderrow">
+        <span style="font-size:13px; color:var(--ink-2); font-weight:500;">모델 상태</span>
+        <button class="btn-ghost" id="modeCal" aria-pressed="true">보정된 모델</button>
+        <button class="btn-ghost" id="modeOver" aria-pressed="false">과신하는 모델</button>
+      </div>
+    </div>
+    <div class="dots" id="dots" role="img" aria-label="문의 240건을 확신도 순으로 늘어놓은 격자. 문턱 위쪽은 자동 처리, 아래쪽은 사람 검토."></div>
+    <div class="keylegend" style="margin-bottom:16px;">
+      <span><i class="swatch sw-jev" style="border-radius:50%;"></i>자동 처리 · 맞음</span>
+      <span><i class="swatch sw-llm" style="border-radius:50%;"></i>자동 처리 · 틀림</span>
+      <span><i class="swatch sw-hollow" style="border-radius:50%;"></i>사람에게 넘김</span>
+    </div>
+    <dl class="readouts">
+      <div class="readout"><dt>자동 처리</dt><dd id="roAuto">—</dd></div>
+      <div class="readout"><dt>그중 오답</dt><dd id="roWrong">—</dd></div>
+      <div class="readout"><dt>사람 검토</dt><dd id="roHuman">—</dd></div>
+      <div class="readout"><dt>자동 처리 정확도</dt><dd id="roAcc">—</dd></div>
+    </dl>
+  </div>
+  <div class="panel-note" id="gateNote"></div>
+</div>
+
+<!-- ════ 4. 수치 ════ -->
+<section class="col">
+  <div class="sectionhead">
+    <div class="eyebrow">04 — 숫자</div>
+    <h2>빠르고 싸다. 다만 더 똑똑하지는 않다</h2>
+  </div>
+  <div class="prose">
+    <p>
+      TypeSafe가 내세우는 수치는 <strong>속도 40~200배, 비용 수백 배 절감</strong>입니다.
+      주목할 것은 정확도 칸입니다 — Jev는 프런티어 모델을 <strong>이기지 않습니다.</strong> 비슷할 뿐입니다.
+      Jev의 주장은 "더 똑똑하다"가 아니라 <strong>"이런 종류의 판단에서는 같은 수준을 두 자릿수 배 싸고 빠르게 낸다"</strong>입니다.
+    </p>
+  </div>
+</section>
+
+<div class="panel wide">
+  <div class="panel-top">
+    <h3>계기 D · 한 건을 처리할 때</h3>
+    <div class="eyebrow">TypeSafe 자체 벤치마크 · 4개 워크플로</div>
+  </div>
+  <div class="panel-body">
+    <div class="chart">
+      <div class="chart-title">한 건을 처리하는 데 걸린 시간</div>
+      <div class="chart-sub">짧을수록 좋음 · 막대는 실제 측정 구간을 눈금 위 제자리에 그린 것</div>
+      <div class="barrow"><div class="barname">Jev</div>
+        <div class="bartrack"><div class="bar jev" style="width:1%"></div></div>
+        <div class="barval">0.4초</div></div>
+      <div class="barrow"><div class="barname">프런티어 LLM</div>
+        <div class="bartrack"><div class="bar-offset" style="width:25%"></div><div class="bar llm" style="width:70%"></div></div>
+        <div class="barval">10–38초</div></div>
+      <div class="axis"><span>0초</span><span>40초</span></div>
+    </div>
+    <div class="chart">
+      <div class="chart-title">한 건당 비용</div>
+      <div class="chart-sub">낮을수록 좋음 · 같은 일을 시켰을 때 청구되는 금액</div>
+      <div class="barrow"><div class="barname">Jev</div>
+        <div class="bartrack"><div class="bar jev" style="width:0.3%"></div></div>
+        <div class="barval">$0.0004</div></div>
+      <div class="barrow"><div class="barname">프런티어 LLM</div>
+        <div class="bartrack"><div class="bar-offset" style="width:17%"></div><div class="bar llm" style="width:81%"></div></div>
+        <div class="barval">$0.0304<br>–0.1761</div></div>
+      <div class="axis"><span>$0</span><span>$0.18</span></div>
+    </div>
+    <div class="chart">
+      <div class="chart-title">정확도</div>
+      <div class="chart-sub">높을수록 좋음 · 두 막대가 거의 같은 길이라는 점이 이 표의 핵심입니다</div>
+      <div class="barrow"><div class="barname">Jev</div>
+        <div class="bartrack"><div class="bar jev" style="width:67.8%"></div></div>
+        <div class="barval">67.8%</div></div>
+      <div class="barrow"><div class="barname">GPT-5.6 Terra</div>
+        <div class="bartrack"><div class="bar llm" style="width:67.9%"></div></div>
+        <div class="barval">67.9%</div></div>
+      <div class="axis"><span>0%</span><span>100%</span></div>
+    </div>
+  </div>
+  <div class="panel-note">
+    이 표의 출처는 <b>TypeSafe가 직접 만들고 직접 채점한 벤치마크</b>입니다. 정답지는 다른 모델들의 답을 평균 낸 것이고,
+    공개 리더보드가 아닙니다. 아래 경고문을 함께 읽어 주세요.
+  </div>
+</div>
+
+<div class="col">
+  <div class="callout">
+    <b>제3자 검증은 딱 한 건뿐입니다.</b> 매체 Every가 독립적으로 돌려 본 결과, 속도와 비용 주장은 사실로 확인됐지만
+    정확도는 Jev 67.8% 대 비교군 최고 74.1%로 <b>프런티어보다 한 단계 아래</b>였습니다. 표본이 작아서 이 숫자로 결론을 내릴 수는 없고,
+    가장 중요한 주장인 <b>보정(확률의 정확성)은 아직 외부에서 아무도 검증하지 않았습니다.</b>
+  </div>
+</div>
+
+<!-- ════ 5. 용례 ════ -->
+<section class="col">
+  <div class="sectionhead">
+    <div class="eyebrow">05 — 특기 영역</div>
+    <h2>이 일은 누구 몫인가</h2>
+  </div>
+  <div class="prose">
+    <p>
+      Jev는 LLM을 대체하지 않습니다. <strong>일의 종류를 나눕니다.</strong> 현장에서 자리 잡은 배치는 네 갈래입니다 —
+      <strong>계산과 권한은 코드가</strong>, <strong>판단은 Jev가</strong>, <strong>쓰기와 추론은 LLM이</strong>,
+      <strong>불확실하거나 중대한 건은 사람이</strong>. 아래에서 직접 나눠 보세요.
+    </p>
+  </div>
+</section>
+
+<div class="panel wide">
+  <div class="panel-top">
+    <h3>계기 E · 여덟 가지 일 나누기</h3>
+    <div class="eyebrow"><span class="score" id="quizScore">0 / 8</span></div>
+  </div>
+  <div class="panel-body">
+    <div class="quiz" id="quiz"></div>
+  </div>
+  <div class="panel-note">
+    규칙은 단순합니다. <b>고르는 일은 Jev, 쓰는 일은 LLM, 셈하고 권한을 확인하는 일은 코드, 책임지는 일은 사람.</b>
+    Jev가 특히 강한 자리는 라우팅·분류·트리아지, 콘텐츠 검수, 채점과 평가(evals), LLM이 뽑아낸 값의 검증,
+    에이전트가 어떤 도구를 쓸지 고르는 순간, 그리고 게임·시뮬레이션처럼 <b>한 프레임 안에 답이 와야 하는 루프</b>입니다.
+  </div>
+</div>
+
+<!-- ════ 6. 한계 ════ -->
+<section class="col">
+  <div class="sectionhead">
+    <div class="eyebrow">06 — 한계와 검증 상태</div>
+    <h2>지금 시점에서 확인된 것과 아닌 것</h2>
+  </div>
+  <div class="prose">
+    <p>
+      Jev는 2026년 9월 15일에 공개됐습니다. 새 물건이고, 회사가 내놓은 주장 대부분은 아직 회사 밖에서 재현되지 않았습니다.
+      비개발자 입장에서 알아 둘 만한 선은 이 정도입니다.
+    </p>
+  </div>
+  <div class="ledger" style="margin-top:24px;">
+    <div class="card known">
+      <div class="card-label"><i class="swatch sw-jev"></i>확인된 것</div>
+      <ul class="known">
+        <li><span class="mark">✓</span><span>정해진 형식을 벗어난 답은 구조적으로 나올 수 없다 — 파싱 실패라는 사고 유형이 사라진다.</span></li>
+        <li><span class="mark">✓</span><span>응답이 빠르다(70–500ms). 제3자 테스트에서도 속도·비용 주장은 살아남았다.</span></li>
+        <li><span class="mark">✓</span><span>질문을 여러 개 묶어도 한 번에 처리되어 비용이 거의 늘지 않는다.</span></li>
+        <li><span class="mark">✓</span><span>OpenRouter·Vercel AI Gateway·Cloudflare Workers AI 등에서 이미 실제로 호출할 수 있다.</span></li>
+      </ul>
+    </div>
+    <div class="card unknown">
+      <div class="card-label"><i class="swatch sw-llm"></i>아직 확인 안 된 것 · 못 하는 것</div>
+      <ul class="unknown">
+        <li><span class="mark">!</span><span>글을 못 쓴다. 코드·요약·설명·대화 전부 불가.</span></li>
+        <li><span class="mark">!</span><span><b>이유를 말해 주지 않는다.</b> 숫자만 나온다 — 감사·규제 영역에서는 이것만으로 부족할 수 있다.</span></li>
+        <li><span class="mark">!</span><span>산술, 여러 단계를 거치는 추론, 방해되는 맥락, 악의적 입력에 약하다고 공개돼 있다.</span></li>
+        <li><span class="mark">!</span><span>보기가 255개를 넘으면 두 단계로 나눠 처리해야 하고, 그만큼 느려진다.</span></li>
+        <li><span class="mark">!</span><span>아키텍처·가중치·보정 곡선 모두 <b>비공개</b>. 재현 가능한 논문이 없다.</span></li>
+        <li><span class="mark">!</span><span>핵심 주장인 보정 성능을 외부에서 측정한 사례가 아직 없다.</span></li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ════ 요약 ════ -->
+<section class="col">
+  <div class="sectionhead">
+    <div class="eyebrow">정리</div>
+    <h2>비개발자를 위한 세 줄</h2>
+  </div>
+  <div class="summary">
+    <ol>
+      <li><b>종류가 다릅니다.</b> LLM은 사람에게 보여 줄 글을 쓰는 기계이고, Jev는 프로그램이 곧바로 쓸 판단을 내는 부품입니다.
+        "더 좋은 LLM"이 아니라 <b>다른 칸에 들어가는 물건</b>입니다.</li>
+      <li><b>강점은 속도·단가·형식 안정성이지 지능이 아닙니다.</b> 판단의 질은 프런티어 모델과 비슷하거나 살짝 아래입니다.
+        대신 한 건에 0.4초, 0.0004달러라서 <b>전에는 비싸서 못 하던 전수 검사</b>가 가능해집니다.</li>
+      <li><b>가장 새로운 부분은 "확신도"입니다.</b> 모델이 스스로 얼마나 확신하는지를 믿을 수 있는 숫자로 준다면,
+        어디까지 자동으로 처리하고 어디서부터 사람이 볼지를 <b>회의가 아니라 슬라이더 하나로</b> 정할 수 있습니다.
+        다만 그 숫자가 정말 믿을 만한지는 아직 외부 검증을 기다리는 중입니다.</li>
+    </ol>
+  </div>
+</section>
+
+<footer class="col sources">
+  <div class="eyebrow" style="margin-bottom:8px;">출처</div>
+  <p>공식 문서 · 발표: TypeSafe AI 블로그 「Introducing System One Models &amp; Jev」, docs.typesafe.ai(System One / State / Primitives / API reference).
+  통합 문서: Vercel AI Gateway, Cloudflare Workers AI, Pydantic AI, LiteLLM, LangChain, Langfuse.</p>
+  <ul>
+    <li><a href="https://typesafe.ai/blog/introducing-system-one-models-and-jev">typesafe.ai — Introducing System One Models &amp; Jev</a></li>
+    <li><a href="https://docs.typesafe.ai/concepts/system-one">docs.typesafe.ai — System One / Primitives / State</a></li>
+    <li><a href="https://www.datacamp.com/blog/system-one-models-jev">DataCamp — System One Models &amp; Jev 해설</a></li>
+    <li><a href="https://www.mindstudio.ai/blog/typesafe-jev-rlcd-vs-rlhf">MindStudio — RLCD vs RLHF</a></li>
+    <li><a href="https://every.to/also-true-for-humans/mini-vibe-check-typesafe-s-jev-judged-everything-i-ve-written-in-0-7-seconds">Every — 독립 테스트</a></li>
+    <li><a href="https://www.langchain.com/blog/building-a-harness-with-jev">LangChain — Jev 하네스 구성</a></li>
+    <li><a href="https://vercel.com/kb/guide/typesafe-jev-and-ai-sdk">Vercel — Jev로 분류·라우팅·스코어링</a></li>
+    <li><a href="https://www.truefoundry.com/blog/typesafe-ai-jev">TrueFoundry — System One 모델이란 무엇인가</a></li>
+  </ul>
+</footer>
+</main>
+
+<script>
+(function(){
+  "use strict";
+  var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* ─────────── 계기 A : 레이스 ─────────── */
+  var LLM_TOKENS = ['{\n','  "','우선','순위','": "','긴급','",\n','  "','담당','부서','": "','결제','팀','",\n',
+                    '  "','환불','가능','": ','true',',\n','  "','이탈','위험','": "','꽤 ','높은',' 편','"\n','}'];
+  var LLM_REAL_MS = 10000, JEV_REAL_MS = 400, SPEED = 4;
+  var JEV_ANS = [
+    {q:"우선순위 (선택)", v:"긴급", p:0.91},
+    {q:"담당 부서 (선택)", v:"결제팀", p:0.87},
+    {q:"환불 가능 (예/아니오)", v:"예", p:0.78},
+    {q:"이탈 위험 (점수)", v:"0.72 / 높음", p:0.72}
+  ];
+  var raceBtn = document.getElementById("raceBtn"),
+      llmStream = document.getElementById("llmStream"),
+      llmClock = document.getElementById("llmClock"),
+      llmVerdict = document.getElementById("llmVerdict"),
+      jevAnswers = document.getElementById("jevAnswers"),
+      jevClock = document.getElementById("jevClock"),
+      jevVerdict = document.getElementById("jevVerdict"),
+      raceRunning = false;
+
+  function buildJevRows(){
+    jevAnswers.innerHTML = "";
+    JEV_ANS.forEach(function(a){
+      var row = document.createElement("div");
+      row.className = "answer";
+      row.innerHTML = '<div class="ans-top"><span class="ans-q">'+a.q+'</span><span class="ans-v">'+a.v+'</span></div>'+
+                      '<div class="meter"><i></i></div>';
+      jevAnswers.appendChild(row);
+    });
+  }
+  function revealJev(){
+    var rows = jevAnswers.querySelectorAll(".answer");
+    for (var i=0;i<rows.length;i++){
+      rows[i].classList.add("on");
+      rows[i].style.opacity = 1;
+      rows[i].querySelector(".meter i").style.width = Math.round(JEV_ANS[i].p*100)+"%";
+    }
+    jevClock.textContent = "0.4초";
+    jevVerdict.innerHTML = '<b>끝.</b> 네 개의 답이 동시에 도착했고, 각 숫자는 그 답의 확률입니다. 프로그램은 이 값을 그대로 씁니다.';
+  }
+  function resetRace(){
+    llmStream.textContent = ""; llmClock.textContent = "0.0초"; llmVerdict.textContent = "";
+    jevClock.textContent = "0.0초"; jevVerdict.textContent = "";
+    buildJevRows();
+  }
+  function runRace(){
+    if (raceRunning) return;
+    raceRunning = true; raceBtn.disabled = true; raceBtn.textContent = "측정 중…";
+    resetRace();
+    if (reduce){ finishAll(); return; }
+    var t0 = performance.now(), i = 0, jevDone = false;
+    var tokenGap = (LLM_REAL_MS / LLM_TOKENS.length) / SPEED;
+    function frame(now){
+      var animEl = now - t0, realEl = animEl * SPEED;
+      if (!jevDone && realEl >= JEV_REAL_MS){ jevDone = true; revealJev(); }
+      else if (!jevDone){ jevClock.textContent = (realEl/1000).toFixed(1)+"초"; }
+      var want = Math.min(LLM_TOKENS.length, Math.floor(animEl / tokenGap));
+      while (i < want){ llmStream.textContent += LLM_TOKENS[i]; i++; }
+      if (i < LLM_TOKENS.length){
+        llmClock.textContent = (Math.min(realEl, LLM_REAL_MS)/1000).toFixed(1)+"초";
+        llmStream.innerHTML = escapeHtml(llmStream.textContent) + '<span class="caret"></span>';
+        requestAnimationFrame(frame);
+      } else {
+        llmClock.textContent = "10.0초";
+        llmStream.textContent = LLM_TOKENS.join("");
+        llmVerdict.innerHTML = '문자열 완성. 이제 프로그램이 <b>이 글자를 뜯어 읽어야</b> 합니다 — '+
+          '"꽤 높은 편"은 숫자가 아니라서 그대로는 쓸 수 없습니다.';
+        if (!jevDone) revealJev();
+        raceRunning = false; raceBtn.disabled = false; raceBtn.textContent = "다시 실행";
+      }
+    }
+    requestAnimationFrame(frame);
+  }
+  function finishAll(){
+    llmStream.textContent = LLM_TOKENS.join("");
+    llmClock.textContent = "10.0초";
+    llmVerdict.innerHTML = '문자열 완성. 이제 프로그램이 <b>이 글자를 뜯어 읽어야</b> 합니다.';
+    revealJev();
+    raceRunning = false; raceBtn.disabled = false; raceBtn.textContent = "다시 실행";
+  }
+  function escapeHtml(s){ return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+  buildJevRows(); revealJev();
+  jevVerdict.innerHTML = '<b>준비됨.</b> 위 버튼을 누르면 두 방식이 같은 일을 동시에 시작합니다.';
+  llmStream.textContent = "(대기 중)";
+  raceBtn.addEventListener("click", runRace);
+
+  /* ─────────── 계기 B : 형식 ─────────── */
+  var SCENES = [
+    { llm:'{"priority": "높음"}',
+      ls:["good","✓","읽는 데 성공. 운이 좋은 경우입니다."],
+      jev:'우선순위 = "높음"\n확률  낮음 0.02 · 보통 0.11\n      높음 0.71 · 긴급 0.16',
+      js:["good","✓","정해진 네 보기 중 하나. 그대로 사용."] },
+    { llm:'```json\n{"priority": "긴급"}\n```',
+      ls:["bad","✕","마크다운 표시가 붙어 나와 읽기 실패 — 벗겨 내는 코드가 따로 필요합니다."],
+      jev:'우선순위 = "긴급"\n확률  낮음 0.01 · 보통 0.04\n      높음 0.27 · 긴급 0.68',
+      js:["good","✓","포장지 같은 게 붙을 자리가 없습니다."] },
+    { llm:'{"priority": "매우 긴급"}',
+      ls:["bad","✕","보기에 없는 값을 지어냈습니다. 형식은 맞지만 시스템이 받을 수 없는 답입니다."],
+      jev:'우선순위 = "긴급"\n확률  낮음 0.01 · 보통 0.03\n      높음 0.19 · 긴급 0.77',
+      js:["good","✓","없는 보기를 고르는 것이 구조적으로 불가능합니다."] },
+    { llm:'문의 내용으로 보아 우선순위는 "높음"으로 판단됩니다.\n다만 환불 기한이 임박해 "긴급"으로 볼 여지도 있습니다.',
+      ls:["bad","✕","설명을 시작했습니다. 프로그램 입장에서는 그냥 알 수 없는 글자 뭉치입니다."],
+      jev:'우선순위 = "높음"\n확률  낮음 0.02 · 보통 0.09\n      높음 0.52 · 긴급 0.37',
+      js:["warn","~","애매한 건이라 확률이 0.52까지 떨어졌습니다 — 사람에게 넘길 신호입니다."] },
+    { llm:'{"priority": "보통"}',
+      ls:["warn","~","읽기는 성공. 그런데 답 자체가 틀렸고, <b>얼마나 확신하는지 알 길이 없습니다.</b>"],
+      jev:'우선순위 = "보통"   ← 실제 정답: 긴급\n확률  낮음 0.08 · 보통 0.44\n      높음 0.33 · 긴급 0.15',
+      js:["bad","✕","<b>Jev도 틀렸습니다.</b> 다만 0.44라는 낮은 확률이 같이 나왔고, 문턱을 0.7로 뒀다면 이 건은 자동 처리되지 않고 사람에게 갔습니다."] }
+  ];
+  var sceneIdx = -1;
+  var llmPayload = document.getElementById("llmPayload"), llmStatus = document.getElementById("llmStatus"),
+      jevPayload = document.getElementById("jevPayload"), jevStatus = document.getElementById("jevStatus"),
+      sceneCount = document.getElementById("sceneCount");
+  function setStatus(el, s){
+    el.className = "status " + s[0];
+    el.innerHTML = '<span class="mark">'+s[1]+'</span><span>'+s[2]+'</span>';
+  }
+  function showScene(){
+    sceneIdx = (sceneIdx + 1) % SCENES.length;
+    var s = SCENES[sceneIdx];
+    llmPayload.textContent = s.llm; jevPayload.textContent = s.jev;
+    setStatus(llmStatus, s.ls); setStatus(jevStatus, s.js);
+    sceneCount.textContent = "상황 " + (sceneIdx+1) + " / " + SCENES.length;
+  }
+  showScene();
+  document.getElementById("nextScene").addEventListener("click", showScene);
+
+  /* ─────────── 계기 C : 확신도 게이트 ─────────── */
+  function mulberry32(a){ return function(){
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    var t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };}
+  var rnd = mulberry32(20260915), CASES = [];
+  for (var k=0;k<240;k++){
+    var c = 0.52 + 0.47 * Math.pow(rnd(), 0.55);
+    CASES.push({ conf: c, roll: rnd() });
+  }
+  CASES.sort(function(a,b){ return b.conf - a.conf; });
+  var dotsEl = document.getElementById("dots"), dotNodes = [];
+  CASES.forEach(function(){
+    var d = document.createElement("i"); d.className = "dot"; dotsEl.appendChild(d); dotNodes.push(d);
+  });
+  var calibrated = true;
+  var threshEl = document.getElementById("thresh"), threshVal = document.getElementById("threshVal"),
+      roAuto = document.getElementById("roAuto"), roWrong = document.getElementById("roWrong"),
+      roHuman = document.getElementById("roHuman"), roAcc = document.getElementById("roAcc"),
+      gateNote = document.getElementById("gateNote");
+  function isCorrect(c){ return calibrated ? (c.roll < c.conf) : (c.roll < 0.62); }
+  function renderGate(){
+    var t = parseInt(threshEl.value,10)/100, auto=0, wrong=0;
+    for (var i=0;i<CASES.length;i++){
+      var c = CASES[i], isAuto = c.conf >= t, ok = isCorrect(c);
+      var cls = "dot";
+      if (isAuto){ auto++; cls += " auto"; if(!ok){ wrong++; cls += " wrong"; } }
+      else if (!ok){ cls += " wrong"; }
+      dotNodes[i].className = cls;
+    }
+    var human = CASES.length - auto;
+    threshVal.textContent = t.toFixed(2);
+    roAuto.innerHTML = auto + '<small> 건 · ' + Math.round(auto/CASES.length*100) + '%</small>';
+    roWrong.innerHTML = wrong + '<small> 건</small>';
+    roHuman.innerHTML = human + '<small> 건</small>';
+    roAcc.innerHTML = auto ? (100 - wrong/auto*100).toFixed(1) + '<small>%</small>' : '—';
+    if (calibrated){
+      gateNote.innerHTML = '문턱을 올리면 자동 처리 건수가 줄고, <b>자동 처리된 것들의 정확도는 올라갑니다.</b> ' +
+        '보정이 맞는 모델에서는 이 맞바꿈이 예측 가능하게 움직여서, 사람이 감당할 검토량을 기준으로 문턱을 고를 수 있습니다. ' +
+        '테두리만 있는 점 중 주황 점선은 사람이 넘겨받아 바로잡은 건입니다.';
+    } else {
+      gateNote.innerHTML = '<b>같은 슬라이더를 움직여 보세요.</b> 확신도를 0.99까지 올려도 오답이 줄지 않습니다. ' +
+        '모델이 "95% 확신한다"고 말해도 실제로는 62%만 맞기 때문입니다. ' +
+        '보정되지 않은 확신도는 <b>숫자가 붙어 있을 뿐 아무 결정도 자동화해 주지 못합니다</b> — Jev가 RLCD로 풀겠다고 한 문제가 바로 이것입니다.';
+    }
+  }
+  threshEl.addEventListener("input", renderGate);
+  var btnCal = document.getElementById("modeCal"), btnOver = document.getElementById("modeOver");
+  btnCal.addEventListener("click", function(){ calibrated = true; btnCal.setAttribute("aria-pressed","true"); btnOver.setAttribute("aria-pressed","false"); renderGate(); });
+  btnOver.addEventListener("click", function(){ calibrated = false; btnCal.setAttribute("aria-pressed","false"); btnOver.setAttribute("aria-pressed","true"); renderGate(); });
+  renderGate();
+
+  /* ─────────── 계기 E : 용례 퀴즈 ─────────── */
+  var OPTS = ["Jev","LLM","코드","사람"];
+  var QUIZ = [
+    {q:"고객 문의 10만 건을 '환불 / 배송 / 기술' 중 하나로 나누기", a:0,
+     why:"보기가 정해진 분류입니다. 전수 처리라 건당 단가가 결정적이고, 설명도 필요 없습니다 — Jev의 한가운데."},
+    {q:"화가 난 고객에게 보낼 사과 메일 초안 쓰기", a:1,
+     why:"결과물이 '사람이 읽을 문장'입니다. Jev는 글을 한 줄도 쓰지 못합니다."},
+    {q:"환불 금액이 정책 한도(30만 원) 안에 드는지 확인하기", a:2,
+     why:"AI가 필요 없습니다. 산술과 권한 확인은 평범한 코드가 더 빠르고 100% 정확합니다. Jev는 산술이 약점으로 공개돼 있습니다."},
+    {q:"해지 위약금 1,200만 원을 면제할지 최종 결정하기", a:3,
+     why:"금액이 크고 되돌리기 어렵습니다. 확신도가 아무리 높아도 이런 건은 사람이 이름을 걸고 결정해야 합니다."},
+    {q:"계약서에서 위약금 조항을 찾아 세 문장으로 요약하기", a:1,
+     why:"긴 문서를 읽고 새 문장을 만들어 내는 일입니다. 전형적인 LLM 작업."},
+    {q:"LLM이 계약서에서 뽑아낸 '계약 시작일'이 실제로 맞는지 검증하기", a:0,
+     why:"현장에서 가장 많이 쓰이는 조합입니다 — LLM이 뽑고, Jev가 예/아니오 + 확률로 검증합니다. 검증을 또 LLM에게 시키면 느리고 비쌉니다."},
+    {q:"게임 속 NPC가 다음 행동을 정해진 동작 목록에서 고르기 (16밀리초 안에)", a:0,
+     why:"한 프레임 안에 답이 와야 하는 루프입니다. 초 단위로 응답하는 LLM은 애초에 들어갈 수 없는 자리입니다."},
+    {q:"업로드된 사진 설명문이 커뮤니티 정책을 어기는지 판정하기", a:0,
+     why:"여러 정책 항목을 한 번의 호출로 동시에 묻고, 확률에 문턱을 걸어 허용·차단·사람검토로 가릅니다. Jev의 대표 용례."}
+  ];
+  var quizEl = document.getElementById("quiz"), scoreEl = document.getElementById("quizScore"), answered = 0, right = 0;
+  QUIZ.forEach(function(item, qi){
+    var card = document.createElement("div"); card.className = "q";
+    var t = document.createElement("div"); t.className = "q-text"; t.textContent = (qi+1)+". "+item.q;
+    var opts = document.createElement("div"); opts.className = "opts";
+    var why = document.createElement("div"); why.className = "why"; why.hidden = true;
+    OPTS.forEach(function(name, oi){
+      var b = document.createElement("button");
+      b.className = "opt"; b.type = "button"; b.textContent = name;
+      b.addEventListener("click", function(){
+        if (card.dataset.done) return;
+        card.dataset.done = "1"; answered++;
+        var correct = (oi === item.a);
+        if (correct) right++;
+        b.classList.add(correct ? "right" : "wrong");
+        if (!correct) opts.children[item.a].classList.add("right");
+        for (var m=0;m<opts.children.length;m++) opts.children[m].disabled = true;
+        why.innerHTML = '<b>' + OPTS[item.a] + '</b> — ' + item.why;
+        why.hidden = false;
+        scoreEl.textContent = right + " / " + QUIZ.length;
+      });
+      opts.appendChild(b);
+    });
+    card.appendChild(t); card.appendChild(opts); card.appendChild(why);
+    quizEl.appendChild(card);
+  });
+})();
+</script>
