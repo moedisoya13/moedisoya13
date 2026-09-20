@@ -225,10 +225,13 @@
   .q-text{font-size:13.5px; font-weight:600; margin-bottom:12px; line-height:1.65;}
   .opts{display:flex; flex-wrap:wrap; gap:7px;}
   .opt{border:1px solid var(--rule-2); background:var(--paper); color:var(--ink); border-radius:2px; padding:6px 14px; font-size:12.5px; font-weight:500;}
-  .opt:hover:not([disabled]){border-color:var(--ink-3);}
+  .opt:hover:not(.locked){border-color:var(--ink-3);}
   .opt.right{background:var(--jev); border-color:var(--jev); color:#fff;}
   .opt.wrong{background:var(--llm-soft); border-color:var(--llm); color:var(--ink);}
-  .opt[disabled]{cursor:default;}
+  .opt.locked{cursor:default;}
+  .opt.locked:hover{border-color:var(--rule-2);}
+  .opt.right.locked:hover{border-color:var(--jev);}
+  .opt.wrong.locked:hover{border-color:var(--llm);}
   .why{margin-top:12px; font-size:12.5px; line-height:1.7; color:var(--ink-2); border-top:1px dashed var(--rule); padding-top:11px;}
   .score{font-family:var(--mono); font-size:11px; letter-spacing:.1em; color:var(--ink-3); font-variant-numeric:tabular-nums;}
 
@@ -254,6 +257,13 @@
   .notes li{font-size:13px; line-height:1.75; color:var(--ink-2);}
   .notes li a{color:var(--ink-2);}
   .colophon{margin-top:26px; font-family:var(--mono); font-size:10.5px; line-height:1.9; letter-spacing:.05em; color:var(--ink-3); text-transform:uppercase;}
+
+  /* 터치 기기에서는 탭 타깃을 44px 이상으로 */
+  @media (pointer: coarse){
+    .opt{padding:11px 16px; min-height:44px;}
+    .btn, .btn-ghost{min-height:44px; padding-block:11px;}
+    input[type=range]{height:44px;}
+  }
 
   @media (prefers-reduced-motion: reduce){*{animation-duration:.01ms !important; transition-duration:.01ms !important;}}
 </style>
@@ -483,7 +493,7 @@
       <div class="gate-controls">
         <div class="sliderrow">
           <label for="thresh">자동 처리 문턱</label>
-          <input type="range" id="thresh" min="50" max="99" value="85" step="1">
+          <input type="range" id="thresh" min="50" max="97" value="85" step="1">
           <span class="thresh" id="threshVal">0.85</span>
         </div>
         <div class="sliderrow">
@@ -498,7 +508,7 @@
         <span><i class="swatch sw-llm" style="border-radius:50%;"></i>자동 처리 · 틀림</span>
         <span><i class="swatch sw-hollow" style="border-radius:50%;"></i>사람에게 넘김</span>
       </div>
-      <dl class="readouts">
+      <dl class="readouts" aria-live="polite">
         <div class="readout"><dt>자동 처리</dt><dd id="roAuto">—</dd></div>
         <div class="readout"><dt>그중 오답</dt><dd id="roWrong">—</dd></div>
         <div class="readout"><dt>사람 검토</dt><dd id="roHuman">—</dd></div>
@@ -835,7 +845,7 @@
   };}
   var rnd = mulberry32(20260915), CASES = [];
   for (var k=0;k<240;k++){
-    CASES.push({ conf: 0.52 + 0.47 * Math.pow(rnd(), 0.55), roll: rnd() });
+    CASES.push({ conf: 0.55 + 0.445 * Math.pow(rnd(), 0.45), roll: rnd() });
   }
   CASES.sort(function(a,b){ return b.conf - a.conf; });
   var dotsEl = document.getElementById("dots"), dotNodes = [];
@@ -861,14 +871,15 @@
     roAuto.innerHTML = auto + '<small> 건 · ' + Math.round(auto/CASES.length*100) + '%</small>';
     roWrong.innerHTML = wrong + '<small> 건</small>';
     roHuman.innerHTML = human + '<small> 건</small>';
-    roAcc.innerHTML = auto ? (100 - wrong/auto*100).toFixed(1) + '<small>%</small>' : '—';
+    var acc = auto ? (100 - wrong/auto*100).toFixed(1) : null;
+    roAcc.innerHTML = acc ? acc + '<small>%</small>' : '—';
     if (calibrated){
       gateNote.innerHTML = '문턱을 올리면 자동 처리 건수가 줄고 <b>자동 처리된 것들의 정확도는 올라간다.</b> ' +
         '보정이 맞는 모델에서는 이 맞바꿈이 예측 가능하게 움직여서, 팀이 감당할 수 있는 검토량을 기준으로 문턱을 고를 수 있다. ' +
         '테두리만 있는 점 중 주황 점선은 사람이 넘겨받아 바로잡은 건이다.';
     } else {
-      gateNote.innerHTML = '<b>슬라이더를 끝까지 올려 보라.</b> 확신도를 0.99까지 올려도 오답이 줄지 않는다. ' +
-        '모델이 “95% 확신한다”고 말해도 실제로는 62%만 맞기 때문이다. ' +
+      gateNote.innerHTML = '<b>슬라이더를 끝까지 올려 보라.</b> 문턱을 아무리 높여도 오답 비율이 거의 그대로다. ' +
+        '지금 이 모델은 “' + Math.round(t*100) + '% 이상 확신한다”고 말한 ' + auto + '건 중 ' + acc + '%만 맞혔다. ' +
         '보정되지 않은 확신도는 <b>숫자가 붙어 있을 뿐 아무 결정도 자동화해 주지 못한다.</b>';
     }
   }
@@ -904,6 +915,7 @@
     var t = document.createElement("div"); t.className = "q-text"; t.textContent = (qi+1)+". "+item.q;
     var opts = document.createElement("div"); opts.className = "opts";
     var why = document.createElement("div"); why.className = "why"; why.hidden = true;
+    why.setAttribute("aria-live","polite");
     OPTS.forEach(function(name, oi){
       var b = document.createElement("button");
       b.className = "opt"; b.type = "button"; b.textContent = name;
@@ -914,7 +926,10 @@
         if (correct) right++;
         b.classList.add(correct ? "right" : "wrong");
         if (!correct) opts.children[item.a].classList.add("right");
-        for (var m=0;m<opts.children.length;m++) opts.children[m].disabled = true;
+        for (var m=0;m<opts.children.length;m++){
+          opts.children[m].classList.add("locked");
+          opts.children[m].setAttribute("aria-disabled","true");
+        }
         why.innerHTML = '<b>' + OPTS[item.a] + '</b> — ' + item.why;
         why.hidden = false;
         scoreEl.textContent = right + " / " + QUIZ.length;
