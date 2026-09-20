@@ -366,7 +366,7 @@
             <span class="lane-clock" id="llmClock">0.0초</span>
           </div>
           <div class="lane-body">
-            <pre class="stream" id="llmStream"></pre>
+            <pre class="stream" id="llmStream"><span id="llmText"></span><span class="caret" id="llmCaret" hidden></span></pre>
             <div class="verdict" id="llmVerdict"></div>
           </div>
         </div>
@@ -532,7 +532,7 @@
       <div class="gatenote" id="gateNote"></div>
     </div>
     <figcaption>
-      <b>“과신하는 모델” 버튼을 꼭 눌러 보라.</b> 확신도를 0.99까지 올려도 오답이 줄지 않는다.
+      <b>“과신하는 모델” 버튼을 꼭 눌러 보라.</b> 문턱을 끝까지 올려도 오답 비율이 그대로다.
       보정되지 않은 확신도는 숫자가 붙어 있을 뿐 아무 결정도 자동화해 주지 못한다는 뜻이고,
       이것이 Jev가 풀겠다고 선언한 문제다.
       <span class="src">시연용 합성 데이터 · 보정된 모델 쪽은 확신도와 적중률이 일치하도록 생성</span>
@@ -736,7 +736,8 @@
     {q:"이탈 위험 (점수)", v:"0.72 / 높음", p:0.72}
   ];
   var raceBtn = document.getElementById("raceBtn"),
-      llmStream = document.getElementById("llmStream"),
+      llmText = document.getElementById("llmText"),
+      llmCaret = document.getElementById("llmCaret"),
       llmClock = document.getElementById("llmClock"),
       llmVerdict = document.getElementById("llmVerdict"),
       jevAnswers = document.getElementById("jevAnswers"),
@@ -765,13 +766,13 @@
     jevVerdict.innerHTML = '<b>끝.</b> 네 개의 답이 동시에 도착했고, 각 숫자는 그 답의 확률이다. 프로그램은 이 값을 그대로 쓴다.';
   }
   function resetRace(){
-    llmStream.textContent = ""; llmClock.textContent = "0.0초"; llmVerdict.textContent = "";
+    llmText.textContent = ""; llmCaret.hidden = true;
+    llmClock.textContent = "0.0초"; llmVerdict.textContent = "";
     jevClock.textContent = "0.0초"; jevVerdict.textContent = "";
     buildJevRows();
   }
-  function escapeHtml(s){ return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
   function finishAll(){
-    llmStream.textContent = LLM_TOKENS.join("");
+    llmText.textContent = LLM_TOKENS.join(""); llmCaret.hidden = true;
     llmClock.textContent = "10.0초";
     llmVerdict.innerHTML = '문자열 완성. 이제 프로그램이 <b>이 글자를 뜯어 읽어야</b> 한다.';
     revealJev();
@@ -789,14 +790,14 @@
       if (!jevDone && realEl >= JEV_REAL_MS){ jevDone = true; revealJev(); }
       else if (!jevDone){ jevClock.textContent = (realEl/1000).toFixed(1)+"초"; }
       var want = Math.min(LLM_TOKENS.length, Math.floor(animEl / tokenGap));
-      while (i < want){ llmStream.textContent += LLM_TOKENS[i]; i++; }
+      while (i < want){ llmText.textContent += LLM_TOKENS[i]; i++; }
       if (i < LLM_TOKENS.length){
         llmClock.textContent = (Math.min(realEl, LLM_REAL_MS)/1000).toFixed(1)+"초";
-        llmStream.innerHTML = escapeHtml(llmStream.textContent) + '<span class="caret"></span>';
+        llmCaret.hidden = false;
         requestAnimationFrame(frame);
       } else {
         llmClock.textContent = "10.0초";
-        llmStream.textContent = LLM_TOKENS.join("");
+        llmText.textContent = LLM_TOKENS.join(""); llmCaret.hidden = true;
         llmVerdict.innerHTML = '문자열 완성. 이제 프로그램이 <b>이 글자를 뜯어 읽어야</b> 한다 — '+
           '“꽤 높은 편”은 숫자가 아니라서 그대로는 쓸 수 없다.';
         if (!jevDone) revealJev();
@@ -807,7 +808,7 @@
   }
   buildJevRows(); revealJev();
   jevVerdict.innerHTML = '<b>준비됨.</b> 위 버튼을 누르면 두 방식이 같은 일을 동시에 시작한다.';
-  llmStream.textContent = "(대기 중)";
+  llmText.textContent = "(대기 중)";
   raceBtn.addEventListener("click", runRace);
 
   /* ─────────── 그림 2 : 형식 ─────────── */
