@@ -2,7 +2,15 @@
 
 TypeSafe AI가 2026-09-15에 공개한 **Jev**(System One 모델)가 기존 LLM과 무엇이 다른지
 작동 원리 · 활용 · 특기 영역 세 축으로 정리한 문서입니다.
-같은 폴더의 `index.html`은 비개발자용 인터랙티브 설명 페이지입니다.
+같은 폴더에 칼럼 형식의 인터랙티브 페이지가 함께 있습니다.
+
+| 파일 | 용도 |
+|---|---|
+| `jev-column.html` | **단독 실행본.** 브라우저로 바로 열면 되는 완전한 HTML 문서 (doctype · charset · viewport 포함) |
+| `index.html` | 아티팩트 게시용 원본. 스켈레톤이 감싸 주는 것을 전제로 `<html>`/`<head>`/`<body>` 태그가 없습니다 |
+
+본문 안의 그림 1·2·3·5는 직접 조작할 수 있습니다. 웹폰트(Hahmlet · Noto Serif KR · IBM Plex Mono)는
+Google Fonts에서 받아오므로 오프라인에서는 시스템 세리프로 대체 표시됩니다.
 
 ## 1. 작동 원리
 

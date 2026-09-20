@@ -1,0 +1,945 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="description" content="TypeSafe의 Jev가 기존 LLM과 작동 원리·활용·특기 영역에서 어떻게 다른지 다룬 칼럼. 본문 안에 직접 조작하는 그림 5점.">
+  <title>말하지 않는 모델 Jev</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hahmlet:wght@500;700&family=IBM+Plex+Mono:wght@400;500;600&family=Noto+Serif+KR:wght@300;400;600&display=swap">
+  <style>
+    :root{ color-scheme: light dark; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+    *{ box-sizing: border-box; }
+    body{ margin: 0; }
+    img{ max-width: 100%; }
+    [hidden]{ display: none !important; }
+  </style>
+</head>
+<body>
+<style>
+  :root{
+    --paper:#FCFCFC; --paper-2:#F3F4F3; --inset:#F8F8F7; --card:#FFFFFF;
+    --ink:#13161A; --ink-2:#4E555D; --ink-3:#868D95;
+    --rule:#E2E4E5; --rule-2:#C9CDD0;
+    --jev:#2a78d6; --jev-soft:#E7F0FB;
+    --llm:#eb6834; --llm-soft:#FDEEE7;
+    --neutral-mark:#C9CDD0;
+    --display:"Hahmlet","Noto Serif KR","Apple SD Gothic Neo",serif;
+    --body:"Noto Serif KR","Apple SD Gothic Neo","Batang",serif;
+    --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+    --sans:"Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --paper:#111314; --paper-2:#191C1E; --inset:#151719; --card:#17191B;
+      --ink:#E9EAE8; --ink-2:#A3A9AE; --ink-3:#787F86;
+      --rule:#272A2D; --rule-2:#3A3E42;
+      --jev:#3987e5; --jev-soft:#152437;
+      --llm:#d95926; --llm-soft:#2E1B11;
+      --neutral-mark:#3A3E42;
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#111314; --paper-2:#191C1E; --inset:#151719; --card:#17191B;
+    --ink:#E9EAE8; --ink-2:#A3A9AE; --ink-3:#787F86;
+    --rule:#272A2D; --rule-2:#3A3E42;
+    --jev:#3987e5; --jev-soft:#152437;
+    --llm:#d95926; --llm-soft:#2E1B11;
+    --neutral-mark:#3A3E42;
+  }
+
+  body{
+    background:var(--paper); color:var(--ink);
+    font-family:var(--body); font-size:17.5px; font-weight:400; line-height:1.95;
+    -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+    padding-inline:20px; padding-block:0 80px;
+  }
+  .measure{max-width:640px; margin-inline:auto;}
+  .broad{max-width:920px; margin-inline:auto;}
+
+  p{margin:0 0 1.45em;}
+  p:last-child{margin-bottom:0;}
+  strong{font-weight:600; color:var(--ink);}
+  a{color:var(--ink); text-decoration:underline; text-decoration-color:var(--rule-2); text-underline-offset:4px; text-decoration-thickness:1px;}
+  a:hover{text-decoration-color:var(--jev);}
+  :focus-visible{outline:2px solid var(--jev); outline-offset:3px; border-radius:2px;}
+  .mono{font-family:var(--mono); font-variant-numeric:tabular-nums;}
+
+  /* ── 상단 레일 ── */
+  .rail{
+    display:flex; flex-wrap:wrap; gap:6px 16px; justify-content:space-between; align-items:baseline;
+    padding-block:22px 0; font-family:var(--mono); font-size:10.5px; font-weight:500;
+    letter-spacing:.17em; text-transform:uppercase; color:var(--ink-3);
+  }
+  .rail .kicker{color:var(--jev);}
+
+  /* ── 제목부 ── */
+  .titleblock{padding-block:30px 0;}
+  h1{
+    font-family:var(--display); font-weight:700; font-size:clamp(40px,8.6vw,72px);
+    line-height:1.14; letter-spacing:-.035em; margin:0; text-wrap:balance;
+  }
+  .deck{
+    font-family:var(--body); font-weight:300; font-size:clamp(18px,2.6vw,21px);
+    line-height:1.82; color:var(--ink-2); margin:22px 0 0; max-width:31em; text-wrap:pretty;
+  }
+  .byline{
+    display:flex; flex-wrap:wrap; gap:4px 14px; align-items:baseline;
+    margin-top:30px; padding-block:14px; border-top:1px solid var(--ink);
+    border-bottom:1px solid var(--rule);
+    font-family:var(--mono); font-size:11px; letter-spacing:.06em; color:var(--ink-3);
+  }
+  .byline b{color:var(--ink-2); font-weight:500;}
+
+  /* ── 본문 ── */
+  article{padding-top:44px;}
+  .lede::first-letter{
+    float:left; font-family:var(--display); font-weight:700; color:var(--ink);
+    font-size:3.15em; line-height:.9; margin:8px 10px 0 0;
+  }
+  h2{
+    font-family:var(--display); font-weight:700; font-size:clamp(24px,4.2vw,31px);
+    line-height:1.35; letter-spacing:-.025em; margin:0 0 .85em;
+    padding-top:26px; border-top:1px solid var(--rule); text-wrap:balance;
+  }
+  section{margin-top:52px;}
+  sup a{
+    font-family:var(--mono); font-size:10px; font-weight:600; text-decoration:none;
+    color:var(--jev); padding-left:1px; letter-spacing:.02em;
+  }
+
+  .pull{
+    margin:46px auto; padding-block:26px; max-width:600px;
+    border-top:2px solid var(--ink); border-bottom:1px solid var(--rule);
+    font-family:var(--display); font-weight:500; font-size:clamp(21px,3.6vw,26px);
+    line-height:1.58; letter-spacing:-.02em; color:var(--ink); text-wrap:balance;
+  }
+
+  .aside{
+    margin:44px auto; max-width:600px; background:var(--inset);
+    border:1px solid var(--rule); border-radius:3px; padding:22px 24px;
+  }
+  .aside-label{
+    font-family:var(--mono); font-size:10.5px; font-weight:600; letter-spacing:.17em;
+    text-transform:uppercase; color:var(--jev); margin-bottom:12px;
+  }
+  .aside h3{font-family:var(--display); font-weight:700; font-size:19px; letter-spacing:-.02em; margin:0 0 14px; line-height:1.4;}
+  .aside dl{margin:0; display:flex; flex-direction:column; gap:13px;}
+  .aside dt{font-family:var(--mono); font-size:12.5px; font-weight:600; color:var(--ink); letter-spacing:.02em;}
+  .aside dd{margin:2px 0 0; font-size:15px; line-height:1.75; color:var(--ink-2);}
+
+  /* ── 그림 ── */
+  figure{margin:52px auto; max-width:920px;}
+  .fig-head{display:flex; flex-wrap:wrap; gap:4px 12px; align-items:baseline; padding-bottom:10px; border-bottom:1px solid var(--ink);}
+  .fig-no{font-family:var(--mono); font-size:10.5px; font-weight:600; letter-spacing:.17em; text-transform:uppercase; color:var(--jev); flex:none;}
+  .fig-title{font-family:var(--sans); font-size:14.5px; font-weight:600; letter-spacing:-.01em; color:var(--ink); line-height:1.5;}
+  .fig-stage{padding:22px 0 0;}
+  figcaption{
+    margin-top:18px; padding-top:12px; border-top:1px solid var(--rule);
+    font-family:var(--sans); font-size:13.5px; line-height:1.75; color:var(--ink-2); max-width:640px;
+  }
+  figcaption b{color:var(--ink); font-weight:600;}
+  figcaption .src{display:block; margin-top:7px; font-family:var(--mono); font-size:10.5px; letter-spacing:.08em; color:var(--ink-3); text-transform:uppercase;}
+
+  /* 그림 내부는 산세리프/모노 */
+  figure, .aside dl, .readouts, .factstrip{font-family:var(--sans);}
+
+  button{font-family:var(--sans); font-size:13.5px; cursor:pointer;}
+  .btn{background:var(--ink); color:var(--paper); border:none; border-radius:3px; padding:9px 18px; font-weight:600;}
+  .btn:hover{opacity:.85;} .btn[disabled]{opacity:.4; cursor:default;}
+  .btn-ghost{background:transparent; color:var(--ink); border:1px solid var(--rule-2); border-radius:3px; padding:8px 14px; font-weight:500;}
+  .btn-ghost:hover{border-color:var(--ink-3);}
+  .btn-ghost[aria-pressed="true"]{background:var(--ink); color:var(--paper); border-color:var(--ink);}
+  .runbar{display:flex; flex-wrap:wrap; gap:11px; align-items:center; margin-bottom:18px;}
+  .speedchip{font-family:var(--mono); font-size:10.5px; letter-spacing:.09em; color:var(--ink-3); text-transform:uppercase;}
+  .swatch{width:11px; height:11px; border-radius:2px; flex:none; display:inline-block;}
+  .sw-jev{background:var(--jev);} .sw-llm{background:var(--llm);}
+  .sw-hollow{background:transparent; border:1.5px solid var(--neutral-mark);}
+  .keylegend{display:flex; flex-wrap:wrap; gap:7px 18px; align-items:center; font-family:var(--sans); font-size:12.5px; color:var(--ink-2);}
+  .keylegend span{display:inline-flex; align-items:center; gap:7px;}
+
+  /* 레이스 */
+  .lanes{display:grid; grid-template-columns:1fr 1fr; gap:16px;}
+  @media (max-width:640px){.lanes{grid-template-columns:1fr;}}
+  .lane{border:1px solid var(--rule); border-radius:3px; overflow:hidden; display:flex; flex-direction:column; background:var(--card);}
+  .lane-head{display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 13px; border-bottom:1px solid var(--rule);}
+  .lane-name{display:flex; align-items:center; gap:8px; font-weight:600; font-size:13px;}
+  .lane-clock{font-family:var(--mono); font-size:12.5px; font-weight:500; color:var(--ink-2); font-variant-numeric:tabular-nums;}
+  .lane--llm .lane-head{background:var(--llm-soft);} .lane--jev .lane-head{background:var(--jev-soft);}
+  .lane-body{padding:14px; flex:1; min-height:218px; background:var(--inset);}
+  .stream{font-family:var(--mono); font-size:12px; line-height:1.85; white-space:pre-wrap; word-break:break-all; color:var(--ink); margin:0; min-height:146px;}
+  .caret{display:inline-block; width:7px; height:14px; background:var(--llm); vertical-align:-2px; animation:blink .9s steps(2) infinite;}
+  @keyframes blink{50%{opacity:0;}}
+  .verdict{margin-top:11px; font-size:12.5px; line-height:1.6; color:var(--ink-2); min-height:36px;}
+  .verdict b{color:var(--ink); font-weight:600;}
+  .answers{display:flex; flex-direction:column; gap:10px;}
+  .answer{opacity:0;}
+  .answer.on{animation:pop .22s ease-out forwards;}
+  @keyframes pop{from{opacity:0; transform:translateY(4px);} to{opacity:1; transform:none;}}
+  .ans-top{display:flex; justify-content:space-between; gap:10px; align-items:baseline; font-size:12.5px;}
+  .ans-q{color:var(--ink-2);}
+  .ans-v{font-weight:600; font-family:var(--mono); font-size:12px;}
+  .meter{height:4px; background:var(--paper-2); margin-top:6px; overflow:hidden;}
+  .meter i{display:block; height:100%; background:var(--jev); width:0; transition:width .5s ease-out;}
+
+  /* 형식 데모 */
+  .twocol{display:grid; grid-template-columns:1fr 1fr; gap:16px;}
+  @media (max-width:640px){.twocol{grid-template-columns:1fr;}}
+  .card{border:1px solid var(--rule); border-radius:3px; padding:14px; background:var(--card); display:flex; flex-direction:column; gap:11px;}
+  .card-label{display:flex; align-items:center; gap:8px; font-size:12.5px; font-weight:600;}
+  .payload{font-family:var(--mono); font-size:12px; line-height:1.72; white-space:pre-wrap; word-break:break-all; background:var(--inset); border:1px solid var(--rule); border-radius:2px; padding:12px; margin:0; min-height:96px; color:var(--ink);}
+  .status{font-size:12.5px; line-height:1.6; display:flex; gap:7px; align-items:flex-start;}
+  .status .mark{font-family:var(--mono); font-weight:600; flex:none;}
+  .status.bad .mark{color:var(--llm);} .status.good .mark{color:var(--jev);} .status.warn .mark{color:var(--ink-3);}
+  .scene-title{font-family:var(--sans); font-size:13px; color:var(--ink-2); margin-bottom:16px; line-height:1.7;}
+  .scene-title b{color:var(--ink); font-weight:600;}
+
+  /* 확신도 */
+  .gate-controls{display:flex; flex-direction:column; gap:14px; margin-bottom:20px;}
+  .sliderrow{display:flex; align-items:center; gap:14px; flex-wrap:wrap;}
+  .sliderrow label, .sliderrow .lbl{font-size:12.5px; color:var(--ink-2); font-weight:600;}
+  input[type=range]{flex:1; min-width:170px; accent-color:var(--jev); height:22px;}
+  .thresh{font-family:var(--mono); font-size:19px; font-weight:600; font-variant-numeric:tabular-nums; min-width:62px;}
+  .dots{display:grid; grid-template-columns:repeat(auto-fill,minmax(11px,1fr)); gap:3px; margin-block:18px;}
+  .dot{aspect-ratio:1; border-radius:50%; background:transparent; border:1.4px solid var(--neutral-mark);}
+  .dot.auto{background:var(--jev); border-color:var(--jev);}
+  .dot.auto.wrong{background:var(--llm); border-color:var(--llm);}
+  .dot.wrong:not(.auto){border-color:var(--llm); border-style:dashed;}
+  .readouts{display:grid; grid-template-columns:repeat(auto-fit,minmax(122px,1fr)); gap:1px; background:var(--rule); border:1px solid var(--rule); margin-top:18px;}
+  .readout{background:var(--card); padding:12px 14px;}
+  .readout dt{font-family:var(--mono); font-size:10px; letter-spacing:.12em; text-transform:uppercase; color:var(--ink-3);}
+  .readout dd{margin:0; font-size:22px; font-weight:600; font-variant-numeric:tabular-nums; line-height:1.45; font-family:var(--sans);}
+  .readout dd small{font-size:12.5px; font-weight:500; color:var(--ink-2);}
+  .gatenote{margin-top:16px; font-family:var(--sans); font-size:13px; line-height:1.75; color:var(--ink-2);}
+  .gatenote b{color:var(--ink); font-weight:600;}
+
+  /* 막대 */
+  .chart{margin-bottom:30px;}
+  .chart:last-child{margin-bottom:0;}
+  .chart-title{font-size:13.5px; font-weight:600; margin-bottom:3px;}
+  .chart-sub{font-size:12px; color:var(--ink-3); margin-bottom:15px; line-height:1.6;}
+  .barrow{display:grid; grid-template-columns:minmax(72px,auto) 1fr minmax(84px,auto); gap:10px; align-items:center; margin-bottom:11px;}
+  .barrow:last-child{margin-bottom:0;}
+  .barname{font-size:12.5px; color:var(--ink-2); line-height:1.4;}
+  .bartrack{display:flex; align-items:center;}
+  .bar{height:14px; min-width:3px;}
+  .bar.jev{background:var(--jev);} .bar.llm{background:var(--llm);}
+  .bar-offset{height:14px; flex:none; border-right:2px solid var(--paper);}
+  .barval{font-family:var(--mono); font-size:11.5px; font-weight:500; color:var(--ink); white-space:nowrap; font-variant-numeric:tabular-nums; text-align:right; line-height:1.4;}
+  .axis{display:flex; justify-content:space-between; gap:10px; margin-top:12px; padding-top:7px; border-top:1px solid var(--rule); font-family:var(--mono); font-size:10px; letter-spacing:.09em; color:var(--ink-3);}
+  @media (max-width:520px){
+    .barrow{grid-template-columns:1fr auto; gap:5px 8px;}
+    .barname{grid-column:1 / -1;}
+    .barval{font-size:11px;}
+  }
+
+  /* 퀴즈 */
+  .quiz{display:flex; flex-direction:column; gap:12px;}
+  .q{border:1px solid var(--rule); border-radius:3px; padding:15px; background:var(--card);}
+  .q-text{font-size:13.5px; font-weight:600; margin-bottom:12px; line-height:1.65;}
+  .opts{display:flex; flex-wrap:wrap; gap:7px;}
+  .opt{border:1px solid var(--rule-2); background:var(--paper); color:var(--ink); border-radius:2px; padding:6px 14px; font-size:12.5px; font-weight:500;}
+  .opt:hover:not([disabled]){border-color:var(--ink-3);}
+  .opt.right{background:var(--jev); border-color:var(--jev); color:#fff;}
+  .opt.wrong{background:var(--llm-soft); border-color:var(--llm); color:var(--ink);}
+  .opt[disabled]{cursor:default;}
+  .why{margin-top:12px; font-size:12.5px; line-height:1.7; color:var(--ink-2); border-top:1px dashed var(--rule); padding-top:11px;}
+  .score{font-family:var(--mono); font-size:11px; letter-spacing:.1em; color:var(--ink-3); font-variant-numeric:tabular-nums;}
+
+  /* 대차대조 */
+  .ledger{display:grid; grid-template-columns:1fr 1fr; gap:16px;}
+  @media (max-width:640px){.ledger{grid-template-columns:1fr;}}
+  .ledger ul{margin:0; padding-left:0; list-style:none; display:flex; flex-direction:column; gap:11px;}
+  .ledger li{font-family:var(--sans); font-size:13px; line-height:1.7; color:var(--ink-2); display:flex; gap:9px;}
+  .ledger li b{color:var(--ink); font-weight:600;}
+  .ledger li .mark{font-family:var(--mono); font-weight:600; flex:none;}
+  .ledger .known li .mark{color:var(--jev);} .ledger .unknown li .mark{color:var(--llm);}
+
+  /* 사실 스트립 */
+  .factstrip{display:grid; grid-template-columns:repeat(auto-fit,minmax(118px,1fr)); gap:1px; background:var(--rule); border:1px solid var(--rule); margin:30px 0 0;}
+  .factstrip div{background:var(--card); padding:12px 14px;}
+  .factstrip dt{font-family:var(--mono); font-size:9.5px; letter-spacing:.13em; text-transform:uppercase; color:var(--ink-3);}
+  .factstrip dd{margin:2px 0 0; font-size:14.5px; font-weight:600; font-variant-numeric:tabular-nums;}
+
+  /* 주석 */
+  .notes{margin-top:64px; padding-top:26px; border-top:2px solid var(--ink); font-family:var(--sans);}
+  .notes h3{font-family:var(--mono); font-size:10.5px; font-weight:600; letter-spacing:.17em; text-transform:uppercase; color:var(--ink-3); margin:0 0 18px;}
+  .notes ol{margin:0; padding-left:1.6em; display:flex; flex-direction:column; gap:10px;}
+  .notes li{font-size:13px; line-height:1.75; color:var(--ink-2);}
+  .notes li a{color:var(--ink-2);}
+  .colophon{margin-top:26px; font-family:var(--mono); font-size:10.5px; line-height:1.9; letter-spacing:.05em; color:var(--ink-3); text-transform:uppercase;}
+
+  @media (prefers-reduced-motion: reduce){*{animation-duration:.01ms !important; transition-duration:.01ms !important;}}
+</style>
+
+<div class="rail measure">
+  <span class="kicker">기술 칼럼 · 모델 구조</span>
+  <span>2026년 9월 20일</span>
+</div>
+
+<header class="titleblock measure">
+  <h1>말하지 않는 모델</h1>
+  <p class="deck">
+    9월에 공개된 Jev는 문장을 한 줄도 쓰지 못한다. 대신 판단 하나와,
+    그 판단을 얼마나 믿어도 되는지를 나타내는 숫자 하나를 0.4초에 내놓는다.
+    이것이 왜 ‘더 싼 LLM’이 아니라 아예 다른 부품인지에 대하여.
+  </p>
+  <div class="byline">
+    <span><b>읽는 데 약 9분</b></span>
+    <span>공개 문서 · 통합 문서 · 제3자 테스트 기반</span>
+    <span>그림 5점 · 직접 조작 가능</span>
+  </div>
+</header>
+
+<article class="measure">
+
+  <p class="lede">
+    지난 9월 15일, 샌프란시스코의 신생 연구소 하나가 스텔스에서 나오며 모델을 공개했다.
+    시드 4천만 달러, 창업자는 OpenAI에서 ChatGPT와 RLHF를 함께 만든 사람.<sup><a href="#n1" id="r1">1</a></sup>
+    보통 이런 발표에서 가장 먼저 읽히는 건 벤치마크 수치다. 그런데 이번에 눈에 걸린 문장은
+    성능에 관한 것이 아니었다. <strong>이 모델은 텍스트를 생성하지 않는다.</strong>
+  </p>
+
+  <p>
+    오타가 아니다. TypeSafe가 내놓은 <strong>Jev</strong>는 대화를 못 한다. 요약도, 번역도, 코드 작성도 못 한다.
+    할 줄 아는 일은 하나뿐이다 — 상황을 읽고 <strong>미리 정해진 보기 중에서 답을 고르는 것</strong>,
+    그리고 그 답에 <strong>확률을 붙이는 것</strong>.
+  </p>
+
+  <p>
+    지난 3년 동안 “AI 모델”이라는 말은 사실상 “글을 쓰는 기계”와 동의어였다.
+    그래서 Jev를 처음 보면 기능이 빠진 물건처럼 보인다. 이 칼럼이 하려는 이야기는 그 반대다.
+    Jev는 기능을 뺀 LLM이 아니라, <strong>애초에 다른 자리에 꽂히는 부품</strong>이다.
+    그 차이를 이해하려면 먼저 지금의 LLM이 어떻게 답을 만드는지부터 봐야 한다.
+  </p>
+
+  <section>
+    <h2>한 글자씩 쓰는 기계</h2>
+    <p>
+      우리가 쓰는 모든 대형 언어 모델은 근본적으로 <strong>다음 토큰 예측기</strong>다.
+      답을 통째로 알고 있다가 꺼내 놓는 게 아니라, 한 조각을 쓰고, 방금 쓴 그 조각을 다시 읽어
+      다음 조각을 쓰고, 이걸 끝까지 반복한다. 자기회귀(autoregression)라고 부르는 이 구조가
+      LLM의 힘이자 비용이다.
+    </p>
+    <p>
+      힘인 이유는 명확하다. 어떤 모양의 답이든 만들어 낼 수 있다. 시도, 계약서 초안도, 파이썬 함수도
+      같은 방식으로 나온다. 비용도 그만큼 명확하다. <strong>답이 길어질수록 시간이 선형으로 늘어나고</strong>,
+      중간에 끊기면 아무것도 못 쓰며, 무엇보다 결과물이 결국 <strong>글자 뭉치</strong>다.
+      사람이 읽을 거라면 문제가 없다. 그런데 그 답을 받아서 다음 일을 해야 하는 게 프로그램이라면,
+      글자 뭉치는 완성품이 아니라 <strong>숙제</strong>다. 다시 뜯어 읽어야 하고, 뜯어 읽다 실패하면 처리해야 한다.
+    </p>
+    <p>
+      Jev는 이 반복 자체를 없앴다. 상황과 질문을 함께 받아 <strong>단 한 번의 계산으로 모든 답을 동시에</strong> 내놓는다.
+      말로 설명하는 것보다 나란히 돌려 보는 편이 빠르다.
+    </p>
+  </section>
+
+  <figure class="broad">
+    <div class="fig-head">
+      <span class="fig-no">그림 1</span>
+      <span class="fig-title">같은 문의를 동시에 처리시켰을 때 — 생성 대 결정</span>
+    </div>
+    <div class="fig-stage">
+      <p class="scene-title">
+        들어온 상황 — <b>“결제가 두 번 됐어요. 카드사에 문의하라더니 판매처에서 처리하라고 하네요. 오늘 안에 환불 안 되면 소비자원 갑니다.”</b>
+        알아내야 할 것: 우선순위 · 담당 부서 · 환불 가능 여부 · 이탈 위험도.
+      </p>
+      <div class="runbar">
+        <button class="btn" id="raceBtn">동시에 실행</button>
+        <span class="speedchip">실제 측정치를 4배속으로 재생</span>
+      </div>
+      <div class="lanes">
+        <div class="lane lane--llm">
+          <div class="lane-head">
+            <span class="lane-name"><i class="swatch sw-llm"></i>기존 LLM</span>
+            <span class="lane-clock" id="llmClock">0.0초</span>
+          </div>
+          <div class="lane-body">
+            <pre class="stream" id="llmStream"></pre>
+            <div class="verdict" id="llmVerdict"></div>
+          </div>
+        </div>
+        <div class="lane lane--jev">
+          <div class="lane-head">
+            <span class="lane-name"><i class="swatch sw-jev"></i>Jev</span>
+            <span class="lane-clock" id="jevClock">0.0초</span>
+          </div>
+          <div class="lane-body">
+            <div class="answers" id="jevAnswers"></div>
+            <div class="verdict" id="jevVerdict"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <figcaption>
+      왼쪽은 글자를 <b>순서대로</b> 만들어 낸다. 오른쪽은 네 개의 답이 <b>같은 순간에</b> 도착하고, 막대는 각 답에 붙은 확률이다.
+      LLM 쪽 10초는 TypeSafe 벤치마크에서 가장 빨랐던 경우이며, 느린 쪽은 38초까지 걸렸다.
+      <span class="src">출처 — TypeSafe 4개 워크플로 벤치마크 (벤더 자체 측정)</span>
+    </figcaption>
+  </figure>
+
+  <section>
+    <h2>질문지를 먼저 건네는 방식</h2>
+    <p>
+      Jev를 부르는 방법은 프롬프트를 쓰는 것과 꽤 다르다. 두 가지를 같이 건넨다.
+      하나는 <strong>상태(state)</strong> — 고객 문의 원문이든, 대화 로그든, 애플리케이션의 현재 상황이든,
+      형식이 없어도 되는 날것의 맥락이다. 다른 하나는 <strong>질문 목록</strong>인데,
+      여기서 각 질문의 <strong>답이 가질 수 있는 모양을 미리 못 박는다</strong>.
+    </p>
+    <p>
+      이 “먼저 못 박기”가 전부를 바꾼다. 모델이 답을 만들어 내는 게 아니라
+      <strong>이미 그려진 칸 안에서 고르는</strong> 일이 되기 때문이다. 그리고 칸이 미리 정해져 있으니
+      질문 스무 개를 한꺼번에 던져도 한 번의 계산에 다 담긴다. 실제로 Jev는 질문 개수가 늘어도
+      시간과 비용이 사실상 그대로다.<sup><a href="#n2" id="r2">2</a></sup>
+      출력 토큰에 값을 매기지 않는 이유도 여기 있다 — 생성하는 토큰이 애초에 없다.
+    </p>
+  </section>
+
+  <div class="aside">
+    <div class="aside-label">용어 상자</div>
+    <h3>Jev가 답할 수 있는 세 가지 모양</h3>
+    <dl>
+      <dt>Boolean — 예 / 아니오</dt>
+      <dd>“이 문의는 환불 요청인가?” 같은 명제에 대해 <strong>참일 확률</strong>을 돌려준다. 0.93은 “93% 확신한다”가 아니라 그 자체로 판단값이며, 0.5는 중간이 아니라 <strong>판단 불가</strong>를 뜻한다.</dd>
+      <dt>Choice — 정해진 보기 중 하나</dt>
+      <dd>“담당 부서는?” 처럼 목록에서 고른다. 고른 것 하나만이 아니라 <strong>보기별 확률 분포</strong>가 함께 나온다. 보기는 최대 255개까지.</dd>
+      <dt>Score — 순서가 있는 등급</dt>
+      <dd>“이탈 위험은 낮음·중간·높음 중?” 처럼 서열이 있는 평가. 연속된 점수와 그 분포를 돌려준다.</dd>
+    </dl>
+  </div>
+
+  <section>
+    <h2>형식은 못 틀리지만, 정답은 틀린다</h2>
+    <p>
+      TypeSafe의 홍보 문구 중 가장 널리 인용된 건 “수학적으로 환각이 불가능하다”는 대목이다.
+      이 말은 사실이지만, 사실인 범위가 생각보다 좁다. 정확히는 <strong>형식이 깨지는 일이 없다</strong>는 뜻이다.
+    </p>
+    <p>
+      현장에서 이게 왜 중요한지는 LLM에 “JSON으로만 답해”라고 시켜 본 사람이면 안다.
+      대체로는 잘 나온다. 그러다 가끔 코드 블록 표시가 붙어 나오고, 가끔 보기에 없는 값을 지어내고,
+      가끔 숫자를 넣어야 할 자리에 설명을 시작한다. 확률이 낮아도 하루 10만 건이면 매일 수백 건이다.
+      그래서 실서비스의 LLM 호출부에는 <strong>뒷수습 코드가 반드시 붙는다</strong> — 벗겨 내고, 고쳐 읽고,
+      안 되면 다시 물어보는.
+    </p>
+    <p>
+      Jev의 답은 애초에 글자가 아니라 정해진 칸에 들어가는 값이라, 이 사고 유형 자체가 없다.
+      다만 여기서 반드시 갈라야 할 지점이 있다.
+    </p>
+  </section>
+
+  <p class="pull">
+    없는 보기를 고를 방법이 없다는 것과,
+    옳은 보기를 고른다는 것은 전혀 다른 말이다.
+  </p>
+
+  <p class="measure">
+    Jev도 틀린다. 형식이 아니라 <strong>판단</strong>에서 틀린다. 주거 문제로 분류해야 할 민원을
+    아동 안전 문제로 자신 있게 분류할 수 있다.<sup><a href="#n3" id="r3">3</a></sup>
+    아래 그림에서 다섯 번째 상황이 정확히 그 경우다.
+  </p>
+
+  <figure class="broad">
+    <div class="fig-head">
+      <span class="fig-no">그림 2</span>
+      <span class="fig-title">같은 질문을 다섯 번 던졌을 때 돌아오는 것</span>
+      <span class="score" id="sceneCount" style="margin-left:auto;">상황 1 / 5</span>
+    </div>
+    <div class="fig-stage">
+      <p class="scene-title">질문 — <b>“이 문의의 우선순위를 [낮음 · 보통 · 높음 · 긴급] 중에서 고르시오.”</b></p>
+      <div class="runbar"><button class="btn" id="nextScene">다음 응답 받기</button></div>
+      <div class="twocol">
+        <div class="card">
+          <div class="card-label"><i class="swatch sw-llm"></i>기존 LLM이 돌려준 것</div>
+          <pre class="payload" id="llmPayload"></pre>
+          <div class="status" id="llmStatus"></div>
+        </div>
+        <div class="card">
+          <div class="card-label"><i class="swatch sw-jev"></i>Jev가 돌려준 것</div>
+          <pre class="payload" id="jevPayload"></pre>
+          <div class="status" id="jevStatus"></div>
+        </div>
+      </div>
+    </div>
+    <figcaption>
+      다섯 번째 상황을 꼭 보길 권한다. <b>Jev도 오답을 낸다.</b> 다만 틀리는 방식이 다르다 —
+      프로그램을 멈춰 세우는 형식 오류가 아니라 사람도 헷갈릴 판단 오류이고,
+      그때 확률이 낮게 나오면 코드가 스스로 “이건 사람에게 넘기자”고 결정할 수 있다.
+      <span class="src">응답 예시는 공개된 동작 방식에 따라 구성한 것</span>
+    </figcaption>
+  </figure>
+
+  <section>
+    <h2>80%라고 말할 때, 정말 80%인가</h2>
+    <p>
+      방금 문장에 이 모델의 진짜 주장이 숨어 있다. “확률이 낮게 나오면 사람에게 넘긴다”는 설계는
+      <strong>그 확률이 믿을 만할 때만</strong> 성립한다. 그리고 지금까지의 언어 모델이 가장 못하는 일이 바로 그것이었다.
+      GPT 계열에게 확신도를 물어보면 대체로 높게 부른다. 틀릴 때도 당당하다.
+    </p>
+    <p>
+      TypeSafe가 <strong>RLCD</strong>(Reinforcement Learning for Calibrated Decisions, 보정된 결정을 위한 강화학습)라는
+      이름을 붙여 내세우는 지점이 여기다. 기존 모델의 RLHF가 <strong>사람이 더 좋아할 문장</strong>을 향해 최적화한다면,
+      RLCD는 <strong>확률이 실제 결과와 맞아떨어지는 것</strong>을 향해 최적화한다고 회사는 설명한다.<sup><a href="#n4" id="r4">4</a></sup>
+    </p>
+    <p>
+      보정(calibration)이 무엇인지는 한 번 정확히 짚고 갈 만하다. 이것은 개별 건에 대한 보증이 <strong>아니다</strong>.
+      “확신 0.8로 내린 판단들을 모아 보면 그중 약 80%가 맞다”는, <strong>무더기에 대한 성질</strong>이다.
+      눈앞의 이 한 건이 맞다는 뜻은 전혀 아니다. 대신 이 성질이 지켜지면 아주 실용적인 일이 가능해진다 —
+      어디까지 자동으로 처리하고 어디서부터 사람이 볼지를, <strong>숫자 하나로 정할 수 있게 된다.</strong>
+    </p>
+  </section>
+
+  <figure class="broad">
+    <div class="fig-head">
+      <span class="fig-no">그림 3</span>
+      <span class="fig-title">문턱을 옮겨 보기 — 문의 240건을 확신도 순으로 늘어놓았다</span>
+    </div>
+    <div class="fig-stage">
+      <div class="gate-controls">
+        <div class="sliderrow">
+          <label for="thresh">자동 처리 문턱</label>
+          <input type="range" id="thresh" min="50" max="99" value="85" step="1">
+          <span class="thresh" id="threshVal">0.85</span>
+        </div>
+        <div class="sliderrow">
+          <span class="lbl">모델 상태</span>
+          <button class="btn-ghost" id="modeCal" aria-pressed="true">보정된 모델</button>
+          <button class="btn-ghost" id="modeOver" aria-pressed="false">과신하는 모델</button>
+        </div>
+      </div>
+      <div class="dots" id="dots" role="img" aria-label="문의 240건을 확신도 순으로 늘어놓은 격자. 문턱 위쪽은 자동 처리, 아래쪽은 사람 검토."></div>
+      <div class="keylegend">
+        <span><i class="swatch sw-jev" style="border-radius:50%;"></i>자동 처리 · 맞음</span>
+        <span><i class="swatch sw-llm" style="border-radius:50%;"></i>자동 처리 · 틀림</span>
+        <span><i class="swatch sw-hollow" style="border-radius:50%;"></i>사람에게 넘김</span>
+      </div>
+      <dl class="readouts">
+        <div class="readout"><dt>자동 처리</dt><dd id="roAuto">—</dd></div>
+        <div class="readout"><dt>그중 오답</dt><dd id="roWrong">—</dd></div>
+        <div class="readout"><dt>사람 검토</dt><dd id="roHuman">—</dd></div>
+        <div class="readout"><dt>자동 처리 정확도</dt><dd id="roAcc">—</dd></div>
+      </dl>
+      <div class="gatenote" id="gateNote"></div>
+    </div>
+    <figcaption>
+      <b>“과신하는 모델” 버튼을 꼭 눌러 보라.</b> 확신도를 0.99까지 올려도 오답이 줄지 않는다.
+      보정되지 않은 확신도는 숫자가 붙어 있을 뿐 아무 결정도 자동화해 주지 못한다는 뜻이고,
+      이것이 Jev가 풀겠다고 선언한 문제다.
+      <span class="src">시연용 합성 데이터 · 보정된 모델 쪽은 확신도와 적중률이 일치하도록 생성</span>
+    </figcaption>
+  </figure>
+
+  <section>
+    <h2>숫자를 읽는 법</h2>
+    <p>
+      이제 회사가 내세우는 수치를 볼 차례다. 속도 40~200배, 비용은 수백 배. 건당 0.4초에 0.0004달러.
+      입력 100만 토큰에 0.042달러이고 출력은 무료다. 맥락은 3만 2천 토큰까지 받는다.
+    </p>
+    <p>
+      그런데 이 표에서 가장 중요한 칸은 속도도 비용도 아니다. <strong>정확도다.</strong>
+    </p>
+  </section>
+
+  <figure class="broad">
+    <div class="fig-head">
+      <span class="fig-no">그림 4</span>
+      <span class="fig-title">한 건을 처리할 때 — 시간, 비용, 그리고 정확도</span>
+    </div>
+    <div class="fig-stage">
+      <div class="chart">
+        <div class="chart-title">걸린 시간</div>
+        <div class="chart-sub">짧을수록 좋음 · 막대는 실제 측정 구간을 눈금 위 제자리에 그린 것</div>
+        <div class="barrow"><div class="barname">Jev</div>
+          <div class="bartrack"><div class="bar jev" style="width:1%"></div></div>
+          <div class="barval">0.4초</div></div>
+        <div class="barrow"><div class="barname">프런티어 LLM</div>
+          <div class="bartrack"><div class="bar-offset" style="width:25%"></div><div class="bar llm" style="width:70%"></div></div>
+          <div class="barval">10–38초</div></div>
+        <div class="axis"><span>0초</span><span>40초</span></div>
+      </div>
+      <div class="chart">
+        <div class="chart-title">한 건당 비용</div>
+        <div class="chart-sub">낮을수록 좋음 · 같은 일을 시켰을 때 청구되는 금액</div>
+        <div class="barrow"><div class="barname">Jev</div>
+          <div class="bartrack"><div class="bar jev" style="width:0.3%"></div></div>
+          <div class="barval">$0.0004</div></div>
+        <div class="barrow"><div class="barname">프런티어 LLM</div>
+          <div class="bartrack"><div class="bar-offset" style="width:17%"></div><div class="bar llm" style="width:81%"></div></div>
+          <div class="barval">$0.0304<br>–0.1761</div></div>
+        <div class="axis"><span>$0</span><span>$0.18</span></div>
+      </div>
+      <div class="chart">
+        <div class="chart-title">정확도</div>
+        <div class="chart-sub">높을수록 좋음 · 두 막대가 거의 같은 길이라는 점이 이 그림의 핵심이다</div>
+        <div class="barrow"><div class="barname">Jev</div>
+          <div class="bartrack"><div class="bar jev" style="width:67.8%"></div></div>
+          <div class="barval">67.8%</div></div>
+        <div class="barrow"><div class="barname">GPT-5.6 Terra</div>
+          <div class="bartrack"><div class="bar llm" style="width:67.9%"></div></div>
+          <div class="barval">67.9%</div></div>
+        <div class="axis"><span>0%</span><span>100%</span></div>
+      </div>
+    </div>
+    <figcaption>
+      Jev는 프런티어 모델을 <b>이기지 않는다.</b> 비슷할 뿐이다. 주장은 “더 똑똑하다”가 아니라
+      “이런 종류의 판단에서 같은 수준을 두 자릿수 배 싸고 빠르게”이다.
+      <span class="src">출처 — TypeSafe 4개 워크플로 벤치마크. 벤더가 설계하고 벤더가 채점했으며, 정답지는 타 모델 출력의 평균이다</span>
+    </figcaption>
+  </figure>
+
+  <section>
+    <p>
+      정확도가 대등하다는 사실은 이 모델을 이해하는 열쇠다. Jev가 바꾸는 것은 판단의 <strong>질</strong>이 아니라
+      판단의 <strong>단가</strong>다. 그리고 단가가 400분의 1이 되면 질이 그대로여도 할 수 있는 일이 달라진다.
+      표본 추출로만 검사하던 것을 전수 검사할 수 있고, 하루 한 번 돌리던 것을 요청마다 돌릴 수 있다.
+    </p>
+    <p>
+      다만 이 수치들을 인용할 때 반드시 함께 붙여야 할 단서가 있다.
+      <strong>위 표는 TypeSafe가 설계하고 TypeSafe가 채점했다.</strong> 공개 리더보드가 아니고,
+      정답지는 다른 모델들의 답을 평균 낸 것이다. 지금까지 나온 제3자 테스트는 매체 Every의 것 한 건뿐인데,
+      거기서 속도와 비용 주장은 그대로 재현됐지만 정확도는 <strong>Jev 67.8% 대 비교군 최고 74.1%</strong>로
+      한 단계 아래였다.<sup><a href="#n5" id="r5">5</a></sup> 표본이 작아 결론을 내릴 수는 없다.
+      그리고 가장 중요한 대목 — <strong>이 회사의 핵심 주장인 보정 성능은, 아직 외부의 누구도 측정하지 않았다.</strong>
+      아키텍처도 가중치도 보정 곡선도 공개돼 있지 않고, 재현 가능한 논문도 없다.
+    </p>
+  </section>
+
+  <section>
+    <h2>그래서 이 일은 누구 몫인가</h2>
+    <p>
+      Jev를 도입한 팀들이 공통적으로 도달한 배치가 있다. LLM을 Jev로 갈아 끼우는 게 아니라,
+      <strong>일의 종류를 네 갈래로 나누는</strong> 방식이다.
+      계산과 권한 확인은 <strong>코드</strong>가, 보기 중에서 고르는 판단은 <strong>Jev</strong>가,
+      쓰고 추론하는 일은 <strong>LLM</strong>이, 불확실하거나 중대한 건은 <strong>사람</strong>이 맡는다.
+    </p>
+    <p>
+      가장 많이 쓰이는 조합은 대체(replace)가 아니라 <strong>검증(verify)</strong>이다.
+      LLM이 계약서에서 값을 뽑아내면, 그 값이 맞는지를 Jev가 예/아니오와 확률로 확인한다.
+      같은 검증을 또 다른 LLM에게 시키면 느리고 비싸며, 그 LLM의 확신도는 믿을 수 없다.
+      아래에서 직접 나눠 보면 감이 잡힌다.
+    </p>
+  </section>
+
+  <figure class="broad">
+    <div class="fig-head">
+      <span class="fig-no">그림 5</span>
+      <span class="fig-title">여덟 가지 일을 넷 중 누구에게 줄 것인가</span>
+      <span class="score" id="quizScore" style="margin-left:auto;">0 / 8</span>
+    </div>
+    <div class="fig-stage">
+      <div class="quiz" id="quiz"></div>
+    </div>
+    <figcaption>
+      규칙은 한 줄로 줄어든다 — <b>고르는 일은 Jev, 쓰는 일은 LLM, 셈하고 권한을 확인하는 일은 코드, 책임지는 일은 사람.</b>
+      Jev가 특히 강한 자리는 라우팅과 트리아지, 콘텐츠 검수, 평가(evals), LLM 출력 검증,
+      에이전트가 어떤 도구를 쓸지 고르는 순간, 그리고 게임·시뮬레이션처럼 한 프레임 안에 답이 와야 하는 루프다.
+      <span class="src">용례 분류는 공개된 통합 문서와 사례 모음을 따랐다</span>
+    </figcaption>
+  </figure>
+
+  <section>
+    <h2>지금 시점의 대차대조표</h2>
+    <div class="ledger" style="margin-top:8px;">
+      <div class="card known">
+        <div class="card-label"><i class="swatch sw-jev"></i>확인된 것</div>
+        <ul class="known">
+          <li><span class="mark">✓</span><span>정해진 형식을 벗어난 답이 구조적으로 나올 수 없다 — <b>파싱 실패라는 사고 유형이 사라진다.</b></span></li>
+          <li><span class="mark">✓</span><span>응답이 빠르다(70–500ms). 제3자 테스트에서도 속도·비용 주장은 살아남았다.</span></li>
+          <li><span class="mark">✓</span><span>질문을 여러 개 묶어도 한 번에 처리되어 비용이 거의 늘지 않는다.</span></li>
+          <li><span class="mark">✓</span><span>OpenRouter · Vercel AI Gateway · Cloudflare Workers AI 등에서 이미 실제로 호출할 수 있다.</span></li>
+        </ul>
+      </div>
+      <div class="card unknown">
+        <div class="card-label"><i class="swatch sw-llm"></i>아직 확인 안 된 것 · 못 하는 것</div>
+        <ul class="unknown">
+          <li><span class="mark">!</span><span>글을 못 쓴다. 대화 · 요약 · 코드 생성 전부 불가.</span></li>
+          <li><span class="mark">!</span><span><b>이유를 말해 주지 않는다.</b> 숫자만 나온다 — 감사와 규제 대응에는 이것만으로 부족할 수 있다.</span></li>
+          <li><span class="mark">!</span><span>산술, 여러 단계를 거치는 추론, 방해되는 맥락, 악의적 입력에 약하다고 공개돼 있다.</span></li>
+          <li><span class="mark">!</span><span>보기가 255개를 넘으면 두 단계로 나눠 처리해야 하고, 그만큼 느려진다.</span></li>
+          <li><span class="mark">!</span><span>아키텍처 · 가중치 · 보정 곡선 모두 <b>비공개</b>이고 재현 가능한 논문이 없다.</span></li>
+          <li><span class="mark">!</span><span>핵심 주장인 보정 성능을 외부에서 측정한 사례가 아직 없다.</span></li>
+        </ul>
+      </div>
+    </div>
+    <dl class="factstrip">
+      <div><dt>모델</dt><dd>Jev 1.13</dd></div>
+      <div><dt>응답</dt><dd>70–500 ms</dd></div>
+      <div><dt>입력</dt><dd>$0.042 / 1M</dd></div>
+      <div><dt>출력</dt><dd>$0</dd></div>
+      <div><dt>맥락</dt><dd>32K</dd></div>
+      <div><dt>보기 한도</dt><dd>255개</dd></div>
+    </dl>
+  </section>
+
+  <section>
+    <h2>제번스의 이름으로</h2>
+    <p>
+      모델의 이름은 19세기 경제학자 윌리엄 스탠리 제번스에게서 왔다.<sup><a href="#n6" id="r6">6</a></sup>
+      석탄을 태우는 효율이 좋아지면 석탄 소비가 줄 것 같지만 실제로는 오히려 늘어난다는,
+      그 유명한 역설의 주인공이다. 작명에 회사의 계산이 그대로 드러난다.
+    </p>
+    <p>
+      판단 한 건의 값이 400분의 1이 되면, 우리는 판단을 400배 덜 하게 되지 않는다.
+      <strong>전에는 비싸서 하지 않던 판단까지 전부 하게 된다.</strong>
+      모든 문의에, 모든 행에, 모든 프레임에. 그때 남는 질문은 “이걸 자동으로 처리해도 되는가”가 아니라
+      “<strong>어디에 선을 그을 것인가</strong>”가 된다.
+    </p>
+    <p>
+      Jev가 실제로 파는 물건은 속도가 아니다. 그 선을 그을 수 있게 해 주는 <strong>숫자</strong>다.
+      그림 3의 슬라이더가 회의실을 대체할 수 있다면, 그건 꽤 큰 변화다.
+      다만 그 숫자를 믿어도 되는지는 — 지금으로서는 회사의 말 외에 근거가 없다.
+      이 칼럼이 독자에게 남기고 싶은 문장은 그래서 하나다.
+      <strong>구조는 진짜로 새롭고, 수치는 아직 회사 것이다.</strong>
+    </p>
+  </section>
+
+  <div class="notes">
+    <h3>주석과 출처</h3>
+    <ol>
+      <li id="n1">TypeSafe AI는 2026년 9월 15일 스텔스에서 나오며 시드 4천만 달러(DCVC 주도)를 공개했다. 창업자는 Diogo Almeida(전 OpenAI), Erik Gafni, Sasha Sheng. <a href="https://typesafe.ai/blog/introducing-system-one-models-and-jev">「Introducing System One Models &amp; Jev」</a> <a href="#r1">↩</a></li>
+      <li id="n2">상태(state)와 질문(primitives)의 규격, 문턱 설정과 확신도 게이팅은 공식 문서에 정리돼 있다. <a href="https://docs.typesafe.ai/concepts/system-one">docs.typesafe.ai — System One · State · Primitives</a>, <a href="https://vercel.com/kb/guide/typesafe-jev-and-ai-sdk">Vercel — Jev와 AI SDK로 분류·라우팅·스코어링하기</a> <a href="#r2">↩</a></li>
+      <li id="n3">스키마 제약은 형식의 정확성이지 의미의 정확성이 아니라는 지적. <a href="https://www.datacamp.com/blog/system-one-models-jev">DataCamp — System One Models &amp; Jev</a>, <a href="https://www.truefoundry.com/blog/typesafe-ai-jev">TrueFoundry — “System One Models”가 실제로 뜻하는 것</a> <a href="#r3">↩</a></li>
+      <li id="n4">RLCD의 목표와, 보상 함수·학습 절차·보정 방법론이 모두 비공개라는 점. <a href="https://www.mindstudio.ai/blog/typesafe-jev-rlcd-vs-rlhf">MindStudio — RLCD vs RLHF</a> <a href="#r4">↩</a></li>
+      <li id="n5">유일한 제3자 테스트. 속도·비용은 재현됐고 정확도는 프런티어보다 한 단계 아래였으며 표본이 작다. <a href="https://every.to/also-true-for-humans/mini-vibe-check-typesafe-s-jev-judged-everything-i-ve-written-in-0-7-seconds">Every — Mini-Vibe Check</a> <a href="#r5">↩</a></li>
+      <li id="n6">이름의 유래와 하이브리드 구성 패턴. <a href="https://www.langchain.com/blog/building-a-harness-with-jev">LangChain — Building a harness with Jev</a> <a href="#r6">↩</a></li>
+    </ol>
+    <p class="colophon">
+      본문의 그림 1·2·3·5는 직접 조작할 수 있다 · 본문 수치는 2026년 9월 20일 기준 공개 자료를 따랐다<br>
+      접근 경로 — typesafe/jev-1.13 (OpenRouter) · typesafe-ai/jev (Vercel AI Gateway) · typesafe/jev (Cloudflare Workers AI) · LiteLLM · Pydantic AI · LangChain · Langfuse
+    </p>
+  </div>
+</article>
+
+<script>
+(function(){
+  "use strict";
+  var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* ─────────── 그림 1 : 레이스 ─────────── */
+  var LLM_TOKENS = ['{\n','  "','우선','순위','": "','긴급','",\n','  "','담당','부서','": "','결제','팀','",\n',
+                    '  "','환불','가능','": ','true',',\n','  "','이탈','위험','": "','꽤 ','높은',' 편','"\n','}'];
+  var LLM_REAL_MS = 10000, JEV_REAL_MS = 400, SPEED = 4;
+  var JEV_ANS = [
+    {q:"우선순위 (선택)", v:"긴급", p:0.91},
+    {q:"담당 부서 (선택)", v:"결제팀", p:0.87},
+    {q:"환불 가능 (예/아니오)", v:"예", p:0.78},
+    {q:"이탈 위험 (점수)", v:"0.72 / 높음", p:0.72}
+  ];
+  var raceBtn = document.getElementById("raceBtn"),
+      llmStream = document.getElementById("llmStream"),
+      llmClock = document.getElementById("llmClock"),
+      llmVerdict = document.getElementById("llmVerdict"),
+      jevAnswers = document.getElementById("jevAnswers"),
+      jevClock = document.getElementById("jevClock"),
+      jevVerdict = document.getElementById("jevVerdict"),
+      raceRunning = false;
+
+  function buildJevRows(){
+    jevAnswers.innerHTML = "";
+    JEV_ANS.forEach(function(a){
+      var row = document.createElement("div");
+      row.className = "answer";
+      row.innerHTML = '<div class="ans-top"><span class="ans-q">'+a.q+'</span><span class="ans-v">'+a.v+'</span></div>'+
+                      '<div class="meter"><i></i></div>';
+      jevAnswers.appendChild(row);
+    });
+  }
+  function revealJev(){
+    var rows = jevAnswers.querySelectorAll(".answer");
+    for (var i=0;i<rows.length;i++){
+      rows[i].classList.add("on");
+      rows[i].style.opacity = 1;
+      rows[i].querySelector(".meter i").style.width = Math.round(JEV_ANS[i].p*100)+"%";
+    }
+    jevClock.textContent = "0.4초";
+    jevVerdict.innerHTML = '<b>끝.</b> 네 개의 답이 동시에 도착했고, 각 숫자는 그 답의 확률이다. 프로그램은 이 값을 그대로 쓴다.';
+  }
+  function resetRace(){
+    llmStream.textContent = ""; llmClock.textContent = "0.0초"; llmVerdict.textContent = "";
+    jevClock.textContent = "0.0초"; jevVerdict.textContent = "";
+    buildJevRows();
+  }
+  function escapeHtml(s){ return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+  function finishAll(){
+    llmStream.textContent = LLM_TOKENS.join("");
+    llmClock.textContent = "10.0초";
+    llmVerdict.innerHTML = '문자열 완성. 이제 프로그램이 <b>이 글자를 뜯어 읽어야</b> 한다.';
+    revealJev();
+    raceRunning = false; raceBtn.disabled = false; raceBtn.textContent = "다시 실행";
+  }
+  function runRace(){
+    if (raceRunning) return;
+    raceRunning = true; raceBtn.disabled = true; raceBtn.textContent = "측정 중…";
+    resetRace();
+    if (reduce){ finishAll(); return; }
+    var t0 = performance.now(), i = 0, jevDone = false;
+    var tokenGap = (LLM_REAL_MS / LLM_TOKENS.length) / SPEED;
+    function frame(now){
+      var animEl = now - t0, realEl = animEl * SPEED;
+      if (!jevDone && realEl >= JEV_REAL_MS){ jevDone = true; revealJev(); }
+      else if (!jevDone){ jevClock.textContent = (realEl/1000).toFixed(1)+"초"; }
+      var want = Math.min(LLM_TOKENS.length, Math.floor(animEl / tokenGap));
+      while (i < want){ llmStream.textContent += LLM_TOKENS[i]; i++; }
+      if (i < LLM_TOKENS.length){
+        llmClock.textContent = (Math.min(realEl, LLM_REAL_MS)/1000).toFixed(1)+"초";
+        llmStream.innerHTML = escapeHtml(llmStream.textContent) + '<span class="caret"></span>';
+        requestAnimationFrame(frame);
+      } else {
+        llmClock.textContent = "10.0초";
+        llmStream.textContent = LLM_TOKENS.join("");
+        llmVerdict.innerHTML = '문자열 완성. 이제 프로그램이 <b>이 글자를 뜯어 읽어야</b> 한다 — '+
+          '“꽤 높은 편”은 숫자가 아니라서 그대로는 쓸 수 없다.';
+        if (!jevDone) revealJev();
+        raceRunning = false; raceBtn.disabled = false; raceBtn.textContent = "다시 실행";
+      }
+    }
+    requestAnimationFrame(frame);
+  }
+  buildJevRows(); revealJev();
+  jevVerdict.innerHTML = '<b>준비됨.</b> 위 버튼을 누르면 두 방식이 같은 일을 동시에 시작한다.';
+  llmStream.textContent = "(대기 중)";
+  raceBtn.addEventListener("click", runRace);
+
+  /* ─────────── 그림 2 : 형식 ─────────── */
+  var SCENES = [
+    { llm:'{"priority": "높음"}',
+      ls:["good","✓","읽는 데 성공. 운이 좋은 경우다."],
+      jev:'우선순위 = "높음"\n확률  낮음 0.02 · 보통 0.11\n      높음 0.71 · 긴급 0.16',
+      js:["good","✓","정해진 네 보기 중 하나. 그대로 사용."] },
+    { llm:'```json\n{"priority": "긴급"}\n```',
+      ls:["bad","✕","마크다운 표시가 붙어 나와 읽기 실패 — 벗겨 내는 코드가 따로 필요하다."],
+      jev:'우선순위 = "긴급"\n확률  낮음 0.01 · 보통 0.04\n      높음 0.27 · 긴급 0.68',
+      js:["good","✓","포장지 같은 게 붙을 자리가 없다."] },
+    { llm:'{"priority": "매우 긴급"}',
+      ls:["bad","✕","보기에 없는 값을 지어냈다. 형식은 맞지만 시스템이 받을 수 없는 답이다."],
+      jev:'우선순위 = "긴급"\n확률  낮음 0.01 · 보통 0.03\n      높음 0.19 · 긴급 0.77',
+      js:["good","✓","없는 보기를 고르는 것이 구조적으로 불가능하다."] },
+    { llm:'문의 내용으로 보아 우선순위는 "높음"으로 판단됩니다.\n다만 환불 기한이 임박해 "긴급"으로 볼 여지도 있습니다.',
+      ls:["bad","✕","설명을 시작했다. 프로그램 입장에서는 그냥 알 수 없는 글자 뭉치다."],
+      jev:'우선순위 = "높음"\n확률  낮음 0.02 · 보통 0.09\n      높음 0.52 · 긴급 0.37',
+      js:["warn","~","애매한 건이라 확률이 0.52까지 떨어졌다 — 사람에게 넘기라는 신호다."] },
+    { llm:'{"priority": "보통"}',
+      ls:["warn","~","읽기는 성공. 그런데 답 자체가 틀렸고, <b>얼마나 확신하는지 알 길이 없다.</b>"],
+      jev:'우선순위 = "보통"   ← 실제 정답: 긴급\n확률  낮음 0.08 · 보통 0.44\n      높음 0.33 · 긴급 0.15',
+      js:["bad","✕","<b>Jev도 틀렸다.</b> 다만 0.44라는 낮은 확률이 함께 나왔고, 문턱을 0.7로 뒀다면 이 건은 자동 처리되지 않고 사람에게 갔다."] }
+  ];
+  var sceneIdx = -1;
+  var llmPayload = document.getElementById("llmPayload"), llmStatus = document.getElementById("llmStatus"),
+      jevPayload = document.getElementById("jevPayload"), jevStatus = document.getElementById("jevStatus"),
+      sceneCount = document.getElementById("sceneCount");
+  function setStatus(el, s){
+    el.className = "status " + s[0];
+    el.innerHTML = '<span class="mark">'+s[1]+'</span><span>'+s[2]+'</span>';
+  }
+  function showScene(){
+    sceneIdx = (sceneIdx + 1) % SCENES.length;
+    var s = SCENES[sceneIdx];
+    llmPayload.textContent = s.llm; jevPayload.textContent = s.jev;
+    setStatus(llmStatus, s.ls); setStatus(jevStatus, s.js);
+    sceneCount.textContent = "상황 " + (sceneIdx+1) + " / " + SCENES.length;
+  }
+  showScene();
+  document.getElementById("nextScene").addEventListener("click", showScene);
+
+  /* ─────────── 그림 3 : 확신도 게이트 ─────────── */
+  function mulberry32(a){ return function(){
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    var t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };}
+  var rnd = mulberry32(20260915), CASES = [];
+  for (var k=0;k<240;k++){
+    CASES.push({ conf: 0.52 + 0.47 * Math.pow(rnd(), 0.55), roll: rnd() });
+  }
+  CASES.sort(function(a,b){ return b.conf - a.conf; });
+  var dotsEl = document.getElementById("dots"), dotNodes = [];
+  CASES.forEach(function(){
+    var d = document.createElement("i"); d.className = "dot"; dotsEl.appendChild(d); dotNodes.push(d);
+  });
+  var calibrated = true;
+  var threshEl = document.getElementById("thresh"), threshVal = document.getElementById("threshVal"),
+      roAuto = document.getElementById("roAuto"), roWrong = document.getElementById("roWrong"),
+      roHuman = document.getElementById("roHuman"), roAcc = document.getElementById("roAcc"),
+      gateNote = document.getElementById("gateNote");
+  function isCorrect(c){ return calibrated ? (c.roll < c.conf) : (c.roll < 0.62); }
+  function renderGate(){
+    var t = parseInt(threshEl.value,10)/100, auto=0, wrong=0;
+    for (var i=0;i<CASES.length;i++){
+      var c = CASES[i], isAuto = c.conf >= t, ok = isCorrect(c), cls = "dot";
+      if (isAuto){ auto++; cls += " auto"; if(!ok){ wrong++; cls += " wrong"; } }
+      else if (!ok){ cls += " wrong"; }
+      dotNodes[i].className = cls;
+    }
+    var human = CASES.length - auto;
+    threshVal.textContent = t.toFixed(2);
+    roAuto.innerHTML = auto + '<small> 건 · ' + Math.round(auto/CASES.length*100) + '%</small>';
+    roWrong.innerHTML = wrong + '<small> 건</small>';
+    roHuman.innerHTML = human + '<small> 건</small>';
+    roAcc.innerHTML = auto ? (100 - wrong/auto*100).toFixed(1) + '<small>%</small>' : '—';
+    if (calibrated){
+      gateNote.innerHTML = '문턱을 올리면 자동 처리 건수가 줄고 <b>자동 처리된 것들의 정확도는 올라간다.</b> ' +
+        '보정이 맞는 모델에서는 이 맞바꿈이 예측 가능하게 움직여서, 팀이 감당할 수 있는 검토량을 기준으로 문턱을 고를 수 있다. ' +
+        '테두리만 있는 점 중 주황 점선은 사람이 넘겨받아 바로잡은 건이다.';
+    } else {
+      gateNote.innerHTML = '<b>슬라이더를 끝까지 올려 보라.</b> 확신도를 0.99까지 올려도 오답이 줄지 않는다. ' +
+        '모델이 “95% 확신한다”고 말해도 실제로는 62%만 맞기 때문이다. ' +
+        '보정되지 않은 확신도는 <b>숫자가 붙어 있을 뿐 아무 결정도 자동화해 주지 못한다.</b>';
+    }
+  }
+  threshEl.addEventListener("input", renderGate);
+  var btnCal = document.getElementById("modeCal"), btnOver = document.getElementById("modeOver");
+  btnCal.addEventListener("click", function(){ calibrated = true; btnCal.setAttribute("aria-pressed","true"); btnOver.setAttribute("aria-pressed","false"); renderGate(); });
+  btnOver.addEventListener("click", function(){ calibrated = false; btnCal.setAttribute("aria-pressed","false"); btnOver.setAttribute("aria-pressed","true"); renderGate(); });
+  renderGate();
+
+  /* ─────────── 그림 5 : 용례 ─────────── */
+  var OPTS = ["Jev","LLM","코드","사람"];
+  var QUIZ = [
+    {q:"고객 문의 10만 건을 ‘환불 / 배송 / 기술’ 중 하나로 나누기", a:0,
+     why:"보기가 정해진 분류다. 전수 처리라 건당 단가가 결정적이고 설명도 필요 없다 — Jev의 한가운데."},
+    {q:"화가 난 고객에게 보낼 사과 메일 초안 쓰기", a:1,
+     why:"결과물이 ‘사람이 읽을 문장’이다. Jev는 글을 한 줄도 쓰지 못한다."},
+    {q:"환불 금액이 정책 한도(30만 원) 안에 드는지 확인하기", a:2,
+     why:"AI가 필요 없다. 산술과 권한 확인은 평범한 코드가 더 빠르고 100% 정확하다. Jev는 산술이 약점으로 공개돼 있다."},
+    {q:"해지 위약금 1,200만 원을 면제할지 최종 결정하기", a:3,
+     why:"금액이 크고 되돌리기 어렵다. 확신도가 아무리 높아도 이런 건은 사람이 이름을 걸고 결정해야 한다."},
+    {q:"계약서에서 위약금 조항을 찾아 세 문장으로 요약하기", a:1,
+     why:"긴 문서를 읽고 새 문장을 만들어 내는 일이다. 전형적인 LLM 작업."},
+    {q:"LLM이 계약서에서 뽑아낸 ‘계약 시작일’이 실제로 맞는지 검증하기", a:0,
+     why:"현장에서 가장 많이 쓰이는 조합이다 — LLM이 뽑고 Jev가 예/아니오와 확률로 검증한다. 검증을 또 LLM에게 시키면 느리고 비싸다."},
+    {q:"게임 속 NPC가 다음 행동을 정해진 동작 목록에서 고르기 (16밀리초 안에)", a:0,
+     why:"한 프레임 안에 답이 와야 하는 루프다. 초 단위로 응답하는 LLM은 애초에 들어갈 수 없는 자리다."},
+    {q:"업로드된 사진 설명문이 커뮤니티 정책을 어기는지 판정하기", a:0,
+     why:"여러 정책 항목을 한 번의 호출로 동시에 묻고, 확률에 문턱을 걸어 허용·차단·사람검토로 가른다. Jev의 대표 용례."}
+  ];
+  var quizEl = document.getElementById("quiz"), scoreEl = document.getElementById("quizScore"), right = 0;
+  QUIZ.forEach(function(item, qi){
+    var card = document.createElement("div"); card.className = "q";
+    var t = document.createElement("div"); t.className = "q-text"; t.textContent = (qi+1)+". "+item.q;
+    var opts = document.createElement("div"); opts.className = "opts";
+    var why = document.createElement("div"); why.className = "why"; why.hidden = true;
+    OPTS.forEach(function(name, oi){
+      var b = document.createElement("button");
+      b.className = "opt"; b.type = "button"; b.textContent = name;
+      b.addEventListener("click", function(){
+        if (card.dataset.done) return;
+        card.dataset.done = "1";
+        var correct = (oi === item.a);
+        if (correct) right++;
+        b.classList.add(correct ? "right" : "wrong");
+        if (!correct) opts.children[item.a].classList.add("right");
+        for (var m=0;m<opts.children.length;m++) opts.children[m].disabled = true;
+        why.innerHTML = '<b>' + OPTS[item.a] + '</b> — ' + item.why;
+        why.hidden = false;
+        scoreEl.textContent = right + " / " + QUIZ.length;
+      });
+      opts.appendChild(b);
+    });
+    card.appendChild(t); card.appendChild(opts); card.appendChild(why);
+    quizEl.appendChild(card);
+  });
+})();
+</script>
+</body>
+</html>
