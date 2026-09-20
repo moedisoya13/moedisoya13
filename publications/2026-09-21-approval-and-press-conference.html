@@ -1,0 +1,1010 @@
+<title>네 번의 균열, 한 번의 회견</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+KR:wght@300;400;500;600;700&display=swap">
+
+<style>
+:root{
+  --paper:#F1F1EE;
+  --paper-2:#E7E8E3;
+  --card:#FBFBF9;
+  --ink:#17191B;
+  --ink-2:#4E5358;
+  --ink-3:#7C8288;
+  --rule:#D8D8D2;
+  --rule-2:#B7B8B0;
+  --band:#1C1F22;
+  --band-ink:#EDEEEA;
+  --band-ink-2:#9AA0A5;
+  --band-rule:#34393E;
+  --pos:#1F5FA8;
+  --neg:#C03A2E;
+  --ok:#1F7A5C;
+  --warn:#8A6510;
+  --bad:#C03A2E;
+  --hl:#E4E6DE;
+
+  --f-disp:"Gowun Batang",'Nanum Myeongjo',serif;
+  --f-body:"IBM Plex Sans KR",system-ui,-apple-system,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;
+  --f-data:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --paper:#141618; --paper-2:#1A1D20; --card:#1C1F22;
+    --ink:#ECEDEA; --ink-2:#A6ABB0; --ink-3:#7A8086;
+    --rule:#2D3237; --rule-2:#414750;
+    --band:#0D0F11; --band-ink:#ECEDEA; --band-ink-2:#8D9399; --band-rule:#282D32;
+    --pos:#5390D6; --neg:#D66354;
+    --ok:#58B995; --warn:#D5A33C; --bad:#D66354;
+    --hl:#242830;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#141618; --paper-2:#1A1D20; --card:#1C1F22;
+  --ink:#ECEDEA; --ink-2:#A6ABB0; --ink-3:#7A8086;
+  --rule:#2D3237; --rule-2:#414750;
+  --band:#0D0F11; --band-ink:#ECEDEA; --band-ink-2:#8D9399; --band-rule:#282D32;
+  --pos:#5390D6; --neg:#D66354;
+  --ok:#58B995; --warn:#D5A33C; --bad:#D66354;
+  --hl:#242830;
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--paper); color:var(--ink);
+  font-family:var(--f-body); font-weight:400; font-size:17px; line-height:1.78;
+  -webkit-font-smoothing:antialiased; word-break:keep-all; overflow-wrap:anywhere;
+}
+h1,h2,h3,h4{margin:0; text-wrap:balance; font-weight:700}
+p{margin:0}
+a{color:inherit}
+strong{font-weight:600}
+svg{display:block}
+
+.wrap{max-width:1140px; margin:0 auto; padding-inline:clamp(16px,4.5vw,44px)}
+.prose{max-width:38rem}
+.prose p + p{margin-top:1.05em}
+.stack{display:flex; flex-direction:column}
+
+/* ---------- masthead ---------- */
+.masthead{background:var(--band); color:var(--band-ink)}
+.masthead__in{display:flex; flex-wrap:wrap; align-items:baseline; gap:10px 22px; padding-block:14px 13px}
+.logo{font-family:var(--f-data); font-weight:600; font-size:13px; letter-spacing:.24em; text-transform:uppercase}
+.logo em{font-style:normal; color:var(--band-ink-2)}
+.masthead__meta{margin-left:auto; display:flex; flex-wrap:wrap; gap:6px 18px;
+  font-family:var(--f-data); font-size:11.5px; letter-spacing:.1em; color:var(--band-ink-2);
+  font-variant-numeric:tabular-nums}
+.masthead__rule{height:3px; background:var(--band); border-top:1px solid var(--band-rule)}
+
+/* ---------- cover ---------- */
+.cover{padding-block:clamp(38px,7vw,68px) clamp(28px,4vw,40px); border-bottom:1px solid var(--rule)}
+.eyebrow{font-family:var(--f-data); font-size:12px; letter-spacing:.2em; text-transform:uppercase; color:var(--neg); font-weight:600}
+.eyebrow span{color:var(--ink-3)}
+h1.cover__h{
+  font-family:var(--f-disp); font-weight:700; line-height:1.24; letter-spacing:-.01em;
+  font-size:clamp(34px,6.6vw,62px); margin-top:18px; max-width:15em;
+}
+.deck{margin-top:22px; max-width:36rem; font-size:clamp(17px,2.1vw,19.5px); line-height:1.75; color:var(--ink-2); font-weight:300}
+.deck b{color:var(--ink); font-weight:600}
+.cover__foot{margin-top:30px; display:flex; flex-wrap:wrap; gap:8px 26px; align-items:center;
+  font-family:var(--f-data); font-size:11.5px; letter-spacing:.09em; color:var(--ink-3); font-variant-numeric:tabular-nums}
+.cover__foot .sep{width:1px; height:12px; background:var(--rule-2)}
+
+/* ---------- section scaffolding ---------- */
+.sec{padding-block:clamp(40px,6vw,64px); border-bottom:1px solid var(--rule)}
+.sec:last-of-type{border-bottom:0}
+.sec__mark{display:flex; align-items:baseline; gap:14px; margin-bottom:8px}
+.sec__no{font-family:var(--f-data); font-size:12px; font-weight:600; letter-spacing:.16em; color:var(--neg)}
+.sec__kicker{font-family:var(--f-data); font-size:12px; letter-spacing:.16em; color:var(--ink-3); text-transform:uppercase}
+h2.sec__h{font-family:var(--f-disp); font-size:clamp(26px,3.8vw,38px); line-height:1.32; margin-bottom:16px; max-width:20em}
+.sec__lede{max-width:38rem; color:var(--ink-2); font-size:16.5px; font-weight:300}
+
+/* ---------- summary card ---------- */
+.summary{background:var(--card); border:1px solid var(--rule); border-left:4px solid var(--ink); padding:clamp(22px,3.4vw,32px); margin-top:clamp(34px,5vw,48px)}
+.summary h3{font-family:var(--f-data); font-size:12px; letter-spacing:.18em; text-transform:uppercase; color:var(--ink-3); font-weight:600}
+.summary ol{margin:18px 0 0; padding:0; list-style:none; display:flex; flex-direction:column; gap:14px; counter-reset:s}
+.summary li{counter-increment:s; position:relative; padding-left:36px; font-size:16.5px; line-height:1.7}
+.summary li::before{content:counter(s,decimal-leading-zero); position:absolute; left:0; top:.42em;
+  font-family:var(--f-data); font-size:11.5px; font-weight:600; color:var(--neg); letter-spacing:.06em; line-height:1}
+
+/* ---------- data band ---------- */
+.band{background:var(--band); color:var(--band-ink); padding-block:clamp(40px,6vw,60px)}
+.band h2,.band h3{color:var(--band-ink)}
+.band .sec__kicker{color:var(--band-ink-2)}
+.band .sec__lede{color:var(--band-ink-2)}
+
+.kpis{display:grid; grid-template-columns:repeat(auto-fit,minmax(168px,1fr)); gap:1px; background:var(--band-rule); border:1px solid var(--band-rule); margin-top:26px}
+.kpi{background:var(--band); padding:18px 18px 16px}
+.kpi__v{font-family:var(--f-data); font-weight:600; font-size:clamp(26px,3.4vw,34px); line-height:1.1; font-variant-numeric:tabular-nums; letter-spacing:-.02em}
+.kpi__v small{font-size:.5em; font-weight:500; margin-left:2px; letter-spacing:0}
+.kpi__l{margin-top:9px; font-size:13px; line-height:1.55; color:var(--band-ink-2)}
+.kpi__s{margin-top:5px; font-family:var(--f-data); font-size:10.5px; letter-spacing:.07em; color:var(--band-ink-2); opacity:.72}
+.kpi--neg .kpi__v{color:var(--neg)}
+.kpi--pos .kpi__v{color:var(--pos)}
+
+/* ---------- figures ---------- */
+.figs{display:grid; gap:1px; background:var(--band-rule); border:1px solid var(--band-rule); margin-top:26px; grid-template-columns:1fr}
+@media(min-width:900px){.figs--2{grid-template-columns:1fr 1fr}}
+figure.fig{margin:0; background:var(--band); padding:20px clamp(14px,2.4vw,22px) 18px}
+.fig__t{font-size:15px; font-weight:600; line-height:1.5}
+.fig__s{margin-top:5px; font-family:var(--f-data); font-size:10.5px; letter-spacing:.06em; color:var(--band-ink-2); line-height:1.7}
+.fig__box{margin-top:14px; overflow-x:auto}
+.fig__box svg{min-width:320px; width:100%; height:auto}
+figcaption{margin-top:12px; font-size:12.5px; line-height:1.65; color:var(--band-ink-2)}
+.legend{display:flex; flex-wrap:wrap; gap:8px 18px; margin-top:12px; font-family:var(--f-data); font-size:11px; letter-spacing:.06em; color:var(--band-ink-2)}
+.legend i{display:inline-block; width:11px; height:11px; border-radius:2px; margin-right:7px; vertical-align:-1px}
+.ax{font-family:var(--f-data); font-size:11px; fill:var(--band-ink-2); font-variant-numeric:tabular-nums}
+.vl{font-family:var(--f-data); font-size:13px; font-weight:600; fill:var(--band-ink); font-variant-numeric:tabular-nums}
+.cl{font-family:var(--f-body); font-size:12.5px; fill:var(--band-ink)}
+.gr{stroke:var(--band-rule); stroke-width:1; fill:none}
+.mark{transition:opacity .13s ease}
+.fig__box:hover .mark{opacity:.55}
+.fig__box .mark:hover{opacity:1}
+@media(prefers-reduced-motion:reduce){.mark{transition:none}}
+
+#tip{position:fixed; z-index:50; pointer-events:none; opacity:0; transform:translate(-50%,-100%);
+  background:var(--card); color:var(--ink); border:1px solid var(--rule-2);
+  padding:8px 11px; font-size:12px; line-height:1.55; max-width:250px;
+  box-shadow:0 6px 20px rgba(0,0,0,.22); transition:opacity .12s ease}
+#tip b{display:block; font-size:12.5px; margin-bottom:3px}
+#tip span{font-family:var(--f-data); font-size:10.5px; color:var(--ink-3); letter-spacing:.05em}
+
+/* ---------- numbered breakdown (4 균열) ---------- */
+.items{margin-top:clamp(30px,4.4vw,44px); display:flex; flex-direction:column}
+.item{display:grid; grid-template-columns:76px 1fr; gap:0 26px; padding-block:clamp(26px,3.4vw,34px); border-top:1px solid var(--rule)}
+.item:first-child{border-top:2px solid var(--ink)}
+.item__n{font-family:var(--f-data); font-weight:600; font-size:13px; letter-spacing:.1em; color:var(--neg); padding-top:5px}
+.item__n em{display:block; font-style:normal; margin-top:7px; font-size:10.5px; letter-spacing:.09em; color:var(--ink-3)}
+.item__h{font-family:var(--f-disp); font-size:clamp(21px,2.9vw,27px); line-height:1.38}
+.item__body{margin-top:14px; max-width:38rem}
+.item__body p + p{margin-top:.95em}
+.facets{margin-top:18px; display:grid; gap:1px; background:var(--rule); border:1px solid var(--rule); grid-template-columns:1fr}
+@media(min-width:620px){.facets{grid-template-columns:1fr 1fr}}
+.facet{background:var(--card); padding:14px 16px}
+.facet dt{font-family:var(--f-data); font-size:10.5px; letter-spacing:.13em; text-transform:uppercase; color:var(--ink-3); font-weight:600}
+.facet dd{margin:7px 0 0; font-size:14.5px; line-height:1.68; color:var(--ink-2)}
+.facet dd b{color:var(--ink); font-weight:600}
+@media(max-width:560px){
+  .item{grid-template-columns:1fr; gap:14px}
+  .item__n{display:flex; gap:12px; align-items:baseline; padding-top:0}
+  .item__n em{margin-top:0}
+}
+
+/* ---------- causal matrix ---------- */
+.matrix{margin-top:clamp(30px,4.4vw,44px); display:flex; flex-direction:column; gap:14px}
+.mrow{display:grid; grid-template-columns:1fr 46px 1fr; align-items:stretch; gap:0;
+  border:1px solid var(--rule); background:var(--card)}
+.mcell{padding:18px clamp(14px,2vw,20px)}
+.mcell--a{background:var(--paper-2)}
+.mcell__k{font-family:var(--f-data); font-size:10.5px; letter-spacing:.13em; text-transform:uppercase; color:var(--ink-3); font-weight:600}
+.mcell__t{margin-top:8px; font-size:16px; font-weight:600; line-height:1.55}
+.mcell__d{margin-top:7px; font-size:14px; line-height:1.66; color:var(--ink-2)}
+.marrow{display:grid; place-items:center; border-inline:1px solid var(--rule); background:var(--card); color:var(--ink-3)}
+.marrow svg{width:17px; height:17px}
+.verdict{display:inline-flex; align-items:center; gap:7px; margin-top:12px;
+  font-family:var(--f-data); font-size:11px; font-weight:600; letter-spacing:.1em;
+  padding:4px 10px; border:1px solid currentColor}
+.verdict i{width:8px; height:8px; border-radius:50%; background:currentColor; flex:none}
+.v--ok{color:var(--ok)}
+.v--warn{color:var(--warn)}
+.v--bad{color:var(--bad)}
+.v--warn i{border-radius:50%; background:linear-gradient(90deg,currentColor 50%,transparent 50%); box-shadow:inset 0 0 0 1px currentColor}
+.v--bad i{background:transparent; box-shadow:inset 0 0 0 1.5px currentColor}
+@media(max-width:760px){
+  .mrow{grid-template-columns:1fr}
+  .marrow{border-inline:0; border-block:1px solid var(--rule); padding:7px 0}
+  .marrow svg{transform:rotate(90deg)}
+}
+
+/* ---------- quote ---------- */
+.quote{margin:26px 0 0; padding:0 0 0 20px; border-left:3px solid var(--neg); max-width:38rem}
+.quote p{font-family:var(--f-disp); font-size:clamp(18px,2.4vw,22px); line-height:1.66}
+.quote footer{margin-top:10px; font-family:var(--f-data); font-size:11px; letter-spacing:.09em; color:var(--ink-3)}
+
+/* ---------- answer blocks ---------- */
+.answers{margin-top:clamp(28px,4vw,40px); display:flex; flex-direction:column; gap:1px; background:var(--rule); border:1px solid var(--rule)}
+.ans{background:var(--card); padding:clamp(20px,2.8vw,26px)}
+.ans__top{display:flex; flex-wrap:wrap; align-items:baseline; gap:10px 14px}
+.ans__tag{font-family:var(--f-data); font-size:10.5px; letter-spacing:.13em; text-transform:uppercase; color:var(--ink-3); font-weight:600}
+.ans__h{font-family:var(--f-disp); font-size:clamp(19px,2.4vw,23px); line-height:1.4; width:100%}
+.ans__q{margin-top:14px; font-size:15.5px; line-height:1.72; color:var(--ink); background:var(--hl); padding:12px 15px; border-left:2px solid var(--ink-3)}
+.ans__q em{font-style:normal; font-family:var(--f-data); font-size:10.5px; letter-spacing:.08em; color:var(--ink-3); display:block; margin-top:7px}
+.ans__b{margin-top:14px; font-size:15.5px; line-height:1.74; color:var(--ink-2); max-width:38rem}
+.ans__b p + p{margin-top:.9em}
+
+/* ---------- timeline ---------- */
+.tl{margin-top:clamp(28px,4vw,40px); display:flex; flex-direction:column}
+.tl__r{display:grid; grid-template-columns:118px 1fr; gap:0 22px; padding-block:15px; border-top:1px solid var(--rule); align-items:start}
+.tl__r:first-child{border-top:2px solid var(--ink)}
+.tl__d{font-family:var(--f-data); font-size:12px; font-weight:500; letter-spacing:.05em; color:var(--ink-3); font-variant-numeric:tabular-nums; padding-top:3px}
+.tl__c{font-size:15.5px; line-height:1.7}
+.tl__c b{font-weight:600}
+.tl__c span{display:block; margin-top:4px; font-size:13.5px; color:var(--ink-2)}
+.tl__r--hot .tl__d{color:var(--neg); font-weight:600}
+.tl__r--hot{background:linear-gradient(90deg,var(--hl),transparent 70%)}
+@media(max-width:560px){
+  .tl__r{grid-template-columns:1fr; gap:6px}
+}
+
+/* ---------- table ---------- */
+.tblbox{margin-top:26px; overflow-x:auto; border:1px solid var(--rule)}
+table{border-collapse:collapse; width:100%; min-width:620px; background:var(--card); font-size:14px}
+caption{text-align:left; padding:14px 16px; font-family:var(--f-data); font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--ink-3); background:var(--paper-2); border-bottom:1px solid var(--rule); font-weight:600}
+th,td{padding:11px 16px; text-align:left; border-top:1px solid var(--rule); vertical-align:top; line-height:1.6}
+thead th{font-family:var(--f-data); font-size:11px; letter-spacing:.09em; text-transform:uppercase; color:var(--ink-3); font-weight:600; border-top:0}
+td.num,th.num{text-align:right; font-family:var(--f-data); font-variant-numeric:tabular-nums; white-space:nowrap}
+tbody tr:hover{background:var(--hl)}
+
+/* ---------- outlook ---------- */
+.watch{margin-top:clamp(28px,4vw,40px); display:grid; gap:1px; background:var(--rule); border:1px solid var(--rule); grid-template-columns:1fr}
+@media(min-width:760px){.watch{grid-template-columns:1fr 1fr}}
+.watch__i{background:var(--card); padding:20px clamp(16px,2.2vw,22px)}
+.watch__k{font-family:var(--f-data); font-size:10.5px; letter-spacing:.13em; color:var(--neg); font-weight:600}
+.watch__h{margin-top:9px; font-size:17px; font-weight:600; line-height:1.5}
+.watch__d{margin-top:8px; font-size:14.5px; line-height:1.7; color:var(--ink-2)}
+.watch__w{margin-top:11px; font-family:var(--f-data); font-size:11px; letter-spacing:.06em; color:var(--ink-3); border-top:1px dashed var(--rule-2); padding-top:9px}
+
+/* ---------- footer ---------- */
+.colophon{background:var(--paper-2); border-top:1px solid var(--rule); padding-block:clamp(34px,5vw,50px)}
+.colophon h3{font-family:var(--f-data); font-size:11.5px; letter-spacing:.16em; text-transform:uppercase; color:var(--ink-3); font-weight:600}
+.srcs{margin-top:16px; display:grid; gap:14px; grid-template-columns:1fr}
+@media(min-width:720px){.srcs{grid-template-columns:1fr 1fr}}
+.src{font-size:14px; line-height:1.68}
+.src b{display:block; font-family:var(--f-data); font-size:10.5px; letter-spacing:.1em; color:var(--neg); font-weight:600; margin-bottom:5px}
+.src a{color:var(--ink-2); word-break:break-all; text-decoration:underline; text-decoration-color:var(--rule-2); text-underline-offset:3px}
+.src a:hover{color:var(--ink)}
+.note{margin-top:26px; padding-top:20px; border-top:1px solid var(--rule); max-width:44rem; font-size:13.5px; line-height:1.75; color:var(--ink-2)}
+.note b{color:var(--ink)}
+.endmark{margin-top:26px; font-family:var(--f-data); font-size:10.5px; letter-spacing:.2em; color:var(--ink-3)}
+:focus-visible{outline:2px solid var(--neg); outline-offset:2px}
+</style>
+
+<header class="masthead">
+  <div class="wrap masthead__in">
+    <div class="logo">Issue Dossier <em>· 주간 심층</em></div>
+    <div class="masthead__meta">
+      <span>VOL. 2026 · W38</span>
+      <span>2026.09.21 MON</span>
+      <span>정치 / 여론</span>
+      <span>READ 13 MIN</span>
+    </div>
+  </div>
+</header>
+<div class="masthead__rule"></div>
+
+<main>
+<article>
+
+  <!-- ============ COVER ============ -->
+  <section class="wrap cover">
+    <div class="eyebrow">커버스토리 <span>· 지지율과 회견</span></div>
+    <h1 class="cover__h">네 번의 균열,<br>한 번의 회견</h1>
+    <p class="deck">
+      한국갤럽 기준 <b>67%에서 37%로</b>. 다섯 달 만에 30%포인트가 빠졌다.
+      뉴닉은 그 경로를 <b>네 개의 장면</b>으로 끊어 읽었고, 사흘 뒤 같은 매체는
+      <b>9월 18일 대통령 기자회견</b>을 정리했다. 두 기사는 따로 쓰였지만 하나의 문장이다 —
+      <b>무엇이 무너뜨렸는가</b>, 그리고 <b>무엇으로 답했는가</b>. 이 리포트는 그 사이의 인과를 잇는다.
+    </p>
+    <div class="cover__foot">
+      <span>출처 · 뉴닉 아티클 2건</span><span class="sep"></span>
+      <span>교차검증 · 국내 언론 1차 보도</span><span class="sep"></span>
+      <span>데이터 기준일 2026.09.20</span>
+    </div>
+
+    <div class="summary">
+      <h3>이 리포트의 결론</h3>
+      <ol>
+        <li>지지율을 깎은 네 개의 균열은 <strong>성격이 다른 사건이 아니라 하나의 구조</strong>다 — 개혁 의제가 대통령의 사적 이해와 겹쳐 보였고, 정책의 지표와 체감이 갈라졌으며, 검증 실패가 반복됐다.</li>
+        <li>리얼미터 기준 <strong>‘9주 연속 하락’을 역산하면 하락 기점은 7월 중순</strong>이다. 보완수사권 전면폐지 논쟁이 격화하고 부동산이 부정평가 1위로 올라선 바로 그 시점과 겹친다.</li>
+        <li>9·18 회견은 <strong>태도에서는 가장 낮은 자세</strong>를 취했다. 사과, 서서 진행, 100분. 그러나 <strong>수단에서는 기조 유지</strong>였다.</li>
+        <li>회견이 가장 깨끗하게 정리한 의제(<strong>연임 개헌</strong>)는 지지율을 깎은 네 개 목록에 없었고, 가장 크게 깎은 의제(<strong>부동산</strong>)에는 새 수단이 없었다. 이것이 이 회견의 구조적 미스매치다.</li>
+        <li>회견의 실질적 성과는 다음 날 나왔다. <strong>김승원 법무부 장관 후보자 자진사퇴</strong> — 그러나 이는 인사 실패를 ‘정리’한 것이지 ‘시스템’을 고친 것은 아니다.</li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- ============ DATA BAND ============ -->
+  <section class="band">
+    <div class="wrap">
+      <div class="sec__mark"><span class="sec__no">DATA</span><span class="sec__kicker">현재 좌표</span></div>
+      <h2 class="sec__h">숫자는 두 개의 사실을 동시에 말한다</h2>
+      <p class="sec__lede">하나는 낙폭의 크기이고, 다른 하나는 그 낙폭이 <em>어디서</em> 왔는가다. 두 여론조사 기관의 수치가 방향은 같고 폭은 다르다는 점도 함께 읽어야 한다.</p>
+
+      <div class="kpis">
+        <div class="kpi kpi--pos">
+          <div class="kpi__v">37<small>%</small></div>
+          <div class="kpi__l">국정수행 긍정평가<br>4주 연속 취임 후 최저</div>
+          <div class="kpi__s">한국갤럽 09.15–17</div>
+        </div>
+        <div class="kpi kpi--neg">
+          <div class="kpi__v">56<small>%</small></div>
+          <div class="kpi__l">부정평가<br>취임 후 최고치</div>
+          <div class="kpi__s">전주 대비 +5%p</div>
+        </div>
+        <div class="kpi kpi--pos">
+          <div class="kpi__v">33.8<small>%</small></div>
+          <div class="kpi__l">긍정평가<br>9주 연속 하락</div>
+          <div class="kpi__s">리얼미터 09.07–11</div>
+        </div>
+        <div class="kpi kpi--neg">
+          <div class="kpi__v">63.3<small>%</small></div>
+          <div class="kpi__l">부정평가<br>취임 후 첫 60%대</div>
+          <div class="kpi__s">긍·부정 격차 29.5%p</div>
+        </div>
+        <div class="kpi kpi--neg">
+          <div class="kpi__v">18.8<small>%</small></div>
+          <div class="kpi__l">20대 긍정평가<br>한 주 만에 10.2%p 급락</div>
+          <div class="kpi__s">20대 정당지지 민주 15.0 · 국힘 61.5</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi__v">−30<small>%p</small></div>
+          <div class="kpi__l">4월 67% → 9월 37%<br>다섯 달간 순낙폭</div>
+          <div class="kpi__s">한국갤럽 기준</div>
+        </div>
+      </div>
+
+      <div class="figs figs--2">
+        <figure class="fig">
+          <div class="fig__t">다섯 달, −30%p</div>
+          <div class="fig__s">한국갤럽 국정수행 긍정평가 · 2026.04 → 2026.09 3주</div>
+          <div class="fig__box" id="fig1">
+            <svg viewBox="0 0 640 262" role="img" aria-label="한국갤럽 긍정평가가 2026년 4월 67퍼센트에서 2026년 9월 3주 37퍼센트로 30퍼센트포인트 하락">
+              <g class="gr">
+                <line x1="92" y1="200" x2="600" y2="200"></line>
+                <line x1="92" y1="154.3" x2="600" y2="154.3"></line>
+                <line x1="92" y1="108.6" x2="600" y2="108.6"></line>
+                <line x1="92" y1="62.9" x2="600" y2="62.9"></line>
+              </g>
+              <text class="ax" x="84" y="204" text-anchor="end">0</text>
+              <text class="ax" x="84" y="158.3" text-anchor="end">20</text>
+              <text class="ax" x="84" y="112.6" text-anchor="end">40</text>
+              <text class="ax" x="84" y="66.9" text-anchor="end">60</text>
+              <text class="ax" x="92" y="24">단위 %</text>
+
+              <path class="mark" data-t="2026년 4월 · 한국갤럽" data-v="긍정평가 67%" data-s="4·5월 국면의 고점 구간"
+                    d="M150 50.9 a4 4 0 0 1 4 -4 h84 a4 4 0 0 1 4 4 V200 h-92 Z" fill="var(--pos)"></path>
+              <text class="vl" x="196" y="38" text-anchor="middle">67%</text>
+
+              <path class="mark" data-t="2026년 9월 3주 · 한국갤럽" data-v="긍정평가 37%" data-s="09.15–17 · 1,002명 · ±3.1%p"
+                    d="M388 119.4 a4 4 0 0 1 4 -4 h84 a4 4 0 0 1 4 4 V200 h-92 Z" fill="var(--pos)"></path>
+              <text class="vl" x="434" y="107" text-anchor="middle">37%</text>
+
+              <path d="M250 46.9 H330 M330 46.9 V115.4 M330 115.4 H380" fill="none" stroke="var(--neg)" stroke-width="1.5" stroke-dasharray="4 4"></path>
+              <circle cx="330" cy="46.9" r="3" fill="var(--neg)"></circle>
+              <circle cx="330" cy="115.4" r="3" fill="var(--neg)"></circle>
+              <text class="vl" x="340" y="85" fill="var(--neg)">−30%p</text>
+
+              <text class="cl" x="196" y="224" text-anchor="middle">2026년 4월</text>
+              <text class="cl" x="434" y="224" text-anchor="middle">2026년 9월 3주</text>
+              <text class="ax" x="92" y="250">구간 내 주별 수치는 출처가 확인된 두 지점만 표기</text>
+            </svg>
+          </div>
+          <figcaption>두 끝점만 실측이다. 사이를 직선으로 잇지 않은 이유는, 하락이 균등하지 않았기 때문이다 — 리얼미터 기준 하락은 7월 중순에 시작돼 9주간 이어졌다.</figcaption>
+        </figure>
+
+        <figure class="fig">
+          <div class="fig__t">왜 부정적인가 — 이유의 순위</div>
+          <div class="fig__s">한국갤럽 09.15–17 · 부정평가 응답자 기준 · 자유응답</div>
+          <div class="fig__box" id="fig2">
+            <svg viewBox="0 0 640 298" role="img" aria-label="부정평가 이유는 부동산 정책 20퍼센트, 인사 16퍼센트, 경제 민생 9퍼센트, 검찰 권한 축소 5퍼센트, 도덕성 문제 5퍼센트 순">
+              <g class="gr">
+                <line x1="196" y1="28" x2="196" y2="250"></line>
+                <line x1="268.8" y1="28" x2="268.8" y2="250"></line>
+                <line x1="341.6" y1="28" x2="341.6" y2="250"></line>
+                <line x1="414.4" y1="28" x2="414.4" y2="250"></line>
+                <line x1="487.2" y1="28" x2="487.2" y2="250"></line>
+                <line x1="560" y1="28" x2="560" y2="250"></line>
+              </g>
+
+              <text class="cl" x="184" y="51" text-anchor="end">부동산 정책</text>
+              <path class="mark" data-t="부동산 정책" data-v="20%" data-s="7월 넷째 주부터 줄곧 1위"
+                    d="M196 34 h283.2 a4 4 0 0 1 4 4 v14 a4 4 0 0 1 -4 4 H196 Z" fill="var(--neg)"></path>
+              <text class="vl" x="495" y="51">20%</text>
+
+              <text class="cl" x="184" y="95" text-anchor="end">인사</text>
+              <path class="mark" data-t="인사" data-v="16%" data-s="2기 내각 인선 이후 2위로 상승"
+                    d="M196 78 h225 a4 4 0 0 1 4 4 v14 a4 4 0 0 1 -4 4 H196 Z" fill="var(--neg)"></path>
+              <text class="vl" x="437" y="95">16%</text>
+
+              <text class="cl" x="184" y="139" text-anchor="end">경제 · 민생</text>
+              <path class="mark" data-t="경제 · 민생" data-v="9%" data-s="물가와 체감경기"
+                    d="M196 122 h123 a4 4 0 0 1 4 4 v14 a4 4 0 0 1 -4 4 H196 Z" fill="var(--neg)"></path>
+              <text class="vl" x="335" y="139">9%</text>
+
+              <text class="cl" x="184" y="183" text-anchor="end">검찰 권한 축소</text>
+              <path class="mark" data-t="검찰 권한 축소" data-v="5%" data-s="보완수사권 폐지 논쟁의 여론 반영"
+                    d="M196 166 h64.8 a4 4 0 0 1 4 4 v14 a4 4 0 0 1 -4 4 H196 Z" fill="var(--neg)"></path>
+              <text class="vl" x="277" y="183">5%</text>
+
+              <text class="cl" x="184" y="227" text-anchor="end">도덕성 · 재판 회피</text>
+              <path class="mark" data-t="도덕성 문제 · 본인 재판 회피" data-v="5%" data-s="공소취소 프레임과 직결"
+                    d="M196 210 h64.8 a4 4 0 0 1 4 4 v14 a4 4 0 0 1 -4 4 H196 Z" fill="var(--neg)"></path>
+              <text class="vl" x="277" y="227">5%</text>
+
+              <text class="ax" x="196" y="268" text-anchor="middle">0</text>
+              <text class="ax" x="268.8" y="268" text-anchor="middle">5</text>
+              <text class="ax" x="341.6" y="268" text-anchor="middle">10</text>
+              <text class="ax" x="414.4" y="268" text-anchor="middle">15</text>
+              <text class="ax" x="487.2" y="268" text-anchor="middle">20</text>
+              <text class="ax" x="560" y="268" text-anchor="middle">25</text>
+              <text class="ax" x="196" y="290">단위 % · 부정평가 응답자 중 비율</text>
+            </svg>
+          </div>
+          <figcaption>상위 두 항목이 곧 네 개 균열 중 두 개다. <strong>부동산(20%)</strong>과 <strong>인사(16%)</strong>가 전체 부정 이유의 3분의 1 이상을 차지한다.</figcaption>
+        </figure>
+      </div>
+
+      <div class="figs">
+        <figure class="fig">
+          <div class="fig__t">두 기관, 같은 방향 다른 폭</div>
+          <div class="fig__s">긍정 · 부정평가 동시 비교 — 조사 방식이 다르면 수준도 달라진다</div>
+          <div class="legend">
+            <span><i style="background:var(--pos)"></i>긍정평가</span>
+            <span><i style="background:var(--neg)"></i>부정평가</span>
+          </div>
+          <div class="fig__box" id="fig3">
+            <svg viewBox="0 0 640 300" role="img" aria-label="리얼미터 긍정 33.8 부정 63.3, 한국갤럽 긍정 37 부정 56">
+              <g class="gr">
+                <line x1="92" y1="210" x2="600" y2="210"></line>
+                <line x1="92" y1="161.4" x2="600" y2="161.4"></line>
+                <line x1="92" y1="112.9" x2="600" y2="112.9"></line>
+                <line x1="92" y1="64.3" x2="600" y2="64.3"></line>
+              </g>
+              <text class="ax" x="84" y="214" text-anchor="end">0</text>
+              <text class="ax" x="84" y="165.4" text-anchor="end">20</text>
+              <text class="ax" x="84" y="116.9" text-anchor="end">40</text>
+              <text class="ax" x="84" y="68.3" text-anchor="end">60</text>
+              <text class="ax" x="92" y="30">단위 %</text>
+
+              <path class="mark" data-t="리얼미터 · 긍정평가" data-v="33.8%" data-s="09.07–11 · 2,515명 · ±2.0%p"
+                    d="M112 131.9 a4 4 0 0 1 4 -4 h68 a4 4 0 0 1 4 4 V210 h-76 Z" fill="var(--pos)"></path>
+              <text class="vl" x="150" y="120" text-anchor="middle">33.8</text>
+              <path class="mark" data-t="리얼미터 · 부정평가" data-v="63.3%" data-s="취임 후 첫 60%대 · 전주 +3.8%p"
+                    d="M190 60.3 a4 4 0 0 1 4 -4 h68 a4 4 0 0 1 4 4 V210 h-76 Z" fill="var(--neg)"></path>
+              <text class="vl" x="228" y="48" text-anchor="middle">63.3</text>
+
+              <path class="mark" data-t="한국갤럽 · 긍정평가" data-v="37%" data-s="09.15–17 · 1,002명 · ±3.1%p"
+                    d="M372 124.1 a4 4 0 0 1 4 -4 h68 a4 4 0 0 1 4 4 V210 h-76 Z" fill="var(--pos)"></path>
+              <text class="vl" x="410" y="112" text-anchor="middle">37</text>
+              <path class="mark" data-t="한국갤럽 · 부정평가" data-v="56%" data-s="취임 후 최고치 · 전주 +5%p"
+                    d="M450 78 a4 4 0 0 1 4 -4 h68 a4 4 0 0 1 4 4 V210 h-76 Z" fill="var(--neg)"></path>
+              <text class="vl" x="488" y="66" text-anchor="middle">56</text>
+
+              <text class="cl" x="190" y="236" text-anchor="middle">리얼미터 · 9월 2주</text>
+              <text class="ax" x="190" y="256" text-anchor="middle">무선 ARS · 2,515명</text>
+              <text class="ax" x="190" y="278" text-anchor="middle" fill="var(--neg)">격차 29.5%p</text>
+
+              <text class="cl" x="450" y="236" text-anchor="middle">한국갤럽 · 9월 3주</text>
+              <text class="ax" x="450" y="256" text-anchor="middle">전화면접 · 1,002명</text>
+              <text class="ax" x="450" y="278" text-anchor="middle" fill="var(--neg)">격차 19.0%p</text>
+            </svg>
+          </div>
+          <figcaption>
+            두 조사는 <strong>같은 방향</strong>을 가리키지만 폭이 다르다. ARS 방식의 리얼미터에서 부정이 더 크게 잡히는 것은 통상적 경향이다.
+            중요한 것은 수준이 아니라 <strong>둘 다 취임 후 최악을 동시에 기록했다</strong>는 사실이다.
+          </figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ LEDE ============ -->
+  <section class="wrap sec">
+    <div class="prose">
+      <p>2026년 9월 18일 오전 10시, 청와대 영빈관. 이재명 대통령은 취임 후 일곱 번째 기자회견을 <strong>서서</strong> 시작했다. 예고된 시간은 90분이었지만 실제로는 100분 가까이 이어졌고, 내외신 기자 150여 명 앞에서 14개의 질문을 받았다. 6월 취임 1주년 회견(167분·21문), 1월 신년 회견(173분·25문)보다 짧았다. 그런데 이 회견을 앞서 두 번과 구분 짓는 것은 길이가 아니었다.</p>
+      <p>첫 문장이 사과였다는 점이다.</p>
+      <p>사흘 전 뉴닉이 내보낸 기사의 제목은 이랬다. <strong>“잘나가던 이재명 정부에 무슨 일이?”</strong> 지지율이 60%대에서 30%대로 떨어진 네 개의 순간을 짚은 기사였다. 그리고 회견 직후, 같은 매체는 <strong>“이재명 대통령 7번째 기자회견 핵심 정리”</strong>를 내놨다. 부제에 달린 세 단어가 흥미롭다 — <em>검찰 개혁 · 부동산 · 장관 후보 논란</em>. 앞선 기사가 꼽은 네 개의 균열 중 셋이다.</p>
+      <p>이 우연이 아닌 일치가 이 리포트의 출발점이다. 두 기사는 각각 <strong>원인 목록</strong>과 <strong>응답 목록</strong>이며, 두 목록을 나란히 놓으면 하나의 질문이 남는다. <strong>응답은 원인을 제거했는가.</strong></p>
+    </div>
+  </section>
+
+  <!-- ============ PART I ============ -->
+  <section class="wrap sec">
+    <div class="sec__mark"><span class="sec__no">PART I</span><span class="sec__kicker">진단 · 출처 ①</span></div>
+    <h2 class="sec__h">네 개의 균열</h2>
+    <p class="sec__lede">뉴닉이 꼽은 네 장면을 시간순으로 다시 세운다. 각 항목에는 <em>무슨 일이 있었나</em>에 더해, 이 리포트가 확인한 <em>왜 이것이 지지율을 깎았나</em>를 붙였다.</p>
+
+    <div class="items">
+
+      <div class="item">
+        <div class="item__n">01<em>2026.04</em></div>
+        <div>
+          <h3 class="item__h">공소취소 조항 — 개혁 법안에 들어간 대통령 자신의 재판</h3>
+          <div class="item__body">
+            <p>더불어민주당이 4월 발의한 이른바 <strong>‘조작수사·조작기소 특검법’</strong>이 첫 번째 장면이다. 지난 정부에서 정치적 목적의 무리한 수사·기소가 있었다는 의혹을 규명하자는 취지였다. 문제는 법안 제6조 2항이었다. 특검의 직무 범위에 <strong>공소제기 및 공소유지 여부의 결정</strong>을 포함시켰다.</p>
+            <p>대통령은 취임과 함께 본인의 형사재판 절차가 중단된 상태다. 특검이 이송받은 사건의 공소 유지 여부를 결정할 수 있다면, 결과적으로 <strong>대통령 자신의 사건 공소가 취소될 수 있다</strong>는 해석이 가능해진다. 야권은 즉각 이 지점을 파고들었고, ‘검찰개혁’이라는 의제 전체가 ‘대통령 방탄’ 프레임 안에 갇혔다.</p>
+          </div>
+          <dl class="facets">
+            <div class="facet"><dt>메커니즘</dt><dd>제도 개혁이 <b>대통령의 사적 이해</b>와 겹쳐 보이는 순간, 개혁의 명분이 아니라 동기가 의심받는다.</dd></div>
+            <div class="facet"><dt>지표에 남은 흔적</dt><dd>9월 갤럽 부정평가 이유 중 <b>‘도덕성 문제·본인 재판 회피’ 5%</b>가 이 항목의 잔여치다.</dd></div>
+          </dl>
+        </div>
+      </div>
+
+      <div class="item">
+        <div class="item__n">02<em>2026.07 –</em></div>
+        <div>
+          <h3 class="item__h">부동산 — 대책은 쏟아졌지만 체감은 반대로 갔다</h3>
+          <div class="item__body">
+            <p>7월께부터 정부는 <strong>대출 규제와 공급 대책</strong>을 잇달아 내놨다. 그러나 수도권 집값과 전월세 부담을 둘러싼 논란은 가라앉지 않았다. 정책의 양과 체감의 방향이 갈라진 것이다.</p>
+            <p>여론조사에 남은 자국이 선명하다. 한국갤럽 조사에서 <strong>‘부동산 정책’은 7월 넷째 주부터 9월까지 단 한 주도 빠짐없이 부정평가 이유 1위</strong>를 지켰다. 9월 3주 조사에서도 20%로 2위(인사·16%)를 크게 앞섰다. 두 달 넘게 같은 항목이 1위를 유지했다는 것은, 일회성 논란이 아니라 <strong>고착된 평가</strong>라는 뜻이다.</p>
+          </div>
+          <dl class="facets">
+            <div class="facet"><dt>메커니즘</dt><dd>주거비는 <b>매달 결제되는 비용</b>이다. 지표가 개선돼도 결제액이 그대로면 정책은 실패로 기억된다.</dd></div>
+            <div class="facet"><dt>지표에 남은 흔적</dt><dd>부정평가 이유 <b>1위 · 20%</b>. 9주 연속 하락 구간과 1위 등극 시점이 겹친다.</dd></div>
+          </dl>
+        </div>
+      </div>
+
+      <div class="item">
+        <div class="item__n">03<em>2026.07 – 08</em></div>
+        <div>
+          <h3 class="item__h">보완수사권 폐지 — 개혁 진영이 둘로 갈라진 자리</h3>
+          <div class="item__body">
+            <p>세 번째는 검찰개혁 과정에서 불거진 <strong>보완수사권 폐지 논쟁</strong>이다. 민주당은 수사와 기소의 완전 분리를 위해 검찰의 보완수사권까지 없애야 한다는 입장이었다. 7월 16일 형사소송법 개정 토론회, 21일 정책의원총회를 거치며 논쟁은 당 바깥이 아니라 <strong>당 안에서</strong> 격화했다.</p>
+            <p>반대 논리는 야당만의 것이 아니었다. 당내와 법조계에서 <strong>경찰 수사가 미진한 사건의 피해자가 권리를 구제받기 어려워진다</strong>는 우려가 나왔다. 전면 폐지파와 예외 존치파가 갈렸고, 논쟁의 초점은 ‘검찰의 권한’에서 ‘피해자의 권리’로 옮겨갔다. 개혁의 정당성을 지지층에게 설명해야 하는 상황이 된 것이다.</p>
+          </div>
+          <dl class="facets">
+            <div class="facet"><dt>메커니즘</dt><dd>반대 진영과의 싸움은 결집을 낳지만, <b>내부 분열은 이탈을 낳는다.</b> 코어층이 먼저 빠진 이유다.</dd></div>
+            <div class="facet"><dt>지표에 남은 흔적</dt><dd>부정평가 이유 <b>‘검찰 권한 축소’ 5%</b>. 20대 긍정평가는 한 주 만에 <b>10.2%p 급락해 18.8%</b>.</dd></div>
+          </dl>
+        </div>
+      </div>
+
+      <div class="item">
+        <div class="item__n">04<em>2026.08.30 –</em></div>
+        <div>
+          <h3 class="item__h">2기 내각 — 검증 실패가 반복이라는 사실</h3>
+          <div class="item__body">
+            <p>8월 30일 개각으로 장관 후보자 6명이 지명됐다. 그리고 <strong>9월 13일 용혜인 성평등가족부 장관 후보자가 자진사퇴</strong>했다. 지명 이후 제기된 논란을 견디지 못한 결과였다. 남은 5명의 인사청문회는 9월 16일 마무리됐지만, ‘신약 로비 의혹’ 등이 제기된 김승원 법무부 장관 후보자를 둘러싼 임명 찬반은 오히려 격해졌다.</p>
+            <p>가장 아픈 대목은 이것이 <strong>처음이 아니라는 점</strong>이다. 이재명 정부는 초기 인선 과정의 검증 논란이 이어지자 지난해 9월 <strong>인사수석을 신설</strong>했다. 그럼에도 2기 개각에서 같은 일이 반복됐다. 한국갤럽이 “장관 인선 후로는 인사 문제가 차상위에 자리한다”고 분석한 것이 이 시점이다.</p>
+          </div>
+          <dl class="facets">
+            <div class="facet"><dt>메커니즘</dt><dd>한 번의 실패는 사고지만, <b>장치를 만들고도 반복된 실패</b>는 역량의 문제로 읽힌다.</dd></div>
+            <div class="facet"><dt>지표에 남은 흔적</dt><dd>부정평가 이유 <b>2위 · 16%</b>. 대구·경북 긍정평가는 한 주 만에 <b>8%p 하락한 26%</b>.</dd></div>
+          </dl>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ============ INTERLUDE ============ -->
+  <section class="wrap sec">
+    <div class="sec__mark"><span class="sec__no">ANALYSIS</span><span class="sec__kicker">인터루드</span></div>
+    <h2 class="sec__h">네 개는 왜 하나의 이야기인가</h2>
+    <div class="prose">
+      <p>네 장면은 분야가 제각각이다. 하나는 사법, 하나는 주거, 하나는 수사기관 설계, 하나는 인사다. 그런데 셋은 같은 문법을 공유한다.</p>
+      <p><strong>첫째, 개혁 의제가 사적 이해와 겹쳐 보였다.</strong> ①번이 전형이다. 특검법의 공소취소 조항 하나가 검찰개혁 전체의 동기를 의심하게 만들었다. ③번도 같은 계열이다 — 수사·기소 분리라는 원칙이 피해자 권리라는 반론 앞에서 방어에 몰렸다.</p>
+      <p><strong>둘째, 체감과 지표가 갈라졌다.</strong> ②번이다. 정부는 대책을 냈고 발표는 계속됐지만, 유권자가 매달 지불하는 금액은 바뀌지 않았다. 여론조사에서 부동산이 두 달 넘게 1위를 지킨 것은 논란이 새로워서가 아니라 <strong>해결되지 않아서</strong>다.</p>
+      <p><strong>셋째, 검증 실패가 반복됐다.</strong> ④번이다. 인사수석이라는 장치를 만든 뒤에도 같은 유형의 낙마가 나왔다.</p>
+      <p>여기에 이 리포트가 확인한 <strong>산술 하나</strong>를 덧붙인다. 리얼미터 9월 2주차(9월 7~11일 조사) 결과가 <strong>“9주 연속 하락”</strong>이었다. 9주를 역산하면 하락의 기점은 <strong>7월 중순</strong>이다. 보완수사권 전면폐지 논쟁이 당내에서 폭발한 시점(7월 16~22일)이고, 갤럽에서 부동산이 부정평가 1위로 올라선 시점(7월 넷째 주)이다.</p>
+      <p>다시 말해 ①번 특검법(4월)은 하락의 <strong>방아쇠가 아니라 저수지</strong>였다. 언제든 ‘방탄’ 프레임으로 퍼 올릴 수 있는 물이 4월부터 고여 있었고, 7월에 ②③이 동시에 터지면서 물이 흘러넘쳤으며, 8월 말 ④가 가속을 붙였다. <strong>6·3 지방선거에서 광역단체장 12곳을 확보한 승리가 불과 한 달 반 만에 하락 국면으로 뒤집힌</strong> 구조가 이것이다.</p>
+    </div>
+    <blockquote class="quote">
+      <p>“지방선거 이후 국민들께서 실망하시는 것을 보고 당황했습니다. 모두 저의 부족함 때문입니다.”</p>
+      <footer>이재명 대통령 · 2026.09.18 기자회견 모두발언 (보도 인용)</footer>
+    </blockquote>
+  </section>
+
+  <!-- ============ BRIDGE ============ -->
+  <section class="wrap sec">
+    <div class="sec__mark"><span class="sec__no">BRIDGE</span><span class="sec__kicker">인과 매트릭스</span></div>
+    <h2 class="sec__h">균열 → 회견 → 판정</h2>
+    <p class="sec__lede">왼쪽은 지지율을 깎은 원인, 오른쪽은 9월 18일 회견에서 나온 답이다. 판정은 <strong>“이 답이 저 원인을 제거하는가”</strong>라는 단일 기준으로 매겼다.</p>
+
+    <div class="matrix">
+
+      <div class="mrow">
+        <div class="mcell mcell--a">
+          <div class="mcell__k">균열 01 · 2026.04</div>
+          <div class="mcell__t">특검법 공소취소 조항</div>
+          <div class="mcell__d">개혁 법안이 대통령 자신의 재판과 연결되며 ‘방탄’ 프레임이 성립. 부정평가 이유 5%로 잔존.</div>
+        </div>
+        <div class="marrow" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 12h15M13 6l6 6-6 6"/></svg>
+        </div>
+        <div class="mcell">
+          <div class="mcell__k">회견의 답</div>
+          <div class="mcell__t">“이송 처분 조항을 삭제해 달라”</div>
+          <div class="mcell__d">국회에 특검법 수정을 직접 요청. 다만 “악의적 수사·조작이 의심되는 사건의 진상규명” 필요성은 유지.</div>
+          <div class="verdict v--warn"><i></i>부분 봉합</div>
+        </div>
+      </div>
+
+      <div class="mrow">
+        <div class="mcell mcell--a">
+          <div class="mcell__k">균열 02 · 2026.07–</div>
+          <div class="mcell__t">부동산 체감</div>
+          <div class="mcell__d">부정평가 이유 <strong>1위(20%)</strong>를 두 달 넘게 유지. 낙폭에 가장 크게 기여한 단일 항목.</div>
+        </div>
+        <div class="marrow" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 12h15M13 6l6 6-6 6"/></svg>
+        </div>
+        <div class="mcell">
+          <div class="mcell__k">회견의 답</div>
+          <div class="mcell__t">“반드시 안정시키겠다” — 기조 유지</div>
+          <div class="mcell__d">공급·규제·세제의 신속 집행 + 경제·행정 2수도. 현 기조의 <strong>강화</strong>이지 전환이 아니다. 새 수단 없음.</div>
+          <div class="verdict v--bad"><i></i>미봉</div>
+        </div>
+      </div>
+
+      <div class="mrow">
+        <div class="mcell mcell--a">
+          <div class="mcell__k">균열 03 · 2026.07–08</div>
+          <div class="mcell__t">보완수사권 폐지 논쟁</div>
+          <div class="mcell__d">피해자 권리구제 공백 우려로 <strong>지지 진영 내부</strong>가 분열. 20대·진보층 이탈의 직접 계기.</div>
+        </div>
+        <div class="marrow" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 12h15M13 6l6 6-6 6"/></svg>
+        </div>
+        <div class="mcell">
+          <div class="mcell__k">회견의 답</div>
+          <div class="mcell__t">“경찰 수사에 견제·보완 장치로 해소”</div>
+          <div class="mcell__d">우려를 정면 수용하고 <strong>고강도 경찰개혁</strong>을 맞교환 카드로 제시. 다만 장치의 내용은 미제시.</div>
+          <div class="verdict v--warn"><i></i>부분 봉합</div>
+        </div>
+      </div>
+
+      <div class="mrow">
+        <div class="mcell mcell--a">
+          <div class="mcell__k">균열 04 · 2026.08.30–</div>
+          <div class="mcell__t">2기 내각 인사 검증</div>
+          <div class="mcell__d">부정평가 이유 <strong>2위(16%)</strong>. 인사수석 신설 이후에도 반복된 낙마.</div>
+        </div>
+        <div class="marrow" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 12h15M13 6l6 6-6 6"/></svg>
+        </div>
+        <div class="mcell">
+          <div class="mcell__k">회견의 답 + 다음 날의 행동</div>
+          <div class="mcell__t">“인사시스템을 재점검하겠다”</div>
+          <div class="mcell__d">김승원 임명 여부는 “최종 결론 유보”. <strong>이튿날 후보자가 자진사퇴</strong>하며 사안은 종결됐으나 시스템은 미검증.</div>
+          <div class="verdict v--warn"><i></i>사안 종결 · 시스템 미봉</div>
+        </div>
+      </div>
+
+      <div class="mrow">
+        <div class="mcell mcell--a">
+          <div class="mcell__k">목록에 없던 의제</div>
+          <div class="mcell__t">연임 개헌</div>
+          <div class="mcell__d">지지율을 깎은 네 개 원인에 <strong>포함되지 않았다.</strong> 야권이 제기한 의혹 의제에 가깝다.</div>
+        </div>
+        <div class="marrow" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 12h15M13 6l6 6-6 6"/></svg>
+        </div>
+        <div class="mcell">
+          <div class="mcell__k">회견의 답</div>
+          <div class="mcell__t">“연임할 생각이 전혀 없다”</div>
+          <div class="mcell__d">헌법 개정을 통한 본인 연임은 불가능하다고 못 박았다. 회견에서 <strong>가장 명확하게 정리된 항목</strong>.</div>
+          <div class="verdict v--ok"><i></i>봉합</div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="prose" style="margin-top:34px">
+      <p>이 표를 세로로 읽으면 회견의 구조가 드러난다. <strong>가장 깨끗하게 봉합된 항목은 애초에 지지율을 깎지 않았던 의제</strong>이고, <strong>가장 크게 깎은 항목에는 새 수단이 없었다.</strong> 회견이 ‘성공’과 ‘미흡’ 사이 어딘가로 평가된 이유가 여기에 있다.</p>
+    </div>
+  </section>
+
+  <!-- ============ PART II ============ -->
+  <section class="wrap sec">
+    <div class="sec__mark"><span class="sec__no">PART II</span><span class="sec__kicker">응답 · 출처 ②</span></div>
+    <h2 class="sec__h">9월 18일, 100분</h2>
+    <p class="sec__lede">형식이 먼저 메시지였다. 앉지 않고 서서, 모두발언의 첫 대목을 사과에 쓰고, 질문 수를 줄이는 대신 답변을 길게 가져갔다. 그리고 다섯 개의 의제에 답했다.</p>
+
+    <blockquote class="quote">
+      <p>“언제나 국민이 옳습니다. 국민에 대한 두려움을 되살리고, 모든 일에 더 세심하게, 더 낮게, 더 치열하게 임하겠습니다.”</p>
+      <footer>모두발언 · 보도 인용</footer>
+    </blockquote>
+
+    <div class="answers">
+
+      <div class="ans">
+        <div class="ans__top"><span class="ans__tag">응답 01 · 공소취소</span></div>
+        <h3 class="ans__h">스스로 조항을 빼달라고 요청했다</h3>
+        <div class="ans__q">
+          “지금 논란이 되고 있는 특검 권한 사항 중 기존 기소 사건의 이송 처분에 관한 조항은 삭제하고 진상 규명에 집중해 달라. 불필요한 공소취소 논란이 생기지 않게 조치해 주시기 바란다.”
+          <em>국회를 향한 직접 요청 · 보도 인용</em>
+        </div>
+        <div class="ans__b">
+          <p>가장 공격적인 방어였다. 프레임의 근거가 되는 조문 자체를 없애달라고 요구함으로써, 의혹의 물적 토대를 제거하려 한 것이다. 민주당은 이 발언 이후 특검 재추진에 시동을 걸었다.</p>
+          <p>그러나 불씨는 남았다. 대통령은 동시에 “악의적 수사, 조작이 의심되는 사건에 대해서는 특검을 통해 진상을 규명해야 한다”는 입장을 유지했다. 법조계에서는 <strong>진상규명 결과 자체가 향후 공소취소의 명분이 될 수 있다</strong>는 지적이 나왔다. 국민의힘 박성훈 수석대변인은 다음 날 “조항을 빼달라는 눈가림 지시가 아니라 당당하게 법정에 나와 재판을 받는 것이 논란을 끝내는 방법”이라고 반박했다.</p>
+        </div>
+      </div>
+
+      <div class="ans">
+        <div class="ans__top"><span class="ans__tag">응답 02 · 연임 개헌</span></div>
+        <h3 class="ans__h">“연임할 생각이 전혀 없다”</h3>
+        <div class="ans__q">
+          “헌법 개정을 통한 저의 연임은 불가능합니다. 저는 연임할 생각이 전혀 없습니다.”
+          <em>모두발언 · 보도 인용</em>
+        </div>
+        <div class="ans__b">
+          <p>가장 짧고 가장 확실하게 닫힌 항목이다. 개헌 논의 자체를 부정한 것이 아니라 <strong>‘본인의 연임’이라는 동기를 부정</strong>하는 방식이었다. 특검법 답변과 같은 논리 구조다 — 의제는 살리고 사적 동기만 잘라낸다.</p>
+          <p>다만 앞서 지적했듯, 이 의제는 지지율을 깎은 네 개 원인에 들어 있지 않았다. 회견의 가장 선명한 성과가 여론 회복에 직접 기여하기 어려운 이유다.</p>
+        </div>
+      </div>
+
+      <div class="ans">
+        <div class="ans__top"><span class="ans__tag">응답 03 · 검찰개혁</span></div>
+        <h3 class="ans__h">경찰개혁을 맞교환 카드로 꺼냈다</h3>
+        <div class="ans__q">
+          “수사·기소 분리라는 검찰개혁의 과제가 종착점에 다다르고 있습니다. 검찰 보완수사권 부재로 생길 수 있는 문제는 경찰 수사에 대한 철저한 견제·보완 장치로 해소하겠습니다. 고강도 경찰개혁을 통해, 수사권 독점에 따라 경찰이 혹여 무소불위 권력기관으로 퇴행하지 않을까 하는 국민의 우려를 불식하겠습니다.”
+          <em>모두발언 · 보도 인용</em>
+        </div>
+        <div class="ans__b">
+          <p>구조적으로 가장 잘 설계된 답변이다. 보완수사권 폐지 반대론의 핵심(“견제 없는 경찰”)을 <strong>부정하지 않고 인정한 뒤</strong>, 경찰개혁이라는 별도 카드로 상쇄하겠다고 제시했다. 개혁을 후퇴시키지 않으면서 반대 논리를 흡수하는 방식이다.</p>
+          <p>문제는 타이밍이다. 이 회견 시점에 공소청·중수청 개청은 코앞이었고, 정작 <strong>법무부 장관·공소청장·중수청장이 모두 공석</strong>이었다. 초대 중수청장 후보자로 검사 출신 김지용 전 광주고검장이 지명되자 “검찰을 지우려다 검사장을 불렀다”는 비판이 여권 내부에서 터져 나왔다. 견제 장치의 구체적 내용은 회견에서 제시되지 않았다.</p>
+        </div>
+      </div>
+
+      <div class="ans">
+        <div class="ans__top"><span class="ans__tag">응답 04 · 부동산</span></div>
+        <h3 class="ans__h">원인은 수도권 집중, 해법은 2수도 — 그리고 ‘평탄화’</h3>
+        <div class="ans__q">
+          “대한민국의 부동산 투기공화국, 부동산 불패 신화를 반드시 끝내겠습니다. 경제수도 서울, 행정수도 세종의 경제·행정 2수도 시대를 열겠습니다. 공급·규제·세제 정책을 확고하고 신속하게 집행하겠습니다.”
+          <em>모두발언 · 보도 인용</em>
+        </div>
+        <div class="ans__b">
+          <p>가장 많은 분량을 쓴 항목이면서, <strong>새 수단이 가장 적은</strong> 항목이었다. 대통령은 수도권 집값 상승의 근본 원인으로 <strong>수도권 1극 체제</strong>와 <strong>부동산 불패 신화</strong>를 지목했다. 관리 강도도 강조했다 — “총리실에서 매일 공급을 체크하고 있고, 제가 일주일마다 진척 사항을 확인하고 있다.”</p>
+          <p>논란이 된 것은 현재 진단이었다. 최근 집값 흐름을 두고 <strong>“강남은 내리고 외곽은 오르는 평탄화 과정”</strong>이라고 설명한 대목이다. 외곽 상승을 겪고 있는 실수요자에게는 상승이 ‘평탄화’로 명명된 셈이 됐고, 시장과 야당 모두에서 반발이 나왔다. 유승민 전 의원은 “부동산 정책 실패에 대한 반성이 없다”고 비판했다.</p>
+          <p>구조적 해법인 균형발전·행정수도는 방향에 이론의 여지가 적지만, <strong>임기 내 체감이 어렵다</strong>는 한계가 분명하다. 부정평가 1위 항목에 대한 답으로는 시간 축이 맞지 않는다.</p>
+        </div>
+      </div>
+
+      <div class="ans">
+        <div class="ans__top"><span class="ans__tag">응답 05 · 인사</span></div>
+        <h3 class="ans__h">결론을 유보했고, 다음 날 후보자가 스스로 물러났다</h3>
+        <div class="ans__q">
+          “인사 시스템을 재점검하겠습니다.” — 김승원 법무부 장관 후보자 임명 여부에 대해서는 “아직 최종 결론을 내리지 못했다”.
+          <em>모두발언 및 질의응답 · 보도 인용</em>
+        </div>
+        <div class="ans__b">
+          <p>회견에서는 가장 모호했던 답이, 24시간 안에 가장 분명한 결과로 바뀐 항목이다. <strong>9월 19일 김승원 후보자가 자진사퇴</strong>했다. 인사청문경과보고서가 이미 채택된 뒤였고, 지명 20일 만이었다. 후보자는 “대통령 기자회견을 보며 결심했다, 국민 눈높이에 미치지 못했다”는 취지로 사퇴의 변을 밝혔다.</p>
+          <p>이로써 2기 내각은 후보자 6명 중 <strong>2명이 낙마</strong>했다. 이재명 정부 전체로는 장관 후보자 5명째다. 임명 강행에 따른 정치적 부담은 덜었지만, <strong>청와대 인사 검증 책임론</strong>은 오히려 확산됐다. 국민의힘은 곧바로 강신철 국방부 장관 후보자로 공세의 방향을 옮겼다.</p>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ============ PART III ============ -->
+  <section class="wrap sec">
+    <div class="sec__mark"><span class="sec__no">PART III</span><span class="sec__kicker">회견 이후 72시간</span></div>
+    <h2 class="sec__h">답이 나온 뒤에 벌어진 일</h2>
+    <p class="sec__lede">회견의 효과를 판정하기엔 아직 이르다. 회견 직전 발표된 조사는 회견을 반영하지 못했고, 회견 이후 사흘간 벌어진 일은 두 방향으로 갈렸다.</p>
+
+    <div class="tl">
+      <div class="tl__r">
+        <div class="tl__d">04월</div>
+        <div class="tl__c"><b>‘조작수사·조작기소 특검법’ 발의</b><span>공소유지 여부 결정 권한이 포함되며 공소취소 논란 점화. 이 시기 갤럽 긍정평가 67%.</span></div>
+      </div>
+      <div class="tl__r">
+        <div class="tl__d">06.03</div>
+        <div class="tl__c"><b>제9회 전국동시지방선거</b><span>민주당 광역단체장 12곳, 국민의힘 4곳. 서울시장은 국민의힘. 대통령은 훗날 “지선 이후 실망하는 국민을 보고 당황했다”고 말한다.</span></div>
+      </div>
+      <div class="tl__r tl__r--hot">
+        <div class="tl__d">07 중순</div>
+        <div class="tl__c"><b>보완수사권 전면폐지 논쟁 격화 · 하락 구간 개시</b><span>7.16 형소법 개정 토론회, 7.21 정책의총. 리얼미터 ‘9주 연속 하락’을 역산한 기점이 이 지점이다.</span></div>
+      </div>
+      <div class="tl__r tl__r--hot">
+        <div class="tl__d">07 4주</div>
+        <div class="tl__c"><b>부동산, 부정평가 이유 1위 등극</b><span>이후 9월까지 단 한 주도 1위를 놓지 않는다.</span></div>
+      </div>
+      <div class="tl__r">
+        <div class="tl__d">08.30</div>
+        <div class="tl__c"><b>2기 개각 — 장관 후보자 6명 지명</b><span>지명 직후부터 검증 논란이 이어진다.</span></div>
+      </div>
+      <div class="tl__r">
+        <div class="tl__d">09.07</div>
+        <div class="tl__c"><b>김지용 초대 중수청장 후보자 제청</b><span>검사 출신 지명에 여권 내부 반발. “간판만 바꾸나”(이성윤).</span></div>
+      </div>
+      <div class="tl__r">
+        <div class="tl__d">09.13</div>
+        <div class="tl__c"><b>용혜인 성평등가족부 장관 후보자 자진사퇴</b><span>2기 내각 첫 낙마.</span></div>
+      </div>
+      <div class="tl__r tl__r--hot">
+        <div class="tl__d">09.14</div>
+        <div class="tl__c"><b>리얼미터 33.8% — 9주 연속 하락</b><span>부정 63.3%로 취임 후 첫 60%대. 정당지지도 국민의힘 42.1% > 민주당 36.1%로 11주 만에 역전.</span></div>
+      </div>
+      <div class="tl__r">
+        <div class="tl__d">09.16</div>
+        <div class="tl__c"><b>2기 장관 후보자 5명 인사청문회 종료</b><span>김승원 후보자 임명 찬반이 최대 쟁점으로 남는다.</span></div>
+      </div>
+      <div class="tl__r tl__r--hot">
+        <div class="tl__d">09.18</div>
+        <div class="tl__c"><b>취임 후 일곱 번째 기자회견 · 같은 날 갤럽 37% 발표</b><span>청와대 영빈관, 약 100분, 14문답. 조사 기간(15~17일)이 회견 이전이므로 <strong>이 수치는 회견 효과를 반영하지 않는다.</strong></span></div>
+      </div>
+      <div class="tl__r tl__r--hot">
+        <div class="tl__d">09.19</div>
+        <div class="tl__c"><b>김승원 법무부 장관 후보자 자진사퇴</b><span>회견 하루 만. 지명 20일 만이자 2기 내각 두 번째 낙마.</span></div>
+      </div>
+      <div class="tl__r">
+        <div class="tl__d">09.20</div>
+        <div class="tl__c"><b>법무장관 · 공소청장 · 중수청장 ‘트리플 공백’</b><span>공소청·중수청 개청이 임박한 시점(보도는 ‘D-7’로 표기). 수장 공백이 핵심 인력 인사까지 지연시킨다.</span></div>
+      </div>
+      <div class="tl__r">
+        <div class="tl__d">09.21</div>
+        <div class="tl__c"><b>추석(9.25) 연휴 진입 주</b><span>여론이 밥상머리에서 한 번 더 정리되는 구간. 다음 조사가 첫 ‘회견 이후’ 수치가 된다.</span></div>
+      </div>
+    </div>
+
+    <div class="prose" style="margin-top:36px">
+      <p>정리하면 회견은 <strong>하나를 얻고 하나를 남겼다.</strong> 얻은 것은 인사 사안의 종결이다. 김승원 후보자 사퇴로 임명 강행의 부담이 사라졌고, 회견의 ‘낮은 자세’가 실제 행동으로 이어졌다는 서사가 만들어졌다.</p>
+      <p>남은 것은 검찰개혁의 실행 리스크다. 개혁의 종착점이라고 선언한 공소청·중수청 체제가, 정작 <strong>법무부 장관과 두 기관장 모두 공석</strong>인 상태로 출범을 맞게 됐다. 개혁의 속도와 방식을 둘러싼 여권 내부 갈등은 회견으로 봉합되지 않았다.</p>
+    </div>
+  </section>
+
+  <!-- ============ OUTLOOK ============ -->
+  <section class="wrap sec">
+    <div class="sec__mark"><span class="sec__no">OUTLOOK</span><span class="sec__kicker">관전 포인트</span></div>
+    <h2 class="sec__h">다음 4주, 무엇을 볼 것인가</h2>
+    <p class="sec__lede">회견의 효과는 추석 직후 조사에서 처음 측정된다. 그때 확인해야 할 네 가지.</p>
+
+    <div class="watch">
+      <div class="watch__i">
+        <div class="watch__k">WATCH 01</div>
+        <div class="watch__h">하락이 멈추는가, 반등하는가</div>
+        <div class="watch__d">‘9주 연속 하락’이 끊기는 것과 지지율이 오르는 것은 다른 사건이다. 먼저 볼 것은 <strong>하락 정지</strong>다. 정지 없이 반등은 없다.</div>
+        <div class="watch__w">지표 · 리얼미터 주간 추이, 갤럽 주간 추이</div>
+      </div>
+      <div class="watch__i">
+        <div class="watch__k">WATCH 02</div>
+        <div class="watch__h">부동산이 1위에서 내려오는가</div>
+        <div class="watch__d">회견에 새 수단이 없었으므로, 이 항목이 내려온다면 그것은 정책이 아니라 <strong>시장 지표의 변화</strong> 때문일 것이다. 두 달 넘게 1위를 지킨 항목이 움직이는지가 핵심.</div>
+        <div class="watch__w">지표 · 갤럽 부정평가 이유 1위 항목</div>
+      </div>
+      <div class="watch__i">
+        <div class="watch__k">WATCH 03</div>
+        <div class="watch__h">공소청·중수청이 누구와 함께 출범하는가</div>
+        <div class="watch__d">법무부 장관·공소청장·중수청장 인선이 개혁의 ‘그립감’을 좌우한다. 김지용 후보자를 둘러싼 여권 내분이 <strong>반쪽 출범</strong>으로 이어질지가 분기점.</div>
+        <div class="watch__w">지표 · 인선 확정 여부, 개청 시 직무대행 체제 범위</div>
+      </div>
+      <div class="watch__i">
+        <div class="watch__k">WATCH 04</div>
+        <div class="watch__h">‘인사 재점검’이 문서로 나오는가</div>
+        <div class="watch__d">인사수석 신설이 실패를 막지 못했다. 재점검이 조직 개편·검증 절차 공개 같은 <strong>확인 가능한 형태</strong>로 나오지 않으면 같은 일이 세 번째 반복된다.</div>
+        <div class="watch__w">지표 · 후속 장관 후보 지명 시 검증 논란 발생 여부</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ DATA APPENDIX ============ -->
+  <section class="wrap sec">
+    <div class="sec__mark"><span class="sec__no">APPENDIX</span><span class="sec__kicker">수치 부록</span></div>
+    <h2 class="sec__h">이 리포트가 인용한 수치 전부</h2>
+    <p class="sec__lede">그래프에 쓰인 값과 본문 수치를 한 표에 모았다. 조사 방식·표본·오차범위를 함께 적었다.</p>
+
+    <div class="tblbox">
+      <table>
+        <caption>여론조사 수치 — 2026년 9월</caption>
+        <thead>
+          <tr>
+            <th>조사 기관</th><th>조사 기간</th><th class="num">긍정</th><th class="num">부정</th><th>표본 · 방식</th><th>비고</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>한국갤럽</td><td>2026.04 (월 단위)</td><td class="num">67%</td><td class="num">—</td><td>—</td><td>낙폭 산정의 기준점</td>
+          </tr>
+          <tr>
+            <td>리얼미터</td><td>09.07 – 09.11</td><td class="num">33.8%</td><td class="num">63.3%</td><td>2,515명 · 무선 ARS · ±2.0%p</td><td>9주 연속 하락 · 부정 첫 60%대 · 격차 29.5%p</td>
+          </tr>
+          <tr>
+            <td>한국갤럽</td><td>09.15 – 09.17</td><td class="num">37%</td><td class="num">56%</td><td>1,002명 · 전화면접 · ±3.1%p</td><td>4주 연속 최저 · 부정 최고치 · 유보 7%</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="tblbox">
+      <table>
+        <caption>세부 지표</caption>
+        <thead><tr><th>항목</th><th class="num">값</th><th>출처 · 기준</th></tr></thead>
+        <tbody>
+          <tr><td>부정평가 이유 — 부동산 정책</td><td class="num">20%</td><td>한국갤럽 09.15–17 · 7월 4주부터 1위 유지</td></tr>
+          <tr><td>부정평가 이유 — 인사</td><td class="num">16%</td><td>한국갤럽 · 2기 내각 인선 이후 2위</td></tr>
+          <tr><td>부정평가 이유 — 경제 · 민생</td><td class="num">9%</td><td>한국갤럽</td></tr>
+          <tr><td>부정평가 이유 — 검찰 권한 축소</td><td class="num">5%</td><td>한국갤럽</td></tr>
+          <tr><td>부정평가 이유 — 도덕성 · 본인 재판 회피</td><td class="num">5%</td><td>한국갤럽</td></tr>
+          <tr><td>20대 긍정평가</td><td class="num">18.8%</td><td>리얼미터 · 전주 대비 −10.2%p</td></tr>
+          <tr><td>20대 정당지지 — 민주당 / 국민의힘</td><td class="num">15.0% / 61.5%</td><td>리얼미터</td></tr>
+          <tr><td>대구·경북 긍정평가</td><td class="num">26%</td><td>한국갤럽 · 전주 대비 −8%p</td></tr>
+          <tr><td>정당지지도 — 국민의힘 / 민주당</td><td class="num">42.1% / 36.1%</td><td>리얼미터 · 11주 만의 역전</td></tr>
+          <tr><td>정당지지도 — 민주당 / 국민의힘</td><td class="num">40% / 27%</td><td>한국갤럽 (같은 주, 기관별 차이)</td></tr>
+          <tr><td>기자회견 — 소요 시간 / 질문 수</td><td class="num">약 100분 / 14문</td><td>2026.09.18 · 청와대 영빈관 (예고 90분)</td></tr>
+          <tr><td>직전 회견 비교 — 1주년 / 신년</td><td class="num">167분·21문 / 173분·25문</td><td>2026.06 / 2026.01</td></tr>
+          <tr><td>2기 내각 낙마</td><td class="num">6명 중 2명</td><td>용혜인(09.13) · 김승원(09.19)</td></tr>
+          <tr><td>6·3 지방선거 광역단체장</td><td class="num">민주 12 / 국힘 4</td><td>2026.06.03 · 16곳 기준</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+</article>
+</main>
+
+<footer class="colophon">
+  <div class="wrap">
+    <h3>출처</h3>
+    <div class="srcs">
+      <div class="src">
+        <b>SOURCE ① · 진단편</b>
+        “잘나가던 이재명 정부에 무슨 일이?” 지지율 60%대 → 30%대로 떨어진 4가지 순간 📉<br>
+        <a href="https://newneek.co/@newneek/article/46161">newneek.co/@newneek/article/46161</a>
+      </div>
+      <div class="src">
+        <b>SOURCE ② · 회견편</b>
+        이재명 대통령 7번째 기자회견 핵심 정리 ✅ (feat. 검찰 개혁·부동산·장관 후보 논란)<br>
+        <a href="https://newneek.co/@newneek/article/46253">newneek.co/@newneek/article/46253</a>
+      </div>
+    </div>
+
+    <h3 style="margin-top:28px">교차검증에 사용한 1차 보도</h3>
+    <div class="src" style="margin-top:12px; color:var(--ink-2)">
+      한국갤럽 2026년 9월 3주 정례조사(09.15–17) 및 리얼미터·에너지경제신문 의뢰 조사(09.07–11) 결과 보도 —
+      연합뉴스 · 뉴스1 · 뉴시스 · SBS · JTBC · MBC · 한국경제 · 경향신문 · 이데일리 · 국민일보 /
+      2026.09.18 기자회견 모두발언 전문 및 질의응답 보도 — 연합뉴스 지상중계, 중앙일보, 경향신문, 한국일보, 한겨레21, 뉴스1, 부산일보, 아주경제 /
+      회견 분석 및 후속 보도 — 뉴스핌, 시사저널, 미디어오늘, 동아일보, 조선일보, 서울경제, 오마이뉴스, 머니투데이, 세계일보, 뉴스토마토, YTN, 매일신문.
+      <br><br>
+      여론조사 관련 세부 사항은 중앙선거여론조사심의위원회 홈페이지에서 확인할 수 있다.
+    </div>
+
+    <div class="note">
+      <b>편집자 주 — 이 리포트가 만들어진 방식.</b>
+      이 문서는 독자가 두 건의 뉴닉 아티클을 출발점으로 삼아 재구성한 <b>분석 리포트</b>이며, 뉴닉이 발행한 간행물이 아니다.
+      작성 환경의 네트워크 정책으로 <b>newneek.co 원문에 직접 접근할 수 없었다.</b> 따라서 두 기사의 제목과 검색 결과에 노출된 요약,
+      그리고 같은 사안을 다룬 국내 언론의 1차 보도를 교차 확인해 내용을 복원했다. 원문의 문장 구성·강조점·이모지 용법 등 형식적 요소는 반영되지 않았다.
+      <br><br>
+      두 기사의 <b>정확한 발행일은 확정하지 못했다.</b> 인접 아티클 ID로 추정하면 2026년 9월 18~19일 사이이며, 본문에서는 ‘9월 셋째 주’로 표기했다.
+      본문의 대통령 발언은 모두 <b>보도 인용</b>이며, 발언 원문의 토씨는 매체에 따라 미세하게 다를 수 있다.
+      ‘9주 연속 하락의 기점은 7월 중순’, ‘네 균열의 공통 구조’, 인과 매트릭스의 <b>판정은 이 리포트의 해석</b>이며 출처 기사의 주장이 아니다.
+    </div>
+
+    <div class="endmark">ISSUE DOSSIER · VOL. 2026 W38 · END</div>
+  </div>
+</footer>
+
+<div id="tip" role="status" aria-live="polite"></div>
+
+<script>
+(function(){
+  var tip = document.getElementById('tip');
+  if(!tip) return;
+  var marks = document.querySelectorAll('.mark[data-t]');
+
+  function show(el, x, y){
+    var t = el.getAttribute('data-t') || '';
+    var v = el.getAttribute('data-v') || '';
+    var s = el.getAttribute('data-s') || '';
+    tip.textContent = '';
+    var head = document.createElement('b');
+    head.textContent = t;
+    tip.appendChild(head);
+    tip.appendChild(document.createTextNode(v));
+    if(s){
+      var sp = document.createElement('span');
+      sp.textContent = s;
+      tip.appendChild(sp);
+    }
+    tip.style.left = x + 'px';
+    tip.style.top = (y - 12) + 'px';
+    tip.style.opacity = '1';
+  }
+  function hide(){ tip.style.opacity = '0'; }
+
+  marks.forEach(function(m){
+    m.style.cursor = 'crosshair';
+    m.addEventListener('pointermove', function(e){ show(m, e.clientX, e.clientY); });
+    m.addEventListener('pointerenter', function(e){ show(m, e.clientX, e.clientY); });
+    m.addEventListener('pointerleave', hide);
+    m.setAttribute('tabindex','0');
+    m.addEventListener('focus', function(){
+      var r = m.getBoundingClientRect();
+      show(m, r.left + r.width/2, r.top);
+    });
+    m.addEventListener('blur', hide);
+  });
+  window.addEventListener('scroll', hide, {passive:true});
+})();
+</script>
