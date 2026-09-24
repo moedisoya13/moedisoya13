@@ -4,3 +4,4 @@ __pycache__/
 *.pyc
 probe-out/
 .pytest_cache/
+skill-zips/
