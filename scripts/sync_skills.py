@@ -203,7 +203,10 @@ def main(argv: list[str] | None = None) -> int:
 
     if (report["added"] or report["updated"] or commands) and not args.dry_run:
         print("\n다음으로 커밋·푸시하면 모바일 세션에서 쓸 수 있습니다:")
-        print('  git add .claude && git commit -m "chore: 데스크톱 skill 동기화" && git push')
+        # PowerShell 5.1 은 && 를 모르므로 셸에 상관없이 되도록 한 줄씩 안내한다.
+        print("  git add .claude")
+        print('  git commit -m "chore: 데스크톱 skill 동기화"')
+        print("  git push")
     return 1 if report["blocked"] else 0
 
 

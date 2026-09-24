@@ -130,11 +130,15 @@ python -m geeknews.main --force     # 오늘자가 이미 있어도 다시 발�
 모바일·웹의 Claude Code 세션은 클라우드 컨테이너에서 이 저장소를 새로 clone 해서 시작하므로,
 데스크톱의 `~/.claude/skills/` 는 보이지 않습니다. 저장소의 `.claude/skills/` 는 로드되므로
 데스크톱에서 아래를 한 번 돌리고 푸시하면 됩니다.
+(Windows PowerShell 5.1 은 `&&` 를 지원하지 않으므로 한 줄씩 실행합니다.
+`python` 이 없으면 `py` 로 바꿉니다.)
 
 ```bash
 python scripts/sync_skills.py --dry-run   # 무엇이 복사될지 확인
 python scripts/sync_skills.py             # 새 skill 복사 (--update 면 기존 것도 덮어씀)
-git add .claude && git commit -m "chore: 데스크톱 skill 동기화" && git push
+git add .claude
+git commit -m "chore: 데스크톱 skill 동기화"
+git push
 ```
 
 - `~/.claude/commands/*.md` (slash command) 도 함께 옮깁니다.
