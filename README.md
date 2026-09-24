@@ -124,3 +124,20 @@ python -m geeknews.main --dry-run   # 발송 없이 수집·요약 결과와 템
 python -m geeknews.main --force     # 오늘자가 이미 있어도 다시 발송
                                     # (아카이브는 덮어쓰지 않고 이어 붙는다)
 ```
+
+## 데스크톱 skill 을 모바일 세션에서 쓰기
+
+모바일·웹의 Claude Code 세션은 클라우드 컨테이너에서 이 저장소를 새로 clone 해서 시작하므로,
+데스크톱의 `~/.claude/skills/` 는 보이지 않습니다. 저장소의 `.claude/skills/` 는 로드되므로
+데스크톱에서 아래를 한 번 돌리고 푸시하면 됩니다.
+
+```bash
+python scripts/sync_skills.py --dry-run   # 무엇이 복사될지 확인
+python scripts/sync_skills.py             # 새 skill 복사 (--update 면 기존 것도 덮어씀)
+git add .claude && git commit -m "chore: 데스크톱 skill 동기화" && git push
+```
+
+- `~/.claude/commands/*.md` (slash command) 도 함께 옮깁니다.
+- 시크릿처럼 보이는 값이 든 skill 은 복사하지 않고, `.env`·`*.pem`·`*.key`·5MB 초과 파일은 뺍니다.
+- 로컬 절대경로(`C:\Users\…`, `/Users/…`)를 참조하면 경고합니다 — 클라우드에서 실패할 수 있습니다.
+- 이 저장소 밖의 세션에서도 쓰려면 `--zip-dir skill-zips` 로 zip 을 만들어 claude.ai 설정의 Skills 에 올립니다.
