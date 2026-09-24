@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "name": "clarify",
+  "owner": "zettalyst",
+  "repo": "claude-plugins",
+  "path": "plugins/clarify/skills/clarify",
+  "branch": "main",
+  "sha": "e264d05483a6c2416c8dcf94fda2f48ebd42e938",
+  "source": "manual"
+}
