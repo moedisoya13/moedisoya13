@@ -1,0 +1,54 @@
+# 재키 서바이버즈(game/) → GitHub Pages
+#
+# master 에 game/ 아래 변경이 들어오면 단위 테스트를 돌리고, 통과하면 game/web 을 그대로 배포한다.
+# 빌드 단계는 없다 — 게임은 의존성 없는 ES 모듈이라 저장소의 파일이 곧 배포물이다.
+#
+# 최초 1회: 저장소 Settings → Pages → Source 를 "GitHub Actions" 로 바꿔야 deploy 가 성공한다.
+# github-pages environment 는 기본 브랜치에서만 배포를 허용하므로, feature 브랜치는 머지 후에 반영된다.
+#
+# 액션 버전: geeknews-daily.yml 과 같은 이유로 메이저 태그를 쓴다 (이 세션에서 SHA 검증 불가).
+name: game-pages
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'game/**'
+      - '.github/workflows/game-pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false # 배포 도중 취소되면 반쯤 올라간 상태가 될 수 있다
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Unit tests
+        working-directory: game
+        run: node --test tests/*.test.mjs
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: game/web
+      - id: deployment
+        uses: actions/deploy-pages@v4

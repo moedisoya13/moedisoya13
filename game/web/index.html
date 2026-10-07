@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="재키">
+<meta name="theme-color" content="#120d16">
+<meta name="format-detection" content="telephone=no">
+<title>재키 서바이버즈</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<link rel="preload" href="assets/fonts/Galmuri11.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<canvas id="game"></canvas>
+<canvas id="fx"></canvas>
+<div id="bar" class="top" style="display:none">
+  <canvas></canvas>
+  <button class="barbtn pause" data-ui data-act="pause" aria-label="일시정지">II</button>
+  <button class="barbtn pager" data-ui data-act="pager" disabled>삐삐 0</button>
+</div>
+<div id="toasts"></div>
+<div id="ui"></div>
+<div id="debug" data-ui></div>
+<div id="boot">로딩 중…</div>
+<script type="module" src="src/main.js"></script>
+</body>
+</html>

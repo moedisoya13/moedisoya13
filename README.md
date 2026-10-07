@@ -141,3 +141,9 @@ git add .claude && git commit -m "chore: 데스크톱 skill 동기화" && git pu
 - 시크릿처럼 보이는 값이 든 skill 은 복사하지 않고, `.env`·`*.pem`·`*.key`·5MB 초과 파일은 뺍니다.
 - 로컬 절대경로(`C:\Users\…`, `/Users/…`)를 참조하면 경고합니다 — 클라우드에서 실패할 수 있습니다.
 - 이 저장소 밖의 세션에서도 쓰려면 `--zip-dir skill-zips` 로 zip 을 만들어 claude.ai 설정의 Skills 에 올립니다.
+
+## 그 밖에: 재키 서바이버즈 (`game/`)
+
+이 저장소에는 개인용 iPhone 웹게임도 들어 있습니다 — 맨손 액션 뱀서라이크 + 주식 투자.
+GitHub Pages(<https://moedisoya13.github.io/moedisoya13/>)로 배포되며, 다이제스트 자동화와는 독립적입니다.
+자세한 내용은 [`game/README.md`](game/README.md).
