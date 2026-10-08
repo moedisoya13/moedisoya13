@@ -1,0 +1,24 @@
+<!doctype html><meta charset="utf-8"><body style="margin:0;background:#08080a">
+<canvas id="c"></canvas>
+<script src="../src/core.js"></script><script src="../src/art.js"></script><script src="../src/gfx.js"></script>
+<script>
+const QP=new URLSearchParams(location.search); Gfx.init(); Gfx.setScale(+(QP.get("s")||4)); const ONLY=(QP.get("only")||"").split(",").filter(Boolean);
+const c=document.getElementById('c'), g=c.getContext('2d');
+c.width=1400; c.height=1500; g.fillStyle='#08080a'; g.fillRect(0,0,c.width,c.height);
+g.imageSmoothingEnabled=false;
+let x=10,y=10,rowH=0;
+function put(cv,label){ if(x+cv.width>c.width-10){x=10;y+=rowH+24;rowH=0;}
+  g.drawImage(cv,x,y); g.fillStyle='#888'; g.font='11px monospace'; g.fillText(label,x,y+cv.height+12);
+  x+=cv.width+14; rowH=Math.max(rowH,cv.height); }
+for(const k in ART){ if(ONLY.length&&!ONLY.includes(k)) continue; for(let f=0;f<ART[k].length;f++){ put(Gfx.get(k,f),k+f);} }
+for(const k of ['spartoi','oni','gwisin']) { put(Gfx.get(k,0,'f'),k+' f'); put(Gfx.get(k,0,'i'),k+' i'); put(Gfx.get(k,0,'d2'),k+' d2'); }
+for(let i=0;i<64;i+=8){ put(Gfx.arrows.arrow[i],'ar'+i); }
+for(let i=0;i<64;i+=8){ put(Gfx.arrows.bolt[i],'bo'+i); }
+for(let i=0;i<64;i+=8){ put(Gfx.bows[0][i],'bw'+i); put(Gfx.bows[1][i],'bd'+i);}
+for(let i=0;i<64;i+=8){ put(Gfx.feathers[i],'fe'+i); }
+for(const k in ICONS){ const cv=document.createElement('canvas'); const im=new Image(); }
+for(const k in DIGITS) put(Gfx.digit(k),k);
+// icons
+const icons=Object.keys(ICONS); let loaded=0;
+icons.forEach(k=>{ const im=new Image(); im.onload=()=>{ const cv=document.createElement('canvas'); cv.width=im.width*4; cv.height=im.height*4; const gg=cv.getContext('2d'); gg.imageSmoothingEnabled=false; gg.drawImage(im,0,0,cv.width,cv.height); put(cv,k); if(++loaded===icons.length) document.title='done'; }; im.src=Gfx.iconURL(k); });
+</script>
