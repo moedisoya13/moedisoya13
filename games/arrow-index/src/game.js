@@ -37,7 +37,7 @@ function newRun() {
     level: 1, xp: 0, xpShown: 0, xpNext: xpNeed(1), kills: 0,
     pendingLv: 0, pendingChest: 0, lvDelay: 0,
     hitstop: 0, slowmo: null, shake: 0, invert: 0, flashW: 0, kickX: 0, kickY: 0, lastStop: 0,
-    boss: null, banner: null, wipe: null, prevGround: null,
+    boss: null, banner: null,
     deathT: 0, endT: 0, dmgDealt: 0, xpEarned: 0, nextId: 1,
     featherT: 0, featherOn: false, featherR: 0, featherA: 0,
     bossOrder: shuffle(Object.keys(BOSSES)), bossKills: 0,
@@ -222,11 +222,9 @@ function addXP(v) {
 
 // ── 스테이지 ──
 function stageChange(st) {
-  G.prevGround = STAGES[G.stage].ground;
   G.stage = st;
   const S = STAGES[st];
   showBanner('STAGE ' + S.roman, S.name + ' · ' + S.sub);
-  G.wipe = { t: 0, dur: 1.4, from: G.prevGround };
   Sfx.play('stage');
   addShake(0.35);
   fxRing(G.p.x, G.p.y, 4, 160, 0.8, 2);
@@ -575,7 +573,6 @@ function updateFx(dt) {
   }
   G.fx = G.fx.filter(f => f.t < f.dur);
   if (G.banner) { G.banner.t += dt; if (G.banner.t > G.banner.dur) G.banner = null; }
-  if (G.wipe) { G.wipe.t += dt; if (G.wipe.t > G.wipe.dur) G.wipe = null; }
 }
 
 function addNum(x, y, v, crit) {

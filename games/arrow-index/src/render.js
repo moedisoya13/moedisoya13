@@ -34,81 +34,42 @@ function resize() {
   HUD.onResize();
 }
 
-// ── 바닥 ──
+// ── 바닥: 이동감만 주는 희미한 점. 모든 스테이지 공통 ──
+const GROUND_DOT = '#3a3833';
 const Ground = {
-  T: 128,
-  cache: {},
-  clear() { this.cache = {}; this.patterns = {}; },
-  tile(style) {
-    if (this.cache[style]) return this.cache[style];
-    const T = this.T;
-    const s = { w: T, h: T, d: new Uint8Array(T * T) };
-    const set = (x, y) => { s.d[(((y % T) + T) % T) * T + (((x % T) + T) % T)] = 1; };
-    const seed = style.length * 7;
-    for (let y = 0; y < T; y++) for (let x = 0; x < T; x++) {
-      const h = hash2(x, y, seed);
-      if (style === 'meadow') {
-        if (h < 0.0022) set(x, y);
-        else if (h < 0.0029) { set(x, y); set(x - 1, y - 1); set(x + 1, y - 1); } // 풀 한 포기
-      } else if (style === 'under') {
-        if (h < 0.002) set(x, y);
-        else if (h < 0.0024) { // 금 간 자국
-          let cx = x, cy = y;
-          for (let k = 0; k < 9; k++) { set(cx, cy); cx += hash2(cx, cy, 3) < 0.5 ? 1 : 0; cy += hash2(cx, cy, 4) < 0.6 ? 1 : -1; }
-        }
-      } else if (style === 'desert') {
-        const yy = y + Math.round(Math.sin(x * 0.11 + Math.floor(y / 16) * 1.7) * 2);
-        if (yy % 16 === 0 && (x & 1) === 0 && hash2(x >> 4, y >> 4, 5) < 0.3) set(x, y);
-        else if (h < 0.0015) set(x, y);
-      } else if (style === 'snow') {
-        if (h < 0.006) set(x, y);
-        else if (h < 0.0066) { set(x, y); set(x - 1, y); set(x + 1, y); set(x, y - 1); set(x, y + 1); }
-      } else if (style === 'temple') {
-        const gx = x % 32, gy = y % 32;
-        const crack = hash2(x >> 4, y >> 4, 9) < 0.25;
-        if ((gx === 0 || gy === 0) && (x + y) % 4 === 0 && !crack) set(x, y);
-        else if (h < 0.0012) set(x, y);
-      } else {
-        if (h < 0.0025) set(x, y);
-        else if (h < 0.0029) { set(x, y); set(x - 1, y); set(x + 1, y); set(x, y - 1); set(x, y + 1); }
-      }
+  T: 256,      // 타일 한 변 (아트 픽셀)
+  CELL: 32,    // 칸마다 점 하나 (일부 칸은 비움)
+  tileC: null,
+  pat: null,
+  clear() { this.tileC = null; this.pat = null; },
+  tile() {
+    if (this.tileC) return this.tileC;
+    const P = View.P, T = this.T, C = this.CELL;
+    const c = document.createElement('canvas');
+    c.width = T * P; c.height = T * P;
+    const g = c.getContext('2d');
+    g.fillStyle = GROUND_DOT;
+    for (let cy = 0; cy < T / C; cy++) for (let cx = 0; cx < T / C; cx++) {
+      if (hash2(cx, cy, 11) > 0.7) continue;
+      const x = cx * C + 4 + Math.floor(hash2(cx, cy, 12) * (C - 8));
+      const y = cy * C + 4 + Math.floor(hash2(cx, cy, 13) * (C - 8));
+      g.fillRect(x * P, y * P, P, P);
     }
-    const c = rasterize(s, View.P);
-    this.cache[style] = c;
+    this.tileC = c;
     return c;
   },
-  pattern(style) {
-    if (!this.patterns[style]) this.patterns[style] = ctx.createPattern(this.tile(style), 'repeat');
-    return this.patterns[style];
-  },
-  draw(style) {
+  draw() {
+    if (!this.pat) this.pat = ctx.createPattern(this.tile(), 'repeat');
     const tw = this.T * View.P;
     const ox = Math.round(View.ox), oy = Math.round(View.oy);
     const mx = ((ox % tw) + tw) % tw, my = ((oy % tw) + tw) % tw;
     ctx.save();
     ctx.translate(mx - tw, my - tw);
-    ctx.fillStyle = this.pattern(style);
+    ctx.fillStyle = this.pat;
     ctx.fillRect(0, 0, View.W + tw * 2, View.H + tw * 2);
     ctx.restore();
   },
 };
-
-const DECO_CELL = 70;
-function drawDeco(style) {
-  const list = DECO[style];
-  const x0 = Math.floor((G.cam.x - View.vw / 2 - 20) / DECO_CELL), x1 = Math.floor((G.cam.x + View.vw / 2 + 20) / DECO_CELL);
-  const y0 = Math.floor((G.cam.y - View.vh / 2 - 20) / DECO_CELL), y1 = Math.floor((G.cam.y + View.vh / 2 + 20) / DECO_CELL);
-  const seed = style.length * 31;
-  for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) {
-    const h = hash2(cx, cy, seed);
-    if (h > 0.3) continue;
-    const name = list[Math.floor(hash2(cx, cy, seed + 1) * list.length)];
-    const x = cx * DECO_CELL + hash2(cx, cy, seed + 2) * DECO_CELL;
-    const y = cy * DECO_CELL + hash2(cx, cy, seed + 3) * DECO_CELL;
-    const c = Gfx.get(name, 0, 'd2', hash2(cx, cy, seed + 4) < 0.5);
-    blit(c, x, y);
-  }
-}
 
 // 월드 좌표 중심에 캔버스를 찍는다 (bottom=true 면 y 가 발끝)
 function blit(c, x, y, scx = 1, scy = 1, bottom = false) {
@@ -190,28 +151,7 @@ function drawWorld() {
   ctx.fillStyle = PAPER;
   ctx.fillRect(0, 0, View.W, View.H);
 
-  const style = STAGES[G.stage].ground;
-  if (G.wipe) {
-    // 새 차원이 플레이어에서부터 번진다
-    Ground.draw(G.wipe.from);
-    drawDeco(G.wipe.from);
-    const u = easeOutCubic(G.wipe.t / G.wipe.dur);
-    const R = u * Math.hypot(View.vw, View.vh) * 0.75;
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(View.ox + G.p.x * P, View.oy + G.p.y * P, R * P, 0, TAU);
-    ctx.fillStyle = PAPER;
-    ctx.fill();
-    ctx.clip();
-    Ground.draw(style);
-    drawDeco(style);
-    ctx.restore();
-    pxCircle(G.p.x, G.p.y, R, u * 0.6);
-    pxCircle(G.p.x, G.p.y, R - 2, 0.5 + u * 0.4);
-  } else {
-    Ground.draw(style);
-    drawDeco(style);
-  }
+  Ground.draw();
 
   // 바닥 효과
   for (const f of G.fx) {
