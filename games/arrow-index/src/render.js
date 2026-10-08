@@ -184,8 +184,8 @@ function drawWorld() {
   const sh = G.shake * G.shake;
   const t = performance.now() / 1000;
   const shx = noise1(t * 22, 1) * sh * 7 * P, shy = noise1(t * 22, 2) * sh * 7 * P;
-  View.ox = View.W / 2 - G.cam.x * P + shx;
-  View.oy = View.H / 2 - G.cam.y * P + shy;
+  View.ox = View.W / 2 - (G.cam.x + (G.kickX || 0)) * P + shx;
+  View.oy = View.H / 2 - (G.cam.y + (G.kickY || 0)) * P + shy;
 
   ctx.fillStyle = PAPER;
   ctx.fillRect(0, 0, View.W, View.H);
@@ -266,6 +266,9 @@ function drawWorld() {
       case 'fall': drawFall(f); break;
       case 'stuck': drawStuck(f, u); break;
       case 'beam': drawBeam(f, u); break;
+      case 'streak': drawStreak(f, u); break;
+      case 'glint': drawGlint(f, u); break;
+      case 'pierce': drawPierce(f, u); break;
       case 'text': drawWorldText(f, u); break;
     }
   }
@@ -311,7 +314,7 @@ function drawPlayer() {
   // 활
   const aim = p.draw > 0.02 || p.recoil > 0.1 ? p.aim : (p.face > 0 ? 0.15 : Math.PI - 0.15);
   const bowC = Gfx.bows[p.draw > 0.45 ? 1 : 0][Gfx.angIndex(aim)];
-  const reach = 5.5 - p.recoil * 2;
+  const reach = 5.5 - p.draw * 1.3 - p.recoil * 2.2;
   const bx = p.x + Math.cos(aim) * reach, by = p.y + 1 + Math.sin(aim) * reach * 0.8;
   const behind = Math.sin(aim) < -0.35;
   if (behind) blit(bowC, bx, by);
@@ -335,7 +338,13 @@ function drawArrow(a) {
   const set = Gfx.arrows[a.kind];
   const c = set[Gfx.angIndex(a.a)];
   const nx = Math.cos(a.a), ny = Math.sin(a.a);
-  if (a.kind !== 'dart') {
+  if (a.kind === 'long') {
+    // 강궁: 길게 끌리는 잔상
+    for (let k = 0; k < 7; k++) {
+      const d = 10 + k * 3;
+      if (k < 2 || ((View.frame + k) & 1)) px(a.x - nx * d, a.y - ny * d);
+    }
+  } else if (a.kind !== 'dart') {
     // 속도선
     if ((View.frame + (a.x | 0)) & 1) px(a.x - nx * 8, a.y - ny * 8);
     px(a.x - nx * 11, a.y - ny * 11);
@@ -465,6 +474,32 @@ function drawStuck(f, u) {
   if (u > 0.6 && (View.frame >> 1) & 1) return;
   const c = Gfx.arrows[f.kind || 'arrow'][Gfx.angIndex(f.a)];
   blit(c, f.x, f.y - (f.a === Math.PI / 2 ? 4 : 0));
+}
+
+// 발사 순간 공기를 가르는 직선
+function drawStreak(f, u) {
+  const nx = Math.cos(f.a), ny = Math.sin(f.a);
+  const len = 14 + easeOutCubic(u) * 46;
+  const from = easeInCubic(u) * len;
+  pxLine(f.x + nx * from, f.y + ny * from, f.x + nx * len, f.y + ny * len, INK, 1 + Math.floor(u * 3));
+}
+
+// 만작 순간 화살촉의 번쩍임
+function drawGlint(f, u) {
+  const s = Math.round(3 * (1 - u)) + 1;
+  for (let i = -s; i <= s; i++) { px(f.x + i, f.y); px(f.x, f.y + i); }
+  if (u < 0.5) { px(f.x - 1, f.y - 1); px(f.x + 1, f.y + 1); px(f.x + 1, f.y - 1); px(f.x - 1, f.y + 1); }
+}
+
+// 관통 자국: 화살이 몸을 찢고 나가는 짧은 선
+function drawPierce(f, u) {
+  if (u > 0.5 && (View.frame & 1)) return;
+  const nx = Math.cos(f.a), ny = Math.sin(f.a);
+  const qx = -ny, qy = nx;
+  const w = 3 * (1 - u);
+  pxLine(f.x - nx * 5, f.y - ny * 5, f.x + nx * (10 + u * 8), f.y + ny * (10 + u * 8));
+  pxLine(f.x + nx * 6 + qx * w, f.y + ny * 6 + qy * w, f.x + nx * 12 + qx * w * 1.5, f.y + ny * 12 + qy * w * 1.5);
+  pxLine(f.x + nx * 6 - qx * w, f.y + ny * 6 - qy * w, f.x + nx * 12 - qx * w * 1.5, f.y + ny * 12 - qy * w * 1.5);
 }
 
 function drawBeam(f, u) {

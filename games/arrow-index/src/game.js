@@ -36,7 +36,7 @@ function newRun() {
     traps: [], falcons: [], uiParts: [], timers: [],
     level: 1, xp: 0, xpShown: 0, xpNext: xpNeed(1), kills: 0,
     pendingLv: 0, pendingChest: 0, lvDelay: 0,
-    hitstop: 0, slowmo: null, shake: 0, invert: 0, flashW: 0,
+    hitstop: 0, slowmo: null, shake: 0, invert: 0, flashW: 0, kickX: 0, kickY: 0, lastStop: 0,
     boss: null, banner: null, wipe: null, prevGround: null,
     deathT: 0, endT: 0, dmgDealt: 0, xpEarned: 0, nextId: 1,
     featherT: 0, featherOn: false, featherR: 0, featherA: 0,
@@ -128,8 +128,9 @@ function updatePlayer(dt) {
   if (p.draw > 0.05) p.face = Math.cos(p.aim) >= 0 ? 1 : -1;
   else if (Math.abs(p.vx) > 6) p.face = p.vx > 0 ? 1 : -1;
   p.animT += dt * (p.moving ? 4 + sp / 9 : 1.6);
+  p.sq.t = 1 - 0.08 * p.draw;
   p.sq.step(dt);
-  p.recoil = damp(p.recoil, 0, 14, dt);
+  p.recoil = damp(p.recoil, 0, 11, dt);
   p.invuln -= dt;
   p.hurtT -= dt;
   p.slowT -= dt;
@@ -300,6 +301,13 @@ function updateEnemies(dt) {
     if (e.spawnT < 1) e.spawnT = Math.min(1, e.spawnT + dt * 2.6);
     e.rootT -= dt; e.slowT -= dt;
 
+    if (e.freezeT > 0) {
+      // 피격 경직: 제자리에서 떨다가 끝나는 순간 넉백이 한꺼번에 들어간다
+      e.freezeT -= dt;
+      e.jit = rand(-0.9, 0.9);
+      if (e.freezeT <= 0) { e.kx += e.pkx; e.ky += e.pky; e.pkx = e.pky = 0; e.jit = 0; }
+      continue;
+    }
     if (e.boss) updateBoss(e, dt);
     else if (!e.seg) moveEnemy(e, dt);
 
@@ -437,16 +445,39 @@ function hurtEnemy(e, dmg, dx, dy, kb = 40, opt = {}) {
   e.flash = 0.1;
   if (tgt !== e) tgt.flash = 0.06;
   const mass = e.boss || e.seg ? 0.06 : e.d.heavy ? 0.3 : e.elite ? 0.45 : 1;
-  e.kx += dx * kb * mass; e.ky += dy * kb * mass;
-  e.sq.v = crit ? 0.6 : 0.76;
+  if (opt.heavy && !e.boss && !e.seg) {
+    e.freezeT = crit ? 0.11 : 0.075;
+    e.pkx = (e.pkx || 0) + dx * kb * mass; e.pky = (e.pky || 0) + dy * kb * mass;
+  } else { e.kx += dx * kb * mass; e.ky += dy * kb * mass; }
+  e.sq.v = opt.heavy ? (crit ? 0.5 : 0.58) : crit ? 0.6 : 0.76;
+  if (opt.heavy) { e.flash = 0.14; tgt.killPow = 1.8; }
   if (!opt.silent) {
     addNum(e.x + rand(-2, 2), e.y - e.h / 2 - 2, dmg, crit);
-    for (let i = 0; i < (crit ? 5 : 2); i++) {
-      const a = Math.atan2(dy, dx) + rand(-0.9, 0.9);
-      spawnPart(e.x - dx * e.r * 0.5, e.y - dy * e.r * 0.5, Math.cos(a) * rand(60, 140), Math.sin(a) * rand(60, 140), rand(5, 25), rand(0.12, 0.25), 'spark');
+    if (opt.heavy) {
+      // 관통: 파편이 화살 진행 방향으로 뿜어져 나간다
+      const ang = Math.atan2(dy, dx);
+      for (let i = 0; i < (crit ? 8 : 5); i++) {
+        const a = ang + rand(-0.45, 0.45);
+        spawnPart(e.x + dx * e.r * 0.5, e.y - e.z + dy * e.r * 0.5, Math.cos(a) * rand(110, 230), Math.sin(a) * rand(110, 230), rand(10, 40), rand(0.15, 0.3), 'spark');
+      }
+      if (G.fx.length < 160) {
+        fxRing(e.x, e.y - e.z, 1, crit ? 15 : 11, crit ? 0.3 : 0.22, 2);
+        G.fx.push({ type: 'pierce', x: e.x, y: e.y - e.z, a: ang, t: 0, dur: 0.14 });
+      }
+      Sfx.play('bowHit');
+      if (crit) Sfx.play('crit');
+      // 화면 전체 멈칫은 치명타에만, 그것도 간격을 둔다 (평타는 맞은 적만 굳는다)
+      const now = performance.now();
+      if (crit && now - (G.lastStop || 0) > 250) { G.lastStop = now; hitstop(0.05); }
+      addShake(crit ? 0.12 : 0.035);
+    } else {
+      for (let i = 0; i < (crit ? 5 : 2); i++) {
+        const a = Math.atan2(dy, dx) + rand(-0.9, 0.9);
+        spawnPart(e.x - dx * e.r * 0.5, e.y - dy * e.r * 0.5, Math.cos(a) * rand(60, 140), Math.sin(a) * rand(60, 140), rand(5, 25), rand(0.12, 0.25), 'spark');
+      }
+      Sfx.play(crit ? 'crit' : 'hit');
+      if (G.fx.length < 140) fxRing(e.x - dx * e.r * 0.6, e.y - e.z - e.h * 0.1 - dy * e.r * 0.6, 1, crit ? 9 : 5, crit ? 0.22 : 0.14, 1);
     }
-    Sfx.play(crit ? 'crit' : 'hit');
-    if (G.fx.length < 140) fxRing(e.x - dx * e.r * 0.6, e.y - e.z - e.h * 0.1 - dy * e.r * 0.6, 1, crit ? 9 : 5, crit ? 0.22 : 0.14, 1);
   }
   if (crit) addShake(0.05);
   if (tgt.hp <= 0) killEnemy(tgt, dx, dy);
@@ -458,7 +489,7 @@ function killEnemy(e, dx, dy, quiet) {
   if (e.seg) return;
   if (!e.boss) G.kills++;
   const fr = Math.floor(e.animT * 4) % Gfx.frames(e.type);
-  shatterBitmap(e.type, fr, e.x, e.y - e.z, e.face, dx, dy, e.boss ? 1.6 : 1, e.elite ? 'i' : 'n', e.boss ? 220 : 40);
+  shatterBitmap(e.type, fr, e.x, e.y - e.z, e.face, dx, dy, e.boss ? 1.6 : (e.killPow || 1), e.elite ? 'i' : 'n', e.boss ? 220 : 40);
   if (e.boss) { if (quiet) G.boss = null; else bossDefeated(e); return; }
   if (quiet) return;
   dropGem(e.x, e.y, e.xp * (1 + G.stage * 0.15));

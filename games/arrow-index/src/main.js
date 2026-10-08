@@ -105,6 +105,8 @@ function step(rdt) {
     if (G.slowmo.t <= 0) G.slowmo = null;
   }
   G.shake = Math.max(0, G.shake - rdt * 1.8);
+  G.kickX = damp(G.kickX || 0, 0, 16, rdt);
+  G.kickY = damp(G.kickY || 0, 0, 16, rdt);
   G.invert = Math.max(0, G.invert - rdt);
   const live = G.state === 'play' || G.state === 'dying' || G.state === 'winning';
   if (live) {

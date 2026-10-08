@@ -58,8 +58,32 @@ function fireArrow(x, y, a, opt) {
   G.arrows.push({
     x, y, px: x, py: y, a, vx: Math.cos(a) * spd, vy: Math.sin(a) * spd,
     dmg: opt.dmg, pierce: opt.pierce + Stat.pierce(), kind: opt.kind || 'arrow',
-    life: opt.life || 0.85, hits: [], kb: opt.kb || 45, blast: opt.blast || 0, t: 0,
+    life: opt.life || 0.85, hits: [], kb: opt.kb || 45, blast: opt.blast || 0, t: 0, heavy: !!opt.heavy,
   });
+}
+
+function bowRelease(w, tg) {
+  const p = G.p;
+  let a = p.aim;
+  if (tg && !tg.dead) a = angleTo(p.x, p.y, tg.x + tg.vx * 0.05, tg.y - tg.z + tg.vy * 0.05);
+  p.aim = a;
+  const c = Math.cos(a), s = Math.sin(a);
+  const hx = p.x + c * 6, hy = p.y - 1 + s * 6;
+  fireArrow(hx, hy, a, { dmg: W(w, 'dmg'), pierce: W(w, 'pierce'), kind: 'long', spd: 560, life: 0.62, kb: 160, heavy: true });
+  // 반동: 몸이 뒤로 밀리고 카메라가 반대쪽으로 튄다
+  p.recoil = 1;
+  p.draw = 0;
+  p.x -= c * 1.4; p.y -= s * 1.4;
+  p.sq.v = 0.86;
+  G.kickX -= c * 2.4; G.kickY -= s * 2.4;
+  addShake(0.045);
+  Sfx.play('bowShot');
+  // 공기를 가르는 선 + 시위 튕김
+  G.fx.push({ type: 'streak', x: hx, y: hy, a, t: 0, dur: 0.12 });
+  for (let i = 0; i < 3; i++) {
+    const b = a + Math.PI + rand(-0.9, 0.9);
+    spawnPart(p.x + c * 2, p.y - 1 + s * 2, Math.cos(b) * rand(30, 70), Math.sin(b) * rand(30, 70), 0, 0.12, 'spark');
+  }
 }
 
 function segCircle(ax, ay, bx, by, cx, cy, r) {
@@ -91,7 +115,7 @@ function updateArrows(dt) {
       if (!segCircle(a.px, a.py, a.x, a.y, e.x, ey, e.r + 1.5)) return false;
       a.hits.push(e.id);
       if (a.blast) { explode(e.x, ey, a.blast, a.dmg); a.life = 0; return true; }
-      hurtEnemy(e, a.dmg, nx, ny, a.kb);
+      hurtEnemy(e, a.dmg, nx, ny, a.kb, a.heavy ? { heavy: true } : {});
       if (--a.pierce <= 0) {
         a.life = 0;
         // 꽂힌 화살 잔상
@@ -124,42 +148,43 @@ function explode(x, y, r, dmg) {
 }
 
 const WEAPON_UPDATE = {
+  // 강궁: 시위를 끝까지 당겼다가 한 발씩. 연속 사격도 매 발 다시 당긴다.
   bow(w, dt) {
     const p = G.p;
+    const DRAW = 0.27;
     w.cd -= dt;
     if (w.phase === 'draw') {
       w.t += dt;
-      const tg = w.targets.find(e => !e.dead);
-      if (tg) p.aim = angleTo(p.x, p.y, tg.x, tg.y - tg.z);
-      p.draw = Math.min(1, w.t / 0.13);
-      if (w.t >= 0.13) { w.phase = 'shoot'; w.q = 0; w.qT = 0; }
-    }
-    if (w.phase === 'shoot') {
-      w.qT -= dt;
-      const n = W(w, 'count') + Stat.amount();
-      while (w.q < n && w.qT <= 0) {
-        const alive = w.targets.filter(e => !e.dead);
-        const tg = alive[w.q % Math.max(1, alive.length)];
-        let a = tg ? angleTo(p.x, p.y, tg.x + tg.vx * 0.08, tg.y - tg.z + tg.vy * 0.08) : p.aim;
-        if (!tg || w.q >= alive.length) a += (w.q % 2 ? 1 : -1) * 0.1 * Math.ceil(w.q / 2);
-        p.aim = a;
-        const hx = p.x + Math.cos(a) * 5, hy = p.y + Math.sin(a) * 5 - 1;
-        fireArrow(hx, hy, a, { dmg: W(w, 'dmg'), pierce: W(w, 'pierce'), kind: 'arrow' });
-        p.recoil = 1;
-        Sfx.play('shoot');
-        // 활시위 섬광
-        spawnPart(hx + Math.cos(a) * 3, hy + Math.sin(a) * 3, Math.cos(a) * 60, Math.sin(a) * 60, 0, 0.08, 'spark');
-        w.q++; w.qT += 0.065;
-        p.draw = w.q < n ? 0.7 : 0;
+      if (!w.tg || w.tg.dead) w.tg = w.targets.find(e => !e.dead) || nearestEnemies(p.x, p.y, 210, 1)[0];
+      const tg = w.tg;
+      if (tg) {
+        const want = angleTo(p.x, p.y, tg.x, tg.y - tg.z);
+        p.aim += angDiff(p.aim, want) * Math.min(1, dt * 22);
       }
-      if (w.q >= n) { w.phase = 'idle'; p.draw = 0; }
+      p.draw = easeOutCubic(Math.min(1, w.t / DRAW));
+      if (w.t >= DRAW && !w.glint) {
+        // 만작: 화살촉에 번쩍
+        w.glint = true;
+        G.fx.push({ type: 'glint', x: p.x + Math.cos(p.aim) * 6, y: p.y - 1 + Math.sin(p.aim) * 6, t: 0, dur: 0.1 });
+      }
+      if (w.t >= DRAW + 0.04) {
+        bowRelease(w, tg);
+        if (--w.shots > 0) {
+          w.phase = 'draw'; w.t = DRAW * 0.35; w.glint = false;
+          w.i++;
+          const alive = w.targets.filter(e => !e.dead);
+          w.tg = alive.length ? alive[w.i % alive.length] : null;
+        } else w.phase = 'idle';
+      }
     }
     if (w.phase === 'idle' && w.cd <= 0) {
       const n = W(w, 'count') + Stat.amount();
-      const ts = nearestEnemies(p.x, p.y, 175, n);
+      const ts = nearestEnemies(p.x, p.y, 210, n);
       if (ts.length) {
-        w.targets = ts; w.phase = 'draw'; w.t = 0;
+        w.targets = ts; w.shots = n; w.i = 0; w.tg = ts[0];
+        w.phase = 'draw'; w.t = 0; w.glint = false;
         w.cd = W(w, 'cd') * Stat.cd();
+        Sfx.play('draw');
       }
     }
   },

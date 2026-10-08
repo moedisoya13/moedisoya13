@@ -148,6 +148,7 @@ const Gfx = {
     this.arrows = {};
     const kinds = {
       arrow: { len: 11, head: 3, fletch: 2, thick: 0 },
+      long: { len: 15, head: 3, fletch: 3, thick: 0 },  // 강궁 화살
       bolt: { len: 14, head: 4, fletch: 3, thick: 1 },
       dart: { len: 7, head: 2, fletch: 0, thick: 0 },
       quill: { len: 6, head: 0, fletch: 3, thick: 0 }, // 텐구 깃털 (적 탄)

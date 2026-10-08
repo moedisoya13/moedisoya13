@@ -77,6 +77,22 @@ const Sfx = {
         this.tone(1250 + rand(-80, 80), 0.07, 'triangle', 0.07, 420);
         this.noise(0.025, 0.05, 'highpass', 3500);
         break;
+      case 'draw':
+        if (!this.ok(name, 0.25)) return;
+        this.noise(0.24, 0.03, 'bandpass', 380, 4, 900);
+        break;
+      case 'bowShot':
+        if (!this.ok(name, 0.06)) return;
+        this.tone(190, 0.24, 'triangle', 0.2, 60);          // 묵직한 시위 울림
+        this.tone(1150, 0.035, 'square', 0.05, 300);        // 시위 튕김
+        this.noise(0.16, 0.09, 'bandpass', 900, 1.2, 3400); // 공기 가르는 소리
+        break;
+      case 'bowHit':
+        if (!this.ok(name, 0.035)) return;
+        this.noise(0.09, 0.22, 'lowpass', 1700, 0.9, 260);
+        this.tone(150, 0.15, 'sine', 0.26, 40);
+        this.tone(430, 0.03, 'square', 0.05, 150);
+        break;
       case 'hit':
         if (!this.ok(name, 0.03)) return;
         this.noise(0.045, 0.13, 'bandpass', 1700 + rand(-300, 300), 1.2);
