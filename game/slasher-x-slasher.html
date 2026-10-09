@@ -5386,7 +5386,8 @@ function drawEndHi(victory) {
 // ─────────────────────────────────────────────────────────────
 
 Object.assign(CFG, {
-  HUNT_VICTIMS: 4, HUNT_TIME: 300,
+  HUNT_VICTIMS: 4, HUNT_TIME: 600,  // 10-minute night
+  HUNT_VICTIM_HP: 3, HUNT_HURT_IFRAME: 0.8, HUNT_MACHINE_HIT_CD: 1.2,
   HUNT_VICTIM_RATIO: 0.96,          // victims run at 96% of the hunter
   HUNT_WALK: 0.7,                   // calm victims walk
   HUNT_STAMINA: 7, HUNT_TIRED: 3, HUNT_TIRED_MULT: 0.8,
@@ -5409,7 +5410,7 @@ const HUNT_INFO = {
   witch: { ko: '마녀', abil: '양초 설치', desc: '양초 빛 속 피해자 노출 · 6개 켜면 의식' },
   janitor: { ko: '수위', abil: '손전등', desc: '목격할수록 등급↑ · B부터 피해자 시야 공유' },
   evolver: { ko: '초진화체', abil: '촉수', desc: '멈추면 은신 · 진화 후 촉수로 낚아챔' },
-  doctor: { ko: '박사', abil: '기계 소환', desc: '전기봉 1타 기절·2타 처치 · 로봇 무제한 소환' },
+  doctor: { ko: '박사', abil: '기계 소환', desc: '전기봉 기절 → 추가타 피해 · 로봇 무제한 소환' },
   samurai: { ko: '무사', abil: '창 찌르기', desc: '벽 너머 투시·관통 · 우물 두 개로 이동' },
 };
 
@@ -5424,6 +5425,7 @@ class Victim extends Enemy {
     this.hideSpot = null; this.hideTarget = null; this.hideT = 0; this.boltAt = null; this.keys = 0; this.honey = 0;
     this.dead = false; this.deadT = 0; this.exposedT = 0; this.sirenT = 0; this.busyT = 0; this.busyFn = null; this.lastDoor = null;
     this.screamT = 0; this.vpts = []; this.stepIdx = 0; this.roamT = 0;
+    this.hp = CFG.HUNT_VICTIM_HP; this.hurtT = 0; this.knock = null;
   }
   canUnlock() { return this.keys > 0; }
   speed() { let s = CFG.PLAYER_SPEED * this.ratio; if (this.tiredT > 0) s *= CFG.HUNT_TIRED_MULT; return s; }
@@ -5447,7 +5449,9 @@ class Victim extends Enemy {
     this.spotT = Math.max(0, this.spotT - dt); this.screamT -= dt;
     if (this.dead) { this.deadT += dt; return; }
     if (this.state === 'hidden') { this.updateHidden(dt); return; }
+    this.hurtT = Math.max(0, this.hurtT - dt);
     if (this.pull) { this.updatePull(dt); return; }
+    if (this.knock) { this.updateKnock(dt); return; }
     if (this.stunT > 0) { this.stunT -= dt; this.amt = approach(this.amt, 0, dt * 8); return; }
     if (this.trav) { this.updateTrav(dt); return; }
     if (this.busyT > 0) {
@@ -5519,7 +5523,7 @@ class Victim extends Enemy {
     this.footsteps();
   }
   findHideSpot() {
-    let best = null, bd = 5.5;
+    let best = null, bd = 5.5 + (CFG.HUNT_VICTIM_HP - this.hp) * 1.5; // the wounded look harder for cover
     for (const f of M.hideSpots) {
       if (f.occupied || inLockedRoom(f.ax, f.ay)) continue;
       if (G.victims.some((v) => v !== this && !v.dead && v.hideTarget === f)) continue;
@@ -5612,7 +5616,15 @@ class Victim extends Enemy {
     p.t += dt;
     const e = Ease.inCubic(Math.min(1, p.t / p.dur));
     this.x = lerp(p.sx, p.tx, e); this.y = lerp(p.sy, p.ty, e);
-    if (p.t >= p.dur) { this.pull = null; killVictim(this, 'tentacle'); }
+    if (p.t >= p.dur) { this.pull = null; P.atk = { phase: 'strike', t: 0, f: 0, landed: true }; hurtVictim(this, P.dmg, P.x, P.y); }
+  }
+  updateKnock(dt) {
+    const k = this.knock;
+    k.t += dt;
+    const d = Math.min(k.rem, lerp(11, 4, Math.min(1, k.t / 0.3)) * dt);
+    const m = gridMove(this, [k.dir], d, walkable, 0.5);
+    k.rem -= d; this.amt = approach(this.amt, 0.6, dt * 6); this.phase += m * 6;
+    if (k.rem <= 0.001 || m < d * 0.5) { this.knock = null; this.path = null; this.goal = null; }
   }
 
   drawBody(X, Y, st) { st.pal = this.info; drawRunner(X, Y, st); }
@@ -5625,12 +5637,14 @@ class Victim extends Enemy {
       drawRunner(X, Y, { ang: this.ang, phase: 0, amt: 0, breath: 0, tilt: -Ease.outBack(f) * 1.45, pal: this.info, dead: true, flash: silhouette });
       return;
     }
+    if (this.hurtT > 0 && !silhouette && ((this.hurtT * 14) | 0) % 2) return; // hit flicker
     super.draw(camX, camY, silhouette);
   }
   drawOverhead(camX, camY) {
     if (this.dead || this.state === 'hidden') return;
     const [X, Y] = this.feet(camX, camY);
     const top = Y - this.headH;
+    hpPips(X, top - 3, this.hp, CFG.HUNT_VICTIM_HP);
     if (this.spotT > 0) text3('!', X + 0.5, top - 6, C.white, 1, 'center');
     if (this.stunT > 0) iconStars(X, top + 2, this.t);
     if (this.sirenT > 0) iconSiren(X, top - 6, this.t);
@@ -5640,9 +5654,9 @@ class Victim extends Enemy {
 
 // ═════════════ the Doctor's machines (hunt version) ═════════════
 class HuntMachine extends Machine {
-  constructor(kind, tx, ty, doc) { super(kind, tx, ty, doc); this.ratio = 1.0; this.stunT = 0.5; this.roamGoal = null; }
+  constructor(kind, tx, ty, doc) { super(kind, tx, ty, doc); this.ratio = 1.0; this.stunT = 0.5; this.roamGoal = null; this.hitCd = 0; }
   update(dt) {
-    this.t += dt; this.flashT = Math.max(0, this.flashT - dt); this.dashCd -= dt; this.sndT -= dt;
+    this.t += dt; this.flashT = Math.max(0, this.flashT - dt); this.dashCd -= dt; this.sndT -= dt; this.hitCd -= dt;
     if (this.stunT > 0) { this.stunT -= dt; return; }
     if (this.stuckT > 0) { this.stuckT -= dt; this.amt = approach(this.amt, 0, dt * 8); return; }
     this.dormant = dist(this.x, this.y, this.doc.x, this.doc.y) > CFG.MACHINE_LEASH;
@@ -5688,7 +5702,13 @@ class HuntMachine extends Machine {
     this.killTouch();
   }
   killTouch() {
-    for (const v of G.victims) if (!v.dead && v.state !== 'hidden' && !v.trav && dist(this.x, this.y, v.x, v.y) < 0.8) killVictim(v, 'machine');
+    if (this.hitCd > 0) return;
+    for (const v of G.victims) {
+      if (v.dead || v.state === 'hidden' || v.trav || v.hurtT > 0 || dist(this.x, this.y, v.x, v.y) >= 0.8) continue;
+      hurtVictim(v, 1, this.x, this.y); this.hitCd = CFG.HUNT_MACHINE_HIT_CD;
+      if (this.dash) { this.dash = null; this.dashCd = 5; this.path = null; }
+      return;
+    }
   }
 }
 
@@ -5727,13 +5747,46 @@ function huntTileTaken(x, y) {
   return false;
 }
 
+// a hit: lose hp, get knocked back and run (no damage during the short flicker after a hit)
+function hurtVictim(v, dmg, fromX, fromY, o = {}) {
+  if (v.dead || v.hurtT > 0 || v.trav || dmg <= 0) return false;
+  if (v.state === 'hidden') v.exitHide(true);
+  v.hp = Math.max(0, v.hp - dmg);
+  if (v.hp <= 0) { killVictim(v, o.cause || 'hit'); return true; }
+  const TS = CFG.TS;
+  v.hurtT = CFG.HUNT_HURT_IFRAME; v.flashT = 0.3; v.stunT = 0; v.panicT = 0; v.busyT = 0; v.busyFn = null;
+  v.state = 'flee'; v.calmT = 0; v.hideTarget = null; v.path = null; v.goal = null; v.spotT = 0.9;
+  v.tiredT = 0; v.stamina = CFG.HUNT_STAMINA; // adrenaline
+  FX.blood(v.x * TS, v.y * TS - 7, 6 + dmg * 5, Math.atan2(v.y - fromY, v.x - fromX));
+  FX.decal('blood', v.x * TS + rand(-3, 3), v.y * TS + rand(-1, 3), rand(1, 2), C.blood);
+  Sfx.hit(dmg >= 2); Sfx.victimScream(v.idx); v.screamT = 4;
+  G.shake = 3 + dmg * 1.5; G.hitStop = 0.05; G.hudPop['v' + v.idx] = 1; G.sinceSeen = 0;
+  if (!o.noKnock) knockVictim(v, fromX, fromY, CFG.KNOCKBACK * (o.knockMul || 1));
+  return true;
+}
+function knockVictim(v, fromX, fromY, tiles) {
+  const ax = v.x - fromX, ay = v.y - fromY;
+  let best = null, bs = -Infinity;
+  for (const D of DIRS) {
+    const probe = { x: v.x, y: v.y, dx: 0, dy: 0 };
+    if (moveSegment(probe, D, 0.6, walkable, 0.5) <= 0) continue;
+    const sc = D[0] * ax + D[1] * ay;
+    if (sc > bs) { bs = sc; best = D; }
+  }
+  if (best) { v.knock = { dir: best, rem: tiles, t: 0 }; v.ang = Math.atan2(fromY - v.y, fromX - v.x); }
+}
+function hpPips(X, Y, hp, max) {
+  const x0 = Math.round(X - (max * 4 - 1) / 2);
+  for (let i = 0; i < max; i++) { rect(x0 + i * 4 - 1, Y - 1, 4, 4, C.ink); rect(x0 + i * 4, Y, 2, 2, i < hp ? C.red : '#4a3a40'); }
+}
+
 function killVictim(v, cause) {
   if (v.dead) return;
   if (v.state === 'hidden' && v.hideSpot) {
     const f = v.hideSpot; f.occupied = false; f.check = 0; f.shake = 0.4; v.hideSpot = null;
     v.x = f.ax + 0.5; v.y = f.ay + 0.5;
   }
-  v.dead = true; v.alive = false; v.deadT = 0; v.state = 'dead'; v.path = null; v.trav = null; v.pull = null; v.busyT = 0;
+  v.dead = true; v.alive = false; v.deadT = 0; v.state = 'dead'; v.path = null; v.trav = null; v.pull = null; v.knock = null; v.busyT = 0; v.hp = 0;
   if (v.hideTarget) v.hideTarget = null;
   G.kills++;
   const TS = CFG.TS, ang = Math.atan2(v.y - P.y, v.x - P.x);
@@ -5764,7 +5817,11 @@ function huntSnuff(v, c) {
   const x = c.x * CFG.TS + 7, y = c.y * CFG.TS + 2;
   if (nearVol(c.x, c.y, 14) > 0) Sfx.candleOut();
   if (!c.fake) { v.exposedT = Math.max(v.exposedT, CFG.CANDLE_EXPOSE); FX.smoke(x, y, 6); }
-  else { v.stunT = CFG.FAKE_SLOW; v.exposedT = Math.max(v.exposedT, CFG.FAKE_SLOW); FX.smoke(x, y, 10, ['#5a2a6a', '#3a1a4a', '#7a3a8a']); Sfx.cackle(); }
+  else {
+    FX.smoke(x, y, 10, ['#5a2a6a', '#3a1a4a', '#7a3a8a']); Sfx.cackle();
+    hurtVictim(v, 1, c.x + 0.5, c.y + 0.5, { noKnock: true, cause: 'curse' });
+    if (!v.dead) { v.stunT = CFG.FAKE_SLOW; v.exposedT = Math.max(v.exposedT, CFG.FAKE_SLOW); }
+  }
 }
 
 // ═════════════ phases ═════════════
@@ -5938,7 +5995,7 @@ function updateHuntAttack(dt) {
       a.phase = 'strike'; a.t = 0;
       let hit = null, bd = Infinity;
       for (const v of liveVictims()) {
-        if (v.trav) continue;
+        if (v.trav || v.hurtT > 0) continue;
         const d = dist(K.x, K.y, v.x, v.y);
         if (d > CFG.HUNT_ATK_REACH || d >= bd) continue;
         if (d > 0.5 && Math.abs(angDiff(K.ang, Math.atan2(v.y - K.y, v.x - K.x))) > 1.3) continue;
@@ -5947,9 +6004,9 @@ function updateHuntAttack(dt) {
       }
       if (hit) {
         a.landed = true;
-        if (K.kind === 'doctor' && hit.stunT > 0) { Sfx.baton(); FX.sparks(hit.x * CFG.TS, hit.y * CFG.TS - 8, 18, ['#9fe8ff', '#ffffff']); killVictim(hit, 'shock'); } // second jolt kills
+        if (K.kind === 'doctor' && hit.stunT > 0) { Sfx.baton(); FX.sparks(hit.x * CFG.TS, hit.y * CFG.TS - 8, 18, ['#9fe8ff', '#ffffff']); hurtVictim(hit, 1, K.x, K.y, { cause: 'shock' }); } // a stunned victim takes the jolt
         else if (K.kind === 'doctor') { hit.stunT = CFG.HUNT_BATON_STUN; hit.exposedT = CFG.HUNT_BATON_STUN; Sfx.baton(); FX.sparks(hit.x * CFG.TS, hit.y * CFG.TS - 8, 12, ['#9fe8ff', '#ffffff']); }
-        else killVictim(hit, 'melee');
+        else hurtVictim(hit, K.dmg, K.x, K.y, { knockMul: K.knockMul, cause: 'melee' });
       } else Sfx.whiff();
     }
   } else if (a.phase === 'strike') {
@@ -6037,7 +6094,7 @@ function huntAbilityTick(K, dt) {
   if (K.flashing) {
     K.flashing.t += dt; K.amt = approach(K.amt, 0, dt * 8);
     if (K.flashing.t >= CFG.JANITOR_FLASH_WINDUP) {
-      K.flashing = null; K.abilCd = CFG.JANITOR_FLASH_CD * (K.grade >= 3 ? 0.5 : 1); Sfx.flash(); // S: twice as often
+      K.flashing = null; K.abilCd = CFG.JANITOR_FLASH_CD; Sfx.flash();
       for (const v of liveVictims()) {
         const d = dist(K.x, K.y, v.x, v.y);
         if (d > CFG.JANITOR_FLASH_RANGE || !los(K.x, K.y, v.x, v.y)) continue;
@@ -6073,7 +6130,7 @@ function huntAbilityTick(K, dt) {
       for (const v of liveVictims()) {
         const vx = Math.floor(v.x), vy = Math.floor(v.y);
         const on = s.dir[0] ? vy === s.ty && Math.sign(vx - s.tx) === s.dir[0] && Math.abs(vx - s.tx) <= CFG.SPEAR_RANGE : vx === s.tx && Math.sign(vy - s.ty) === s.dir[1] && Math.abs(vy - s.ty) <= CFG.SPEAR_RANGE;
-        if (on) killVictim(v, 'spear');
+        if (on) hurtVictim(v, 1, K.x, K.y, { cause: 'spear' });
       }
     } else if (s.phase === 'strike' && s.t >= 0.4) { K.thrust = null; K.abilCd = CFG.SPEAR_CD; }
     return true;
@@ -6121,7 +6178,7 @@ function updateHuntCheck(dt) {
   if (c.t >= CFG.HIDE_CHECK) {
     f.check = 0; K.check = null;
     const v = G.victims.find((q) => !q.dead && q.state === 'hidden' && q.hideSpot === f);
-    if (v) { K.atk = { phase: 'strike', t: 0, f: 0, landed: true }; killVictim(v, 'found'); }
+    if (v) { K.atk = { phase: 'strike', t: 0, f: 0, landed: true }; hurtVictim(v, Math.max(1, K.dmg), K.x, K.y, { knockMul: K.knockMul, cause: 'found' }); }
     else Sfx.creak();
   }
 }
@@ -6259,7 +6316,11 @@ function drawHuntHUD() {
   const W = Screen.W, K = P;
   L.globalAlpha = 0.84; L.fillStyle = '#0a0709'; L.fillRect(0, 0, W, 20); L.globalAlpha = 1;
   rect(0, 20, W, 1, '#3a1e26');
-  G.victims.forEach((v, i) => drawVictimHead(7 + i * 11, 10, v));
+  G.victims.forEach((v, i) => {
+    const x = 7 + i * 12;
+    drawVictimHead(x, 9, v);
+    if (!v.dead) for (let k = 0; k < CFG.HUNT_VICTIM_HP; k++) rect(x - 4 + k * 3, 16, 2, 2, k < v.hp ? C.red : '#4a3a40');
+  });
   const t = G.huntT, urgent = t <= 30 && ((G.rt * 4) | 0) % 2;
   text3(fmtTime(t), W / 2, 5, urgent ? C.red : t <= 60 ? '#ffb347' : C.white, 2, 'center');
   const rx = W - 4;
@@ -6309,7 +6370,7 @@ function drawHuntControls() {
   const ic = ready ? C.white : '#6a5e64';
   drawAbilityIcon(K.kind, ab.x, ab.y - 1, ic);
   if (K.abilCd > 0) {
-    const tot = { butcher: CFG.BUTCHER_BREAK_CD, janitor: CFG.JANITOR_FLASH_CD * (K.grade >= 3 ? 0.5 : 1), evolver: CFG.HUNT_TENTACLE_CD, doctor: CFG.HUNT_SUMMON_CD, samurai: CFG.SPEAR_CD }[K.kind] || 1;
+    const tot = { butcher: CFG.BUTCHER_BREAK_CD, janitor: CFG.JANITOR_FLASH_CD, evolver: CFG.HUNT_TENTACLE_CD, doctor: CFG.HUNT_SUMMON_CD, samurai: CFG.SPEAR_CD }[K.kind] || 1;
     for (let r = ab.r - 1; r <= ab.r; r += 0.5) ring(ab.x, ab.y - 1, r, C.gold, 1 - K.abilCd / tot);
   }
   if (K.kind === 'witch') text3(String(K.stock), ab.x + 8, ab.y + 4, C.white);
@@ -6468,7 +6529,7 @@ function drawHuntEndHi() {
     g.textAlign = 'left'; g.fillStyle = win ? '#efe8dc' : '#1a2230'; g.font = `700 ${u * 4}px ${FONT_KO}`;
     g.fillText(v.info.name, pw / 2 - u * 11, y);
     g.textAlign = 'right'; g.fillStyle = v.dead ? (win ? '#ff6a70' : '#a01020') : (win ? '#9fe8ff' : '#2a6a40');
-    g.fillText(v.dead ? '처치' : '생존', pw / 2 + u * 17, y);
+    g.fillText(v.dead ? '처치' : `생존 ♥${v.hp}`, pw / 2 + u * 17, y);
   });
   g.textAlign = 'center';
   if (t > 1.2) {
