@@ -476,15 +476,31 @@ function drawComicKillerBody(g, kind, stage) {
   ink(g, (q) => { q.moveTo(620, 905); q.bezierCurveTo(670, 960, 720, 960, 760, 905); }, null, 10);
 }
 
+// _menace: draw the heads as hunters (select screen) — glaring, no sweat, grinning
+let _menace = false;
 function eyesWide(g, x, y, r, pupil = 7, white = '#ffffff', iris = INK) {
   ink(g, (q) => q.ellipse(x, y, r, r * 0.8, 0, 0, TAU), white, 6);
   g.fillStyle = iris; g.beginPath(); g.arc(x + 2, y + 1, pupil, 0, TAU); g.fill();
+  if (!_menace) return;
+  // heavy slanted lid + brow: inner corners low
+  const left = x < 780, a = left ? -0.5 : 0.1, b = left ? 0.1 : -0.5;
+  g.save(); g.beginPath(); g.ellipse(x, y, r, r * 0.8, 0, 0, TAU); g.clip();
+  g.fillStyle = INK; g.beginPath(); g.moveTo(x - r - 4, y - r); g.lineTo(x + r + 4, y - r); g.lineTo(x + r + 4, y + b * r); g.lineTo(x - r - 4, y + a * r); g.closePath(); g.fill();
+  g.restore();
+  g.strokeStyle = INK; g.lineWidth = Math.max(10, r * 0.45); g.lineCap = 'round';
+  g.beginPath(); g.moveTo(x - r * 1.15, y + a * r - r * 0.25); g.lineTo(x + r * 1.15, y + b * r - r * 0.25); g.stroke();
+}
+function grin(g, x, y, w) {
+  const m = (q) => { q.moveTo(x - w, y - w * 0.2); q.quadraticCurveTo(x, y + w * 0.35, x + w, y - w * 0.2); q.quadraticCurveTo(x, y + w * 0.95, x - w, y - w * 0.2); q.closePath(); };
+  ink(g, m, '#3a0a14', 7);
+  for (let i = 0; i < 6; i++) { const tx = x - w * 0.8 + i * w * 0.32; ink(g, P2([tx, y + w * 0.02, tx + w * 0.26, y + w * 0.06, tx + w * 0.13, y + w * 0.3]), '#efe8d8', 3); }
 }
 function koEyes(g, x, y, r) {
   g.lineWidth = 9; g.strokeStyle = INK; g.lineCap = 'round';
   g.beginPath(); g.moveTo(x - r, y - r); g.lineTo(x + r, y + r); g.moveTo(x + r, y - r); g.lineTo(x - r, y + r); g.stroke();
 }
 function sweat(g, x, y, s, t) {
+  if (_menace) return;
   const yy = y + ((t * 120) % 60);
   ink(g, (q) => { q.moveTo(x, yy - 22 * s); q.bezierCurveTo(x + 14 * s, yy, x + 10 * s, yy + 14 * s, x, yy + 14 * s); q.bezierCurveTo(x - 10 * s, yy + 14 * s, x - 14 * s, yy, x, yy - 22 * s); }, '#bfe6ff', 4);
 }
@@ -534,7 +550,7 @@ function drawComicKillerHead(g, kind, stage, s) {
       ink(g, P2([hx - 15, hy - 160, hx + 25, hy - 160, hx + 30, hy - 120, hx - 20, hy - 120]), HERO.gold, 6);
       // sanpaku eyes: huge whites, pinprick pupils
       for (const ex of [hx - 42, hx + 48]) { if (ko) koEyes(g, ex, hy - 5, 18); else eyesWide(g, ex, hy - 5, 32, 4); }
-      ink(g, (q) => q.ellipse(hx + 5, hy + 85, 34, ko ? 16 : 40, 0, 0, TAU), '#3a0a14', 7);
+      if (_menace) grin(g, hx + 5, hy + 80, 62); else ink(g, (q) => q.ellipse(hx + 5, hy + 85, 34, ko ? 16 : 40, 0, 0, TAU), '#3a0a14', 7);
       sweat(g, hx - 120, hy - 20, 1.1, t); sweat(g, hx + 125, hy + 10, 0.9, t + 0.3);
       break;
     }
@@ -562,7 +578,7 @@ function drawComicKillerHead(g, kind, stage, s) {
       for (const ex of [hx - 40, hx + 45]) ink(g, (q) => q.arc(ex, hy - 95, 30, 0, TAU), '#8fd3ff', 8);
       ink(g, (q) => { q.moveTo(hx - 75, hy - 50); q.quadraticCurveTo(hx, hy - 75, hx + 80, hy - 50); }, null, 14);
       for (const ex of [hx - 40, hx + 45]) { if (ko) koEyes(g, ex, hy - 10, 18); else eyesWide(g, ex, hy - 10, 28, 6, '#fff9d8'); }
-      ink(g, (q) => q.ellipse(hx + 5, hy + 80, 46, ko ? 14 : 36, 0, 0, TAU), '#3a0a14', 7);
+      if (_menace) grin(g, hx + 5, hy + 75, 66); else ink(g, (q) => q.ellipse(hx + 5, hy + 80, 46, ko ? 14 : 36, 0, 0, TAU), '#3a0a14', 7);
       g.strokeStyle = '#8be06a'; g.lineWidth = 9; g.beginPath(); g.moveTo(hx + 30, hy + 105); g.quadraticCurveTo(hx + 40, hy + 160, hx + 25, hy + 210); g.stroke();
       sweat(g, hx + 120, hy - 40, 1, t);
       break;

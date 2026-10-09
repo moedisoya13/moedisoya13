@@ -4,15 +4,18 @@
 
 function render() {
   const ph = G.phase;
+  if (G.game === 'hunt') { renderHuntFrame(); return; }
   if (ph === 'punish') { Comic.draw(); return; }
   renderWorld();
-  if (ph !== 'title' && ph !== 'intro') drawHUD();
+  if (ph !== 'title' && ph !== 'intro' && ph !== 'select') drawHUD();
   if (ph === 'play') drawControls();
   else { Input.layout.act = null; Input.layout.honey = null; }
+  Input.layout.abil = null; Input.layout.ctx = null;
   let zoom = 1, zx = 0, zy = 0;
   if (ph === 'closeup') { const f = Ease.outCubic(Math.min(1, G.phaseT / 0.55)); zoom = 1 + 2.2 * f; zx = G.closeup.x - G.camX; zy = G.closeup.y - G.camY; }
   presentFrame(0, 0, zoom, zx, zy);
   if (ph === 'title') drawTitleHi();
+  else if (ph === 'select') drawSelectHi();
   else if (ph === 'intro') drawIntroHi();
   else if (ph === 'shazam') drawShazamHi();
   else if (ph === 'closeup') drawCloseupHi();

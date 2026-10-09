@@ -159,6 +159,7 @@ function drawHandIcon(x, y, c) { disc(x, y + 1, 3.2, c); for (let i = -2; i <= 1
 
 // ── hi-res overlays (device px) ──
 function hiU() { return Math.min(Screen.pw, Screen.ph * 0.6) / 100; }
+const UI = { title: null, select: null }; // hi-res hit areas (device px), refreshed while drawing
 
 function drawTitleHi() {
   const g = Screen.ctx, pw = Screen.pw, ph = Screen.ph, u = hiU(), t = G.rt;
@@ -180,12 +181,27 @@ function drawTitleHi() {
   g.textAlign = 'center'; g.textBaseline = 'middle';
   g.fillStyle = '#d8cfc4'; g.font = `600 ${u * 4.2}px ${FONT_KO}`;
   g.fillText('살인마로부터 살아남아라', pw / 2, ph * 0.6);
-  const a = 0.55 + Math.sin(t * 4) * 0.45;
-  g.globalAlpha = a; g.fillStyle = '#ffffff'; g.font = `900 ${u * 5.6}px ${FONT_DISPLAY}`;
-  g.fillText('TAP TO START', pw / 2, ph * 0.78);
-  g.globalAlpha = 0.7; g.font = `500 ${u * 3.4}px ${FONT_KO}`; g.fillStyle = '#b8aeb0';
-  g.fillText('화면 아무 곳이나 탭', pw / 2, ph * 0.82);
-  g.globalAlpha = 0.45; g.font = `500 ${u * 2.7}px ${FONT_KO}`;
+  // mode buttons
+  UI.title = {};
+  const bw = Math.min(pw * 0.78, u * 80), bh = u * 13.5, bx = (pw - bw) / 2;
+  const modes = [
+    { id: 'run', y: ph * 0.68, en: 'RUN', ko: '도망자 모드 · 살인마로부터 살아남기', c: '#efe8dc', bg: 'rgba(30,22,26,0.85)' },
+    { id: 'hunt', y: ph * 0.68 + bh + u * 4, en: 'HUNT', ko: '살인마 모드 · 동트기 전에 4명 사냥', c: '#ff4a54', bg: 'rgba(60,6,12,0.88)' },
+  ];
+  for (const m of modes) {
+    const pulse = 1 + Math.sin(t * 3 + (m.id === 'hunt' ? 1.5 : 0)) * 0.012;
+    g.save(); g.translate(pw / 2, m.y + bh / 2); g.scale(pulse, pulse); g.translate(-pw / 2, -(m.y + bh / 2));
+    g.fillStyle = m.bg; g.fillRect(bx, m.y, bw, bh);
+    g.lineWidth = u * 0.6; g.strokeStyle = m.c; g.strokeRect(bx, m.y, bw, bh);
+    g.textAlign = 'left'; g.fillStyle = m.c; g.font = `900 ${u * 7}px ${FONT_DISPLAY}`;
+    g.fillText(m.en, bx + u * 4, m.y + bh * 0.5);
+    g.textAlign = 'right'; g.fillStyle = '#d8cfc4'; g.font = `600 ${u * 3.1}px ${FONT_KO}`;
+    g.fillText(m.ko, bx + bw - u * 3.5, m.y + bh * 0.52);
+    g.restore();
+    UI.title[m.id] = { x: bx, y: m.y, w: bw, h: bh };
+  }
+  g.textAlign = 'center';
+  g.globalAlpha = 0.45; g.fillStyle = '#b8aeb0'; g.font = `500 ${u * 2.7}px ${FONT_KO}`;
   g.fillText('소리를 켜고 플레이하세요 · 왼손 조이스틱 / 오른손 버튼', pw / 2, ph * 0.94);
   g.restore();
 }

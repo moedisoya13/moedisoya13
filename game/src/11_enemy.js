@@ -21,7 +21,10 @@ function walkGoal(x, y) {
   return null;
 }
 function nearVol(x, y, maxD = 14) { return P ? clamp(1 - dist(x, y, P.x, P.y) / maxD, 0, 1) : 0; }
-function repathAll() { if (G && G.enemies) for (const e of G.enemies) { e.path = null; e.repathT = 0; } }
+function repathAll() {
+  if (!G) return;
+  for (const list of [G.enemies, G.victims, G.machines]) if (list) for (const e of list) { e.path = null; e.repathT = 0; }
+}
 function targetable() { return P && !P.hero && (P.state === 'free' || P.state === 'knock' || P.state === 'stun' || P.state === 'pulled'); }
 
 class Enemy {
@@ -42,12 +45,14 @@ class Enemy {
     this.name = ''; this.title = ''; this.ko = '';
   }
   speed(base = false) { return CFG.PLAYER_SPEED * this.ratio; }
+  // fleeing killers (revenge) and hunt-mode victims may spend keys on locked doors
+  canUnlock() { return G.mode === 'revenge' && this.keys > 0; }
   tile() { return [Math.floor(this.x), Math.floor(this.y)]; }
   pathOpts() {
     return {
       bash: this.canBash && G.mode !== 'revenge' ? this.bashTime : 0, speed: this.speed(),
       toilets: this.useToilets, wells: this.useWells && M.wells.length === 2 && !M.wells[0].sealed,
-      key: G.mode === 'revenge' && this.keys > 0,
+      key: this.canUnlock(),
     };
   }
 
@@ -206,6 +211,7 @@ class Enemy {
       return gridMove(this, [cd], Math.min(d, off), walkable, 0.51);
     };
     while (d > EPS && guard++ < 10) {
+      if (!this.path) break; // an unlock re-paths everyone, this one included
       if (this.pathI >= this.path.length) { const m = toCenter(); if (m <= 0) break; d -= m; total += m; continue; }
       const st = this.path[this.pathI];
       const sx = st.i % M.w, sy = (st.i / M.w) | 0;
@@ -224,7 +230,7 @@ class Enemy {
       const door = doorAt(sx, sy);
       if (door && door.state === 'locked') {
         if (!atCenter(this)) { const m = toCenter(); if (m <= 0) break; d -= m; total += m; continue; }
-        if (G.mode === 'revenge' && this.keys > 0) { this.keys--; door.state = 'open'; Sfx.unlock(); FX.sparks(door.x * CFG.TS + 7, door.y * CFG.TS + 5, 6); repathAll(); continue; }
+        if (this.canUnlock()) { this.keys--; door.state = 'open'; if (nearVol(door.x, door.y, 14) > 0) Sfx.unlock(); FX.sparks(door.x * CFG.TS + 7, door.y * CFG.TS + 5, 6); if (this.onUnlock) this.onUnlock(door); repathAll(); continue; }
         if (this.canBash && G.mode !== 'revenge') this.startBash(door);
         else { this.path = null; this.repathT = 0; }
         break;
@@ -350,6 +356,7 @@ class Enemy {
   // ── toilets / wells ──
   beginTrav(st) {
     const kind = st.via === VIA.TOILET ? 'toilet' : 'well';
+    if (this.onTrav) this.onTrav(kind);
     this.trav = { kind, t: 0, to: st.i, moved: false };
     if (kind === 'toilet') { G.toiletCd = CFG.TOILET_CD; if (nearVol(this.x, this.y, 14) > 0) Sfx.flush(); }
     else Sfx.well();

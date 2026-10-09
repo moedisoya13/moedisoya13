@@ -197,6 +197,23 @@ const Sfx = {
   },
   cackle() { this.scream('witch'); },
 
+  // ── hunt mode ──
+  victimScream(i) {
+    const b = [1100, 1260, 980, 1380][i % 4];
+    this.voice([[0, b * 0.7], [0.08, b * 1.3], [0.42, b * 1.15], [0.7, b * 0.8]], { formants: [1250, 3000], vibRate: 11, vibDepth: 70, vol: 0.18 });
+  },
+  kill() {
+    this.noise(0.3, { vol: 0.3, f0: 1800, f1: 200 });
+    this.tone(220, 60, 0.3, { vol: 0.28 });
+    this.tone(90, 40, 0.5, { vol: 0.24, at: 0.22 });
+  },
+  baton() { this.tone(800, 2400, 0.18, { type: 'square', vol: 0.08, vib: [70, 200], filter: ['bandpass', 2000, 1.5] }); this.noise(0.15, { vol: 0.1, ft: 'highpass', f0: 3500 }); },
+  dawn() {
+    [523, 659, 784, 1047].forEach((f, i) => this.tone(f, f, 1.6, { type: 'sine', vol: 0.05, at: i * 0.18 }));
+    for (let i = 0; i < 6; i++) this.tone(rand(2600, 3600), rand(3000, 4200), 0.07, { type: 'sine', vol: 0.03, at: 0.9 + i * 0.13 });
+  },
+  huntStart() { this.tone(55, 41, 2.2, { type: 'sawtooth', vol: 0.09, filter: ['lowpass', 260] }); this.noise(1.6, { vol: 0.08, f0: 200, f1: 900 }); },
+
   startDrone() {
     if (!this.ok || this.drone) return;
     const ctx = this.ctx, t0 = ctx.currentTime;

@@ -8,8 +8,12 @@ const Input = {
   joy: { active: false, id: null, ox: 0, oy: 0, x: 0, y: 0, vx: 0, vy: 0, mag: 0 },
   JOY_R: 20,
   keys: Object.create(null),
-  btn: { act: { down: false, pressed: false, released: false, id: null }, honey: { down: false, pressed: false, released: false, id: null } },
-  layout: { act: null, honey: null },  // set by the HUD every frame: {x,y,r,enabled}
+  // act = interact (run) / attack (hunt) · honey = honey jar · abil = killer ability · ctx = hunt context action
+  btn: {
+    act: { down: false, pressed: false, released: false, id: null }, honey: { down: false, pressed: false, released: false, id: null },
+    abil: { down: false, pressed: false, released: false, id: null }, ctx: { down: false, pressed: false, released: false, id: null },
+  },
+  layout: { act: null, honey: null, abil: null, ctx: null },  // set by the HUD every frame: {x,y,r,visible}
   taps: [],
   anyKeyTap: false,
 
@@ -47,7 +51,7 @@ const Input = {
     Sfx.init();
     const p = this.toLo(e);
     this.taps.push({ x: p.x, y: p.y, id: e.pointerId });
-    for (const name of ['act', 'honey']) {
+    for (const name of Object.keys(this.btn)) {
       if (this.hitBtn(name, p)) {
         const b = this.btn[name];
         b.down = true; b.pressed = true; b.id = e.pointerId;
@@ -80,7 +84,7 @@ const Input = {
   onUp(e) {
     const j = this.joy;
     if (j.active && e.pointerId === j.id) { j.active = false; j.id = null; j.vx = 0; j.vy = 0; j.mag = 0; }
-    for (const name of ['act', 'honey']) {
+    for (const name of Object.keys(this.btn)) {
       const b = this.btn[name];
       if (b.down && b.id === e.pointerId) { b.down = false; b.released = true; b.id = null; }
     }
@@ -96,12 +100,11 @@ const Input = {
       if (!down && b.down) b.released = true;
       b.down = down;
     }
-    if (k === 'q' || k === 'h') {
-      const b = this.btn.honey;
-      if (down && !b.down) b.pressed = true;
-      if (!down && b.down) b.released = true;
-      b.down = down;
-    }
+    const press = (name) => { const b = this.btn[name]; if (down && !b.down) b.pressed = true; if (!down && b.down) b.released = true; b.down = down; };
+    if (k === 'q' || k === 'h') { press('honey'); press('ctx'); }
+    if (k === 'c') press('ctx');
+    if (k === 'r' || k === 'f') press('abil');
+    if (down && k === 'k') this.huntKey = true; // menu shortcut: hunt mode
   },
   reset() {
     this.keys = Object.create(null);
@@ -122,7 +125,7 @@ const Input = {
   // "anything pressed" for menus / rhythm taps
   tapped() { return this.taps.length > 0 || this.anyKeyTap; },
   endFrame() {
-    this.taps.length = 0; this.anyKeyTap = false;
+    this.taps.length = 0; this.anyKeyTap = false; this.huntKey = false;
     for (const b of Object.values(this.btn)) { b.pressed = false; b.released = false; }
   },
 };

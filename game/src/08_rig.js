@@ -135,16 +135,19 @@ function drawRunner(X, Y, st) {
   const rig = new Rig(X, Y, st.ang, st.scale || 1, st.tilt || 0, st.roll || 0);
   if (st.flash) rig.flash = st.flash;
   const J = humanPose({ phase: st.phase, amt: st.amt, breath: st.breath, lean: st.lean, headTurn: st.headTurn, crouch: st.crouch, handL: st.handL, handR: st.handR });
-  const k = { legs: '#2d3552', legs2: '#232a40', boot: C.boot, body: C.coat, sleeve: C.coat, sleeve2: C.coat2, hand: C.skin };
+  // st.pal recolours the raincoat (hunt-mode victims); st.dead draws X eyes
+  const pal = st.pal || { coat: C.coat, coat2: C.coat2, legs: '#2d3552' };
+  const k = { legs: pal.legs, legs2: shade(pal.legs, 0.78), boot: C.boot, body: pal.coat, sleeve: pal.coat, sleeve2: pal.coat2, hand: C.skin };
   drawHumanBody(rig, J, k, {});
   // coat hem flares behind the hips
-  rig.disc(rig.P(J.hipC[0] - 0.6, 0, J.hipC[2] - 1.4), 2.7, C.coat2, -0.05);
+  rig.disc(rig.P(J.hipC[0] - 0.6, 0, J.hipC[2] - 1.4), 2.7, pal.coat2, -0.05);
   const H = headPts(rig, J, 3.2, J.headAng);
-  rig.disc(H.c, 3.3, C.coat, 0.05);              // hood
+  rig.disc(H.c, 3.3, pal.coat, 0.05);              // hood
   rig.disc(H.front(1.4, 0, -0.2), 2.2, C.skin, 0.12); // face opening
-  rig.disc(H.front(-1.6, 0, 0.6), 2.2, C.coat2, 0.04);
+  rig.disc(H.front(-1.6, 0, 0.6), 2.2, pal.coat2, 0.04);
   rig.fn(rig.Pj(J.head).d + 0.3, () => {
     const e1 = H.front(3.1, -1, 0.2), e2 = H.front(3.1, 1, 0.2);
+    if (st.dead) { px(e1.x, e1.y, C.blood2); px(e2.x, e2.y, C.blood2); return; }
     if (rig.fy > -0.25) { px(e1.x, e1.y, '#1b1214'); px(e2.x, e2.y, '#1b1214'); }
   });
   rig.render();

@@ -5,12 +5,13 @@
 let G = null;
 let ROUND = 0;
 
-function newGame(kindOverride) {
+// fresh map + base state shared by both modes ('run' = fugitive, 'hunt' = killer)
+function makeG(game) {
   ROUND++;
   if (PARAMS.seed) rnd = mulberry32(+PARAMS.seed * 7919 + ROUND); else rnd = Math.random;
   M = genMap(); renderMap(); Vision.reset(); FX.clear();
-  G = {
-    phase: 'title', phaseT: 0, mode: 'normal', time: 0, rt: 0,
+  return {
+    game, phase: 'title', phaseT: 0, mode: 'normal', time: 0, rt: 0,
     enemies: [], killer: null,
     keyItems: [], laurels: [], aItems: [], honeyTraps: [], candles: [], cracks: [],
     keyRespawn: [], laurelRespawn: [], aRespawn: [],
@@ -23,13 +24,21 @@ function newGame(kindOverride) {
     noise(x, y, r) { for (const e of this.enemies) if (e.alive && dist(e.x, e.y, x, y) <= r) e.hearNoise(x, y); },
     playerAction(kind) { if (this.killer && this.killer.onPlayerAction) this.killer.onPlayerAction(kind); },
   };
-  // player near the bottom-centre corridor
+}
+// the player starts near the bottom-centre corridor
+function startTile() {
   let best = null, bs = -Infinity;
   for (const [x, y] of G.openTiles) {
     if (M.roomOf[y * M.w + x] >= 0) continue;
     const s = y * 2 - Math.abs(x - M.w / 2) * 1.5;
     if (s > bs) { bs = s; best = [x, y]; }
   }
+  return best;
+}
+
+function newGame(kindOverride) {
+  G = makeG('run');
+  const best = startTile();
   P = makePlayer(best[0], best[1]);
   // killer far away
   const kind = kindOverride || (KILLER_TYPES[PARAMS.killer] ? PARAMS.killer : pick(KILLER_KINDS));
@@ -127,11 +136,15 @@ function beginReturn() {
 function updateGame(dt) {
   G.rt += dt; G.phaseT += dt;
   const ph = G.phase;
-  if (ph === 'title') {
+  if (ph === 'title' || ph === 'select') {
     G.cam.x += dt * 9; if (G.cam.x > M.w * CFG.TS - Screen.W) G.cam.x = 0;
-    if (Input.tapped()) { Sfx.init(); Sfx.tap(); newGame(); startPhase('intro'); }
+    if (ph === 'select') { updateSelect(dt); return; }
+    const hit = (id) => Input.taps.some((t) => { const b = UI.title && UI.title[id]; return b && t.x * Screen.S >= b.x && t.x * Screen.S <= b.x + b.w && t.y * Screen.S >= b.y && t.y * Screen.S <= b.y + b.h; });
+    if (hit('run') || (Input.anyKeyTap && !Input.huntKey)) { Sfx.init(); Sfx.tap(); newGame(); startPhase('intro'); }
+    else if (hit('hunt') || Input.huntKey) { Sfx.init(); Sfx.tap(); openSelect(); }
     return;
   }
+  if (G.game === 'hunt') { updateHuntGame(dt); return; }
   if (ph === 'intro') {
     if (!G.introScream && G.phaseT > 1.3) { G.introScream = true; if (G.killer.kind !== 'evolver') Sfx.scream(G.killer.kind); else Sfx.tone(60, 40, 2, { type: 'sawtooth', vol: 0.06, filter: ['lowpass', 300] }); }
     if (G.phaseT > 3.8 || (G.phaseT > 1.6 && Input.tapped())) { startPhase('play'); G.startT = G.rt; }
@@ -266,6 +279,7 @@ function blitMap(camX, camY) {
   if (sx1 > sx0 && sy1 > sy0) L.drawImage(MapGfx.cv, sx0, sy0, sx1 - sx0, sy1 - sy0, sx0 - camX, sy0 - camY, sx1 - sx0, sy1 - sy0);
 }
 
+const MENU = () => G.phase === 'title' || G.phase === 'select';
 function renderWorld() {
   const TS = CFG.TS, W = Screen.W, H = Screen.H;
   const sh = G.shake;
@@ -280,9 +294,9 @@ function renderWorld() {
   let vr = P.hero ? CFG.HERO_VISION_RANGE : CFG.VISION_RANGE, vh = P.hero ? CFG.HERO_VISION_HALF : CFG.VISION_HALF, near = CFG.VISION_NEAR;
   if (P.state === 'hidden') { vr = 2.4; vh = 0.7; near = 1.3; }
   if (P.state === 'dead') { vr = 3.2; vh = 3.1; near = 3; }
-  if (G.phase === 'title') { vr = 6; vh = 3.1; near = 6; }
+  if (MENU()) { vr = 6; vh = 3.1; near = 6; }
   const flick = 1 + Math.sin(G.rt * 23) * 0.012 + (Math.sin(G.rt * 3.1) > 0.995 ? -0.1 : 0);
-  const vx = G.phase === 'title' ? (camX + W / 2) / TS : P.x, vy = G.phase === 'title' ? (camY + H * 0.45) / TS : P.y - 0.15;
+  const vx = MENU() ? (camX + W / 2) / TS : P.x, vy = MENU() ? (camY + H * 0.45) / TS : P.y - 0.15;
   Vision.cast(vx, vy, P.ang + P.headTurn * 0.5, vr * flick, vh, near);
   const K = G.killer;
   if (K && K.kind === 'janitor' && K.grade === 3 && G.mode === 'normal' && K.alive) {
@@ -300,11 +314,11 @@ function renderWorld() {
   const tx0 = Math.floor(camX / TS) - 1, tx1 = Math.ceil((camX + W) / TS) + 1, ty0 = Math.floor(camY / TS) - 1, ty1 = Math.ceil((camY + H) / TS) + 2;
   for (const f of M.furn) if (f.x >= tx0 && f.x <= tx1 && f.y >= ty0 && f.y <= ty1) list.push({ y: (f.y + 1) * TS - 0.5, d: () => drawFurniture(f, f.x * TS - camX, f.y * TS - camY, G.time) });
   for (const d of M.doors) if (d.x >= tx0 && d.x <= tx1 && d.y >= ty0 && d.y <= ty1) list.push({ y: (d.y + 1) * TS - 1, d: () => drawDoor(d, d.x * TS - camX, d.y * TS - camY, G.time) });
-  if (G.phase !== 'title' && G.phase !== 'hellgate') list.push({ y: P.y * TS + 4, d: () => drawPlayer(camX, camY) });
+  if (!MENU() && G.phase !== 'hellgate') list.push({ y: P.y * TS + 4, d: () => drawPlayer(camX, camY) });
   const reveal = G.dupT > 0 || G.mode === 'revenge';
   for (const e of G.enemies) {
     e._drawn = false;
-    if (!e.alive || G.phase === 'title') continue;
+    if (!e.alive || MENU()) continue;
     if (Vision.visible(e.x, e.y) || (e === K && K.kind === 'evolver' && K.stage === 'egg' && Vision.visible(e.x, e.y - 0.4))) { e._drawn = true; list.push({ y: e.y * TS + 4, d: () => e.draw(camX, camY) }); }
   }
   list.sort((a, b) => a.y - b.y);
@@ -320,7 +334,7 @@ function renderWorld() {
   if (P.hero) Vision.addLight({ x: P.x, y: P.y - 0.4, r: 3, a: 1 });
   if (K && K.kind === 'janitor' && K.flashing) Vision.addLight({ x: K.x + Math.cos(K.ang) * 1.5, y: K.y + Math.sin(K.ang) * 1.5, r: 2.2, a: 0.9 });
   let darkness = G.blackoutT > 0 ? 0.96 : 0.6;
-  if (G.phase === 'title') darkness = 0.7;
+  if (MENU()) darkness = 0.7;
   if (G.phase === 'explode') darkness *= 1 - Math.min(1, G.whiteFlash);
   Vision.drawMask(camX, camY, darkness, { x: vx, y: vy, r: vr });
   drawPathOutline(camX, camY);
@@ -334,7 +348,7 @@ function renderWorld() {
   for (const c of G.candles) drawCandle(c.x * TS + 7 - camX, c.y * TS + 10 - camY, c.t, c.fake);
   for (const l of G.laurels) if (!Vision.visibleTile(l.x, l.y)) { L.globalAlpha = 0.55; drawLaurel(l.x * TS + 7 - camX, l.y * TS + 5 - camY, l.t); L.globalAlpha = 1; }
   // revealed killers (duplicate-letter buff, revenge)
-  if (reveal && G.phase !== 'title') {
+  if (reveal && !MENU()) {
     for (const e of G.enemies) {
       if (!e.alive || e._drawn) continue;
       if (G.mode === 'revenge' && !e.main && G.dupT <= 0) continue;
