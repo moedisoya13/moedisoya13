@@ -27,6 +27,32 @@ function repathAll() {
 }
 function targetable() { return P && !P.hero && (P.state === 'free' || P.state === 'knock' || P.state === 'stun' || P.state === 'pulled'); }
 
+// a killer (or machine) steps on a honey trap: stuck for a while — but after
+// CFG.HONEY_IMMUNE_AFTER sticks it is immune and simply tramples the trap
+function honeyStep(e) {
+  const tx = Math.floor(e.x), ty = Math.floor(e.y);
+  const i = G.honeyTraps.findIndex((h) => h.x === tx && h.y === ty);
+  if (i < 0) return false;
+  G.honeyTraps.splice(i, 1);
+  const X = e.x * CFG.TS, Y = e.y * CFG.TS;
+  if (e.honeyImmune) {
+    FX.burst(X, Y, 6, { c: [C.honey, C.honey2], sp0: 6, sp1: 18, l0: 0.2, l1: 0.4 });
+    if (nearVol(e.x, e.y, 12) > 0) Sfx.tone(240, 110, 0.12, { type: 'triangle', vol: 0.06 });
+    e.honeyNoT = 1.2;
+    return false;
+  }
+  e.honeyHits = (e.honeyHits || 0) + 1;
+  e.stuckT = CFG.HONEY_STICK;
+  Sfx.honeyStick();
+  FX.burst(X, Y, 10, { c: [C.honey, C.honey2, '#ffd27a'], sp0: 10, sp1: 30, l0: 0.3, l1: 0.6 });
+  if (e.honeyHits >= CFG.HONEY_IMMUNE_AFTER) {
+    e.honeyImmune = true; e.honeyNoT = 2.2;
+    FX.ring(X, Y - 8, C.honey, 14); Sfx.stamp();
+    if (G.hudPop) G.hudPop.honeyNo = 1;
+  }
+  return true;
+}
+
 class Enemy {
   constructor(kind, tx, ty) {
     this.kind = kind; this.x = tx + 0.5; this.y = ty + 0.5; this.dx = 0; this.dy = 0;
@@ -73,6 +99,7 @@ class Enemy {
     this.t += dt;
     this.flashT = Math.max(0, this.flashT - dt);
     this.spotT = Math.max(0, this.spotT - dt);
+    this.honeyNoT = Math.max(0, (this.honeyNoT || 0) - dt);
     this.atkCd = Math.max(0, this.atkCd - dt);
     this.breath = Math.sin(this.t * 2) * 0.3;
     if (this.stuckT > 0) {
@@ -256,15 +283,7 @@ class Enemy {
     } else this.phase = approach(this.phase, Math.round(this.phase / Math.PI) * Math.PI, dt * 6);
   }
 
-  honeyCheck() {
-    const tx = Math.floor(this.x), ty = Math.floor(this.y);
-    const i = G.honeyTraps.findIndex((h) => h.x === tx && h.y === ty);
-    if (i < 0) return;
-    G.honeyTraps.splice(i, 1);
-    this.stuckT = CFG.HONEY_STICK;
-    Sfx.honeyStick();
-    FX.burst(this.x * CFG.TS, this.y * CFG.TS, 10, { c: [C.honey, C.honey2, '#ffd27a'], sp0: 10, sp1: 30, l0: 0.3, l1: 0.6 });
-  }
+  honeyCheck() { honeyStep(this); }
 
   // ── doors ──
   startBash(door) {
@@ -437,5 +456,6 @@ class Enemy {
     if (this.stunT > 0 || this.stuckT > 0) iconStars(X, top + 2, this.t);
     if (this.spotT > 0 && this.hostile) { text3('!', X + 0.5, top - 6 - (this.spotT > 0.7 ? (this.spotT - 0.7) * 20 : 0), C.red, 1, 'center'); }
     if (G.heartsShown && this.main) for (let i = 0; i < 3; i++) iconHeart(X - 9 + i * 7, top - 12, i < this.hp);
+    if (this.honeyNoT > 0) drawHoneyNo(X, top - (G.heartsShown && this.main ? 20 : 8));
   }
 }

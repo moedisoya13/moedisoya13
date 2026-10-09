@@ -106,7 +106,7 @@ const CFG = {
   SLOT_SPIN: 1.05,
   KEYS: 3, KEY_RESPAWN: 6, KEY_MAX: 9,
   DUP_BUFF: 5, DUP_SPEED: 1.12,
-  HONEY_MAX: 3, HONEY_STICK: 3,
+  HONEY_MAX: 3, HONEY_STICK: 3, HONEY_IMMUNE_AFTER: 10,   // a killer stuck 10 times shrugs honey off for good
 
   REVENGE_TIME: 20,
   REVENGE_STUN: 1.3,
@@ -2790,6 +2790,32 @@ function repathAll() {
 }
 function targetable() { return P && !P.hero && (P.state === 'free' || P.state === 'knock' || P.state === 'stun' || P.state === 'pulled'); }
 
+// a killer (or machine) steps on a honey trap: stuck for a while — but after
+// CFG.HONEY_IMMUNE_AFTER sticks it is immune and simply tramples the trap
+function honeyStep(e) {
+  const tx = Math.floor(e.x), ty = Math.floor(e.y);
+  const i = G.honeyTraps.findIndex((h) => h.x === tx && h.y === ty);
+  if (i < 0) return false;
+  G.honeyTraps.splice(i, 1);
+  const X = e.x * CFG.TS, Y = e.y * CFG.TS;
+  if (e.honeyImmune) {
+    FX.burst(X, Y, 6, { c: [C.honey, C.honey2], sp0: 6, sp1: 18, l0: 0.2, l1: 0.4 });
+    if (nearVol(e.x, e.y, 12) > 0) Sfx.tone(240, 110, 0.12, { type: 'triangle', vol: 0.06 });
+    e.honeyNoT = 1.2;
+    return false;
+  }
+  e.honeyHits = (e.honeyHits || 0) + 1;
+  e.stuckT = CFG.HONEY_STICK;
+  Sfx.honeyStick();
+  FX.burst(X, Y, 10, { c: [C.honey, C.honey2, '#ffd27a'], sp0: 10, sp1: 30, l0: 0.3, l1: 0.6 });
+  if (e.honeyHits >= CFG.HONEY_IMMUNE_AFTER) {
+    e.honeyImmune = true; e.honeyNoT = 2.2;
+    FX.ring(X, Y - 8, C.honey, 14); Sfx.stamp();
+    if (G.hudPop) G.hudPop.honeyNo = 1;
+  }
+  return true;
+}
+
 class Enemy {
   constructor(kind, tx, ty) {
     this.kind = kind; this.x = tx + 0.5; this.y = ty + 0.5; this.dx = 0; this.dy = 0;
@@ -2836,6 +2862,7 @@ class Enemy {
     this.t += dt;
     this.flashT = Math.max(0, this.flashT - dt);
     this.spotT = Math.max(0, this.spotT - dt);
+    this.honeyNoT = Math.max(0, (this.honeyNoT || 0) - dt);
     this.atkCd = Math.max(0, this.atkCd - dt);
     this.breath = Math.sin(this.t * 2) * 0.3;
     if (this.stuckT > 0) {
@@ -3019,15 +3046,7 @@ class Enemy {
     } else this.phase = approach(this.phase, Math.round(this.phase / Math.PI) * Math.PI, dt * 6);
   }
 
-  honeyCheck() {
-    const tx = Math.floor(this.x), ty = Math.floor(this.y);
-    const i = G.honeyTraps.findIndex((h) => h.x === tx && h.y === ty);
-    if (i < 0) return;
-    G.honeyTraps.splice(i, 1);
-    this.stuckT = CFG.HONEY_STICK;
-    Sfx.honeyStick();
-    FX.burst(this.x * CFG.TS, this.y * CFG.TS, 10, { c: [C.honey, C.honey2, '#ffd27a'], sp0: 10, sp1: 30, l0: 0.3, l1: 0.6 });
-  }
+  honeyCheck() { honeyStep(this); }
 
   // ── doors ──
   startBash(door) {
@@ -3200,6 +3219,7 @@ class Enemy {
     if (this.stunT > 0 || this.stuckT > 0) iconStars(X, top + 2, this.t);
     if (this.spotT > 0 && this.hostile) { text3('!', X + 0.5, top - 6 - (this.spotT > 0.7 ? (this.spotT - 0.7) * 20 : 0), C.red, 1, 'center'); }
     if (G.heartsShown && this.main) for (let i = 0; i < 3; i++) iconHeart(X - 9 + i * 7, top - 12, i < this.hp);
+    if (this.honeyNoT > 0) drawHoneyNo(X, top - (G.heartsShown && this.main ? 20 : 8));
   }
 }
 
@@ -5082,6 +5102,7 @@ function drawHUD() {
   x -= 13;
   x -= text3(String(P.honey), x, 8 - Math.round(hp * 2), hp > 0 ? '#ffffff' : C.white, 1, 'right') + 2;
   drawJarIcon(x - 3, 10);
+  if (G.killer && G.killer.honeyImmune) slashIcon(x - 3, 10); // honey no longer sticks the killer
 
   // context row
   const K = G.killer;
@@ -5122,6 +5143,9 @@ function drawKeyIcon(x, y) { ring(x - 2, y, 1.6, C.key); rect(x - 1, y, 5, 1, C.
 function drawJarIcon(x, y, s = 1) {
   rect(x - 3, y - 3, 6, 7, C.ink); rect(x - 2, y - 2, 4, 5, C.honey); rect(x - 2, y - 4, 4, 1, '#d8c8a8'); px(x - 1, y - 1, '#ffe08a');
 }
+function slashIcon(x, y) { thickLine(x - 4, y + 4, x + 4, y - 4, 1.6, C.ink); line(x - 4, y + 4, x + 4, y - 4, C.red); }
+// over a killer's head: honey no longer works on it
+function drawHoneyNo(X, Y) { drawJarIcon(X, Y); slashIcon(X, Y); }
 
 function drawSlotReel(cx, cy) {
   const s = G.slot.active;
@@ -5157,6 +5181,7 @@ function drawControls() {
     disc(hon.x, hon.y + (pr ? 1 : 0), hon.r, '#7a4a10');
     disc(hon.x, hon.y - 1 + (pr ? 1 : 0), hon.r - 2, '#a86410');
     drawJarIcon(hon.x, hon.y + (pr ? 1 : 0));
+    if (G.killer && G.killer.honeyImmune) slashIcon(hon.x, hon.y + (pr ? 1 : 0));
     text3(String(P.honey), hon.x + 7, hon.y + 3, C.white);
   }
   const j = Input.joy;
@@ -5957,7 +5982,7 @@ function huntKillerRules(dt) {
 // ═════════════ the player's killer ═════════════
 function updateHunter(dt) {
   const K = P;
-  K.t += dt; K.flashT = Math.max(0, K.flashT - dt); K.breath = Math.sin(K.t * 2) * 0.3;
+  K.t += dt; K.flashT = Math.max(0, K.flashT - dt); K.breath = Math.sin(K.t * 2) * 0.3; K.honeyNoT = Math.max(0, (K.honeyNoT || 0) - dt);
   K.abilCd = Math.max(0, K.abilCd - dt); K.atkCd = Math.max(0, K.atkCd - dt);
   if (K.gradePop !== undefined) K.gradePop = Math.max(0, K.gradePop - dt * 1.5);
   K.trail.unshift([K.x, K.y]); if (K.trail.length > 16) K.trail.pop();
@@ -5992,9 +6017,7 @@ function updateHunter(dt) {
     K.stillT = 0;
   } else { K.phase = approach(K.phase, Math.round(K.phase / Math.PI) * Math.PI, dt * 6); if (!K.atk) K.stillT += dt; }
   // honey traps laid by victims
-  const tx = Math.floor(K.x), ty = Math.floor(K.y);
-  const hi = G.honeyTraps.findIndex((h) => h.x === tx && h.y === ty);
-  if (hi >= 0) { G.honeyTraps.splice(hi, 1); K.stuckT = CFG.HONEY_STICK; Sfx.honeyStick(); FX.burst(K.x * CFG.TS, K.y * CFG.TS, 10, { c: [C.honey, C.honey2], sp0: 10, sp1: 30, l0: 0.3, l1: 0.6 }); return; }
+  if (honeyStep(K)) return; // stuck (or, once immune, trampled through)
   if (K.atk) updateHuntAttack(dt);
   else if (K.atkQ > 0 && K.atkCd <= 0) { K.atkQ = 0; startHuntAttack(); }
   if (K.abilQ > 0 && !K.atk) { K.abilQ = 0; tryHuntAbility(); }
@@ -6316,6 +6339,7 @@ function renderHunt() {
   // world UI
   if (K.drawOverhead && K.kind === 'janitor') K.drawOverhead(camX, camY);
   else { const [X, Y] = K.feet(camX, camY); if (K.stuckT > 0) iconStars(X, Y - K.headH + 2, K.t); }
+  if (K.honeyNoT > 0) { const [X, Y] = K.feet(camX, camY); drawHoneyNo(X, Y - K.headH - 8); }
   if (K.drawWorldUI) K.drawWorldUI(camX, camY);
   for (const v of G.victims) if (v._drawn) v.drawOverhead(camX, camY);
   for (const f of M.hideSpots) if (f.check > 0) iconGauge(f.x * TS + 7 - camX, f.y * TS - 12 - camY, f.check);
@@ -6360,6 +6384,12 @@ function drawHuntHUD() {
   const t = G.huntT, urgent = t <= 30 && ((G.rt * 4) | 0) % 2;
   text3(fmtTime(t), Math.round(W * 0.62), 5, urgent ? C.red : t <= 60 ? '#ffb347' : C.white, 2, 'center');
   const rx = W - 4;
+  // honey sticks so far (immune after CFG.HONEY_IMMUNE_AFTER), just under the bar
+  if (K.honeyHits > 0) {
+    const pop = G.hudPop.honeyNo || 0;
+    if (K.honeyImmune) { drawJarIcon(rx - 4, 27 - Math.round(pop * 2)); slashIcon(rx - 4, 27 - Math.round(pop * 2)); }
+    else { const tw = text3(`${K.honeyHits}/${CFG.HONEY_IMMUNE_AFTER}`, rx, 25, '#e8c878', 1, 'right'); drawJarIcon(rx - tw - 5, 27); }
+  }
   switch (K.kind) {
     case 'witch': {
       for (let i = 0; i < CFG.HUNT_CANDLE_STOCK; i++) { const cx = rx - i * 6; rect(cx - 1, 6, 3, 7, C.ink); rect(cx, 7, 1, 5, i < K.stock ? '#efe9d8' : '#3a3036'); if (i < K.stock) px(cx, 5, '#ffb347'); }

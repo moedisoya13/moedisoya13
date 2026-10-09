@@ -77,7 +77,7 @@ const CFG = {
   SLOT_SPIN: 1.05,
   KEYS: 3, KEY_RESPAWN: 6, KEY_MAX: 9,
   DUP_BUFF: 5, DUP_SPEED: 1.12,
-  HONEY_MAX: 3, HONEY_STICK: 3,
+  HONEY_MAX: 3, HONEY_STICK: 3, HONEY_IMMUNE_AFTER: 10,   // a killer stuck 10 times shrugs honey off for good
 
   REVENGE_TIME: 20,
   REVENGE_STUN: 1.3,

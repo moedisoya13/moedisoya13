@@ -56,6 +56,7 @@ NODE_PATH=$(npm root -g) node game/tests/<파일>.js      # 스크린샷은 game
 | `hunt-damage.js` | HUNT 피해원별 생명점, 넉백, 무피해 시간 |
 | `hunt-ten-victims.js` | 도망자 10명 배치, 박사와 머신의 시야 공유(두 모드), 성능 |
 | `janitor-honey.js` | 수위가 꿀 설치를 목격하면 등급이 오르는지(두 모드) |
+| `honey-immune.js` | 꿀을 10번 밟은 살인마의 면역(두 모드) |
 | `hunt-bot.js <killer> <seed> <초>` | 위치를 다 아는 봇의 자동 플레이 소크 |
 
 페이지에는 테스트 훅 `window.__SXS`(`G`, `P`, `M`, `startPhase`, `newGame`, `CFG`, `Comic`, `Input`)가 있다. 전역 함수는 `page.evaluate`에서 바로 부를 수 있다.

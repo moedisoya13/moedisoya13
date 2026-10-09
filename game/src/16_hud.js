@@ -43,6 +43,7 @@ function drawHUD() {
   x -= 13;
   x -= text3(String(P.honey), x, 8 - Math.round(hp * 2), hp > 0 ? '#ffffff' : C.white, 1, 'right') + 2;
   drawJarIcon(x - 3, 10);
+  if (G.killer && G.killer.honeyImmune) slashIcon(x - 3, 10); // honey no longer sticks the killer
 
   // context row
   const K = G.killer;
@@ -83,6 +84,9 @@ function drawKeyIcon(x, y) { ring(x - 2, y, 1.6, C.key); rect(x - 1, y, 5, 1, C.
 function drawJarIcon(x, y, s = 1) {
   rect(x - 3, y - 3, 6, 7, C.ink); rect(x - 2, y - 2, 4, 5, C.honey); rect(x - 2, y - 4, 4, 1, '#d8c8a8'); px(x - 1, y - 1, '#ffe08a');
 }
+function slashIcon(x, y) { thickLine(x - 4, y + 4, x + 4, y - 4, 1.6, C.ink); line(x - 4, y + 4, x + 4, y - 4, C.red); }
+// over a killer's head: honey no longer works on it
+function drawHoneyNo(X, Y) { drawJarIcon(X, Y); slashIcon(X, Y); }
 
 function drawSlotReel(cx, cy) {
   const s = G.slot.active;
@@ -118,6 +122,7 @@ function drawControls() {
     disc(hon.x, hon.y + (pr ? 1 : 0), hon.r, '#7a4a10');
     disc(hon.x, hon.y - 1 + (pr ? 1 : 0), hon.r - 2, '#a86410');
     drawJarIcon(hon.x, hon.y + (pr ? 1 : 0));
+    if (G.killer && G.killer.honeyImmune) slashIcon(hon.x, hon.y + (pr ? 1 : 0));
     text3(String(P.honey), hon.x + 7, hon.y + 3, C.white);
   }
   const j = Input.joy;
