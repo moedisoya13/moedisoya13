@@ -59,7 +59,7 @@ const Vision = {
       for (let k = 2; k < pts.length; k += 2) g.lineTo(sx(pts[k]), sy(pts[k + 1]));
       g.closePath(); g.fill();
     };
-    if (playerLight) fillPoly(this.pts, playerLight.x, playerLight.y, playerLight.r * TS, 0.55, 0.22);
+    if (playerLight) fillPoly(this.pts, playerLight.x, playerLight.y, playerLight.r * TS, 0.68, 0.35);
     for (const l of this.extra) {
       if (l.poly) { fillPoly(l.poly, l.x, l.y, l.r * TS, 0.4, 0.15); continue; }
       const gr = g.createRadialGradient(sx(l.x), sy(l.y), 0, sx(l.x), sy(l.y), l.r * TS);

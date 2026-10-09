@@ -531,16 +531,21 @@ function drawHoney(X, Y, t, active) {
   L.globalAlpha = 1;
 }
 
+// Real: ivory wax, warm orange flame, irregular flicker.
+// Fake: lavender-grey wax with a black drip, sickly green flame, steady metronome pulse
+//       (plus a smaller, colder light — see renderWorld).
 function drawCandle(X, Y, t, fake, lit = true) {
+  const wax = fake ? '#bfb0d2' : '#efe9d8', wax2 = fake ? '#9585ad' : '#d8d0b8', hi = fake ? '#d8cce8' : '#f8f4e8';
   rect(X - 2, Y - 6, 4, 7, C.ink);
-  rect(X - 1, Y - 5, 2, 5, '#efe9d8'); px(X - 1, Y - 2, '#d8d0b8'); px(X + 1, Y - 1, '#f8f4e8');
-  rect(X - 3, Y, 6, 2, C.ink); rect(X - 2, Y, 4, 1, '#cfc6ae');
+  rect(X - 1, Y - 5, 2, 5, wax); px(X - 1, Y - 2, wax2); px(X + 1, Y - 1, hi);
+  if (fake) { px(X, Y - 4, '#2a1a36'); px(X, Y - 3, '#2a1a36'); px(X + 1, Y - 2, '#2a1a36'); }
+  rect(X - 3, Y, 6, 2, C.ink); rect(X - 2, Y, 4, 1, fake ? '#7a6a8e' : '#cfc6ae');
   if (!lit) return;
-  // fake candles flicker in a different (steady) rhythm with a slightly greener flame
-  const fl = fake ? (((t * 5) | 0) % 2) : ((Math.sin(t * 17) + Math.sin(t * 7.3)) > 0 ? 1 : 0);
-  const outer = fake ? '#f0d878' : '#ffb347', inner = fake ? '#fff0b0' : '#fff2c0';
+  const fl = fake ? (((t * 4) | 0) % 2) : ((Math.sin(t * 17) + Math.sin(t * 7.3)) > 0 ? 1 : 0);
+  const outer = fake ? '#7fe04a' : '#ffb347', inner = fake ? '#e2ffc0' : '#fff2c0';
   px(X, Y - 7, outer); px(X, Y - 8, fl ? outer : inner); if (fl) px(X, Y - 9, outer);
   px(X - 1 + fl, Y - 7, inner);
+  if (fake && fl) px(X + 1, Y - 10, '#5a8a3a'); // thin green smoke wisp
 }
 
 function drawWell(X, Y, t, sealed, ripple) {

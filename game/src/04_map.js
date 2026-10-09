@@ -248,7 +248,7 @@ function breakableWall(x, y) {
 // ─────────────────────────────────────────────────────────────
 // Pre-rendered tile layer (ImageData for speed)
 // ─────────────────────────────────────────────────────────────
-const MapGfx = { cv: null, ctx: null, img: null };
+const MapGfx = { cv: null, ctx: null, img: null, ol: null, olx: null };
 const _rgb = {};
 function hexRgb(h) { if (_rgb[h]) return _rgb[h]; const n = parseInt(h.slice(1), 16); return (_rgb[h] = [(n >> 16) & 255, (n >> 8) & 255, n & 255]); }
 
@@ -260,6 +260,11 @@ function renderMap() {
   const img = MapGfx.ctx.createImageData(M.w * TS, M.h * TS);
   for (let y = 0; y < M.h; y++) for (let x = 0; x < M.w; x++) paintTile(img.data, M.w * TS, x, y, 0, 0);
   MapGfx.ctx.putImageData(img, 0, 0);
+  // outline layer: drawn over the fog so the maze shape is always readable
+  MapGfx.ol = document.createElement('canvas');
+  MapGfx.ol.width = M.w * TS; MapGfx.ol.height = M.h * TS;
+  MapGfx.olx = MapGfx.ol.getContext('2d');
+  for (let y = 0; y < M.h; y++) for (let x = 0; x < M.w; x++) paintOutlineTile(MapGfx.olx, x, y);
 }
 // re-render a tile (and its neighbours whose shading depends on it)
 function rerenderTiles(x, y) {
@@ -269,7 +274,28 @@ function rerenderTiles(x, y) {
     const img = MapGfx.ctx.createImageData(TS, TS);
     paintTile(img.data, TS, xx, yy, xx * TS, yy * TS);
     MapGfx.ctx.putImageData(img, xx * TS, yy * TS);
+    MapGfx.olx.clearRect(xx * TS, yy * TS, TS, TS);
+    paintOutlineTile(MapGfx.olx, xx, yy);
   }
+}
+
+// Path outline: a 1px line on every floor edge that touches a wall (Pac-Man style),
+// plus the corner pixel where a wall pillar meets two open sides diagonally.
+const OUTLINE_C = '#b08a84';
+function paintOutlineTile(g, x, y) {
+  const open = (a, b) => inB(a, b) && tAt(a, b) !== T.WALL;
+  if (!open(x, y)) return;
+  const TS = CFG.TS, X = x * TS, Y = y * TS;
+  g.fillStyle = OUTLINE_C;
+  const n = open(x, y - 1), s = open(x, y + 1), w = open(x - 1, y), e = open(x + 1, y);
+  if (!n) g.fillRect(X, Y, TS, 1);
+  if (!s) g.fillRect(X, Y + TS - 1, TS, 1);
+  if (!w) g.fillRect(X, Y, 1, TS);
+  if (!e) g.fillRect(X + TS - 1, Y, 1, TS);
+  if (n && e && !open(x + 1, y - 1)) g.fillRect(X + TS - 1, Y, 1, 1);
+  if (n && w && !open(x - 1, y - 1)) g.fillRect(X, Y, 1, 1);
+  if (s && e && !open(x + 1, y + 1)) g.fillRect(X + TS - 1, Y + TS - 1, 1, 1);
+  if (s && w && !open(x - 1, y + 1)) g.fillRect(X, Y + TS - 1, 1, 1);
 }
 
 function paintTile(d, stride, tx, ty, offX, offY) {

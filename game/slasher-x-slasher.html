@@ -113,8 +113,8 @@ const CFG = {
   HERO_HIT_STUN: 0.5,
   RETURN_STUN: 2.5,
 
-  VISION_RANGE: 7.2, VISION_HALF: 0.95, VISION_NEAR: 1.9,
-  HERO_VISION_RANGE: 9, HERO_VISION_HALF: 1.25,
+  VISION_RANGE: 9.5, VISION_HALF: 1.3, VISION_NEAR: 3.0,   // 도망자 기본 시야 (넓힘)
+  HERO_VISION_RANGE: 11, HERO_VISION_HALF: 1.5,
   KILLER_SIGHT: 8.5, KILLER_FOV: 1.25, KILLER_NEAR: 2.3,
 
   NOISE_DOOR: 8, NOISE_TOILET: 10, NOISE_HONEY: 4,
@@ -975,7 +975,7 @@ function breakableWall(x, y) {
 // ─────────────────────────────────────────────────────────────
 // Pre-rendered tile layer (ImageData for speed)
 // ─────────────────────────────────────────────────────────────
-const MapGfx = { cv: null, ctx: null, img: null };
+const MapGfx = { cv: null, ctx: null, img: null, ol: null, olx: null };
 const _rgb = {};
 function hexRgb(h) { if (_rgb[h]) return _rgb[h]; const n = parseInt(h.slice(1), 16); return (_rgb[h] = [(n >> 16) & 255, (n >> 8) & 255, n & 255]); }
 
@@ -987,6 +987,11 @@ function renderMap() {
   const img = MapGfx.ctx.createImageData(M.w * TS, M.h * TS);
   for (let y = 0; y < M.h; y++) for (let x = 0; x < M.w; x++) paintTile(img.data, M.w * TS, x, y, 0, 0);
   MapGfx.ctx.putImageData(img, 0, 0);
+  // outline layer: drawn over the fog so the maze shape is always readable
+  MapGfx.ol = document.createElement('canvas');
+  MapGfx.ol.width = M.w * TS; MapGfx.ol.height = M.h * TS;
+  MapGfx.olx = MapGfx.ol.getContext('2d');
+  for (let y = 0; y < M.h; y++) for (let x = 0; x < M.w; x++) paintOutlineTile(MapGfx.olx, x, y);
 }
 // re-render a tile (and its neighbours whose shading depends on it)
 function rerenderTiles(x, y) {
@@ -996,7 +1001,28 @@ function rerenderTiles(x, y) {
     const img = MapGfx.ctx.createImageData(TS, TS);
     paintTile(img.data, TS, xx, yy, xx * TS, yy * TS);
     MapGfx.ctx.putImageData(img, xx * TS, yy * TS);
+    MapGfx.olx.clearRect(xx * TS, yy * TS, TS, TS);
+    paintOutlineTile(MapGfx.olx, xx, yy);
   }
+}
+
+// Path outline: a 1px line on every floor edge that touches a wall (Pac-Man style),
+// plus the corner pixel where a wall pillar meets two open sides diagonally.
+const OUTLINE_C = '#b08a84';
+function paintOutlineTile(g, x, y) {
+  const open = (a, b) => inB(a, b) && tAt(a, b) !== T.WALL;
+  if (!open(x, y)) return;
+  const TS = CFG.TS, X = x * TS, Y = y * TS;
+  g.fillStyle = OUTLINE_C;
+  const n = open(x, y - 1), s = open(x, y + 1), w = open(x - 1, y), e = open(x + 1, y);
+  if (!n) g.fillRect(X, Y, TS, 1);
+  if (!s) g.fillRect(X, Y + TS - 1, TS, 1);
+  if (!w) g.fillRect(X, Y, 1, TS);
+  if (!e) g.fillRect(X + TS - 1, Y, 1, TS);
+  if (n && e && !open(x + 1, y - 1)) g.fillRect(X + TS - 1, Y, 1, 1);
+  if (n && w && !open(x - 1, y - 1)) g.fillRect(X, Y, 1, 1);
+  if (s && e && !open(x + 1, y + 1)) g.fillRect(X + TS - 1, Y + TS - 1, 1, 1);
+  if (s && w && !open(x - 1, y + 1)) g.fillRect(X, Y + TS - 1, 1, 1);
 }
 
 function paintTile(d, stride, tx, ty, offX, offY) {
@@ -1315,7 +1341,7 @@ const Vision = {
       for (let k = 2; k < pts.length; k += 2) g.lineTo(sx(pts[k]), sy(pts[k + 1]));
       g.closePath(); g.fill();
     };
-    if (playerLight) fillPoly(this.pts, playerLight.x, playerLight.y, playerLight.r * TS, 0.55, 0.22);
+    if (playerLight) fillPoly(this.pts, playerLight.x, playerLight.y, playerLight.r * TS, 0.68, 0.35);
     for (const l of this.extra) {
       if (l.poly) { fillPoly(l.poly, l.x, l.y, l.r * TS, 0.4, 0.15); continue; }
       const gr = g.createRadialGradient(sx(l.x), sy(l.y), 0, sx(l.x), sy(l.y), l.r * TS);
@@ -2220,16 +2246,21 @@ function drawHoney(X, Y, t, active) {
   L.globalAlpha = 1;
 }
 
+// Real: ivory wax, warm orange flame, irregular flicker.
+// Fake: lavender-grey wax with a black drip, sickly green flame, steady metronome pulse
+//       (plus a smaller, colder light — see renderWorld).
 function drawCandle(X, Y, t, fake, lit = true) {
+  const wax = fake ? '#bfb0d2' : '#efe9d8', wax2 = fake ? '#9585ad' : '#d8d0b8', hi = fake ? '#d8cce8' : '#f8f4e8';
   rect(X - 2, Y - 6, 4, 7, C.ink);
-  rect(X - 1, Y - 5, 2, 5, '#efe9d8'); px(X - 1, Y - 2, '#d8d0b8'); px(X + 1, Y - 1, '#f8f4e8');
-  rect(X - 3, Y, 6, 2, C.ink); rect(X - 2, Y, 4, 1, '#cfc6ae');
+  rect(X - 1, Y - 5, 2, 5, wax); px(X - 1, Y - 2, wax2); px(X + 1, Y - 1, hi);
+  if (fake) { px(X, Y - 4, '#2a1a36'); px(X, Y - 3, '#2a1a36'); px(X + 1, Y - 2, '#2a1a36'); }
+  rect(X - 3, Y, 6, 2, C.ink); rect(X - 2, Y, 4, 1, fake ? '#7a6a8e' : '#cfc6ae');
   if (!lit) return;
-  // fake candles flicker in a different (steady) rhythm with a slightly greener flame
-  const fl = fake ? (((t * 5) | 0) % 2) : ((Math.sin(t * 17) + Math.sin(t * 7.3)) > 0 ? 1 : 0);
-  const outer = fake ? '#f0d878' : '#ffb347', inner = fake ? '#fff0b0' : '#fff2c0';
+  const fl = fake ? (((t * 4) | 0) % 2) : ((Math.sin(t * 17) + Math.sin(t * 7.3)) > 0 ? 1 : 0);
+  const outer = fake ? '#7fe04a' : '#ffb347', inner = fake ? '#e2ffc0' : '#fff2c0';
   px(X, Y - 7, outer); px(X, Y - 8, fl ? outer : inner); if (fl) px(X, Y - 9, outer);
   px(X - 1 + fl, Y - 7, inner);
+  if (fake && fl) px(X + 1, Y - 10, '#5a8a3a'); // thin green smoke wisp
 }
 
 function drawWell(X, Y, t, sealed, ripple) {
@@ -4697,6 +4728,21 @@ function updateCamera(dt, snap) {
 // ─────────────────────────────────────────────────────────────
 // World rendering (low-res)
 // ─────────────────────────────────────────────────────────────
+// The maze outline always shows through the fog; locked doorways get a red bar.
+function drawPathOutline(camX, camY) {
+  const W = Screen.W, H = Screen.H, TS = CFG.TS, mw = MapGfx.ol.width, mh = MapGfx.ol.height;
+  const sx0 = Math.max(0, camX), sy0 = Math.max(0, camY), sx1 = Math.min(mw, camX + W), sy1 = Math.min(mh, camY + H);
+  L.globalAlpha = G.blackoutT > 0 ? 0.4 : 0.62;
+  if (sx1 > sx0 && sy1 > sy0) L.drawImage(MapGfx.ol, sx0, sy0, sx1 - sx0, sy1 - sy0, sx0 - camX, sy0 - camY, sx1 - sx0, sy1 - sy0);
+  L.globalAlpha = G.blackoutT > 0 ? 0.5 : 0.85;
+  for (const d of M.doors) {
+    if (d.state !== 'locked') continue;
+    const X = d.x * TS - camX, Y = d.y * TS - camY;
+    if (X < -TS || Y < -TS || X > W || Y > H) continue;
+    if (d.horiz) rect(X + 6, Y + 1, 2, TS - 2, '#d0484c'); else rect(X + 1, Y + 6, TS - 2, 2, '#d0484c');
+  }
+  L.globalAlpha = 1;
+}
 function blitMap(camX, camY) {
   const W = Screen.W, H = Screen.H, mw = MapGfx.cv.width, mh = MapGfx.cv.height;
   const sx0 = Math.max(0, camX), sy0 = Math.max(0, camY), sx1 = Math.min(mw, camX + W), sy1 = Math.min(mh, camY + H);
@@ -4751,7 +4797,8 @@ function renderWorld() {
   // lighting
   for (const l of G.laurels) Vision.addLight({ x: l.x + 0.5, y: l.y + 0.4, r: 1.5, a: 0.75 });
   for (const a of G.aItems) Vision.addLight({ x: a.x + 0.5, y: a.y + 0.4, r: 1.6, a: 0.8 });
-  for (const c of G.candles) Vision.addLight({ x: c.x + 0.5, y: c.y + 0.5, r: CFG.CANDLE_RADIUS, a: 0.95 });
+  // fake candles give a smaller, colder light — one of their tells
+  for (const c of G.candles) Vision.addLight({ x: c.x + 0.5, y: c.y + 0.5, r: c.fake ? 1.5 : CFG.CANDLE_RADIUS, a: c.fake ? 0.7 : 0.95 });
   for (const f of M.furn) if (f.kind === 'lamp') Vision.addLight({ x: f.x + 0.5, y: f.y + 0.2, r: 1.7, a: 0.6 });
   if (P.hero) Vision.addLight({ x: P.x, y: P.y - 0.4, r: 3, a: 1 });
   if (K && K.kind === 'janitor' && K.flashing) Vision.addLight({ x: K.x + Math.cos(K.ang) * 1.5, y: K.y + Math.sin(K.ang) * 1.5, r: 2.2, a: 0.9 });
@@ -4759,12 +4806,13 @@ function renderWorld() {
   if (G.phase === 'title') darkness = 0.7;
   if (G.phase === 'explode') darkness *= 1 - Math.min(1, G.whiteFlash);
   Vision.drawMask(camX, camY, darkness, { x: vx, y: vy, r: vr });
+  drawPathOutline(camX, camY);
 
   // glow layer
   L.globalCompositeOperation = 'lighter';
   for (const l of G.laurels) { L.globalAlpha = 0.22 + Math.sin(l.t * 3) * 0.08; disc(l.x * TS + 7 - camX, l.y * TS + 5 - camY, 7, '#ffcc33'); }
   for (const a of G.aItems) { L.globalAlpha = 0.3; disc(a.x * TS + 7 - camX, a.y * TS + 5 - camY, 8, '#ffcc33'); }
-  for (const c of G.candles) { L.globalAlpha = 0.18 + Math.sin(c.t * 9) * 0.04; disc(c.x * TS + 7 - camX, c.y * TS + 2 - camY, 4, '#ff9a3a'); }
+  for (const c of G.candles) { L.globalAlpha = 0.18 + Math.sin(c.t * 9) * 0.04; disc(c.x * TS + 7 - camX, c.y * TS + 2 - camY, c.fake ? 3 : 4, c.fake ? '#6ad040' : '#ff9a3a'); }
   L.globalAlpha = 1; L.globalCompositeOperation = 'source-over';
   for (const c of G.candles) drawCandle(c.x * TS + 7 - camX, c.y * TS + 10 - camY, c.t, c.fake);
   for (const l of G.laurels) if (!Vision.visibleTile(l.x, l.y)) { L.globalAlpha = 0.55; drawLaurel(l.x * TS + 7 - camX, l.y * TS + 5 - camY, l.t); L.globalAlpha = 1; }

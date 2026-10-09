@@ -245,6 +245,21 @@ function updateCamera(dt, snap) {
 // ─────────────────────────────────────────────────────────────
 // World rendering (low-res)
 // ─────────────────────────────────────────────────────────────
+// The maze outline always shows through the fog; locked doorways get a red bar.
+function drawPathOutline(camX, camY) {
+  const W = Screen.W, H = Screen.H, TS = CFG.TS, mw = MapGfx.ol.width, mh = MapGfx.ol.height;
+  const sx0 = Math.max(0, camX), sy0 = Math.max(0, camY), sx1 = Math.min(mw, camX + W), sy1 = Math.min(mh, camY + H);
+  L.globalAlpha = G.blackoutT > 0 ? 0.4 : 0.62;
+  if (sx1 > sx0 && sy1 > sy0) L.drawImage(MapGfx.ol, sx0, sy0, sx1 - sx0, sy1 - sy0, sx0 - camX, sy0 - camY, sx1 - sx0, sy1 - sy0);
+  L.globalAlpha = G.blackoutT > 0 ? 0.5 : 0.85;
+  for (const d of M.doors) {
+    if (d.state !== 'locked') continue;
+    const X = d.x * TS - camX, Y = d.y * TS - camY;
+    if (X < -TS || Y < -TS || X > W || Y > H) continue;
+    if (d.horiz) rect(X + 6, Y + 1, 2, TS - 2, '#d0484c'); else rect(X + 1, Y + 6, TS - 2, 2, '#d0484c');
+  }
+  L.globalAlpha = 1;
+}
 function blitMap(camX, camY) {
   const W = Screen.W, H = Screen.H, mw = MapGfx.cv.width, mh = MapGfx.cv.height;
   const sx0 = Math.max(0, camX), sy0 = Math.max(0, camY), sx1 = Math.min(mw, camX + W), sy1 = Math.min(mh, camY + H);
@@ -299,7 +314,8 @@ function renderWorld() {
   // lighting
   for (const l of G.laurels) Vision.addLight({ x: l.x + 0.5, y: l.y + 0.4, r: 1.5, a: 0.75 });
   for (const a of G.aItems) Vision.addLight({ x: a.x + 0.5, y: a.y + 0.4, r: 1.6, a: 0.8 });
-  for (const c of G.candles) Vision.addLight({ x: c.x + 0.5, y: c.y + 0.5, r: CFG.CANDLE_RADIUS, a: 0.95 });
+  // fake candles give a smaller, colder light — one of their tells
+  for (const c of G.candles) Vision.addLight({ x: c.x + 0.5, y: c.y + 0.5, r: c.fake ? 1.5 : CFG.CANDLE_RADIUS, a: c.fake ? 0.7 : 0.95 });
   for (const f of M.furn) if (f.kind === 'lamp') Vision.addLight({ x: f.x + 0.5, y: f.y + 0.2, r: 1.7, a: 0.6 });
   if (P.hero) Vision.addLight({ x: P.x, y: P.y - 0.4, r: 3, a: 1 });
   if (K && K.kind === 'janitor' && K.flashing) Vision.addLight({ x: K.x + Math.cos(K.ang) * 1.5, y: K.y + Math.sin(K.ang) * 1.5, r: 2.2, a: 0.9 });
@@ -307,12 +323,13 @@ function renderWorld() {
   if (G.phase === 'title') darkness = 0.7;
   if (G.phase === 'explode') darkness *= 1 - Math.min(1, G.whiteFlash);
   Vision.drawMask(camX, camY, darkness, { x: vx, y: vy, r: vr });
+  drawPathOutline(camX, camY);
 
   // glow layer
   L.globalCompositeOperation = 'lighter';
   for (const l of G.laurels) { L.globalAlpha = 0.22 + Math.sin(l.t * 3) * 0.08; disc(l.x * TS + 7 - camX, l.y * TS + 5 - camY, 7, '#ffcc33'); }
   for (const a of G.aItems) { L.globalAlpha = 0.3; disc(a.x * TS + 7 - camX, a.y * TS + 5 - camY, 8, '#ffcc33'); }
-  for (const c of G.candles) { L.globalAlpha = 0.18 + Math.sin(c.t * 9) * 0.04; disc(c.x * TS + 7 - camX, c.y * TS + 2 - camY, 4, '#ff9a3a'); }
+  for (const c of G.candles) { L.globalAlpha = 0.18 + Math.sin(c.t * 9) * 0.04; disc(c.x * TS + 7 - camX, c.y * TS + 2 - camY, c.fake ? 3 : 4, c.fake ? '#6ad040' : '#ff9a3a'); }
   L.globalAlpha = 1; L.globalCompositeOperation = 'source-over';
   for (const c of G.candles) drawCandle(c.x * TS + 7 - camX, c.y * TS + 10 - camY, c.t, c.fake);
   for (const l of G.laurels) if (!Vision.visibleTile(l.x, l.y)) { L.globalAlpha = 0.55; drawLaurel(l.x * TS + 7 - camX, l.y * TS + 5 - camY, l.t); L.globalAlpha = 1; }
