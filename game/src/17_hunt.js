@@ -425,7 +425,7 @@ function huntWitness(v, kind) {
   if (!K || K.kind !== 'janitor' || v.dead) return;
   if (kind === 'toilet' && K.grade >= 1) { v.exposedT = CFG.JANITOR_SIREN; v.sirenT = CFG.JANITOR_SIREN; Sfx.siren(); }
   if (kind === 'honey' && K.grade >= 2) { v.exposedT = CFG.JANITOR_SIREN; v.sirenT = CFG.JANITOR_SIREN; Sfx.siren(); }
-  if ((kind === 'key' || kind === 'toilet') && Vision.visible(v.x, v.y) && K.grade < 3) {
+  if ((kind === 'key' || kind === 'toilet' || kind === 'honey') && Vision.visible(v.x, v.y) && K.grade < 3) {
     K.setGrade(K.grade + 1); K.gradePop = 1; Sfx.stamp(); Sfx.whistle();
   }
 }

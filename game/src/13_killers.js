@@ -159,7 +159,7 @@ class Janitor extends Enemy {
     if (G.mode !== 'normal') return;
     if (kind === 'toilet' && this.grade >= 1) this.siren();
     if (kind === 'honey' && this.grade >= 2) this.siren();
-    if ((kind === 'key' || kind === 'toilet') && this.sees && this.grade < 3) {
+    if ((kind === 'key' || kind === 'toilet' || kind === 'honey') && this.sees && this.grade < 3) {
       this.setGrade(this.grade + 1); this.gradePop = 1;
       Sfx.stamp(); Sfx.whistle();
     }
