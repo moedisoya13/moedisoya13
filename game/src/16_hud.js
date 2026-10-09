@@ -186,7 +186,7 @@ function drawTitleHi() {
   const bw = Math.min(pw * 0.78, u * 80), bh = u * 13.5, bx = (pw - bw) / 2;
   const modes = [
     { id: 'run', y: ph * 0.68, en: 'RUN', ko: '도망자 모드 · 살인마로부터 살아남기', c: '#efe8dc', bg: 'rgba(30,22,26,0.85)' },
-    { id: 'hunt', y: ph * 0.68 + bh + u * 4, en: 'HUNT', ko: '살인마 모드 · 동트기 전에 4명 사냥', c: '#ff4a54', bg: 'rgba(60,6,12,0.88)' },
+    { id: 'hunt', y: ph * 0.68 + bh + u * 4, en: 'HUNT', ko: `살인마 모드 · 동트기 전에 ${CFG.HUNT_VICTIMS}명 사냥`, c: '#ff4a54', bg: 'rgba(60,6,12,0.88)' },
   ];
   for (const m of modes) {
     const pulse = 1 + Math.sin(t * 3 + (m.id === 'hunt' ? 1.5 : 0)) * 0.012;

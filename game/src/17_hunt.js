@@ -7,14 +7,14 @@
 // ─────────────────────────────────────────────────────────────
 
 Object.assign(CFG, {
-  HUNT_VICTIMS: 4, HUNT_TIME: 600,  // 10-minute night
-  HUNT_VICTIM_HP: 3, HUNT_HURT_IFRAME: 0.8, HUNT_MACHINE_HIT_CD: 1.2,
+  HUNT_VICTIMS: 10, HUNT_TIME: 600,  // ten victims, a 10-minute night
+  HUNT_VICTIM_HP: 3, HUNT_HURT_IFRAME: 0.8, HUNT_MACHINE_HIT_CD: 1.2, HUNT_MACHINE_SIGHT: 6,
   HUNT_VICTIM_RATIO: 0.96,          // victims run at 96% of the hunter
   HUNT_WALK: 0.7,                   // calm victims walk
   HUNT_STAMINA: 7, HUNT_TIRED: 3, HUNT_TIRED_MULT: 0.8,
   HUNT_ATK_WINDUP: 0.12, HUNT_ATK_REACH: 1.5, HUNT_ATK_RECOVER: 0.35, HUNT_ATK_MISS: 0.5,
   HUNT_INSTINCT_AFTER: 15, HUNT_INSTINCT_EVERY: 12, HUNT_INSTINCT_SHOW: 2.2,
-  HUNT_KEYS: 4, HUNT_HONEY: 2,
+  HUNT_KEYS: 6, HUNT_HONEY: 3,
   HUNT_BLIND: 2.5, HUNT_BATON_STUN: 2.5, HUNT_SUMMON_CD: 15, HUNT_CANDLE_STOCK: 3,
   HUNT_TENTACLE_CD: 15, HUNT_SPEAR_WINDUP: 0.45, HUNT_WELL_GAP: 8,
 });
@@ -24,6 +24,12 @@ const VICTIMS = [
   { name: '준호', coat: '#3fc1b0', coat2: '#2a8a7e', legs: '#3a2d4a' },
   { name: '서연', coat: '#ef6fa0', coat2: '#b84a76', legs: '#2d3552' },
   { name: '도윤', coat: '#8fd14f', coat2: '#5f9a2e', legs: '#3a3030' },
+  { name: '하은', coat: '#ff8c3a', coat2: '#c4621e', legs: '#2d3552' },
+  { name: '지호', coat: '#5fa8ff', coat2: '#3a74c4', legs: '#3a3030' },
+  { name: '수아', coat: '#b07cff', coat2: '#7c52c4', legs: '#2d2d3a' },
+  { name: '현우', coat: '#e8e2d0', coat2: '#b0a890', legs: '#3a2d4a' },
+  { name: '예린', coat: '#c98a5a', coat2: '#94603a', legs: '#2d3552' },
+  { name: '태민', coat: '#8a94b0', coat2: '#5e6680', legs: '#2a2a30' },
 ];
 
 const HUNT_INFO = {
@@ -31,7 +37,7 @@ const HUNT_INFO = {
   witch: { ko: '마녀', abil: '양초 설치', desc: '양초 빛 속 피해자 노출 · 6개 켜면 의식' },
   janitor: { ko: '수위', abil: '손전등', desc: '목격할수록 등급↑ · B부터 피해자 시야 공유' },
   evolver: { ko: '초진화체', abil: '촉수', desc: '멈추면 은신 · 진화 후 촉수로 낚아챔' },
-  doctor: { ko: '박사', abil: '기계 소환', desc: '전기봉 기절 → 추가타 피해 · 로봇 무제한 소환' },
+  doctor: { ko: '박사', abil: '기계 소환', desc: '로봇 무제한 소환 · 로봇과 시야 공유' },
   samurai: { ko: '무사', abil: '창 찌르기', desc: '벽 너머 투시·관통 · 우물 두 개로 이동' },
 };
 
@@ -301,7 +307,7 @@ class HuntMachine extends Machine {
     for (const v of G.victims) {
       if (v.dead || v.state === 'hidden') continue;
       const d = dist(this.x, this.y, v.x, v.y);
-      if (d < bd && (v.exposedT > 0 || los(this.x, this.y, v.x, v.y))) { bd = d; tgt = v; }
+      if (d < bd && (v.exposedT > 0 || Vision.visible(v.x, v.y) || los(this.x, this.y, v.x, v.y))) { bd = d; tgt = v; } // shared sight
     }
     if (tgt) {
       this.lastSeen = { x: tgt.x, y: tgt.y };
@@ -351,7 +357,10 @@ function newHunt(kind) {
   const f = costField(st[0], st[1], {});
   const cands = shuffle(G.openTiles.filter(([x, y]) => f[y * M.w + x] !== Infinity && f[y * M.w + x] >= 12 && walkable(x, y)));
   const spots = [];
-  for (const c of cands) { if (spots.every((s) => dist(s[0], s[1], c[0], c[1]) >= 8)) spots.push(c); if (spots.length >= CFG.HUNT_VICTIMS) break; }
+  for (const gap of [8, 6, 4, 2]) {
+    for (const c of cands) { if (spots.length >= CFG.HUNT_VICTIMS) break; if (spots.every((s) => dist(s[0], s[1], c[0], c[1]) >= gap)) spots.push(c); }
+    if (spots.length >= CFG.HUNT_VICTIMS) break;
+  }
   while (spots.length < CFG.HUNT_VICTIMS) spots.push(pick(cands));
   spots.forEach((s, i) => G.victims.push(new Victim(s[0], s[1], i)));
   for (let i = 0; i < CFG.HUNT_KEYS; i++) { const [x, y] = spawnTile(6); G.keyItems.push({ x, y, t: rand(0, 5) }); }
@@ -860,6 +869,14 @@ function renderHunt() {
       Vision.addLight({ poly: v.vpts, x: v.x, y: v.y, r: 6 });
     }
   }
+  if (K.kind === 'doctor') {
+    // the Doctor sees through every machine's eye (sleeping ones too)
+    for (const m of G.machines) {
+      m.vpts = m.vpts || [];
+      Vision.cast(m.x, m.y, m.ang, CFG.HUNT_MACHINE_SIGHT, 1.0, 1.6, 72, true, m.vpts);
+      Vision.addLight({ poly: m.vpts, x: m.x, y: m.y, r: CFG.HUNT_MACHINE_SIGHT });
+    }
+  }
   FX.drawDecals(camX, camY);
   for (const w of M.wells) if (Vision.visibleTile(w.x, w.y)) drawWell(w.x * TS + 7 - camX, w.y * TS + 8 - camY, G.time, false, K.trav && K.trav.kind === 'well' && K.trav.to === w.y * M.w + w.x ? K.trav.t : 0);
   drawItems(camX, camY, G.time);
@@ -925,25 +942,26 @@ function renderHunt() {
 function drawVictimHead(x, y, v) {
   const pop = G.hudPop['v' + v.idx] || 0;
   if (v.dead) {
-    disc(x, y, 4.4, C.ink); disc(x, y, 3.6, '#4a4048'); disc(x, y + 0.6, 2, '#6a6068');
+    disc(x, y, 4.1, C.ink); disc(x, y, 3.3, '#4a4048'); disc(x, y + 0.6, 1.8, '#6a6068');
     line(x - 2, y - 2, x + 2, y + 2, C.red); line(x + 2, y - 2, x - 2, y + 2, C.red);
   } else {
-    disc(x, y, 4.4, C.ink); disc(x, y, 3.6, v.info.coat); disc(x, y + 0.8, 2.1, C.skin);
+    disc(x, y, 4.1, C.ink); disc(x, y, 3.3, v.info.coat); disc(x, y + 0.8, 1.9, C.skin);
     px(x - 1, y + 0.5, C.ink); px(x + 1, y + 0.5, C.ink);
   }
-  if (pop > 0) { L.globalAlpha = pop; disc(x, y, 5, '#ffffff'); L.globalAlpha = 1; }
+  if (pop > 0) { L.globalAlpha = pop; disc(x, y, 4.8, '#ffffff'); L.globalAlpha = 1; }
 }
 function drawHuntHUD() {
   const W = Screen.W, K = P;
   L.globalAlpha = 0.84; L.fillStyle = '#0a0709'; L.fillRect(0, 0, W, 20); L.globalAlpha = 1;
   rect(0, 20, W, 1, '#3a1e26');
+  const step = Math.min(12, Math.floor((W * 0.47) / G.victims.length));
   G.victims.forEach((v, i) => {
-    const x = 7 + i * 12;
-    drawVictimHead(x, 9, v);
-    if (!v.dead) for (let k = 0; k < CFG.HUNT_VICTIM_HP; k++) rect(x - 4 + k * 3, 16, 2, 2, k < v.hp ? C.red : '#4a3a40');
+    const x = 6 + i * step;
+    drawVictimHead(x, 8, v);
+    if (!v.dead) for (let k = 0; k < CFG.HUNT_VICTIM_HP; k++) rect(x - 3 + k * 2, 15, 2, 2, k < v.hp ? C.red : '#4a3a40'); // 3-segment hp bar
   });
   const t = G.huntT, urgent = t <= 30 && ((G.rt * 4) | 0) % 2;
-  text3(fmtTime(t), W / 2, 5, urgent ? C.red : t <= 60 ? '#ffb347' : C.white, 2, 'center');
+  text3(fmtTime(t), Math.round(W * 0.62), 5, urgent ? C.red : t <= 60 ? '#ffb347' : C.white, 2, 'center');
   const rx = W - 4;
   switch (K.kind) {
     case 'witch': {
@@ -1066,7 +1084,8 @@ function drawSelectHi() {
   const back = { x: u * 2, y: u * 2, w: u * 18, h: u * 8 };
   g.fillStyle = '#b8aeb0'; g.font = `600 ${u * 3.4}px ${FONT_KO}`; g.textAlign = 'left'; g.fillText('‹ 모드', back.x + u * 1.5, back.y + back.h / 2);
   const m = u * 3, top = ph * 0.14, bottom = ph * 0.84, gap = u * 2.4;
-  const cw = (pw - m * 3) / 2, chh = (bottom - top - gap * 2) / 3, portH = chh * 0.62;
+  const rows = Math.ceil(KILLER_KINDS.length / 2); // 2 columns; more killers → more, shorter rows
+  const cw = (pw - m * 3) / 2, chh = (bottom - top - gap * (rows - 1)) / rows, portH = chh * 0.62;
   if (!Sel.cache || Math.abs(Sel.cw - cw) > 1) buildPortraits(cw, portH);
   const cards = [];
   KILLER_KINDS.forEach((kind, i) => {
@@ -1144,13 +1163,14 @@ function drawHuntEndHi() {
   g.fillStyle = win ? '#ff3a46' : '#fff6e0'; g.fillText(word, 0, 0); g.restore();
   g.fillStyle = win ? '#efe8dc' : '#1a2230'; g.font = `700 ${u * 4.8}px ${FONT_KO}`;
   g.fillText(win ? `${CFG.HUNT_VICTIMS}명 모두 처치 · ${fmtTime(G.huntT)} 남김` : `날이 밝았다 · 처치 ${G.kills}/${CFG.HUNT_VICTIMS}`, pw / 2, ph * 0.41);
+  const rows = Math.ceil(G.victims.length / 2);
   G.victims.forEach((v, i) => {
-    const y = ph * 0.5 + i * u * 7;
-    g.fillStyle = v.info.coat; g.beginPath(); g.arc(pw / 2 - u * 16, y, u * 2.2, 0, TAU); g.fill();
-    g.textAlign = 'left'; g.fillStyle = win ? '#efe8dc' : '#1a2230'; g.font = `700 ${u * 4}px ${FONT_KO}`;
-    g.fillText(v.info.name, pw / 2 - u * 11, y);
+    const cx = pw * (i < rows ? 0.27 : 0.73), y = ph * 0.48 + (i % rows) * u * 7;
+    g.fillStyle = v.info.coat; g.beginPath(); g.arc(cx - u * 17, y, u * 2, 0, TAU); g.fill();
+    g.textAlign = 'left'; g.fillStyle = win ? '#efe8dc' : '#1a2230'; g.font = `700 ${u * 3.8}px ${FONT_KO}`;
+    g.fillText(v.info.name, cx - u * 13, y);
     g.textAlign = 'right'; g.fillStyle = v.dead ? (win ? '#ff6a70' : '#a01020') : (win ? '#9fe8ff' : '#2a6a40');
-    g.fillText(v.dead ? '처치' : `생존 ♥${v.hp}`, pw / 2 + u * 17, y);
+    g.fillText(v.dead ? '처치' : `생존 ♥${v.hp}`, cx + u * 20, y);
   });
   g.textAlign = 'center';
   if (t > 1.2) {

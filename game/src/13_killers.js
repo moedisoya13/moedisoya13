@@ -365,6 +365,8 @@ class Doctor extends Enemy {
     if (G.docT <= 0 && G.phase === 'play') { G.docT = 0; startPhase('explode'); return; }
     this.actT += dt;
     if (this.actT >= CFG.DOCTOR_ACT_EVERY) { this.actT = 0; this.act(); }
+    // one pair of eyes: the Doctor and every machine (sleeping ones too) share what they see
+    G.teamSeen = [this, ...this.machines()].some(sightOf) ? { x: P.x, y: P.y } : null;
   }
   machines() { return G.enemies.filter((e) => e.machine && e.alive); }
   act() {
@@ -423,6 +425,14 @@ function drawTimerPlate(X, Y, s) {
   text3(str, X + 0.5, Y + 1, urgent ? '#ffffff' : '#7dff9a', 1, 'center');
 }
 
+// plain line-of-sight cone check that ignores who is hostile (the Doctor himself never attacks)
+function sightOf(e) {
+  if (!P || P.hero || P.state === 'hidden' || P.state === 'dead' || P.state === 'toilet') return false;
+  const d = dist(e.x, e.y, P.x, P.y);
+  if (d > CFG.KILLER_SIGHT || !los(e.x, e.y, P.x, P.y)) return false;
+  return d <= CFG.KILLER_NEAR || Math.abs(angDiff(e.ang, Math.atan2(P.y - e.y, P.x - e.x))) <= CFG.KILLER_FOV;
+}
+
 class Machine extends Enemy {
   constructor(kind, tx, ty, doc) {
     super(kind, tx, ty);
@@ -457,6 +467,14 @@ class Machine extends Enemy {
       if (aligned && los(this.x, this.y, P.x, P.y)) { snapCenter(this); this.dash = { phase: 'rev', t: 0, dir: [Math.sign(px - tx), Math.sign(py - ty)], hit: false }; this.ang = Math.atan2(this.dash.dir[1], this.dash.dir[0]); Sfx.saw(); return true; }
     }
     return false;
+  }
+  perceive(dt) {
+    super.perceive(dt);
+    // shared sight: chase where the Doctor or another machine last saw the player
+    if (!this.sees && G.teamSeen && G.mode === 'normal') {
+      this.lastSeen = { x: G.teamSeen.x, y: G.teamSeen.y }; this.unseenT = 0;
+      if (this.state !== 'chase' && this.state !== 'bash') this.state = 'chase';
+    }
   }
   drawBody(X, Y, st) {
     if (this.dash && this.dash.phase === 'rev') X += Math.round(Math.sin(this.t * 80));
