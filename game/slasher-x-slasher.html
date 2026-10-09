@@ -88,7 +88,7 @@ const CFG = {
   PLAYER_SPEED: 4.6,         // tiles/s  (= "100")
   KILLER_RATIO: 0.94,        // 살인마 = 94
   HERO_RATIO: 1.18,          // 히어로 = 현재 살인마 속도 × 1.18 (20초 안에 잡을 수 있게)
-  TURN_TOL: 0.42,            // cornering assist (tiles)
+  TURN_TOL: 0.46,            // cornering assist (tiles) — turn this far before/after a junction centre
   HP: 3,
 
   ATTACK_RANGE: 0.95,        // start swing
@@ -130,7 +130,7 @@ const CFG = {
   EGG_TELEPORT: 60, LARVA_STEALTH: 3, EVOLVE_ADULT: 90, EVOLVE_PERFECT: 180,
   TENTACLE_RANGE: 3, TENTACLE_CD: 30, TENTACLE_WINDUP: 0.5, PERFECT_UPGRADE_EVERY: 30, PERFECT_SPEED_STEP: 0.015, PERFECT_RANGE_STEP: 0.5,
   // 박사
-  DOCTOR_COUNTDOWN: 300, DOCTOR_ACT_EVERY: 60, MACHINE_MAX: 2, MACHINE_LEASH: 8, SAW_DASH_WINDUP: 0.5, SAW_DASH_TIME: 0.7, SAW_DASH_MULT: 1.75, DRILL_BASH: 4,
+  DOCTOR_COUNTDOWN: 300, DOCTOR_ACT_EVERY: 60, MACHINE_LEASH: 8, SAW_DASH_WINDUP: 0.5, SAW_DASH_TIME: 0.7, SAW_DASH_MULT: 1.75, DRILL_BASH: 4,
   // 무사
   SAMURAI_XRAY: 6, SPEAR_RANGE: 6, SPEAR_CD: 8, SPEAR_WINDUP: 0.7, WELL_FIRST: 22, WELL_GAP: 15,
 };
@@ -903,6 +903,10 @@ function furnishRooms(m) {
     for (let y = r.y0; y <= r.y1; y++) for (let x = r.x0; x <= r.x1; x++) inside.push([x, y]);
     const doorIn = r.doors.map((id) => [m.doors[id].inX, m.doors[id].inY]);
     const isDoorIn = (x, y) => doorIn.some(([a, b]) => a === x && b === y);
+    // furniture with a button (hide / toilet) never shares a standing tile with a door or with another kind of button
+    const nearDoor = (x, y) => doorIn.some(([a, b]) => Math.abs(a - x) + Math.abs(b - y) <= 1);
+    const action = (kind, hide) => (hide ? 'hide' : kind === 'toilet' ? 'toilet' : null);
+    const clash = (x, y, act) => act && (nearDoor(x, y) || placed.some((f) => { const o = action(f.kind, f.hide); return o && o !== act && Math.abs(f.x - x) + Math.abs(f.y - y) === 2; }));
     const edge = (x, y) => x === r.x0 || x === r.x1 || y === r.y0 || y === r.y1;
     const occ = new Set();
     const placed = [];
@@ -931,7 +935,8 @@ function furnishRooms(m) {
     };
     for (const [kind, hide] of spec.furn) {
       if (placed.length >= Math.max(2, Math.floor(inside.length / 3))) break;
-      const cands = shuffle(inside.filter(([x, y]) => edge(x, y) && !isDoorIn(x, y) && !occ.has(y * m.w + x)));
+      const act = action(kind, hide);
+      const cands = shuffle(inside.filter(([x, y]) => edge(x, y) && !isDoorIn(x, y) && !occ.has(y * m.w + x) && !clash(x, y, act)));
       for (const [x, y] of cands) {
         occ.add(y * m.w + x);
         const f = { id: m.furn.length + placed.length, kind, x, y, room: r.id, hide: !!hide, ax: x, ay: y, occupied: false, shake: 0 };
@@ -978,6 +983,12 @@ function allOpenTiles() {
   const out = [];
   for (let y = 0; y < M.h; y++) for (let x = 0; x < M.w; x++) if (openTile(x, y)) out.push([x, y]);
   return out;
+}
+// a candle here would not share a button tile with a door, hiding spot or toilet
+function candleSpotClear(x, y) {
+  for (const d of M.doors) if (Math.abs(d.x - x) + Math.abs(d.y - y) <= 2) return false;
+  for (const f of M.furn) if ((f.hide || f.kind === 'toilet') && Math.abs(f.x - x) + Math.abs(f.y - y) <= 2) return false;
+  return true;
 }
 function inLockedRoom(x, y) {
   const r = M.roomOf[y * M.w + x];
@@ -2359,7 +2370,9 @@ function moveSegment(e, D, d, pass, tol) {
     const off = e.y - cy;
     if (Math.abs(off) > EPS) {
       if (Math.abs(off) > tol || !pass(tx + dx, ty)) return 0;
-      const a = Math.min(Math.abs(off), d); e.y -= Math.sign(off) * a; if (Math.abs(e.y - cy) < EPS) e.y = cy; return a;
+      const a = Math.min(Math.abs(off), d); e.y -= Math.sign(off) * a; if (Math.abs(e.y - cy) < EPS) e.y = cy;
+      const fw = (e.x - cx) * dx; if (fw > -EPS && fw + a < 0.49) e.x += dx * a; // cut the corner: already sliding into the new lane
+      return a;
     }
     e.y = cy;
     let toC = (cx - e.x) * dx;
@@ -2371,7 +2384,9 @@ function moveSegment(e, D, d, pass, tol) {
     const off = e.x - cx;
     if (Math.abs(off) > EPS) {
       if (Math.abs(off) > tol || !pass(tx, ty + dy)) return 0;
-      const a = Math.min(Math.abs(off), d); e.x -= Math.sign(off) * a; if (Math.abs(e.x - cx) < EPS) e.x = cx; return a;
+      const a = Math.min(Math.abs(off), d); e.x -= Math.sign(off) * a; if (Math.abs(e.x - cx) < EPS) e.x = cx;
+      const fw = (e.y - cy) * dy; if (fw > -EPS && fw + a < 0.49) e.y += dy * a;
+      return a;
     }
     e.x = cx;
     let toC = (cy - e.y) * dy;
@@ -2382,7 +2397,7 @@ function moveSegment(e, D, d, pass, tol) {
   }
 }
 
-function gridMove(e, cands, d, pass, tol = CFG.TURN_TOL) {
+function gridMove(e, cands, d, pass, tol = CFG.TURN_TOL, follow = false) {
   let total = 0, guard = 0;
   while (d > EPS && guard++ < 10) {
     let m = 0;
@@ -2391,10 +2406,43 @@ function gridMove(e, cands, d, pass, tol = CFG.TURN_TOL) {
       m = moveSegment(e, D, d, pass, tol);
       if (m > 0) { e.dx = D[0]; e.dy = D[1]; break; }
     }
+    if (m <= 0 && follow) {
+      const D = bendDir(e, cands[0], pass);
+      if (D) { m = moveSegment(e, D, d, pass, tol); if (m > 0) { e.dx = D[0]; e.dy = D[1]; } }
+    }
     if (m <= 0) break;
     d -= m; total += m;
   }
   return total;
+}
+
+// pushing into a plain wall at an L-bend: follow the corridor round the corner
+// (never at a junction, and never away from a door or furniture you're facing)
+function bendDir(e, prim, pass) {
+  if (!prim || !atCenter(e)) return null;
+  const tx = Math.floor(e.x), ty = Math.floor(e.y);
+  if (tAt(tx + prim[0], ty + prim[1]) !== T.WALL) return null;
+  let out = null;
+  for (const D of DIRS) {
+    if ((D[0] === -prim[0] && D[1] === -prim[1]) || (D[0] === -e.dx && D[1] === -e.dy) || (D[0] === prim[0] && D[1] === prim[1])) continue;
+    if (!pass(tx + D[0], ty + D[1])) continue;
+    if (out) return null;
+    out = D;
+  }
+  return out;
+}
+
+// joystick → rail candidates: main axis, the other axis, then keep going
+function railCands(e, v, moving) {
+  const ax = Math.abs(v.x), ay = Math.abs(v.y);
+  let horiz = ax >= ay;
+  // near the diagonal stay on the axis we're already travelling (no zig-zag at junctions)
+  if (moving && (e.dx || e.dy) && Math.abs(ax - ay) < 0.3 * Math.max(ax, ay)) horiz = e.dx !== 0;
+  const prim = horiz ? [Math.sign(v.x), 0] : [0, Math.sign(v.y)];
+  const sec = horiz ? (ay > 0.22 ? [0, Math.sign(v.y)] : null) : (ax > 0.22 ? [Math.sign(v.x), 0] : null);
+  const cands = [prim, sec];
+  if (moving && (e.dx || e.dy) && !(e.dx === -prim[0] && e.dy === -prim[1])) cands.push([e.dx, e.dy]);
+  return cands;
 }
 const atCenter = (e) => Math.abs(e.x - Math.floor(e.x) - 0.5) < 1e-3 && Math.abs(e.y - Math.floor(e.y) - 0.5) < 1e-3;
 
@@ -2446,12 +2494,8 @@ function updatePlayer(dt) {
   const v = Input.vector();
   let moved = 0;
   if (v.mag > 0 && P.staggerT <= 0) {
-    const ax = Math.abs(v.x), ay = Math.abs(v.y);
-    const prim = ax >= ay ? [Math.sign(v.x), 0] : [0, Math.sign(v.y)];
-    const sec = ax >= ay ? (ay > 0.22 ? [0, Math.sign(v.y)] : null) : (ax > 0.22 ? [Math.sign(v.x), 0] : null);
-    const cands = [prim, sec];
-    if ((P.dx || P.dy) && P.amt > 0.2 && !(P.dx === -prim[0] && P.dy === -prim[1])) cands.push([P.dx, P.dy]);
-    moved = gridMove(P, cands, playerSpeed() * dt, playerPass);
+    const moving = P.amt > 0.2;
+    moved = gridMove(P, railCands(P, v, moving), playerSpeed() * dt, playerPass, CFG.TURN_TOL, moving);
     const want = moved > 0 ? Math.atan2(P.dy, P.dx) : Math.atan2(v.y, v.x);
     P.ang = angApproach(P.ang, want, dt * 16);
     if (P.hero) heroSmashDoors();
@@ -3188,6 +3232,7 @@ function spawnTile(minD = 6, o = {}) {
     if (o.maxD && P && dist(x + 0.5, y + 0.5, P.x, P.y) > o.maxD) continue;
     if (o.noLocked && inLockedRoom(x, y)) continue;
     if (o.hidden && Vision.visibleTile(x, y)) continue;
+    if (o.clear && !candleSpotClear(x, y)) continue;
     return [x, y];
   }
   return pick(G.openTiles);
@@ -3398,7 +3443,7 @@ class Witch extends Enemy {
       if (this.fakeT >= CFG.WITCH_FAKE_EVERY) {
         this.fakeT = 0;
         if (G.candles.filter((c) => c.fake).length < CFG.WITCH_FAKE_MAX) {
-          const [x, y] = spawnTile(5, { maxD: 16, hidden: true });
+          const [x, y] = spawnTile(5, { maxD: 16, hidden: true, clear: true });
           G.candles.push({ x, y, fake: true, t: 0 });
         }
       }
@@ -3413,7 +3458,7 @@ class Witch extends Enemy {
     if (this.placeT > 0) { this.placeT -= dt; this.amt = approach(this.amt, 0, dt * 8); return true; }
     if (G.mode === 'normal' && this.candleT >= CFG.WITCH_CANDLE_EVERY && nearCenter(this)) {
       const [tx, ty] = this.tile();
-      if (openTile(tx, ty) && !G.candles.some((c) => c.x === tx && c.y === ty)) {
+      if (openTile(tx, ty) && candleSpotClear(tx, ty) && !G.candles.some((c) => c.x === tx && c.y === ty)) {
         snapCenter(this);
         G.candles.push({ x: tx, y: ty, fake: false, t: 0 });
         this.candleT = 0; this.placeT = CFG.WITCH_PLACE_PAUSE;
@@ -3648,6 +3693,12 @@ class Evolver extends Enemy {
 }
 
 // ── 6.5 박사 ─────────────────────────────────────────────────
+// keep the saw / drill mix even as the swarm grows
+function machineKind(ms) {
+  const saws = ms.filter((m) => m.kind === 'saw').length, drills = ms.length - saws;
+  return saws < drills ? 'saw' : drills < saws ? 'drill' : pick(['saw', 'drill']);
+}
+
 class Doctor extends Enemy {
   constructor(tx, ty) {
     super('doctor', tx, ty);
@@ -3666,11 +3717,11 @@ class Doctor extends Enemy {
   machines() { return G.enemies.filter((e) => e.machine && e.alive); }
   act() {
     const ms = this.machines();
-    if (ms.length < CFG.MACHINE_MAX && rnd() < 0.55) this.summon(); else this.teleport(10);
+    if (rnd() < 0.55) this.summon(); else this.teleport(10); // no cap on machines
   }
   summon() {
     const ms = this.machines();
-    const kind = ms.some((m) => m.kind === 'saw') ? 'drill' : ms.some((m) => m.kind === 'drill') ? 'saw' : pick(['saw', 'drill']);
+    const kind = machineKind(ms);
     const [tx, ty] = this.tile();
     const spot = DIRS.map(([dx, dy]) => [tx + dx, ty + dy]).find(([x, y]) => walkable(x, y)) || [tx, ty];
     G.enemies.push(new Machine(kind, spot[0], spot[1], this));
@@ -5358,7 +5409,7 @@ const HUNT_INFO = {
   witch: { ko: '마녀', abil: '양초 설치', desc: '양초 빛 속 피해자 노출 · 6개 켜면 의식' },
   janitor: { ko: '수위', abil: '손전등', desc: '목격할수록 등급↑ · B부터 피해자 시야 공유' },
   evolver: { ko: '초진화체', abil: '촉수', desc: '멈추면 은신 · 진화 후 촉수로 낚아챔' },
-  doctor: { ko: '박사', abil: '기계 소환', desc: '전기봉 1타 기절·2타 처치 · 로봇 소환' },
+  doctor: { ko: '박사', abil: '기계 소환', desc: '전기봉 1타 기절·2타 처치 · 로봇 무제한 소환' },
   samurai: { ko: '무사', abil: '창 찌르기', desc: '벽 너머 투시·관통 · 우물 두 개로 이동' },
 };
 
@@ -5845,12 +5896,8 @@ function updateHunter(dt) {
   // movement (slowed while swinging)
   let moved = 0;
   if (v.mag > 0) {
-    const ax = Math.abs(v.x), ay = Math.abs(v.y);
-    const prim = ax >= ay ? [Math.sign(v.x), 0] : [0, Math.sign(v.y)];
-    const sec = ax >= ay ? (ay > 0.22 ? [0, Math.sign(v.y)] : null) : (ax > 0.22 ? [Math.sign(v.x), 0] : null);
-    const cands = [prim, sec];
-    if ((K.dx || K.dy) && K.amt > 0.2 && !(K.dx === -prim[0] && K.dy === -prim[1])) cands.push([K.dx, K.dy]);
-    moved = gridMove(K, cands, K.speed() * (K.atk ? 0.6 : 1) * dt, walkable);
+    const moving = K.amt > 0.2;
+    moved = gridMove(K, railCands(K, v, moving), K.speed() * (K.atk ? 0.6 : 1) * dt, walkable, CFG.TURN_TOL, moving);
     if (!K.atk) K.ang = angApproach(K.ang, moved > 0 ? Math.atan2(K.dy, K.dx) : Math.atan2(v.y, v.x), dt * 16);
   }
   K.amt = approach(K.amt, moved > 0 ? 1 : 0, dt * (moved > 0 ? 7 : 9));
@@ -5928,7 +5975,6 @@ function huntAbilityReady() {
     case 'butcher': { const [dx, dy] = facingDir(K), [tx, ty] = K.tile(); return breakableWall(tx + dx, ty + dy); }
     case 'witch': { const [tx, ty] = K.tile(); return K.stock > 0 && openTile(tx, ty) && !G.candles.some((c) => c.x === tx && c.y === ty); }
     case 'evolver': return K.stage !== 'larva';
-    case 'doctor': return G.machines.length < CFG.MACHINE_MAX;
     default: return true;
   }
 }
@@ -5955,7 +6001,7 @@ function tryHuntAbility() {
       K.tent = { phase: 'windup', t: 0, dir: [dx, dy] };
       break;
     case 'doctor': {
-      const kind = G.machines.some((m) => m.kind === 'saw') ? 'drill' : 'saw';
+      const kind = machineKind(G.machines);
       const spot = DIRS.map(([a, b]) => [tx + a, ty + b]).find(([x, y]) => walkable(x, y)) || [tx, ty];
       G.machines.push(new HuntMachine(kind, spot[0], spot[1], K));
       Sfx.summon(); FX.ring(spot[0] * CFG.TS + 7, spot[1] * CFG.TS + 7, '#7dff9a', 18);
@@ -6234,7 +6280,12 @@ function drawHuntHUD() {
       }
       break;
     }
-    case 'doctor': for (let i = 0; i < CFG.MACHINE_MAX; i++) { const on = i < G.machines.length; disc(rx - 4 - i * 9, 10, 3.6, C.ink); disc(rx - 4 - i * 9, 10, 2.8, on ? '#8b909a' : '#2a2a30'); if (on) px(rx - 4 - i * 9, 9, '#ff2a2a'); } break;
+    case 'doctor': { // machine count (no cap)
+      const n = G.machines.length, mx = rx - 4 - textW3('X' + n, 1) - 6;
+      disc(mx, 10, 3.6, C.ink); disc(mx, 10, 2.8, n ? '#8b909a' : '#2a2a30'); if (n) px(mx, 9, '#ff2a2a');
+      text3('X' + n, rx, 8, n ? C.white : '#6a5e64', 1, 'right');
+      break;
+    }
     case 'samurai': for (let i = 0; i < 2; i++) { const on = i < M.wells.length; ellipse(rx - 5 - i * 11, 10, 4.6, 3, 0, C.ink); ellipse(rx - 5 - i * 11, 10, 3.6, 2.2, 0, on ? '#5a5a62' : '#2a2a30'); if (on) ellipse(rx - 5 - i * 11, 9.6, 2, 1.1, 0, '#0c1418'); } break;
   }
 }

@@ -59,7 +59,7 @@ const CFG = {
   PLAYER_SPEED: 4.6,         // tiles/s  (= "100")
   KILLER_RATIO: 0.94,        // 살인마 = 94
   HERO_RATIO: 1.18,          // 히어로 = 현재 살인마 속도 × 1.18 (20초 안에 잡을 수 있게)
-  TURN_TOL: 0.42,            // cornering assist (tiles)
+  TURN_TOL: 0.46,            // cornering assist (tiles) — turn this far before/after a junction centre
   HP: 3,
 
   ATTACK_RANGE: 0.95,        // start swing
@@ -101,7 +101,7 @@ const CFG = {
   EGG_TELEPORT: 60, LARVA_STEALTH: 3, EVOLVE_ADULT: 90, EVOLVE_PERFECT: 180,
   TENTACLE_RANGE: 3, TENTACLE_CD: 30, TENTACLE_WINDUP: 0.5, PERFECT_UPGRADE_EVERY: 30, PERFECT_SPEED_STEP: 0.015, PERFECT_RANGE_STEP: 0.5,
   // 박사
-  DOCTOR_COUNTDOWN: 300, DOCTOR_ACT_EVERY: 60, MACHINE_MAX: 2, MACHINE_LEASH: 8, SAW_DASH_WINDUP: 0.5, SAW_DASH_TIME: 0.7, SAW_DASH_MULT: 1.75, DRILL_BASH: 4,
+  DOCTOR_COUNTDOWN: 300, DOCTOR_ACT_EVERY: 60, MACHINE_LEASH: 8, SAW_DASH_WINDUP: 0.5, SAW_DASH_TIME: 0.7, SAW_DASH_MULT: 1.75, DRILL_BASH: 4,
   // 무사
   SAMURAI_XRAY: 6, SPEAR_RANGE: 6, SPEAR_CD: 8, SPEAR_WINDUP: 0.7, WELL_FIRST: 22, WELL_GAP: 15,
 };

@@ -156,6 +156,10 @@ function furnishRooms(m) {
     for (let y = r.y0; y <= r.y1; y++) for (let x = r.x0; x <= r.x1; x++) inside.push([x, y]);
     const doorIn = r.doors.map((id) => [m.doors[id].inX, m.doors[id].inY]);
     const isDoorIn = (x, y) => doorIn.some(([a, b]) => a === x && b === y);
+    // furniture with a button (hide / toilet) never shares a standing tile with a door or with another kind of button
+    const nearDoor = (x, y) => doorIn.some(([a, b]) => Math.abs(a - x) + Math.abs(b - y) <= 1);
+    const action = (kind, hide) => (hide ? 'hide' : kind === 'toilet' ? 'toilet' : null);
+    const clash = (x, y, act) => act && (nearDoor(x, y) || placed.some((f) => { const o = action(f.kind, f.hide); return o && o !== act && Math.abs(f.x - x) + Math.abs(f.y - y) === 2; }));
     const edge = (x, y) => x === r.x0 || x === r.x1 || y === r.y0 || y === r.y1;
     const occ = new Set();
     const placed = [];
@@ -184,7 +188,8 @@ function furnishRooms(m) {
     };
     for (const [kind, hide] of spec.furn) {
       if (placed.length >= Math.max(2, Math.floor(inside.length / 3))) break;
-      const cands = shuffle(inside.filter(([x, y]) => edge(x, y) && !isDoorIn(x, y) && !occ.has(y * m.w + x)));
+      const act = action(kind, hide);
+      const cands = shuffle(inside.filter(([x, y]) => edge(x, y) && !isDoorIn(x, y) && !occ.has(y * m.w + x) && !clash(x, y, act)));
       for (const [x, y] of cands) {
         occ.add(y * m.w + x);
         const f = { id: m.furn.length + placed.length, kind, x, y, room: r.id, hide: !!hide, ax: x, ay: y, occupied: false, shake: 0 };
@@ -231,6 +236,12 @@ function allOpenTiles() {
   const out = [];
   for (let y = 0; y < M.h; y++) for (let x = 0; x < M.w; x++) if (openTile(x, y)) out.push([x, y]);
   return out;
+}
+// a candle here would not share a button tile with a door, hiding spot or toilet
+function candleSpotClear(x, y) {
+  for (const d of M.doors) if (Math.abs(d.x - x) + Math.abs(d.y - y) <= 2) return false;
+  for (const f of M.furn) if ((f.hide || f.kind === 'toilet') && Math.abs(f.x - x) + Math.abs(f.y - y) <= 2) return false;
+  return true;
 }
 function inLockedRoom(x, y) {
   const r = M.roomOf[y * M.w + x];

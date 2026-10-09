@@ -26,6 +26,7 @@ function spawnTile(minD = 6, o = {}) {
     if (o.maxD && P && dist(x + 0.5, y + 0.5, P.x, P.y) > o.maxD) continue;
     if (o.noLocked && inLockedRoom(x, y)) continue;
     if (o.hidden && Vision.visibleTile(x, y)) continue;
+    if (o.clear && !candleSpotClear(x, y)) continue;
     return [x, y];
   }
   return pick(G.openTiles);

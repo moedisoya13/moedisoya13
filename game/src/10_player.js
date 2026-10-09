@@ -14,7 +14,9 @@ function moveSegment(e, D, d, pass, tol) {
     const off = e.y - cy;
     if (Math.abs(off) > EPS) {
       if (Math.abs(off) > tol || !pass(tx + dx, ty)) return 0;
-      const a = Math.min(Math.abs(off), d); e.y -= Math.sign(off) * a; if (Math.abs(e.y - cy) < EPS) e.y = cy; return a;
+      const a = Math.min(Math.abs(off), d); e.y -= Math.sign(off) * a; if (Math.abs(e.y - cy) < EPS) e.y = cy;
+      const fw = (e.x - cx) * dx; if (fw > -EPS && fw + a < 0.49) e.x += dx * a; // cut the corner: already sliding into the new lane
+      return a;
     }
     e.y = cy;
     let toC = (cx - e.x) * dx;
@@ -26,7 +28,9 @@ function moveSegment(e, D, d, pass, tol) {
     const off = e.x - cx;
     if (Math.abs(off) > EPS) {
       if (Math.abs(off) > tol || !pass(tx, ty + dy)) return 0;
-      const a = Math.min(Math.abs(off), d); e.x -= Math.sign(off) * a; if (Math.abs(e.x - cx) < EPS) e.x = cx; return a;
+      const a = Math.min(Math.abs(off), d); e.x -= Math.sign(off) * a; if (Math.abs(e.x - cx) < EPS) e.x = cx;
+      const fw = (e.y - cy) * dy; if (fw > -EPS && fw + a < 0.49) e.y += dy * a;
+      return a;
     }
     e.x = cx;
     let toC = (cy - e.y) * dy;
@@ -37,7 +41,7 @@ function moveSegment(e, D, d, pass, tol) {
   }
 }
 
-function gridMove(e, cands, d, pass, tol = CFG.TURN_TOL) {
+function gridMove(e, cands, d, pass, tol = CFG.TURN_TOL, follow = false) {
   let total = 0, guard = 0;
   while (d > EPS && guard++ < 10) {
     let m = 0;
@@ -46,10 +50,43 @@ function gridMove(e, cands, d, pass, tol = CFG.TURN_TOL) {
       m = moveSegment(e, D, d, pass, tol);
       if (m > 0) { e.dx = D[0]; e.dy = D[1]; break; }
     }
+    if (m <= 0 && follow) {
+      const D = bendDir(e, cands[0], pass);
+      if (D) { m = moveSegment(e, D, d, pass, tol); if (m > 0) { e.dx = D[0]; e.dy = D[1]; } }
+    }
     if (m <= 0) break;
     d -= m; total += m;
   }
   return total;
+}
+
+// pushing into a plain wall at an L-bend: follow the corridor round the corner
+// (never at a junction, and never away from a door or furniture you're facing)
+function bendDir(e, prim, pass) {
+  if (!prim || !atCenter(e)) return null;
+  const tx = Math.floor(e.x), ty = Math.floor(e.y);
+  if (tAt(tx + prim[0], ty + prim[1]) !== T.WALL) return null;
+  let out = null;
+  for (const D of DIRS) {
+    if ((D[0] === -prim[0] && D[1] === -prim[1]) || (D[0] === -e.dx && D[1] === -e.dy) || (D[0] === prim[0] && D[1] === prim[1])) continue;
+    if (!pass(tx + D[0], ty + D[1])) continue;
+    if (out) return null;
+    out = D;
+  }
+  return out;
+}
+
+// joystick → rail candidates: main axis, the other axis, then keep going
+function railCands(e, v, moving) {
+  const ax = Math.abs(v.x), ay = Math.abs(v.y);
+  let horiz = ax >= ay;
+  // near the diagonal stay on the axis we're already travelling (no zig-zag at junctions)
+  if (moving && (e.dx || e.dy) && Math.abs(ax - ay) < 0.3 * Math.max(ax, ay)) horiz = e.dx !== 0;
+  const prim = horiz ? [Math.sign(v.x), 0] : [0, Math.sign(v.y)];
+  const sec = horiz ? (ay > 0.22 ? [0, Math.sign(v.y)] : null) : (ax > 0.22 ? [Math.sign(v.x), 0] : null);
+  const cands = [prim, sec];
+  if (moving && (e.dx || e.dy) && !(e.dx === -prim[0] && e.dy === -prim[1])) cands.push([e.dx, e.dy]);
+  return cands;
 }
 const atCenter = (e) => Math.abs(e.x - Math.floor(e.x) - 0.5) < 1e-3 && Math.abs(e.y - Math.floor(e.y) - 0.5) < 1e-3;
 
@@ -101,12 +138,8 @@ function updatePlayer(dt) {
   const v = Input.vector();
   let moved = 0;
   if (v.mag > 0 && P.staggerT <= 0) {
-    const ax = Math.abs(v.x), ay = Math.abs(v.y);
-    const prim = ax >= ay ? [Math.sign(v.x), 0] : [0, Math.sign(v.y)];
-    const sec = ax >= ay ? (ay > 0.22 ? [0, Math.sign(v.y)] : null) : (ax > 0.22 ? [Math.sign(v.x), 0] : null);
-    const cands = [prim, sec];
-    if ((P.dx || P.dy) && P.amt > 0.2 && !(P.dx === -prim[0] && P.dy === -prim[1])) cands.push([P.dx, P.dy]);
-    moved = gridMove(P, cands, playerSpeed() * dt, playerPass);
+    const moving = P.amt > 0.2;
+    moved = gridMove(P, railCands(P, v, moving), playerSpeed() * dt, playerPass, CFG.TURN_TOL, moving);
     const want = moved > 0 ? Math.atan2(P.dy, P.dx) : Math.atan2(v.y, v.x);
     P.ang = angApproach(P.ang, want, dt * 16);
     if (P.hero) heroSmashDoors();

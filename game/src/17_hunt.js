@@ -30,7 +30,7 @@ const HUNT_INFO = {
   witch: { ko: '마녀', abil: '양초 설치', desc: '양초 빛 속 피해자 노출 · 6개 켜면 의식' },
   janitor: { ko: '수위', abil: '손전등', desc: '목격할수록 등급↑ · B부터 피해자 시야 공유' },
   evolver: { ko: '초진화체', abil: '촉수', desc: '멈추면 은신 · 진화 후 촉수로 낚아챔' },
-  doctor: { ko: '박사', abil: '기계 소환', desc: '전기봉 1타 기절·2타 처치 · 로봇 소환' },
+  doctor: { ko: '박사', abil: '기계 소환', desc: '전기봉 1타 기절·2타 처치 · 로봇 무제한 소환' },
   samurai: { ko: '무사', abil: '창 찌르기', desc: '벽 너머 투시·관통 · 우물 두 개로 이동' },
 };
 
@@ -517,12 +517,8 @@ function updateHunter(dt) {
   // movement (slowed while swinging)
   let moved = 0;
   if (v.mag > 0) {
-    const ax = Math.abs(v.x), ay = Math.abs(v.y);
-    const prim = ax >= ay ? [Math.sign(v.x), 0] : [0, Math.sign(v.y)];
-    const sec = ax >= ay ? (ay > 0.22 ? [0, Math.sign(v.y)] : null) : (ax > 0.22 ? [Math.sign(v.x), 0] : null);
-    const cands = [prim, sec];
-    if ((K.dx || K.dy) && K.amt > 0.2 && !(K.dx === -prim[0] && K.dy === -prim[1])) cands.push([K.dx, K.dy]);
-    moved = gridMove(K, cands, K.speed() * (K.atk ? 0.6 : 1) * dt, walkable);
+    const moving = K.amt > 0.2;
+    moved = gridMove(K, railCands(K, v, moving), K.speed() * (K.atk ? 0.6 : 1) * dt, walkable, CFG.TURN_TOL, moving);
     if (!K.atk) K.ang = angApproach(K.ang, moved > 0 ? Math.atan2(K.dy, K.dx) : Math.atan2(v.y, v.x), dt * 16);
   }
   K.amt = approach(K.amt, moved > 0 ? 1 : 0, dt * (moved > 0 ? 7 : 9));
@@ -600,7 +596,6 @@ function huntAbilityReady() {
     case 'butcher': { const [dx, dy] = facingDir(K), [tx, ty] = K.tile(); return breakableWall(tx + dx, ty + dy); }
     case 'witch': { const [tx, ty] = K.tile(); return K.stock > 0 && openTile(tx, ty) && !G.candles.some((c) => c.x === tx && c.y === ty); }
     case 'evolver': return K.stage !== 'larva';
-    case 'doctor': return G.machines.length < CFG.MACHINE_MAX;
     default: return true;
   }
 }
@@ -627,7 +622,7 @@ function tryHuntAbility() {
       K.tent = { phase: 'windup', t: 0, dir: [dx, dy] };
       break;
     case 'doctor': {
-      const kind = G.machines.some((m) => m.kind === 'saw') ? 'drill' : 'saw';
+      const kind = machineKind(G.machines);
       const spot = DIRS.map(([a, b]) => [tx + a, ty + b]).find(([x, y]) => walkable(x, y)) || [tx, ty];
       G.machines.push(new HuntMachine(kind, spot[0], spot[1], K));
       Sfx.summon(); FX.ring(spot[0] * CFG.TS + 7, spot[1] * CFG.TS + 7, '#7dff9a', 18);
@@ -906,7 +901,12 @@ function drawHuntHUD() {
       }
       break;
     }
-    case 'doctor': for (let i = 0; i < CFG.MACHINE_MAX; i++) { const on = i < G.machines.length; disc(rx - 4 - i * 9, 10, 3.6, C.ink); disc(rx - 4 - i * 9, 10, 2.8, on ? '#8b909a' : '#2a2a30'); if (on) px(rx - 4 - i * 9, 9, '#ff2a2a'); } break;
+    case 'doctor': { // machine count (no cap)
+      const n = G.machines.length, mx = rx - 4 - textW3('X' + n, 1) - 6;
+      disc(mx, 10, 3.6, C.ink); disc(mx, 10, 2.8, n ? '#8b909a' : '#2a2a30'); if (n) px(mx, 9, '#ff2a2a');
+      text3('X' + n, rx, 8, n ? C.white : '#6a5e64', 1, 'right');
+      break;
+    }
     case 'samurai': for (let i = 0; i < 2; i++) { const on = i < M.wells.length; ellipse(rx - 5 - i * 11, 10, 4.6, 3, 0, C.ink); ellipse(rx - 5 - i * 11, 10, 3.6, 2.2, 0, on ? '#5a5a62' : '#2a2a30'); if (on) ellipse(rx - 5 - i * 11, 9.6, 2, 1.1, 0, '#0c1418'); } break;
   }
 }

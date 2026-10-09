@@ -95,7 +95,7 @@ class Witch extends Enemy {
       if (this.fakeT >= CFG.WITCH_FAKE_EVERY) {
         this.fakeT = 0;
         if (G.candles.filter((c) => c.fake).length < CFG.WITCH_FAKE_MAX) {
-          const [x, y] = spawnTile(5, { maxD: 16, hidden: true });
+          const [x, y] = spawnTile(5, { maxD: 16, hidden: true, clear: true });
           G.candles.push({ x, y, fake: true, t: 0 });
         }
       }
@@ -110,7 +110,7 @@ class Witch extends Enemy {
     if (this.placeT > 0) { this.placeT -= dt; this.amt = approach(this.amt, 0, dt * 8); return true; }
     if (G.mode === 'normal' && this.candleT >= CFG.WITCH_CANDLE_EVERY && nearCenter(this)) {
       const [tx, ty] = this.tile();
-      if (openTile(tx, ty) && !G.candles.some((c) => c.x === tx && c.y === ty)) {
+      if (openTile(tx, ty) && candleSpotClear(tx, ty) && !G.candles.some((c) => c.x === tx && c.y === ty)) {
         snapCenter(this);
         G.candles.push({ x: tx, y: ty, fake: false, t: 0 });
         this.candleT = 0; this.placeT = CFG.WITCH_PLACE_PAUSE;
@@ -345,6 +345,12 @@ class Evolver extends Enemy {
 }
 
 // ── 6.5 박사 ─────────────────────────────────────────────────
+// keep the saw / drill mix even as the swarm grows
+function machineKind(ms) {
+  const saws = ms.filter((m) => m.kind === 'saw').length, drills = ms.length - saws;
+  return saws < drills ? 'saw' : drills < saws ? 'drill' : pick(['saw', 'drill']);
+}
+
 class Doctor extends Enemy {
   constructor(tx, ty) {
     super('doctor', tx, ty);
@@ -363,11 +369,11 @@ class Doctor extends Enemy {
   machines() { return G.enemies.filter((e) => e.machine && e.alive); }
   act() {
     const ms = this.machines();
-    if (ms.length < CFG.MACHINE_MAX && rnd() < 0.55) this.summon(); else this.teleport(10);
+    if (rnd() < 0.55) this.summon(); else this.teleport(10); // no cap on machines
   }
   summon() {
     const ms = this.machines();
-    const kind = ms.some((m) => m.kind === 'saw') ? 'drill' : ms.some((m) => m.kind === 'drill') ? 'saw' : pick(['saw', 'drill']);
+    const kind = machineKind(ms);
     const [tx, ty] = this.tile();
     const spot = DIRS.map(([dx, dy]) => [tx + dx, ty + dy]).find(([x, y]) => walkable(x, y)) || [tx, ty];
     G.enemies.push(new Machine(kind, spot[0], spot[1], this));
