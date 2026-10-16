@@ -17,6 +17,8 @@
 "전역" 은 이 저장소의 `.claude/skills/`(→ 클라우드·모바일 세션 전부) 와 데스크톱 `~/.claude/` + `claude mcp add --scope user` 를 뜻한다.
 판정 기준은 ① Claude Code 자산인가 ② 특정 엔진·프로젝트·GPU 없이 동작하나 ③ 라이선스(한국 거주자 사용 가능, 상업 이용) ④ 매 세션 컨텍스트 비용 ⑤ 이름 충돌·보안 다섯 가지다.
 
+신규 모바일 게임에 쓸 요소만 따로 추린 정리는 [MOBILE-GAMEDEV-PICKS.md](MOBILE-GAMEDEV-PICKS.md) 에 있다.
+
 참고로 현재 게임 프로젝트 `how-to-survive-a-slasher-film` 은 Three.js + Vite 웹 게임이라 Unreal / Unity / Godot 전용 도구 9종은 해당 사항이 없다.
 
 ## 15종 일람
