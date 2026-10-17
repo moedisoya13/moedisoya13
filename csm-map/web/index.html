@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="ko" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CSM 거래처 지도</title>
+<meta name="description" content="거래처·대리점 주소를 지오코딩해 시군구 단위 지도 위에 시각화하는 로컬 미니 앱">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 2l12 7v14l-12 7L4 23V9z' fill='%233460fb'/%3E%3Ccircle cx='16' cy='16' r='5' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="vendor/leaflet/leaflet.css">
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="app.css">
+<!-- CSM:INLINE -->
+</head>
+<body>
+<div id="app" class="app" data-mode="focus">
+
+  <!-- ① 전체: 제목·요약·전역 동작 -->
+  <header class="topbar" role="banner">
+    <div class="brand">
+      <svg class="brand__mark" viewBox="0 0 32 32" aria-hidden="true"><path d="M16 2l12 7v14l-12 7L4 23V9z"/><circle cx="16" cy="16" r="5"/></svg>
+      <div>
+        <h1 class="brand__title">CSM 거래처 지도</h1>
+        <p class="brand__summary" id="summary" aria-live="polite">데이터를 불러오는 중…</p>
+      </div>
+    </div>
+    <div class="topbar__actions">
+      <label class="search" aria-label="거래처·대리점·주소 검색">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5"/><path d="M13 13l4.5 4.5"/></svg>
+        <input id="search" type="search" placeholder="거래처·대리점·주소 검색" autocomplete="off">
+        <kbd>/</kbd>
+      </label>
+      <div class="geostatus" id="geostatus" role="status" aria-live="polite">
+        <span class="geostatus__bar"><span class="geostatus__fill" id="geofill"></span></span>
+        <span class="geostatus__text" id="geotext">대기</span>
+      </div>
+      <button class="btn btn--primary app-only" id="btn-geocode" type="button" title="주소를 좌표로 변환합니다">지오코딩</button>
+      <div class="menu">
+        <button class="btn" id="btn-export" type="button" aria-haspopup="menu" aria-expanded="false">내보내기</button>
+        <div class="menu__list" role="menu" id="export-menu" hidden>
+          <button role="menuitem" class="app-only" data-export="html">단독 HTML 저장</button>
+          <button role="menuitem" class="app-only" data-export="csv">CSV 저장 (좌표 포함)</button>
+          <button role="menuitem" data-export="csv-dl">CSV 다운로드</button>
+        </div>
+      </div>
+      <button class="btn btn--icon" id="btn-theme" type="button" title="라이트/다크 전환" aria-label="테마 전환">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path class="sun" d="M10 3v2M10 15v2M3 10h2M15 10h2M5.1 5.1l1.4 1.4M13.5 13.5l1.4 1.4M5.1 14.9l1.4-1.4M13.5 6.5l1.4-1.4"/><circle cx="10" cy="10" r="3.2"/></svg>
+      </button>
+      <button class="btn btn--icon" id="btn-settings" type="button" title="설정" aria-label="설정">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="2.6"/><path d="M10 2.5v2.2M10 15.3v2.2M2.5 10h2.2M15.3 10h2.2M4.7 4.7l1.6 1.6M13.7 13.7l1.6 1.6M4.7 15.3l1.6-1.6M13.7 6.3l1.6-1.6"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- ② 지표: 전체 → 선택 권역 비교 -->
+  <section class="kpis" aria-label="주요 지표" id="kpis">
+    <article class="kpi" data-kpi="stores">
+      <span class="kpi__label">거래처</span>
+      <span class="kpi__value" data-count="0">0</span>
+      <span class="kpi__compare" data-compare>전체</span>
+    </article>
+    <article class="kpi" data-kpi="dealers">
+      <span class="kpi__label">대리점</span>
+      <span class="kpi__value" data-count="0">0</span>
+      <span class="kpi__compare" data-compare>주소 등록 0</span>
+    </article>
+    <article class="kpi" data-kpi="regions">
+      <span class="kpi__label">시군구</span>
+      <span class="kpi__value" data-count="0">0</span>
+      <span class="kpi__compare" data-compare>전체 권역</span>
+    </article>
+    <article class="kpi" data-kpi="quality">
+      <span class="kpi__label">좌표 확정률</span>
+      <span class="kpi__value"><span data-count="0">0</span><small>%</small></span>
+      <span class="kpi__compare" data-compare>근사 0 · 실패 0</span>
+    </article>
+    <div class="kpi__meta" id="kpi-meta">기준 시점 —</div>
+  </section>
+
+  <!-- ③ 필터: 영향을 받는 지도는 바로 아래 -->
+  <section class="filters" aria-label="권역 필터" id="filters">
+    <div class="filters__row">
+      <div class="seg" role="tablist" aria-label="시도" id="sido-seg"></div>
+      <div class="filters__spacer"></div>
+      <div class="presets">
+        <select id="preset-select" aria-label="저장된 필터" class="select"><option value="">저장된 필터…</option></select>
+        <button class="btn btn--ghost" id="btn-preset-save" type="button" title="현재 선택을 이름 붙여 저장">저장</button>
+        <button class="btn btn--ghost" id="btn-preset-delete" type="button" title="선택한 프리셋 삭제" disabled>삭제</button>
+      </div>
+      <button class="btn btn--ghost" id="btn-clear" type="button">전체 보기</button>
+      <button class="btn btn--primary" id="btn-apply" type="button" disabled>적용 <span class="count-badge" id="apply-count" hidden>0</span></button>
+    </div>
+    <div class="chips" id="chips" role="group" aria-label="시군구 선택"></div>
+  </section>
+
+  <!-- ④ 지도(전체 공간) + ⑤ 상세 패널(부분) -->
+  <main class="main">
+    <section class="mapwrap" aria-label="지도">
+      <div id="map" class="map" role="application" aria-label="거래처 지도" tabindex="0"></div>
+      <div class="edge-layer" id="edge-layer" aria-live="off"></div>
+      <div class="map-toolbar">
+        <button class="tool" id="btn-zoom-in" type="button" title="확대" aria-label="확대">+</button>
+        <button class="tool" id="btn-zoom-out" type="button" title="축소" aria-label="축소">−</button>
+        <button class="tool" id="btn-fit" type="button" title="선택 권역에 맞춤" aria-label="선택 권역에 맞춤">⤢</button>
+        <button class="tool" id="btn-tiles" type="button" title="온라인 배경지도 켜기/끄기" aria-pressed="false">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 7l7-4 7 4-7 4z"/><path d="M3 10l7 4 7-4M3 13l7 4 7-4"/></svg>
+        </button>
+        <button class="tool" id="btn-colormode" type="button" title="색상 모드: 주목 ↔ 대리점별" aria-pressed="false">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="7" cy="8" r="3.2"/><circle cx="13" cy="8" r="3.2"/><circle cx="10" cy="13" r="3.2"/></svg>
+        </button>
+      </div>
+      <div class="placing-banner" id="placing" hidden>
+        <span>지도를 클릭해 <b id="placing-name"></b> 위치를 지정하세요</span>
+        <button class="btn btn--ghost btn--sm" id="placing-cancel" type="button">취소</button>
+      </div>
+    </section>
+
+    <aside class="panel" aria-label="상세">
+      <div class="tabs" role="tablist">
+        <button class="tab is-active" role="tab" data-tab="dealers" aria-selected="true">대리점 <span class="tab__n" data-n="dealers"></span></button>
+        <button class="tab" role="tab" data-tab="stores" aria-selected="false">거래처 <span class="tab__n" data-n="stores"></span></button>
+        <button class="tab" role="tab" data-tab="issues" aria-selected="false">미해결 <span class="tab__n tab__n--warn" data-n="issues"></span></button>
+        <button class="tab" role="tab" data-tab="table" aria-selected="false">표</button>
+      </div>
+      <div class="panel__body">
+        <section class="tabpane is-active" data-pane="dealers" role="tabpanel">
+          <div class="pane__tools">
+            <span class="pane__hint">호버: 납품망 · 클릭: 고정</span>
+            <button class="link-btn" id="dealer-sort" type="button" data-sort="count">거래처 수순</button>
+          </div>
+          <ul class="list" id="dealer-list"></ul>
+        </section>
+        <section class="tabpane" data-pane="stores" role="tabpanel">
+          <div class="pane__tools"><span class="pane__hint" id="store-hint"></span></div>
+          <ul class="list list--dense" id="store-list"></ul>
+        </section>
+        <section class="tabpane" data-pane="issues" role="tabpanel">
+          <p class="pane__desc">좌표를 정확히 찾지 못한 주소입니다. 근사 위치는 시군구 중심 부근에 점선으로 표시됩니다.
+            <span class="app-only">「위치 지정」으로 지도에서 직접 찍어 보정할 수 있습니다.</span></p>
+          <ul class="list list--dense" id="issue-list"></ul>
+        </section>
+        <section class="tabpane" data-pane="table" role="tabpanel">
+          <div class="pane__tools">
+            <span class="pane__hint" id="table-hint"></span>
+            <button class="link-btn" data-export="csv-dl" type="button">CSV 다운로드</button>
+          </div>
+          <div class="tablewrap"><table class="table" id="table"><thead></thead><tbody></tbody></table></div>
+        </section>
+      </div>
+      <div class="detail" id="detail" hidden></div>
+    </aside>
+  </main>
+
+  <!-- ⑥ 메타 정보 -->
+  <footer class="infobar" id="infobar">
+    <span id="info-source">출처 —</span>
+    <span class="dot">·</span>
+    <span id="info-geo">지오코딩 —</span>
+    <span class="dot">·</span>
+    <span id="info-bnd">경계 —</span>
+    <span class="dot">·</span>
+    <span id="info-notes">주석 —</span>
+    <button class="link-btn" id="btn-defs" type="button">정의</button>
+    <span class="infobar__spacer"></span>
+    <span id="info-attrib" class="attrib"></span>
+    <span class="legend" id="legend" aria-label="범례">
+      <span class="legend__row"><i class="lg lg--store"></i>거래처</span>
+      <span class="legend__row"><i class="lg lg--approx"></i>근사</span>
+      <span class="legend__row"><i class="lg lg--manual"></i>수동</span>
+      <span class="legend__row"><i class="lg lg--dealer">대</i>대리점</span>
+      <span class="legend__row"><i class="lg lg--edge"></i>권역 밖</span>
+    </span>
+  </footer>
+
+  <!-- 설정 -->
+  <dialog class="dialog" id="settings">
+    <form method="dialog" class="dialog__form" id="settings-form">
+      <h2>설정</h2>
+      <div class="app-only">
+        <label class="field">
+          <span>카카오 REST API 키</span>
+          <input type="password" id="api-key" placeholder="developers.kakao.com → 내 애플리케이션 → 앱 키" autocomplete="off">
+          <small id="api-key-hint">키가 없으면 시군구 중심 근사 좌표로만 표시됩니다.</small>
+        </label>
+      </div>
+      <label class="field field--row"><span>테마</span>
+        <select id="set-theme" class="select"><option value="light">라이트</option><option value="dark">다크</option></select></label>
+      <label class="field field--row"><span>색상 모드</span>
+        <select id="set-colormode" class="select"><option value="focus">주목 모드 (선택 대리점만 강조)</option><option value="dealer">대리점별 색 구분</option></select></label>
+      <label class="field field--row"><span>온라인 배경지도</span><input type="checkbox" id="set-tiles"></label>
+      <label class="field field--row"><span>선택 권역 밖 경계 표시</span><input type="checkbox" id="set-ghost" checked></label>
+      <label class="field field--row"><span>지도 라벨</span><input type="checkbox" id="set-labels" checked></label>
+      <div class="dialog__actions">
+        <button type="button" class="btn btn--ghost app-only" id="btn-regeocode" title="캐시를 무시하고 모든 주소를 다시 조회">전체 다시 지오코딩</button>
+        <span class="spacer"></span>
+        <button type="button" class="btn btn--ghost" id="settings-cancel">닫기</button>
+        <button type="submit" class="btn btn--primary">저장</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- 정의 -->
+  <dialog class="dialog" id="defs">
+    <div class="dialog__form">
+      <h2>용어 정의</h2>
+      <dl class="defs">
+        <dt><i class="lg lg--store"></i>정확</dt><dd>주소 검색으로 좌표를 찾음 (Kakao 주소 검색, 또는 거래처명 키워드 검색으로 같은 시군구 안에서 확인).</dd>
+        <dt><i class="lg lg--approx"></i>근사</dt><dd>주소 좌표를 못 찾아 주소에 적힌 시군구의 중심 부근에 둔 것. 같은 주소는 항상 같은 자리에 놓인다.</dd>
+        <dt><i class="lg lg--manual"></i>수동</dt><dd>지도에서 직접 지정한 위치 (overrides.json 에 저장).</dd>
+        <dt>실패</dt><dd>시군구조차 알 수 없어 지도에 없음. 표와 미해결 목록에만 보인다.</dd>
+        <dt><i class="lg lg--edge"></i>권역 밖</dt><dd>선택한 권역에 속하지 않는 거래처. 실제 방향의 지도 가장자리에 점으로 표시한다.</dd>
+      </dl>
+      <div class="dialog__actions"><span class="spacer"></span><button type="button" class="btn btn--primary" id="defs-close">닫기</button></div>
+    </div>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+</div>
+
+<script src="vendor/leaflet/leaflet.js"></script>
+<script src="vendor/topojson/topojson-client.min.js"></script>
+<script src="js/util.js"></script>
+<script src="js/api.js"></script>
+<script src="js/mapview.js"></script>
+<script src="js/markers.js"></script>
+<script src="js/spider.js"></script>
+<script src="js/edge.js"></script>
+<script src="js/filters.js"></script>
+<script src="js/panel.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

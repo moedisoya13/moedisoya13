@@ -5,3 +5,14 @@ __pycache__/
 probe-out/
 .pytest_cache/
 skill-zips/
+
+# csm-map 작업 산출물 (사용자 데이터·키·캐시는 커밋하지 않는다)
+csm-map/config.json
+csm-map/overrides.json
+csm-map/geocode_cache.json
+csm-map/*.xlsx
+csm-map/CSM_map_*.html
+csm-map/CSM_geocoded_*.csv
+csm-map/build/dist/
+csm-map/build/work/
+csm-map/tests/fixtures/
