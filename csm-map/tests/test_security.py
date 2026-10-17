@@ -46,6 +46,26 @@ def test_api_requires_token(srv):
     assert st == 200
 
 
+def test_launch_token_is_single_use_and_exchanged(srv):
+    base, state = srv
+    launch = state.launch_token
+    r = urllib.request.Request(base + f"/?t={launch}")
+    opener = urllib.request.build_opener(urllib.request.HTTPRedirectHandler)
+    class NoRedirect(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, *a, **k): return None
+    opener = urllib.request.build_opener(NoRedirect)
+    try:
+        opener.open(r, timeout=5)
+        assert False, "302 expected"
+    except urllib.error.HTTPError as e:
+        assert e.code == 302 and e.headers["Location"] == f"/#k={state.token}"
+    # 두 번째는 교환되지 않고 그냥 페이지(토큰 없음)
+    with urllib.request.urlopen(base + f"/?t={launch}", timeout=5) as resp:
+        assert resp.status == 200 and b"<!doctype html>" in resp.read()[:40]
+    # launch 토큰으로는 API 를 못 쓴다
+    assert req(base + "/api/state", headers={"X-CSM-Token": launch})[0] == 401
+
+
 def test_csrf_simple_request_without_token_is_rejected(srv, folder):
     """text/plain 단순 요청은 preflight 없이 전송되지만 토큰이 없어 거부되어야 한다."""
     base, _ = srv

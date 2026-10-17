@@ -2,13 +2,12 @@
 (function (CSM) {
   const isStatic = !!window.CSM_DATA;
 
-  // 1회성 토큰: 앱 창을 연 URL 의 ?t= 로 받아 sessionStorage 에 옮기고 주소창에서 지운다.
+  // 세션 토큰: 서버가 1회용 launch 토큰과 교환해 #k= 로 넘겨준다. sessionStorage 에 옮기고 주소창에서 지운다.
   let token = "";
   if (!isStatic) {
     try {
-      const u = new URL(location.href);
-      const t = u.searchParams.get("t");
-      if (t) { sessionStorage.setItem("csm:token", t); u.searchParams.delete("t"); history.replaceState(null, "", u.pathname + u.search); }
+      const m = /(?:^#|&)k=([^&]+)/.exec(location.hash || "");
+      if (m) { sessionStorage.setItem("csm:token", decodeURIComponent(m[1])); history.replaceState(null, "", location.pathname + location.search); }
       token = sessionStorage.getItem("csm:token") || "";
     } catch { token = ""; }
   }
@@ -44,7 +43,8 @@
       if (isStatic || !window.EventSource) return () => {};
       const es = new EventSource("/api/events?t=" + encodeURIComponent(token));
       for (const [name, fn] of Object.entries(handlers)) {
-        es.addEventListener(name, (e) => { try { fn(JSON.parse(e.data)); } catch (err) { console.error(err); } });
+        // 'error' 는 EventSource 의 연결 오류 이벤트와 이름이 겹친다 — data 가 없는 네이티브 이벤트는 건너뛴다
+        es.addEventListener(name, (e) => { if (typeof e.data !== "string") return; try { fn(JSON.parse(e.data)); } catch (err) { console.error(err); } });
       }
       es.onerror = () => { /* 서버가 내려가면 브라우저가 재시도한다 */ };
       return () => es.close();

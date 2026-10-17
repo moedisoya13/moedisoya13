@@ -71,9 +71,10 @@ def main(argv: list[str] | None = None) -> int:
 
     pipeline.apply_cached()
     httpd, state, port = serve(pipeline, port=args.port, auto_exit=not (args.keep_alive or args.no_browser))
-    url = state.url()  # 1회성 토큰이 붙은 주소 — 이 주소로 연 창만 API 를 쓸 수 있다
-    print(f"  서버: http://127.0.0.1:{port}/  (브라우저로 직접 열려면 아래 전체 주소 사용)")
-    print(f"  {url}")
+    url = state.url()  # 1회용 launch 토큰이 붙은 주소 — 처음 여는 창 하나만 API 를 쓸 수 있다
+    print(f"  서버: http://127.0.0.1:{port}/")
+    if args.no_browser:
+        print(f"  브라우저로 열기(1회용 주소): {url}")
 
     # 키가 있거나 데모면 기동과 함께 지오코딩 시작 — UI 는 SSE 로 진행률을 받는다
     if pipeline.demo or config.api_key:

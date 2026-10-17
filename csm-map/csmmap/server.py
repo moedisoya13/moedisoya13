@@ -4,8 +4,9 @@
 끊기면 스스로 종료한다 (자동 종료는 --keep-alive 로 끌 수 있다).
 
 보안 모델 — 같은 PC 의 브라우저에 열린 *다른* 웹사이트가 공격자다:
-  * 모든 /api/* 는 기동 때 만든 1회성 토큰(X-CSM-Token 헤더 또는 ?t=)이 있어야 한다.
-    토큰은 앱 창을 열 때 URL 로 한 번만 전달되고, 페이지가 sessionStorage 로 옮긴 뒤 주소창에서 지운다.
+  * 모든 /api/* 는 기동 때 만든 세션 토큰(X-CSM-Token 헤더 또는 ?t=)이 있어야 한다.
+    앱 창을 여는 URL 에는 **1회용 launch 토큰**만 들어간다(프로세스 인자로 노출되므로). 서버는 그것을
+    한 번 받으면 폐기하고 세션 토큰을 URL fragment(#k=) 로 넘겨 주며, 페이지는 sessionStorage 로 옮긴 뒤 지운다.
     → 다른 사이트는 토큰을 모르므로 CSRF(단순 요청) 가 통하지 않고, 커스텀 헤더는 preflight 를 유발해 차단된다.
   * Host 헤더가 127.0.0.1/localhost 가 아니면 거부 → DNS 리바인딩으로 같은 출처가 되어도 읽을 수 없다.
   * Origin 헤더가 있으면 우리 출처여야 한다. 요청 본문은 1MB 까지. 응답에 CSP·nosniff·frame-ancestors 'none'.
@@ -47,7 +48,8 @@ class AppState:
     def __init__(self, pipeline: Pipeline, auto_exit: bool = True):
         self.pipeline = pipeline
         self.auto_exit = auto_exit
-        self.token = secrets.token_urlsafe(24)
+        self.token = secrets.token_urlsafe(24)          # 세션 토큰: /api/* 에 필요
+        self.launch_token: str | None = secrets.token_urlsafe(24)  # 1회용: 창을 여는 URL 에만
         self.subscribers: list[queue.Queue] = []
         self.sub_lock = threading.Lock()
         self.job: threading.Thread | None = None
@@ -58,7 +60,13 @@ class AppState:
         self.started = time.monotonic()
 
     def url(self) -> str:
-        return f"http://127.0.0.1:{self.port}/?t={self.token}"
+        return f"http://127.0.0.1:{self.port}/?t={self.launch_token}"
+
+    def consume_launch(self, supplied: str) -> bool:
+        if self.launch_token and hmac.compare_digest(supplied, self.launch_token):
+            self.launch_token = None
+            return True
+        return False
 
     # ---- SSE ----
     def subscribe(self) -> queue.Queue:
@@ -227,6 +235,13 @@ def make_handler(state: AppState):
             if query is None:
                 return None
             if p == "/":
+                t = (query.get("t") or [""])[0]
+                if t and (state.consume_launch(t) or hmac.compare_digest(t, state.token)):
+                    # launch 토큰 → 세션 토큰 교환. fragment 는 서버 로그·프로세스 인자에 남지 않는다
+                    self.send_response(HTTPStatus.FOUND)
+                    self._headers({"Location": f"/#k={state.token}", "Content-Length": "0"})
+                    self.end_headers()
+                    return None
                 return self._static("index.html")
             if p == "/api/state":
                 return self._json({
