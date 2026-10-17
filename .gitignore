@@ -14,5 +14,7 @@ csm-map/*.xlsx
 csm-map/CSM_map_*.html
 csm-map/CSM_geocoded_*.csv
 csm-map/build/dist/
+csm-map/dist/
+csm-map/CSM_정정요청_*.xlsx
 csm-map/build/work/
 csm-map/tests/fixtures/

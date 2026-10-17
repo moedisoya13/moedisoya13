@@ -28,7 +28,7 @@ from urllib.parse import parse_qs, urlparse
 
 from . import __version__
 from .config import ConfigError
-from .export import export_csv, export_html
+from .export import export_corrections, export_csv, export_html
 from .pipeline import Pipeline
 
 WEB_DIR = pathlib.Path(__file__).resolve().parents[1] / "web"
@@ -328,10 +328,16 @@ def make_handler(state: AppState):
                     return self._json({"data": state.pipeline.payload()})
                 if p == "/api/export":
                     fmt = body.get("format", "html")
-                    if fmt not in ("html", "csv"):
+                    if fmt not in ("html", "csv", "corrections"):
                         raise BadRequest("format")
-                    out = export_csv(state.pipeline) if fmt == "csv" else export_html(state.pipeline)
-                    return self._json({"path": str(out), "name": out.name})
+                    count = None
+                    if fmt == "corrections":
+                        out, count = export_corrections(state.pipeline)  # 0건이면 ValueError → 400
+                    elif fmt == "csv":
+                        out = export_csv(state.pipeline)
+                    else:
+                        out = export_html(state.pipeline)
+                    return self._json({"path": str(out), "name": out.name, "count": count})
                 if p == "/api/quit":
                     self._json({"ok": True})
                     state.shutdown()

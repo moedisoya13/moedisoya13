@@ -205,6 +205,11 @@ kbd { font: 500 10px/1 var(--mono); padding: 2px 5px; border: 1px solid var(--bo
 .pt.is-lit { transform: scale(1.5); z-index: 5; box-shadow: 0 0 0 2px var(--dot-ring), 0 0 0 5px color-mix(in srgb, var(--c) 30%, transparent); }
 .pt.is-hit { transform: scale(1.6); box-shadow: 0 0 0 2px var(--dot-ring), 0 0 0 6px color-mix(in srgb, var(--c) 35%, transparent); }
 .pt--approx { background: transparent; border: 2px dashed var(--c); box-shadow: 0 0 0 2px color-mix(in srgb, var(--dot-ring) 70%, transparent); }
+/* 정정 필요: 흐린 점선 마름모 — 원형(정확)·점선 원(근사)과 모양으로 구분 */
+.pt--fix { --c: var(--warning) !important; background: transparent; border: 2px dashed var(--c); border-radius: 2px; width: 11px; height: 11px; box-shadow: none; }
+.pt--fix.is-in { transform: rotate(45deg) scale(1); opacity: .55; }
+.pt--fix.is-lit, .pt--fix.is-hit { transform: rotate(45deg) scale(1.5); opacity: .95; box-shadow: none; }
+.pt--fix.is-dim { transform: rotate(45deg) scale(.8); opacity: .2; }
 .pt--manual::after { content: ""; position: absolute; inset: 3px; border-radius: 50%; background: var(--dot-ring); }
 .pt:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 3px; }
 .leaflet-marker-icon.pt-wrap { background: none; border: 0; }
@@ -233,6 +238,8 @@ kbd { font: 500 10px/1 var(--mono); padding: 2px 5px; border: 1px solid var(--bo
 }
 .hex--noaddr { opacity: .45; }
 .hex--approx svg path { stroke-dasharray: 4 3; }
+.hex--fix { opacity: .5; }
+.hex--fix svg path { stroke-dasharray: 3 3; stroke: var(--warning); stroke-width: 2.5; }
 .hex:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 3px; border-radius: 50%; }
 @keyframes ring { 0% { transform: scale(.9); opacity: .6; } 100% { transform: scale(1.35); opacity: 0; } }
 .app[data-mode="focus"] .hex { --c: var(--neutral-mid) !important; }
@@ -299,10 +306,11 @@ kbd { font: 500 10px/1 var(--mono); padding: 2px 5px; border: 1px solid var(--bo
 .tool:hover { background: var(--bg-control); }
 .tool[aria-pressed="true"] { background: var(--primary); color: #fff; border-color: var(--primary); }
 .tool svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 1.6; stroke-linejoin: round; }
-.legend { display: inline-flex; align-items: center; gap: 14px; margin-left: 12px; padding-left: 12px; border-left: 1px solid var(--border); font-size: var(--fs-micro); color: var(--text-label); }
+.legend { display: inline-flex; align-items: center; gap: 10px; flex: none; margin-left: 12px; padding-left: 12px; border-left: 1px solid var(--border); font-size: var(--fs-micro); color: var(--text-label); }
 .legend__row { display: inline-flex; align-items: center; gap: 6px; }
 .lg { display: inline-grid; place-items: center; width: 12px; height: 12px; border-radius: 50%; background: var(--dot-store); box-shadow: 0 0 0 2px var(--dot-ring); flex: none; }
 .lg--approx { background: transparent; border: 2px dashed var(--dot-store); box-shadow: none; }
+.lg--fix { width: 10px; height: 10px; border-radius: 2px; background: transparent; border: 2px dashed var(--warning); box-shadow: none; transform: rotate(45deg); opacity: .8; }
 .lg--manual { background: var(--dot-store); position: relative; }
 .lg--manual::after { content: ""; position: absolute; inset: 3px; border-radius: 50%; background: var(--dot-ring); }
 .lg--dealer { width: 16px; height: 16px; border-radius: 3px; background: var(--neutral-dark); color: #fff; font-size: 8px; font-weight: 700; clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%); box-shadow: none; }
@@ -362,6 +370,15 @@ kbd { font: 500 10px/1 var(--mono); padding: 2px 5px; border: 1px solid var(--bo
 .pill { display: inline-block; padding: 1px 6px; border-radius: 999px; font-size: 10px; font-weight: 500; background: var(--bg-control); color: var(--text-label); white-space: nowrap; }
 .pill--warn { background: var(--warning-tint); color: var(--warning); }
 .pill--err { background: var(--error-tint); color: var(--error); }
+.pill--fix { background: var(--warning-tint); color: var(--warning); border: 1px dashed currentColor; min-width: 52px; text-align: center; }
+.fix-actions { display: grid; gap: 6px; padding: 2px 14px 10px; }
+.fix-actions .btn { justify-self: start; }
+.fix-actions small { color: var(--text-label); line-height: 1.45; }
+.list .group-head { padding: 10px 14px 4px; font-size: var(--fs-micro); color: var(--text-label); }
+.list .group-head b { color: var(--text-strong); font-size: var(--fs-small); }
+.tip__fix { margin-top: 5px; padding: 5px 8px; border-radius: 6px; background: var(--warning-tint); color: var(--warning); font-size: var(--fs-micro); line-height: 1.45; white-space: normal; width: 230px; }
+.tip__fix small { color: var(--text-label); }
+.tip__tag--fix { background: var(--warning-tint); color: var(--warning); }
 .pill--ok { background: var(--success-tint); color: var(--success); }
 .pill--out { background: var(--bg-control); color: var(--text-muted); border: 1px dashed var(--border-strong); }
 .row__actions { display: flex; gap: 4px; }
@@ -444,3 +461,9 @@ kbd { font: 500 10px/1 var(--mono); padding: 2px 5px; border: 1px solid var(--bo
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
   .spider path { stroke-dashoffset: 0; }
 }
+
+/* 정정 필요 마커는 색상 모드와 무관하게 경고색 유지 (주목 모드의 회색 규칙보다 우선) */
+.app[data-mode] .pt.pt--fix,
+.app[data-mode] .pt.pt--fix.is-lit,
+.app[data-mode] .pt.pt--fix.is-hit,
+.app[data-mode] .pt.pt--fix.is-search { --c: var(--warning) !important; }

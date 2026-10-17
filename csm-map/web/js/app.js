@@ -46,9 +46,9 @@
     const d = S.data, sel = S.selection.size > 0;
     const stores = d.stores, inside = stores.filter((s) => sel ? S.selection.has(s.sgg_code) : true);
     const withAddr = stores.filter((s) => s.address);
-    const good = stores.filter((s) => ["exact", "keyword", "manual"].includes(s.precision)).length;
-    const approx = stores.filter((s) => s.precision === "approx").length;
-    const failed = withAddr.filter((s) => s.precision === "failed").length;
+    const good = stores.filter((s) => ["exact", "manual"].includes(s.precision)).length;
+    const fix = stores.filter(util.isFix).length;
+    const unverified = stores.filter((s) => s.precision === "approx" || s.precision === "failed").length;
     const regionsAll = new Set(stores.map((s) => s.sgg_code).filter(Boolean)).size;
     const dealersWithAddr = d.dealers.filter((x) => x.address).length;
     const dealersInside = sel ? new Set(inside.map((s) => s.dealer_id)).size : d.dealers.length;
@@ -62,8 +62,8 @@
     k("dealers").querySelector("[data-compare]").textContent = sel ? `전체 ${d.dealers.length} · 주소 등록 ${dealersWithAddr}` : `주소 등록 ${dealersWithAddr}`;
     util.countUp(k("regions").querySelector("[data-count]"), sel ? S.selection.size : regionsAll);
     k("regions").querySelector("[data-compare]").textContent = sel ? `전체 ${regionsAll}개 권역 중` : "거래처가 있는 시군구";
-    util.countUp(k("quality").querySelector("[data-count]"), util.pct(good, withAddr.length));
-    k("quality").querySelector("[data-compare]").innerHTML = `근사 <b>${approx}</b> · 실패 <b>${failed}</b>`;
+    util.countUp(k("quality").querySelector("[data-count]"), util.pct(good, stores.length));
+    k("quality").querySelector("[data-compare]").innerHTML = `정정 필요 <b>${fix}</b> · 미확인 <b>${unverified}</b>`;
 
     const files = d.files || [];
     const when = files.map((f) => f.modified.replace("T", " ").slice(0, 16)).join(", ");
@@ -75,12 +75,11 @@
     const counts = new Map();
     for (const s of d.stores) if (s.sgg_name) counts.set(s.sgg_name, (counts.get(s.sgg_name) || 0) + 1);
     const top = [...counts.entries()].sort((a, b) => b[1] - a[1])[0];
-    const approx = d.stores.filter((s) => s.precision === "approx").length;
-    const failed = d.stores.filter((s) => s.precision === "failed").length;
+    const fix = d.stores.filter(util.isFix).length;
     const parts = [`거래처 ${util.fmt(d.stores.length)}곳`, `대리점 ${d.dealers.length}곳`];
     if (top) parts.push(`${top[0]} ${top[1]}곳 최다`);
+    if (fix) parts.push(`주소 정정 필요 ${fix}건`);
     if (d.meta && d.meta.demo) parts.push("근사 좌표(데모)");
-    else if (approx || failed) parts.push(`미해결 ${approx + failed}건`);
     if (S.selection.size) parts.push(`선택 권역 ${S.selection.size}개`);
     util.$("#summary").textContent = parts.join(" · ");
   }
@@ -91,9 +90,11 @@
     util.$("#info-source").textContent = `출처 ${files || "–"}`;
     util.$("#info-geo").textContent = `지오코딩 ${m.provider || "–"}${m.cache_size ? ` · 캐시 ${m.cache_size}` : ""} · 생성 ${(m.generated_at || "").replace("T", " ").slice(0, 16)}`;
     const b = m.boundaries || {};
-    util.$("#info-bnd").textContent = `경계 행정구역 ver${b.version || "?"} (통계청 자료 기반 vuski/admdongkor 가공)`;
-    const approx = d.stores.filter((s) => s.precision === "approx").length, failed = d.stores.filter((s) => s.precision === "failed").length;
-    const notes = [`근사 ${approx}`, `실패 ${failed}`];
+    const bnd = util.$("#info-bnd");
+    bnd.textContent = `경계 ver${b.version || "?"}`;
+    bnd.title = "행정구역 경계: 통계청 자료 기반 vuski/admdongkor 가공";
+    const fix = d.stores.filter(util.isFix).length, approx = d.stores.filter((s) => s.precision === "approx" || s.precision === "failed").length;
+    const notes = [`정정 필요 ${fix}`, `미확인 ${approx}`];
     if (d.warnings && d.warnings.length) notes.push(`경고 ${d.warnings.length}`);
     if (m.last_error) notes.push(`오류: ${m.last_error}`);
     util.$("#info-notes").textContent = `주석 ${notes.join(" · ")}`;
@@ -208,15 +209,15 @@
 
   // ---------- 내보내기 ----------
   function csvText() {
-    const rows = [["대리점명", "거래처명", "주소", "시도", "시군구", "위도", "경도", "정밀도"]];
-    for (const s of S.data.stores) rows.push([s.dealer_name, s.name, s.address, s.sido, s.sgg_name, s.lat ?? "", s.lng ?? "", util.precisionLabel[s.precision]]);
+    const rows = [["대리점명", "거래처명", "주소", "시도", "시군구", "위도", "경도", "정밀도", "사유"]];
+    for (const s of S.data.stores) rows.push([s.dealer_name, s.name, s.address, s.sido, s.sgg_name, s.lat ?? "", s.lng ?? "", util.precisionLabel[s.precision], s.reason || ""]);
     return util.csv(rows);
   }
   async function doExport(kind) {
     try {
       if (kind === "csv-dl") { util.download(`CSM_geocoded_${new Date().toISOString().slice(0, 10)}.csv`, csvText()); return; }
       const r = await api.exportFile(kind);
-      util.toast(`저장됨: ${r.path}`, { ms: 6000 });
+      util.toast(kind === "corrections" ? `정정 요청 ${r.count}건 저장됨: ${r.path}` : `저장됨: ${r.path}`, { ms: 7000 });
     } catch (e) { util.toast("내보내기 실패: " + e.message, { error: true }); }
   }
 

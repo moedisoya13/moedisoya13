@@ -81,10 +81,11 @@ window.CSM = window.CSM || {};
     return 2 * R * Math.asin(Math.sqrt(s));
   };
 
-  util.precisionLabel = { exact: "정확", keyword: "키워드", manual: "수동", approx: "근사", failed: "실패" };
+  util.precisionLabel = { exact: "정확", manual: "수동", needs_fix: "정정 필요", approx: "근사", failed: "실패" };
+  util.isFix = (x) => x && x.precision === "needs_fix";
   util.precisionTag = (p) => {
-    if (p === "exact" || p === "keyword") return "";
-    const cls = p === "approx" ? "tip__tag tip__tag--approx" : p === "manual" ? "tip__tag tip__tag--manual" : "tip__tag";
+    if (p === "exact") return "";
+    const cls = p === "needs_fix" ? "tip__tag tip__tag--fix" : p === "approx" ? "tip__tag tip__tag--approx" : p === "manual" ? "tip__tag tip__tag--manual" : "tip__tag";
     return `<span class="${cls}">${util.esc(util.precisionLabel[p] || p)}</span>`;
   };
 

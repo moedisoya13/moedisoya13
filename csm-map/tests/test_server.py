@@ -63,7 +63,7 @@ def test_scan_geocode_export(server):
     st, r = post(base + "/api/geocode", {})
     assert st == 202 and r["started"] is True
     state.job.join(timeout=10)
-    assert state.job_status["running"] is False and state.job_status["done"] == 15
+    assert state.job_status["running"] is False and state.job_status["done"] == 16  # 거래처 12(빈 주소 포함) + 주소 있는 대리점 4
     st, r = post(base + "/api/export", {"format": "csv"})
     assert st == 200 and r["name"].startswith("CSM_geocoded_")
     st, r = post(base + "/api/config", {"theme": "dark", "api_key": "abcdef0123456789", "junk": 1})

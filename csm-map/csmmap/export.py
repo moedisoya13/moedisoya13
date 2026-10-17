@@ -11,6 +11,7 @@ import json
 import pathlib
 import re
 
+from . import model
 from .pipeline import Pipeline
 
 WEB_DIR = pathlib.Path(__file__).resolve().parents[1] / "web"
@@ -49,10 +50,11 @@ def build_html(payload: dict, boundaries_json: str | None = None, web_dir: pathl
     html = _FONT_LINK.sub("", html)
     if boundaries_json is None:
         boundaries_json = (web_dir / "data" / "boundaries.json").read_text(encoding="utf-8")
+    safe_boundaries = boundaries_json.replace("<", "\\u003c")  # f-string 밖에서 — 3.12 미만 호환
     inject = (
         "<script>\n"
         f"window.CSM_DATA = {_safe_json(payload)};\n"
-        f"window.CSM_BOUNDARIES = {boundaries_json.replace('<', '\\u003c')};\n"
+        f"window.CSM_BOUNDARIES = {safe_boundaries};\n"
         "</script>\n"
     )
     return html.replace("<!-- CSM:INLINE -->", inject, 1)
@@ -78,10 +80,116 @@ def export_csv(pipeline: Pipeline, out_dir: pathlib.Path | None = None) -> pathl
     out = out_dir / f"CSM_geocoded_{dt.date.today().isoformat()}.csv"
     with out.open("w", newline="", encoding="utf-8-sig") as fh:
         w = csv.writer(fh)
-        w.writerow(["구분", "대리점명", "거래처명", "주소", "시도", "시군구", "위도", "경도", "정밀도", "출처", "파일", "행"])
+        w.writerow(["구분", "대리점명", "거래처명", "주소", "시도", "시군구", "위도", "경도", "정밀도", "사유", "출처", "파일", "행"])
         for s in pipeline.dataset.stores:
-            w.writerow([csv_safe(v) for v in ["거래처", s.dealer_name, s.name, s.address, s.sido, s.sgg_name, s.lat, s.lng, s.precision, s.provider, s.source, s.row]])
+            w.writerow([csv_safe(v) for v in ["거래처", s.dealer_name, s.name, s.address, s.sido, s.sgg_name, s.lat, s.lng, s.precision, s.reason, s.provider, s.source, s.row]])
         for d in pipeline.dataset.dealers:
             if d.address:
-                w.writerow([csv_safe(v) for v in ["대리점", d.name, "", d.address, d.sido, d.sgg_name, d.lat, d.lng, d.precision, d.provider, "", ""]])
+                w.writerow([csv_safe(v) for v in ["대리점", d.name, "", d.address, d.sido, d.sgg_name, d.lat, d.lng, d.precision, d.reason, d.provider, "", ""]])
     return out
+
+
+# ---------------------------------------------------------------------------
+# 정정 요청 목록 (xlsx) — 주소 검색에 실패한 거래처·대리점을 담당자에게 보내 정정받기 위한 파일
+# ---------------------------------------------------------------------------
+CORRECTION_COLUMNS = [
+    ("번호", 6), ("구분", 8), ("대리점명", 18), ("거래처명", 24), ("현재 주소", 52), ("사유", 26),
+    ("주소상 시군구", 16), ("원본 위치", 18), ("수정 주소", 52), ("비고", 24),
+]
+FIX_COL = 9  # '수정 주소' 열 (1-based)
+
+
+def correction_rows(pipeline: Pipeline) -> list[list]:
+    rows = []
+    for s in pipeline.dataset.stores:
+        if s.precision == model.NEEDS_FIX:
+            where = f"{s.source} {s.row}행" if s.source else ""
+            rows.append(["거래처", s.dealer_name, s.name, s.address, s.reason, s.sgg_name, where])
+    for d in pipeline.dataset.dealers:
+        if d.address and d.precision == model.NEEDS_FIX:
+            rows.append(["대리점", d.name, "", d.address, d.reason, d.sgg_name, "대리점 목록(H:I열)"])
+    rows.sort(key=lambda r: (r[0] != "거래처", r[1], r[2]))
+    return [[i + 1, *r] for i, r in enumerate(rows)]
+
+
+def _text(cell, value) -> None:
+    """문자열은 항상 '문자열 셀'로 — openpyxl 은 '=' 로 시작하면 수식으로 쓰기 때문(수식 인젝션 방지)."""
+    cell.value = value
+    if isinstance(value, str):
+        cell.data_type = "s"
+
+
+def export_corrections(pipeline: Pipeline, out_dir: pathlib.Path | None = None) -> tuple[pathlib.Path, int]:
+    """정정 필요 건을 xlsx 로. (경로, 건수) 를 돌려준다. 0건이면 ValueError."""
+    import openpyxl
+    from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+    from openpyxl.utils import get_column_letter
+
+    rows = correction_rows(pipeline)
+    if not rows:
+        raise ValueError("정정할 항목이 없습니다")
+    out_dir = out_dir or pipeline.folder
+    out = out_dir / f"CSM_정정요청_{dt.date.today().isoformat()}.xlsx"
+
+    from .excel import OWN_OUTPUT_TITLE
+
+    wb = openpyxl.Workbook()
+    wb.properties.title = OWN_OUTPUT_TITLE  # 같은 폴더에 있어도 원본 데이터로 읽지 않게 표시
+    wb.properties.creator = "csm-map"
+    ws = wb.active
+    ws.title = "정정 요청"
+    head_fill = PatternFill("solid", fgColor="E8F1FE")
+    fix_fill = PatternFill("solid", fgColor="FFF6CC")
+    thin = Side(style="thin", color="CCCCCC")
+    border = Border(left=thin, right=thin, top=thin, bottom=thin)
+    for c, (title, width) in enumerate(CORRECTION_COLUMNS, start=1):
+        cell = ws.cell(row=1, column=c)
+        _text(cell, title)
+        cell.font = Font(bold=True, color="0017C1" if c == FIX_COL else "1A1A1C")
+        cell.fill = fix_fill if c == FIX_COL else head_fill
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+        cell.border = border
+        ws.column_dimensions[get_column_letter(c)].width = width
+    for r, values in enumerate(rows, start=2):
+        for c in range(1, len(CORRECTION_COLUMNS) + 1):
+            cell = ws.cell(row=r, column=c)
+            if c <= len(values):
+                _text(cell, values[c - 1])
+            cell.border = border
+            cell.alignment = Alignment(vertical="center", wrap_text=c in (5, 6, FIX_COL))
+            if c == FIX_COL:
+                cell.fill = fix_fill
+    ws.freeze_panes = "E2"
+    ws.auto_filter.ref = f"A1:{get_column_letter(len(CORRECTION_COLUMNS))}{len(rows) + 1}"
+    ws.row_dimensions[1].height = 22
+
+    guide = wb.create_sheet("안내")
+    lines = [
+        ("CSM 거래처 지도 — 주소 정정 요청", True),
+        ("", False),
+        ("아래 거래처·대리점은 카카오 주소 검색에서 위치를 찾지 못했습니다.", False),
+        ("'정정 요청' 시트의 노란 칸 「수정 주소」에 정확한 도로명 또는 지번 주소를 적어 회신해 주세요.", False),
+        ("", False),
+        ("주소 작성 예: 경기도 부천시 소사구 범안로 103   (건물명·층·호는 없어도 됩니다)", False),
+        ("", False),
+        ("회신받은 뒤 반영 방법", True),
+        ("1. CSM.xlsx 에서 해당 행의 주소를 수정 주소로 바꿉니다 — 거래처는 D열, 대리점은 I열.", False),
+        ("2. 앱을 다시 실행하면 바뀐 주소만 새로 검색합니다(이전 결과는 캐시에 남아 다시 묻지 않습니다).", False),
+        ("3. 그래도 찾지 못하면 다음 정정 요청 목록에 다시 나타납니다.", False),
+        ("", False),
+        (f"작성: {dt.datetime.now().strftime('%Y-%m-%d %H:%M')} · 대상 {len(rows)}건 · "
+         f"원본 {', '.join(f.name for f in pipeline.dataset.files) or '-'}", False),
+    ]
+    for i, (text, bold) in enumerate(lines, start=1):
+        cell = guide.cell(row=i, column=1)
+        _text(cell, text)
+        cell.font = Font(bold=bold, size=13 if i == 1 else 11)
+    guide.column_dimensions["A"].width = 100
+
+    wb.save(out)
+    try:
+        import os
+        os.chmod(out, 0o600)
+    except OSError:
+        pass
+    return out, len(rows)

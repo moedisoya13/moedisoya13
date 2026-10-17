@@ -40,10 +40,9 @@ def test_corrupt_cache_file_does_not_break_startup(folder, regions):
 def test_kakao_nonfinite_coordinates_are_rejected(regions, tmp_path):
     class Fake:
         def address(self, q): return {"x": "1e999", "y": "37.5"}
-        def keyword(self, q): return {"x": "nan", "y": "37.5", "address_name": "경기 부천시 소사구 x"}
     g = Geocoder(regions, Cache(tmp_path / "c.json"), Fake())
     r = g.geocode_one("경기도 부천시 소사구 범안로 103", "가게")
-    assert r.precision == model.APPROX
+    assert r.precision == model.NEEDS_FIX  # 비정상 좌표는 적중으로 치지 않는다
 
 
 def test_safe_json_blocks_script_data_escape():

@@ -44,18 +44,20 @@ class Pipeline:
             res = g.cache.get(s.address.strip())
             if hit:
                 res = GeoResult(hit["lat"], hit["lng"], model.MANUAL, "manual")
-            if res and res.ok():
+            if res and (res.ok() or res.precision == model.NEEDS_FIX):
                 self._apply(s, res)
+            elif not s.address.strip():
+                self._apply(s, GeoResult(None, None, model.NEEDS_FIX, reason="주소 없음"))
         for d in self.dataset.dealers:
             if d.address:
                 res = g.cache.get(d.address.strip())
-                if res and res.ok():
+                if res and (res.ok() or res.precision == model.NEEDS_FIX):
                     self._apply(d, res)
         self._assign_regions()
 
     def geocode(self, progress: Progress | None = None, force: bool = False) -> None:
         geocoder = self.make_geocoder()
-        items = [(s.id, s.address, s.name) for s in self.dataset.stores if s.address]
+        items = [(s.id, s.address, s.name) for s in self.dataset.stores]  # 빈 주소도 넣어 '주소 없음'으로 분류
         items += [(d.id, d.address, d.name) for d in self.dataset.dealers if d.address]
         results = geocoder.geocode_many(items, progress=progress, force=force)
         by_id = {s.id: s for s in self.dataset.stores}
@@ -85,15 +87,17 @@ class Pipeline:
     @staticmethod
     def _apply(obj, res: GeoResult) -> None:
         obj.lat, obj.lng = res.lat, res.lng
-        obj.precision = res.precision if res.ok() else model.FAILED
+        # 좌표가 없어도 '정정 필요'는 그 분류를 유지한다 (목록·엑셀에 나와야 하므로)
+        obj.precision = res.precision if (res.ok() or res.precision == model.NEEDS_FIX) else model.FAILED
         obj.provider = res.provider
+        obj.reason = res.reason
 
     def _assign_regions(self) -> None:
         for obj in [*self.dataset.stores, *self.dataset.dealers]:
             region = None
             address = getattr(obj, "address", "")
             # 근사 좌표는 주소 텍스트에서 나온 것이므로 텍스트 귀속이 우선 (지터가 옆 구로 넘어갈 수 있음)
-            if obj.precision == model.APPROX and address:
+            if obj.precision in (model.APPROX, model.NEEDS_FIX) and address:
                 sido, sgg = parse_region(address)
                 region = self.regions.by_name(sido, sgg) if sgg else None
             if region is None and obj.lat is not None and obj.lng is not None:

@@ -5,12 +5,14 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 
 # 좌표 정밀도. 지도에서는 색이 아니라 '형태'로 구분한다 (가이드북: 색만으로 식별하지 않음).
-EXACT = "exact"      # 주소 지오코딩 적중
-KEYWORD = "keyword"  # 거래처명 키워드 검색으로 보정
-MANUAL = "manual"    # 사용자가 지도에서 직접 지정 (overrides.json)
-APPROX = "approx"    # 시군구 중심 근사 (점선 중공 링으로 표시)
-FAILED = "failed"    # 좌표 없음 (지도에 없고 미해결 패널·표에만)
-PRECISIONS = (EXACT, KEYWORD, MANUAL, APPROX, FAILED)
+EXACT = "exact"          # 카카오 주소 검색 적중
+MANUAL = "manual"        # 사용자가 지도에서 직접 지정 (overrides.json)
+NEEDS_FIX = "needs_fix"  # 주소 검색을 했지만 결과 없음 / 주소 빈칸 → 원천 데이터 정정 요청 대상.
+                         #   시군구를 읽을 수 있으면 그 중심 부근에 흐린 점선 마름모로 표시
+APPROX = "approx"        # 검색하지 않은 근사(데모·키 없음·API 오류) — 시군구 중심, 점선 원
+FAILED = "failed"        # 검색하지 않았고 시군구도 모름 — 지도에 없음
+PRECISIONS = (EXACT, MANUAL, NEEDS_FIX, APPROX, FAILED)
+# 거래처명 키워드 검색은 엉뚱한 지점을 잡을 위험이 있어 쓰지 않는다 (v0.2).
 
 
 @dataclass
@@ -25,6 +27,7 @@ class Store:
     lng: float | None = None
     precision: str = FAILED
     provider: str = ""
+    reason: str = ""
     sido: str = ""
     sgg_code: str = ""
     sgg_name: str = ""
@@ -41,6 +44,7 @@ class Dealer:
     lng: float | None = None
     precision: str = FAILED
     provider: str = ""
+    reason: str = ""
     sido: str = ""
     sgg_code: str = ""
     sgg_name: str = ""

@@ -20,6 +20,7 @@
     const where = s.sgg_name ? `${util.esc(s.sido)} ${util.esc(s.sgg_name)}` : "권역 미확정";
     return `<div class="tip__title">${util.esc(s.name)}${util.precisionTag(s.precision)}</div>
       <div class="tip__sub">${util.esc(dealer ? dealer.name : s.dealer_name)} · ${where}</div>
+      ${s.precision === "needs_fix" ? `<div class="tip__fix"><b>${util.esc(s.reason || "주소 검색 결과 없음")}</b><br><small>시군구 중심 부근에 임시로 둔 위치입니다</small></div>` : ""}
       <div class="tip__line">${util.esc(s.address || "주소 없음")}</div>`;
   }
   function dealerTip(d, stores) {
@@ -57,8 +58,8 @@
     for (const s of visible) {
       const d = dealers.get(s.dealer_id);
       const color = ctx.dealerColorOf(d);
-      const cls = ["pt", s.precision === "approx" ? "pt--approx" : "", s.precision === "manual" ? "pt--manual" : ""].filter(Boolean).join(" ");
-      const icon = L.divIcon({ className: "pt-wrap", iconSize: [12, 12], iconAnchor: [6, 6], html: `<div class="${cls}" style="--c:${color}" role="button" aria-label="${util.esc(s.name)}"></div>` });
+      const cls = ["pt", { approx: "pt--approx", manual: "pt--manual", needs_fix: "pt--fix" }[s.precision] || ""].filter(Boolean).join(" ");
+      const icon = L.divIcon({ className: "pt-wrap", iconSize: [12, 12], iconAnchor: [6, 6], html: `<div class="${cls}" style="--c:${color}" role="button" aria-label="${util.esc(s.name)}${s.precision === "needs_fix" ? " (정정 필요)" : ""}"></div>` });
       const m = L.marker([s.lat, s.lng], { icon, keyboard: true, riseOnHover: true, title: "" });
       m.storeId = s.id; m.dealerId = s.dealer_id;
       m.bindTooltip(() => storeTip(s, d), { direction: "top", offset: [0, -8], opacity: 1 });
@@ -86,7 +87,7 @@
       const stores = storesByDealer.get(d.id) || [];
       const size = Math.round(22 + Math.min(12, stores.length * 0.6));
       const color = ctx.dealerColorOf(d);
-      const cls = ["hex", d.precision === "approx" ? "hex--approx" : ""].filter(Boolean).join(" ");
+      const cls = ["hex", d.precision === "approx" ? "hex--approx" : "", d.precision === "needs_fix" ? "hex--fix" : ""].filter(Boolean).join(" ");
       const html = `<div class="${cls}" style="--c:${color};--sz:${size}px">${HEX}<span>${util.esc(util.initials(d.name))}</span></div>`;
       const icon = L.divIcon({ className: "pt-wrap", iconSize: [size, size], iconAnchor: [size / 2, size / 2], html });
       const m = L.marker([d.lat, d.lng], { icon, keyboard: true, zIndexOffset: 1000, riseOnHover: true, title: "" });

@@ -1,12 +1,13 @@
-"""지오코딩: Kakao Local API → 키워드 폴백 → 시군구 중심 근사.
+"""지오코딩: Kakao 주소 검색만 쓴다. 실패하면 '정정 필요'로 따로 분류한다.
 
 순서 (geocode_one):
   0. 수동 보정(overrides) 가 있으면 그대로 (precision=manual)
-  1. 캐시 적중 (성공 결과만; 실패는 retry 요청 시 다시 시도)
-  2. Kakao 주소 검색: 원문 → 점점 단순한 변형 순으로
-  3. Kakao 키워드 검색: '거래처명 시군구'. 결과의 시군구가 주소의 시군구와 같을 때만 채택
-  4. 근사: 주소 텍스트의 시군구 중심 + 결정적 지터 (같은 주소는 항상 같은 자리)
-  5. 실패
+  1. 캐시 적중
+  2. 데모(키 없음)면 시군구 중심 근사 (precision=approx, 검색하지 않음)
+  3. Kakao 주소 검색: 원문 → 점점 단순한 변형 순으로 → 적중하면 exact
+  4. 모두 결과 없음 → needs_fix(사유 기록). 시군구를 읽을 수 있으면 그 중심 부근에 둔다.
+     거래처명 키워드 검색은 같은 이름의 다른 지점을 잡을 위험이 있어 하지 않는다.
+  API 오류는 주소 문제가 아니므로 needs_fix 가 아니라 approx 로 두고 캐시하지 않는다.
 """
 from __future__ import annotations
 
@@ -28,8 +29,10 @@ from .normalize import address_variants, clean_text, parse_region
 from .regions import RegionIndex
 
 KAKAO_ADDRESS = "https://dapi.kakao.com/v2/local/search/address.json"
-KAKAO_KEYWORD = "https://dapi.kakao.com/v2/local/search/keyword.json"
-USER_AGENT = "csm-map/0.1 (+local desktop app)"
+USER_AGENT = "csm-map/0.2 (+local desktop app)"
+REASON_NOT_FOUND = "주소 검색 결과 없음"
+REASON_EMPTY = "주소 없음"
+REASON_NO_REGION = "시군구 인식 불가"
 JITTER_DEG = 0.012  # 근사 배치 지터 반경(약 1.3km) — 같은 구 안에서 점이 겹치지 않게
 
 
@@ -41,6 +44,7 @@ class GeoResult:
     provider: str = ""
     query: str = ""
     ts: float = 0.0
+    reason: str = ""
 
     def ok(self) -> bool:
         return self.lat is not None and self.lng is not None
@@ -51,7 +55,7 @@ class KakaoError(RuntimeError):
 
 
 class Cache:
-    """geocode_cache.json — 정규화 주소 → GeoResult. 성공만 저장, 스레드 안전."""
+    """geocode_cache.json — 정규화 주소 → GeoResult. 적중(exact)과 정정 필요(needs_fix)를 저장, 스레드 안전."""
 
     def __init__(self, path: pathlib.Path):
         self.path = path
@@ -73,8 +77,8 @@ class Cache:
             r = GeoResult(**{k: d.get(k) for k in _FIELDS if k in d})
         except TypeError:
             return None
-        if r.precision not in model.PRECISIONS or not isinstance(r.provider, str) or not isinstance(r.query, str):
-            return None
+        if r.precision not in model.PRECISIONS or not all(isinstance(v, str) for v in (r.provider, r.query, r.reason)):
+            return None  # 예전 'keyword' 엔트리도 여기서 탈락 → 주소 검색만으로 다시 조회
         if r.ok() and not _finite_coord(r.lat, r.lng):
             return None
         return r
@@ -170,9 +174,6 @@ class KakaoClient:
         docs = self._get(KAKAO_ADDRESS, {"query": query, "size": 1}).get("documents") or []
         return docs[0] if docs else None
 
-    def keyword(self, query: str) -> dict | None:
-        docs = self._get(KAKAO_KEYWORD, {"query": query, "size": 3}).get("documents") or []
-        return docs[0] if docs else None
 
 
 class Geocoder:
@@ -194,25 +195,45 @@ class Geocoder:
         self.last_error: str | None = None
 
     # ---- 단건 ----
-    def approx(self, address: str) -> GeoResult:
+    def _region_point(self, address: str, precision: str, provider: str, reason: str = "") -> GeoResult:
+        """주소 텍스트의 시군구 중심 + 결정적 지터(같은 주소는 항상 같은 자리). 시군구를 못 읽으면 좌표 없음."""
         sido, sgg = parse_region(address)
         region = self.regions.by_name(sido, sgg) if sgg else None
         if not region:
-            return GeoResult(None, None, model.FAILED, provider="approx", query=address, ts=time.time())
+            if precision == model.NEEDS_FIX:
+                why = " · ".join(x for x in (reason, REASON_NO_REGION) if x)
+                return GeoResult(None, None, model.NEEDS_FIX, provider=provider, query=address, ts=time.time(), reason=why)
+            return GeoResult(None, None, model.FAILED, provider=provider, query=address, ts=time.time(), reason=REASON_NO_REGION)
         lat, lng = region.centroid
         dlat, dlng = _jitter(cache_key(address))
-        return GeoResult(lat + dlat, lng + dlng, model.APPROX, provider="approx", query=region.display, ts=time.time())
+        # 작은 시군구에서는 지터가 경계를 넘을 수 있다 → 그 시군구 안에 들어올 때까지 반경을 줄인다
+        for _ in range(4):
+            hit = self.regions.locate(lat + dlat, lng + dlng)
+            if hit is not None and hit.code == region.code:
+                break
+            dlat, dlng = dlat / 2, dlng / 2
+        else:
+            dlat = dlng = 0.0
+        return GeoResult(lat + dlat, lng + dlng, precision, provider=provider, query=region.display, ts=time.time(), reason=reason)
+
+    def approx(self, address: str) -> GeoResult:
+        """검색하지 않은 근사 — 데모 모드, API 오류 시."""
+        return self._region_point(address, model.APPROX, "approx")
+
+    def needs_fix(self, address: str, reason: str = REASON_NOT_FOUND) -> GeoResult:
+        """검색했지만 찾지 못함 — 원천 주소 정정 요청 대상."""
+        return self._region_point(address, model.NEEDS_FIX, "kakao:none", reason)
 
     def geocode_one(self, address: str, name: str = "", force: bool = False) -> GeoResult:
         key = cache_key(address)
         if not key:
-            return GeoResult(None, None, model.FAILED, ts=time.time())
+            return GeoResult(None, None, model.NEEDS_FIX, provider="", ts=time.time(), reason=REASON_EMPTY)
         if key in self.overrides:
             o = self.overrides[key]
             return GeoResult(o["lat"], o["lng"], model.MANUAL, provider="manual", ts=o.get("ts", 0))
         if not force:
             hit = self.cache.get(key)
-            if hit and hit.ok() and (not self.demo or hit.precision != model.APPROX):
+            if hit and hit.precision in (model.EXACT, model.NEEDS_FIX):
                 return hit
         if self.demo:
             return self.approx(address)
@@ -226,19 +247,12 @@ class Geocoder:
                     res = GeoResult(xy[0], xy[1], model.EXACT, "kakao:address", variant, time.time())
                     self.cache.put(key, res)
                     return res
-            sido, sgg = parse_region(address)
-            if name:
-                doc = self.client.keyword(f"{name} {sgg}".strip())
-                xy = _xy(doc) if doc else None
-                if xy and _same_region(str(doc.get("address_name", "")), sgg):
-                    res = GeoResult(xy[0], xy[1], model.KEYWORD, "kakao:keyword", name, time.time())
-                    self.cache.put(key, res)
-                    return res
         except KakaoError as exc:
+            # 키 거부·연결 실패 등은 주소 탓이 아니다 → 정정 대상으로 만들지 않고, 캐시도 하지 않는다
             self.last_error = str(exc)
-        res = self.approx(address)
-        if res.ok():
-            self.cache.put(key, res)
+            return self.approx(address)
+        res = self.needs_fix(address)
+        self.cache.put(key, res)  # 재실행 때 같은 주소로 API 를 다시 부르지 않게. 주소를 고치면 키가 바뀐다
         return res
 
     # ---- 일괄 ----
@@ -269,9 +283,3 @@ class Geocoder:
         self.cache.save()
         return results
 
-
-def _same_region(address_name: str, sgg: str) -> bool:
-    if not sgg:
-        return True
-    _, found = parse_region(address_name)
-    return found.replace(" ", "") == sgg.replace(" ", "")

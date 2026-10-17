@@ -35,8 +35,8 @@
     renderDealers(); renderStores(); renderIssues(); renderTable();
     util.$('[data-n="dealers"]').textContent = d.dealers.length;
     util.$('[data-n="stores"]').textContent = d.stores.length;
-    const issues = d.stores.filter((s) => s.precision === "approx" || s.precision === "failed").length;
-    util.$('[data-n="issues"]').textContent = issues || "";
+    const fixes = d.stores.filter(util.isFix).length + d.dealers.filter((x) => x.address && util.isFix(x)).length;
+    util.$('[data-n="issues"]').textContent = fixes || "";
   };
 
   pn.setActive = function (dealerId) {
@@ -97,6 +97,7 @@
       const d = data.dealers.find((x) => x.id === s.dealer_id);
       if (s.dealer_name !== lastDealer && !query) { lastDealer = s.dealer_name; }
       const tags = [];
+      if (s.precision === "needs_fix") tags.push(util.h("span.pill.pill--fix", { title: s.reason || "" }, "정정 필요"));
       if (s.precision === "approx") tags.push(util.h("span.pill.pill--warn", {}, "근사"));
       if (s.precision === "failed") tags.push(util.h("span.pill.pill--err", {}, "실패"));
       if (s.precision === "manual") tags.push(util.h("span.pill.pill--ok", {}, "수동"));
@@ -115,22 +116,44 @@
     }
   }
 
+  function issueRow(s, pill, sub) {
+    const actions = [];
+    if (!CSM.api.isStatic && s.dealer_id) {
+      actions.push(util.h("button.btn.btn--ghost.btn--sm", { type: "button", onclick: (e) => { e.stopPropagation(); h.place && h.place(s); } }, "위치 지정"));
+    }
+    return util.h("li", {}, util.h("div.row", { tabindex: 0, role: "button", onclick: () => s.dealer_id && h.storeClick && h.storeClick(s) }, [
+      pill,
+      util.h("span", {}, [util.h("div.row__name", {}, s.name), util.h("div.row__sub", { title: s.address || "" }, sub)]),
+      util.h("span.row__actions", {}, actions),
+    ]));
+  }
+
   function renderIssues() {
-    const list = data.stores.filter((s) => s.precision === "approx" || s.precision === "failed")
-      .sort((a, b) => (a.precision === "failed" ? -1 : 1) - (b.precision === "failed" ? -1 : 1) || a.name.localeCompare(b.name, "ko"));
     els.issues.innerHTML = "";
-    if (!list.length) { els.issues.append(util.h("li.list__empty", {}, "모든 주소의 좌표를 찾았습니다 ✓")); return; }
-    for (const s of list) {
-      const actions = [];
-      if (!CSM.api.isStatic) {
-        actions.push(util.h("button.btn.btn--ghost.btn--sm", { type: "button", onclick: (e) => { e.stopPropagation(); h.place && h.place(s); } }, "위치 지정"));
+    // 1) 정정 필요 — 주소 검색을 했지만 찾지 못함 / 주소 빈칸 (거래처 + 대리점)
+    const fixStores = data.stores.filter(util.isFix).sort((a, b) => a.dealer_name.localeCompare(b.dealer_name, "ko") || a.name.localeCompare(b.name, "ko"));
+    const fixDealers = data.dealers.filter((d) => d.address && util.isFix(d));
+    const nFix = fixStores.length + fixDealers.length;
+    const exportBtn = util.$("#btn-fix-export");
+    if (exportBtn) { exportBtn.disabled = nFix === 0; exportBtn.textContent = nFix ? `정정 요청 목록 내보내기 (${nFix}건)` : "정정 요청 목록 내보내기"; }
+    els.issues.append(util.h("li.group-head", {}, [util.h("b", {}, "정정 필요"), util.h("span", {}, ` ${nFix}건 · 주소 검색 결과가 없거나 주소가 비어 있음`)]));
+    if (!nFix) els.issues.append(util.h("li.list__empty", {}, "정정이 필요한 주소가 없습니다 ✓"));
+    const short = (r) => (!r || r.startsWith("주소 검색 결과 없음") ? (r && r.includes("시군구") ? "시군구 불명" : "결과 없음") : r === "주소 없음" ? "주소 없음" : r);
+    for (const s of fixStores) {
+      els.issues.append(issueRow(s, util.h("span.pill.pill--fix", { title: s.reason || "" }, short(s.reason)),
+        `${s.dealer_name} · ${s.address || "주소 칸이 비어 있음"}`));
+    }
+    for (const d of fixDealers) {
+      els.issues.append(issueRow(d, util.h("span.pill.pill--fix", { title: d.reason || "" }, "대리점"), `${short(d.reason)} · ${d.address}`));
+    }
+    // 2) 미확인 — 검색하지 않음(데모·키 없음·API 오류)
+    const unverified = data.stores.filter((s) => s.precision === "approx" || s.precision === "failed");
+    if (unverified.length) {
+      els.issues.append(util.h("li.group-head", {}, [util.h("b", {}, "미확인"), util.h("span", {}, ` ${unverified.length}건 · 아직 주소 검색을 하지 않아 시군구 중심 부근에 둔 위치`)]));
+      for (const s of unverified.slice(0, 200)) {
+        els.issues.append(issueRow(s, util.h("span.pill" + (s.precision === "failed" ? ".pill--err" : ".pill--warn"), {}, s.precision === "failed" ? "실패" : "근사"),
+          `${s.dealer_name} · ${s.address || "주소 없음"}`));
       }
-      const row = util.h("div.row", { tabindex: 0, role: "button", onclick: () => h.storeClick && h.storeClick(s) }, [
-        util.h("span.pill" + (s.precision === "failed" ? ".pill--err" : ".pill--warn"), {}, s.precision === "failed" ? "실패" : "근사"),
-        util.h("span", {}, [util.h("div.row__name", {}, s.name), util.h("div.row__sub", { title: s.address }, s.address || "주소 없음")]),
-        util.h("span.row__actions", {}, actions),
-      ]);
-      els.issues.append(util.h("li", {}, row));
     }
     if (data.warnings && data.warnings.length) {
       els.issues.append(util.h("li.warn-row", {}, "⚠ " + data.warnings.join(" / ")));
@@ -138,7 +161,7 @@
   }
 
   const COLS = [
-    ["dealer_name", "대리점"], ["name", "거래처"], ["sgg_name", "시군구"], ["address", "주소"], ["precision", "정밀도"], ["lat", "위도"], ["lng", "경도"],
+    ["dealer_name", "대리점"], ["name", "거래처"], ["sgg_name", "시군구"], ["address", "주소"], ["precision", "정밀도"], ["reason", "사유"], ["lat", "위도"], ["lng", "경도"],
   ];
   function renderTable() {
     const rows = data.stores.filter(matches).sort((a, b) => {

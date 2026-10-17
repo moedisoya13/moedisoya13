@@ -33,6 +33,12 @@ python csm_map.py --export-only      # 창 없이 단독 HTML 만 생성
 
 Windows 에선 `run.bat` 더블클릭. Edge(또는 Chrome)를 주소창 없는 **앱 창**으로 열며, 창을 닫으면 서버도 종료됩니다.
 
+### Windows 휴대용 실행 (Python 설치 없이)
+
+`python tools/make_portable.py --xlsx <CSM.xlsx 경로>` 로 `dist/CSM-Map-portable-날짜.zip` 을 만든다.
+NuGet 의 공식 Windows Python(게시자 Python Software Foundation)을 받아 SHA512 를 검증하고, 의존성과 앱을 함께 묶는다.
+받는 사람은 압축을 풀고 `run_csm_map.bat` 만 더블클릭하면 된다. 사용법은 zip 안의 `읽어주세요.txt` 참고.
+
 ### 카카오 REST API 키 (정확한 좌표를 얻으려면 필수)
 
 1. [developers.kakao.com](https://developers.kakao.com) → 내 애플리케이션 → 앱 키 → **REST API 키** 복사
@@ -41,6 +47,18 @@ Windows 에선 `run.bat` 더블클릭. Edge(또는 Chrome)를 주소창 없는 *
 3. 결과는 `geocode_cache.json` 에 캐시되어 다음 실행부터는 새 주소만 조회합니다.
 
 키가 없으면 **근사 모드**로 동작합니다: 주소에 적힌 시군구 중심 부근에 점선 링으로 표시합니다.
+
+### 주소 검색 실패 → '정정 필요' 분류와 정정 요청
+
+카카오 **주소 검색만** 씁니다. 원문과 괄호·층·호를 뗀 변형으로 다시 찾고, 그래도 없으면 **거래처명으로 대신 찾지 않고**
+'정정 필요'로 따로 분류합니다(같은 이름의 다른 지점을 잡을 위험 때문). 주소 칸이 빈 거래처도 여기에 들어갑니다.
+
+- 지도: 주소상 시군구 중심 부근에 **흐린 점선 마름모**(경고색)로만 표시. 실제 위치가 아님을 툴팁에 적습니다.
+- 패널 「정정 필요」 탭: 대상 목록(사유·주소) + **정정 요청 목록 내보내기** → `CSM_정정요청_날짜.xlsx`
+  (번호·구분·대리점명·거래처명·현재 주소·사유·시군구·원본 위치·**수정 주소(노란 칸)**·비고, 안내 시트 포함).
+- 담당자에게 받은 수정 주소를 CSM.xlsx(거래처 D열·대리점 I열)에 반영하고 앱을 다시 실행하면 그 주소만 새로 검색합니다.
+- 검색 결과 없음도 캐시에 남겨 재실행 때 API 를 다시 부르지 않습니다. 강제로 다시 찾으려면 설정의 「전체 다시 지오코딩」.
+- API 오류(키 거부·연결 실패)는 주소 문제가 아니므로 정정 대상이 아니라 '근사(미확인)'로 두고 캐시하지 않습니다.
 
 ## 화면
 
@@ -81,6 +99,7 @@ Windows 에선 `run.bat` 더블클릭. Edge(또는 Chrome)를 주소창 없는 *
 | `overrides.json` | 지도에서 직접 지정한 좌표 |
 | `CSM_map_YYYY-MM-DD.html` | 내보낸 단독 HTML |
 | `CSM_geocoded_YYYY-MM-DD.csv` | 내보낸 CSV |
+| `CSM_정정요청_YYYY-MM-DD.xlsx` | 정정 요청 목록 |
 
 ## Windows 실행파일 만들기
 

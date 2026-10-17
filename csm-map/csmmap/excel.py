@@ -60,11 +60,24 @@ def dealer_id(name: str) -> str:
     return "d" + hashlib.sha1(clean_text(name).encode("utf-8")).hexdigest()[:8]
 
 
+# 이 앱이 같은 폴더에 만드는 파일 — 다음 실행 때 원본 데이터로 다시 읽으면 안 된다
+OWN_OUTPUT_PREFIXES = ("CSM_정정요청_",)
+OWN_OUTPUT_TITLE = "csm-map:corrections"
+
+
 def iter_xlsx(folder: pathlib.Path) -> list[pathlib.Path]:
     return sorted(
         p for p in folder.glob("*.xlsx")
-        if not p.name.startswith("~$") and not p.name.startswith(".")
+        if not p.name.startswith(("~$", ".")) and not p.name.startswith(OWN_OUTPUT_PREFIXES)
     )
+
+
+def is_own_output(wb) -> bool:
+    """파일 이름을 바꿔도 알아볼 수 있게 문서 속성(title)으로도 표시해 둔다."""
+    try:
+        return (wb.properties.title or "") == OWN_OUTPUT_TITLE
+    except AttributeError:
+        return False
 
 
 def load_folder(folder: pathlib.Path) -> Dataset:
@@ -84,6 +97,9 @@ def load_folder(folder: pathlib.Path) -> Dataset:
             continue
         if not wb.worksheets:
             warnings.append(f"{path.name}: 워크시트가 없음")
+            wb.close()
+            continue
+        if is_own_output(wb):  # 이름을 바꾼 정정 요청 파일
             wb.close()
             continue
         ws = wb["CSM"] if "CSM" in wb.sheetnames else wb.worksheets[0]

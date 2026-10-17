@@ -10,9 +10,8 @@ from csmmap.geocode import Cache, Geocoder, KakaoClient, KakaoError, cache_key
 class FakeClient:
     """주소 → 응답 사전으로 Kakao 클라이언트를 흉내 낸다."""
 
-    def __init__(self, address=None, keyword=None, fail=None):
+    def __init__(self, address=None, fail=None):
         self.address_map = address or {}
-        self.keyword_map = keyword or {}
         self.fail = fail
         self.calls = []
 
@@ -22,9 +21,8 @@ class FakeClient:
             raise self.fail
         return self.address_map.get(q)
 
-    def keyword(self, q):
-        self.calls.append(("keyword", q))
-        return self.keyword_map.get(q)
+    def keyword(self, q):  # pragma: no cover - 호출되면 실패해야 한다
+        raise AssertionError("거래처명 키워드 검색은 호출되면 안 된다")
 
 
 ADDR = "경기도 부천시 소사구 범안로 103, 1층 전체 (범박동)"
@@ -38,6 +36,15 @@ def test_cache_roundtrip(tmp_path):
     c2 = Cache(tmp_path / "cache.json")
     assert c2.get("k").lat == 37.5 and len(c2) == 1
     c2.drop("k"); assert c2.get("k") is None
+
+
+def test_region_point_stays_inside_its_district(regions, tmp_path):
+    g = Geocoder(regions, Cache(tmp_path / "c.json"), None, demo=True)
+    for r in regions.regions:
+        if r.sido not in ("서울특별시", "인천광역시"):
+            continue
+        res = g.approx(f"{r.sido} {r.display} 테스트로 {r.code}")
+        assert regions.locate(res.lat, res.lng).code == r.code, r.display
 
 
 def test_demo_is_deterministic_approx(regions, tmp_path):
@@ -59,13 +66,42 @@ def test_exact_hit_on_simplified_variant(regions, tmp_path):
     assert g.geocode_one(ADDR).precision == model.EXACT and len(fake.calls) == n
 
 
-def test_keyword_fallback_requires_same_region(regions, tmp_path):
-    fake = FakeClient(keyword={"월드식자재마트 부천시 소사구": {"x": "126.80", "y": "37.47", "address_name": "경기 부천시 소사구 범박동 1"}})
+def test_address_miss_is_needs_fix_without_keyword_search(regions, tmp_path):
+    fake = FakeClient()  # 어떤 변형에도 결과 없음
     g = Geocoder(regions, Cache(tmp_path / "c.json"), fake)
-    assert g.geocode_one(ADDR, "월드식자재마트").precision == model.KEYWORD
-    fake2 = FakeClient(keyword={"월드식자재마트 부천시 소사구": {"x": "127.0", "y": "37.5", "address_name": "서울 강남구 x"}})
-    g2 = Geocoder(regions, Cache(tmp_path / "c2.json"), fake2)
-    assert g2.geocode_one(ADDR, "월드식자재마트").precision == model.APPROX
+    r = g.geocode_one(ADDR, "월드식자재마트")
+    assert r.precision == model.NEEDS_FIX and r.reason == "주소 검색 결과 없음"
+    assert regions.locate(r.lat, r.lng).display == "부천시 소사구"     # 주소상 시군구 중심 부근
+    assert all(kind == "address" for kind, _ in fake.calls)            # 키워드 검색 없음
+    # 캐시되어 재실행 때 API 를 다시 부르지 않는다
+    n = len(fake.calls)
+    assert g.geocode_one(ADDR, "월드식자재마트").precision == model.NEEDS_FIX and len(fake.calls) == n
+    # 강제 재검색이면 다시 묻는다
+    g.geocode_one(ADDR, "월드식자재마트", force=True)
+    assert len(fake.calls) > n
+
+
+def test_needs_fix_without_region_has_no_coords(regions, tmp_path):
+    g = Geocoder(regions, Cache(tmp_path / "c.json"), FakeClient())
+    r = g.geocode_one("어딘가 알수없는 주소 1")
+    assert r.precision == model.NEEDS_FIX and r.lat is None and "시군구 인식 불가" in r.reason
+
+
+def test_empty_address_is_needs_fix(regions, tmp_path):
+    for demo in (True, False):
+        g = Geocoder(regions, Cache(tmp_path / "c.json"), None if demo else FakeClient(), demo=demo)
+        r = g.geocode_one("   ")
+        assert r.precision == model.NEEDS_FIX and r.reason == "주소 없음" and r.lat is None
+
+
+def test_legacy_keyword_cache_entry_is_ignored(regions, tmp_path):
+    path = tmp_path / "c.json"
+    path.write_text(json.dumps({cache_key(ADDR): {"lat": 37.47, "lng": 126.8, "precision": "keyword",
+                                                   "provider": "kakao:keyword", "query": "x", "ts": 0}}), encoding="utf-8")
+    fake = FakeClient(address={"경기도 부천시 소사구 범안로 103": {"x": "126.80", "y": "37.47"}})
+    g = Geocoder(regions, Cache(path), fake)
+    r = g.geocode_one(ADDR)
+    assert r.precision == model.EXACT and fake.calls  # 예전 키워드 결과를 쓰지 않고 주소로 다시 조회
 
 
 def test_api_error_falls_back_to_approx_and_records_error(regions, tmp_path):
@@ -73,6 +109,7 @@ def test_api_error_falls_back_to_approx_and_records_error(regions, tmp_path):
     g = Geocoder(regions, Cache(tmp_path / "c.json"), fake)
     r = g.geocode_one(ADDR)
     assert r.precision == model.APPROX and "키 거부" in g.last_error
+    assert g.cache.get(cache_key(ADDR)) is None  # 주소 문제가 아니므로 정정 대상도, 캐시 대상도 아니다
 
 
 def test_override_wins(regions, tmp_path):

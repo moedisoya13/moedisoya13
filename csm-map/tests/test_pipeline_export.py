@@ -17,11 +17,11 @@ def test_pipeline_demo_assigns_regions(folder, regions):
     p = make_pipeline(folder, regions)
     pl = p.payload()
     counts = pl["meta"]["counts"]
-    assert counts["approx"] == 11 and counts["failed"] == 1   # 주소 없는 1건
+    assert counts["approx"] == 11 and counts["needs_fix"] == 1   # 주소 없는 1건은 정정 필요
     by_name = {s["name"]: s for s in pl["stores"]}
     assert by_name["샘플마트 화정점"]["sgg_name"] == "고양시 덕양구"
     assert by_name["샘플마트 서해점"]["sgg_name"] == "서해구"
-    assert by_name["샘플마트 주소없음"]["lat"] is None
+    assert by_name["샘플마트 주소없음"]["lat"] is None and by_name["샘플마트 주소없음"]["reason"] == "주소 없음"
     dealers = {d["name"]: d for d in pl["dealers"]}
     assert dealers["(주)한빛유통"]["lat"] is not None and dealers["한빛유통"]["lat"] is None
     assert pl["meta"]["demo"] is True
