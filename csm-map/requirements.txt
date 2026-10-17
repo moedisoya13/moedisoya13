@@ -1,1 +1,2 @@
 openpyxl>=3.1,<4
+defusedxml>=0.7     # openpyxl 이 있으면 자동 사용 — XML 폭탄·외부 엔티티 방어

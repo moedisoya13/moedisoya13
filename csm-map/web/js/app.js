@@ -227,7 +227,8 @@
     // 저장된 표시 설정 (정적: localStorage, 앱: config.json 이 우선)
     let cfg = {};
     if (!api.isStatic) {
-      try { const st = await api.state(); cfg = st.config || {}; S.data = st.data; S.config = cfg; } catch (e) { util.toast("서버에 연결할 수 없습니다: " + e.message, { error: true }); }
+      if (!api.hasToken()) util.toast("접근 토큰이 없습니다. 앱(csm_map.py)이 띄운 창이나 콘솔에 찍힌 주소로 열어 주세요.", { error: true, ms: 10000 });
+      try { const st = await api.state(); cfg = st.config || {}; S.data = st.data; S.config = cfg; } catch (e) { util.toast("서버에 연결할 수 없습니다: " + e.message, { error: true, ms: 8000 }); return; }
     } else { S.data = window.CSM_DATA; }
     const theme = cfg.theme || LS.get("theme", window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
     setTheme(theme, { save: false });

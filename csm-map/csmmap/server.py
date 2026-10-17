@@ -2,26 +2,43 @@
 
 표준 라이브러리만 사용한다. 127.0.0.1 에만 바인딩하며, 브라우저 창이 닫혀 하트비트(/api/ping)가
 끊기면 스스로 종료한다 (자동 종료는 --keep-alive 로 끌 수 있다).
+
+보안 모델 — 같은 PC 의 브라우저에 열린 *다른* 웹사이트가 공격자다:
+  * 모든 /api/* 는 기동 때 만든 1회성 토큰(X-CSM-Token 헤더 또는 ?t=)이 있어야 한다.
+    토큰은 앱 창을 열 때 URL 로 한 번만 전달되고, 페이지가 sessionStorage 로 옮긴 뒤 주소창에서 지운다.
+    → 다른 사이트는 토큰을 모르므로 CSRF(단순 요청) 가 통하지 않고, 커스텀 헤더는 preflight 를 유발해 차단된다.
+  * Host 헤더가 127.0.0.1/localhost 가 아니면 거부 → DNS 리바인딩으로 같은 출처가 되어도 읽을 수 없다.
+  * Origin 헤더가 있으면 우리 출처여야 한다. 요청 본문은 1MB 까지. 응답에 CSP·nosniff·frame-ancestors 'none'.
 """
 from __future__ import annotations
 
+import hmac
 import json
 import mimetypes
 import pathlib
 import queue
+import secrets
 import threading
 import time
 import traceback
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 from . import __version__
+from .config import ConfigError
 from .export import export_csv, export_html
 from .pipeline import Pipeline
 
 WEB_DIR = pathlib.Path(__file__).resolve().parents[1] / "web"
-PING_TIMEOUT = 45.0  # 초. 이 시간 동안 핑이 없으면 종료
+PING_TIMEOUT = 45.0          # 초. 이 시간 동안 핑이 없으면 종료
+MAX_BODY = 1_000_000         # 요청 본문 상한(바이트)
+ALLOWED_HOSTS = ("127.0.0.1", "localhost", "[::1]")
+CSP = (
+    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+    "font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https://*.basemaps.cartocdn.com; "
+    "connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'; object-src 'none'"
+)
 mimetypes.add_type("application/javascript", ".js")
 mimetypes.add_type("application/json", ".json")
 
@@ -30,13 +47,18 @@ class AppState:
     def __init__(self, pipeline: Pipeline, auto_exit: bool = True):
         self.pipeline = pipeline
         self.auto_exit = auto_exit
+        self.token = secrets.token_urlsafe(24)
         self.subscribers: list[queue.Queue] = []
         self.sub_lock = threading.Lock()
         self.job: threading.Thread | None = None
         self.job_status: dict = {"running": False, "done": 0, "total": 0}
         self.last_ping: float | None = None
         self.server: ThreadingHTTPServer | None = None
+        self.port: int = 0
         self.started = time.monotonic()
+
+    def url(self) -> str:
+        return f"http://127.0.0.1:{self.port}/?t={self.token}"
 
     # ---- SSE ----
     def subscribe(self) -> queue.Queue:
@@ -97,49 +119,113 @@ class AppState:
                 return
 
 
+class BadRequest(ValueError):
+    pass
+
+
 def make_handler(state: AppState):
     class Handler(BaseHTTPRequestHandler):
         server_version = f"csm-map/{__version__}"
+        sys_version = ""  # 파이썬 버전 노출 안 함
 
-        def log_message(self, fmt, *args):  # 조용히
+        # ---- 로그: 토큰이 섞일 수 있는 쿼리는 지운다 ----
+        def log_message(self, fmt, *args):
             if args and "/api/ping" in str(args[0]):
                 return
+            args = tuple(a.split("?", 1)[0] if isinstance(a, str) and "?t=" in a else a for a in args)
             super().log_message(fmt, *args)
 
         # ---- helpers ----
-        def _json(self, obj, status=HTTPStatus.OK):
-            body = json.dumps(obj, ensure_ascii=False).encode("utf-8")
-            self.send_response(status)
-            self.send_header("Content-Type", "application/json; charset=utf-8")
-            self.send_header("Content-Length", str(len(body)))
+        def _headers(self, extra: dict | None = None):
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("X-Frame-Options", "DENY")
+            self.send_header("Referrer-Policy", "no-referrer")
             self.send_header("Cache-Control", "no-store")
+            for k, v in (extra or {}).items():
+                self.send_header(k, v)
+
+        def _json(self, obj, status=HTTPStatus.OK):
+            body = json.dumps(obj, ensure_ascii=False, allow_nan=False).encode("utf-8")
+            self.send_response(status)
+            self._headers({"Content-Type": "application/json; charset=utf-8", "Content-Length": str(len(body))})
             self.end_headers()
             self.wfile.write(body)
 
+        def _deny(self, status=HTTPStatus.FORBIDDEN, msg="forbidden"):
+            self._json({"error": msg}, status)
+
+        def _host_ok(self) -> bool:
+            host = (self.headers.get("Host") or "").strip().lower()
+            name = host.rsplit(":", 1)[0] if not host.startswith("[") or "]:" in host else host
+            if name.startswith("[") and "]:" in host:
+                name = host.split("]:")[0] + "]"
+            return name in ALLOWED_HOSTS
+
+        def _origin_ok(self) -> bool:
+            origin = self.headers.get("Origin")
+            if origin is None or origin == "null":
+                return origin is None
+            o = urlparse(origin)
+            return o.scheme == "http" and o.hostname in ("127.0.0.1", "localhost", "::1") and o.port == state.port
+
+        def _token_ok(self, query: dict) -> bool:
+            supplied = self.headers.get("X-CSM-Token") or (query.get("t") or [""])[0]
+            return bool(supplied) and hmac.compare_digest(supplied, state.token)
+
         def _body(self) -> dict:
             n = int(self.headers.get("Content-Length") or 0)
+            if n > MAX_BODY:
+                raise BadRequest("요청 본문이 너무 큽니다")
             if not n:
                 return {}
-            return json.loads(self.rfile.read(n).decode("utf-8"))
+            try:
+                data = json.loads(self.rfile.read(n).decode("utf-8"))
+            except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+                raise BadRequest("JSON 본문이 아닙니다") from exc
+            if not isinstance(data, dict):
+                raise BadRequest("객체가 아닙니다")
+            return data
 
         def _static(self, rel: str):
-            path = (WEB_DIR / rel).resolve()
-            if not str(path).startswith(str(WEB_DIR)) or not path.is_file():
-                self.send_error(HTTPStatus.NOT_FOUND)
-                return
+            try:
+                path = (WEB_DIR / rel).resolve()
+                path.relative_to(WEB_DIR)
+            except (ValueError, OSError):
+                return self._deny(HTTPStatus.NOT_FOUND, "not found")
+            if not path.is_file():
+                return self._deny(HTTPStatus.NOT_FOUND, "not found")
             ctype = mimetypes.guess_type(str(path))[0] or "application/octet-stream"
+            if ctype.startswith("text/") or "javascript" in ctype or "json" in ctype:
+                ctype += "; charset=utf-8"
             data = path.read_bytes()
             self.send_response(HTTPStatus.OK)
-            self.send_header("Content-Type", ctype + ("; charset=utf-8" if ctype.startswith("text/") or "javascript" in ctype or "json" in ctype else ""))
-            self.send_header("Content-Length", str(len(data)))
-            self.send_header("Cache-Control", "no-cache")
+            extra = {"Content-Type": ctype, "Content-Length": str(len(data))}
+            if ctype.startswith("text/html"):
+                extra["Content-Security-Policy"] = CSP
+            self._headers(extra)
             self.end_headers()
             self.wfile.write(data)
 
+        def _gate(self, api: bool) -> dict | None:
+            """공통 검문. 통과하면 쿼리 dict, 아니면 응답을 보내고 None."""
+            if not self._host_ok() or not self._origin_ok():
+                self._deny(); return None
+            url = urlparse(self.path)
+            query = parse_qs(url.query)
+            if api and not self._token_ok(query):
+                self._deny(HTTPStatus.UNAUTHORIZED, "토큰이 없거나 틀립니다 — 앱을 다시 실행하세요"); return None
+            return query
+
+        def do_OPTIONS(self):  # CORS preflight 는 항상 거부(헤더 없음)
+            self._deny()
+
         # ---- GET ----
         def do_GET(self):
-            url = urlparse(self.path)
-            p = url.path
+            p = urlparse(self.path).path
+            is_api = p.startswith("/api/")
+            query = self._gate(is_api)
+            if query is None:
+                return None
             if p == "/":
                 return self._static("index.html")
             if p == "/api/state":
@@ -154,15 +240,15 @@ def make_handler(state: AppState):
                 return self._json({"ok": True, "job": state.job_status})
             if p == "/api/events":
                 return self._sse()
+            if is_api:
+                return self._deny(HTTPStatus.NOT_FOUND, "not found")
             return self._static(p.lstrip("/"))
 
         def _sse(self):
             q = state.subscribe()
             try:
                 self.send_response(HTTPStatus.OK)
-                self.send_header("Content-Type", "text/event-stream; charset=utf-8")
-                self.send_header("Cache-Control", "no-store")
-                self.send_header("Connection", "keep-alive")
+                self._headers({"Content-Type": "text/event-stream; charset=utf-8", "Connection": "keep-alive"})
                 self.end_headers()
                 self.wfile.write(b": connected\n\n")
                 self.wfile.flush()
@@ -173,10 +259,10 @@ def make_handler(state: AppState):
                         self.wfile.write(b": ping\n\n")
                         self.wfile.flush()
                         continue
-                    payload = json.dumps(data, ensure_ascii=False)
+                    payload = json.dumps(data, ensure_ascii=False, allow_nan=False)
                     self.wfile.write(f"event: {event}\ndata: {payload}\n\n".encode("utf-8"))
                     self.wfile.flush()
-            except (BrokenPipeError, ConnectionResetError, OSError):
+            except (BrokenPipeError, ConnectionResetError, OSError, ValueError):
                 pass
             finally:
                 state.unsubscribe(q)
@@ -184,6 +270,8 @@ def make_handler(state: AppState):
         # ---- POST ----
         def do_POST(self):
             p = urlparse(self.path).path
+            if self._gate(True) is None:
+                return None
             try:
                 body = self._body()
                 if p == "/api/scan":
@@ -199,20 +287,29 @@ def make_handler(state: AppState):
                         state.pipeline.geocoded = False
                     return self._json({"config": state.pipeline.config.public()})
                 if p == "/api/override":
+                    sid = body.get("id")
+                    if not isinstance(sid, str) or len(sid) > 64:
+                        raise BadRequest("id")
                     if body.get("clear"):
-                        state.pipeline.clear_override(body["id"])
+                        state.pipeline.clear_override(sid)
                     else:
-                        state.pipeline.set_override(body["id"], float(body["lat"]), float(body["lng"]))
+                        state.pipeline.set_override(sid, body.get("lat"), body.get("lng"))
                     return self._json({"data": state.pipeline.payload()})
                 if p == "/api/export":
                     fmt = body.get("format", "html")
+                    if fmt not in ("html", "csv"):
+                        raise BadRequest("format")
                     out = export_csv(state.pipeline) if fmt == "csv" else export_html(state.pipeline)
                     return self._json({"path": str(out), "name": out.name})
                 if p == "/api/quit":
                     self._json({"ok": True})
                     state.shutdown()
                     return None
-                return self._json({"error": "not found"}, HTTPStatus.NOT_FOUND)
+                return self._deny(HTTPStatus.NOT_FOUND, "not found")
+            except (BadRequest, ConfigError, ValueError) as exc:
+                return self._json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
+            except KeyError as exc:
+                return self._json({"error": f"없는 항목: {exc}"}, HTTPStatus.NOT_FOUND)
             except Exception as exc:
                 traceback.print_exc()
                 return self._json({"error": f"{exc.__class__.__name__}: {exc}"}, HTTPStatus.INTERNAL_SERVER_ERROR)
@@ -225,5 +322,6 @@ def serve(pipeline: Pipeline, port: int = 0, auto_exit: bool = True) -> tuple[Th
     httpd = ThreadingHTTPServer(("127.0.0.1", port), make_handler(state))
     httpd.daemon_threads = True
     state.server = httpd
+    state.port = httpd.server_address[1]
     threading.Thread(target=state.watchdog, daemon=True, name="watchdog").start()
-    return httpd, state, httpd.server_address[1]
+    return httpd, state, state.port

@@ -6,7 +6,7 @@ import pathlib
 from typing import Callable
 
 from . import model
-from .config import CACHE_NAME, Config, Overrides
+from .config import CACHE_NAME, Config, Overrides, validate_coord
 from .excel import load_folder
 from .geocode import Cache, Geocoder, GeoResult, KakaoClient
 from .normalize import parse_region
@@ -67,6 +67,7 @@ class Pipeline:
         self.last_error = geocoder.last_error
 
     def set_override(self, store_id: str, lat: float, lng: float) -> None:
+        lat, lng = validate_coord(lat, lng)
         target = next((x for x in self.dataset.stores + self.dataset.dealers if x.id == store_id), None)
         if not target:
             raise KeyError(store_id)
@@ -106,7 +107,8 @@ class Pipeline:
                 obj.sido = obj.sgg_code = obj.sgg_name = ""
 
     # ---- 출력 ----
-    def payload(self) -> dict:
+    def payload(self, for_export: bool = False) -> dict:
+        """for_export=True 면 로컬 경로 등 공유 파일에 들어가면 안 되는 정보를 뺀다."""
         meta = {
             "generated_at": dt.datetime.now().isoformat(timespec="seconds"),
             "folder": str(self.folder),
@@ -117,4 +119,7 @@ class Pipeline:
             "cache_size": len(self.cache),
             "last_error": self.last_error,
         }
+        if for_export:
+            meta.pop("folder", None)
+            meta.pop("last_error", None)
         return self.dataset.to_json(meta)

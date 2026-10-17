@@ -105,7 +105,8 @@ window.CSM = window.CSM || {};
   };
 
   util.csv = (rows) => rows.map((r) => r.map((v) => {
-    const s = v == null ? "" : String(v);
+    let s = v == null ? "" : String(v);
+    if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;   // 엑셀 수식 인젝션 방지
     return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   }).join(",")).join("\n");
 

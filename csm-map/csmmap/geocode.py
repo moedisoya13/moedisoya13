@@ -78,6 +78,11 @@ class Cache:
         with self._lock:
             tmp = self.path.with_suffix(".tmp")
             tmp.write_text(json.dumps(self._data, ensure_ascii=False, indent=1), encoding="utf-8")
+            try:
+                import os
+                os.chmod(tmp, 0o600)
+            except OSError:
+                pass
             tmp.replace(self.path)
 
     def __len__(self) -> int:

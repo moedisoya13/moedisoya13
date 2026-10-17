@@ -58,8 +58,15 @@ def export_html(pipeline: Pipeline, out_dir: pathlib.Path | None = None) -> path
     out_dir = out_dir or pipeline.folder
     name = f"CSM_map_{dt.date.today().isoformat()}.html"
     out = out_dir / name
-    out.write_text(build_html(pipeline.payload()), encoding="utf-8")
+    out.write_text(build_html(pipeline.payload(for_export=True)), encoding="utf-8")
     return out
+
+
+def csv_safe(value) -> object:
+    """엑셀 수식 인젝션 방지: = + - @ 탭 등으로 시작하는 셀은 작은따옴표를 앞에 붙여 문자열로 고정."""
+    if isinstance(value, str) and value[:1] in ("=", "+", "-", "@", "\t", "\r"):
+        return "'" + value
+    return value
 
 
 def export_csv(pipeline: Pipeline, out_dir: pathlib.Path | None = None) -> pathlib.Path:
@@ -69,8 +76,8 @@ def export_csv(pipeline: Pipeline, out_dir: pathlib.Path | None = None) -> pathl
         w = csv.writer(fh)
         w.writerow(["구분", "대리점명", "거래처명", "주소", "시도", "시군구", "위도", "경도", "정밀도", "출처", "파일", "행"])
         for s in pipeline.dataset.stores:
-            w.writerow(["거래처", s.dealer_name, s.name, s.address, s.sido, s.sgg_name, s.lat, s.lng, s.precision, s.provider, s.source, s.row])
+            w.writerow([csv_safe(v) for v in ["거래처", s.dealer_name, s.name, s.address, s.sido, s.sgg_name, s.lat, s.lng, s.precision, s.provider, s.source, s.row]])
         for d in pipeline.dataset.dealers:
             if d.address:
-                w.writerow(["대리점", d.name, "", d.address, d.sido, d.sgg_name, d.lat, d.lng, d.precision, d.provider, "", ""])
+                w.writerow([csv_safe(v) for v in ["대리점", d.name, "", d.address, d.sido, d.sgg_name, d.lat, d.lng, d.precision, d.provider, "", ""]])
     return out

@@ -5,8 +5,10 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 import pathlib
+import re
 import time
 from typing import Any
 
@@ -36,8 +38,81 @@ def _read(path: pathlib.Path) -> dict:
 
 def _write(path: pathlib.Path, data: dict) -> None:
     tmp = path.with_suffix(".tmp")
-    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2, allow_nan=False), encoding="utf-8")
+    try:
+        os.chmod(tmp, 0o600)  # 키·좌표 파일은 본인만 읽게 (Windows 에선 무시됨)
+    except OSError:
+        pass
     tmp.replace(path)
+
+
+class ConfigError(ValueError):
+    pass
+
+
+_KEY_RE = re.compile(r"^[A-Za-z0-9_\-]{8,128}$")
+_THEMES = ("light", "dark")
+_COLOR_MODES = ("focus", "dealer")
+
+
+def _short_str(v: Any, limit: int, what: str) -> str:
+    if not isinstance(v, str) or len(v) > limit or any(ch in v for ch in "\r\n\x00"):
+        raise ConfigError(f"{what}: 문자열 길이 {limit} 이하여야 합니다")
+    return v.strip()
+
+
+def validate_patch(patch: dict[str, Any]) -> dict[str, Any]:
+    """프런트/외부에서 온 설정 변경을 형·길이·허용값 기준으로 걸러 돌려준다. 모르는 키는 버린다."""
+    if not isinstance(patch, dict):
+        raise ConfigError("객체가 아닙니다")
+    out: dict[str, Any] = {}
+    for k, v in patch.items():
+        if k == "api_key":
+            key = _short_str(v, 128, "api_key")
+            if key and not _KEY_RE.match(key):
+                raise ConfigError("api_key: 영문·숫자 8~128자여야 합니다")
+            out[k] = key
+        elif k == "theme":
+            if v not in _THEMES:
+                raise ConfigError("theme")
+            out[k] = v
+        elif k == "color_mode":
+            if v not in _COLOR_MODES:
+                raise ConfigError("color_mode")
+            out[k] = v
+        elif k == "tiles":
+            out[k] = bool(v)
+        elif k == "active_preset":
+            out[k] = None if v is None else _short_str(v, 100, "active_preset")
+        elif k == "presets":
+            if not isinstance(v, list) or len(v) > 100:
+                raise ConfigError("presets: 100개 이하 목록이어야 합니다")
+            presets = []
+            for item in v:
+                if not isinstance(item, dict):
+                    raise ConfigError("presets")
+                name = _short_str(item.get("name"), 100, "presets.name")
+                regions = item.get("regions")
+                if not isinstance(regions, list) or len(regions) > 400 or not all(isinstance(r, str) and len(r) <= 10 for r in regions):
+                    raise ConfigError("presets.regions")
+                presets.append({"name": name, "regions": regions})
+            out[k] = presets
+        elif k == "aliases":
+            if not isinstance(v, dict) or len(v) > 500:
+                raise ConfigError("aliases")
+            out[k] = {_short_str(a, 100, "aliases"): _short_str(b, 100, "aliases") for a, b in v.items()}
+        # 그 밖의 키는 무시
+    return out
+
+
+def validate_coord(lat: Any, lng: Any) -> tuple[float, float]:
+    try:
+        la, ln = float(lat), float(lng)
+    except (TypeError, ValueError) as exc:
+        raise ConfigError("좌표는 숫자여야 합니다") from exc
+    if not (math.isfinite(la) and math.isfinite(ln)) or not (-90 <= la <= 90) or not (-180 <= ln <= 180):
+        raise ConfigError("좌표 범위를 벗어났습니다")
+    return la, ln
 
 
 class Config:
@@ -51,9 +126,7 @@ class Config:
         return self.data.get("api_key") or os.environ.get("KAKAO_REST_API_KEY", "")
 
     def update(self, patch: dict[str, Any]) -> None:
-        for k, v in patch.items():
-            if k in DEFAULTS:
-                self.data[k] = v
+        self.data.update(validate_patch(patch))
         self.save()
 
     def save(self) -> None:
@@ -74,6 +147,7 @@ class Overrides:
         self.data: dict[str, dict] = _read(self.path)
 
     def set(self, address_key: str, lat: float, lng: float, note: str = "") -> None:
+        lat, lng = validate_coord(lat, lng)
         self.data[address_key] = {"lat": lat, "lng": lng, "note": note, "ts": time.time()}
         _write(self.path, self.data)
 
