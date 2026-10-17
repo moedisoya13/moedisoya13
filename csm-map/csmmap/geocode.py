@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import pathlib
 import threading
 import time
@@ -19,7 +20,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, fields
 from typing import Callable
 
 from . import model
@@ -58,13 +59,25 @@ class Cache:
         self._data: dict[str, dict] = {}
         if path.exists():
             try:
-                self._data = json.loads(path.read_text(encoding="utf-8"))
-            except json.JSONDecodeError:
+                loaded = json.loads(path.read_text(encoding="utf-8"))
+                self._data = loaded if isinstance(loaded, dict) else {}
+            except (json.JSONDecodeError, UnicodeDecodeError, OSError):
                 self._data = {}
 
     def get(self, key: str) -> GeoResult | None:
+        """손상되거나 조작된 엔트리(모르는 키, 비정상 precision, 무한/범위 밖 좌표)는 없는 것으로 친다."""
         d = self._data.get(key)
-        return GeoResult(**d) if d else None
+        if not isinstance(d, dict):
+            return None
+        try:
+            r = GeoResult(**{k: d.get(k) for k in _FIELDS if k in d})
+        except TypeError:
+            return None
+        if r.precision not in model.PRECISIONS or not isinstance(r.provider, str) or not isinstance(r.query, str):
+            return None
+        if r.ok() and not _finite_coord(r.lat, r.lng):
+            return None
+        return r
 
     def put(self, key: str, result: GeoResult) -> None:
         with self._lock:
@@ -77,7 +90,7 @@ class Cache:
     def save(self) -> None:
         with self._lock:
             tmp = self.path.with_suffix(".tmp")
-            tmp.write_text(json.dumps(self._data, ensure_ascii=False, indent=1), encoding="utf-8")
+            tmp.write_text(json.dumps(self._data, ensure_ascii=False, indent=1, allow_nan=False), encoding="utf-8")
             try:
                 import os
                 os.chmod(tmp, 0o600)
@@ -87,6 +100,23 @@ class Cache:
 
     def __len__(self) -> int:
         return len(self._data)
+
+
+_FIELDS = tuple(f.name for f in fields(GeoResult))
+
+
+def _finite_coord(lat, lng) -> bool:
+    try:
+        la, ln = float(lat), float(lng)
+    except (TypeError, ValueError):
+        return False
+    return math.isfinite(la) and math.isfinite(ln) and -90 <= la <= 90 and -180 <= ln <= 180
+
+
+def _xy(doc: dict) -> tuple[float, float] | None:
+    """Kakao 응답의 x(경도)/y(위도). 숫자가 아니거나 무한·범위 밖이면 None."""
+    lat, lng = doc.get("y"), doc.get("x")
+    return (float(lat), float(lng)) if _finite_coord(lat, lng) else None
 
 
 def cache_key(address: str) -> str:
@@ -191,15 +221,17 @@ class Geocoder:
         try:
             for variant in address_variants(address):
                 doc = self.client.address(variant)
-                if doc:
-                    res = GeoResult(float(doc["y"]), float(doc["x"]), model.EXACT, "kakao:address", variant, time.time())
+                xy = _xy(doc) if doc else None
+                if xy:
+                    res = GeoResult(xy[0], xy[1], model.EXACT, "kakao:address", variant, time.time())
                     self.cache.put(key, res)
                     return res
             sido, sgg = parse_region(address)
             if name:
                 doc = self.client.keyword(f"{name} {sgg}".strip())
-                if doc and _same_region(doc.get("address_name", ""), sgg):
-                    res = GeoResult(float(doc["y"]), float(doc["x"]), model.KEYWORD, "kakao:keyword", name, time.time())
+                xy = _xy(doc) if doc else None
+                if xy and _same_region(str(doc.get("address_name", "")), sgg):
+                    res = GeoResult(xy[0], xy[1], model.KEYWORD, "kakao:keyword", name, time.time())
                     self.cache.put(key, res)
                     return res
         except KakaoError as exc:

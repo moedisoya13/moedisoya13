@@ -16,11 +16,13 @@ from .pipeline import Pipeline
 WEB_DIR = pathlib.Path(__file__).resolve().parents[1] / "web"
 _LINK = re.compile(r'<link\s+rel="stylesheet"\s+href="([^"]+)"\s*/?>')
 _SCRIPT = re.compile(r'<script\s+src="([^"]+)"\s*></script>')
+_FONT_LINK = re.compile(r'<link[^>]+fonts\.googleapis\.com[^>]*>\s*')
 
 
 def _safe_json(obj) -> str:
-    # </script> 로 HTML 이 깨지지 않게
-    return json.dumps(obj, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
+    """JSON 문자열 안의 '<' 를 \\u003c 로 — </script> 뿐 아니라 <!--<script> 같은 토크나이저 탈출도 막는다.
+    JSON 에서 '<' 는 문자열 안에만 올 수 있으므로 의미는 변하지 않는다."""
+    return json.dumps(obj, ensure_ascii=False, separators=(",", ":"), allow_nan=False).replace("<", "\\u003c")
 
 
 def build_html(payload: dict, boundaries_json: str | None = None, web_dir: pathlib.Path = WEB_DIR) -> str:
@@ -43,12 +45,14 @@ def build_html(payload: dict, boundaries_json: str | None = None, web_dir: pathl
 
     html = _LINK.sub(inline_css, html)
     html = _SCRIPT.sub(inline_js, html)
+    # 공유 파일은 외부 요청을 하지 않게 — 글꼴 링크 제거(시스템 글꼴로 표시)
+    html = _FONT_LINK.sub("", html)
     if boundaries_json is None:
         boundaries_json = (web_dir / "data" / "boundaries.json").read_text(encoding="utf-8")
     inject = (
         "<script>\n"
         f"window.CSM_DATA = {_safe_json(payload)};\n"
-        f"window.CSM_BOUNDARIES = {boundaries_json.replace('</', '<\\/')};\n"
+        f"window.CSM_BOUNDARIES = {boundaries_json.replace('<', '\\u003c')};\n"
         "</script>\n"
     )
     return html.replace("<!-- CSM:INLINE -->", inject, 1)

@@ -18,6 +18,7 @@ from .model import Dataset, Dealer, SourceFile, Store
 from .normalize import clean_text, similar_dealer_groups
 
 HEADER_SCAN_ROWS = 5
+MAX_FILE_BYTES = 50 * 1024 * 1024  # 이보다 큰 xlsx 는 건너뛴다 (압축 폭탄·메모리 보호)
 
 
 @dataclass
@@ -73,10 +74,17 @@ def load_folder(folder: pathlib.Path) -> Dataset:
     warnings: list[str] = []
 
     for fi, path in enumerate(iter_xlsx(folder)):
+        if path.stat().st_size > MAX_FILE_BYTES:
+            warnings.append(f"{path.name}: {MAX_FILE_BYTES // (1024 * 1024)}MB 를 넘어 건너뜀")
+            continue
         try:
             wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
         except Exception as exc:  # 손상·잠김 파일은 건너뛰고 경고
             warnings.append(f"{path.name}: 열 수 없음 ({exc.__class__.__name__})")
+            continue
+        if not wb.worksheets:
+            warnings.append(f"{path.name}: 워크시트가 없음")
+            wb.close()
             continue
         ws = wb["CSM"] if "CSM" in wb.sheetnames else wb.worksheets[0]
         # read_only 모드에서는 max_column 이 None 일 수 있어 일반 모드로 다시 연다

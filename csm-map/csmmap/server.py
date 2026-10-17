@@ -135,6 +135,7 @@ def make_handler(state: AppState):
     class Handler(BaseHTTPRequestHandler):
         server_version = f"csm-map/{__version__}"
         sys_version = ""  # 파이썬 버전 노출 안 함
+        timeout = 30      # 소켓 타임아웃 — 느린/유휴 연결이 스레드를 영원히 잡지 않게
 
         # ---- 로그: 토큰이 섞일 수 있는 쿼리는 지운다 ----
         def log_message(self, fmt, *args):
@@ -181,8 +182,11 @@ def make_handler(state: AppState):
             return bool(supplied) and hmac.compare_digest(supplied, state.token)
 
         def _body(self) -> dict:
-            n = int(self.headers.get("Content-Length") or 0)
-            if n > MAX_BODY:
+            try:
+                n = int(self.headers.get("Content-Length") or 0)
+            except ValueError as exc:
+                raise BadRequest("Content-Length") from exc
+            if n < 0 or n > MAX_BODY:
                 raise BadRequest("요청 본문이 너무 큽니다")
             if not n:
                 return {}
@@ -229,6 +233,18 @@ def make_handler(state: AppState):
 
         # ---- GET ----
         def do_GET(self):
+            try:
+                return self._get()
+            except (BrokenPipeError, ConnectionResetError):
+                return None
+            except Exception as exc:  # 데이터 직렬화 실패 등도 연결을 끊지 않고 JSON 오류로
+                traceback.print_exc()
+                try:
+                    return self._json({"error": f"{exc.__class__.__name__}: {exc}"}, HTTPStatus.INTERNAL_SERVER_ERROR)
+                except Exception:
+                    return None
+
+        def _get(self):
             p = urlparse(self.path).path
             is_api = p.startswith("/api/")
             query = self._gate(is_api)

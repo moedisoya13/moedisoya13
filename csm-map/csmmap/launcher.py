@@ -1,6 +1,7 @@
 """Edge/Chrome 을 '앱 모드'(주소창 없는 창) 로 연다. 못 찾으면 기본 브라우저."""
 from __future__ import annotations
 
+import getpass
 import os
 import pathlib
 import platform
@@ -48,12 +49,24 @@ def find_browser() -> str | None:
     return None
 
 
+def _profile_dir() -> pathlib.Path:
+    """브라우저 전용 프로필. 공용 /tmp 에서 다른 사용자가 미리 만든 디렉터리를 쓰지 않도록
+    사용자 이름을 붙이고 0700 으로 만들며, 소유자가 다르면 새 임시 디렉터리를 쓴다."""
+    base = pathlib.Path(tempfile.gettempdir()) / f"csm-map-profile-{getpass.getuser()}"
+    try:
+        base.mkdir(mode=0o700, exist_ok=True)
+        if hasattr(os, "getuid") and base.stat().st_uid != os.getuid():
+            raise PermissionError
+        return base
+    except (OSError, PermissionError):
+        return pathlib.Path(tempfile.mkdtemp(prefix="csm-map-profile-"))
+
+
 def open_app_window(url: str, size: tuple[int, int] = (1440, 900)) -> str:
     """앱 모드로 열고 사용한 방식('app' | 'browser') 을 돌려준다."""
     exe = find_browser()
     if exe:
-        profile = pathlib.Path(tempfile.gettempdir()) / "csm-map-profile"
-        profile.mkdir(exist_ok=True)
+        profile = _profile_dir()
         args = [
             exe, f"--app={url}", f"--window-size={size[0]},{size[1]}",
             f"--user-data-dir={profile}", "--no-first-run", "--no-default-browser-check",

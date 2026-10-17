@@ -58,7 +58,8 @@ def test_build_html_escapes_script_close(regions, folder):
     payload = p.payload()
     payload["stores"][0]["name"] = "x</script><b>"
     html = build_html(payload)
-    assert "x</script><b>" not in html and "x<\\/script>" in html
+    data_line = next(l for l in html.splitlines() if l.startswith("window.CSM_DATA"))
+    assert "</script>" not in data_line and "x\\u003c/script>" in data_line
 
 
 def test_export_csv(folder, regions):

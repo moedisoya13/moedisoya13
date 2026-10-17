@@ -37,7 +37,6 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--folder", type=pathlib.Path, default=default_folder(), help="xlsx 가 있는 폴더 (기본: 앱 위치)")
     ap.add_argument("--port", type=int, default=0, help="고정 포트 (기본: 자동)")
     ap.add_argument("--demo", action="store_true", help="API 호출 없이 시군구 중심 근사 좌표로 표시")
-    ap.add_argument("--key", help="카카오 REST API 키 (config.json 에 저장)")
     ap.add_argument("--no-browser", action="store_true", help="브라우저를 열지 않음")
     ap.add_argument("--keep-alive", action="store_true", help="브라우저가 닫혀도 서버 유지")
     ap.add_argument("--export-only", action="store_true", help="단독 HTML 만 만들고 종료")
@@ -49,9 +48,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"폴더가 없습니다: {folder}", file=sys.stderr)
         return 2
 
-    config = Config(folder)
-    if args.key:
-        config.update({"api_key": args.key})
+    config = Config(folder)  # 키는 설정 화면(⚙) 또는 환경변수 KAKAO_REST_API_KEY 로 — 명령줄 인자는 셸 기록에 남으므로 받지 않는다
     regions = RegionIndex.load()
     pipeline = Pipeline(folder, regions, config, demo=args.demo)
     print(f"csm-map {__version__} · 폴더: {folder}")

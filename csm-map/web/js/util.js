@@ -85,7 +85,7 @@ window.CSM = window.CSM || {};
   util.precisionTag = (p) => {
     if (p === "exact" || p === "keyword") return "";
     const cls = p === "approx" ? "tip__tag tip__tag--approx" : p === "manual" ? "tip__tag tip__tag--manual" : "tip__tag";
-    return `<span class="${cls}">${util.precisionLabel[p] || p}</span>`;
+    return `<span class="${cls}">${util.esc(util.precisionLabel[p] || p)}</span>`;
   };
 
   util.toast = (msg, { error = false, ms = 3200 } = {}) => {
