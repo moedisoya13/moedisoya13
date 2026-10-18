@@ -46,7 +46,7 @@ skill 자체는 CCGS 프레임워크(`project.yaml` · hook)에 묶여 있어서
 
 ### 3. 역할 agent — `.claude/agents/` 에서 골라 쓰기
 
-agent 파일은 거의 독립적이다. 프레임워크 경로(`production/…`) 참조가 한두 곳 있으니 그 줄만 프로젝트에 맞게 고친다. 모바일에 쓸모 있는 것:
+agent 본문의 전문 지식은 범용이지만, 그대로 옮기면 안 된다. 실제로 이식해 보니 손볼 곳이 처음 예상("경로 한두 줄")보다 많았다 — 세션 상태 파일(`production/session-state/active.md`), 원본 skill(`skills: [balance-check]`, `/design-review` 등), 작업 모드(`modes.workflow`), 엔진 레퍼런스 경로, 설치하지 않은 agent 로의 보고 · 위임 체계. 모바일에 쓸모 있는 것:
 
 - `ux-designer` — 터치 UX 리뷰
 - `performance-analyst` — 프레임 시간 · 메모리 분석. 모바일은 발열 · 배터리가 곧 성능 문제다
@@ -93,3 +93,17 @@ agent 파일은 거의 독립적이다. 프레임워크 경로(`production/…`)
 | UnrealClaude | UE 5.7 전용, 에디터 채팅 도구라 모바일과 무관 |
 | UnrealGenAISupport | 모바일 빌드에서 LLM API 를 부르면 키가 클라이언트에 실린다. MCP 는 개발 중단 상태 |
 | Claude-Code-Game-Studios 템플릿 전체 | 위의 템플릿 · 점검 항목 · agent 만 골라 쓰고, 프레임워크 통째 도입은 하지 않는다 |
+
+## 설치 결과 (2026-10-18)
+
+클라우드 작업 환경(4 CPU · GPU 없음 · Unity / Godot / Unreal 없음)에서 가능한 것만 게임 repo
+[`how-to-survive-a-slasher-film`](https://github.com/moedisoya13/how-to-survive-a-slasher-film) 에 프로젝트 단위로 설치했다. 전역(이 저장소 `.claude/`)에는 아무것도 넣지 않았다.
+
+| 요소 | 설치 위치 | 상태 |
+|---|---|---|
+| 문서 템플릿 12 + 가이드 7 | `docs/templates/` | 경로를 `docs/design/` 기준으로 바꾸고 원본 slash command · 작업 모드 언급 제거 |
+| 모바일 점검표 | `docs/qa/mobile-checklist.md` | 항목별 "현재 코드" 상태 포함. 깜빡임 끄기 설정 없음, 오디오용 `visibilitychange` 처리 없음을 표시 |
+| 역할 agent 6종 | `.claude/agents/` | game · level · ux · technical-artist · performance · sound. qa-tester 는 Godot · Unity · Unreal 테스트 패턴과 원본 버그 템플릿에 묶여 있어 제외 |
+| ACE-Step skill 2종 | `.claude/skills/acestep`, `acestep-songwriting` | 설치됨. 단 이 클라우드 환경에서는 `api.acemusic.ai` · `huggingface.co` 가 네트워크 정책으로 막혀 생성은 못 한다 — 데스크톱이나 도메인 허용 후 사용 |
+
+설치하지 않은 것: ml-agents · Unity-MCP(Unity 없음), godot-mcp(Godot 없음, 게임도 Godot 아님), Unreal 계열(엔진 없음), ACE-Step 모델 자체(GPU 없음, 컨테이너가 매번 새로 만들어짐).
