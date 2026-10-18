@@ -1,7 +1,9 @@
 /* 디자인 토큰 — "Field Atlas"
    크롬(패널·버튼·글자)은 종이와 잉크의 단색으로 두고, 색은 데이터의 관계에만 쓴다.
    --h0 … --h9 : 대리점 색 10슬롯. 겹치는 영업권끼리 다른 색이 되도록 csmmap/palette.py 가 배정한다.
-   팔레트는 dataviz 검증기(validate_palette.js)로 명도대·채도·정상 시각 전 쌍 ΔE≥15 를 확인했다. */
+   팔레트는 dataviz 검증기(validate_palette.js)로 명도대·채도·정상 시각 전 쌍 ΔE≥15 를 확인했다.
+   가장자리는 macOS 문법: 0.5px 머리카락 테두리(--hair) + 윗면 하이라이트(--hilite) + 겹친 부드러운 그림자,
+   떠 있는 면은 반투명 재질(--mat + --mat-blur), 포커스는 반투명 고리(--ring). 연속 곡률 모서리는 app.css 끝. */
 :root {
   color-scheme: light;
   /* 종이 */
@@ -62,9 +64,14 @@
   --r-lg: 14px;
   --r-md: 10px;
   --r-sm: 7px;
-  --sh-1: 0 1px 2px rgba(23, 22, 26, 0.06), 0 0 0 1px rgba(23, 22, 26, 0.04);
-  --sh-2: 0 10px 30px -10px rgba(40, 34, 20, 0.22), 0 2px 6px rgba(40, 34, 20, 0.07), 0 0 0 1px rgba(23, 22, 26, 0.05);
-  --sh-3: 0 24px 60px -18px rgba(40, 34, 20, 0.32), 0 4px 12px rgba(40, 34, 20, 0.08), 0 0 0 1px rgba(23, 22, 26, 0.06);
+  --hair: rgba(23, 22, 26, 0.17);
+  --hilite: rgba(255, 255, 255, 0.75);
+  --mat: color-mix(in oklab, var(--surface) 82%, transparent);
+  --mat-blur: blur(26px) saturate(1.8);
+  --ring: color-mix(in oklab, var(--focus) 42%, transparent);
+  --sh-1: 0 0 0 0.5px var(--hair), 0 1px 1.5px rgba(23, 22, 26, 0.06);
+  --sh-2: 0 0 0 0.5px var(--hair), inset 0 0.5px 0 var(--hilite), 0 2px 5px rgba(40, 34, 20, 0.06), 0 12px 30px -8px rgba(40, 34, 20, 0.22);
+  --sh-3: 0 0 0 0.5px var(--hair), inset 0 0.5px 0 var(--hilite), 0 4px 12px rgba(40, 34, 20, 0.08), 0 30px 70px -14px rgba(40, 34, 20, 0.34);
   --font: "Pretendard", "Pretendard Variable", "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", system-ui, sans-serif;
   --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
   --t-2xs: 10.5px;
@@ -132,7 +139,10 @@
   --ok-bg: #16301f;
   --err: #ff8a85;
   --err-bg: #3c1b1b;
-  --sh-1: 0 1px 2px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.04);
-  --sh-2: 0 12px 32px -10px rgba(0, 0, 0, 0.6), 0 2px 6px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.05);
-  --sh-3: 0 26px 64px -16px rgba(0, 0, 0, 0.7), 0 4px 12px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --hair: rgba(0, 0, 0, 0.8);
+  --hilite: rgba(255, 255, 255, 0.11);
+  --mat: color-mix(in oklab, var(--surface) 80%, transparent);
+  --sh-1: 0 0 0 0.5px var(--hair), inset 0 0 0 0.5px var(--hilite);
+  --sh-2: 0 0 0 0.5px var(--hair), inset 0 0 0 0.5px var(--hilite), 0 12px 32px -8px rgba(0, 0, 0, 0.6);
+  --sh-3: 0 0 0 0.5px var(--hair), inset 0 0 0 0.5px var(--hilite), 0 30px 70px -12px rgba(0, 0, 0, 0.75);
 }

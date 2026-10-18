@@ -103,9 +103,16 @@ def test_preflight_is_refused(srv):
 
 # ---- 입력 검증 ----
 def test_body_size_limit(srv):
+    """서버는 Content-Length 만 보고 본문을 읽기 전에 거절한 뒤 연결을 닫는다. 부하가 있으면 클라이언트가
+    본문을 다 보내기 전에 닫혀 400 대신 연결 끊김을 받기도 하는데, 그것도 거절이다(테스트가 가끔 깨지던 원인)."""
     base, state = srv
     raw = b'{"theme":"' + b"A" * (MAX_BODY + 10) + b'"}'
-    st, d = req(base + "/api/config", "POST", raw=raw, headers={"X-CSM-Token": state.token})
+    try:
+        st, d = req(base + "/api/config", "POST", raw=raw, headers={"X-CSM-Token": state.token})
+    except (urllib.error.URLError, ConnectionError) as e:
+        reason = getattr(e, "reason", e)
+        assert isinstance(reason, (ConnectionResetError, BrokenPipeError, ConnectionAbortedError)), e
+        return
     assert st == 400
 
 

@@ -299,11 +299,18 @@
     return b;
   }
   mv.boundsOf = boundsOf;
-  /** 범례(왼쪽 아래)에 판이 가리지 않도록 아래 여백을 범례 높이만큼 둔다 */
+  /** 범례(왼쪽 아래)·상세 카드(오른쪽)에 판이 가리지 않도록 그만큼 여백을 둔다.
+      카드 여백은 지도 폭이 넉넉할 때만(좁은 화면에서는 판이 너무 작아지므로 기본 여백) */
   function pad() {
-    const lg = document.getElementById("legend");
+    const lg = document.getElementById("legend"), card = document.getElementById("card");
     const bottom = lg && !lg.hidden ? lg.offsetHeight + 30 : 56;
-    return { paddingTopLeft: [56, 52], paddingBottomRight: [76, Math.max(56, bottom)] };
+    let right = 76;
+    if (card && !card.hidden) {
+      const box = map.getContainer().getBoundingClientRect(), cr = card.getBoundingClientRect();
+      const need = box.right - cr.left + 24;
+      if (box.width - need - 56 >= 420) right = Math.max(right, need);
+    }
+    return { paddingTopLeft: [56, 52], paddingBottomRight: [right, Math.max(56, bottom)] };
   }
 
   /** 판에 맞춰 보고, 판 밖으로 너무 멀리 나가지 않게 이동·축소 범위를 잠근다 */
