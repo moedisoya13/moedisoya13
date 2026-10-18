@@ -42,7 +42,7 @@
 
     const body = util.h("div.card__body", {}, [
       util.h("div.card__stats", {}, [
-        util.h("div", {}, [util.h("b", {}, D.hasSelection ? `${inScope.length}/${list.length}` : String(list.length)), util.h("span", {}, D.hasSelection ? "이 권역 / 전체 거래처" : "거래처")]),
+        util.h("div", {}, [util.h("b", {}, D.hasSelection ? `${inScope.length}/${list.length}` : String(list.length)), util.h("span", {}, D.hasSelection ? "거래처 권역/전체" : "거래처")]),
         util.h("div", {}, [util.h("b", {}, String(byRegion.size)), util.h("span", {}, "시군구")]),
         util.h("div", {}, [util.h("b", {}, avg != null ? avg.toFixed(1) : "–"), util.h("span", {}, "평균 거리 km")]),
       ]),

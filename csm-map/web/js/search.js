@@ -62,7 +62,7 @@
       group("대리점");
       for (const d of dealers) {
         const hex = data.hexOf(d);
-        add("dealer", d, util.h("span.sr__icon", { style: `background:${hex};color:${util.onColor(hex)};font:700 9px/1 var(--font)` }, util.initials(d.name)), d.name, `거래처 ${d.store_ids.length}곳${d.sgg_name ? ` · ${util.esc(d.sgg_name)}` : ""}`);
+        add("dealer", d, util.h("span.sr__icon", { style: `background:${hex};color:${util.onColor(hex)};font:700 var(--t-glyph)/1 var(--font)` }, util.initials(d.name)), d.name, `거래처 ${d.store_ids.length}곳${d.sgg_name ? ` · ${util.esc(d.sgg_name)}` : ""}`);
       }
     }
     if (stores.length) {

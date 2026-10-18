@@ -17,7 +17,7 @@
     if (body) headers["Content-Type"] = "application/json";
     const res = await fetch(path, { method, headers, body: body ? JSON.stringify(body) : undefined });
     const json = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+    if (!res.ok) { const err = new Error(json.error || `HTTP ${res.status}`); err.status = res.status; err.code = json.code || ""; throw err; }
     return json;
   }
 

@@ -173,3 +173,28 @@ def test_export_html_has_no_local_path(folder, regions):
     html = build_html(p.payload(for_export=True))
     assert str(folder) not in html
     assert '"folder"' not in html
+
+
+# ---- 저장 실패 안내 ----
+def test_export_file_locked_gives_fix_not_traceback(srv, monkeypatch):
+    """Windows 에서 같은 이름의 파일이 엑셀에 열려 있으면 PermissionError — 원인 코드 대신 해결 방법을 돌려준다."""
+    import csmmap.server as server_mod
+    def locked(_p):
+        raise PermissionError(13, "Permission denied", r"C:\CSM\CSM_geocoded_2026-10-18.csv")
+    monkeypatch.setattr(server_mod, "export_csv", locked)
+    base, state = srv
+    st, d = req(base + "/api/export", "POST", {"format": "csv"}, {"X-CSM-Token": state.token})
+    assert st == 409 and d["code"] == "file_locked"
+    assert "CSM_geocoded_2026-10-18.csv" in d["error"] and "닫고 다시" in d["error"]
+    assert "Errno" not in d["error"] and "PermissionError" not in d["error"]
+
+
+def test_export_disk_error_is_friendly(srv, monkeypatch):
+    import errno
+    import csmmap.server as server_mod
+    def full(_p):
+        raise OSError(errno.ENOSPC, "No space left on device")
+    monkeypatch.setattr(server_mod, "export_html", full)
+    base, state = srv
+    st, d = req(base + "/api/export", "POST", {"format": "html"}, {"X-CSM-Token": state.token})
+    assert st == 500 and d["code"] == "io" and "저장 공간" in d["error"]

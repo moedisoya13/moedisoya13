@@ -127,9 +127,19 @@ window.CSM = window.CSM || {};
   }).join(",")).join("\n");
 
   /** 바깥 클릭/ESC 로 닫히는 팝업 공통 처리 */
+  /** 바깥을 누르거나 Esc 를 누르면 닫는다. onClose(사유) — "escape" 면 키보드 사용자이므로 연 버튼으로 포커스를 돌려준다 */
+  /** 오류 알림 = 무엇을 못 했는지 + 왜 / 어떻게 하면 되는지. what 예: "정정 요청 엑셀을 저장" */
+  util.failText = (what, err) => {
+    const msg = (err && err.message) || "";
+    if (err && !err.status && (err.name === "TypeError" || /Failed to fetch|NetworkError/i.test(msg)))
+      return `${what}하지 못했습니다. 앱 서버와 연결이 끊겼습니다 — 앱(run_csm_map.bat)을 다시 실행해 주세요.`;
+    if (err && (err.code === "file_locked" || err.code === "io" || (err.status >= 400 && err.status < 500))) return `${what}하지 못했습니다. ${msg}`;
+    return `${what}하지 못했습니다${msg ? ` (${msg})` : ""}. 다시 해도 같으면 앱을 닫고 다시 실행해 주세요.`;
+  };
+
   util.dismissable = (el, anchor, onClose) => {
-    const onDown = (e) => { if (!el.contains(e.target) && !(anchor && anchor.contains(e.target))) onClose(); };
-    const onKey = (e) => { if (e.key === "Escape") { e.stopPropagation(); onClose(); } };
+    const onDown = (e) => { if (!el.contains(e.target) && !(anchor && anchor.contains(e.target))) onClose("outside"); };
+    const onKey = (e) => { if (e.key === "Escape") { e.stopPropagation(); onClose("escape"); } };
     setTimeout(() => document.addEventListener("pointerdown", onDown, true), 0);
     document.addEventListener("keydown", onKey, true);
     return () => { document.removeEventListener("pointerdown", onDown, true); document.removeEventListener("keydown", onKey, true); };

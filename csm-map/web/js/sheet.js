@@ -2,6 +2,7 @@
 (function (CSM) {
   const { util } = CSM;
   const sheet = {};
+  let opener = null;   // 시트를 연 버튼 — 닫을 때 포커스를 돌려준다
   let els, H = {}, mode = null, tableSort = { key: "dealer_name", dir: 1 }, tableQ = "", tableScope = true, last = null, undismiss = null;
 
   sheet.init = function (handlers) {
@@ -12,15 +13,21 @@
   sheet.isOpen = () => !els.root.hidden;
   sheet.mode = () => mode;
   sheet.close = function () {
+    const hadFocus = els.root.contains(document.activeElement) || document.activeElement === document.body;
     els.root.hidden = true; mode = null;
     if (undismiss) { undismiss(); undismiss = null; }
+    if (hadFocus && opener && document.contains(opener)) opener.focus();
+    opener = null;
   };
-  function open(m, wide) {
+  /** focus: 새로 열 때만 제목으로 포커스를 옮긴다(데이터 갱신으로 다시 그릴 때는 그대로) */
+  function open(m, wide, focus = true) {
+    if (els.root.hidden) { const a = document.activeElement; opener = a && a !== document.body && !els.root.contains(a) ? a : null; }
     mode = m;
     els.root.hidden = false;
     els.root.classList.toggle("is-wide", !!wide);
     els.root.style.animation = "none"; void els.root.offsetWidth; els.root.style.animation = "";
     if (!undismiss) undismiss = util.dismissable(els.root, document.querySelector(".rail__foot"), () => sheet.close());
+    if (focus) requestAnimationFrame(() => els.title.focus({ preventScroll: true }));
   }
   sheet.refresh = function (D, hexOf) {
     if (!mode) return;
@@ -32,7 +39,7 @@
   sheet.openFix = function (D, hexOf, { keep = false } = {}) {
     last = { D, hexOf };
     const scroll = keep ? els.body.scrollTop : 0;
-    open("fix", false);
+    open("fix", false, !keep);
     const fixStores = D.stores.filter(util.isFix).sort((a, b) => a.dealer_name.localeCompare(b.dealer_name, "ko") || a.name.localeCompare(b.name, "ko"));
     const fixDealers = D.dealers.filter((d) => d.address && util.isFix(d));
     const unverified = D.stores.filter((s) => s.precision === "approx" || s.precision === "failed");
@@ -84,10 +91,10 @@
   sheet.openTable = function (D, hexOf, { keep = false } = {}) {
     last = { D, hexOf };
     const scroll = keep ? els.body.scrollTop : 0;
-    open("table", true);
+    open("table", true, !keep);
     if (!keep || !els.tools.querySelector(".mini-search")) {
       els.tools.innerHTML = "";
-      const input = util.h("input", { type: "search", placeholder: "이 표에서 찾기 · 이름·대리점·주소", value: tableQ });
+      const input = util.h("input", { type: "search", "aria-label": "이 표에서 찾기", placeholder: "이 표에서 찾기 · 이름·대리점·주소", value: tableQ });
       input.addEventListener("input", util.debounce(() => { tableQ = input.value.trim().toLowerCase(); renderTable(); }, 120));
       const scope = util.h("input", { type: "checkbox", id: "table-scope-in" });
       scope.checked = tableScope;

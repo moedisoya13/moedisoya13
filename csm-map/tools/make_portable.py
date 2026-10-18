@@ -151,6 +151,7 @@ def readme_text(py_version: str, with_xlsx: bool) -> str:
 ■ 문제 해결
   - 창이 바로 닫힘: run_csm_map.bat 를 cmd 창에서 실행하면 오류 문구를 볼 수 있습니다.
   - Edge 가 없으면 기본 브라우저로 열립니다.
+  - 「저장하지 못했습니다」: 같은 이름의 엑셀·CSV 파일이 엑셀에서 열려 있으면 닫고 다시 누르세요.
   - 회사 보안 프로그램이 runtime\\python.exe 실행을 막으면 IT 담당자에게 예외 등록을 요청하세요.
     (Python Software Foundation 서명 파일입니다)
   - 앱 창 없이 지도 HTML 만 만들기: cmd 에서  run_csm_map.bat --export-only

@@ -347,6 +347,17 @@ def make_handler(state: AppState):
                 return self._json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
             except KeyError as exc:
                 return self._json({"error": f"없는 항목: {exc}"}, HTTPStatus.NOT_FOUND)
+            except PermissionError as exc:
+                # Windows 에서 같은 이름의 파일이 엑셀에 열려 있으면 여기로 온다 — 가장 흔한 저장 실패
+                name = pathlib.Path(exc.filename).name if getattr(exc, "filename", None) else "저장할"
+                return self._json({"error": f"{name} 파일이 엑셀 등 다른 프로그램에서 열려 있으면 닫고 다시 눌러 주세요.",
+                                   "code": "file_locked"}, HTTPStatus.CONFLICT)
+            except (BrokenPipeError, ConnectionResetError):
+                raise
+            except OSError as exc:
+                traceback.print_exc()
+                return self._json({"error": f"파일을 쓰지 못했습니다({exc.strerror or exc}). 저장 공간과 폴더 권한을 확인해 주세요.",
+                                   "code": "io"}, HTTPStatus.INTERNAL_SERVER_ERROR)
             except Exception as exc:
                 traceback.print_exc()
                 return self._json({"error": f"{exc.__class__.__name__}: {exc}"}, HTTPStatus.INTERNAL_SERVER_ERROR)

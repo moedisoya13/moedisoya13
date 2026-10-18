@@ -224,7 +224,10 @@
       if (kind === "csv-dl") { util.download(`CSM_거래처좌표_${new Date().toISOString().slice(0, 10)}.csv`, csvText()); return; }
       const r = await api.exportFile(kind);
       util.toast(kind === "corrections" ? `정정 요청 ${r.count}건을 저장했습니다 · ${r.name}` : `저장했습니다 · ${r.name}`, { ms: 6500 });
-    } catch (e) { util.toast("내보내기 실패: " + e.message, { error: true, ms: 6000 }); }
+    } catch (e) {
+      const what = { html: "지도 공유 파일을 저장", corrections: "정정 요청 엑셀을 저장", csv: "좌표 목록(CSV)을 저장" }[kind] || "파일을 저장";
+      util.toast(util.failText(what, e), { error: true, ms: 8000 });
+    }
   }
 
   // ───────────── 테마·표시 옵션 ─────────────
@@ -244,7 +247,7 @@
   /** 범례 설명과 색 띠 — 영업권은 '1위 대리점 비중' 두 단계, 밀도는 거래처 수 다섯 단계 */
   function renderLegend() {
     const m = S.mode, note = util.$("#legend-note"), ramp = util.$("#legend-ramp");
-    note.textContent = m === "territory" ? "시군구 바탕색 = 그곳에서 거래처가 가장 많은 대리점의 색"
+    note.textContent = m === "territory" ? "시군구 바탕색 = 그곳 1위 대리점의 색"
       : m === "density" ? "시군구 바탕색 = 그곳의 거래처 수" : "바탕색 없이 점과 연결선만 봅니다";
     ramp.hidden = m === "plain";
     if (m === "density") ramp.innerHTML = mapview.densitySteps().map(([t, v]) => `<span style="--c:var(${v})">${t}</span>`).join("");
@@ -351,7 +354,7 @@
       if (!S.placing) return;
       const s = S.placing; stopPlacing();
       try { const r = await api.override(s.id, e.latlng.lat, e.latlng.lng); S.data = r.data; renderAll(); card.showStore(S.D.storeById.get(s.id) || s, S.D, hexOf); util.toast(`「${s.name}」 위치를 저장했습니다`); }
-      catch (err) { util.toast("저장 실패: " + err.message, { error: true }); }
+      catch (err) { util.toast(util.failText("위치를 저장", err), { error: true, ms: 7000 }); }
     });
 
     // 저장된 표시 상태 복원
@@ -413,7 +416,7 @@
 
     const exportBtn = util.$("#btn-export"), menu = util.$("#export-menu");
     let undismiss = null;
-    const closeMenu = () => { menu.hidden = true; exportBtn.setAttribute("aria-expanded", "false"); if (undismiss) { undismiss(); undismiss = null; } };
+    const closeMenu = (why) => { menu.hidden = true; exportBtn.setAttribute("aria-expanded", "false"); if (undismiss) { undismiss(); undismiss = null; } if (why === "escape") exportBtn.focus(); };
     exportBtn.addEventListener("click", () => {
       if (!menu.hidden) return closeMenu();
       menu.hidden = false; exportBtn.setAttribute("aria-expanded", "true");
@@ -444,13 +447,21 @@
       dlg.close();
       if (key && !api.isStatic) {
         try { const r = await api.config({ api_key: key }); S.config = r.config; util.toast("키를 저장했습니다 · 주소 확인을 시작합니다"); await api.geocode(false); setStatus("running"); }
-        catch (err) { util.toast(err.message, { error: true, ms: 6000 }); }
+        catch (err) { util.toast(util.failText("키를 저장", err), { error: true, ms: 7000 }); }
       }
     });
-    util.$("#btn-regeocode").addEventListener("click", async () => {
-      if (!confirm("저장된 결과를 무시하고 모든 주소를 다시 검색합니다. 계속할까요?")) return;
+    // 모든 주소 다시 검색 — 브라우저 기본 확인 창 대신 앱 대화상자로, 몇 건을 다시 찾는지 알린다
+    const regeo = util.$("#regeo");
+    util.$("#btn-regeocode").addEventListener("click", () => {
+      const n = S.data.stores.filter((s) => s.address).length + S.data.dealers.filter((d) => d.address).length;
+      util.$("#regeo-n").textContent = util.fmt(n);
       dlg.close();
-      try { await api.geocode(true); setStatus("running"); } catch (err) { util.toast(err.message, { error: true }); }
+      regeo.returnValue = "";
+      regeo.showModal();
+    });
+    regeo.addEventListener("close", async () => {
+      if (regeo.returnValue !== "ok") return;
+      try { await api.geocode(true); setStatus("running"); } catch (err) { util.toast(util.failText("주소 다시 검색을 시작", err), { error: true, ms: 7000 }); }
     });
     util.$("#btn-info").addEventListener("click", () => { fillInfo(); util.$("#info").showModal(); });
     util.$("#info-close").addEventListener("click", () => util.$("#info").close());
@@ -475,5 +486,5 @@
   }
 
   CSM.app = { state: S, renderAll, setSelection, togglePin, focusStore, setTheme, setMode, setLinks, derive: () => S.D };
-  boot().catch((e) => { console.error(e); util.toast("초기화 실패: " + e.message, { error: true, ms: 9000 }); });
+  boot().catch((e) => { console.error(e); util.toast(`지도를 여는 중 문제가 생겼습니다${e.message ? ` (${e.message})` : ""}. 앱을 닫고 다시 실행해 주세요.`, { error: true, ms: 10000 }); });
 })(window.CSM);

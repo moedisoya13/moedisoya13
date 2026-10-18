@@ -3,4 +3,4 @@
 excel → normalize → geocode → regions → pipeline(JSON) → server/export 순으로 흐른다.
 """
 
-__version__ = "0.3.0"
+__version__ = "0.3.1"

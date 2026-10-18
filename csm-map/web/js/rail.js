@@ -50,7 +50,8 @@
     }
     const top = rows.slice(0, 3).map(([did, n]) => {
       const d = D.dealersById.get(did);
-      return `<span class="sw" style="--c:${ctx.hexOf(d)}"></span><b>${util.esc(d.name)}</b> ${util.pct(n, total)}%`;
+      // 항목 하나(색 견본·이름·비율)는 한 덩어리로 줄바꿈 — 이름과 비율이 갈라지지 않게
+      return `<span class="share__item"><span class="sw" style="--c:${ctx.hexOf(d)}"></span><b>${util.esc(d.name)}</b> ${util.pct(n, total)}%</span>`;
     });
     els.caption.innerHTML = total ? `상위 ${top.join(" · ")}` : "이 권역에는 거래처가 없습니다";
 
@@ -102,7 +103,7 @@
       onclick: () => H.click && H.click(d),
     }, [
       util.h("span.dl__hub" + (d.lat == null ? ".is-noaddr" : ""), { title: d.lat == null ? "거점 주소가 없어 지도에 거점이 표시되지 않습니다" : "" }, util.initials(d.name)),
-      util.h("span.dl__main", {}, [util.h("b", {}, d.name), util.h("small", {}, sub.join(" · "))]),
+      util.h("span.dl__main", {}, [util.h("b", {}, d.name), util.h("small", { title: sub.join(" · ") }, sub.join(" · "))]),
       util.h("span.dl__val", {}, [
         util.h("b", { html: D.hasSelection && d.store_ids.length !== n ? `${n}<small>/${d.store_ids.length}</small>` : String(n || d.store_ids.length) }),
         util.h("i", { style: `--w:${Math.round(((n || 0) / max) * 100)}%` }),

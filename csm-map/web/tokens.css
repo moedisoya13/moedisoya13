@@ -59,6 +59,7 @@
   --ok-bg: #e2f1e5;
   --err: #c23434;
   --err-bg: #fbe4e2;
+  --on-err: #ffffff;   /* --err 를 바탕으로 쓸 때(오류 알림)의 글자색 */
   /* 형태 */
   --r-xl: 18px;
   --r-lg: 14px;
@@ -72,14 +73,16 @@
   --sh-1: 0 0 0 0.5px var(--hair), 0 1px 1.5px rgba(23, 22, 26, 0.06);
   --sh-2: 0 0 0 0.5px var(--hair), inset 0 0.5px 0 var(--hilite), 0 2px 5px rgba(40, 34, 20, 0.06), 0 12px 30px -8px rgba(40, 34, 20, 0.22);
   --sh-3: 0 0 0 0.5px var(--hair), inset 0 0.5px 0 var(--hilite), 0 4px 12px rgba(40, 34, 20, 0.08), 0 30px 70px -14px rgba(40, 34, 20, 0.34);
-  --font: "Pretendard", "Pretendard Variable", "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", system-ui, sans-serif;
+  --font: "NanumSquare Neo", "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", system-ui, sans-serif;
   --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
-  --t-2xs: 10.5px;
-  --t-xs: 11.5px;
-  --t-sm: 12.5px;
-  --t-md: 13.5px;
-  --t-lg: 15px;
-  --t-xl: 19px;
+  /* 글자 크기 6단계 — 화면 글자는 12px 이상(지도 기호·이니셜만 --t-glyph 11px) */
+  --t-glyph: 11px;
+  --t-2xs: 12px;   /* 보조 설명·건수 (--t-xs 와 같은 값, 역할만 구분) */
+  --t-xs: 12px;
+  --t-sm: 13px;
+  --t-md: 14px;
+  --t-lg: 16px;
+  --t-xl: 20px;
   --t-2xl: 30px;
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
   --ease-in: cubic-bezier(0.5, 0, 0.75, 0);
@@ -139,6 +142,7 @@
   --ok-bg: #16301f;
   --err: #ff8a85;
   --err-bg: #3c1b1b;
+  --on-err: #2b0f0e;
   --hair: rgba(0, 0, 0, 0.8);
   --hilite: rgba(255, 255, 255, 0.11);
   --mat: color-mix(in oklab, var(--surface) 80%, transparent);

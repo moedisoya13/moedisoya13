@@ -58,13 +58,14 @@
     render();
     position();
     setTimeout(() => els.search.focus(), 30);
-    undismiss = util.dismissable(els.pop, els.btn, rp.close);
+    undismiss = util.dismissable(els.pop, els.btn, (why) => rp.close({ restoreFocus: why === "escape" }));
   };
-  rp.close = function () {
+  rp.close = function ({ restoreFocus = false } = {}) {
     if (els.pop.hidden) return;
     els.pop.hidden = true;
     els.btn.setAttribute("aria-expanded", "false");
     if (undismiss) { undismiss(); undismiss = null; }
+    if (restoreFocus) els.btn.focus();
   };
 
   function position() {

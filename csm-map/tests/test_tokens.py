@@ -37,7 +37,7 @@ def contrast(a, b):
 TEXT = [  # 4.5:1
     ("--ink", "--surface"), ("--ink", "--paper"), ("--ink-2", "--surface"), ("--ink-2", "--surface-2"),
     ("--ink-3", "--surface"), ("--ink-3", "--surface-2"), ("--link", "--surface"), ("--accent-ink", "--accent"),
-    ("--fix", "--fix-bg"), ("--ok", "--ok-bg"), ("--err", "--err-bg"), ("--label", "--land"), ("--label", "--land-2"),
+    ("--fix", "--fix-bg"), ("--ok", "--ok-bg"), ("--err", "--err-bg"), ("--on-err", "--err"), ("--label", "--land"), ("--label", "--land-2"),
 ]
 GRAPHIC = [  # 3:1
     ("--land-edge", "--land"), ("--land-edge", "--land-ctx"), ("--sido-line", "--land-2"), ("--ink-3", "--sea"),
