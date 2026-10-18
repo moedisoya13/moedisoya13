@@ -5,6 +5,7 @@ HTML 은 CSS·JS·Leaflet·경계 데이터·거래처 데이터를 모두 인�
 """
 from __future__ import annotations
 
+import base64
 import csv
 import datetime as dt
 import json
@@ -18,6 +19,7 @@ WEB_DIR = pathlib.Path(__file__).resolve().parents[1] / "web"
 _LINK = re.compile(r'<link\s+rel="stylesheet"\s+href="([^"]+)"\s*/?>')
 _SCRIPT = re.compile(r'<script\s+src="([^"]+)"\s*></script>')
 _FONT_LINK = re.compile(r'<link[^>]+fonts\.googleapis\.com[^>]*>\s*')
+_CSS_URL = re.compile(r'url\("?([^")]+\.woff2)"?\)')
 
 
 def _safe_json(obj) -> str:
@@ -33,7 +35,17 @@ def build_html(payload: dict, boundaries_json: str | None = None, web_dir: pathl
         href = m.group(1)
         if href.startswith("http"):
             return m.group(0)
-        css = (web_dir / href).read_text(encoding="utf-8")
+        css_path = web_dir / href
+        css = css_path.read_text(encoding="utf-8")
+
+        def embed_font(u: re.Match) -> str:
+            font = (css_path.parent / u.group(1)).resolve()
+            if not str(font).startswith(str(web_dir.resolve())) or not font.is_file():
+                return u.group(0)
+            data = base64.b64encode(font.read_bytes()).decode("ascii")
+            return f'url("data:font/woff2;base64,{data}")'
+
+        css = _CSS_URL.sub(embed_font, css)  # 공유 파일에서도 같은 글꼴로 보이게
         # leaflet.css 의 상대 이미지 경로는 마커 아이콘용이라 쓰지 않음 — 그대로 둠
         return f"<style>\n{css}\n</style>"
 

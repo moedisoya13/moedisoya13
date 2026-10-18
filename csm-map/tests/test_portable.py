@@ -29,3 +29,13 @@ def test_readme_has_bom_crlf_and_flow():
     t = mp.readme_text("3.14.8", True)
     assert t.startswith("﻿") and "\r\n" in t
     assert "정정 요청" in t and "run_csm_map.bat" in t and "3.14.8" in t
+
+
+def test_secret_scan_blocks_config_and_key_strings(tmp_path):
+    (tmp_path / "app").mkdir()
+    (tmp_path / "app" / "ok.js").write_text("const x = 1;", encoding="utf-8")
+    assert mp.secret_scan(tmp_path) == []
+    (tmp_path / "config.json").write_text("{}", encoding="utf-8")
+    (tmp_path / "app" / "leak.js").write_text('const k = "0123456789abcdef0123456789abcdef";', encoding="utf-8")
+    found = mp.secret_scan(tmp_path)
+    assert any("config.json" in f for f in found) and any("leak.js" in f for f in found)

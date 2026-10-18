@@ -1,187 +1,350 @@
-/* 기본 지도: 시군구/시도 벡터 경계, 라벨, 선택 권역 강조, 온라인 타일 토글 */
+/* 지도 판(plate) 렌더러
+   전국 지도를 깔지 않는다. 고른 권역(없으면 거래처가 있는 시군구)만 '판'으로 새로 그리고,
+   그 판과 맞닿은 시군구만 흐린 맥락으로 둘레에 그린다. 필터가 바뀌면 A/B 두 벌의 레이어를
+   번갈아 쓰며 교차 페이드로 바꿔 그린다. */
 (function (CSM) {
   const { util } = CSM;
   const mv = {};
-  let map, sggLayer, sidoLayer, labelLayer, tileLayer = null;
-  let selection = new Set();       // 적용된 시군구 코드
-  let hoverCode = null;
-  let ghostVisible = true;
-  let labelsOn = true;
-  const regions = [];              // {code, sido, name, display, layer, label: L.LatLng, bounds}
+  let map, topo, geoms;
+  const feats = [];
   const byCode = new Map();
+  const nbr = new Map();
+  const groups = { A: null, B: null };
+  let slot = "A";
+  let state = { focus: new Set(), context: new Set(), key: "" };
+  let opts = null;
+  let handlers = {};
+  let tileLayer = null;
+  let labelsOn = true;
+  let hovered = null;
+
   const TILES = {
     light: "https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png",
     dark: "https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png",
   };
-  mv.TILES_ATTRIB = '© <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a> © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors';
+  mv.TILES_ATTRIB = '© <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a> © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>';
+  const PANES = ["ctx", "plate", "edge", "label"];
 
-  function displayName(sggnm) {
-    const m = /^(.+?시)(.+구)$/.exec(sggnm);
-    return m && m[1].length >= 2 && m[2].length >= 2 ? `${m[1]} ${m[2]}` : sggnm;
+  const codeOf = (g) => String(g.properties.sgg);
+  const displayName = (n) => { const m = /^(.+?시)(.+구)$/.exec(n); return m && m[1].length >= 2 && m[2].length >= 2 ? `${m[1]} ${m[2]}` : n; };
+  const shortSido = (n) => n.replace(/특별자치시|특별자치도|통합특별시|광역시|특별시/, "").replace(/^경기도$/, "경기").replace(/^(충청|경상|전라)(남|북)도$/, "$1$2");
+  mv.shortSido = shortSido;
+
+  function pane(name, z, noPointer) {
+    const p = map.createPane(name);
+    p.style.zIndex = z;
+    p.classList.add("pane-fade");
+    if (noPointer) p.style.pointerEvents = "none";
+    return p;
   }
 
-  function colors() {
-    return {
-      fill: util.cssVar("--map-fill"), fillActive: util.cssVar("--map-fill-active"), fillHover: util.cssVar("--map-fill-hover"),
-      stroke: util.cssVar("--map-stroke"), strokeActive: util.cssVar("--map-stroke-active"), sido: util.cssVar("--map-sido-stroke"),
-      ghost: util.cssVar("--map-ghost"),
-    };
-  }
-
-  function styleFor(code) {
-    const c = colors();
-    const hasSel = selection.size > 0;
-    const sel = selection.has(code);
-    if (hoverCode === code) {
-      return { fill: true, fillColor: c.fillHover, fillOpacity: 0.9, color: c.strokeActive, weight: 1.4, opacity: 1 };
-    }
-    if (!hasSel) return { fill: true, fillColor: c.fill, fillOpacity: 1, color: c.stroke, weight: 0.8, opacity: 1 };
-    if (sel) return { fill: true, fillColor: c.fillActive, fillOpacity: 1, color: c.strokeActive, weight: 1.2, opacity: 1 };
-    return { fill: true, fillColor: c.fill, fillOpacity: ghostVisible ? 0.35 : 0, color: c.ghost, weight: ghostVisible ? 0.8 : 0, opacity: 1 };
-  }
-
-  function sidoStyle() {
-    const c = colors();
-    return { fill: false, color: c.sido, weight: selection.size ? 0.9 : 1.1, opacity: selection.size ? 0.55 : 0.9, interactive: false };
-  }
-
-  mv.init = function (containerId, topo, { onRegionClick } = {}) {
-    map = L.map(containerId, {
-      zoomControl: false, attributionControl: false, zoomSnap: 0.25, zoomDelta: 0.5, wheelPxPerZoomLevel: 90,
-      minZoom: 6, maxZoom: 18, worldCopyJump: false, preferCanvas: false, maxBoundsViscosity: 0.7,
-      zoomAnimationThreshold: 8,
+  mv.init = function (id, topoData, h = {}) {
+    handlers = h;
+    map = L.map(id, {
+      zoomControl: false, attributionControl: false, zoomSnap: 0.25, zoomDelta: 0.5, wheelPxPerZoomLevel: 110,
+      minZoom: 6, maxZoom: 17, maxBoundsViscosity: 0.9, keyboard: true, inertia: true,
     });
-    map.setView([36.4, 127.8], 7);
-    map.createPane("labels").style.zIndex = 450;
-    map.getPane("labels").style.pointerEvents = "none";
+    map.setView([37.45, 126.85], 10);
     map.createPane("tiles").style.zIndex = 150;
-
-    const sgg = topojson.feature(topo, topo.objects.sgg);
-    const sido = topojson.feature(topo, topo.objects.sido);
-    const labels = topojson.feature(topo, topo.objects.labels);
-    const labelByCode = new Map(labels.features.map((f) => [String(f.properties.sgg), L.latLng(f.geometry.coordinates[1], f.geometry.coordinates[0])]));
-
-    sggLayer = L.geoJSON(sgg, {
-      style: (f) => ({ ...styleFor(String(f.properties.sgg)), className: "rg" }),
-      onEachFeature: (f, layer) => {
-        const code = String(f.properties.sgg);
-        const r = { code, sido: f.properties.sidonm, name: f.properties.sggnm, display: displayName(f.properties.sggnm), layer, label: labelByCode.get(code), bounds: layer.getBounds() };
-        regions.push(r); byCode.set(code, r);
-        layer.on("mouseover", () => { hoverCode = code; layer.setStyle(styleFor(code)); layer.bringToFront(); });
-        layer.on("mouseout", () => { hoverCode = null; layer.setStyle(styleFor(code)); });
-        layer.on("click", () => onRegionClick && onRegionClick(r));
-        layer.bindTooltip(() => `<div class="tip__title">${util.esc(r.display)}</div><div class="tip__sub">${util.esc(r.sido)}${r.count ? ` · 거래처 ${r.count}곳` : ""}</div>`,
-          { sticky: true, direction: "top", offset: [0, -6], opacity: 1 });
-      },
-    }).addTo(map);
-    sidoLayer = L.geoJSON(sido, { style: sidoStyle, interactive: false }).addTo(map);
-
-    labelLayer = L.layerGroup().addTo(map);
-    for (const r of regions) {
-      if (!r.label) continue;
-      r.labelMarker = L.marker(r.label, {
-        pane: "labels", interactive: false, keyboard: false,
-        icon: L.divIcon({ className: "map-label", html: util.esc(r.display), iconSize: null }),
-      });
-      labelLayer.addLayer(r.labelMarker);
+    for (const s of ["A", "B"]) {
+      pane(`ctx${s}`, 300); pane(`plate${s}`, 340); pane(`edge${s}`, 360, true); pane(`label${s}`, 450, true);
     }
-    map.on("zoomend", updateLabelVisibility);
-    map.on("zoomend moveend", () => map.fire("csm:view"));
-    updateLabelVisibility();
+    topo = topoData;
+    geoms = topo.objects.sgg.geometries;
+    const fc = topojson.feature(topo, topo.objects.sgg);
+    const labels = new Map(topojson.feature(topo, topo.objects.labels).features
+      .map((f) => [String(f.properties.sgg), L.latLng(f.geometry.coordinates[1], f.geometry.coordinates[0])]));
+    fc.features.forEach((f) => {
+      const c = String(f.properties.sgg);
+      const r = { code: c, sido: f.properties.sidonm, name: f.properties.sggnm, display: displayName(f.properties.sggnm),
+        feature: f, label: labels.get(c), bounds: L.geoJSON(f).getBounds() };
+      feats.push(r); byCode.set(c, r);
+    });
+    const nb = topojson.neighbors(geoms);
+    geoms.forEach((g, i) => nbr.set(codeOf(g), new Set(nb[i].map((j) => codeOf(geoms[j])))));
+    map.on("zoomend", onZoom);
+    map.on("csm:layout", () => cullLabels());
+    onZoom();
     return map;
   };
 
-  function updateLabelVisibility() {
-    const z = map.getZoom();
-    const show = labelsOn && z >= 9;
-    map.getContainer().classList.toggle("map--labels", show);
-    // 거래처가 없는 시군구 라벨은 더 확대해야 보인다 (밀도 억제)
-    for (const r of regions) {
-      const el = r.labelMarker && r.labelMarker.getElement();
-      if (!el) continue;
-      el.classList.toggle("is-minor", !r.count && z < 11);
+  mv.map = () => map;
+  mv.regions = () => feats;
+  mv.region = (c) => byCode.get(c);
+  mv.neighbors = (c) => nbr.get(c) || new Set();
+  mv.focus = () => state.focus;
+
+  function colors() {
+    const v = (n) => util.cssVar(n);
+    return {
+      land: v("--land"), land2: v("--land-2"), gap: v("--land-gap"), edge: v("--land-edge"), ink: v("--ink"),
+      ctx: v("--land-ctx"), ctxHover: v("--land-ctx-hover"), ctxLine: v("--land-ctx-line"), sido: v("--sido-line"),
+      seq: [1, 2, 3, 4, 5].map((i) => v(`--seq-${i}`)),
+    };
+  }
+  let C = null;
+
+  function densityFill(n) {
+    if (n >= 11) return C.seq[4];
+    if (n >= 7) return C.seq[3];
+    if (n >= 4) return C.seq[2];
+    if (n >= 2) return C.seq[1];
+    return C.seq[0];
+  }
+  mv.densitySteps = () => [["1", "--seq-1"], ["2–3", "--seq-2"], ["4–6", "--seq-3"], ["7–10", "--seq-4"], ["11+", "--seq-5"]];
+
+  function plateFill(code) {
+    const st = opts.stats.get(code);
+    if (!st || !st.count) return C.land2;
+    if (opts.mode === "territory" && st.dom) return util.mix(C.land, opts.hueOf(st.dom), st.share >= 0.5 ? 0.3 : 0.16);
+    if (opts.mode === "density") return densityFill(st.count);
+    return C.land;
+  }
+  function plateStyle(f) {
+    const code = String(f.properties.sgg);
+    const fill = plateFill(code);
+    return {
+      className: "rg rg--focus", fill: true, fillColor: hovered === code ? util.mix(fill, C.ink, 0.07) : fill,
+      fillOpacity: tileLayer ? 0.62 : 1, color: C.gap, weight: 1.5, opacity: 1, lineJoin: "round",
+    };
+  }
+  function ctxStyle(f) {
+    const code = String(f.properties.sgg);
+    return {
+      className: "rg rg--ctx", fill: true, fillColor: hovered === code ? C.ctxHover : C.ctx,
+      fillOpacity: tileLayer ? 0.28 : 1, color: C.ctxLine, weight: 0.9, opacity: 1,
+    };
+  }
+
+  function tipHtml(code, kind) {
+    const r = byCode.get(code);
+    const st = opts.stats.get(code) || { count: 0, top: [] };
+    const rows = (st.top || []).slice(0, 4).map((t) =>
+      `<div style="--c:${t.hex}"><i></i><span>${util.esc(t.name)}</span><b>${t.n}</b></div>`).join("");
+    const hint = kind === "ctx"
+      ? "누르면 이 시군구를 권역에 더합니다"
+      : (opts.hasSelection ? "Shift+클릭: 권역에서 빼기" : "누르면 이 시군구만 봅니다");
+    return `<div class="tip__in" style="--c:${st.top && st.top[0] ? st.top[0].hex : "var(--line-3)"}">
+      <div class="tip__t">${util.esc(r.display)}</div>
+      <div class="tip__s">${util.esc(r.sido)} · 거래처 ${st.count}곳${st.fix ? ` · 정정 필요 ${st.fix}` : ""}</div>
+      ${rows ? `<div class="tip__rows">${rows}</div>` : ""}
+      <div class="tip__hint">${hint}</div></div>`;
+  }
+
+  function bindRegion(layer, f, kind) {
+    const code = String(f.properties.sgg);
+    layer.on("mouseover", () => { hovered = code; layer.setStyle(kind === "ctx" ? ctxStyle(f) : plateStyle(f)); });
+    layer.on("mouseout", () => { if (hovered === code) hovered = null; layer.setStyle(kind === "ctx" ? ctxStyle(f) : plateStyle(f)); });
+    layer.on("click", (e) => handlers.regionClick && handlers.regionClick(code, kind, e.originalEvent));
+    layer.bindTooltip(() => tipHtml(code, kind), { className: "tip", sticky: true, direction: "top", offset: [0, -12], opacity: 1 });
+  }
+
+  function labelMarker(r, kind, count, s) {
+    const html = kind === "focus"
+      ? `<span class="lbl">${util.esc(r.display)}${count ? `<b>${count}</b>` : ""}</span>`
+      : `<span class="lbl lbl--ctx">${util.esc(r.display)}</span>`;
+    const m = L.marker(r.label || r.bounds.getCenter(), {
+      pane: `label${s}`, interactive: false, keyboard: false,
+      icon: L.divIcon({ className: "lbl-wrap", html, iconSize: [0, 0] }),
+    });
+    m.priority = (kind === "focus" ? 1000 : 0) + (count || 0);
+    return m;
+  }
+
+  function clearSlot(s) {
+    const g = groups[s];
+    if (!g) return;
+    for (const layer of g.layers) map.removeLayer(layer);
+    groups[s] = null;
+  }
+  function slotPanes(s) { return PANES.map((p) => map.getPane(`${p}${s}`)); }
+  function showSlot(s, on, animate) {
+    for (const p of slotPanes(s)) {
+      if (on) {
+        p.classList.remove("is-gone");
+        if (animate && !util.reduced()) {
+          p.classList.add("is-rising");
+          requestAnimationFrame(() => requestAnimationFrame(() => p.classList.remove("is-rising")));
+        }
+      } else {
+        p.classList.add("is-gone");
+      }
     }
   }
 
-  mv.map = () => map;
-  mv.regions = () => regions;
-  mv.region = (code) => byCode.get(code);
-  mv.selection = () => selection;
+  function build(s) {
+    const inFocus = (g) => state.focus.has(codeOf(g));
+    const drawn = (g) => state.focus.has(codeOf(g)) || state.context.has(codeOf(g));
+    const fcOf = (set) => ({ type: "FeatureCollection", features: feats.filter((r) => set.has(r.code)).map((r) => r.feature) });
+    const ctx = L.geoJSON(fcOf(state.context), { pane: `ctx${s}`, style: ctxStyle, onEachFeature: (f, l) => bindRegion(l, f, "ctx") });
+    const plate = L.geoJSON(fcOf(state.focus), { pane: `plate${s}`, style: plateStyle, onEachFeature: (f, l) => bindRegion(l, f, "focus") });
+    const rim = topojson.mesh(topo, topo.objects.sgg, (a, b) => inFocus(a) !== inFocus(b) || (a === b && inFocus(a)));
+    const edgeLine = L.geoJSON(rim, { pane: `edge${s}`, interactive: false, style: { color: C.edge, weight: 1.25, opacity: 0.9, fill: false, lineJoin: "round" } });
+    const sidoMesh = topojson.mesh(topo, topo.objects.sgg, (a, b) => a !== b && drawn(a) && drawn(b) && a.properties.sidonm !== b.properties.sidonm);
+    const sido = L.geoJSON(sidoMesh, { pane: `edge${s}`, interactive: false, style: { color: C.sido, weight: 1.1, opacity: 0.8, dashArray: "1 4", lineCap: "round", fill: false } });
+    const labels = L.layerGroup();
+    const g = { s, ctx, plate, edgeLine, sido, labels, layers: [ctx, plate, edgeLine, sido, labels] };
+    groups[s] = g;
+    fillLabels(g);
+    for (const layer of g.layers) layer.addTo(map);
+    requestAnimationFrame(cullLabels);
+  }
 
-  mv.setCounts = function (counts) { for (const r of regions) r.count = counts.get(r.code) || 0; updateLabelVisibility(); };
-
-  mv.restyle = function () {
-    sggLayer.eachLayer((l) => l.setStyle(styleFor(String(l.feature.properties.sgg))));
-    sidoLayer.setStyle(sidoStyle());
-    for (const r of regions) {
-      if (!r.labelMarker) continue;
-      const el = r.labelMarker.getElement();
-      if (!el) continue;
-      el.classList.toggle("is-muted", selection.size > 0 && !selection.has(r.code));
-      el.classList.toggle("is-active", selection.has(r.code));
+  function fillLabels(g) {
+    g.labels.clearLayers();
+    for (const code of state.focus) {
+      const r = byCode.get(code);
+      const st = opts.stats.get(code);
+      g.labels.addLayer(labelMarker(r, "focus", st ? st.count : 0, g.s));
     }
+    for (const code of state.context) g.labels.addLayer(labelMarker(byCode.get(code), "ctx", 0, g.s));
+  }
+
+  /** 이름표 배치: 거래처가 많은 시군구부터, 제자리 → 아래 → 위 → 오른쪽 → 왼쪽 순으로 자리를 찾는다.
+      다른 이름표·대리점 거점과 겹치면 안 되고, 거래처 점은 되도록 덜 가리는 자리를 고른다. 자리가 없으면 숨긴다. */
+  function cullLabels() {
+    const g = groups[slot];
+    if (!g) return;
+    const obs = (CSM.markers && CSM.markers.obstacles && CSM.markers.obstacles()) || { hard: [], soft: [] };
+    const hitsCircle = (o, r) => {
+      const cx = Math.max(r.x1, Math.min(o.x, r.x2)), cy = Math.max(r.y1, Math.min(o.y, r.y2));
+      return (o.x - cx) ** 2 + (o.y - cy) ** 2 < o.r * o.r;
+    };
+    const kept = [];
+    const ms = [];
+    g.labels.eachLayer((m) => ms.push(m));
+    ms.sort((a, b) => b.priority - a.priority);
+    for (const m of ms) {
+      const el = m.getElement() && m.getElement().firstElementChild;
+      if (!el) continue;
+      const p = map.latLngToLayerPoint(m.getLatLng());
+      const w = el.offsetWidth, hgt = el.offsetHeight;
+      const ctx = m.priority < 1000;
+      const nearY = hgt / 2 + 13, farY = hgt / 2 + 30, sideX = w / 2 + 18, farX = w / 2 + 36;
+      const cands = ctx ? [[0, 0], [0, hgt + 4], [0, -hgt - 4]]
+        : [[0, 0], [0, nearY], [0, -nearY], [sideX, 0], [-sideX, 0], [0, farY], [0, -farY], [farX, 0], [-farX, 0], [sideX, nearY], [-sideX, -nearY]];
+      let best = null;
+      for (const [dx, dy] of cands) {
+        const r = { x1: p.x + dx - w / 2 - 3, x2: p.x + dx + w / 2 + 3, y1: p.y + dy - hgt / 2 - 2, y2: p.y + dy + hgt / 2 + 2 };
+        let hard = kept.some((k) => r.x1 < k.x2 && r.x2 > k.x1 && r.y1 < k.y2 && r.y2 > k.y1) ? 1 : 0;
+        for (const o of obs.hard) if (hitsCircle(o, r)) hard++;
+        let soft = 0;
+        for (const o of obs.soft) if (hitsCircle(o, r)) soft++;
+        const score = hard * 1000 + soft * 6 + Math.abs(dx) / 40 + Math.abs(dy) / 20;
+        if (!best || score < best.score) best = { score, dx, dy, r, hard };
+      }
+      const hide = best.hard > 0;
+      el.style.opacity = hide ? "0" : "";
+      el.style.setProperty("--lx", `${best.dx.toFixed(0)}px`);
+      el.style.setProperty("--ly", `${best.dy.toFixed(0)}px`);
+      if (!hide) kept.push(best.r);
+    }
+  }
+
+  function onZoom() {
+    const el = map.getContainer();
+    el.classList.toggle("zoom-low", map.getZoom() < 10.5);
+    el.classList.toggle("show-labels", labelsOn);
+    // 이름표 자리는 점 배치가 끝난 뒤(csm:layout) 다시 잡는다
+  }
+
+  function restyle() {
+    const g = groups[slot];
+    if (!g) return;
+    g.plate.setStyle(plateStyle);
+    g.ctx.setStyle(ctxStyle);
+    g.edgeLine.setStyle({ color: C.edge });
+    g.sido.setStyle({ color: C.sido });
+    fillLabels(g);
+    requestAnimationFrame(cullLabels);
+  }
+
+  /**
+   * @param o {focus:Set, stats:Map(code→{count,dom,share,top,fix}), mode, hueOf(dealerId)→hex, hasSelection, fit, animate}
+   */
+  mv.render = function (o) {
+    opts = o;
+    C = colors();
+    const focus = new Set(o.focus);
+    const context = new Set();
+    for (const c of focus) for (const n of nbr.get(c) || []) if (!focus.has(n)) context.add(n);
+    const key = [...focus].sort().join(",");
+    if (key === state.key && groups[slot]) {
+      restyle();
+      if (o.fit) mv.fit(o.animate);
+      return false;
+    }
+    state = { focus, context, key };
+    const next = groups[slot] ? (slot === "A" ? "B" : "A") : slot;
+    const prev = slot;
+    clearSlot(next);
+    build(next);
+    showSlot(next, true, o.animate);
+    if (next !== prev) {
+      showSlot(prev, false, o.animate);
+      setTimeout(() => { if (slot !== prev) clearSlot(prev); }, o.animate ? 480 : 0);
+    }
+    slot = next;
+    if (o.fit !== false) mv.fit(o.animate);
+    return true;
   };
 
-  mv.selectionBounds = function () {
+  function boundsOf(set) {
     let b = null;
-    for (const code of selection) {
-      const r = byCode.get(code);
+    for (const c of set) {
+      const r = byCode.get(c);
       if (!r) continue;
       b = b ? b.extend(r.bounds) : L.latLngBounds(r.bounds.getSouthWest(), r.bounds.getNorthEast());
     }
     return b;
-  };
+  }
+  mv.boundsOf = boundsOf;
+  /** 범례(왼쪽 아래)에 판이 가리지 않도록 아래 여백을 범례 높이만큼 둔다 */
+  function pad() {
+    const lg = document.getElementById("legend");
+    const bottom = lg && !lg.hidden ? lg.offsetHeight + 30 : 56;
+    return { paddingTopLeft: [56, 52], paddingBottomRight: [76, Math.max(56, bottom)] };
+  }
 
-  /** 적용된 선택을 바꾸고 뷰를 맞춘다 */
-  mv.setSelection = function (codes, { fit = true, animate = true } = {}) {
-    selection = new Set(codes);
-    mv.restyle();
-    const b = mv.selectionBounds();
-    if (b) {
-      map.setMaxBounds(b.pad(0.9));
-      if (fit) mv.fitBounds(b, animate);
+  /** 판에 맞춰 보고, 판 밖으로 너무 멀리 나가지 않게 이동·축소 범위를 잠근다 */
+  mv.fit = function (animate = true) {
+    const b = boundsOf(state.focus);
+    if (!b) return;
+    const all = boundsOf(new Set([...state.focus, ...state.context])) || b;
+    map.setMaxBounds(null);
+    map.setMinZoom(5);
+    const lock = () => {
+      const z = map.getBoundsZoom(b, false, L.point(132, 108));
+      map.setMinZoom(Math.max(5, Math.min(z, map.getZoom()) - 1.25));
+      map.setMaxBounds(all.pad(0.45));
+    };
+    if (animate && !util.reduced() && map._loaded) {
+      map.once("moveend", lock);
+      map.flyToBounds(b, { ...pad(), duration: 0.85, easeLinearity: 0.25, maxZoom: 14 });
     } else {
-      map.setMaxBounds(null);
+      map.fitBounds(b, { ...pad(), maxZoom: 14, animate: false });
+      lock();
     }
   };
-
-  mv.fitBounds = function (b, animate = true, pad = [48, 48]) {
-    if (!b || !b.isValid()) return;
-    if (animate && !util.reduced() && map._loaded) map.flyToBounds(b, { padding: pad, duration: 0.9, easeLinearity: 0.2, maxZoom: 13 });
-    else map.fitBounds(b, { padding: pad, maxZoom: 13 });
-  };
-
-  mv.fitSelectionOrAll = function (allLatLngs) {
-    const b = mv.selectionBounds() || (allLatLngs && allLatLngs.length ? L.latLngBounds(allLatLngs) : null);
-    if (b) mv.fitBounds(b.isValid() ? b : null);
-    else map.setView([36.4, 127.8], 7);
+  /** 특정 범위를 잠깐 보여준다(판 밖 거래처 확인 등) — 잠금 해제 후 이동 */
+  mv.peek = function (bounds) {
+    map.setMaxBounds(null);
+    map.setMinZoom(5);
+    map.flyToBounds(bounds, { ...pad(), duration: 0.8, maxZoom: 14 });
   };
 
   mv.setTiles = function (on, theme) {
     if (tileLayer) { map.removeLayer(tileLayer); tileLayer = null; }
     if (on) {
-      tileLayer = L.tileLayer(TILES[theme === "dark" ? "dark" : "light"], { pane: "tiles", subdomains: "abcd", maxZoom: 19, opacity: 0.9 });
+      tileLayer = L.tileLayer(TILES[theme === "dark" ? "dark" : "light"], { pane: "tiles", subdomains: "abcd", maxZoom: 19 });
       tileLayer.addTo(map);
     }
-    map.getContainer().classList.toggle("map--tiles", !!on);
-    // 타일이 깔리면 폴리곤 채움을 비워 배경이 보이게
-    sggLayer.setStyle((f) => {
-      const s = styleFor(String(f.properties.sgg));
-      if (on && !(selection.size && selection.has(String(f.properties.sgg)))) s.fillOpacity = Math.min(s.fillOpacity, 0.15);
-      if (on && selection.size && selection.has(String(f.properties.sgg))) s.fillOpacity = 0.35;
-      return s;
-    });
+    map.getContainer().classList.toggle("has-tiles", !!on);
+    if (opts) { C = colors(); restyle(); }
   };
-  mv.tilesOn = () => !!tileLayer;
-
-  mv.setGhost = function (on) { ghostVisible = on; mv.restyle(); };
-  mv.setLabels = function (on) { labelsOn = on; updateLabelVisibility(); };
-  mv.flashRegion = function (code) {
-    const r = byCode.get(code);
-    if (!r) return;
-    hoverCode = code; r.layer.setStyle(styleFor(code));
-    setTimeout(() => { hoverCode = null; r.layer.setStyle(styleFor(code)); }, 700);
-  };
+  mv.setLabels = function (on) { labelsOn = on; onZoom(); };
+  mv.refresh = function () { if (opts) { C = colors(); restyle(); } };
+  mv.cull = () => cullLabels();
 
   CSM.mapview = mv;
 })(window.CSM);

@@ -85,10 +85,12 @@ def _point_in_ring(x: float, y: float, ring: Ring) -> bool:
 
 
 class RegionIndex:
-    def __init__(self, regions: list[Region], sido_names: list[str], meta: dict):
+    def __init__(self, regions: list[Region], sido_names: list[str], meta: dict,
+                 neighbors: dict[str, set[str]] | None = None):
         self.regions = regions
         self.sido_names = sido_names
         self.meta = meta
+        self.neighbors: dict[str, set[str]] = neighbors or {}
         self._by_key = {r.key: r for r in regions}
         self._by_code = {r.code: r for r in regions}
 
@@ -101,14 +103,20 @@ class RegionIndex:
             if g.get("type") == "Point":
                 labels[g["properties"]["sgg"]] = _point(topo, g["coordinates"])
         regions: list[Region] = []
+        arc_owner: dict[int, set[str]] = {}
         for g in topo["objects"]["sgg"]["geometries"]:
             p = g["properties"]
             if g["type"] == "Polygon":
                 polys = [[_ring(r, arcs) for r in g["arcs"]]]
+                rings = g["arcs"]
             elif g["type"] == "MultiPolygon":
                 polys = [[_ring(r, arcs) for r in poly] for poly in g["arcs"]]
+                rings = [r for poly in g["arcs"] for r in poly]
             else:
                 continue
+            for ring in rings:
+                for i in ring:
+                    arc_owner.setdefault(i if i >= 0 else ~i, set()).add(str(p["sgg"]))
             xs = [pt[0] for poly in polys for pt in poly[0]]
             ys = [pt[1] for poly in polys for pt in poly[0]]
             regions.append(Region(
@@ -116,7 +124,12 @@ class RegionIndex:
                 polygons=polys, bbox=(min(xs), min(ys), max(xs), max(ys)), label=labels.get(str(p["sgg"])),
             ))
         sidos = sorted({r.sido for r in regions})
-        return cls(regions, sidos, topo.get("meta", {}))
+        # 같은 경계선(arc)을 나눠 쓰는 시군구 = 맞닿은 시군구
+        neighbors: dict[str, set[str]] = {r.code: set() for r in regions}
+        for owners in arc_owner.values():
+            for a in owners:
+                neighbors.setdefault(a, set()).update(owners - {a})
+        return cls(regions, sidos, topo.get("meta", {}), neighbors)
 
     def locate(self, lat: float, lng: float) -> Region | None:
         """좌표가 속한 시군구. 바깥 링 안이고 구멍 링 밖이면 포함."""

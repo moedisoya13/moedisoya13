@@ -90,6 +90,27 @@ def should_copy(rel: pathlib.PurePath) -> bool:
     return rel.suffix not in APP_EXCLUDE_SUFFIX
 
 
+SECRET_FILES = {"config.json", "overrides.json", "geocode_cache.json", ".env"}
+_HEX32 = __import__("re").compile(rb"(?<![0-9a-f])[0-9a-f]{32}(?![0-9a-f])")
+
+
+def secret_scan(root: pathlib.Path) -> list[str]:
+    """번들에 개발자 설정 파일이나 카카오 REST 키 형식(32자리 16진) 문자열이 있으면 목록을 돌려준다."""
+    found = []
+    for f in root.rglob("*"):
+        if not f.is_file():
+            continue
+        rel = f.relative_to(root).as_posix()
+        if f.name in SECRET_FILES:
+            found.append(f"설정 파일: {rel}")
+        elif f.suffix in {".py", ".js", ".html", ".css", ".json", ".md", ".txt", ".bat"} and "/runtime/" not in f"/{rel}":
+            if f.name == "boundaries.json":
+                continue
+            if _HEX32.search(f.read_bytes().lower()):
+                found.append(f"키 형식 문자열: {rel}")
+    return found
+
+
 def readme_text(py_version: str, with_xlsx: bool) -> str:
     xlsx_line = "이 폴더에 들어 있는 CSM.xlsx 를 그대로 씁니다." if with_xlsx else "이 폴더에 CSM.xlsx 를 넣어 주세요."
     text = f"""CSM 거래처 지도 — 휴대용 실행 폴더
@@ -102,15 +123,20 @@ def readme_text(py_version: str, with_xlsx: bool) -> str:
      → 검은 창(진행 로그)과 함께 Edge 앱 창이 열립니다. 앱 창을 닫으면 프로그램도 끝납니다.
 
 ■ 정확한 위치를 얻으려면 — 카카오 REST API 키
-  앱 창 오른쪽 위 ⚙ 설정 → 「카카오 REST API 키」 붙여넣기 → 저장.
+  앱 창 오른쪽 위 「근사 위치 · 키 설정」(또는 맨 오른쪽 설정 버튼) → 「카카오 REST API 키」 붙여넣기 → 저장.
   키가 없으면 주소에 적힌 시군구 중심 부근에 '근사' 위치로만 표시됩니다.
   키 발급: developers.kakao.com → 내 애플리케이션 → 앱 키 → REST API 키
   401/403 오류가 나면 카카오 콘솔에서 「카카오맵」 사용 설정을 켜 주세요.
 
+■ 화면 사용
+  위쪽 「권역」에서 시군구를 체크하면 그 권역만 지도로 새로 그립니다(이름 붙여 저장 가능).
+  지도 둘레의 흐린 시군구를 누르면 권역에 더해집니다. 대리점(목록이나 지도의 이니셜 원)에 마우스를 올리면
+  납품 거래처까지 선이 그려지고, 누르면 고정되어 자세한 카드가 열립니다. 점 색 = 소속 대리점.
+
 ■ 주소 정정 요청
   카카오 주소 검색으로 찾지 못한 거래처는 거래처명으로 대신 찾지 않고 '정정 필요'로 따로 모읍니다.
   지도에는 시군구 중심 부근에 흐린 점선 마름모로만 표시됩니다.
-  오른쪽 「정정 필요」 탭 → 「정정 요청 목록 내보내기」 → CSM_정정요청_날짜.xlsx 생성
+  왼쪽 아래 「주소 정정 필요」 → 「정정 요청 엑셀 만들기」 → CSM_정정요청_날짜.xlsx 생성
   → 담당자에게 보내 노란 칸 「수정 주소」를 받음 → CSM.xlsx 의 주소(거래처 D열 · 대리점 I열)를 고침
   → 앱을 다시 실행하면 바뀐 주소만 새로 검색합니다.
 
@@ -257,6 +283,10 @@ def build(out_dir: pathlib.Path, xlsx: pathlib.Path | None, version: str, local_
         (bundle / "읽어주세요.txt").write_bytes(readme_text(version, bool(xlsx)).encode("utf-8"))
         if xlsx:
             shutil.copy2(xlsx, bundle / "CSM.xlsx")
+        leaks = secret_scan(bundle)
+        if leaks:  # 개발자 키·설정이 섞여 나가는 일을 원천 차단
+            raise RuntimeError("번들에 민감 정보가 있어 중단합니다: " + "; ".join(leaks))
+        print("  민감 정보 검사: 없음")
         out = out_dir / f"CSM-Map-portable-{dt.date.today().strftime('%Y%m%d')}.zip"
         with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as z:
             for f in sorted(bundle.rglob("*")):

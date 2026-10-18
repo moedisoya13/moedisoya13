@@ -36,8 +36,8 @@ PING_TIMEOUT = 45.0          # 초. 이 시간 동안 핑이 없으면 종료
 MAX_BODY = 1_000_000         # 요청 본문 상한(바이트)
 ALLOWED_HOSTS = ("127.0.0.1", "localhost", "[::1]")
 CSP = (
-    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
-    "font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https://*.basemaps.cartocdn.com; "
+    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
+    "font-src 'self' data:; img-src 'self' data: https://*.basemaps.cartocdn.com; "
     "connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'; object-src 'none'"
 )
 mimetypes.add_type("application/javascript", ".js")

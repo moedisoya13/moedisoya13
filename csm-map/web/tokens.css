@@ -1,128 +1,138 @@
-/* 역할별 디자인 토큰 — デジタル庁 대시보드 디자인 가이드북의 10색 역할 체계를 따른다.
-   Text(Black/White/Label/Link) · Background(Standard/Highlight/Control) · Chart(Primary/Secondary/Neutral)
-   · Semantic(Positive/Negative/Success/Error). 기준 값은 공식 Blue 테마 JSON. */
+/* 디자인 토큰 — "Field Atlas"
+   크롬(패널·버튼·글자)은 종이와 잉크의 단색으로 두고, 색은 데이터의 관계에만 쓴다.
+   --h0 … --h9 : 대리점 색 10슬롯. 겹치는 영업권끼리 다른 색이 되도록 csmmap/palette.py 가 배정한다.
+   팔레트는 dataviz 검증기(validate_palette.js)로 명도대·채도·정상 시각 전 쌍 ΔE≥15 를 확인했다. */
 :root {
-  /* text */
-  --text: #1a1a1c;
-  --text-strong: #000000;
-  --text-label: #626264;
-  --text-muted: #8a8a8e;
-  --text-inverse: #ffffff;
-  --link: #0017c1;
-  /* background */
-  --bg-page: #ffffff;
-  --bg-standard: #f8f8fb;
-  --bg-highlight: #e8f1fe;
-  --bg-control: #f2f2f2;
-  --bg-control-hover: #e9e9ee;
-  --bg-overlay: rgba(255, 255, 255, 0.86);
-  --border: #e6e6e6;
-  --border-strong: #cccccc;
-  --divider: #949494;
-  /* chart */
-  --primary: #3460fb;
-  --primary-dark: #0017c1;
-  --primary-soft: #7096f8;
-  --primary-tint: #c5d7fb;
-  --primary-faint: #e8f1fe;
-  --secondary: #0017c1;
-  --neutral: #999999;
-  --neutral-dark: #4d4d4d;
-  --neutral-mid: #767676;
-  --neutral-light: #cccccc;
-  /* semantic */
-  --positive: #3460fb;
-  --negative: #fe3939;
-  --success: #259d63;
-  --success-tint: #e6f5ec;
-  --error: #fe3939;
-  --error-tint: #ffbbbb;
-  --warning: #ac3e00;
-  --warning-tint: #ffeee2;
-  /* map */
-  --map-bg: #ffffff;
-  --map-fill: #f2f2f2;
-  --map-fill-active: #e8f1fe;
-  --map-fill-hover: #c5d7fb;
-  --map-stroke: #cccccc;
-  --map-stroke-active: #3460fb;
-  --map-sido-stroke: #949494;
-  --map-label: #626264;
-  --map-ghost: rgba(0, 0, 0, 0.08);
-  --dot-store: #767676;
-  --dot-store-focus: #3460fb;
-  --dot-ring: #ffffff;
-  --spider: #3460fb;
-  --focus-ring: #0017c1;
-  /* layout */
-  --radius: 12px;
-  --radius-sm: 8px;
-  --pad: 12px;
-  --gap: 8px;
-  --shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 4px 16px rgba(0, 0, 0, 0.06);
-  --font: "Pretendard Variable", Pretendard, "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
-  --mono: "JetBrains Mono", "SF Mono", Consolas, monospace;
-  --fs-title: 20px;
-  --fs-h: 14px;
-  --fs-body: 13px;
-  --fs-small: 12px;
-  --fs-micro: 11px;
-  --dur-fast: 160ms;
-  --dur: 280ms;
-  --dur-slow: 520ms;
-  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
-  --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
   color-scheme: light;
+  /* 종이 */
+  --paper: #f2f0ea;
+  --paper-2: #e9e6de;
+  --surface: #fdfcf9;
+  --surface-2: #f6f4ee;
+  --surface-3: #eeebe3;
+  /* 잉크 */
+  --ink: #17161a;
+  --ink-2: #4b4943;
+  --ink-3: #6a675f;
+  --ink-4: #9b978d;
+  --line: #e4e0d6;
+  --line-2: #d4cfc3;
+  --line-3: #bdb7a9;
+  --accent: #17161a;
+  --accent-ink: #fdfcf9;
+  --focus: #2f5bd3;
+  --link: #2448b8;
+  /* 지도 */
+  --sea: #dfe4e6;
+  --sea-dot: rgba(38, 58, 68, 0.085);
+  --land: #fffefa;
+  --land-2: #f5f2ea;
+  --land-gap: #fffefa;
+  --land-edge: #2b2a2e;
+  --land-ctx: #f1eee7;
+  --land-ctx-hover: #e7e3d9;
+  --land-ctx-line: #d5cfc2;
+  --sido-line: #8c877b;
+  --label: #3d3b36;
+  --label-ctx: #8a867c;
+  --label-halo: #fffefa;
+  --plate-shadow-1: rgba(60, 50, 25, 0.18);
+  --plate-shadow-2: rgba(60, 50, 25, 0.10);
+  --dot-ring: #fffefa;
+  --dot-edge: rgba(23, 22, 26, 0.28);
+  /* 밀도 단계 (dataviz 순차 파랑) */
+  --seq-1: #e6effb;
+  --seq-2: #cde2fb;
+  --seq-3: #b7d3f6;
+  --seq-4: #9ec5f4;
+  --seq-5: #86b6ef;
+  /* 대리점 10색 */
+  --h0: #b42965; --h1: #fe7551; --h2: #8f5d04; --h3: #afab01; --h4: #097f1b;
+  --h5: #06bfa8; --h6: #0083a9; --h7: #5ba8fc; --h8: #684fc8; --h9: #da78e3;
+  /* 상태 (아이콘·글자와 함께만 쓴다) */
+  --fix: #a8461a;
+  --fix-bg: #fbeadf;
+  --fix-mark: #ec835a;
+  --ok: #1c7a37;
+  --ok-bg: #e2f1e5;
+  --err: #c23434;
+  --err-bg: #fbe4e2;
+  /* 형태 */
+  --r-xl: 18px;
+  --r-lg: 14px;
+  --r-md: 10px;
+  --r-sm: 7px;
+  --sh-1: 0 1px 2px rgba(23, 22, 26, 0.06), 0 0 0 1px rgba(23, 22, 26, 0.04);
+  --sh-2: 0 10px 30px -10px rgba(40, 34, 20, 0.22), 0 2px 6px rgba(40, 34, 20, 0.07), 0 0 0 1px rgba(23, 22, 26, 0.05);
+  --sh-3: 0 24px 60px -18px rgba(40, 34, 20, 0.32), 0 4px 12px rgba(40, 34, 20, 0.08), 0 0 0 1px rgba(23, 22, 26, 0.06);
+  --font: "Pretendard", "Pretendard Variable", "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
+  --t-2xs: 10.5px;
+  --t-xs: 11.5px;
+  --t-sm: 12.5px;
+  --t-md: 13.5px;
+  --t-lg: 15px;
+  --t-xl: 19px;
+  --t-2xl: 30px;
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-in: cubic-bezier(0.5, 0, 0.75, 0);
+  --spring: cubic-bezier(0.34, 1.45, 0.64, 1);
+  --d1: 140ms;
+  --d2: 240ms;
+  --d3: 420ms;
+  --d4: 700ms;
 }
 
 :root[data-theme="dark"] {
-  --text: #ececf1;
-  --text-strong: #ffffff;
-  --text-label: #a9a9b3;
-  --text-muted: #7d7d88;
-  --text-inverse: #0f1118;
-  --link: #9db7ff;
-  --bg-page: #0f1118;
-  --bg-standard: #171a23;
-  --bg-highlight: #1a2440;
-  --bg-control: #20242f;
-  --bg-control-hover: #2a2f3c;
-  --bg-overlay: rgba(15, 17, 24, 0.84);
-  --border: #262a36;
-  --border-strong: #363b4a;
-  --divider: #6b6f7d;
-  --primary: #7096f8;
-  --primary-dark: #3460fb;
-  --primary-soft: #9db7ff;
-  --primary-tint: #2a3d78;
-  --primary-faint: #1a2440;
-  --secondary: #9db7ff;
-  --neutral: #6f737f;
-  --neutral-dark: #c3c6d1;
-  --neutral-mid: #8a8e9a;
-  --neutral-light: #3a3f4d;
-  --positive: #7096f8;
-  --negative: #ff7171;
-  --success: #51b883;
-  --success-tint: #16301f;
-  --error: #ff7171;
-  --error-tint: #4a1f1f;
-  --warning: #ff8d44;
-  --warning-tint: #3a2314;
-  --map-bg: #0f1118;
-  --map-fill: #171a23;
-  --map-fill-active: #1e2c58;
-  --map-fill-hover: #2a3d78;
-  --map-stroke: #2c3140;
-  --map-stroke-active: #7096f8;
-  --map-sido-stroke: #6b6f7d;
-  --map-label: #a9a9b3;
-  --map-ghost: rgba(255, 255, 255, 0.08);
-  --dot-store: #9a9ea9;
-  --dot-store-focus: #9db7ff;
-  --dot-ring: #0f1118;
-  --spider: #9db7ff;
-  --focus-ring: #9db7ff;
-  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 6px 20px rgba(0, 0, 0, 0.45);
   color-scheme: dark;
+  --paper: #0f1013;
+  --paper-2: #14161a;
+  --surface: #17181c;
+  --surface-2: #1d1f24;
+  --surface-3: #25272d;
+  --ink: #efece6;
+  --ink-2: #c3bfb6;
+  --ink-3: #a19d94;
+  --ink-4: #6f6c66;
+  --line: #26282e;
+  --line-2: #31343b;
+  --line-3: #43464e;
+  --accent: #efece6;
+  --accent-ink: #17181c;
+  --focus: #8aa4ff;
+  --link: #a7b9ff;
+  --sea: #0a0b0e;
+  --sea-dot: rgba(255, 255, 255, 0.045);
+  --land: #282a30;
+  --land-2: #222429;
+  --land-gap: #0f1013;
+  --land-edge: #d9d5cc;
+  --land-ctx: #1a1c21;
+  --land-ctx-hover: #22252b;
+  --land-ctx-line: #30333a;
+  --sido-line: #7f7c74;
+  --label: #dedad2;
+  --label-ctx: #7f7c75;
+  --label-halo: #17181c;
+  --plate-shadow-1: rgba(0, 0, 0, 0.55);
+  --plate-shadow-2: rgba(0, 0, 0, 0.35);
+  --dot-ring: #17181c;
+  --dot-edge: rgba(255, 255, 255, 0.38);
+  --seq-1: #1a2434;
+  --seq-2: #1d2d45;
+  --seq-3: #223a5b;
+  --seq-4: #284a74;
+  --seq-5: #2f5a8f;
+  --h0: #b8284d; --h1: #e86904; --h2: #8f5d04; --h3: #88a00d; --h4: #047d49;
+  --h5: #1aa9a5; --h6: #0d70a4; --h7: #5b8efe; --h8: #7b47bf; --h9: #d562bd;
+  --fix: #f2946b;
+  --fix-bg: #3a2318;
+  --fix-mark: #ec835a;
+  --ok: #5cc479;
+  --ok-bg: #16301f;
+  --err: #ff8a85;
+  --err-bg: #3c1b1b;
+  --sh-1: 0 1px 2px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.04);
+  --sh-2: 0 12px 32px -10px rgba(0, 0, 0, 0.6), 0 2px 6px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  --sh-3: 0 26px 64px -16px rgba(0, 0, 0, 0.7), 0 4px 12px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.06);
 }

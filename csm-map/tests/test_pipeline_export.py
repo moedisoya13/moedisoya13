@@ -50,7 +50,7 @@ def test_export_html_is_self_contained(folder, regions):
     local = [m for m in re.findall(r'(?:src|href)="([^"]+)"', html) if not m.startswith(("http", "data:", "#"))]
     assert local == [], local
     assert "</script>" not in html.split("window.CSM_DATA")[1].split("\n")[0]
-    assert out.stat().st_size < 1_500_000
+    assert out.stat().st_size < 3_000_000  # 글꼴 내장 포함
 
 
 def test_build_html_escapes_script_close(regions, folder):

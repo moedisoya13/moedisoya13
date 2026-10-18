@@ -10,6 +10,7 @@ from .config import CACHE_NAME, Config, Overrides, validate_coord
 from .excel import load_folder
 from .geocode import Cache, Geocoder, GeoResult, KakaoClient
 from .normalize import parse_region
+from .palette import assign_hues
 from .regions import RegionIndex
 
 Progress = Callable[[int, int, str, GeoResult], None]
@@ -109,6 +110,13 @@ class Pipeline:
                 obj.sido, obj.sgg_code, obj.sgg_name = region.sido, region.code, region.display
             else:
                 obj.sido = obj.sgg_code = obj.sgg_name = ""
+        self._assign_hues()
+
+    def _assign_hues(self) -> None:
+        """권역이 정해진 뒤 색을 배정한다 — 필터와 무관하게 대리점마다 고정."""
+        hues = assign_hues(self.dataset, self.regions.neighbors)
+        for d in self.dataset.dealers:
+            d.hue = hues.get(d.id, 0)
 
     # ---- 출력 ----
     def payload(self, for_export: bool = False) -> dict:

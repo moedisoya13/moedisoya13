@@ -48,7 +48,8 @@ class Dealer:
     sido: str = ""
     sgg_code: str = ""
     sgg_name: str = ""
-    color_idx: int = 0
+    color_idx: int = 0   # 거래처 수 순위 (목록 정렬용)
+    hue: int = 0         # 지도 색 슬롯 0–7 (palette.assign_hues — 영업권이 겹치는 대리점끼리 다른 색)
     store_ids: list[str] = field(default_factory=list)
     similar_to: list[str] = field(default_factory=list)
 
