@@ -6,8 +6,10 @@ description: 'Turns an illustration into a clean black-and-white manga page (cri
   from the start. Use when the user wants 만화풍 / 흑백 원고 / 망점 / 스크린톤 / 톤 처리 /
   manga, comic B&W, halftone or screentone conversion of an image; asks to install,
   explain or tune ComfyUI-MangaScreen or its nodes (Manga Finish, Manga Levels, Manga
-  Panel); or wants one fixed manga look applied across a series of generated images.
-  Runs headless without ComfyUI or torch (numpy + OpenCV only).'
+  Panel); wants one fixed manga look applied across a series of generated images; or
+  wants a manga panel from a text description (텍스트로 만화 / text to manga: generate a
+  grayscale image with Figma Weave first, then convert). Runs headless without ComfyUI
+  or torch (numpy + OpenCV only).'
 ---
 
 # Manga Screen
@@ -64,6 +66,46 @@ python3 $S gen.png --no-panel                # 테두리·여백·잉크 질감 
 되도록 `--screen-lines` 를 폭/5 이하로 낮춘다.
 
 결과는 꼭 열어서 확인한다. 같은 값이라도 원화가 바뀌면 면이 크게 바뀐다(위 2번).
+
+## 텍스트에서 시작하기 (Text → Manga)
+
+이 CLI 는 그림을 만들지 않는다. 텍스트로 시작하면 그레이스케일 원화를 먼저 생성하고
+위 CLI 로 바꾼다. 클라우드 세션에서 끝까지 확인한 경로는 **Figma MCP 의 Weave 모델**이다.
+
+1. **모델 찾기**: `weave_find_model("nano banana")` → **Nano Banana 2.1**
+   (`fal-ai/nano-banana-2/edit`). id 는 바뀔 수 있으니 매번 찾는다.
+2. **비용 조회**: `acknowledgedCost` 없이 `weave_run_model` 을 부르면 돈을 쓰지 않고
+   견적만 온다. 2K 한 장에 Weave 크레딧 5(Figma AI 크레딧과 별개).
+3. **승인 받기**: 견적을 보여 주고 AskUserQuestion 으로 승인/취소를 묻는다. **매 실행마다**.
+   승인되면 같은 입력에 `acknowledgedCost` 를 붙여 다시 부른다.
+4. **결과 기다리기**: `weave_get_model_run_output` 을 폴링한다(2K 는 1~2 분).
+5. **받기**: 결과 URL(`media.weavy.ai`)을 `curl -f -o` 로 받는다. 클라우드 네트워크에서 열려 있다.
+6. **변환**: `manga_screen.py --report` 로 민감도를 보고 → 기본값(`gray` 프리셋)으로 변환.
+
+입력: `aspect_ratio`(예: `3:2`), `resolution` `2K`(작업 크기 2MP 와 맞음), `output_format` `png`.
+
+Figma AI 의 `generate_image` 는 쓰지 않는다. Figma AI 크레딧을 따로 쓰는데 이 계정에선
+부족으로 거절됐고(월초 초기화), 그 결과 이미지를 받는 호스트 일부(`s3-alpha-sig.figma.com`,
+`api.figma.com`)가 클라우드 네트워크 정책에서 막혀 있다.
+
+**생성 프롬프트** (확인된 형태, 영어로):
+
+```
+Monochrome greyscale manga illustration, black and white only, clean confident ink
+lineart with varied line weight, original character. <장면과 인물>. <밝게 둘 것: skin,
+light hair, white coat ...> stay bright paper white; <어둡게 둘 것: night background,
+deep shadows ...> are clearly dark. Backgrounds drawn with lines, not painted.
+No color, no text, no speech bubbles, no watermark.
+```
+
+- **명암을 나누는 문장이 핵심이다.** 무엇은 종이, 무엇은 확실히 어둡게를 적어 두면 문턱값
+  근처에 몰리는 명암이 줄어든다. 이 형태로 만든 원화는 `--report` 최대 변동이 3.5%,
+  스크린샷에서 잘라 낸 게시물 원화는 16% 였다. 출력도 거의 순수 흑백이라 Levels 가 필요 없다.
+- **실존 작품의 캐릭터 이름은 넣지 않는다.** "하울 같은 미남" 같은 요청은 머리 모양·분위기
+  같은 일반적인 특징으로 풀어 오리지널 캐릭터로 묘사한다.
+- **두 장면을 한 장에**: `A single image split vertically into two halves by a thin diagonal
+  border. Left half, DAY: ... Right half, NIGHT: the same young man ...` 로 크레딧 1 회에 대비 컷.
+- **같은 캐릭터로 여러 컷**: 앞서 만든 이미지를 `images` 입력(참조)으로 넘긴다. 아직 확인 안 함.
 
 ## 파라미터 — 맞추는 순서
 

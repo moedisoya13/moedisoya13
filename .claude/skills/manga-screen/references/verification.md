@@ -44,6 +44,20 @@ CLI 는 torch 없는 venv(numpy, opencv-python-headless, pillow)에서 돌렸다
 `black_point` 0.40, `white_point` 0.75 언저리가 가깝고, 가방·촉수의 디테일 선은 펜 선을
 얹은 것으로 보인다(정확한 값은 게시물에 없음).
 
+## 텍스트 → 만화 (같은 날, 클라우드 세션)
+
+- Figma AI `generate_image`(기본 모델, 1536×1024 요청): "Insufficient Figma AI credits" 로 거절.
+  2026-11-01 초기화. 차감 없음.
+- Figma Weave `weave_run_model`, Nano Banana 2.1(`fal-ai/nano-banana-2/edit`),
+  `aspect_ratio` 3:2, `resolution` 2K, png: 견적 5 크레딧 → 사용자 승인 → 실행.
+  1~2 분 뒤 COMPLETED, 2528×1696 PNG.
+- 결과 URL `media.weavy.ai/...` 를 curl 로 받음(HTTP 200, 7.3MB). 채널 차이 평균 0.96 —
+  거의 순수 흑백.
+- `--report`: 종이 69.0% / 옅은 톤 7.0% / 짙은 톤 7.1% / 베타 17.0%, 최대 변동 3.5%(보통).
+- 기본값 변환이 가장 나았다. `black_point` 0.40 은 밤 조명 원뿔만 좁아짐.
+- 같은 세션에서 Figma 이미지 호스트 `s3-alpha-sig.figma.com`, `api.figma.com` 은 프록시가
+  CONNECT 를 거절함(Figma AI 생성 결과를 받는 경로는 확인 못 함).
+
 ## 확인하지 못한 것
 
 - 펜 선(comfyui_controlnet_aux 의 Manga Lineart): 모델이 HuggingFace 에 있는데 이 세션의
@@ -51,3 +65,4 @@ CLI 는 torch 없는 venv(numpy, opencv-python-headless, pillow)에서 돌렸다
   돌리지는 못했고, 그 노드만 빼고 같은 체인을 돌렸다. 나머지 노드 타입(ImageScaleToTotalPixels,
   GetImageSize, ImageCompare, LoadImage, SaveImage)은 등록돼 있음을 확인.
 - QWEN-Manga 워크플로우(편집 모델 필요), GPU 실행.
+- 같은 캐릭터 연속 컷(앞 이미지를 Weave `images` 참조로 넘기기).
