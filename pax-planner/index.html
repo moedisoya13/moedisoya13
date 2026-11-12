@@ -216,7 +216,7 @@ details summary{cursor:pointer;color:var(--ink)}
   <header>
     <span class="eyebrow">IKEA PAX · 도어 없는 오픈형 · 부부 2인</span>
     <h1>PAX 2.4m 벽 플래너</h1>
-    <p class="lede">좌상단 방의 서쪽 240cm 벽에 들어가는 프레임 조합을 계산해 두 사람의 옷 수량에 맞춰 순위를 매깁니다. 방 평면도에서 창·문과의 간섭을, 정면도에서 내부 구성을, 3D에서 방 안 모습을 봅니다. 부품을 끌어 옮기거나 입력창에 말로 지시하면 수납량과 견적이 바로 바뀝니다.</p>
+    <p class="lede">좌상단 방의 서쪽 240cm 벽에 들어가는 프레임 조합을 계산해 두 사람의 옷 수량에 맞춰 순위를 매깁니다. 방 평면도에서 창·문과의 간섭을, 정면도에서 내부 구성을, 3D와 실사에서 방 안 모습을 봅니다. 부품을 끌어 옮기거나 입력창에 말로 지시하면 수납량과 견적이 바로 바뀝니다.</p>
     <p class="hint">가격·규격: IKEA 코리아 온라인몰·PAX 구매 가이드, 2026-11-11 조회, 화이트 기준. 옷 수량과 수납량 환산은 편집 가능한 예시값입니다.</p>
     <div class="row" id="shareRow" hidden>
       <button type="button" class="btn pri" id="btnShare">지금 구성을 링크로 보내기</button>
@@ -266,6 +266,7 @@ details summary{cursor:pointer;color:var(--ink)}
           <button type="button" data-v="plan" aria-pressed="true">방 평면도</button>
           <button type="button" data-v="front" aria-pressed="false">정면도</button>
           <button type="button" data-v="three" aria-pressed="false">3D</button>
+          <button type="button" data-v="real" aria-pressed="false">실사</button>
         </div>
         <div class="checks">
           <label><input type="checkbox" id="ckClothes" checked> 옷 표시</label>
@@ -288,7 +289,11 @@ details summary{cursor:pointer;color:var(--ink)}
         <div id="three" hidden>
           <canvas id="cv"></canvas>
           <p class="note" id="threeMsg" hidden>3D 라이브러리를 불러오지 못했습니다. 정면도는 그대로 쓸 수 있습니다.</p>
-          <div class="legend">
+          <div class="legend" id="lgReal" hidden>
+            <span>흰 벽·흰 천장·마루 바닥에 창 쪽 햇빛을 넣어 계산한 그림입니다. 사진이 아니라서 실제 색·질감과는 차이가 있습니다.</span>
+            <span>끌어서 시점 이동 · 휠/핀치로 확대</span>
+          </div>
+          <div class="legend" id="lg3d">
             <span><i style="background:var(--accent);opacity:.45"></i>서랍·바구니 인출 구역(약 45cm)</span>
             <span><i style="background:var(--edge)"></i>맞은편 가구·벽 위치</span>
             <span>끌어서 회전 · 휠/핀치로 확대</span>
@@ -1245,95 +1250,185 @@ $('#viewSeg').addEventListener('click', e => { const b = e.target.closest('butto
 
 /* ---------- 3D ---------- */
 let G = null;
+const isReal = () => S.view === 'real';
 function init3D() {
   if (G || !window.THREE) { if (!window.THREE) $('#threeMsg').hidden = false; return; }
   const THREE = window.THREE, cv = $('#cv');
   let R;
   try { R = new THREE.WebGLRenderer({canvas:cv, antialias:true}); } catch (e) { $('#threeMsg').hidden = false; return; }
   R.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  R.shadowMap.type = THREE.PCFSoftShadowMap;
   const scene = new THREE.Scene(), cam = new THREE.PerspectiveCamera(30, 1.6, 10, 6000), root = new THREE.Group();
-  scene.add(new THREE.HemisphereLight(0xffffff, 0x7a8696, .9));
-  const dl = new THREE.DirectionalLight(0xffffff, .5); dl.position.set(250, 420, 600); scene.add(dl, root);
-  G = {THREE, R, scene, cam, root, az:-.62, el:.22, zoom:1, movers:[], openT:0, dirty:true, side:undefined};
+  scene.add(root);
+  G = {THREE, R, scene, cam, root, o:{three:{az:-.62, el:.22, zoom:1}, real:{az:.3, el:.05, zoom:1}}, movers:[], openT:0, dirty:true, side:undefined};
+  const cur = () => G.o[isReal() ? 'real' : 'three'];
   const pts = new Map(); let pinch = 0;
   cv.addEventListener('pointerdown', e => { pts.set(e.pointerId, [e.clientX, e.clientY]); try { cv.setPointerCapture(e.pointerId); } catch (err) {} });
   cv.addEventListener('pointermove', e => {
     const p = pts.get(e.pointerId); if (!p) return;
-    if (pts.size === 1) { G.az = clamp(G.az - (e.clientX - p[0]) * .006, -1.35, 1.35); G.el = clamp(G.el + (e.clientY - p[1]) * .005, .02, 1.2); }
+    const o = cur(), real = isReal();
+    if (pts.size === 1) { o.az = clamp(o.az - (e.clientX - p[0]) * .006, real ? -1.15 : -1.35, real ? 1.15 : 1.35); o.el = clamp(o.el + (e.clientY - p[1]) * .005, real ? -.04 : .02, real ? .75 : 1.2); }
     pts.set(e.pointerId, [e.clientX, e.clientY]);
-    if (pts.size === 2) { const [a, b] = [...pts.values()], d = Math.hypot(a[0] - b[0], a[1] - b[1]); if (pinch) G.zoom = clamp(G.zoom * pinch / d, .45, 2); pinch = d; }
+    if (pts.size === 2) { const [a, b] = [...pts.values()], d = Math.hypot(a[0] - b[0], a[1] - b[1]); if (pinch) o.zoom = clamp(o.zoom * pinch / d, .45, 2); pinch = d; }
     G.dirty = true;
   });
   const up = e => { pts.delete(e.pointerId); pinch = 0; };
   cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
-  cv.addEventListener('wheel', e => { e.preventDefault(); G.zoom = clamp(G.zoom * (e.deltaY > 0 ? 1.08 : .925), .45, 2); G.dirty = true; }, {passive:false});
+  cv.addEventListener('wheel', e => { e.preventDefault(); const o = cur(); o.zoom = clamp(o.zoom * (e.deltaY > 0 ? 1.08 : .925), .45, 2); G.dirty = true; }, {passive:false});
   new ResizeObserver(() => { G.dirty = true; }).observe($('#three'));
   const loop = () => {
     requestAnimationFrame(loop);
-    if (S.view !== 'three') return;
+    const real = isReal();
+    if (S.view !== 'three' && !real) return;
     const target = S.open ? 1 : 0;
     if (Math.abs(G.openT - target) > .001) { G.openT += clamp(target - G.openT, -.035, .035); G.dirty = true; }
     if (!G.dirty) return; G.dirty = false;
     const w = cv.parentElement.clientWidth - 12, hgt = Math.round(clamp(w * .62, 260, 560));
     if (cv.width !== Math.round(w * R.getPixelRatio()) || cv.height !== Math.round(hgt * R.getPixelRatio())) { R.setSize(w, hgt, false); cv.style.height = hgt + 'px'; cam.aspect = w / hgt; }
     G.movers.forEach(m => { const t = clamp(G.openT * 1.6 - m.lag, 0, 1), ez = t * t * (3 - 2 * t); m.o.position.z = m.z + ez * 40; });
+    const o = cur();
+    cam.fov = real ? 64 : 30;
     const fy = cam.fov * Math.PI / 360, fx = Math.atan(Math.tan(fy) * cam.aspect);
-    const span = S.wall + 150 + (cornerOn() ? 60 : 0);
-    const dist = Math.max(span / 2 / Math.tan(fx), (S.ceil + 70) / 2 / Math.tan(fy)) * 1.02 * G.zoom;
-    const tx = S.wall / 2, ty = S.ceil * .42, tz = roomOn() ? Math.min(110, S.room.depth * .4) : cornerOn() ? 70 : 40;
-    cam.position.set(tx + dist * Math.sin(G.az) * Math.cos(G.el), ty + dist * Math.sin(G.el), tz + dist * Math.cos(G.az) * Math.cos(G.el));
+    let dist, tx = S.wall / 2, ty, tz;
+    if (real) {   /* a wide-angle photo taken from near the opposite wall */
+      dist = Math.max((S.wall + 10) / 2 / Math.tan(fx), (S.ceil - 4) / 2 / Math.tan(fy)) * 1.13 * o.zoom;
+      ty = S.ceil * .46; tz = bbv() + DEPTH;
+    } else {
+      const span = S.wall + 150 + (cornerOn() ? 60 : 0);
+      dist = Math.max(span / 2 / Math.tan(fx), (S.ceil + 70) / 2 / Math.tan(fy)) * 1.02 * o.zoom;
+      ty = S.ceil * .42; tz = roomOn() ? Math.min(110, S.room.depth * .4) : cornerOn() ? 70 : 40;
+    }
+    cam.position.set(tx + dist * Math.sin(o.az) * Math.cos(o.el), ty + dist * Math.sin(o.el), tz + dist * Math.cos(o.az) * Math.cos(o.el));
     cam.lookAt(tx, ty, tz); cam.updateProjectionMatrix();
     R.render(scene, cam);
   };
   loop();
 }
 function cssColor(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || '#888'; }
+function floorTexture() {
+  const {THREE} = G;
+  if (!G.floorCanvas) {
+    const c = document.createElement('canvas'); c.width = c.height = 512;
+    const x = c.getContext('2d'), R = rnd(77), plank = 512 / 16;
+    for (let r = 0; r < 16; r++) {
+      let px = -R() * 200;
+      while (px < 512) {
+        const len = 150 + R() * 200, l = 70 + R() * 7, s = 30 + R() * 8;
+        x.fillStyle = `hsl(${32 + R() * 5}, ${s}%, ${l}%)`; x.fillRect(px, r * plank, len, plank);
+        x.fillStyle = 'rgba(90,60,30,.05)'; for (let g = 0; g < 5; g++) x.fillRect(px, r * plank + R() * plank, len, 1);
+        x.fillStyle = 'rgba(70,45,20,.28)'; x.fillRect(px, r * plank, 1.2, plank);
+        px += len;
+      }
+      x.fillStyle = 'rgba(70,45,20,.22)'; x.fillRect(0, r * plank, 512, 1);
+    }
+    G.floorCanvas = c;
+  }
+  const tx = new THREE.CanvasTexture(G.floorCanvas);
+  tx.wrapS = tx.wrapT = THREE.RepeatWrapping; tx.encoding = THREE.sRGBEncoding; tx.anisotropy = 4;
+  return tx;
+}
+/* white-walled room for the realistic view: single-sided walls, so the camera can look in from outside */
+function realRoom(K) {
+  const {THREE, root} = G, box = K.box, W = S.wall, C = S.ceil, bb = bbv(), on = roomOn(), R0 = S.room;
+  const RW = on ? R0.depth : bb + DEPTH + Math.max(S.front, 60) + 60, bt = Math.max(bb, 1);
+  const mWall = K.mat(0xf3f2ee, {roughness:.96}), mCeil = K.mat(0xfbfbf9, {roughness:1}), mTrim = K.mat(0xfcfcfb, {roughness:.5});
+  const ftx = floorTexture(); ftx.repeat.set(RW / 190, W / 190);
+  const mFloor = new THREE.MeshStandardMaterial({map:ftx, roughness:.62, metalness:0});
+  const quad = (w, h, x, y, z, ry, rx, mat) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat); m.position.set(x, y, z); m.rotation.set(rx || 0, ry || 0, 0); m.receiveShadow = true; root.add(m); return m; };
+  const fl = quad(RW, W, W / 2, 0, RW / 2, 0, -Math.PI / 2, mFloor); fl.rotation.z = Math.PI / 2;
+  quad(W, RW, W / 2, C, RW / 2, 0, Math.PI / 2, mCeil);
+  quad(W, C, W / 2, C / 2, 0, 0, 0, mWall);
+  quad(W, C, W / 2, C / 2, RW, Math.PI, 0, mWall);
+  const seg = (x, ry, z0, z1, y0, y1) => { if (z1 - z0 > .1 && y1 - y0 > .1) quad(z1 - z0, y1 - y0, x, (y0 + y1) / 2, (z0 + z1) / 2, ry, 0, mWall); };
+  let winMid = RW * .55;
+  if (on) {
+    const d0 = doorStart(), d1 = doorEnd(), w0 = R0.winStart, w1 = R0.winStart + R0.winW, dh = 205;
+    winMid = (w0 + w1) / 2;
+    seg(0, Math.PI / 2, 0, d0, 0, C); seg(0, Math.PI / 2, d1, RW, 0, C); seg(0, Math.PI / 2, d0, d1, dh, C);
+    box(root, 3.5, dh - 1, d1 - d0, -5, 0, d0, K.mat(0xf1eee8, {roughness:.5}));                    /* closed door leaf */
+    box(root, 5, dh, 1, -5, 0, d0, mTrim); box(root, 5, dh, 1, -5, 0, d1 - 1, mTrim); box(root, 5, 1, d1 - d0, -5, dh - 1, d0, mTrim);
+    box(root, 1.2, dh + 6, 6, 0, 0, d0 - 6, mTrim); box(root, 1.2, dh + 6, 6, 0, 0, d1, mTrim); box(root, 1.2, 6, d1 - d0, 0, dh, d0, mTrim);
+    box(root, 5, 2.2, 11, -1.5, 100, d0 + 6, K.mMetal);
+    seg(W, -Math.PI / 2, 0, w0, 0, C); seg(W, -Math.PI / 2, w1, RW, 0, C); seg(W, -Math.PI / 2, w0, w1, 0, 90); seg(W, -Math.PI / 2, w0, w1, 210, C);
+    const glass = new THREE.Mesh(new THREE.PlaneGeometry(w1 - w0, 120), new THREE.MeshBasicMaterial({color:new THREE.Color(0xf2f8ff).convertSRGBToLinear()}));
+    glass.position.set(W + 7, 150, winMid); glass.rotation.y = -Math.PI / 2; root.add(glass);
+    box(root, 7, 1, w1 - w0, W, 90, w0, mTrim); box(root, 7, 1, w1 - w0, W, 209, w0, mTrim); box(root, 7, 120, 1, W, 90, w0, mTrim); box(root, 7, 120, 1, W, 90, w1 - 1, mTrim);
+    box(root, 2.5, 120, 3.5, W + 3.5, 90, winMid - 1.75, mTrim); box(root, 9, 2, w1 - w0 + 6, W - 2, 88, w0 - 3, mTrim);
+    box(root, bt, 7, d0 - 6, 0, 0, 0, mTrim); box(root, bt, 7, RW - d1 - 6, 0, 0, d1 + 6, mTrim);
+  } else {
+    seg(0, Math.PI / 2, 0, RW, 0, C); seg(W, -Math.PI / 2, 0, RW, 0, C);
+    box(root, bt, 7, RW, 0, 0, 0, mTrim);
+  }
+  box(root, bt, 7, RW, W - bt, 0, 0, mTrim); box(root, W, 7, bt, 0, 0, 0, mTrim); box(root, W, 7, bt, 0, 0, RW - bt, mTrim);
+  /* daylight from the window side, soft sky fill, and a weak ceiling light */
+  root.add(new THREE.HemisphereLight(0xffffff, 0xe6d8c2, .4));
+  const sun = new THREE.DirectionalLight(0xfff2de, .62);
+  sun.position.set(W + 230, C + 110, winMid + 90); sun.target.position.set(W * .35, 50, 45);
+  sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -.0005; sun.shadow.normalBias = .7; sun.shadow.radius = 3.5;
+  const sc = sun.shadow.camera; sc.left = -330; sc.right = 330; sc.top = 330; sc.bottom = -330; sc.near = 20; sc.far = 1200;
+  root.add(sun, sun.target);
+  const fill = new THREE.PointLight(0xfff7ea, .16, 1000, 1.1); fill.position.set(W / 2, C - 24, Math.min(RW - 40, RW * .62)); root.add(fill);
+}
 function build3D(L) {
   if (!G) return;
-  const {THREE, root} = G;
-  root.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material && o.material.dispose) o.material.dispose(); });
+  const {THREE, root, R} = G, real = isReal();
+  root.traverse(o => {
+    if (o.geometry) o.geometry.dispose();
+    if (o.material) { if (o.material.map) o.material.map.dispose(); if (o.material.dispose) o.material.dispose(); }
+    if (o.isLight && o.shadow && o.shadow.map) o.shadow.map.dispose();
+  });
   root.clear(); G.movers = [];
+  R.shadowMap.enabled = real;
+  R.toneMapping = real ? THREE.ACESFilmicToneMapping : THREE.NoToneMapping; R.toneMappingExposure = 1.0;
+  R.outputEncoding = real ? THREE.sRGBEncoding : THREE.LinearEncoding;
   const side = L.g ? S.corner.side : null;
-  if (G.side !== side) { G.side = side; G.az = side === 'left' ? .85 : side === 'right' ? -.85 : -.62; }
+  if (G.side !== side) { G.side = side; G.o.three.az = side === 'left' ? .85 : side === 'right' ? -.85 : -.62; G.o.real.az = side === 'left' ? .36 : side === 'right' ? -.36 : .3; }
   const col = n => new THREE.Color(cssColor(n));
-  G.scene.background = col('--stage');
-  const Mat = (c, o) => new THREE.MeshLambertMaterial(Object.assign({color:c}, o || {}));
-  const K = {mPanel:Mat(0xf3f3ee), mIn:Mat(0xe4e6e4), mMetal:Mat(0xaeb6c0), mEdge:new THREE.LineBasicMaterial({color:col('--edge')}),
-    gcol:[1, 2, 3, 4, 5, 6].map(i => Mat(col('--c' + i))), own:{a:Mat(col('--a')), b:Mat(col('--b')), s:Mat(col('--s'))}};
+  const toC = c => { const k = c && c.isColor ? c.clone() : new THREE.Color(c); return real ? k.convertSRGBToLinear() : k; };
+  const Mat = (c, o) => real ? new THREE.MeshStandardMaterial(Object.assign({color:toC(c), roughness:.85, metalness:0}, o || {})) : new THREE.MeshLambertMaterial(Object.assign({color:toC(c)}, o || {}));
+  G.scene.background = real ? toC(0xdfe3e8) : col('--stage');
+  const K = real
+    ? {real:true, mat:Mat, mPanel:Mat(0xf7f6f2, {roughness:.5}), mIn:Mat(0xeeede8, {roughness:.7}), mMetal:Mat(0xcfd4da, {metalness:.85, roughness:.32}),
+       gcol:[0x2f3a4f, 0xd9cdb6, 0x4c524b, 0xf2efe8, 0xb98c8a, 0x8ea2b6].map(c => Mat(c, {roughness:1})), own:{}}
+    : {real:false, mat:Mat, mPanel:Mat(0xf3f3ee), mIn:Mat(0xe4e6e4), mMetal:Mat(0xaeb6c0), mEdge:new THREE.LineBasicMaterial({color:col('--edge')}),
+       gcol:[1, 2, 3, 4, 5, 6].map(i => Mat(col('--c' + i))), own:{a:Mat(col('--a')), b:Mat(col('--b')), s:Mat(col('--s'))}};
   K.box = (parent, w, h, d, x, y, z, mat, edges) => {
     const g = new THREE.BoxGeometry(Math.max(.05, w), Math.max(.05, h), Math.max(.05, d)), m = new THREE.Mesh(g, mat);
     m.position.set(x + w / 2, y + h / 2, z + d / 2);
-    if (edges) m.add(new THREE.LineSegments(new THREE.EdgesGeometry(g), K.mEdge));
+    if (real) { m.castShadow = true; m.receiveShadow = true; }
+    else if (edges) m.add(new THREE.LineSegments(new THREE.EdgesGeometry(g), K.mEdge));
     parent.add(m); return m;
   };
   const box = K.box, W = S.wall, C = S.ceil, bb = bbv(), fz = DEPTH + Math.max(S.front, 60) + 90;
-  const mSide = Mat(col('--wall'), {transparent:true, opacity:.5});
-  if (roomOn()) {
-    const R = S.room, RW = R.depth, d0 = doorStart(), d1 = doorEnd(), w0 = R.winStart, w1 = R.winStart + R.winW;
-    const mT = Mat(col('--wall'), {transparent:true, opacity:.22, depthWrite:false});
-    box(root, W, 1, RW, 0, -1, 0, Mat(col('--line')));
-    box(root, W, C, 1, 0, 0, -1, Mat(col('--wall')));
-    /* south wall (planner left) with the door */
-    box(root, 1, C, d0, -1, 0, 0, mT); box(root, 1, C, Math.max(.1, RW - d1), -1, 0, d1, mT); box(root, 1, C - 205, d1 - d0, -1, 205, d0, mT);
-    box(root, R.doorW, 200, 2.5, 0, 0, d1 - 2.5, Mat(0xd9cbb3), true);
-    const arc = new THREE.Mesh(new THREE.RingGeometry(R.doorW - 1.2, R.doorW, 32, 1, 0, Math.PI / 2), Mat(col('--edge'), {side:THREE.DoubleSide}));
-    arc.rotation.x = -Math.PI / 2; arc.position.set(0, .4, d1); root.add(arc);
-    /* north wall (planner right) with the window (sill/top assumed 90/210) */
-    box(root, 1, C, w0, W, 0, 0, mT); box(root, 1, C, Math.max(.1, RW - w1), W, 0, w1, mT);
-    box(root, 1, 90, w1 - w0, W, 0, w0, mT); box(root, 1, C - 210, w1 - w0, W, 210, w0, mT);
-    box(root, .6, 120, w1 - w0, W, 90, w0, Mat(0x9cc3e6, {transparent:true, opacity:.45}), true);
-    /* east wall: a low outline only, so the camera can look through */
-    box(root, W, 6, 1, 0, 0, RW, Mat(col('--wall')));
-  } else {
-    const closedL = endClosed('left') || side === 'left', closedR = endClosed('right') || side === 'right';
-    const sl = side ? L.sideShown : 0;
-    box(root, W + 160, 1, Math.max(fz, sl + 30), -80, -1, 0, Mat(col('--line')));
-    box(root, W + (closedL ? 0 : 70) + (closedR ? 0 : 70), C, 1, closedL ? 0 : -70, 0, -1, Mat(col('--wall')));
-    if (closedL) box(root, 1, C, side === 'left' ? sl : DEPTH + 30, -1, 0, 0, mSide);
-    if (closedR) box(root, 1, C, side === 'right' ? sl : DEPTH + 30, W, 0, 0, mSide);
-    box(root, W, 46, 5, 0, 0, DEPTH + S.front, Mat(col('--edge'), {transparent:true, opacity:.5}), true);
+  if (real) realRoom(K);
+  else {
+    root.add(new THREE.HemisphereLight(0xffffff, 0x7a8696, .9));
+    const dl = new THREE.DirectionalLight(0xffffff, .5); dl.position.set(250, 420, 600); root.add(dl);
+    const mSide = Mat(col('--wall'), {transparent:true, opacity:.5});
+    if (roomOn()) {
+      const R0 = S.room, RW = R0.depth, d0 = doorStart(), d1 = doorEnd(), w0 = R0.winStart, w1 = R0.winStart + R0.winW;
+      const mT = Mat(col('--wall'), {transparent:true, opacity:.22, depthWrite:false});
+      box(root, W, 1, RW, 0, -1, 0, Mat(col('--line')));
+      box(root, W, C, 1, 0, 0, -1, Mat(col('--wall')));
+      box(root, 1, C, d0, -1, 0, 0, mT); box(root, 1, C, Math.max(.1, RW - d1), -1, 0, d1, mT); box(root, 1, C - 205, d1 - d0, -1, 205, d0, mT);
+      box(root, R0.doorW, 200, 2.5, 0, 0, d1 - 2.5, Mat(0xd9cbb3), true);
+      const arc = new THREE.Mesh(new THREE.RingGeometry(R0.doorW - 1.2, R0.doorW, 32, 1, 0, Math.PI / 2), Mat(col('--edge'), {side:THREE.DoubleSide}));
+      arc.rotation.x = -Math.PI / 2; arc.position.set(0, .4, d1); root.add(arc);
+      box(root, 1, C, w0, W, 0, 0, mT); box(root, 1, C, Math.max(.1, RW - w1), W, 0, w1, mT);
+      box(root, 1, 90, w1 - w0, W, 0, w0, mT); box(root, 1, C - 210, w1 - w0, W, 210, w0, mT);
+      box(root, .6, 120, w1 - w0, W, 90, w0, Mat(0x9cc3e6, {transparent:true, opacity:.45}), true);
+      box(root, W, 6, 1, 0, 0, RW, Mat(col('--wall')));
+    } else {
+      const closedL = endClosed('left') || side === 'left', closedR = endClosed('right') || side === 'right';
+      const sl = side ? L.sideShown : 0;
+      box(root, W + 160, 1, Math.max(fz, sl + 30), -80, -1, 0, Mat(col('--line')));
+      box(root, W + (closedL ? 0 : 70) + (closedR ? 0 : 70), C, 1, closedL ? 0 : -70, 0, -1, Mat(col('--wall')));
+      if (closedL) box(root, 1, C, side === 'left' ? sl : DEPTH + 30, -1, 0, 0, mSide);
+      if (closedR) box(root, 1, C, side === 'right' ? sl : DEPTH + 30, W, 0, 0, mSide);
+      box(root, W, 46, 5, 0, 0, DEPTH + S.front, Mat(col('--edge'), {transparent:true, opacity:.5}), true);
+    }
+    if (L.sum) box(root, L.sum, .4, 45, L.start, .05, bb + DEPTH, Mat(col('--accent'), {transparent:true, opacity:.28}));
   }
-  if (L.sum) box(root, L.sum, .4, 45, L.start, .05, bb + DEPTH, Mat(col('--accent'), {transparent:true, opacity:.28}));
   const mainG = new THREE.Group(); mainG.position.z = bb; root.add(mainG);
   const sideG = new THREE.Group();
   if (side) { sideG.rotation.y = side === 'left' ? Math.PI / 2 : -Math.PI / 2; sideG.position.x = side === 'left' ? bb : W - bb; root.add(sideG); }
@@ -1342,7 +1437,7 @@ function build3D(L) {
     const onSide = (u.k === 'cf' || u.k === 'cu') && u._wall === 'side';
     unit3D(onSide ? sideG : mainG, u, onSide && side === 'right' ? -W : 0, K, lag);
   });
-  if (S.people) [['a', S.ha], ['b', S.hb]].forEach(([p, ht]) => {
+  if (S.people && !real) [['a', S.ha], ['b', S.hb]].forEach(([p, ht]) => {
     const u = S.units.find(x => x.k === 'f' && x.own === p) || S.units.find(x => x.k === 'f' && x.own === 's') || (cornerOn() && S.corner.own === p ? (S.corner.cf._wall === 'main' ? S.corner.cf : S.corner.cu) : null);
     if (!u) return;
     const m = Mat(col('--' + p), {transparent:true, opacity:.6}), cx = u._x + u.w / 2, cz = bb + DEPTH + Math.min(60, Math.max(30, frontSpace() * .6));
@@ -1354,7 +1449,7 @@ function build3D(L) {
 function unit3D(par, u, xo, K, lag) {
   const {THREE} = G, box = K.box, x = u._x + xo;
   if (u.k === 'end') {
-    const st = new THREE.MeshLambertMaterial({color:0xdfe2e6});
+    const st = K.mat(0xdfe2e6);
     [[0, 0], [u.w - 1.5, 0], [0, DEPTH - 1.5], [u.w - 1.5, DEPTH - 1.5]].forEach(([a, b]) => box(par, 1.5, FH, 1.5, x + a, 0, b, st));
     [20, 60, 165].forEach(y => box(par, u.w, 1.2, DEPTH, x, y, 0, st, true));
     return;
@@ -1370,27 +1465,28 @@ function unit3D(par, u, xo, K, lag) {
     box(par, u.w - 3.6, BASE - 1.8, 1.6, x + 1.8, 0, D - 4, K.mPanel); box(par, u.w - 3.6, FH - 2, .4, x + 1.8, 1, .2, K.mIn);
   }
   if (u.k === 'mid') {
-    [45, 84, 123, 152, 176].forEach((y, k) => box(par, u.w - 3.6, 1.8, D - 2, x + 1.8, y, 1, k === 2 || k === 3 ? new THREE.MeshLambertMaterial({color:0xbcd4e6, transparent:true, opacity:.5}) : K.mPanel, true));
+    [45, 84, 123, 152, 176].forEach((y, k) => box(par, u.w - 3.6, 1.8, D - 2, x + 1.8, y, 1, k === 2 || k === 3 ? K.mat(0xbcd4e6, {transparent:true, opacity:.5}) : K.mPanel, true));
     return;
   }
-  box(par, u.w, 1.4, 1.4, x, FH, D - 1.4, K.own[u.own]);
+  if (!K.real) box(par, u.w, 1.4, 1.4, x, FH, D - 1.4, K.own[u.own]);
   if (needsDivider(u)) box(par, 1.8, DIV_TOP - BASE, D - 2, (u._coverLeft ? u._span[0] : u._span[1] - 1.8) + xo, BASE, 1, K.mPanel, true);
   const geo = sortedGeo(u), seed = seedOf(u), ix = x + 1.8, iw = u.w - 3.6;
   geo.forEach((g, k) => {
     const below = geo[k - 1], y = g.y, rg = itemRange(u, g), sx = rg[0] + xo, sw = rg[1];
     if (g.t === 'rail') {
       const c = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.1, iw, 10), K.mMetal);
-      c.rotation.z = Math.PI / 2; c.position.set(x + u.w / 2, y + 1.5, D / 2); par.add(c);
+      c.rotation.z = Math.PI / 2; c.position.set(x + u.w / 2, y + 1.5, D / 2); c.castShadow = !!K.real; par.add(c);
       if (S.clothes) garmentList(u, seed, g, below).forEach(q => box(par, Math.max(1.2, q.w - 1), q.len, Math.min(40, D - 6), x + q.x, y - 1 - q.len, Math.max(3, (D - 40) / 2), K.gcol[q.c - 1]));
     } else if (g.t === 'shelf') {
       box(par, sw, 1.8, D - 2, sx, y, 1, K.mPanel, true);
       const cl = foldClear(geo, k);
       if (S.clothes && cl >= 10) { const stacks = Math.max(1, Math.floor((g.w - 3.9) / 28)), per = Math.min(9, Math.floor(cl / 3.5)), Rr = rnd(seed * 17 + g.idx * 5 + 3), cell = sw / stacks;
-        for (let a = 0; a < stacks; a++) { const cnt = Math.max(2, Math.round(per * (.55 + Rr() * .45))); for (let b = 0; b < cnt; b++) Rr(); box(par, 22, cnt * 3.1, Math.min(30, D - 6), sx + a * cell + (cell - 22) / 2, y + 1.8, Math.max(2, D - 36), K.gcol[Math.floor(Rr() * 6)], true); } }
+        for (let a = 0; a < stacks; a++) { const cnt = Math.max(2, Math.round(per * (.55 + Rr() * .45))); if (K.real) { for (let b = 0; b < cnt; b++) box(par, 22 - (b % 2), 2.9, Math.min(30, D - 6), sx + a * cell + (cell - 22) / 2, y + 1.8 + b * 3.1, Math.max(2, D - 36), K.gcol[Math.floor(Rr() * 6)]); }
+          else { for (let b = 0; b < cnt; b++) Rr(); box(par, 22, cnt * 3.1, Math.min(30, D - 6), sx + a * cell + (cell - 22) / 2, y + 1.8, Math.max(2, D - 36), K.gcol[Math.floor(Rr() * 6)], true); } } }
     } else {
       const grp = new THREE.Group(); par.add(grp); G.movers.push({o:grp, z:0, lag:(lag.v++ % 7) * .09});
       if (g.t === 'drawer') { box(grp, sw - .8, 15.4, 2, sx + .4, y + .3, D - 4, K.mPanel, true); box(grp, sw - 2, 12, D - 8, sx + 1, y + .3, 4, K.mIn, true); }
-      else if (g.t === 'basket') box(grp, sw - 1.2, 15, D - 6, sx + .6, y + .3, 4, new THREE.MeshLambertMaterial({color:0xdfe3e8, transparent:true, opacity:.4}), true);
+      else if (g.t === 'basket') box(grp, sw - 1.2, 15, D - 6, sx + .6, y + .3, 4, K.mat(0xdfe3e8, {transparent:true, opacity:.4}), true);
       else if (g.t === 'tray') box(grp, sw - .8, 4, D - 5, sx + .4, y, 3, K.mPanel, true);
       else { box(grp, sw - .8, 2.5, D - 5, sx + .4, y + 1, 3, K.mMetal, true);
         const c = y - (below ? below.y + below.h : BASE);
@@ -1476,7 +1572,7 @@ op 목록 (필요한 키만 쓴다)
 - {"op":"add_item","id":"m1","t":"drawer","h":cm}  h 생략 가능
 - {"op":"remove_item","id":"m1","t":"drawer","h":cm}  h 생략 시 그 종류 하나
 - {"op":"auto"}  지금 프레임 배치를 유지하고 내부 구성을 옷 수량에 맞게 자동으로 고른다
-- {"op":"view","view":"plan|front|three","clothes":true|false,"people":true|false,"open":true|false,"light":true|false}  open=3D에서 서랍 열기, light=센서 조명 견적 추가
+- {"op":"view","view":"plan|front|three|real"(real = 흰 벽 실사 보기),"clothes":true|false,"people":true|false,"open":true|false,"light":true|false}  open=3D·실사에서 서랍 열기, light=센서 조명 견적 추가
 
 부품: rail 옷걸이봉, shelf 선반, drawer 서랍(높이 16), basket 메시바구니(16), tray 인출식트레이(4), pants 인출식바지걸이(3.5).
 제약: cu에는 shelf(최대 4)와 rail(kind 58만)만 넣는다. cf의 서랍·바구니·트레이·바지걸이는 바닥에서 88cm 아래 50cm 칸에만 들어간다.
@@ -1593,9 +1689,9 @@ function applyOps(ops) {
         }
         case 'auto': autoFit(); break;
         case 'view':
-          if (['plan', 'front', 'three'].includes(o.view)) S.view = o.view;
+          if (['plan', 'front', 'three', 'real'].includes(o.view)) S.view = o.view;
           ['clothes', 'people', 'open', 'light'].forEach(k => { if (typeof o[k] === 'boolean') S[k] = o[k]; });
-          if (o.open === true) S.view = 'three';
+          if (o.open === true && S.view !== 'real') S.view = 'three';
           break;
         default: throw new Error('알 수 없는 작업: ' + o.op);
       }
@@ -1710,9 +1806,10 @@ $('#nlEx').addEventListener('click', e => { const b = e.target.closest('button')
 function renderAll(light) {
   if (!getUnit(S.sel)) S.sel = S.units.length ? 'm1' : (cornerOn() ? 'cf' : 'm1');
   const L = layout();
-  if (!['plan', 'front', 'three'].includes(S.view)) S.view = 'plan';
-  const three = S.view === 'three';
+  if (!['plan', 'front', 'three', 'real'].includes(S.view)) S.view = 'plan';
+  const three = S.view === 'three' || S.view === 'real';
   $('#front').hidden = S.view !== 'front'; $('#planV').hidden = S.view !== 'plan'; $('#three').hidden = !three; $('#lbOpen').hidden = !three;
+  $('#lg3d').hidden = S.view !== 'three'; $('#lgReal').hidden = S.view !== 'real';
   document.querySelectorAll('#viewSeg button').forEach(b => b.setAttribute('aria-pressed', b.dataset.v === S.view));
   if (three) { init3D(); build3D(L); } else if (S.view === 'plan') renderPlan(L); else renderFront(L);
   renderRoomCard(L);
@@ -1727,7 +1824,7 @@ renderAll();
 initNL();
 if (STANDALONE) loadSharedFromHash();
 let rt = 0; window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { if (S.view === 'front') renderFront(layout()); }, 120); });
-const reTheme = () => { if (S.view === 'three') build3D(layout()); };
+const reTheme = () => { if (S.view === 'three' || S.view === 'real') build3D(layout()); };
 try { window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', reTheme); } catch (e) {}
 new MutationObserver(reTheme).observe(document.documentElement, {attributes:true, attributeFilter:['data-theme']});
 window.__pax = {S: () => S, CAND: () => CAND, applyOps, layout, fit, stats, buildPrompt};
