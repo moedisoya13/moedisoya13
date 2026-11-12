@@ -1,0 +1,1737 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex">
+<meta property="og:title" content="PAX 옷장 플래너">
+<meta property="og:description" content="좌상단 방 240cm 벽에 들어갈 IKEA PAX 오픈형 옷장 구성">
+<title>PAX 2.4m 벽 플래너</title>
+
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,-apple-system,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
+<script>window.PAX_STANDALONE=true</script>
+</head><body>
+<style>
+/* Layout: a drafting sheet. Candidate combinations on top, the scaled wall drawing as the work surface,
+   a side column for the selected unit, capacity fit and cost; reference tables below. */
+:root{
+  --bg:#f2f4f7; --surface:#ffffff; --ink:#17212e; --muted:#5a6676; --line:#d4dae2;
+  --accent:#1d4f91; --accent-soft:#e2ebf7; --on-accent:#ffffff;
+  --a:#b9581a; --b:#0f7a74; --s:#665fa6;
+  --a-soft:#f7e6d9; --b-soft:#d9efed; --s-soft:#e7e5f4;
+  --stage:#e8ecf1; --wall:#dfe4ea; --panel:#fbfbf8; --cavity:#eceeed; --edge:#8792a0; --metal:#a9b1bb;
+  --ok:#1c7d45; --warn:#a86a10; --bad:#b8372b;
+  --c1:#7d8fa6; --c2:#c9b79c; --c3:#5e6f63; --c4:#b98a8a; --c5:#3f4a5c; --c6:#d7d3c8;
+  --sans:"IBM Plex Sans KR","Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR",system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#10151c; --surface:#19202a; --ink:#e7ecf3; --muted:#9aa6b5; --line:#2d3745;
+  --accent:#86b4f2; --accent-soft:#1d2d45; --on-accent:#0d1520;
+  --a:#f09a62; --b:#4fc4bc; --s:#aaa4ee;
+  --a-soft:#3a2a1e; --b-soft:#17322f; --s-soft:#28263d;
+  --stage:#141b24; --wall:#212a36; --panel:#d5d9de; --cavity:#aeb5bd; --edge:#5d6876; --metal:#7c8793;
+  --ok:#5cc98a; --warn:#e2ab52; --bad:#f08172;
+  --c1:#6f819a; --c2:#b9a686; --c3:#566a5c; --c4:#a97c7c; --c5:#394456; --c6:#c3bfb4;
+  color-scheme:dark } }
+:root[data-theme="dark"]{
+  --bg:#10151c; --surface:#19202a; --ink:#e7ecf3; --muted:#9aa6b5; --line:#2d3745;
+  --accent:#86b4f2; --accent-soft:#1d2d45; --on-accent:#0d1520;
+  --a:#f09a62; --b:#4fc4bc; --s:#aaa4ee;
+  --a-soft:#3a2a1e; --b-soft:#17322f; --s-soft:#28263d;
+  --stage:#141b24; --wall:#212a36; --panel:#d5d9de; --cavity:#aeb5bd; --edge:#5d6876; --metal:#7c8793;
+  --ok:#5cc98a; --warn:#e2ab52; --bad:#f08172;
+  --c1:#6f819a; --c2:#b9a686; --c3:#566a5c; --c4:#a97c7c; --c5:#394456; --c6:#c3bfb4;
+  color-scheme:dark }
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.55}
+.wrap{max-width:1180px;margin:0 auto;padding-block:28px 56px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  display:flex;flex-direction:column;gap:28px}
+h1{font-size:clamp(24px,4vw,34px);line-height:1.15;margin:0;font-weight:700;letter-spacing:-.02em;text-wrap:balance}
+h2{font-size:18px;margin:0;font-weight:700;letter-spacing:-.01em}
+h3{font-size:14px;margin:0;font-weight:600}
+p{margin:0}
+.lede{color:var(--muted);max-width:62ch}
+.mono,.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent)}
+header{display:flex;flex-direction:column;gap:8px}
+.sec{display:flex;flex-direction:column;gap:12px}
+.sec-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 14px;justify-content:space-between}
+.hint{color:var(--muted);font-size:13px}
+a{color:var(--accent)}
+button,select,input{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* candidate chips */
+.chips{display:grid;grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:8px}
+.chip{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:10px 12px;text-align:left;
+  display:flex;flex-direction:column;gap:4px;min-width:0}
+.chip:hover{border-color:var(--accent)}
+.chip[aria-pressed="true"]{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent);background:var(--accent-soft)}
+.chip .w{font-family:var(--mono);font-weight:500;font-size:14px}
+.chip .mini{display:flex;height:8px;gap:1px;background:var(--stage);border-radius:2px;overflow:hidden}
+.chip .mini i{display:block;height:100%}
+.chip .meta{font-size:12px;color:var(--muted);display:flex;justify-content:space-between;gap:6px;flex-wrap:wrap}
+.chip .best{font-size:11px;font-weight:600;color:var(--accent)}
+
+/* work area */
+.work{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:16px;align-items:start}
+@media (max-width:920px){.work{grid-template-columns:minmax(0,1fr)}}
+.stage{background:var(--surface);border:1px solid var(--line);border-radius:8px;min-width:0;overflow:hidden}
+.bar{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;justify-content:space-between;padding:10px 12px;border-bottom:1px solid var(--line)}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.seg button{border:0;background:transparent;padding:6px 12px;font-size:13px;font-weight:500;color:var(--muted)}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--on-accent)}
+.seg.own button[data-o="a"][aria-pressed="true"]{background:var(--a)}
+.seg.own button[data-o="b"][aria-pressed="true"]{background:var(--b)}
+.seg.own button[data-o="s"][aria-pressed="true"]{background:var(--s)}
+.checks{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:13px;color:var(--muted)}
+.checks label{display:inline-flex;gap:6px;align-items:center;cursor:pointer}
+.canvas{background:var(--stage);padding:6px}
+#elev{display:block;width:100%;height:auto;user-select:none;-webkit-user-select:none}
+#three{position:relative}
+#cv{display:block;width:100%;touch-action:none;cursor:grab;border-radius:4px}
+#cv:active{cursor:grabbing}
+.legend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;color:var(--muted);padding:8px 6px 2px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+.status{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));border-top:1px solid var(--line)}
+.status div{padding:9px 12px;font-size:13px;border-right:1px solid var(--line);min-width:0}
+.status b{display:block;font-family:var(--mono);font-weight:500;font-size:14px}
+.status .ok b{color:var(--ok)} .status .warn b{color:var(--warn)} .status .bad b{color:var(--bad)}
+.status span{color:var(--muted);font-size:12px}
+
+/* svg drawing */
+.dw-wall{fill:var(--wall)} .dw-solid{fill:var(--edge)} .dw-floor{stroke:var(--ink);stroke-width:.8}
+.dw-open{stroke:var(--edge);stroke-width:.5;stroke-dasharray:3 3;fill:none}
+.dw-frame{fill:var(--panel);stroke:var(--edge);stroke-width:.45}
+.dw-cav{fill:var(--cavity)}
+.dw-sel{fill:none;stroke:var(--accent);stroke-width:1.3}
+.dw-rail{fill:var(--metal);stroke:var(--edge);stroke-width:.25}
+.dw-shelf{fill:var(--panel);stroke:var(--edge);stroke-width:.3}
+.dw-drawer{fill:var(--panel);stroke:var(--edge);stroke-width:.4}
+.dw-groove{stroke:var(--edge);stroke-width:.3}
+.dw-basket{fill:url(#mesh);stroke:var(--edge);stroke-width:.4}
+.dw-glass{fill:var(--accent);fill-opacity:.25;stroke:var(--edge);stroke-width:.25}
+.dw-steel{fill:none;stroke:var(--edge);stroke-width:1}
+.it{cursor:ns-resize;touch-action:none}
+.it.on .dw-rail,.it.on .dw-shelf,.it.on .dw-drawer,.it.on .dw-basket{stroke:var(--accent);stroke-width:1}
+.hit{fill:transparent}
+.unit{cursor:pointer}
+.g1{fill:var(--c1)}.g2{fill:var(--c2)}.g3{fill:var(--c3)}.g4{fill:var(--c4)}.g5{fill:var(--c5)}.g6{fill:var(--c6)}
+.gar{stroke:var(--edge);stroke-width:.15;pointer-events:none}
+.dim{font-family:var(--mono);fill:var(--muted)} .dim-l{stroke:var(--muted);stroke-width:.3;fill:none}
+.dim.warn{fill:var(--warn)} .dim.bad{fill:var(--bad)}
+.t-a{fill:var(--a)}.t-b{fill:var(--b)}.t-s{fill:var(--s)}
+.s-a{stroke:var(--a)}.s-b{stroke:var(--b)}.s-s{stroke:var(--s)}
+.own-tag{font-family:var(--sans);font-weight:600}
+.fig{pointer-events:none;opacity:.26;fill:none;stroke-linecap:round}
+.halo{paint-order:stroke;stroke:var(--wall);stroke-width:1.1;stroke-linejoin:round}
+.reach{stroke-width:.45;stroke-dasharray:1.5 2.5;fill:none;pointer-events:none}
+
+/* side panel */
+.side{display:flex;flex-direction:column;gap:12px;min-width:0}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:14px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.row{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.row > .lab{font-size:12px;color:var(--muted);flex:0 0 100%}
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:6px;padding:5px 10px;font-size:13px}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--on-accent);font-weight:600}
+.btn.pri:hover{color:var(--on-accent);opacity:.9}
+.btn[disabled]{opacity:.4;cursor:default}
+select,input[type=number]{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:5px 8px;min-width:0}
+select{max-width:100%}
+input[type=number]{width:72px;font-family:var(--mono)}
+.note{font-size:12.5px;color:var(--muted)}
+.note.warn{color:var(--warn)} .note.bad{color:var(--bad)}
+.kv{display:flex;justify-content:space-between;gap:10px;font-size:13px}
+.kv b{font-family:var(--mono);font-weight:500}
+
+/* fit bars */
+.fit{display:grid;grid-template-columns:auto minmax(0,1fr) minmax(0,1fr);gap:7px 10px;align-items:center;font-size:12.5px}
+.fit .hd{font-weight:600}
+.fit .hd.a{color:var(--a)} .fit .hd.b{color:var(--b)}
+.meter{display:flex;flex-direction:column;gap:2px;min-width:0}
+.meter .tr{height:7px;border-radius:2px;background:var(--stage);overflow:hidden}
+.meter .tr i{display:block;height:100%}
+.meter.a .tr i{background:var(--a)} .meter.b .tr i{background:var(--b)}
+.meter .tx{font-family:var(--mono);font-size:11.5px;color:var(--muted);white-space:nowrap}
+.meter.short .tx{color:var(--bad)}
+.pct{font-family:var(--mono);font-size:26px;font-weight:500;line-height:1}
+.total{font-family:var(--mono);font-size:22px;font-weight:500}
+
+/* lower sections */
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,330px),1fr));gap:16px}
+.form{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 12px;align-items:center;font-size:13.5px}
+.inv{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px 10px;align-items:center;font-size:13.5px}
+.inv .hd{font-weight:600;font-size:12.5px;text-align:center}
+.tbl{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th,td{padding:7px 10px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+th{font-size:12px;color:var(--muted);font-weight:600}
+td.r,th.r{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums}
+tfoot td{font-weight:600;border-bottom:0}
+ul.facts{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px;max-width:70ch}
+ul.facts li::marker{color:var(--accent)}
+details{font-size:13px;color:var(--muted)}
+details summary{cursor:pointer;color:var(--ink)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+/* corner, unfolded side wall, natural-language box */
+.dw-wall2{fill:var(--wall);fill-opacity:.62}
+.dw-fold{stroke:var(--ink);stroke-width:.5;stroke-dasharray:4 3}
+.dw-cover{fill:var(--panel);stroke:var(--edge);stroke-width:.45}
+.dw-div{fill:var(--panel);stroke:var(--edge);stroke-width:.35}
+.wall-tag{font-family:var(--sans);font-weight:600;fill:var(--muted)}
+.nl{display:flex;flex-direction:column;gap:10px}
+.nl textarea{width:100%;min-height:62px;resize:vertical;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:9px 11px;line-height:1.5}
+.nl textarea:focus{border-color:var(--accent);outline:none;box-shadow:0 0 0 2px var(--accent-soft)}
+.nl .ex{display:flex;flex-wrap:wrap;gap:6px}
+.nl .ex button{border:1px dashed var(--line);background:transparent;border-radius:14px;padding:3px 10px;font-size:12.5px;color:var(--muted)}
+.nl .ex button:hover{border-color:var(--accent);color:var(--accent)}
+.nl-out{font-size:13.5px;border-left:3px solid var(--accent);padding:6px 10px;background:var(--accent-soft);border-radius:0 6px 6px 0}
+.nl-out.err{border-left-color:var(--bad);background:transparent;color:var(--bad)}
+.nl-out.muted{border-left-color:var(--line);background:transparent;color:var(--muted)}
+.nl-out ul{margin:4px 0 0;padding-left:18px}
+.chip .no{font-family:var(--mono);font-size:11px;color:var(--muted);margin-right:4px}
+.chip .sub{font-size:11.5px;color:var(--muted)}
+.dw-opening{fill:var(--surface);stroke:var(--edge);stroke-width:.5;stroke-dasharray:3 2}
+#plan{display:block;width:100%;max-height:620px}
+.pl-floor{fill:var(--surface)}
+.pl-wall{fill:var(--edge)}
+.pl-win{fill:var(--accent-soft)} .pl-winl{stroke:var(--accent);stroke-width:1}
+.pl-door{fill:none;stroke:var(--muted);stroke-width:.6;stroke-dasharray:2 1.5} .pl-leaf{stroke:var(--ink);stroke-width:1.4}
+.pl-bb{fill:var(--line)}
+.pl-u{stroke:var(--edge);stroke-width:.6;cursor:pointer}
+.pl-u.on{stroke:var(--accent);stroke-width:1.6}
+.pl-a{fill:var(--a-soft)} .pl-b{fill:var(--b-soft)} .pl-s{fill:var(--s-soft)}
+.pl-pull{fill:var(--accent);fill-opacity:.1;stroke:var(--accent);stroke-width:.4;stroke-dasharray:2 1.5}
+.pl-free{stroke:var(--ok);stroke-width:.5;marker-start:none}
+.pl-lab{font-family:var(--sans);font-weight:600;fill:var(--ink)}
+.pl-ulab{font-family:var(--sans);font-weight:600;fill:var(--ink)}
+</style>
+
+<div class="wrap">
+  <header>
+    <span class="eyebrow">IKEA PAX · 도어 없는 오픈형 · 부부 2인</span>
+    <h1>PAX 2.4m 벽 플래너</h1>
+    <p class="lede">좌상단 방의 서쪽 240cm 벽에 들어가는 프레임 조합을 계산해 두 사람의 옷 수량에 맞춰 순위를 매깁니다. 방 평면도에서 창·문과의 간섭을, 정면도에서 내부 구성을, 3D에서 방 안 모습을 봅니다. 부품을 끌어 옮기거나 입력창에 말로 지시하면 수납량과 견적이 바로 바뀝니다.</p>
+    <p class="hint">가격·규격: IKEA 코리아 온라인몰·PAX 구매 가이드, 2026-11-11 조회, 화이트 기준. 옷 수량과 수납량 환산은 편집 가능한 예시값입니다.</p>
+    <div class="row" id="shareRow" hidden>
+      <button type="button" class="btn pri" id="btnShare">지금 구성을 링크로 보내기</button>
+      <span class="note" id="shareMsg">고친 내용은 이 기기에만 저장됩니다. 상대에게 보여 주려면 링크로 보내세요.</span>
+      <input type="text" id="shareUrl" readonly hidden style="flex:1 1 100%;font-family:var(--mono);font-size:12px;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:5px 8px">
+    </div>
+  </header>
+
+  <section class="card nl" id="nlCard">
+    <div class="sec-head"><h2>말로 바꾸기</h2><span class="hint" id="nlHint">Claude가 지시를 읽고 플래너를 바꿉니다. 처음 한 번 사용 허락을 묻습니다.</span></div>
+    <form id="nlForm" class="nl">
+      <label for="nlIn" class="hint">예: 문 쪽 벽에 코너형 PAX를 넣고 남편 칸은 2단 걸이로 바꿔줘</label>
+      <textarea id="nlIn" rows="2" placeholder="원하는 변경을 적어 주세요"></textarea>
+      <div class="ex" id="nlEx">
+        <button type="button">문 쪽 벽에 코너형 PAX 넣어줘</button>
+        <button type="button">코너유닛은 옆 벽으로 옮기고 깊이 35짜리로 바꿔줘</button>
+        <button type="button">문은 맞은편 벽에서 30cm, 폭은 90cm야</button>
+        <button type="button">남편 칸 맨 아래에 서랍 하나 더 넣어줘</button>
+        <button type="button">2번 조합으로 바꾸고 3D로 서랍 열어서 보여줘</button>
+      </div>
+      <div class="row" id="nlPassRow" hidden>
+        <label for="nlPass" class="lab">암호 (한 번만 넣으면 이 기기에서 기억합니다)</label>
+        <input type="password" id="nlPass" autocomplete="current-password" style="background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:5px 8px;min-width:0;flex:1 1 160px">
+        <button type="button" class="btn" id="nlPassSave">저장</button>
+      </div>
+      <div class="row">
+        <button type="submit" class="btn pri" id="nlGo">적용</button>
+        <button type="button" class="btn" id="nlStop" hidden>중지</button>
+        <button type="button" class="btn" id="nlUndo" hidden>되돌리기</button>
+      </div>
+      <div class="nl-out muted" id="nlOut">claude.ai에서 열면 바로 쓸 수 있습니다. 아래 컨트롤로도 모든 항목을 직접 바꿀 수 있습니다.</div>
+    </form>
+  </section>
+
+  <section class="sec">
+    <div class="sec-head">
+      <h2>들어가는 프레임 조합</h2>
+      <span class="hint">현재 옷 수량 기준 충족률 순. 누르면 자동 맞춤된 내부 구성이 적용됩니다.</span>
+    </div>
+    <div class="chips" id="chips"></div>
+  </section>
+
+  <section class="work">
+    <div class="stage">
+      <div class="bar">
+        <div class="seg" id="viewSeg" role="group" aria-label="보기">
+          <button type="button" data-v="plan" aria-pressed="true">방 평면도</button>
+          <button type="button" data-v="front" aria-pressed="false">정면도</button>
+          <button type="button" data-v="three" aria-pressed="false">3D</button>
+        </div>
+        <div class="checks">
+          <label><input type="checkbox" id="ckClothes" checked> 옷 표시</label>
+          <label><input type="checkbox" id="ckPeople" checked> 사람·손 높이</label>
+          <label id="lbOpen" hidden><input type="checkbox" id="ckOpen"> 서랍 열기</label>
+        </div>
+      </div>
+      <div class="canvas">
+        <div id="planV"><svg id="plan" role="img" aria-label="방 평면도"></svg>
+          <div class="legend">
+            <span><i style="background:var(--a-soft);border:1px solid var(--edge)"></i>아내 칸</span>
+            <span><i style="background:var(--s-soft);border:1px solid var(--edge)"></i>공용 칸</span>
+            <span><i style="background:var(--b-soft);border:1px solid var(--edge)"></i>남편 칸</span>
+            <span><i style="background:repeating-linear-gradient(45deg,var(--edge) 0 1px,var(--panel) 1px 3px)"></i>코너 프레임의 가려진 칸</span>
+            <span><i style="border:1px dashed var(--accent)"></i>서랍 인출 구역 45cm</span>
+            <span>칸을 누르면 오른쪽에서 고칠 수 있습니다</span>
+          </div>
+        </div>
+        <div id="front" hidden><svg id="elev" role="img" aria-label="옷장 정면도와 펼친 옆 벽"></svg></div>
+        <div id="three" hidden>
+          <canvas id="cv"></canvas>
+          <p class="note" id="threeMsg" hidden>3D 라이브러리를 불러오지 못했습니다. 정면도는 그대로 쓸 수 있습니다.</p>
+          <div class="legend">
+            <span><i style="background:var(--accent);opacity:.45"></i>서랍·바구니 인출 구역(약 45cm)</span>
+            <span><i style="background:var(--edge)"></i>맞은편 가구·벽 위치</span>
+            <span>끌어서 회전 · 휠/핀치로 확대</span>
+          </div>
+        </div>
+      </div>
+      <div class="status" id="status"></div>
+    </div>
+
+    <aside class="side">
+      <div class="card" id="editor"></div>
+      <div class="card" id="fitCard"></div>
+      <div class="card" id="costCard"></div>
+    </aside>
+  </section>
+
+  <section class="card" id="roomCard" hidden></section>
+
+  <section class="grid2">
+    <div class="card">
+      <h2>공간</h2>
+      <div class="form">
+        <label for="inWall">정면 벽 폭 (cm)</label><input type="number" id="inWall" min="120" max="400" step="1">
+        <label for="inCeil">천장 높이 (cm)</label><input type="number" id="inCeil" min="200" max="300" step="1">
+        <label for="inEnds">벽 양 끝</label>
+        <select id="inEnds"><option value="closed">양쪽 다 벽(알코브)</option><option value="left">왼쪽만 트임</option><option value="right">오른쪽만 트임</option><option value="both">양쪽 다 트임</option></select>
+        <label for="inAlign">남는 폭 위치</label>
+        <select id="inAlign"><option value="left">오른쪽에 모으기</option><option value="center">양쪽으로 나누기</option><option value="right">왼쪽에 모으기</option></select>
+        <label for="inFront">옷장 앞 빈 공간 (cm)</label><input type="number" id="inFront" min="30" max="300" step="5">
+        <label for="inBB">걸레받이 두께 (cm)</label><input type="number" id="inBB" min="0" max="5" step="0.1">
+        <label for="inHa">아내 키 (cm)</label><input type="number" id="inHa" min="140" max="200" step="1">
+        <label for="inHb">남편 키 (cm)</label><input type="number" id="inHb" min="140" max="210" step="1">
+      </div>
+      <p class="note">정면 벽 폭을 걸레받이 위 벽면에서 쟀다면 걸레받이 두께를 그대로 두고, 바닥에서 걸레받이 끝까지 쟀다면 0으로 바꾸세요.</p>
+      <h3>방 (스케치 치수)</h3>
+      <label class="note" style="display:flex;gap:6px;align-items:center;cursor:pointer"><input type="checkbox" id="ckRoom"> 좌상단 방 스케치로 계산 (옷장 벽 = 서쪽 240 벽)</label>
+      <div class="form">
+        <label for="inRoomD">방 폭: 옷장 벽 ↔ 맞은편 벽 (cm)</label><input type="number" id="inRoomD" min="150" max="600" step="1">
+        <label for="inWinS">창 쪽 벽: 옷장 벽에서 창틀까지 (cm)</label><input type="number" id="inWinS" min="0" max="500" step="1">
+        <label for="inWinW">창 폭 (cm)</label><input type="number" id="inWinW" min="30" max="400" step="1">
+        <label for="inDoorE">문 쪽 벽: 맞은편 벽에서 문틀까지 (cm)</label><input type="number" id="inDoorE" min="0" max="500" step="1">
+        <label for="inDoorW">문 폭, 문틀 포함 (cm)</label><input type="number" id="inDoorW" min="60" max="200" step="1">
+      </div>
+      <p class="note">창 위치·폭과 문 폭은 스케치에서 추정한 값입니다(창 약 71~171cm, 문 85cm, 맞은편 벽에서 33cm). 실측으로 바꾸면 조합과 경고가 다시 계산됩니다.</p>
+      <h3>코너형 구성</h3>
+      <div class="form">
+        <label for="inCSide">코너 위치</label>
+        <select id="inCSide"><option value="none">코너 없음</option><option value="left">왼쪽 모서리</option><option value="right">오른쪽 모서리</option></select>
+        <label for="inCPlace">코너유닛을 둘 벽</label>
+        <select id="inCPlace"><option value="main">정면 벽 (프레임은 옆 벽)</option><option value="side">옆 벽 (프레임은 정면 벽)</option></select>
+        <label for="inCKind">코너 종류</label>
+        <select id="inCKind"><option value="58">깊이 58 코너유닛 + 100 프레임</option><option value="35">깊이 35 코너유닛 + 75 프레임</option></select>
+        <label for="inCSideLen">옆 벽에서 쓸 수 있는 길이 (cm)</label><input type="number" id="inCSideLen" min="30" max="400" step="1">
+      </div>
+      <p class="note">코너 쪽 옆 벽에 문이나 창이 있으면, 모서리에서 문틀까지의 길이를 넣으세요. 58 코너는 양쪽 벽에 110.5cm씩 필요하고, 35 코너는 프레임 쪽 벽 88cm, 코너유닛 쪽 벽 110.5cm가 필요합니다.</p>
+    </div>
+    <div class="card">
+      <h2>옷 수량 <span class="hint">(예시값, 실제 수량으로 바꾸세요)</span></h2>
+      <div class="inv" id="inv"></div>
+      <div class="row">
+        <button type="button" class="btn pri" id="btnAuto">현재 조합에 자동 맞춤</button>
+        <button type="button" class="btn" id="btnReset">처음 상태로</button>
+      </div>
+      <details>
+        <summary>수납량 환산 기준</summary>
+        <p>옷걸이봉 유효 길이 = 봉 폭 − 3.5cm. 긴 옷 1벌 5cm, 짧은 옷 1벌 3.3cm, 옷걸이에 건 바지 3.5cm. 봉 아래 여유가 130cm 이상이면 긴 옷, 85cm 이상이면 짧은 옷 자리로 봅니다. 선반은 28cm 폭 더미당 최대 9벌, 서랍은 폭 100cm 기준 약 26점, 메시바구니 약 21점, 바지걸이 약 13벌로 환산합니다. 코너 프레임은 아래쪽 서랍·선반을 보이는 50cm 칸에만 넣고, 옷걸이봉은 전체 폭에 걸어 옷을 밀어 쓰는 것으로 계산합니다. 모두 어림값입니다.</p>
+      </details>
+    </div>
+  </section>
+
+  <section class="sec">
+    <div class="sec-head"><h2>견적 내역</h2><span class="hint">화이트 기준 단가, 조립·배송비 제외</span></div>
+    <div class="card"><div class="tbl" id="costTable"></div>
+      <label class="note" style="display:flex;gap:6px;align-items:center;cursor:pointer"><input type="checkbox" id="ckLight"> 프레임마다 센서 조명(ÖVERSIDAN) 추가</label>
+    </div>
+  </section>
+
+  <section class="grid2">
+    <div class="sec">
+      <h2>IKEA 코리아에서 확인한 것</h2>
+      <ul class="facts">
+        <li>한국 몰의 프레임은 높이 201cm 한 종류입니다(폭 50·75·100, 깊이 35·58). 236cm 프레임은 현재 목록에 없습니다.</li>
+        <li>2.4m에 들어가는 프레임 최대 폭은 225cm(100+75+50, 75×3, 50×3+75)이고 15cm가 남습니다. 보조미드유닛(35cm)을 끼우면 235cm까지 채울 수 있습니다.</li>
+        <li>추가코너유닛+선반4는 53×58cm ₩190,000, 53×35cm ₩180,000이며 선반 4개가 들어 있습니다. 75·100cm 프레임과 짝을 이루고, 짝이 되는 프레임 폭이 약 11cm(35 깊이는 13cm) 늘어난 것처럼 벽을 차지합니다.</li>
+        <li>구매 가이드 도면 기준으로 58 코너유닛 + 100×58 프레임은 두 벽에 110.5×110.5cm, 35 코너유닛 + 75×58 프레임은 88×110.5cm를 씁니다. 짝 프레임 앞면 중 코너유닛 옆면에 가려지는 부분은 깊숙한 보관 공간이 됩니다.</li>
+        <li>기성 코너옷장 211/161cm(₩1,167,000)는 100+100 프레임 쪽 211cm, 50 프레임 쪽 161cm입니다. 정면 벽 2.4m에 211cm 쪽을 놓으려면 옆 벽이 161cm 이상 필요합니다.</li>
+        <li>IKEA의 250cm 오픈형 기성 조합(₩1,015,000)은 2.4m 벽에 들어가지 않습니다. 175cm 기성 조합(75+50+50)은 ₩582,500입니다.</li>
+        <li>천장 202cm 이상이면 세운 채로 조립할 수 있고, 2명이 조립해야 하며 벽 고정은 필수입니다.</li>
+      </ul>
+      <p class="hint"><a href="https://www.ikea.com/kr/ko/cat/pax-system-19086/" target="_blank" rel="noopener">PAX 시스템</a> · <a href="https://www.ikea.com/kr/ko/p/pax-add-on-corner-unit-with-4-shelves-white-60346937/" target="_blank" rel="noopener">추가코너유닛</a> · <a href="https://www.ikea.com/kr/ko/cat/pax-wardrobes-without-doors-19110/" target="_blank" rel="noopener">오픈형 조합</a> · <a href="https://www.ikea.com/kr/ko/cat/pax-interior-organisers-19113/" target="_blank" rel="noopener">내부 정리용품</a></p>
+    </div>
+    <div class="sec">
+      <h2>도어 없이 쓸 때</h2>
+      <ul class="facts">
+        <li>문 열림 공간이 필요 없어, 옷장 앞은 서랍을 당기고 설 자리(약 90cm)만 있으면 됩니다.</li>
+        <li>코너형은 옆 벽 쪽으로 110cm 안팎 튀어나옵니다. 그 앞에 침대나 문이 오면 통로가 막히는지 3D에서 확인하세요.</li>
+        <li>코너 프레임의 가려진 쪽은 손이 잘 닿지 않습니다. 철 지난 옷이나 여행가방처럼 가끔 꺼내는 것을 두기 좋습니다.</li>
+        <li>속옷·양말처럼 보이고 싶지 않은 것은 서랍에, 접은 니트처럼 보여도 괜찮은 것은 선반에 둡니다. 메시바구니는 내용물이 보입니다.</li>
+        <li>먼지는 어깨선에 쌓입니다. 철 지난 옷은 프레임 위 여유 공간의 뚜껑 있는 상자로 올리고, 걸린 옷은 자주 입는 것만 둡니다.</li>
+        <li>슬라이딩 도어는 150·200cm 폭 세트로만 팔립니다. 코너형을 넣으면 나중에 슬라이딩 도어를 달기 어렵고, 여닫이 도어는 달 수 있습니다.</li>
+      </ul>
+    </div>
+  </section>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = s => document.querySelector(s);
+const STANDALONE = !!window.PAX_STANDALONE;
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const r1 = v => Math.round(v * 10) / 10;
+const won = n => '₩' + Math.round(n).toLocaleString('ko-KR');
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;'}[c]));
+const clone = o => JSON.parse(JSON.stringify(o));
+const SLOT = 3.2, BASE = 7, TOP = 199.4, FH = 201.2, DEPTH = 58, FD = 58, CU_W = 52.5, DIV_TOP = 88.5;
+const T = {
+  rail:{n:'옷걸이봉',h:3}, shelf:{n:'선반',h:1.8}, drawer:{n:'서랍',h:16},
+  basket:{n:'메시바구니',h:16}, tray:{n:'인출식트레이',h:4}, pants:{n:'인출식바지걸이',h:3.5}
+};
+const PULL = {drawer:1, basket:1, tray:1, pants:1};
+/* IKEA Korea, white, checked 2026-11-11 */
+const PRICE = {
+  frame:{50:120000,75:130000,100:140000},
+  rail:{50:5000,75:7500,100:10000}, shelf:{50:15000,75:20000,100:25000},
+  drawer:{50:35000,75:40000,100:45000}, basket:{50:22000,75:27000,100:32000},
+  tray:{50:30000,75:35000,100:40000}, pants:{50:45000,75:50000,100:55000},
+  light:{50:9900,75:14900,100:19900}, mid:140000, end:120000,
+  cu:{58:190000, 35:180000}, divider:55000
+};
+/* corner geometry from the IKEA Korea PAX buying guide (p.5): 58 corner + 100x58 frame = 110.5 x 110.5; 35 corner + 75x58 frame = 88 x 110.5 */
+const CK = {'58':{cd:58, fw:100, off:10.5}, '35':{cd:35, fw:75, off:13}};
+const PRESET = {
+  double:{n:'2단 걸이', it:[['rail',57],['rail',28]]},
+  long:{n:'긴 옷 걸이 + 서랍 1', it:[['shelf',53],['rail',51],['drawer',0]]},
+  hangdr:{n:'걸이 + 서랍 4', it:[['shelf',53],['rail',51],['drawer',0],['drawer',5],['drawer',10],['drawer',15]]},
+  hangbk:{n:'걸이 + 메시바구니 3', it:[['shelf',53],['rail',51],['basket',0],['basket',6],['basket',12]]},
+  hangsh:{n:'걸이 + 선반 2', it:[['shelf',53],['rail',51],['shelf',10],['shelf',20]]},
+  pants:{n:'걸이 + 바지걸이', it:[['rail',57],['pants',28],['drawer',0]]},
+  tower:{n:'서랍 4 + 선반 3', it:[['drawer',0],['drawer',5],['drawer',10],['drawer',15],['tray',21],['shelf',30],['shelf',40],['shelf',50]]},
+  shelves:{n:'선반 5', it:[['shelf',10],['shelf',20],['shelf',30],['shelf',40],['shelf',50]]}
+};
+const CU_PRESET = {
+  curail:{n:'걸이 + 선반 2', it:[['shelf',53],['rail',51],['shelf',22]]},
+  cushelf:{n:'선반 4', it:[['shelf',8],['shelf',22],['shelf',36],['shelf',50]]}
+};
+const PKEYS = Object.keys(PRESET);
+const cuKeys = kind => kind === '58' ? ['curail', 'cushelf'] : ['cushelf'];
+const presetOf = p => PRESET[p] || CU_PRESET[p];
+const OWN = {a:'아내', b:'남편', s:'공용'};
+const CATS = [
+  {k:'long', n:'긴 옷 걸이', u:'벌'}, {k:'short', n:'짧은 옷 걸이', u:'벌'}, {k:'pants', n:'바지걸이', u:'벌'},
+  {k:'fold', n:'접는 옷(선반)', u:'벌'}, {k:'small', n:'서랍·바구니', u:'점'}
+];
+const DEF = () => ({
+  wall:240, ceil:230, ends:'closed', align:'left', front:90, ha:162, hb:175, bb:1.5,
+  room:{on:true, depth:251, winStart:71, winW:100, doorFromE:33, doorW:85},
+  inv:{a:{long:8,short:28,pants:8,fold:20,small:40}, b:{long:3,short:30,pants:8,fold:20,small:40}},
+  corner:{side:'left', place:'main', kind:'58', own:'a', sideLen:120, cf:null, cu:null},
+  units:[], sel:'m1', selItem:-1, view:'plan', clothes:true, people:true, open:false, light:false, chip:''
+});
+const KEY = 'pax240v3';
+let S = DEF();
+try { const raw = localStorage.getItem(KEY); if (raw) { const o = JSON.parse(raw); if (o && Array.isArray(o.units) && o.corner && o.room) S = Object.assign(DEF(), o); } } catch (e) {}
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} };
+
+const mkItems = p => presetOf(p).it.map(([t, n]) => ({t, n}));
+const mkUnit = (k, w, own, p) => k === 'f' ? {k, w, own, p, items: mkItems(p)} : {k, w: k === 'mid' ? 35 : 20, own:'s', items:[]};
+const mkCF = (kind, own, p) => ({k:'cf', kind, w:CK[kind].fw, own, p, items:mkItems(p)});
+const mkCU = (kind, own, p) => ({k:'cu', kind, w:CU_W, own, p, items:mkItems(p)});
+const iy = it => BASE + it.n * SLOT;
+const cornerOn = () => S.corner.side === 'left' || S.corner.side === 'right';
+const ownerOf = u => (u.k === 'mid' || u.k === 'end') ? 's' : u.own;
+function ensureCorner() {
+  const c = S.corner;
+  if (!cornerOn()) return;
+  if (!CK[c.kind]) c.kind = '58';
+  if (!c.cf || c.cf.kind !== c.kind) c.cf = mkCF(c.kind, c.own, 'hangdr');
+  if (!c.cu || c.cu.kind !== c.kind) c.cu = mkCU(c.kind, c.own, cuKeys(c.kind)[0]);
+  c.cf.own = c.cu.own = c.own;
+}
+function allUnits() {
+  const list = S.units.map((u, i) => { u._key = 'm' + (i + 1); return u; });
+  if (cornerOn()) { ensureCorner(); S.corner.cf._key = 'cf'; S.corner.cu._key = 'cu'; list.push(S.corner.cf, S.corner.cu); }
+  return list;
+}
+function getUnit(key) {
+  if (key === 'cf' || key === 'cu') return cornerOn() ? (ensureCorner(), S.corner[key]) : null;
+  const m = /^m(\d+)$/.exec(String(key || ''));
+  return m ? S.units[+m[1] - 1] || null : null;
+}
+const unitName = u => u.k === 'cf' ? '코너 프레임' : u.k === 'cu' ? '추가코너유닛' : u.k === 'mid' ? '보조미드유닛' : u.k === 'end' ? '보조엔드유닛' : '프레임';
+
+/* width of the KOMPLEMENT part an item uses */
+function itemWide(u, it) {
+  if (u.k === 'cu') return 50;
+  if (u.k === 'cf') return (it.t === 'rail' || (it.t === 'shelf' && iy(it) >= DIV_TOP)) ? u.w : 50;
+  return u.w;
+}
+const needsDivider = u => u.k === 'cf' && u.items.some(i => itemWide(u, i) === 50);
+const allowedTypes = u => u.k === 'cu' ? (u.kind === '58' ? ['shelf', 'rail'] : ['shelf']) : Object.keys(T);
+
+/* ---------- capacity model ---------- */
+function stats(u) {
+  const r = {long:0, short:0, pants:0, fold:0, small:0, warn:[]};
+  if (u.k === 'mid') { r.fold = 24; return r; }
+  if (u.k === 'end') return r;
+  const its = u.items.map(i => ({t:i.t, y:iy(i), h:T[i.t].h, w:itemWide(u, i)})).sort((a, b) => a.y - b.y);
+  const perStack = (c, w) => c >= 10 ? Math.max(1, Math.floor((w - 3.9) / 28)) * Math.min(9, Math.floor(c / 3.5)) : 0;
+  its.forEach((it, k) => {
+    const below = its[k - 1], above = its[k + 1];
+    const c = it.y - (below ? below.y + below.h : BASE);
+    if (it.t === 'rail') {
+      if (c >= 130) r.long += it.w - 3.5; else if (c >= 85) r.short += it.w - 3.5;
+      else r.warn.push('봉 아래 여유 ' + Math.round(c) + 'cm: 옷을 걸기에 짧습니다');
+    } else if (it.t === 'pants') {
+      if (c >= 65) r.pants += Math.floor((it.w - 3.9) / 7); else r.warn.push('바지걸이 아래 여유 ' + Math.round(c) + 'cm: 65cm 이상 필요');
+    } else if (it.t === 'shelf') {
+      if (!above || (above.t !== 'rail' && above.t !== 'pants')) r.fold += perStack((above ? above.y : TOP) - (it.y + it.h), it.w);
+    } else if (it.t === 'drawer') r.small += Math.round((it.w - 3.9) * 0.28);
+    else if (it.t === 'basket') r.small += Math.round((it.w - 3.9) * 0.22);
+    else if (it.t === 'tray') r.small += Math.round((it.w - 3.9) * 0.1);
+  });
+  if (its[0] && its[0].t === 'shelf') r.fold += perStack(its[0].y - BASE, its[0].w);
+  return r;
+}
+function unitCost(u, light) {
+  if (u.k === 'mid') return PRICE.mid;
+  if (u.k === 'end') return PRICE.end;
+  if (u.k === 'cu') {
+    let c = PRICE.cu[u.kind], sh = 0;
+    u.items.forEach(i => { if (i.t === 'rail') c += PRICE.rail[50]; else if (i.t === 'shelf' && ++sh > 4) c += PRICE.shelf[50]; });
+    return c;
+  }
+  let c = PRICE.frame[u.w] + (light ? PRICE.light[u.w] : 0);
+  u.items.forEach(i => { c += PRICE[i.t][itemWide(u, i)]; });
+  if (needsDivider(u)) c += PRICE.divider;
+  return c;
+}
+
+function alloc(nA, nB, cA, cB, cS) {
+  let hA = Math.min(nA, cA), hB = Math.min(nB, cB);
+  let lA = cA - hA, lB = cB - hB, dA = nA - hA, dB = nB - hB;
+  const d = dA + dB;
+  if (d > 0 && cS > 0) { const g = Math.min(cS, d), gA = g * dA / d; hA += gA; hB += g - gA; dA -= gA; dB -= g - gA; cS -= g; }
+  const bA = Math.min(dA, lB), bB = Math.min(dB, lA);
+  lB -= bA; lA -= bB;
+  return {hA, hB, bA, bB, lA, lB, lS: cS};
+}
+function fit(units, inv, pre) {
+  const z = () => ({long:0, short:0, pants:0, fold:0, small:0}), cap = {a:z(), b:z(), s:z()};
+  units.forEach((u, i) => { const st = pre ? pre[i] : stats(u), o = ownerOf(u);
+    for (const k in cap[o]) cap[o][k] += st[k]; });
+  const out = {}, A = inv.a, B = inv.b;
+  const pa = alloc(A.pants, B.pants, cap.a.pants, cap.b.pants, cap.s.pants);
+  const ovA = A.pants - pa.hA - pa.bA, ovB = B.pants - pa.hB - pa.bB;
+  const lo = alloc(A.long * 5, B.long * 5, cap.a.long, cap.b.long, cap.s.long);
+  const sh = alloc(A.short * 3.3 + ovA * 3.5, B.short * 3.3 + ovB * 3.5, cap.a.short + lo.lA, cap.b.short + lo.lB, cap.s.short + lo.lS);
+  const fo = alloc(A.fold, B.fold, cap.a.fold, cap.b.fold, cap.s.fold);
+  const sm = alloc(A.small, B.small, cap.a.small, cap.b.small, cap.s.small);
+  out.long = {nA:A.long, nB:B.long, hA:(lo.hA + lo.bA) / 5, hB:(lo.hB + lo.bB) / 5, bA:lo.bA / 5, bB:lo.bB / 5};
+  out.short = {nA:A.short + ovA * 3.5 / 3.3, nB:B.short + ovB * 3.5 / 3.3, hA:(sh.hA + sh.bA) / 3.3, hB:(sh.hB + sh.bB) / 3.3, bA:sh.bA / 3.3, bB:sh.bB / 3.3, ovA, ovB};
+  out.pants = {nA:A.pants, nB:B.pants, hA:pa.hA + pa.bA, hB:pa.hB + pa.bB, bA:pa.bA, bB:pa.bB, soft:true};
+  out.fold = {nA:A.fold, nB:B.fold, hA:fo.hA + fo.bA, hB:fo.hB + fo.bB, bA:fo.bA, bB:fo.bB};
+  out.small = {nA:A.small, nB:B.small, hA:sm.hA + sm.bA, hB:sm.hB + sm.bB, bA:sm.bA, bB:sm.bB};
+  const W = {long:5, short:3.3, fold:2, small:1};
+  let need = 0, got = 0, clean = 0;
+  for (const k in W) { const o = out[k], w = W[k];
+    need += w * (o.nA + o.nB); got += w * (o.hA + o.hB); clean += w * (o.hA + o.hB - 0.3 * (o.bA + o.bB)); }
+  out.pct = need > 0 ? got / need : 1;
+  out.score = need > 0 ? clean / need : 1;
+  return out;
+}
+
+/* ---------- vertical placement on the 32 mm hole grid ---------- */
+function validPos(u, i, n) {
+  const t = u.items[i].t, hh = T[t].h, y = BASE + n * SLOT;
+  if (n < 0 || y + hh > TOP + .01) return false;
+  if (t === 'rail' && y > TOP - 9) return false;
+  if (u.k === 'cf' && PULL[t] && y + hh > DIV_TOP + .5) return false;   /* pull-outs only in the 50 cm section under the divider */
+  return u.items.every((o, j) => j === i || !(y < iy(o) + T[o.t].h - .01 && iy(o) < y + hh - .01));
+}
+function addItem(u, t, h) {
+  if (!T[t]) throw new Error('모르는 부품: ' + t);
+  if (!allowedTypes(u).includes(t)) throw new Error(`${unitName(u)}에는 ${T[t].n}을(를) 넣을 수 없습니다`);
+  if (u.k === 'cu' && t === 'shelf' && u.items.filter(i => i.t === 'shelf').length >= 4) throw new Error('코너유닛 선반은 4개까지입니다');
+  const i = u.items.push({t, n:0}) - 1, maxN = Math.floor((TOP - BASE - T[t].h) / SLOT);
+  const pref = h != null && isFinite(h) ? Math.round((h - BASE) / SLOT) : t === 'rail' ? 51 : t === 'shelf' ? 30 : t === 'pants' ? 28 : 0;
+  for (let d = 0; d <= maxN + Math.abs(pref); d++) for (const n of [pref + d, pref - d]) {
+    if (n >= 0 && n <= maxN && validPos(u, i, n)) { u.items[i].n = n; return i; }
+  }
+  u.items.pop();
+  throw new Error(`${unitName(u)}에 ${T[t].n}을(를) 넣을 자리가 없습니다`);
+}
+
+/* ---------- corner geometry ---------- */
+function cornerGeoOf(c) {
+  const k = CK[c.kind] || CK['58'], frameOnSide = c.place === 'main';
+  return {k, frameOnSide, mainUse: frameOnSide ? FD + CU_W : k.off + k.fw, sideUse: frameOnSide ? k.off + k.fw : FD + CU_W};
+}
+const cornerGeo = () => cornerOn() ? cornerGeoOf(S.corner) : null;
+/* room from the floor-plan sketch: wardrobe on the west wall; facing it, left = south (door wall), right = north (window wall) */
+const bbv = () => clamp(Number(S.bb) || 0, 0, 5);
+const roomOn = () => !!(S.room && S.room.on);
+const doorStart = () => S.room.depth - S.room.doorFromE - S.room.doorW;
+const doorEnd = () => S.room.depth - S.room.doorFromE;
+const frontSpace = () => roomOn() ? r1(S.room.depth - 2 * bbv() - DEPTH) : S.front;
+const endClosed = side => roomOn() || (side === 'left' ? (S.ends === 'closed' || S.ends === 'right') : (S.ends === 'closed' || S.ends === 'left'));
+const sideLimit = side => roomOn() ? (side === 'left' ? doorStart() : S.room.winStart) : S.corner.sideLen;
+const sideName = side => roomOn() ? (side === 'left' ? '문 쪽 벽' : '창 쪽 벽') : (side === 'left' ? '왼쪽 벽' : '오른쪽 벽');
+const limitName = side => roomOn() ? (side === 'left' ? '문틀' : '창틀') : '사용 가능 끝';
+function mainBounds(cc) {
+  const W = S.wall, bb = bbv(), g = cc && (cc.side === 'left' || cc.side === 'right') ? cornerGeoOf(cc) : null;
+  let a0 = endClosed('left') ? bb : 0, a1 = W - (endClosed('right') ? bb : 0);
+  if (g) { if (cc.side === 'left') a0 = bb + g.mainUse; else a1 = W - bb - g.mainUse; }
+  return [a0, a1];
+}
+const sumW = () => S.units.reduce((s, u) => s + u.w, 0);
+function layout() {
+  const W = S.wall, g = cornerGeo(), bb = bbv();
+  const [a0, a1] = mainBounds(g ? S.corner : null);
+  const sum = sumW(), gap = a1 - a0 - sum;
+  let x = gap < 0 ? a0 : S.align === 'left' ? a0 : S.align === 'center' ? a0 + gap / 2 : a0 + gap;
+  const start = x;
+  S.units.forEach(u => { u._x = x; x += u.w; });
+  const L = {a0, a1, gap, g, start, sum};
+  if (g) {
+    ensureCorner();
+    const left = S.corner.side === 'left', fm = d => left ? bb + d : W - bb - d, fs = d => left ? -(bb + d) : W + bb + d, fw = d => left ? -d : W + d;
+    const rng = (f, d0, d1) => { const p = f(d0), q = f(d1); return [Math.min(p, q), Math.max(p, q)]; };
+    const k = g.k, ff = g.frameOnSide ? fs : fm, fc = g.frameOnSide ? fm : fs, cf = S.corner.cf, cu = S.corner.cu;
+    cf.w = k.fw; cf._x = rng(ff, k.off, k.off + k.fw)[0];
+    cf._span = rng(ff, k.cd, k.off + k.fw - 1.8); cf._cover = rng(ff, 0, k.cd); cf._wall = g.frameOnSide ? 'side' : 'main';
+    cf._coverLeft = cf._cover[0] < cf._span[0];
+    cu.w = CU_W; cu._x = rng(fc, FD, FD + CU_W)[0]; cu._end = rng(fc, 0, FD); cu._wall = g.frameOnSide ? 'main' : 'side'; cu._cd = k.cd;
+    cu._outerRight = fc(FD + CU_W) > fc(FD);
+    L.cornerMain = rng(fm, 0, g.mainUse); L.cornerSide = rng(fs, 0, g.sideUse);
+    L.sideShown = roomOn() ? clamp(sideLimit(S.corner.side) + 30, 60, S.room.depth) : S.corner.sideLen;
+    L.sideWall = rng(fw, 0, L.sideShown); L.fw = fw;
+  }
+  return L;
+}
+
+/* ---------- optimiser: owner + interior for every frame ---------- */
+const STAT = {f:{}, cf:{}, cu:{}}, PCOST = {f:{}, cf:{}, cu:{}};
+const CF_KEYS = PKEYS.filter(p => { const u = mkCF('58', 's', p); return u.items.every((it, i) => validPos(u, i, it.n)); });
+[50, 75, 100].forEach(w => { STAT.f[w] = {}; PCOST.f[w] = {};
+  PKEYS.forEach(p => { const u = mkUnit('f', w, 's', p); STAT.f[w][p] = stats(u); PCOST.f[w][p] = unitCost(u, false); }); });
+['58', '35'].forEach(k => {
+  STAT.cf[k] = {}; PCOST.cf[k] = {}; STAT.cu[k] = {}; PCOST.cu[k] = {};
+  CF_KEYS.forEach(p => { const u = mkCF(k, 's', p); STAT.cf[k][p] = stats(u); PCOST.cf[k][p] = unitCost(u, false); });
+  cuKeys(k).forEach(p => { const u = mkCU(k, 's', p); STAT.cu[k][p] = stats(u); PCOST.cu[k][p] = unitCost(u, false); });
+});
+const MIDSTAT = stats({k:'mid'});
+function rnd(seed) { let t = seed * 2654435761 >>> 0; return () => { t ^= t << 13; t >>>= 0; t ^= t >>> 17; t ^= t << 5; t >>>= 0; return t / 4294967296; }; }
+function optimise(widths, mid, fixedOwn, cc) {
+  const slots = widths.map((w, i) => ({type:'f', w, opts:(fixedOwn ? [fixedOwn[i]] : ['a', 'b', 's']).flatMap(o => PKEYS.map(p => ({o, p})))}));
+  if (cc) {
+    slots.push({type:'cf', kind:cc.kind, opts:CF_KEYS.map(p => ({o:cc.own, p}))});
+    slots.push({type:'cu', kind:cc.kind, opts:cuKeys(cc.kind).map(p => ({o:cc.own, p}))});
+  }
+  const evalCfg = cfg => {
+    const us = [], pre = [];
+    let cost = mid ? PRICE.mid : 0, shared = 0, hasA = false, hasB = false;
+    cfg.forEach((c, i) => {
+      const s = slots[i];
+      us.push({k:s.type, own:c.o});
+      pre.push(s.type === 'f' ? STAT.f[s.w][c.p] : STAT[s.type][s.kind][c.p]);
+      cost += s.type === 'f' ? PCOST.f[s.w][c.p] : PCOST[s.type][s.kind][c.p];
+      if (c.o === 's' && s.type === 'f') shared++;
+      if (c.o === 'a') hasA = true; if (c.o === 'b') hasB = true;
+    });
+    if (mid) { us.push({k:'mid'}); pre.push(MIDSTAT); }
+    const f = fit(us, S.inv, pre);
+    return {v: f.score * 1000 - cost / 100000 * 2.5 - shared * 3 - (hasA && hasB ? 0 : 25), f, cost};
+  };
+  const total = slots.reduce((t, s) => t * s.opts.length, 1);
+  let best = null;
+  const take = (cfg, e) => { if (!best || e.v > best.v + 1e-9) best = {v:e.v, f:e.f, cost:e.cost, cfg:cfg.slice()}; };
+  if (!slots.length) take([], evalCfg([]));
+  else if (total <= 30000) {
+    const cfg = slots.map(s => s.opts[0]);
+    for (let t = 0; t < total; t++) { let r = t; for (let i = 0; i < slots.length; i++) { const L = slots[i].opts.length; cfg[i] = slots[i].opts[r % L]; r = Math.floor(r / L); } take(cfg, evalCfg(cfg)); }
+  } else {
+    const R = rnd(slots.length * 97 + widths.reduce((a, b) => a + b, 0));
+    for (let s = 0; s < 8; s++) {
+      const cfg = slots.map(sl => sl.opts[Math.floor(R() * sl.opts.length)]);
+      let cur = evalCfg(cfg), improved = true, guard = 0;
+      while (improved && guard++ < 8) {
+        improved = false;
+        for (let i = 0; i < slots.length; i++) for (const c of slots[i].opts) {
+          if (cfg[i] === c) continue;
+          const keep = cfg[i]; cfg[i] = c;
+          const e = evalCfg(cfg);
+          if (e.v > cur.v + 1e-9) { cur = e; improved = true; } else cfg[i] = keep;
+        }
+      }
+      take(cfg, cur);
+    }
+  }
+  const n = widths.length;
+  let units = best.cfg.slice(0, n).map((c, i) => mkUnit('f', widths[i], c.o, c.p));
+  if (!fixedOwn) {
+    let rank = {a:0, s:1, b:2};
+    if (cc) { const near = cc.own === 'b' ? 'b' : 'a', far = near === 'a' ? 'b' : 'a';
+      rank = cc.side === 'left' ? {[near]:0, s:1, [far]:2} : {[far]:0, s:1, [near]:2}; }
+    units.sort((x, y) => rank[x.own] - rank[y.own] || y.w - x.w);
+  }
+  if (mid) units.splice(Math.ceil(units.length / 2), 0, mkUnit('mid', 35));
+  const res = {units, pct:best.f.pct, v:best.v, cost:best.cost, sum:widths.reduce((a, b) => a + b, 0) + (mid ? 35 : 0)};
+  if (cc) { res.cf = mkCF(cc.kind, cc.own, best.cfg[n].p); res.cu = mkCU(cc.kind, cc.own, best.cfg[n + 1].p); }
+  return res;
+}
+let CAND = [];
+function rankCandidates() {
+  const cfgs = cornerOn()
+    ? [['main', '58'], ['main', '35'], ['side', '58'], ['side', '35']].map(([place, kind]) => ({side:S.corner.side, place, kind, own:S.corner.own}))
+    : [null];
+  const out = [];
+  cfgs.forEach(cc => {
+    const g = cc ? cornerGeoOf(cc) : null, mb = mainBounds(cc), lim = mb[1] - mb[0] - 0.3;
+    const short = g ? g.sideUse + bbv() > sideLimit(cc.side) + .01 : false;
+    const combos = [];
+    (function rec(arr, sum, maxW) {
+      for (const w of [100, 75, 50]) { if (w > maxW || sum + w > lim || arr.length >= 6) continue; rec(arr.concat(w), sum + w, w); }
+      if ((arr.length >= 1 || (cc && lim < 50)) && lim - sum < 50) { combos.push({ws:arr, mid:false}); if (arr.length >= 2 && sum + 35 <= lim) combos.push({ws:arr, mid:true}); }
+    })([], 0, 100);
+    combos.forEach(c => {
+      const r = optimise(c.ws, c.mid, null, cc);
+      r.cc = cc; r.short = short; if (short) r.v -= 400;
+      r.id = (cc ? cc.place[0] + cc.kind : 'x') + '-' + (c.ws.join('+') || '0') + (c.mid ? '+m' : '');
+      out.push(r);
+    });
+  });
+  CAND = out.sort((a, b) => b.v - a.v);
+}
+const chipLabel = c => (c.cc ? '코너 + ' : '') + (c.units.length ? c.units.map(u => u.k === 'mid' ? '미드' : u.w).join('·') : '정면 없음');
+const chipSub = c => c.cc ? `코너유닛 ${c.cc.place === 'main' ? '정면' : '옆'} 벽 · 깊이 ${c.cc.kind}` : '';
+function applyCand(c) {
+  S.units = c.units.map(u => clone(u));
+  if (c.cc) { S.corner.place = c.cc.place; S.corner.kind = c.cc.kind; S.corner.cf = clone(c.cf); S.corner.cu = clone(c.cu); }
+  S.sel = S.units.length ? 'm1' : 'cf'; S.selItem = -1; S.chip = c.id;
+}
+function bestFor(place, kind) {
+  return CAND.find(c => c.cc && (!place || c.cc.place === place) && (!kind || c.cc.kind === kind)) || null;
+}
+
+/* ---------- shared drawing helpers ---------- */
+function sortedGeo(u) { return u.items.map((i, idx) => ({idx, t:i.t, y:iy(i), h:T[i.t].h, w:itemWide(u, i)})).sort((a, b) => a.y - b.y); }
+function garmentList(u, seed, g, below) {
+  const clear = g.y - (below ? below.y + below.h : BASE);
+  if (clear < 60) return [];
+  const long = clear >= 130, pitch = long ? 5 : 3.4, n = Math.floor((u.w - 5.2) / pitch), R = rnd(seed * 31 + g.idx * 7 + Math.round(u.w)), maxLen = clear - 7, list = [];
+  for (let k = 0; k < n; k++) {
+    const r = R(), len = long ? (r < .3 ? 70 + r * 50 : Math.min(maxLen, 100 + r * 45)) : Math.min(maxLen, 58 + r * 28);
+    list.push({x:2.6 + k * pitch, w:pitch - .9, len, c:1 + Math.floor(R() * 6)});
+  }
+  return list;
+}
+function foldClear(geo, k) {
+  const g = geo[k], above = geo[k + 1];
+  if (above && (above.t === 'rail' || above.t === 'pants')) return 0;
+  return (above ? above.y : TOP) - (g.y + g.h);
+}
+const seedOf = u => u._key === 'cf' ? 91 : u._key === 'cu' ? 97 : (parseInt(String(u._key).slice(1), 10) || 1) * 3;
+/* horizontal range an item occupies: [x0, width] */
+function itemRange(u, g) {
+  const ix = u._x + 1.8, iw = u.w - 3.6;
+  if (u.k === 'cf' && g.w === 50) return [u._span[0] + (u._coverLeft ? 0 : 0), u._span[1] - u._span[0]];
+  return [ix, iw];
+}
+
+/* ---------- front elevation (main wall + unfolded side wall) ---------- */
+let ppc = 2;
+function renderFront(L) {
+  const svg = $('#elev'), W = S.wall, C = S.ceil, g = L.g, side = g ? S.corner.side : null, sl = g ? L.sideShown : 0;
+  const xMin = side === 'left' ? -sl : 0, xMax = side === 'right' ? W + sl : W;
+  const vb = {x:xMin - 17, y:-9, w:xMax - xMin + 34, h:C + 44};
+  svg.setAttribute('viewBox', `${vb.x} ${vb.y} ${vb.w} ${vb.h}`);
+  ppc = (svg.getBoundingClientRect().width || 700) / vb.w;
+  const fs = clamp(11 / ppc, 3.6, 9), Y = y => C - y, f1 = r1;
+  let h = `<defs><pattern id="mesh" width="2.4" height="2.4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="2.4" height="2.4" fill="var(--cavity)"/><path d="M0 0H2.4M0 0V2.4" stroke="var(--edge)" stroke-width=".35"/></pattern></defs>`;
+  h += `<rect class="dw-wall" x="0" y="0" width="${W}" height="${C}"/>`;
+  if (g) h += `<rect class="dw-wall2" x="${f1(L.sideWall[0])}" y="0" width="${f1(sl)}" height="${C}"/>`;
+  const closedL = endClosed('left'), closedR = endClosed('right');
+  const endMark = (x, closed) => closed ? `<rect class="dw-solid" x="${x - 2}" y="-4" width="4" height="${C + 4}"/>` : `<line class="dw-open" x1="${x}" y1="0" x2="${x}" y2="${C}"/>`;
+  if (side === 'left') { h += `<line class="dw-fold" x1="0" y1="-4" x2="0" y2="${C}"/>` + endMark(-sl, false) + endMark(W, closedR); }
+  else if (side === 'right') { h += `<line class="dw-fold" x1="${W}" y1="-4" x2="${W}" y2="${C}"/>` + endMark(W + sl, false) + endMark(0, closedL); }
+  else h += endMark(0, closedL) + endMark(W, closedR);
+  h += `<rect class="dw-solid" x="${xMin - 4}" y="-4" width="${xMax - xMin + 8}" height="4"/><line class="dw-floor" x1="${xMin - 9}" y1="${C}" x2="${xMax + 9}" y2="${C}"/>`;
+  if (g && roomOn()) {
+    const op = (s0, s1, y0, y1, label) => { const e = Math.min(s1, sl); if (s0 >= sl) return '';
+      const xa = L.fw(s0), xb = L.fw(e), x0 = Math.min(xa, xb), w = Math.abs(xb - xa);
+      return `<rect class="dw-opening" x="${f1(x0)}" y="${f1(Y(y1))}" width="${f1(w)}" height="${f1(y1 - y0)}"/><text class="wall-tag" x="${f1(x0 + w / 2)}" y="${f1(Y((y0 + y1) / 2))}" font-size="${f1(fs * .9)}" text-anchor="middle">${label}</text>`; };
+    h += side === 'left' ? op(doorStart(), doorEnd(), 0, 205, '문') : op(S.room.winStart, S.room.winStart + S.room.winW, 90, 210, '창');
+  }
+  if (g) h += `<text class="wall-tag" x="${f1((L.sideWall[0] + L.sideWall[1]) / 2)}" y="${f1(Y(FH) - 9 - fs)}" font-size="${f1(fs * .95)}" text-anchor="middle">${sideName(side)} (펼친 그림)</text>` +
+    `<text class="wall-tag" x="${f1(side === 'left' ? W * .72 : W * .28)}" y="${f1(Y(FH) - 9 - fs)}" font-size="${f1(fs * .95)}" text-anchor="middle">정면 벽</text>`;
+
+  const units = allUnits();
+  units.forEach(u => { h += drawUnit2D(u, fs, Y); });
+  if (g) {
+    const cf = S.corner.cf, cu = S.corner.cu, ov = (r, label) => `<g pointer-events="none"><rect class="dw-cover" x="${f1(r[0])}" y="${Y(FH)}" width="${f1(r[1] - r[0])}" height="${FH}"/>` +
+      `<text class="dim" transform="translate(${f1((r[0] + r[1]) / 2 + fs * .3)} ${f1(Y(FH / 2))}) rotate(-90)" font-size="${f1(fs * .85)}" text-anchor="middle">${label}</text></g>`;
+    h += ov(cf._cover, '코너유닛 옆면 (뒤는 깊은 보관칸)') + ov(cu._end, '코너 프레임 옆면');
+  }
+  const selU = getUnit(S.sel);
+  if (selU && selU._x != null) h += `<rect class="dw-sel" x="${f1(selU._x)}" y="${f1(Y(FH) - 2.4)}" width="${f1(selU.w)}" height="${FH + 2.4}" pointer-events="none"/>`;
+
+  if (S.people) {
+    [['a', S.ha], ['b', S.hb]].forEach(([p, ht]) => {
+      const u = S.units.find(x => x.k === 'f' && x.own === p) || S.units.find(x => x.k === 'f' && x.own === 's') || (cornerOn() && S.corner.own === p ? (S.corner.cf._wall === 'main' ? S.corner.cf : S.corner.cu) : null);
+      const ry = Math.round(ht * 1.15);
+      h += `<line class="reach s-${p}" x1="0" y1="${Y(ry)}" x2="${W}" y2="${Y(ry)}"/><text class="dim halo t-${p}" x="${p === 'a' ? 2 : W - 2}" y="${f1(Y(ry) + fs * .95)}" font-size="${f1(fs * .86)}" text-anchor="${p === 'a' ? 'start' : 'end'}">${OWN[p]} 손 닿는 높이 ${ry}</text>`;
+      if (!u) return;
+      const cx = u._x + u.w / 2 + (p === 'a' ? -4 : 4), q = f1;
+      h += `<g class="fig s-${p}"><circle cx="${q(cx)}" cy="${q(Y(ht * .935))}" r="${q(ht * .065)}" class="t-${p}" stroke="none"/>` +
+        `<line x1="${q(cx)}" y1="${q(Y(ht * .8))}" x2="${q(cx)}" y2="${q(Y(ht * .5))}" stroke-width="${q(ht * .13)}"/>` +
+        `<line x1="${q(cx - ht * .035)}" y1="${q(Y(ht * .47))}" x2="${q(cx - ht * .045)}" y2="${q(Y(ht * .03))}" stroke-width="${q(ht * .065)}"/>` +
+        `<line x1="${q(cx + ht * .035)}" y1="${q(Y(ht * .47))}" x2="${q(cx + ht * .045)}" y2="${q(Y(ht * .03))}" stroke-width="${q(ht * .065)}"/>` +
+        `<line x1="${q(cx - ht * .1)}" y1="${q(Y(ht * .8))}" x2="${q(cx - ht * .13)}" y2="${q(Y(ht * .47))}" stroke-width="${q(ht * .045)}"/>` +
+        `<line x1="${q(cx + ht * .1)}" y1="${q(Y(ht * .8))}" x2="${q(cx + ht * .17)}" y2="${q(Y(ry))}" stroke-width="${q(ht * .045)}"/></g>`;
+    });
+  }
+
+  /* dimensions */
+  const dy = C + 9, dy2 = C + 22, tick = (x, y) => `<line class="dim-l" x1="${f1(x)}" y1="${y - 2.5}" x2="${f1(x)}" y2="${y + 2.5}"/>`;
+  const seg = (a, b, label, cls) => tick(a, dy) + tick(b, dy) + `<text class="dim ${cls || ''}" x="${f1((a + b) / 2)}" y="${f1(dy - 2.2)}" font-size="${f1(fs * .9)}" text-anchor="middle">${label}</text>`;
+  h += `<line class="dim-l" x1="${f1(xMin)}" y1="${dy}" x2="${f1(xMax)}" y2="${dy}"/>`;
+  if (g) {
+    h += seg(L.cornerMain[0], L.cornerMain[1], f1(g.mainUse));
+    const lim = sideLimit(side), need = g.sideUse + bbv(), sOk = need <= lim + .01;
+    h += seg(L.cornerSide[0], L.cornerSide[1], f1(g.sideUse), sOk ? '' : 'bad');
+    const rest = lim - need;
+    if (Math.abs(rest) > .5) { const p = L.fw(need), q = L.fw(lim), a = Math.min(p, q), b = Math.max(p, q);
+      h += `<text class="dim ${rest < 0 ? 'bad' : ''}" x="${f1((a + b) / 2)}" y="${f1(dy + fs + 1.6)}" font-size="${f1(fs * .9)}" text-anchor="middle">${rest < 0 ? '부족 ' + f1(-rest) : '남음 ' + f1(rest)}</text>`; }
+  }
+  S.units.forEach(u => { h += seg(u._x, u._x + u.w, u.w); });
+  const gl = (a, b) => { const gg = b - a; if (Math.abs(gg) < .5) return ''; const cls = gg < 0 ? 'bad' : gg < 2 ? 'warn' : ''; return `<text class="dim ${cls}" x="${f1((a + b) / 2)}" y="${f1(dy + fs + 1.6)}" font-size="${f1(fs * .9)}" text-anchor="middle">${gg < 0 ? '초과 ' : '+'}${f1(Math.abs(gg))}</text>`; };
+  if (L.gap < 0) h += gl(L.a1 - L.gap, L.a1); else { h += gl(L.a0, L.start) + gl(L.start + L.sum, L.a1); }
+  const topGap = C - FH;
+  h += `<text class="dim${topGap < 1 ? ' bad' : ''}" x="${f1(g ? (side === 'left' ? W * .3 : W * .7) : W / 2)}" y="${f1(Y(FH + topGap / 2 + 3.5) + fs * .35)}" font-size="${f1(fs * .9)}" text-anchor="middle">상부 여유 ${f1(topGap)}</text>`;
+  h += `<line class="dim-l" x1="0" y1="${dy2}" x2="${W}" y2="${dy2}"/>` + tick(0, dy2) + tick(W, dy2) + `<text class="dim" x="${W / 2}" y="${f1(dy2 + fs + 1.4)}" font-size="${f1(fs)}" text-anchor="middle">정면 벽 ${W}</text>`;
+  if (g) h += `<line class="dim-l" x1="${f1(L.sideWall[0])}" y1="${dy2}" x2="${f1(L.sideWall[1])}" y2="${dy2}"/>` + tick(L.sideWall[0], dy2) + tick(L.sideWall[1], dy2) +
+    `<text class="dim" x="${f1((L.sideWall[0] + L.sideWall[1]) / 2)}" y="${f1(dy2 + fs + 1.4)}" font-size="${f1(fs)}" text-anchor="middle">${sideName(side)} · ${limitName(side)}까지 ${r1(sideLimit(side))}</text>`;
+  const lx = xMin - 10;
+  h += `<line class="dim-l" x1="${lx}" y1="${Y(0)}" x2="${lx}" y2="${Y(FH)}"/><line class="dim-l" x1="${lx - 2.5}" y1="${Y(FH)}" x2="${lx + 2.5}" y2="${Y(FH)}"/><line class="dim-l" x1="${lx - 2.5}" y1="${Y(0)}" x2="${lx + 2.5}" y2="${Y(0)}"/>` +
+    `<text class="dim" transform="translate(${lx - 1.6} ${f1(Y(FH / 2))}) rotate(-90)" font-size="${f1(fs)}" text-anchor="middle">201</text>`;
+  const rx = xMax + 10;
+  h += `<line class="dim-l" x1="${rx}" y1="0" x2="${rx}" y2="${C}"/><line class="dim-l" x1="${rx - 2.5}" y1="0" x2="${rx + 2.5}" y2="0"/><line class="dim-l" x1="${rx - 2.5}" y1="${C}" x2="${rx + 2.5}" y2="${C}"/>` +
+    `<text class="dim" transform="translate(${rx + 1.6 + fs * .8} ${f1(C / 2)}) rotate(-90)" font-size="${f1(fs)}" text-anchor="middle">천장 ${C}</text>`;
+  svg.innerHTML = h;
+}
+function drawUnit2D(u, fs, Y) {
+  const x = u._x, f1 = r1, key = u._key, on = key === S.sel;
+  let h = `<g class="unit" data-unit="${key}">`;
+  if (u.k === 'f' || u.k === 'cf' || u.k === 'cu') {
+    h += `<rect class="dw-frame" x="${f1(x + .1)}" y="${Y(FH)}" width="${f1(u.w - .2)}" height="${FH}"/>`;
+    h += `<rect class="dw-cav" x="${f1(x + 1.8)}" y="${Y(TOP)}" width="${f1(u.w - 3.6)}" height="${TOP - BASE}"/>`;
+    h += `<rect class="t-${u.own}" x="${f1(x + .1)}" y="${Y(FH) - 2.2}" width="${f1(u.w - .2)}" height="2.2"/>`;
+    if (needsDivider(u)) { const dx = u._coverLeft ? u._span[0] : u._span[1] - 1.8;
+      h += `<rect class="dw-div" x="${f1(dx)}" y="${Y(DIV_TOP)}" width="1.8" height="${DIV_TOP - BASE}"/>`; }
+    const geo = sortedGeo(u), seed = seedOf(u);
+    geo.forEach((g, k) => {
+      const below = geo[k - 1], sel = on && g.idx === S.selItem, y = g.y, [sx, sw] = itemRange(u, g), ix = x + 1.8, iw = u.w - 3.6;
+      let s = '';
+      if (g.t === 'rail') {
+        if (S.clothes) garmentList(u, seed, g, below).forEach(q => { s += `<rect class="gar g${q.c}" x="${f1(x + q.x)}" y="${f1(Y(y - 1))}" width="${f1(q.w)}" height="${f1(q.len)}" rx="1"/>`; });
+        s += `<rect class="hit" x="${f1(ix)}" y="${f1(Y(y + 8))}" width="${f1(iw)}" height="12"/><rect class="dw-rail" x="${f1(ix)}" y="${f1(Y(y + 2.6))}" width="${f1(iw)}" height="2.2" rx="1.1"/>`;
+      } else if (g.t === 'shelf') {
+        const c = foldClear(geo, k);
+        if (S.clothes && c >= 10) {
+          const stacks = Math.max(1, Math.floor((g.w - 3.9) / 28)), per = Math.min(9, Math.floor(c / 3.5)), R = rnd(seed * 17 + g.idx * 5 + 3), cell = sw / stacks;
+          for (let a = 0; a < stacks; a++) { const cnt = Math.max(2, Math.round(per * (.55 + R() * .45)));
+            for (let b = 0; b < cnt; b++) s += `<rect class="gar g${1 + Math.floor(R() * 6)}" x="${f1(sx + a * cell + (cell - 22) / 2)}" y="${f1(Y(y + 1.8 + (b + 1) * 3.1))}" width="22" height="2.8" rx=".8"/>`; }
+        }
+        s += `<rect class="hit" x="${f1(sx)}" y="${f1(Y(y + 6))}" width="${f1(sw)}" height="10"/><rect class="dw-shelf" x="${f1(sx)}" y="${f1(Y(y + 1.8))}" width="${f1(sw)}" height="1.8"/>`;
+      } else if (g.t === 'drawer') {
+        s += `<rect class="dw-drawer" x="${f1(sx + .4)}" y="${f1(Y(y + 15.7))}" width="${f1(sw - .8)}" height="15.4" rx=".8"/><line class="dw-groove" x1="${f1(sx + sw * .32)}" y1="${f1(Y(y + 13.2))}" x2="${f1(sx + sw * .68)}" y2="${f1(Y(y + 13.2))}"/>`;
+      } else if (g.t === 'basket') {
+        s += `<rect class="dw-basket" x="${f1(sx + .6)}" y="${f1(Y(y + 15.4))}" width="${f1(sw - 1.2)}" height="15" rx="1.2"/>`;
+      } else if (g.t === 'tray') {
+        s += `<rect class="hit" x="${f1(sx)}" y="${f1(Y(y + 8))}" width="${f1(sw)}" height="12"/><rect class="dw-drawer" x="${f1(sx + .4)}" y="${f1(Y(y + 4))}" width="${f1(sw - .8)}" height="4" rx=".6"/>`;
+      } else if (g.t === 'pants') {
+        const c = y - (below ? below.y + below.h : BASE);
+        if (S.clothes && c >= 40) { const R = rnd(seed * 13 + g.idx), n = Math.floor((sw - 3) / 7);
+          for (let a = 0; a < n; a++) s += `<rect class="gar g${[5, 1, 3, 5, 2, 5][Math.floor(R() * 6)]}" x="${f1(sx + 2 + a * 7)}" y="${f1(Y(y))}" width="5" height="${f1(Math.min(c - 5, 56 + R() * 6))}" rx=".6"/>`; }
+        s += `<rect class="hit" x="${f1(sx)}" y="${f1(Y(y + 8))}" width="${f1(sw)}" height="12"/><rect class="dw-drawer" x="${f1(sx + .4)}" y="${f1(Y(y + 3.5))}" width="${f1(sw - .8)}" height="3.5" rx=".6"/>`;
+      }
+      h += `<g class="it${sel ? ' on' : ''}" data-u="${key}" data-i="${g.idx}">${s}</g>`;
+    });
+    const tag = u.k === 'cf' ? `코너 · ${OWN[u.own]}` : u.k === 'cu' ? `코너유닛` : `${key.slice(1)} · ${OWN[u.own]}`;
+    const tx = u.k === 'cf' ? (u._span[0] + u._span[1]) / 2 : x + u.w / 2;
+    h += `<text class="own-tag t-${u.own}" x="${f1(tx)}" y="${f1(Y(FH) - 4.6)}" font-size="${f1(fs * (u.k === 'f' ? 1 : .85))}" text-anchor="middle">${tag}</text>`;
+  } else if (u.k === 'mid') {
+    h += `<rect class="dw-frame" x="${f1(x + .1)}" y="${Y(FH)}" width="${u.w - .2}" height="${FH}"/><rect class="dw-cav" x="${f1(x + 1.8)}" y="${Y(TOP)}" width="${u.w - 3.6}" height="${TOP - BASE}"/>`;
+    [45, 84, 123, 152, 176].forEach((yy, k) => { h += `<rect class="${k === 2 || k === 3 ? 'dw-glass' : 'dw-shelf'}" x="${f1(x + 1.8)}" y="${Y(yy + 1.8)}" width="${u.w - 3.6}" height="1.8"/>`; });
+    h += `<text class="own-tag dim" x="${f1(x + u.w / 2)}" y="${f1(Y(FH) - 4.6)}" font-size="${f1(fs * .85)}" text-anchor="middle">${key.slice(1)} · 미드</text>`;
+  } else {
+    h += `<rect class="dw-steel" x="${f1(x + .8)}" y="${Y(FH)}" width="${u.w - 1.6}" height="${FH}"/>`;
+    [20, 60, 165].forEach(yy => { h += `<rect class="dw-shelf" x="${f1(x + .8)}" y="${Y(yy + 1.2)}" width="${u.w - 1.6}" height="1.2"/>`; });
+    h += `<text class="own-tag dim" x="${f1(x + u.w / 2)}" y="${f1(Y(FH) - 4.6)}" font-size="${f1(fs * .85)}" text-anchor="middle">엔드</text>`;
+  }
+  return h + `</g>`;
+}
+
+/* ---------- room plan (top view, same orientation as the sketch: wardrobe wall on the west) ---------- */
+const depthOf = u => u.k === 'cu' ? u._cd : u.k === 'mid' ? 35 : DEPTH;
+function planBox(u, xr, z0, z1) {
+  const W = S.wall, bb = bbv();
+  if (u._wall === 'side') {
+    const left = S.corner.side === 'left', d0 = left ? -xr[1] : xr[0] - W, d1 = left ? -xr[0] : xr[1] - W;
+    return left ? {x:d0, y:W - bb - z1, w:d1 - d0, h:z1 - z0} : {x:d0, y:bb + z0, w:d1 - d0, h:z1 - z0};
+  }
+  return {x:bb + z0, y:W - xr[1], w:z1 - z0, h:xr[1] - xr[0]};
+}
+const planRect = u => planBox(u, [u._x, u._x + u.w], 0, depthOf(u));
+function pullRect(u) {
+  if (!(u.items || []).some(i => PULL[i.t])) return null;
+  const D = depthOf(u);
+  return planBox(u, u.k === 'cf' ? u._span : [u._x + 1.8, u._x + u.w - 1.8], D, D + 45);
+}
+function hiddenRect(u) {
+  if (u.k !== 'cf') return null;
+  const a = Math.max(u._x, u._cover[0]), b = Math.min(u._x + u.w, u._cover[1]);
+  return b > a ? planBox(u, [a, b], 0, DEPTH) : null;
+}
+function roomChecks(L) {
+  const out = {bad:[], warn:[]};
+  if (!roomOn()) return out;
+  const R = S.room, W = S.wall, bb = bbv(), us = allUnits();
+  const w0 = R.winStart, w1 = R.winStart + R.winW, d0 = doorStart(), d1 = doorEnd();
+  const swing = r => { const x0 = r.x, x1 = Math.min(r.x + r.w, d1), y0 = r.y, y1 = Math.min(r.y + r.h, W); if (x1 <= x0 || y1 <= y0) return false;
+    return Math.hypot(clamp(d1, x0, x1) - d1, clamp(W, y0, y1) - W) < R.doorW; };
+  us.forEach(u => {
+    const r = planRect(u), nm = u.k === 'cf' ? '코너 프레임' : u.k === 'cu' ? '코너유닛' : `${u._key.slice(1)}번 칸`;
+    if (r.y <= bb + 1 && r.x < w1 && r.x + r.w > w0) out.bad.push(`${nm}이 창을 ${r1(Math.min(w1, r.x + r.w) - Math.max(w0, r.x))}cm 가립니다`);
+    if (r.y + r.h >= W - bb - 1 && r.x < d1 && r.x + r.w > d0) out.bad.push(`${nm}이 문을 막습니다`);
+    else if (swing(r)) out.bad.push(`${nm}이 문 열리는 자리에 걸립니다`);
+    const p = pullRect(u);
+    if (p && swing(p)) out.warn.push(`${nm} 서랍을 당기면 문 열리는 자리와 겹칩니다`);
+  });
+  return out;
+}
+function renderPlan(L) {
+  const svg = $('#plan'), W = S.wall, bb = bbv(), on = roomOn(), R = S.room;
+  const RW = on ? R.depth : Math.max(DEPTH + S.front + 20, 160);
+  svg.setAttribute('viewBox', `-40 -34 ${RW + 80} ${W + 78}`);
+  const f1 = r1, fs = 6.4, T2 = (x, y, s, o = {}) => `<text class="${o.cls || 'dim'}" x="${f1(x)}" y="${f1(y)}" font-size="${o.fs || fs}" text-anchor="${o.a || 'middle'}"${o.rot ? ` transform="rotate(${o.rot} ${f1(x)} ${f1(y)})"` : ''}>${s}</text>`;
+  let h = `<defs><pattern id="phatch" width="3" height="3" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="3" height="3" fill="var(--panel)"/><line x1="0" y1="0" x2="0" y2="3" stroke="var(--edge)" stroke-width=".7"/></pattern></defs>`;
+  h += `<rect class="pl-floor" x="0" y="0" width="${f1(RW)}" height="${W}"/>`;
+  const wt = 6;
+  h += `<rect class="pl-wall" x="${-wt}" y="${-wt}" width="${wt}" height="${W + 2 * wt}"/>`;
+  if (on) {
+    const d0 = doorStart(), d1 = doorEnd(), w0 = R.winStart, w1 = R.winStart + R.winW;
+    h += `<rect class="pl-wall" x="${-wt}" y="${-wt}" width="${f1(w0 + wt)}" height="${wt}"/><rect class="pl-wall" x="${f1(w1)}" y="${-wt}" width="${f1(RW - w1 + wt)}" height="${wt}"/>`;
+    h += `<rect class="pl-win" x="${f1(w0)}" y="${-wt}" width="${f1(w1 - w0)}" height="${wt}"/><line class="pl-winl" x1="${f1(w0)}" y1="${-wt / 2}" x2="${f1(w1)}" y2="${-wt / 2}"/>`;
+    h += `<rect class="pl-wall" x="${f1(RW)}" y="${-wt}" width="${wt}" height="${W + 2 * wt}"/>`;
+    h += `<rect class="pl-wall" x="${-wt}" y="${W}" width="${f1(d0 + wt)}" height="${wt}"/><rect class="pl-wall" x="${f1(d1)}" y="${W}" width="${f1(RW - d1 + wt)}" height="${wt}"/>`;
+    h += `<path class="pl-door" d="M${f1(d0)} ${W} A${R.doorW} ${R.doorW} 0 0 1 ${f1(d1)} ${f1(W - R.doorW)}"/><line class="pl-leaf" x1="${f1(d1)}" y1="${W}" x2="${f1(d1)}" y2="${f1(W - R.doorW)}"/>`;
+    h += T2((w0 + w1) / 2, -wt - 3, `창 ${R.winW}`, {cls:'pl-lab'}) + T2((d0 + d1) / 2, W + wt + 8, `문 ${R.doorW}`, {cls:'pl-lab'});
+    if (bb) h += `<rect class="pl-bb" x="0" y="0" width="${f1(RW)}" height="${bb}"/><rect class="pl-bb" x="0" y="${f1(W - bb)}" width="${f1(d0)}" height="${bb}"/><rect class="pl-bb" x="0" y="0" width="${bb}" height="${W}"/><rect class="pl-bb" x="${f1(RW - bb)}" y="0" width="${bb}" height="${W}"/>`;
+  } else {
+    const fl = DEPTH + bb + S.front;
+    h += `<line class="pl-door" x1="${f1(fl)}" y1="0" x2="${f1(fl)}" y2="${W}"/>` + T2(fl + 3, W / 2, '맞은편 가구', {a:'start'});
+  }
+  const sel = S.sel;
+  allUnits().forEach(u => {
+    const r = planRect(u), p = pullRect(u), hd = hiddenRect(u);
+    if (p) h += `<rect class="pl-pull" x="${f1(p.x)}" y="${f1(p.y)}" width="${f1(p.w)}" height="${f1(p.h)}"/>`;
+    h += `<g class="unit" data-unit="${u._key}"><rect class="pl-u pl-${ownerOf(u)}${u._key === sel ? ' on' : ''}" x="${f1(r.x)}" y="${f1(r.y)}" width="${f1(r.w)}" height="${f1(r.h)}"/>`;
+    if (hd) h += `<rect fill="url(#phatch)" x="${f1(hd.x + .6)}" y="${f1(hd.y + .6)}" width="${f1(hd.w - 1.2)}" height="${f1(hd.h - 1.2)}" pointer-events="none"/>`;
+    const lab = u.k === 'cf' ? '코너 프레임' : u.k === 'cu' ? '코너유닛' : u.k === 'mid' ? '미드' : u.k === 'end' ? '엔드' : `${u._key.slice(1)}`;
+    const sub = u.k === 'cu' ? '' : u.k === 'f' || u.k === 'cf' ? `${u.w} · ${OWN[u.own]}` : '';
+    const vertical = r.h > r.w, cx = r.x + r.w / 2, cy = r.y + r.h / 2;
+    h += T2(cx, cy + (sub ? -1.5 : 2), lab, {cls:'pl-ulab', rot: vertical ? -90 : 0, fs:5.6}) + (sub ? T2(vertical ? cx + 6.5 : cx, vertical ? cy - 1.5 : cy + 6.5, sub, {fs:4.8, rot: vertical ? -90 : 0}) : '');
+    h += `</g>`;
+  });
+  /* dimensions */
+  h += `<line class="dim-l" x1="-24" y1="0" x2="-24" y2="${W}"/>` + T2(-27, W / 2, `옷장 벽 ${W}`, {rot:-90});
+  if (on) {
+    h += `<line class="dim-l" x1="0" y1="-24" x2="${f1(RW)}" y2="-24"/>` + T2(RW / 2, -27, `방 폭 ${RW}`);
+    const yMid = L.sum ? W - (L.start + L.sum / 2) : W / 2, x0 = bb + DEPTH;
+    h += `<line class="pl-free" x1="${f1(x0)}" y1="${f1(yMid)}" x2="${f1(RW - bb)}" y2="${f1(yMid)}"/>` + T2((x0 + RW) / 2, yMid - 2.5, `옷장 앞 ${f1(RW - bb - x0)}`, {cls:'pl-lab'});
+    if (cornerOn()) {
+      const g = L.g, side = S.corner.side, need = g.sideUse + bb, lim = sideLimit(side), yy = side === 'left' ? W - bb - (g.frameOnSide ? DEPTH : g.k.cd) - 8 : bb + (g.frameOnSide ? DEPTH : g.k.cd) + 8;
+      if (lim - need > 1) h += `<line class="pl-free" x1="${f1(need)}" y1="${f1(yy)}" x2="${f1(lim)}" y2="${f1(yy)}"/>` + T2((need + lim) / 2, yy - 2.5, `${limitName(side)}까지 ${f1(lim - need)}`, {cls:'pl-lab', fs:5.2});
+    }
+    if (R.winStart > bb + DEPTH + 1) { const yy = bb + 8; h += `<line class="pl-free" x1="${f1(bb + DEPTH)}" y1="${yy}" x2="${f1(R.winStart)}" y2="${yy}"/>` + T2((bb + DEPTH + R.winStart) / 2, yy + 7, `창까지 ${f1(R.winStart - bb - DEPTH)}`, {fs:4.8}); }
+  }
+  h += T2(-12, W + 22, on ? '위 = 창 쪽, 아래 = 문 쪽 (스케치와 같은 방향)' : '옷장 벽을 왼쪽에 둔 평면', {a:'start', fs:5});
+  svg.innerHTML = h;
+}
+$('#plan').addEventListener('click', e => { const un = e.target.closest('[data-unit]'); if (un) { S.sel = un.dataset.unit; S.selItem = -1; renderAll(true); } });
+
+function renderRoomCard(L) {
+  const el = $('#roomCard');
+  if (!roomOn()) { el.hidden = true; return; }
+  el.hidden = false;
+  const R = S.room, bb = bbv(), W = S.wall, rc = roomChecks(L), g = L.g, items = [];
+  const d0 = doorStart(), w0 = R.winStart;
+  items.push(`정면 벽 ${W}cm에서 양 끝 걸레받이 ${bb}cm씩을 빼면 프레임을 세울 수 있는 폭은 ${r1(W - 2 * bb)}cm입니다.`);
+  const nc = [{side:'left', place:'main', kind:'35'}, {side:'right', place:'main', kind:'35'}].map(c => ({c, need: cornerGeoOf(c).sideUse + bb}));
+  items.push(`창 쪽(위) 벽은 옷장 벽에서 창틀까지 약 ${w0}cm라, 코너형(최소 ${r1(nc[1].need)}cm)을 두면 창을 가립니다. 코너는 문 쪽(아래) 벽에 둡니다.`);
+  items.push(`문 쪽(아래) 벽은 옷장 벽에서 문틀까지 약 ${r1(d0)}cm입니다.${g && S.corner.side === 'left' ? ` 지금 코너가 ${r1(g.sideUse + bb)}cm를 써서 ${r1(d0 - g.sideUse - bb)}cm가 남습니다.` : ''}`);
+  items.push(`정면 벽 프레임은 깊이 ${r1(bb + DEPTH)}cm까지 나와 창틀(${w0}cm)과 ${r1(w0 - bb - DEPTH)}cm 떨어집니다.`);
+  items.push(`옷장 앞 바닥은 ${frontSpace()}cm가 남습니다. 서랍을 다 당겨도(45cm) ${r1(frontSpace() - 45)}cm가 통로로 남습니다.`);
+  rc.bad.concat(rc.warn).forEach(m => items.push(`<b>${esc(m)}</b>`));
+  el.innerHTML = `<div class="sec-head"><h2>이 방에서 확인한 것</h2><span class="hint">스케치 치수 기준. 창 위치·문 폭은 그림에서 추정한 값이라 실측으로 바꿔 주세요.</span></div><ul class="facts">${items.map(x => `<li>${x}</li>`).join('')}</ul>`;
+}
+
+/* ---------- drag items ---------- */
+let drag = null;
+const svgEl = $('#elev');
+svgEl.addEventListener('pointerdown', e => {
+  const g = e.target.closest('.it'), un = e.target.closest('[data-unit]');
+  if (g) {
+    const key = g.dataset.u, ii = +g.dataset.i, u = getUnit(key); if (!u) return;
+    S.sel = key; S.selItem = ii;
+    drag = {key, ii, y0:e.clientY, n0:u.items[ii].n, id:e.pointerId};
+    try { svgEl.setPointerCapture(e.pointerId); } catch (err) {}
+    e.preventDefault(); renderAll(true);
+  } else if (un) { S.sel = un.dataset.unit; S.selItem = -1; renderAll(true); }
+});
+svgEl.addEventListener('pointermove', e => {
+  if (!drag || e.pointerId !== drag.id) return;
+  const u = getUnit(drag.key); if (!u) return;
+  const n = drag.n0 + Math.round(-(e.clientY - drag.y0) / ppc / SLOT);
+  if (n !== u.items[drag.ii].n && validPos(u, drag.ii, n)) { u.items[drag.ii].n = n; u.p = ''; S.chip = ''; renderAll(true); }
+});
+const endDrag = () => { if (drag) { drag = null; renderAll(); } };
+svgEl.addEventListener('pointerup', endDrag); svgEl.addEventListener('pointercancel', endDrag);
+
+/* ---------- side panel ---------- */
+function renderEditor() {
+  const el = $('#editor'), u = getUnit(S.sel);
+  if (!u) { el.innerHTML = '<h3>유닛 없음</h3><p class="note">위의 조합을 누르거나 아래에서 유닛을 추가하세요.</p>' + addRow(); return; }
+  const st = stats(u), corner = u.k === 'cf' || u.k === 'cu';
+  const title = u.k === 'f' ? `유닛 ${S.sel.slice(1)} · 프레임 ${u.w}×58×201` : u.k === 'cf' ? `코너 프레임 ${u.w}×58×201` :
+    u.k === 'cu' ? `추가코너유닛 53×${u.kind}×201` : u.k === 'mid' ? `유닛 ${S.sel.slice(1)} · 보조미드유닛 35×35×201` : `유닛 ${S.sel.slice(1)} · 보조엔드유닛 20×58×201`;
+  let h = `<div class="kv"><h3>${title}</h3><b>${won(unitCost(u, S.light))}</b></div>`;
+  if (u.k === 'f' || corner) {
+    h += `<div class="row"><span class="lab">누가 쓰나요${corner ? ' (코너 두 칸 함께)' : ''}</span><div class="seg own" id="ownSeg">${['a', 's', 'b'].map(o => `<button type="button" data-o="${o}" aria-pressed="${u.own === o}">${OWN[o]}</button>`).join('')}</div></div>`;
+    const keys = u.k === 'cu' ? cuKeys(u.kind) : u.k === 'cf' ? CF_KEYS : PKEYS;
+    h += `<div class="row"><label class="lab" for="selPreset">내부 구성</label><select id="selPreset">${u.p ? '' : '<option value="">직접 수정함</option>'}${keys.map(p => `<option value="${p}"${u.p === p ? ' selected' : ''}>${presetOf(p).n}</option>`).join('')}</select></div>`;
+    h += `<div class="row"><span class="lab">부품 추가</span>${allowedTypes(u).map(t => `<button type="button" class="btn" data-add="${t}">${T[t].n}</button>`).join('')}</div>`;
+    const it = u.items[S.selItem];
+    h += it ? `<div class="row"><span class="lab">선택한 부품: ${T[it.t].n}${u.k === 'cf' ? ` (${itemWide(u, it)}cm 폭)` : ''} · 바닥에서 ${Math.round(iy(it))}cm</span><button type="button" class="btn" data-nudge="1">▲ 위로</button><button type="button" class="btn" data-nudge="-1">▼ 아래로</button><button type="button" class="btn" data-del="1">빼기</button></div>`
+      : `<p class="note">정면도에서 봉·선반·서랍을 누르고 위아래로 끌면 3.2cm 간격으로 움직입니다.</p>`;
+    const bits = [];
+    if (st.long) bits.push(`긴 옷 ${Math.floor(st.long / 5)}벌`);
+    if (st.short) bits.push(`짧은 옷 ${Math.floor(st.short / 3.3)}벌`);
+    if (st.pants) bits.push(`바지 ${st.pants}벌`);
+    if (st.fold) bits.push(`접는 옷 ${st.fold}벌`);
+    if (st.small) bits.push(`서랍류 ${st.small}점`);
+    h += `<p class="note">이 칸의 수납량: ${bits.join(' · ') || '없음'}</p>`;
+    if (u.k === 'cf') h += `<p class="note">앞면 중 약 53cm만 보입니다. 서랍·바구니·트레이는 프레임칸막이(${won(PRICE.divider)}) 옆 50cm 칸, 바닥에서 ${DIV_TOP}cm 아래에만 들어갑니다. 옷걸이봉과 그 위 선반은 전체 폭이라 옷을 밀어 넣어 씁니다.</p>`;
+    if (u.k === 'cu') h += `<p class="note">선반 4개가 가격에 포함됩니다. 프레임 쪽 옆면이 트여 있어 코너 프레임의 가려진 공간과 이어집니다.${u.kind === '58' ? ' 50cm 옷걸이봉을 걸 수 있습니다.' : ' 깊이 35라 옷걸이봉은 넣지 않습니다.'}</p>`;
+    st.warn.forEach(w => { h += `<p class="note warn">${w}</p>`; });
+  } else if (u.k === 'mid') {
+    h += `<p class="note">깊이 35cm 진열 유닛입니다. 유리선반 2, 나무선반 3이 포함되고 프레임 두 개 사이에 설치해야 합니다. 접는 옷 약 24벌 또는 가방·소품 자리로 계산합니다.</p>`;
+  } else {
+    const idx = S.units.indexOf(u), atL = idx === 0, atR = idx === S.units.length - 1;
+    const openL = S.ends === 'left' || S.ends === 'both', openR = S.ends === 'right' || S.ends === 'both';
+    h += `<p class="note">옷장 옆면에 붙어 옆을 향해 열리는 철제 선반·걸이입니다. 내일 입을 옷 자리로 씁니다.</p>`;
+    if (!((atL && openL) || (atR && openR))) h += `<p class="note bad">엔드유닛은 벽 끝이 트인 쪽의 맨 끝에만 쓸 수 있습니다.</p>`;
+  }
+  if (corner) h += `<div class="row"><span class="lab">코너</span><button type="button" class="btn" data-rmcorner="1">코너 빼기</button></div>`;
+  else { const i = S.units.indexOf(u);
+    h += `<div class="row"><span class="lab">이 유닛</span><button type="button" class="btn" data-mv="-1"${i === 0 ? ' disabled' : ''}>← 왼쪽으로</button><button type="button" class="btn" data-mv="1"${i === S.units.length - 1 ? ' disabled' : ''}>오른쪽으로 →</button><button type="button" class="btn" data-rm="1">삭제</button></div>`; }
+  el.innerHTML = h + addRow();
+}
+const addRow = () => `<div class="row"><span class="lab">정면 벽에 유닛 추가</span>${[['f', 50, '50'], ['f', 75, '75'], ['f', 100, '100'], ['mid', 35, '미드 35'], ['end', 20, '엔드 20']].map(([k, w, l]) => `<button type="button" class="btn" data-addu="${k}:${w}">${l}</button>`).join('')}</div>`;
+let flash = '';
+$('#editor').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  const u = getUnit(S.sel);
+  try {
+    if (b.dataset.o) { if (u.k === 'cf' || u.k === 'cu') { S.corner.own = b.dataset.o; ensureCorner(); } else u.own = b.dataset.o; S.chip = ''; }
+    else if (b.dataset.add) { S.selItem = addItem(u, b.dataset.add); u.p = ''; S.chip = ''; }
+    else if (b.dataset.nudge) { const d = +b.dataset.nudge, it = u.items[S.selItem];
+      for (let k = 1; k < 60; k++) { if (validPos(u, S.selItem, it.n + d * k)) { it.n += d * k; u.p = ''; S.chip = ''; break; } } }
+    else if (b.dataset.del) { u.items.splice(S.selItem, 1); S.selItem = -1; u.p = ''; S.chip = ''; }
+    else if (b.dataset.mv) { const i = S.units.indexOf(u), j = i + (+b.dataset.mv); if (j >= 0 && j < S.units.length) { [S.units[i], S.units[j]] = [S.units[j], S.units[i]]; S.sel = 'm' + (j + 1); S.chip = ''; } }
+    else if (b.dataset.rm) { const i = S.units.indexOf(u); S.units.splice(i, 1); S.sel = S.units.length ? 'm' + Math.max(1, i) : (cornerOn() ? 'cf' : 'm1'); S.selItem = -1; S.chip = ''; }
+    else if (b.dataset.rmcorner) { S.corner.side = 'none'; S.sel = 'm1'; S.selItem = -1; S.chip = ''; rankCandidates(); syncInputs(); }
+    else if (b.dataset.addu) { const [k, w] = b.dataset.addu.split(':'); S.units.push(mkUnit(k, +w, 's', 'hangdr')); S.sel = 'm' + S.units.length; S.selItem = -1; S.chip = ''; }
+    else return;
+  } catch (err) { flash = err.message; }
+  renderAll();
+});
+$('#editor').addEventListener('change', e => {
+  if (e.target.id === 'selPreset' && e.target.value) { const u = getUnit(S.sel); u.p = e.target.value; u.items = mkItems(u.p); S.selItem = -1; S.chip = ''; renderAll(); }
+});
+
+function renderFit() {
+  const f = fit(allUnits(), S.inv), pct = Math.round(f.pct * 100);
+  let h = `<div class="kv"><h3>옷 수량 대비 수납 충족률</h3><span class="pct" style="color:var(--${pct >= 97 ? 'ok' : pct >= 85 ? 'warn' : 'bad'})">${pct}%</span></div><div class="fit"><span></span><span class="hd a">아내</span><span class="hd b">남편</span>`;
+  const notes = [];
+  CATS.forEach(c => {
+    const o = f[c.k];
+    h += `<span>${c.n}</span>`;
+    [['a', o.nA, o.hA, o.bA], ['b', o.nB, o.hB, o.bB]].forEach(([p, n, hv, bo]) => {
+      const short = !o.soft && hv < n - .5, r = n > 0 ? clamp(hv / n, 0, 1) : 1;
+      h += `<div class="meter ${p}${short ? ' short' : ''}"><div class="tr"><i style="width:${Math.round(r * 100)}%"></i></div><span class="tx">${Math.floor(hv + .01)}/${Math.round(n)}${c.u}${short ? ' 부족' : ''}</span></div>`;
+      if (bo > .5) notes.push(`${OWN[p]}의 ${c.n} ${Math.round(bo)}${c.u}은 상대 칸을 빌려 씁니다.`);
+    });
+  });
+  h += `</div>`;
+  const ov = Math.round(f.short.ovA + f.short.ovB);
+  if (ov > 0) notes.push(`바지걸이에 못 들어간 바지 ${ov}벌은 옷걸이에 걸어 짧은 옷 봉으로 계산했습니다.`);
+  notes.forEach(n => { h += `<p class="note">${n}</p>`; });
+  $('#fitCard').innerHTML = h;
+  return pct;
+}
+
+function costLines() {
+  const m = new Map(), add = (key, name, size, unit) => { const r = m.get(key) || {name, size, unit, q:0}; r.q++; m.set(key, r); };
+  allUnits().forEach(u => {
+    if (u.k === 'mid') return add('mid', 'PAX 보조미드유닛', '35×35×201', PRICE.mid);
+    if (u.k === 'end') return add('end', 'PAX 보조엔드유닛', '20×58×201', PRICE.end);
+    if (u.k === 'cu') {
+      add('cu' + u.kind, 'PAX 추가코너유닛+선반4', `53×${u.kind}×201`, PRICE.cu[u.kind]);
+      let sh = 0;
+      u.items.forEach(i => { if (i.t === 'rail') add('rail50', 'KOMPLEMENT 옷걸이봉', '50', PRICE.rail[50]); else if (i.t === 'shelf' && ++sh > 4) add('shelf50', 'KOMPLEMENT 선반', '50×58', PRICE.shelf[50]); });
+      return;
+    }
+    add('f' + u.w, 'PAX 옷장프레임', `${u.w}×58×201`, PRICE.frame[u.w]);
+    u.items.forEach(i => { const w = itemWide(u, i);
+      add(i.t + w, 'KOMPLEMENT ' + T[i.t].n + (i.t === 'basket' ? '+인출식레일' : ''), i.t === 'rail' ? `${w}` : `${w}×58`, PRICE[i.t][w]); });
+    if (needsDivider(u)) add('div', 'KOMPLEMENT 프레임칸막이', '75-100×58', PRICE.divider);
+    if (S.light) add('l' + u.w, 'ÖVERSIDAN LED 라인조명+센서', `${{50:46, 75:71, 100:96}[u.w]}`, PRICE.light[u.w]);
+  });
+  return [...m.values()];
+}
+function renderCost() {
+  const lines = costLines(), total = lines.reduce((s, l) => s + l.q * l.unit, 0);
+  const nf = allUnits().filter(u => u.k === 'f' || u.k === 'cf').length;
+  $('#costCard').innerHTML = `<div class="kv"><h3>예상 견적</h3><span class="total">${won(total)}</span></div><p class="note">프레임 ${nf}개${cornerOn() ? ' + 추가코너유닛 1개' : ''}</p>`;
+  $('#costTable').innerHTML = `<table><thead><tr><th>품목</th><th>규격(cm)</th><th class="r">수량</th><th class="r">단가</th><th class="r">금액</th></tr></thead><tbody>` +
+    lines.map(l => `<tr><td>${l.name}</td><td class="mono">${l.size}</td><td class="r">${l.q}</td><td class="r">${won(l.unit)}</td><td class="r">${won(l.q * l.unit)}</td></tr>`).join('') +
+    `</tbody><tfoot><tr><td colspan="4">합계</td><td class="r">${won(total)}</td></tr></tfoot></table>`;
+  return total;
+}
+
+function renderStatus(L) {
+  const W = S.wall, g = L.g, gap = L.gap, used = W - gap, top = S.ceil - FH, cells = [], bb = bbv();
+  const bbNote = bb ? ` · 걸레받이 ${bb}cm 포함` : '';
+  cells.push({c: gap < -.01 ? 'bad' : gap < 2 ? 'warn' : 'ok', b:`정면 ${r1(used)} / ${W}cm`, s: (gap < -.01 ? `${r1(-gap)}cm 넘칩니다` : gap < 2 ? `여유 ${r1(gap)}cm: 시공 오차에 빠듯합니다` : `${r1(gap)}cm 남음`) + bbNote});
+  if (g) {
+    const side = S.corner.side, lim = sideLimit(side), need = r1(g.sideUse + bb);
+    const openEnd = !roomOn() && (side === 'left' ? (S.ends === 'left' || S.ends === 'both') : (S.ends === 'right' || S.ends === 'both'));
+    const clash = !roomOn() && g.sideUse > FD + S.front;
+    const lab = `${sideName(side)} ${need} / ${r1(lim)}cm`;
+    cells.push(openEnd ? {c:'bad', b:'코너 쪽 벽 없음', s:`${side === 'left' ? '왼쪽' : '오른쪽'} 끝이 트여 있다고 설정되어 있습니다`}
+      : need > lim + .01 ? {c:'bad', b:lab, s:`${limitName(side)}까지 ${r1(need - lim)}cm 모자랍니다`}
+      : clash ? {c:'warn', b:lab, s:'코너가 맞은편 가구 선까지 튀어나옵니다'}
+      : {c:'ok', b:lab, s:`${limitName(side)}까지 ${r1(lim - need)}cm 남음`});
+  }
+  const rc = roomChecks(L);
+  if (roomOn()) cells.push(rc.bad.length ? {c:'bad', b:'창·문과 겹침', s:rc.bad[0]} : rc.warn.length ? {c:'warn', b:'창·문 확인', s:rc.warn[0]} : {c:'ok', b:'창·문과 겹치지 않음', s:'문 열림 반경과 서랍 인출 구역도 비켜 갑니다'});
+  cells.push(top < 1 ? {c:'bad', b:`천장 ${S.ceil}cm`, s:'201cm 프레임은 천장 202cm 이상 필요'} : top < 9 ? {c:'warn', b:`상부 여유 ${Math.round(top)}cm`, s:'세운 상태로만 조립 가능'} : {c:'ok', b:`상부 여유 ${Math.round(top)}cm`, s: top >= 19 ? '눕혀 조립 가능 · 19cm 높이 상자 올릴 수 있음' : '눕혀 조립해 세울 수 있음'});
+  const pull = allUnits().some(u => (u.items || []).some(i => PULL[i.t]));
+  const fr = frontSpace(), frl = roomOn() ? `옷장 앞 바닥 ${fr}cm` : `앞 공간 ${fr}cm`;
+  cells.push(fr >= 90 ? {c:'ok', b:frl, s:'서랍을 다 당기고 그 앞에 설 수 있음'} : fr >= 70 ? {c:'warn', b:frl, s: pull ? '서랍은 옆으로 비켜서서 열어야 함' : '걸이·선반 사용에 충분'} : {c: pull ? 'bad' : 'warn', b:frl, s: pull ? '서랍·바구니를 끝까지 당기기 어려움' : '통로가 좁습니다'});
+  $('#status').innerHTML = cells.map(c => `<div class="${c.c}"><b>${c.b}</b><span>${c.s}</span></div>`).join('');
+}
+
+function renderChips() {
+  const top = CAND[0], W = S.wall;
+  $('#chips').innerHTML = CAND.slice(0, 12).map((c, i) => {
+    const g = c.cc ? cornerGeoOf(c.cc) : null, mb = mainBounds(c.cc), gap = mb[1] - mb[0] - c.sum;
+    const own = c.cc ? c.cc.own : 's', left = !c.cc || c.cc.side === 'left';
+    const cBlock = g ? `<i style="width:${g.mainUse / W * 100}%;background:repeating-linear-gradient(135deg,var(--${own}) 0 3px,transparent 3px 6px)"></i>` : '';
+    const mini = (left ? cBlock : '') + c.units.map(u => `<i style="width:${u.w / W * 100}%;background:var(--${u.k === 'f' ? u.own : 'edge'})"></i>`).join('') + (left ? '' : cBlock);
+    return `<button type="button" class="chip" data-id="${c.id}" aria-pressed="${S.chip === c.id}"><span class="w"><span class="no">${i + 1}</span>${chipLabel(c)}</span>${c.cc ? `<span class="sub">${chipSub(c)}</span>` : ''}<span class="mini">${mini}</span>` +
+      `<span class="meta"><span>충족 ${Math.round(c.pct * 100)}%</span><span>남는 폭 ${r1(gap)}</span></span><span class="meta"><span class="num">${won(c.cost)}</span>${c.short ? `<span class="best" style="color:var(--bad)">${roomOn() ? limitName(c.cc.side) + '에 걸림' : '옆 벽 부족'}</span>` : c === top ? '<span class="best">추천</span>' : ''}</span></button>`;
+  }).join('');
+}
+$('#chips').addEventListener('click', e => {
+  const b = e.target.closest('.chip'); if (!b) return;
+  const c = CAND.find(x => x.id === b.dataset.id); if (c) { applyCand(c); syncInputs(); renderAll(); }
+});
+
+/* ---------- inputs ---------- */
+const INV_ROWS = [['long', '긴 옷 (코트·원피스·롱패딩)'], ['short', '짧은 옷 (셔츠·재킷·블라우스)'], ['pants', '바지·스커트'], ['fold', '접는 옷 (니트·티셔츠·청바지)'], ['small', '서랍에 넣을 것 (속옷·양말·소품)']];
+function buildInv() {
+  $('#inv').innerHTML = `<span></span><span class="hd" style="color:var(--a)">아내</span><span class="hd" style="color:var(--b)">남편</span>` +
+    INV_ROWS.map(([k, l]) => `<span>${l}</span>` + ['a', 'b'].map(p => `<input type="number" id="inv-${p}-${k}" min="0" max="300" step="1" value="${S.inv[p][k]}" aria-label="${OWN[p]} ${l}">`).join('')).join('');
+}
+let rerankTimer = 0;
+const rerankSoon = () => { clearTimeout(rerankTimer); rerankTimer = setTimeout(() => { rankCandidates(); renderAll(); }, 260); };
+$('#inv').addEventListener('input', e => {
+  const m = /^inv-(a|b)-(\w+)$/.exec(e.target.id); if (!m) return;
+  S.inv[m[1]][m[2]] = clamp(parseInt(e.target.value, 10) || 0, 0, 300);
+  renderAll(true); rerankSoon();
+});
+const FIELDS = [['#inWall', 'wall', true, true], ['#inCeil', 'ceil', true], ['#inEnds', 'ends'], ['#inAlign', 'align'], ['#inFront', 'front', true], ['#inHa', 'ha', true], ['#inHb', 'hb', true]];
+FIELDS.forEach(([id, key, num, rerank]) => { const el = $(id);
+  el.addEventListener(num ? 'input' : 'change', () => { let v = num ? parseFloat(el.value) : el.value; if (num && !isFinite(v)) return;
+    if (num) v = clamp(v, +el.min, +el.max); S[key] = v; if (rerank) rerankSoon(); renderAll(); }); });
+function cornerChanged(place, kind) {
+  rankCandidates();
+  const best = cornerOn() ? bestFor(place, kind) : CAND[0];
+  if (best) applyCand(best);
+  syncInputs(); renderAll();
+}
+$('#inCSide').addEventListener('change', e => { S.corner.side = e.target.value; ensureCorner(); cornerChanged(); });
+$('#inCPlace').addEventListener('change', e => { S.corner.place = e.target.value; ensureCorner(); cornerChanged(S.corner.place, S.corner.kind); });
+$('#inCKind').addEventListener('change', e => { S.corner.kind = e.target.value; ensureCorner(); cornerChanged(S.corner.place, S.corner.kind); });
+const ROOMF = [['#inRoomD', 'depth', 150, 600], ['#inWinS', 'winStart', 0, 500], ['#inWinW', 'winW', 30, 400], ['#inDoorE', 'doorFromE', 0, 500], ['#inDoorW', 'doorW', 60, 200]];
+ROOMF.forEach(([id, key, lo, hi]) => { $(id).addEventListener('input', e => { const v = parseFloat(e.target.value); if (!isFinite(v)) return; S.room[key] = clamp(v, lo, hi); renderAll(true); rerankSoon(); }); });
+$('#ckRoom').addEventListener('change', e => { S.room.on = e.target.checked; syncInputs(); rankCandidates(); renderAll(); });
+$('#inBB').addEventListener('input', e => { const v = parseFloat(e.target.value); if (!isFinite(v)) return; S.bb = clamp(v, 0, 5); renderAll(true); rerankSoon(); });
+$('#inCSideLen').addEventListener('input', e => { const v = parseFloat(e.target.value); if (!isFinite(v)) return; S.corner.sideLen = clamp(v, 30, 400); renderAll(true); rerankSoon(); });
+const ck = (id, key) => { const el = $(id); el.addEventListener('change', () => { S[key] = el.checked; renderAll(); }); };
+ck('#ckClothes', 'clothes'); ck('#ckPeople', 'people'); ck('#ckOpen', 'open'); ck('#ckLight', 'light');
+function autoFit() {
+  const fr = S.units.filter(u => u.k === 'f');
+  const cc = cornerOn() ? {side:S.corner.side, place:S.corner.place, kind:S.corner.kind, own:S.corner.own} : null;
+  if (!fr.length && !cc) return;
+  const r = optimise(fr.map(u => u.w), false, fr.map(u => u.own), cc);
+  let k = 0; S.units.forEach(u => { if (u.k === 'f') { const n = r.units[k++]; u.p = n.p; u.items = n.items; } });
+  if (cc) { S.corner.cf = r.cf; S.corner.cu = r.cu; }
+  S.selItem = -1; S.chip = '';
+}
+function fitCornerInterior() {
+  if (!cornerOn()) return;
+  ensureCorner();
+  const c = S.corner; let best = null;
+  CF_KEYS.forEach(pf => cuKeys(c.kind).forEach(pu => {
+    const cf = mkCF(c.kind, c.own, pf), cu = mkCU(c.kind, c.own, pu);
+    const f = fit([...S.units, cf, cu], S.inv), v = f.score * 1000 - (unitCost(cf, false) + unitCost(cu, false)) / 100000 * 2.5;
+    if (!best || v > best.v) best = {v, cf, cu};
+  }));
+  c.cf = best.cf; c.cu = best.cu;
+}
+$('#btnAuto').addEventListener('click', () => { autoFit(); renderAll(); });
+$('#btnReset').addEventListener('click', () => { S = DEF(); syncInputs(); buildInv(); rankCandidates(); if (CAND[0]) applyCand(CAND[0]); renderAll(); });
+function syncInputs() {
+  FIELDS.forEach(([id, key]) => { $(id).value = S[key]; });
+  $('#ckRoom').checked = roomOn(); $('#inBB').value = S.bb;
+  ROOMF.forEach(([id, key]) => { $(id).value = S.room[key]; $(id).disabled = !roomOn(); });
+  $('#inFront').disabled = roomOn(); $('#inEnds').disabled = roomOn();
+  if (roomOn()) $('#inFront').value = frontSpace();
+  const so = $('#inCSide').options; so[1].text = roomOn() ? '왼쪽 모서리 (문 쪽 벽)' : '왼쪽 모서리'; so[2].text = roomOn() ? '오른쪽 모서리 (창 쪽 벽)' : '오른쪽 모서리';
+  $('#inCSide').value = cornerOn() ? S.corner.side : 'none'; $('#inCPlace').value = S.corner.place; $('#inCKind').value = S.corner.kind; $('#inCSideLen').value = S.corner.sideLen;
+  ['#inCPlace', '#inCKind'].forEach(i => { $(i).disabled = !cornerOn(); }); $('#inCSideLen').disabled = !cornerOn() || roomOn();
+  if (roomOn() && cornerOn()) $('#inCSideLen').value = r1(sideLimit(S.corner.side));
+  [['#ckClothes', 'clothes'], ['#ckPeople', 'people'], ['#ckOpen', 'open'], ['#ckLight', 'light']].forEach(([i, k]) => { $(i).checked = !!S[k]; });
+}
+$('#viewSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; S.view = b.dataset.v; renderAll(); });
+
+/* ---------- 3D ---------- */
+let G = null;
+function init3D() {
+  if (G || !window.THREE) { if (!window.THREE) $('#threeMsg').hidden = false; return; }
+  const THREE = window.THREE, cv = $('#cv');
+  let R;
+  try { R = new THREE.WebGLRenderer({canvas:cv, antialias:true}); } catch (e) { $('#threeMsg').hidden = false; return; }
+  R.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  const scene = new THREE.Scene(), cam = new THREE.PerspectiveCamera(30, 1.6, 10, 6000), root = new THREE.Group();
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x7a8696, .9));
+  const dl = new THREE.DirectionalLight(0xffffff, .5); dl.position.set(250, 420, 600); scene.add(dl, root);
+  G = {THREE, R, scene, cam, root, az:-.62, el:.22, zoom:1, movers:[], openT:0, dirty:true, side:undefined};
+  const pts = new Map(); let pinch = 0;
+  cv.addEventListener('pointerdown', e => { pts.set(e.pointerId, [e.clientX, e.clientY]); try { cv.setPointerCapture(e.pointerId); } catch (err) {} });
+  cv.addEventListener('pointermove', e => {
+    const p = pts.get(e.pointerId); if (!p) return;
+    if (pts.size === 1) { G.az = clamp(G.az - (e.clientX - p[0]) * .006, -1.35, 1.35); G.el = clamp(G.el + (e.clientY - p[1]) * .005, .02, 1.2); }
+    pts.set(e.pointerId, [e.clientX, e.clientY]);
+    if (pts.size === 2) { const [a, b] = [...pts.values()], d = Math.hypot(a[0] - b[0], a[1] - b[1]); if (pinch) G.zoom = clamp(G.zoom * pinch / d, .45, 2); pinch = d; }
+    G.dirty = true;
+  });
+  const up = e => { pts.delete(e.pointerId); pinch = 0; };
+  cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
+  cv.addEventListener('wheel', e => { e.preventDefault(); G.zoom = clamp(G.zoom * (e.deltaY > 0 ? 1.08 : .925), .45, 2); G.dirty = true; }, {passive:false});
+  new ResizeObserver(() => { G.dirty = true; }).observe($('#three'));
+  const loop = () => {
+    requestAnimationFrame(loop);
+    if (S.view !== 'three') return;
+    const target = S.open ? 1 : 0;
+    if (Math.abs(G.openT - target) > .001) { G.openT += clamp(target - G.openT, -.035, .035); G.dirty = true; }
+    if (!G.dirty) return; G.dirty = false;
+    const w = cv.parentElement.clientWidth - 12, hgt = Math.round(clamp(w * .62, 260, 560));
+    if (cv.width !== Math.round(w * R.getPixelRatio()) || cv.height !== Math.round(hgt * R.getPixelRatio())) { R.setSize(w, hgt, false); cv.style.height = hgt + 'px'; cam.aspect = w / hgt; }
+    G.movers.forEach(m => { const t = clamp(G.openT * 1.6 - m.lag, 0, 1), ez = t * t * (3 - 2 * t); m.o.position.z = m.z + ez * 40; });
+    const fy = cam.fov * Math.PI / 360, fx = Math.atan(Math.tan(fy) * cam.aspect);
+    const span = S.wall + 150 + (cornerOn() ? 60 : 0);
+    const dist = Math.max(span / 2 / Math.tan(fx), (S.ceil + 70) / 2 / Math.tan(fy)) * 1.02 * G.zoom;
+    const tx = S.wall / 2, ty = S.ceil * .42, tz = roomOn() ? Math.min(110, S.room.depth * .4) : cornerOn() ? 70 : 40;
+    cam.position.set(tx + dist * Math.sin(G.az) * Math.cos(G.el), ty + dist * Math.sin(G.el), tz + dist * Math.cos(G.az) * Math.cos(G.el));
+    cam.lookAt(tx, ty, tz); cam.updateProjectionMatrix();
+    R.render(scene, cam);
+  };
+  loop();
+}
+function cssColor(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || '#888'; }
+function build3D(L) {
+  if (!G) return;
+  const {THREE, root} = G;
+  root.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material && o.material.dispose) o.material.dispose(); });
+  root.clear(); G.movers = [];
+  const side = L.g ? S.corner.side : null;
+  if (G.side !== side) { G.side = side; G.az = side === 'left' ? .85 : side === 'right' ? -.85 : -.62; }
+  const col = n => new THREE.Color(cssColor(n));
+  G.scene.background = col('--stage');
+  const Mat = (c, o) => new THREE.MeshLambertMaterial(Object.assign({color:c}, o || {}));
+  const K = {mPanel:Mat(0xf3f3ee), mIn:Mat(0xe4e6e4), mMetal:Mat(0xaeb6c0), mEdge:new THREE.LineBasicMaterial({color:col('--edge')}),
+    gcol:[1, 2, 3, 4, 5, 6].map(i => Mat(col('--c' + i))), own:{a:Mat(col('--a')), b:Mat(col('--b')), s:Mat(col('--s'))}};
+  K.box = (parent, w, h, d, x, y, z, mat, edges) => {
+    const g = new THREE.BoxGeometry(Math.max(.05, w), Math.max(.05, h), Math.max(.05, d)), m = new THREE.Mesh(g, mat);
+    m.position.set(x + w / 2, y + h / 2, z + d / 2);
+    if (edges) m.add(new THREE.LineSegments(new THREE.EdgesGeometry(g), K.mEdge));
+    parent.add(m); return m;
+  };
+  const box = K.box, W = S.wall, C = S.ceil, bb = bbv(), fz = DEPTH + Math.max(S.front, 60) + 90;
+  const mSide = Mat(col('--wall'), {transparent:true, opacity:.5});
+  if (roomOn()) {
+    const R = S.room, RW = R.depth, d0 = doorStart(), d1 = doorEnd(), w0 = R.winStart, w1 = R.winStart + R.winW;
+    const mT = Mat(col('--wall'), {transparent:true, opacity:.22, depthWrite:false});
+    box(root, W, 1, RW, 0, -1, 0, Mat(col('--line')));
+    box(root, W, C, 1, 0, 0, -1, Mat(col('--wall')));
+    /* south wall (planner left) with the door */
+    box(root, 1, C, d0, -1, 0, 0, mT); box(root, 1, C, Math.max(.1, RW - d1), -1, 0, d1, mT); box(root, 1, C - 205, d1 - d0, -1, 205, d0, mT);
+    box(root, R.doorW, 200, 2.5, 0, 0, d1 - 2.5, Mat(0xd9cbb3), true);
+    const arc = new THREE.Mesh(new THREE.RingGeometry(R.doorW - 1.2, R.doorW, 32, 1, 0, Math.PI / 2), Mat(col('--edge'), {side:THREE.DoubleSide}));
+    arc.rotation.x = -Math.PI / 2; arc.position.set(0, .4, d1); root.add(arc);
+    /* north wall (planner right) with the window (sill/top assumed 90/210) */
+    box(root, 1, C, w0, W, 0, 0, mT); box(root, 1, C, Math.max(.1, RW - w1), W, 0, w1, mT);
+    box(root, 1, 90, w1 - w0, W, 0, w0, mT); box(root, 1, C - 210, w1 - w0, W, 210, w0, mT);
+    box(root, .6, 120, w1 - w0, W, 90, w0, Mat(0x9cc3e6, {transparent:true, opacity:.45}), true);
+    /* east wall: a low outline only, so the camera can look through */
+    box(root, W, 6, 1, 0, 0, RW, Mat(col('--wall')));
+  } else {
+    const closedL = endClosed('left') || side === 'left', closedR = endClosed('right') || side === 'right';
+    const sl = side ? L.sideShown : 0;
+    box(root, W + 160, 1, Math.max(fz, sl + 30), -80, -1, 0, Mat(col('--line')));
+    box(root, W + (closedL ? 0 : 70) + (closedR ? 0 : 70), C, 1, closedL ? 0 : -70, 0, -1, Mat(col('--wall')));
+    if (closedL) box(root, 1, C, side === 'left' ? sl : DEPTH + 30, -1, 0, 0, mSide);
+    if (closedR) box(root, 1, C, side === 'right' ? sl : DEPTH + 30, W, 0, 0, mSide);
+    box(root, W, 46, 5, 0, 0, DEPTH + S.front, Mat(col('--edge'), {transparent:true, opacity:.5}), true);
+  }
+  if (L.sum) box(root, L.sum, .4, 45, L.start, .05, bb + DEPTH, Mat(col('--accent'), {transparent:true, opacity:.28}));
+  const mainG = new THREE.Group(); mainG.position.z = bb; root.add(mainG);
+  const sideG = new THREE.Group();
+  if (side) { sideG.rotation.y = side === 'left' ? Math.PI / 2 : -Math.PI / 2; sideG.position.x = side === 'left' ? bb : W - bb; root.add(sideG); }
+  let lag = {v:0};
+  allUnits().forEach(u => {
+    const onSide = (u.k === 'cf' || u.k === 'cu') && u._wall === 'side';
+    unit3D(onSide ? sideG : mainG, u, onSide && side === 'right' ? -W : 0, K, lag);
+  });
+  if (S.people) [['a', S.ha], ['b', S.hb]].forEach(([p, ht]) => {
+    const u = S.units.find(x => x.k === 'f' && x.own === p) || S.units.find(x => x.k === 'f' && x.own === 's') || (cornerOn() && S.corner.own === p ? (S.corner.cf._wall === 'main' ? S.corner.cf : S.corner.cu) : null);
+    if (!u) return;
+    const m = Mat(col('--' + p), {transparent:true, opacity:.6}), cx = u._x + u.w / 2, cz = bb + DEPTH + Math.min(60, Math.max(30, frontSpace() * .6));
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(ht * .07, ht * .05, ht * .86, 16), m); body.position.set(cx, ht * .43, cz); root.add(body);
+    const head = new THREE.Mesh(new THREE.SphereGeometry(ht * .065, 16, 12), m); head.position.set(cx, ht * .935, cz); root.add(head);
+  });
+  G.dirty = true;
+}
+function unit3D(par, u, xo, K, lag) {
+  const {THREE} = G, box = K.box, x = u._x + xo;
+  if (u.k === 'end') {
+    const st = new THREE.MeshLambertMaterial({color:0xdfe2e6});
+    [[0, 0], [u.w - 1.5, 0], [0, DEPTH - 1.5], [u.w - 1.5, DEPTH - 1.5]].forEach(([a, b]) => box(par, 1.5, FH, 1.5, x + a, 0, b, st));
+    [20, 60, 165].forEach(y => box(par, u.w, 1.2, DEPTH, x, y, 0, st, true));
+    return;
+  }
+  const D = u.k === 'cu' ? u._cd : u.k === 'mid' ? 35 : DEPTH;
+  if (u.k === 'cu') {
+    box(par, 1.8, FH, D, u._outerRight ? x + u.w - 1.8 : x, 0, 0, K.mPanel, true);
+    box(par, u.w, 1.8, D, x, FH - 1.8, 0, K.mPanel, true); box(par, u.w, 1.8, D, x, BASE - 1.8, 0, K.mPanel);
+    box(par, u.w, FH - 2, .4, x, 1, .2, K.mIn);
+  } else {
+    box(par, 1.8, FH, D, x, 0, 0, K.mPanel, true); box(par, 1.8, FH, D, x + u.w - 1.8, 0, 0, K.mPanel, true);
+    box(par, u.w - 3.6, 1.8, D, x + 1.8, FH - 1.8, 0, K.mPanel, true); box(par, u.w - 3.6, 1.8, D, x + 1.8, BASE - 1.8, 0, K.mPanel);
+    box(par, u.w - 3.6, BASE - 1.8, 1.6, x + 1.8, 0, D - 4, K.mPanel); box(par, u.w - 3.6, FH - 2, .4, x + 1.8, 1, .2, K.mIn);
+  }
+  if (u.k === 'mid') {
+    [45, 84, 123, 152, 176].forEach((y, k) => box(par, u.w - 3.6, 1.8, D - 2, x + 1.8, y, 1, k === 2 || k === 3 ? new THREE.MeshLambertMaterial({color:0xbcd4e6, transparent:true, opacity:.5}) : K.mPanel, true));
+    return;
+  }
+  box(par, u.w, 1.4, 1.4, x, FH, D - 1.4, K.own[u.own]);
+  if (needsDivider(u)) box(par, 1.8, DIV_TOP - BASE, D - 2, (u._coverLeft ? u._span[0] : u._span[1] - 1.8) + xo, BASE, 1, K.mPanel, true);
+  const geo = sortedGeo(u), seed = seedOf(u), ix = x + 1.8, iw = u.w - 3.6;
+  geo.forEach((g, k) => {
+    const below = geo[k - 1], y = g.y, rg = itemRange(u, g), sx = rg[0] + xo, sw = rg[1];
+    if (g.t === 'rail') {
+      const c = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.1, iw, 10), K.mMetal);
+      c.rotation.z = Math.PI / 2; c.position.set(x + u.w / 2, y + 1.5, D / 2); par.add(c);
+      if (S.clothes) garmentList(u, seed, g, below).forEach(q => box(par, Math.max(1.2, q.w - 1), q.len, Math.min(40, D - 6), x + q.x, y - 1 - q.len, Math.max(3, (D - 40) / 2), K.gcol[q.c - 1]));
+    } else if (g.t === 'shelf') {
+      box(par, sw, 1.8, D - 2, sx, y, 1, K.mPanel, true);
+      const cl = foldClear(geo, k);
+      if (S.clothes && cl >= 10) { const stacks = Math.max(1, Math.floor((g.w - 3.9) / 28)), per = Math.min(9, Math.floor(cl / 3.5)), Rr = rnd(seed * 17 + g.idx * 5 + 3), cell = sw / stacks;
+        for (let a = 0; a < stacks; a++) { const cnt = Math.max(2, Math.round(per * (.55 + Rr() * .45))); for (let b = 0; b < cnt; b++) Rr(); box(par, 22, cnt * 3.1, Math.min(30, D - 6), sx + a * cell + (cell - 22) / 2, y + 1.8, Math.max(2, D - 36), K.gcol[Math.floor(Rr() * 6)], true); } }
+    } else {
+      const grp = new THREE.Group(); par.add(grp); G.movers.push({o:grp, z:0, lag:(lag.v++ % 7) * .09});
+      if (g.t === 'drawer') { box(grp, sw - .8, 15.4, 2, sx + .4, y + .3, D - 4, K.mPanel, true); box(grp, sw - 2, 12, D - 8, sx + 1, y + .3, 4, K.mIn, true); }
+      else if (g.t === 'basket') box(grp, sw - 1.2, 15, D - 6, sx + .6, y + .3, 4, new THREE.MeshLambertMaterial({color:0xdfe3e8, transparent:true, opacity:.4}), true);
+      else if (g.t === 'tray') box(grp, sw - .8, 4, D - 5, sx + .4, y, 3, K.mPanel, true);
+      else { box(grp, sw - .8, 2.5, D - 5, sx + .4, y + 1, 3, K.mMetal, true);
+        const c = y - (below ? below.y + below.h : BASE);
+        if (S.clothes && c >= 40) { const Rr = rnd(seed * 13 + g.idx), n = Math.floor((sw - 3) / 7); for (let a = 0; a < n; a++) { const ci = [5, 1, 3, 5, 2, 5][Math.floor(Rr() * 6)], len = Math.min(c - 5, 56 + Rr() * 6); box(grp, 1.6, len, D - 14, sx + 3.6 + a * 7, y - len, 7, K.gcol[ci - 1]); } } }
+    }
+  });
+}
+
+/* ---------- natural-language commands (Claude via the sample capability) ---------- */
+const NL = {sample:null, ctl:null, undo:null, timer:0, state:'wait'};
+const nlOut = (html, cls) => { const o = $('#nlOut'); o.className = 'nl-out' + (cls ? ' ' + cls : ''); o.innerHTML = html; };
+const PASS_KEY = 'pax240pass';
+const getPass = () => { try { return localStorage.getItem(PASS_KEY) || ''; } catch (e) { return NL.memPass || ''; } };
+const setPass = v => { NL.memPass = v; try { if (v) localStorage.setItem(PASS_KEY, v); else localStorage.removeItem(PASS_KEY); } catch (e) {} };
+function showPass(on) { $('#nlPassRow').hidden = !on; if (on) setTimeout(() => $('#nlPass').focus(), 0); }
+function initNL() {
+  if (STANDALONE) {
+    NL.state = 'ready'; NL.sample = 'api';
+    $('#nlHint').textContent = '말로 적은 지시를 Claude가 읽고 플래너를 바꿉니다. 처음 한 번 암호를 넣으면 이 기기에서 기억합니다.';
+    showPass(!getPass());
+    nlOut(getPass() ? '예시를 누르거나 직접 적고 적용을 누르세요.' : '남편에게 받은 암호를 넣고 저장을 누르세요. 아래 컨트롤은 암호 없이도 모두 쓸 수 있습니다.', 'muted');
+    fetch('/api/command', {cache:'no-store'}).then(r => r.json()).then(d => { if (d && d.keySet === false) nlOut('서버에 Claude API 키가 아직 설정되지 않았습니다. 아래 컨트롤은 그대로 쓸 수 있습니다.', 'muted'); }).catch(() => {});
+    return;
+  }
+  const cl = window.claude;
+  const off = msg => { NL.state = 'off'; $('#nlGo').disabled = true; nlOut(msg, 'muted'); };
+  if (!cl || typeof cl.use !== 'function') { off('이 보기에서는 Claude를 부를 수 없습니다. claude.ai에서 열면 말로 바꾸기를 쓸 수 있고, 아래 컨트롤로도 모든 항목을 바꿀 수 있습니다.'); return; }
+  nlOut('Claude 연결을 확인하는 중입니다…', 'muted');
+  cl.use('sample').then(s => {
+    if (!s) return off('이 보기에서는 Claude를 부를 수 없습니다. 아래 컨트롤로 직접 바꿔 주세요.');
+    NL.sample = s; NL.state = 'ready';
+    nlOut('예시를 누르거나 직접 적고 적용을 누르세요. 처음 한 번 Claude 사용 허락을 묻습니다.', 'muted');
+  }, () => off('Claude 연결을 확인하지 못했습니다. 아래 컨트롤로 직접 바꿔 주세요.'));
+}
+function wifeSide() {
+  const xs = allUnits().filter(u => ownerOf(u) === 'a').map(u => (u._wall === 'side' ? (S.corner.side === 'left' ? 0 : S.wall) : u._x + u.w / 2));
+  if (!xs.length) return 'none';
+  const m = xs.reduce((a, b) => a + b, 0) / xs.length;
+  return m < S.wall / 2 ? 'left' : 'right';
+}
+function stateForPrompt() {
+  const L = layout(), g = L.g, f = fit(allUnits(), S.inv);
+  return {
+    space:{wall:S.wall, ceil:S.ceil, ends:S.ends, align:S.align, front:frontSpace(), ha:S.ha, hb:S.hb, baseboard:bbv()},
+    room: roomOn() ? {on:true, depth:S.room.depth, window:{wall:'north = 정면 벽 기준 오른쪽 옆 벽', from:S.room.winStart, to:S.room.winStart + S.room.winW}, door:{wall:'south = 정면 벽 기준 왼쪽 옆 벽', from:r1(doorStart()), to:r1(doorEnd())}, sideLimit:{left:r1(sideLimit('left')), right:r1(sideLimit('right'))}} : {on:false},
+    corner: g ? {side:S.corner.side, place:S.corner.place, kind:S.corner.kind, own:S.corner.own, sideLimit:r1(sideLimit(S.corner.side)), mainUse:r1(g.mainUse), sideUse:r1(g.sideUse)} : {side:'none'},
+    wifeSide:wifeSide(),
+    units:allUnits().map(u => ({id:u._key, type:{f:'frame', cf:'corner-frame', cu:'corner-unit', mid:'mid', end:'end'}[u.k], w:u.k === 'cu' ? 53 : u.w, own:ownerOf(u), preset:u.p || 'custom', wall:u._wall || 'main',
+      x:[r1(u._x), r1(u._x + u.w)], items:(u.items || []).map(i => ({t:i.t, h:Math.round(iy(i))}))})),
+    freeWidthOnMainWall:r1(L.gap),
+    inventory:S.inv, fitPct:Math.round(f.pct * 100),
+    candidates:CAND.slice(0, 12).map((c, i) => ({no:i + 1, id:c.id, label:chipLabel(c) + (c.cc ? ' / ' + chipSub(c) : ''), fitPct:Math.round(c.pct * 100), cost:c.cost, sideWallShort:!!c.short}))
+  };
+}
+function buildPrompt(text) {
+  return `너는 IKEA PAX 오픈형 옷장 플래너 페이지의 명령 해석기다. 사용자의 한국어 요청을 아래 작업(op) 목록으로 바꿔 JSON 객체 하나로만 답한다.
+형식: {"reply":"한국어 1~3문장. 무엇을 바꿨는지, 못 한 것은 이유, 가정한 것","ops":[...]}
+
+좌표와 용어
+- 왼쪽/오른쪽은 정면 벽(옷장 벽)을 바라본 기준. 방 스케치가 켜져 있으면 옷장 벽은 서쪽 벽이고, 왼쪽 = 아래(남쪽, 문 있는) 벽, 오른쪽 = 위(북쪽, 창 있는) 벽이다. "문 쪽", "창 쪽"도 이 기준으로 바꾼다.
+- 높이 h는 바닥에서 부품 아래면까지 cm. 걸레받이(space.baseboard)만큼 양 끝과 벽에서 띄워 계산한다.
+- 유닛 id: m1..mN = 정면 벽 유닛(왼쪽부터, 코너 제외). cf = 코너 프레임, cu = 추가코너유닛.
+- own: a=아내, b=남편, s=공용. "아내 쪽"은 state.wifeSide 쪽.
+- 프레임은 높이 201cm, 폭 50/75/100, 깊이 58만 쓴다. 236cm 프레임은 한국 몰에 없다.
+- 코너형: 추가코너유닛(53cm, 선반 4 포함)과 짝 프레임 1개가 모서리를 감싼다.
+  kind "58" = 깊이58 코너유닛 + 100 프레임: 두 벽에 각각 110.5cm.
+  kind "35" = 깊이35 코너유닛 + 75 프레임: 프레임이 놓인 벽 88cm, 코너유닛이 놓인 벽 110.5cm.
+  place "main" = 코너유닛이 정면 벽, 짝 프레임은 옆 벽. place "side" = 짝 프레임이 정면 벽, 코너유닛이 옆 벽.
+  옆 벽 사용 가능 길이는 corner.sideLen.
+
+op 목록 (필요한 키만 쓴다)
+- {"op":"space","wall":cm,"ceil":cm,"ends":"closed|left|right|both"(트인 쪽),"align":"left|center|right","front":cm,"ha":아내키,"hb":남편키,"sideLen":옆벽길이}
+- {"op":"room","on":true|false,"depth":방폭,"bb":걸레받이두께,"winStart":옷장벽에서 창틀까지,"winW":창폭,"doorFromE":맞은편 벽에서 문틀까지,"doorW":문폭}  방 스케치 치수 수정
+- {"op":"inventory","who":"a|b","long":n,"short":n,"pants":n,"fold":n,"small":n}
+- {"op":"corner","side":"none|left|right","place":"main|side","kind":"58|35","own":"a|b|s"}  코너를 켜거나 끄거나 모서리를 바꾸거나, 정면 벽 유닛이 더 이상 들어가지 않으면 페이지가 정면 벽 조합을 즉시 다시 고르고 m 번호가 바뀐다. 그 경우 같은 요청 안에서 m 유닛을 고치지 말고, reply에서 결과를 보고 다시 말해 달라고 안내한다. 코너 내부(cf, cu) 수정은 corner 뒤에 써도 된다.
+- {"op":"pick","no":후보번호} 또는 {"op":"pick","id":"후보 id"}  state.candidates 중 하나를 적용
+- {"op":"layout","units":[{"type":"frame|mid|end","w":50|75|100,"own":"a|b|s","preset":"프리셋 id"}]}  정면 벽 유닛 전체 교체(코너 제외, 왼쪽부터)
+- {"op":"unit","id":"m2","own":"a|b|s","preset":"id","w":50|75|100}
+- {"op":"add_unit","type":"frame|mid|end","w":50|75|100,"own":"a|b|s","preset":"id","at":위치(1부터, 생략 시 맨 끝)}
+- {"op":"remove_unit","id":"m3"}
+- {"op":"move_unit","id":"m3","to":1}
+- {"op":"items","id":"m1","items":[{"t":"rail|shelf|drawer|basket|tray|pants","h":cm}]}  내부 전체 교체
+- {"op":"add_item","id":"m1","t":"drawer","h":cm}  h 생략 가능
+- {"op":"remove_item","id":"m1","t":"drawer","h":cm}  h 생략 시 그 종류 하나
+- {"op":"auto"}  지금 프레임 배치를 유지하고 내부 구성을 옷 수량에 맞게 자동으로 고른다
+- {"op":"view","view":"plan|front|three","clothes":true|false,"people":true|false,"open":true|false,"light":true|false}  open=3D에서 서랍 열기, light=센서 조명 견적 추가
+
+부품: rail 옷걸이봉, shelf 선반, drawer 서랍(높이 16), basket 메시바구니(16), tray 인출식트레이(4), pants 인출식바지걸이(3.5).
+제약: cu에는 shelf(최대 4)와 rail(kind 58만)만 넣는다. cf의 서랍·바구니·트레이·바지걸이는 바닥에서 88cm 아래 50cm 칸에만 들어간다.
+프리셋 id: ${PKEYS.map(p => `${p}(${PRESET[p].n})`).join(', ')}. cu 프리셋: curail(걸이 + 선반 2, kind 58만), cushelf(선반 4).
+
+판단 규칙
+- 질문이면 ops를 비우고 reply로 답한다.
+- 규격에 없거나 벽에 안 들어가는 요청은 하지 말고 reply에 이유를 쓴다.
+- 애매하면 가장 그럴듯하게 해석하고, 그렇게 가정했다고 reply에 쓴다.
+
+현재 상태(JSON):
+${JSON.stringify(stateForPrompt())}
+
+사용자 요청: ${text}`;
+}
+function applyOps(ops) {
+  const notes = [];
+  let corner = null, layoutSet = false, rerank = false, n = 0;
+  const num = (v, a, b) => { const x = Number(v); if (!isFinite(x)) throw new Error('숫자가 아닙니다: ' + v); return clamp(x, a, b); };
+  const need = (id) => { const u = getUnit(id); if (!u) throw new Error(`유닛 ${id}이(가) 없습니다`); return u; };
+  const ownOk = o => ['a', 'b', 's'].includes(o);
+  const mkFromSpec = s => {
+    const type = s.type || 'frame';
+    if (type === 'mid') return mkUnit('mid', 35);
+    if (type === 'end') return mkUnit('end', 20);
+    const w = Number(s.w); if (![50, 75, 100].includes(w)) throw new Error('프레임 폭은 50·75·100만 됩니다');
+    return mkUnit('f', w, ownOk(s.own) ? s.own : 's', PRESET[s.preset] ? s.preset : 'hangdr');
+  };
+  for (const o of (Array.isArray(ops) ? ops : []).slice(0, 40)) {
+    if (!o || typeof o !== 'object') continue;
+    try {
+      switch (o.op) {
+        case 'space':
+          if (o.wall != null) { S.wall = num(o.wall, 120, 400); rerank = true; }
+          if (o.ceil != null) S.ceil = num(o.ceil, 200, 300);
+          if (o.front != null) S.front = num(o.front, 30, 300);
+          if (o.ha != null) S.ha = num(o.ha, 140, 200);
+          if (o.hb != null) S.hb = num(o.hb, 140, 210);
+          if (o.sideLen != null) { S.corner.sideLen = num(o.sideLen, 30, 400); rerank = true; }
+          if (o.bb != null) { S.bb = num(o.bb, 0, 5); rerank = true; }
+          if (['closed', 'left', 'right', 'both'].includes(o.ends)) S.ends = o.ends;
+          if (['left', 'center', 'right'].includes(o.align)) S.align = o.align;
+          break;
+        case 'room': {
+          if (typeof o.on === 'boolean') S.room.on = o.on;
+          [['depth', 150, 600], ['winStart', 0, 500], ['winW', 30, 400], ['doorFromE', 0, 500], ['doorW', 60, 200]].forEach(([k, lo, hi]) => { if (o[k] != null) S.room[k] = num(o[k], lo, hi); });
+          if (o.bb != null) S.bb = num(o.bb, 0, 5);
+          rerank = true; break;
+        }
+        case 'inventory': {
+          if (o.who !== 'a' && o.who !== 'b') throw new Error('옷 수량은 아내(a) 또는 남편(b)에게만 넣습니다');
+          CATS.forEach(c => { if (o[c.k] != null) S.inv[o.who][c.k] = Math.round(num(o[c.k], 0, 300)); });
+          rerank = true; break;
+        }
+        case 'corner': {
+          const wasOn = cornerOn(), prevSide = S.corner.side, prevKind = S.corner.kind;
+          if (['none', 'left', 'right'].includes(o.side)) S.corner.side = o.side;
+          if (['main', 'side'].includes(o.place)) S.corner.place = o.place;
+          if (o.kind != null && CK[String(o.kind)]) S.corner.kind = String(o.kind);
+          if (ownOk(o.own)) S.corner.own = o.own;
+          ensureCorner();
+          const g = cornerGeo(), fits = sumW() <= S.wall - (g ? g.mainUse : 0) + .01;
+          rankCandidates(); rerank = false;
+          if (wasOn !== cornerOn() || (cornerOn() && prevSide !== S.corner.side) || !fits) {
+            const best = cornerOn() ? bestFor(['main', 'side'].includes(o.place) ? o.place : null, o.kind != null && CK[String(o.kind)] ? String(o.kind) : null) : CAND[0];
+            if (best) { applyCand(best); notes.push(`정면 벽 조합을 ${chipLabel(best)}(으)로 다시 골랐습니다.`); }
+          } else if (cornerOn() && (prevKind !== S.corner.kind || o.place || ownOk(o.own))) fitCornerInterior();
+          corner = true;
+          break;
+        }
+        case 'pick': {
+          if (rerank) { rankCandidates(); rerank = false; }
+          const c = o.id ? CAND.find(x => x.id === o.id) : CAND[Number(o.no) - 1];
+          if (!c) throw new Error('그런 조합 번호가 없습니다');
+          applyCand(c); layoutSet = true; corner = null; break;
+        }
+        case 'layout':
+          if (!Array.isArray(o.units)) throw new Error('layout에 units 목록이 없습니다');
+          S.units = o.units.slice(0, 8).map(mkFromSpec); S.sel = 'm1'; layoutSet = true; break;
+        case 'unit': {
+          const u = need(o.id);
+          if (ownOk(o.own)) { if (u.k === 'cf' || u.k === 'cu') { S.corner.own = o.own; ensureCorner(); } else if (u.k === 'f') u.own = o.own; }
+          if (o.preset) { const keys = u.k === 'cu' ? cuKeys(u.kind) : u.k === 'cf' ? CF_KEYS : u.k === 'f' ? PKEYS : [];
+            if (!keys.includes(o.preset)) throw new Error(`${unitName(u)}에 쓸 수 없는 구성: ${o.preset}`); u.p = o.preset; u.items = mkItems(o.preset); }
+          if (o.w != null) { const w = Number(o.w); if (u.k !== 'f' || ![50, 75, 100].includes(w)) throw new Error('폭은 정면 벽 프레임에서 50·75·100으로만 바꿀 수 있습니다'); u.w = w; layoutSet = true; }
+          S.sel = o.id; break;
+        }
+        case 'add_unit': {
+          const u = mkFromSpec(o), at = o.at != null ? clamp(Math.round(Number(o.at)) - 1, 0, S.units.length) : S.units.length;
+          S.units.splice(at, 0, u); S.sel = 'm' + (at + 1); layoutSet = true; break;
+        }
+        case 'remove_unit': {
+          if (o.id === 'cf' || o.id === 'cu') { S.corner.side = 'none'; corner = true; rankCandidates(); break; }
+          const u = need(o.id); S.units.splice(S.units.indexOf(u), 1); S.sel = 'm1'; layoutSet = true; break;
+        }
+        case 'move_unit': {
+          const u = need(o.id); if (u.k === 'cf' || u.k === 'cu') throw new Error('코너는 옮길 수 없습니다. 코너 위치를 바꾸세요');
+          const i = S.units.indexOf(u), to = clamp(Math.round(Number(o.to)) - 1, 0, S.units.length - 1);
+          S.units.splice(i, 1); S.units.splice(to, 0, u); S.sel = 'm' + (to + 1); layoutSet = true; break;
+        }
+        case 'items': {
+          const u = need(o.id); if (!Array.isArray(o.items)) throw new Error('items 목록이 없습니다');
+          const keep = u.items; u.items = [];
+          try { o.items.slice().sort((a, b) => (Number(a.h) || 0) - (Number(b.h) || 0)).forEach(it => addItem(u, it.t, Number(it.h))); u.p = ''; }
+          catch (err) { u.items = keep; throw err; }
+          S.sel = o.id; S.selItem = -1; break;
+        }
+        case 'add_item': { const u = need(o.id); S.selItem = addItem(u, o.t, o.h != null ? Number(o.h) : null); u.p = ''; S.sel = o.id; break; }
+        case 'remove_item': {
+          const u = need(o.id), cand = u.items.map((it, i) => ({it, i})).filter(x => x.it.t === o.t);
+          if (!cand.length) throw new Error(`${unitName(u)}에 ${T[o.t] ? T[o.t].n : o.t}이(가) 없습니다`);
+          const h = Number(o.h); cand.sort((a, b) => isFinite(h) ? Math.abs(iy(a.it) - h) - Math.abs(iy(b.it) - h) : iy(b.it) - iy(a.it));
+          u.items.splice(cand[0].i, 1); u.p = ''; S.selItem = -1; S.sel = o.id; break;
+        }
+        case 'auto': autoFit(); break;
+        case 'view':
+          if (['plan', 'front', 'three'].includes(o.view)) S.view = o.view;
+          ['clothes', 'people', 'open', 'light'].forEach(k => { if (typeof o[k] === 'boolean') S[k] = o[k]; });
+          if (o.open === true) S.view = 'three';
+          break;
+        default: throw new Error('알 수 없는 작업: ' + o.op);
+      }
+      n++;
+    } catch (err) { notes.push(err.message || String(err)); }
+  }
+  if (rerank || layoutSet) rankCandidates();
+  syncInputs(); buildInv(); renderAll();
+  return {n, notes};
+}
+const NL_ERR = {
+  not_granted:'Claude 사용이 허락되지 않았습니다. 아래 컨트롤로 직접 바꿀 수 있습니다.', sampling_disabled:'이 계정에서는 Claude를 쓸 수 없습니다.',
+  rate_limited:'요청이 많습니다. 잠시 뒤에 다시 시도하세요.', session_expired:'다시 로그인해야 합니다.',
+  invalid_json:'지시를 해석하지 못했습니다. 조금 다르게 적어 보세요.', refused:'이 요청은 처리하지 않았습니다. 다르게 적어 보세요.',
+  empty_completion:'답을 받지 못했습니다. 다시 시도하세요.', prompt_too_large:'지시가 너무 깁니다. 짧게 나눠 주세요.',
+  bad_pass:'암호가 맞지 않습니다. 다시 넣어 주세요.', not_configured:'서버에 Claude API 키가 아직 설정되지 않았습니다.'
+};
+async function callApi(text, signal) {
+  let r;
+  try {
+    r = await fetch('/api/command', {method:'POST', signal, headers:{'content-type':'application/json', 'x-pax-pass':getPass()}, body:JSON.stringify({text, state:stateForPrompt()})});
+  } catch (e) { throw {code: e && e.name === 'AbortError' ? 'cancelled' : 'upstream_error'}; }
+  const d = await r.json().catch(() => ({}));
+  if (r.status === 401) { setPass(''); showPass(true); throw {code:'bad_pass'}; }
+  if (r.status === 503) throw {code:'not_configured'};
+  if (r.status === 429) throw {code:'rate_limited'};
+  if (!r.ok) throw {code: d.error === 'invalid_json' ? 'invalid_json' : 'upstream_error'};
+  return d;
+}
+async function runNL(text) {
+  if (!text.trim()) return;
+  if (!NL.sample) { nlOut(NL.state === 'off' ? '이 보기에서는 Claude를 부를 수 없습니다.' : '아직 Claude 연결을 확인하는 중입니다. 잠시 뒤 다시 눌러 주세요.', 'muted'); return; }
+  if (STANDALONE && !getPass()) { showPass(true); nlOut('암호를 먼저 넣어 주세요.', 'muted'); return; }
+  const ctl = new AbortController(); NL.ctl = ctl;
+  $('#nlGo').disabled = true; $('#nlStop').hidden = false;
+  const t0 = Date.now(); nlOut('생각 중…', 'muted');
+  NL.timer = setInterval(() => nlOut(`생각 중… ${Math.round((Date.now() - t0) / 1000)}초`, 'muted'), 1000);
+  try {
+    const res = STANDALONE ? await callApi(text, ctl.signal) : await NL.sample.json(buildPrompt(text), {signal:ctl.signal, modelTier:'default', effort:'low'});
+    clearInterval(NL.timer);
+    if (!res || typeof res !== 'object') throw {code:'invalid_json'};
+    const snap = JSON.stringify(S);
+    const ops = Array.isArray(res.ops) ? res.ops : [];
+    const r = ops.length ? applyOps(ops) : {n:0, notes:[]};
+    if (r.n) { NL.undo = snap; $('#nlUndo').hidden = false; }
+    let h = esc(res.reply || (r.n ? '적용했습니다.' : '바꾼 것이 없습니다.'));
+    if (r.notes.length) h += `<ul>${r.notes.map(x => `<li>${esc(x)}</li>`).join('')}</ul>`;
+    nlOut(h, '');
+  } catch (e) {
+    clearInterval(NL.timer);
+    const code = e && e.code;
+    if (code === 'cancelled') nlOut('중지했습니다.', 'muted');
+    else { nlOut(esc(NL_ERR[code] || 'Claude 응답을 받지 못했습니다. 다시 시도하세요.'), 'err');
+      if (code === 'not_granted' || code === 'sampling_disabled') { NL.sample = null; NL.state = 'off'; } }
+  } finally {
+    $('#nlGo').disabled = NL.state === 'off'; $('#nlStop').hidden = true; NL.ctl = null;
+  }
+}
+$('#nlForm').addEventListener('submit', e => { e.preventDefault(); runNL($('#nlIn').value); });
+$('#nlIn').addEventListener('keydown', e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); runNL($('#nlIn').value); } });
+$('#nlStop').addEventListener('click', () => { if (NL.ctl) NL.ctl.abort(); });
+$('#nlPassSave').addEventListener('click', () => { const v = $('#nlPass').value.trim(); if (!v) return; setPass(v); $('#nlPass').value = ''; showPass(false); nlOut('암호를 저장했습니다. 이제 지시를 적고 적용을 누르세요.', 'muted'); });
+$('#nlPass').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('#nlPassSave').click(); } });
+
+/* ---------- share the current design as a link (standalone page only) ---------- */
+const b64u = u8 => { let s = ''; for (let i = 0; i < u8.length; i++) s += String.fromCharCode(u8[i]); return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); };
+const unb64u = s => { s = s.replace(/-/g, '+').replace(/_/g, '/'); while (s.length % 4) s += '='; const bin = atob(s); const u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return u; };
+async function encodeState() {
+  const json = JSON.stringify(S, (k, v) => (k && k[0] === '_') ? undefined : v), bytes = new TextEncoder().encode(json);
+  if (window.CompressionStream) { const st = new Blob([bytes]).stream().pipeThrough(new CompressionStream('deflate-raw')); return 'z' + b64u(new Uint8Array(await new Response(st).arrayBuffer())); }
+  return 'j' + b64u(bytes);
+}
+async function decodeState(str) {
+  let bytes = unb64u(str.slice(1));
+  if (str[0] === 'z') { const st = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate-raw')); bytes = new Uint8Array(await new Response(st).arrayBuffer()); }
+  const o = JSON.parse(new TextDecoder().decode(bytes));
+  if (!o || !Array.isArray(o.units) || !o.corner || !o.room || !o.inv) throw new Error('bad');
+  return o;
+}
+const shareMsg = (m, cls) => { const el = $('#shareMsg'); el.textContent = m; el.className = 'note' + (cls ? ' ' + cls : ''); };
+if (STANDALONE) {
+  $('#shareRow').hidden = false;
+  $('#btnShare').addEventListener('click', async () => {
+    try {
+      const url = location.origin + location.pathname + '#s=' + await encodeState();
+      if (navigator.share) { try { await navigator.share({title:'PAX 옷장 구성', text:'지금 옷장 구성입니다. 링크를 열면 그대로 보입니다.', url}); shareMsg('보냈습니다.'); return; } catch (e) { if (e && e.name === 'AbortError') return; } }
+      try { await navigator.clipboard.writeText(url); shareMsg('링크를 복사했습니다. 카카오톡 등에 붙여 넣어 보내세요.'); }
+      catch (e) { $('#shareUrl').hidden = false; $('#shareUrl').value = url; $('#shareUrl').select(); shareMsg('아래 링크를 길게 눌러 복사하세요.'); }
+    } catch (e) { shareMsg('링크를 만들지 못했습니다.', 'bad'); }
+  });
+}
+async function loadSharedFromHash() {
+  const m = /^#s=([jz][A-Za-z0-9_-]+)$/.exec(location.hash || '');
+  if (!m) return;
+  try {
+    const o = await decodeState(m[1]);
+    NL.undo = JSON.stringify(S); $('#nlUndo').hidden = false;
+    S = Object.assign(DEF(), o);
+    syncInputs(); buildInv(); rankCandidates(); renderAll();
+    shareMsg('공유받은 구성을 열었습니다. 원래 쓰던 구성은 위 말로 바꾸기의 되돌리기로 돌아갈 수 있습니다.');
+  } catch (e) { shareMsg('공유 링크를 읽지 못했습니다. 링크가 잘리지 않았는지 확인하세요.', 'bad'); }
+  try { history.replaceState(null, '', location.pathname); } catch (e) {}
+}
+$('#nlUndo').addEventListener('click', () => {
+  if (!NL.undo) return;
+  S = Object.assign(DEF(), JSON.parse(NL.undo)); NL.undo = null; $('#nlUndo').hidden = true;
+  syncInputs(); buildInv(); rankCandidates(); renderAll(); nlOut('마지막 변경을 되돌렸습니다.', 'muted');
+});
+$('#nlEx').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; $('#nlIn').value = b.textContent; $('#nlIn').focus(); });
+
+/* ---------- render ---------- */
+function renderAll(light) {
+  if (!getUnit(S.sel)) S.sel = S.units.length ? 'm1' : (cornerOn() ? 'cf' : 'm1');
+  const L = layout();
+  if (!['plan', 'front', 'three'].includes(S.view)) S.view = 'plan';
+  const three = S.view === 'three';
+  $('#front').hidden = S.view !== 'front'; $('#planV').hidden = S.view !== 'plan'; $('#three').hidden = !three; $('#lbOpen').hidden = !three;
+  document.querySelectorAll('#viewSeg button').forEach(b => b.setAttribute('aria-pressed', b.dataset.v === S.view));
+  if (three) { init3D(); build3D(L); } else if (S.view === 'plan') renderPlan(L); else renderFront(L);
+  renderRoomCard(L);
+  renderEditor();
+  if (flash) { $('#editor').insertAdjacentHTML('beforeend', `<p class="note bad">${esc(flash)}</p>`); flash = ''; }
+  renderFit(); renderCost(); renderStatus(L);
+  if (!light) { renderChips(); save(); }
+}
+syncInputs(); buildInv(); rankCandidates();
+if (!S.units.length && !(cornerOn() && S.corner.cf)) { const best = cornerOn() ? bestFor(S.corner.place, S.corner.kind) || CAND[0] : CAND[0]; if (best) applyCand(best); syncInputs(); }
+renderAll();
+initNL();
+if (STANDALONE) loadSharedFromHash();
+let rt = 0; window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { if (S.view === 'front') renderFront(layout()); }, 120); });
+const reTheme = () => { if (S.view === 'three') build3D(layout()); };
+try { window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', reTheme); } catch (e) {}
+new MutationObserver(reTheme).observe(document.documentElement, {attributes:true, attributeFilter:['data-theme']});
+window.__pax = {S: () => S, CAND: () => CAND, applyOps, layout, fit, stats, buildPrompt};
+})();
+</script>
+
+</body></html>
