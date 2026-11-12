@@ -346,6 +346,13 @@ details summary{cursor:pointer;color:var(--ink)}
       <p class="note">코너 쪽 옆 벽에 문이나 창이 있으면, 모서리에서 문틀까지의 길이를 넣으세요. 58 코너는 양쪽 벽에 110.5cm씩 필요하고, 35 코너는 프레임 쪽 벽 88cm, 코너유닛 쪽 벽 110.5cm가 필요합니다.</p>
     </div>
     <div class="card">
+      <h2>공간 나누기</h2>
+      <div class="row" style="gap:8px 10px">
+        <label for="inSplitA">아내</label><input type="number" id="inSplitA" min="0" max="10" step="0.5">
+        <span>: 남편</span><b class="num" id="splitB">4.5</b><span class="note">(10점 만점)</span>
+      </div>
+      <label class="note" style="display:flex;gap:6px;align-items:center;cursor:pointer"><input type="checkbox" id="ckSplit"> 이 비율에 맞춰 칸 주인을 정하기 (공용 칸 없이 둘로 나눔)</label>
+      <p class="note">공간은 칸 부피(폭×깊이)로 잽니다. 코너 프레임의 가려진 칸도 포함합니다.</p>
       <h2>옷 수량 <span class="hint">(예시값, 실제 수량으로 바꾸세요)</span></h2>
       <div class="inv" id="inv"></div>
       <div class="row">
@@ -447,13 +454,14 @@ const CATS = [
 const DEF = () => ({
   wall:240, ceil:230, ends:'closed', align:'left', front:90, ha:162, hb:175, bb:1.5,
   room:{on:true, depth:251, winStart:71, winW:100, doorFromE:33, doorW:85},
+  split:{on:true, a:5.5},   /* wife's share of the wardrobe space, out of 10; husband gets the rest */
   inv:{a:{long:8,short:28,pants:8,fold:20,small:40}, b:{long:3,short:30,pants:8,fold:20,small:40}},
   corner:{side:'left', place:'main', kind:'58', own:'a', sideLen:120, cf:null, cu:null},
   units:[], sel:'m1', selItem:-1, view:'plan', clothes:true, people:true, open:false, light:false, chip:''
 });
-const KEY = 'pax240v3';
+const KEY = 'pax240v4';
 let S = DEF();
-try { const raw = localStorage.getItem(KEY); if (raw) { const o = JSON.parse(raw); if (o && Array.isArray(o.units) && o.corner && o.room) S = Object.assign(DEF(), o); } } catch (e) {}
+try { const raw = localStorage.getItem(KEY); if (raw) { const o = JSON.parse(raw); if (o && Array.isArray(o.units) && o.corner && o.room && o.split) S = Object.assign(DEF(), o); } } catch (e) {}
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} };
 
 const mkItems = p => presetOf(p).it.map(([t, n]) => ({t, n}));
@@ -489,6 +497,16 @@ function itemWide(u, it) {
   if (u.k === 'cf') return (it.t === 'rail' || (it.t === 'shelf' && iy(it) >= DIV_TOP)) ? u.w : 50;
   return u.w;
 }
+/* space = interior volume share by footprint (width x depth); mid/end units count as shared */
+const volOf = u => u.k === 'f' ? u.w * DEPTH : u.k === 'cf' ? CK[u.kind].fw * DEPTH : u.k === 'cu' ? 53 * CK[u.kind].cd : 0;
+const splitOn = () => !!(S.split && S.split.on);
+const splitTarget = () => clamp(Number(S.split && S.split.a) || 5, 0, 10) / 10;
+function splitOf(units) {
+  let a = 0, b = 0, s = 0;
+  units.forEach(u => { const v = volOf(u), o = ownerOf(u); if (!v) return; if (o === 'a') a += v; else if (o === 'b') b += v; else s += v; });
+  return {a, b, s, shareA: a + b ? a / (a + b) : null};
+}
+const pts = x => (Math.round(x * 20) / 2).toFixed(1);   /* share -> points out of 10, 0.5 steps shown with one decimal */
 const needsDivider = u => u.k === 'cf' && u.items.some(i => itemWide(u, i) === 50);
 const allowedTypes = u => u.k === 'cu' ? (u.kind === '58' ? ['shelf', 'rail'] : ['shelf']) : Object.keys(T);
 
@@ -646,29 +664,31 @@ const CF_KEYS = PKEYS.filter(p => { const u = mkCF('58', 's', p); return u.items
 const MIDSTAT = stats({k:'mid'});
 function rnd(seed) { let t = seed * 2654435761 >>> 0; return () => { t ^= t << 13; t >>>= 0; t ^= t >>> 17; t ^= t << 5; t >>>= 0; return t / 4294967296; }; }
 function optimise(widths, mid, fixedOwn, cc) {
-  const slots = widths.map((w, i) => ({type:'f', w, opts:(fixedOwn ? [fixedOwn[i]] : ['a', 'b', 's']).flatMap(o => PKEYS.map(p => ({o, p})))}));
+  const owners = splitOn() ? ['a', 'b'] : ['a', 'b', 's'], target = splitTarget();
+  const slots = widths.map((w, i) => ({type:'f', w, vol:w * DEPTH, opts:(fixedOwn ? [fixedOwn[i]] : owners).flatMap(o => PKEYS.map(p => ({o, p})))}));
   if (cc) {
-    slots.push({type:'cf', kind:cc.kind, opts:CF_KEYS.map(p => ({o:cc.own, p}))});
-    slots.push({type:'cu', kind:cc.kind, opts:cuKeys(cc.kind).map(p => ({o:cc.own, p}))});
+    slots.push({type:'cf', kind:cc.kind, vol:CK[cc.kind].fw * DEPTH, opts:CF_KEYS.map(p => ({o:cc.own, p}))});
+    slots.push({type:'cu', kind:cc.kind, vol:53 * CK[cc.kind].cd, opts:cuKeys(cc.kind).map(p => ({o:cc.own, p}))});
   }
   const evalCfg = cfg => {
     const us = [], pre = [];
-    let cost = mid ? PRICE.mid : 0, shared = 0, hasA = false, hasB = false;
+    let cost = mid ? PRICE.mid : 0, shared = 0, hasA = false, hasB = false, va = 0, vb = 0;
     cfg.forEach((c, i) => {
       const s = slots[i];
       us.push({k:s.type, own:c.o});
       pre.push(s.type === 'f' ? STAT.f[s.w][c.p] : STAT[s.type][s.kind][c.p]);
       cost += s.type === 'f' ? PCOST.f[s.w][c.p] : PCOST[s.type][s.kind][c.p];
       if (c.o === 's' && s.type === 'f') shared++;
-      if (c.o === 'a') hasA = true; if (c.o === 'b') hasB = true;
+      if (c.o === 'a') { hasA = true; va += s.vol; } if (c.o === 'b') { hasB = true; vb += s.vol; }
     });
     if (mid) { us.push({k:'mid'}); pre.push(MIDSTAT); }
     const f = fit(us, S.inv, pre);
-    return {v: f.score * 1000 - cost / 100000 * 2.5 - shared * 3 - (hasA && hasB ? 0 : 25), f, cost};
+    const shareA = va + vb ? va / (va + vb) : target, off = splitOn() ? Math.abs(shareA - target) * 1500 : 0;
+    return {v: f.score * 1000 - cost / 100000 * 2.5 - shared * 3 - (hasA && hasB ? 0 : 25) - off, f, cost, shareA};
   };
   const total = slots.reduce((t, s) => t * s.opts.length, 1);
   let best = null;
-  const take = (cfg, e) => { if (!best || e.v > best.v + 1e-9) best = {v:e.v, f:e.f, cost:e.cost, cfg:cfg.slice()}; };
+  const take = (cfg, e) => { if (!best || e.v > best.v + 1e-9) best = {v:e.v, f:e.f, cost:e.cost, shareA:e.shareA, cfg:cfg.slice()}; };
   if (!slots.length) take([], evalCfg([]));
   else if (total <= 30000) {
     const cfg = slots.map(s => s.opts[0]);
@@ -699,7 +719,7 @@ function optimise(widths, mid, fixedOwn, cc) {
     units.sort((x, y) => rank[x.own] - rank[y.own] || y.w - x.w);
   }
   if (mid) units.splice(Math.ceil(units.length / 2), 0, mkUnit('mid', 35));
-  const res = {units, pct:best.f.pct, v:best.v, cost:best.cost, sum:widths.reduce((a, b) => a + b, 0) + (mid ? 35 : 0)};
+  const res = {units, pct:best.f.pct, v:best.v, cost:best.cost, shareA:best.shareA, sum:widths.reduce((a, b) => a + b, 0) + (mid ? 35 : 0)};
   if (cc) { res.cf = mkCF(cc.kind, cc.own, best.cfg[n].p); res.cu = mkCU(cc.kind, cc.own, best.cfg[n + 1].p); }
   return res;
 }
@@ -1087,7 +1107,15 @@ $('#editor').addEventListener('change', e => {
 
 function renderFit() {
   const f = fit(allUnits(), S.inv), pct = Math.round(f.pct * 100);
-  let h = `<div class="kv"><h3>옷 수량 대비 수납 충족률</h3><span class="pct" style="color:var(--${pct >= 97 ? 'ok' : pct >= 85 ? 'warn' : 'bad'})">${pct}%</span></div><div class="fit"><span></span><span class="hd a">아내</span><span class="hd b">남편</span>`;
+  let h = `<div class="kv"><h3>옷 수량 대비 수납 충족률</h3><span class="pct" style="color:var(--${pct >= 97 ? 'ok' : pct >= 85 ? 'warn' : 'bad'})">${pct}%</span></div>`;
+  const sp = splitOf(allUnits());
+  if (sp.shareA != null) {
+    const tgt = splitTarget(), off = Math.abs(sp.shareA - tgt), col = !splitOn() ? 'muted' : off <= .03 ? 'ok' : off <= .07 ? 'warn' : 'bad';
+    h += `<div class="kv"><span>공간 나누기 (10점 만점)</span><b style="color:var(--${col})">아내 ${pts(sp.shareA)} : 남편 ${pts(1 - sp.shareA)}</b></div>` +
+      `<div class="meter"><div class="tr" style="display:flex"><i style="width:${r1(sp.shareA * 100)}%;background:var(--a)"></i><i style="width:${r1((1 - sp.shareA) * 100)}%;background:var(--b)"></i></div>` +
+      `<span class="tx">${splitOn() ? `목표 ${pts(tgt)} : ${pts(1 - tgt)} · ` : ''}칸 부피(폭×깊이) 기준${sp.s ? ' · 공용 칸 제외' : ''}</span></div>`;
+  }
+  h += `<div class="fit"><span></span><span class="hd a">아내</span><span class="hd b">남편</span>`;
   const notes = [];
   CATS.forEach(c => {
     const o = f[c.k];
@@ -1166,7 +1194,9 @@ function renderChips() {
     const cBlock = g ? `<i style="width:${g.mainUse / W * 100}%;background:repeating-linear-gradient(135deg,var(--${own}) 0 3px,transparent 3px 6px)"></i>` : '';
     const mini = (left ? cBlock : '') + c.units.map(u => `<i style="width:${u.w / W * 100}%;background:var(--${u.k === 'f' ? u.own : 'edge'})"></i>`).join('') + (left ? '' : cBlock);
     return `<button type="button" class="chip" data-id="${c.id}" aria-pressed="${S.chip === c.id}"><span class="w"><span class="no">${i + 1}</span>${chipLabel(c)}</span>${c.cc ? `<span class="sub">${chipSub(c)}</span>` : ''}<span class="mini">${mini}</span>` +
-      `<span class="meta"><span>충족 ${Math.round(c.pct * 100)}%</span><span>남는 폭 ${r1(gap)}</span></span><span class="meta"><span class="num">${won(c.cost)}</span>${c.short ? `<span class="best" style="color:var(--bad)">${roomOn() ? limitName(c.cc.side) + '에 걸림' : '옆 벽 부족'}</span>` : c === top ? '<span class="best">추천</span>' : ''}</span></button>`;
+      `<span class="meta"><span>충족 ${Math.round(c.pct * 100)}%</span><span>남는 폭 ${r1(gap)}</span></span>` +
+      (c.shareA != null ? `<span class="meta"><span>아내 ${pts(c.shareA)} : 남편 ${pts(1 - c.shareA)}</span></span>` : '') +
+      `<span class="meta"><span class="num">${won(c.cost)}</span>${c.short ? `<span class="best" style="color:var(--bad)">${roomOn() ? limitName(c.cc.side) + '에 걸림' : '옆 벽 부족'}</span>` : c === top ? '<span class="best">추천</span>' : ''}</span></button>`;
   }).join('');
 }
 $('#chips').addEventListener('click', e => {
@@ -1203,6 +1233,8 @@ $('#inCKind').addEventListener('change', e => { S.corner.kind = e.target.value; 
 const ROOMF = [['#inRoomD', 'depth', 150, 600], ['#inWinS', 'winStart', 0, 500], ['#inWinW', 'winW', 30, 400], ['#inDoorE', 'doorFromE', 0, 500], ['#inDoorW', 'doorW', 60, 200]];
 ROOMF.forEach(([id, key, lo, hi]) => { $(id).addEventListener('input', e => { const v = parseFloat(e.target.value); if (!isFinite(v)) return; S.room[key] = clamp(v, lo, hi); renderAll(true); rerankSoon(); }); });
 $('#ckRoom').addEventListener('change', e => { S.room.on = e.target.checked; syncInputs(); rankCandidates(); renderAll(); });
+$('#inSplitA').addEventListener('input', e => { const v = parseFloat(e.target.value); if (!isFinite(v)) return; S.split.a = clamp(Math.round(v * 2) / 2, 0, 10); $('#splitB').textContent = (10 - S.split.a).toFixed(1); renderAll(true); rerankSoon(); });
+$('#ckSplit').addEventListener('change', e => { S.split.on = e.target.checked; rankCandidates(); renderAll(); });
 $('#inBB').addEventListener('input', e => { const v = parseFloat(e.target.value); if (!isFinite(v)) return; S.bb = clamp(v, 0, 5); renderAll(true); rerankSoon(); });
 $('#inCSideLen').addEventListener('input', e => { const v = parseFloat(e.target.value); if (!isFinite(v)) return; S.corner.sideLen = clamp(v, 30, 400); renderAll(true); rerankSoon(); });
 const ck = (id, key) => { const el = $(id); el.addEventListener('change', () => { S[key] = el.checked; renderAll(); }); };
@@ -1232,6 +1264,7 @@ $('#btnReset').addEventListener('click', () => { S = DEF(); syncInputs(); buildI
 function syncInputs() {
   FIELDS.forEach(([id, key]) => { $(id).value = S[key]; });
   $('#ckRoom').checked = roomOn(); $('#inBB').value = S.bb;
+  $('#inSplitA').value = S.split.a; $('#splitB').textContent = (10 - S.split.a).toFixed(1); $('#ckSplit').checked = splitOn();
   ROOMF.forEach(([id, key]) => { $(id).value = S.room[key]; $(id).disabled = !roomOn(); });
   $('#inFront').disabled = roomOn(); $('#inEnds').disabled = roomOn();
   if (roomOn()) $('#inFront').value = frontSpace();
@@ -1442,6 +1475,7 @@ function stateForPrompt() {
       x:[r1(u._x), r1(u._x + u.w)], items:(u.items || []).map(i => ({t:i.t, h:Math.round(iy(i))}))})),
     freeWidthOnMainWall:r1(L.gap),
     inventory:S.inv, fitPct:Math.round(f.pct * 100),
+    split:(() => { const sp = splitOf(allUnits()); return {on:splitOn(), targetWife:S.split.a, targetHusband:10 - S.split.a, nowWife:sp.shareA == null ? null : +pts(sp.shareA)}; })(),
     candidates:CAND.slice(0, 12).map((c, i) => ({no:i + 1, id:c.id, label:chipLabel(c) + (c.cc ? ' / ' + chipSub(c) : ''), fitPct:Math.round(c.pct * 100), cost:c.cost, sideWallShort:!!c.short}))
   };
 }
@@ -1464,6 +1498,7 @@ function buildPrompt(text) {
 op 목록 (필요한 키만 쓴다)
 - {"op":"space","wall":cm,"ceil":cm,"ends":"closed|left|right|both"(트인 쪽),"align":"left|center|right","front":cm,"ha":아내키,"hb":남편키,"sideLen":옆벽길이}
 - {"op":"room","on":true|false,"depth":방폭,"bb":걸레받이두께,"winStart":옷장벽에서 창틀까지,"winW":창폭,"doorFromE":맞은편 벽에서 문틀까지,"doorW":문폭}  방 스케치 치수 수정
+- {"op":"split","a":아내 점수(0~10, 0.5 단위),"on":true|false}  공간 나누기(10점 만점, 남편 = 10 - a). 켜져 있으면 각 칸을 아내나 남편에게 나눠 이 비율에 맞춘다. 비율을 바꾸고 그에 맞는 조합으로 바꾸라는 뜻이면 이어서 {"op":"pick","no":1}을 쓴다.
 - {"op":"inventory","who":"a|b","long":n,"short":n,"pants":n,"fold":n,"small":n}
 - {"op":"corner","side":"none|left|right","place":"main|side","kind":"58|35","own":"a|b|s"}  코너를 켜거나 끄거나 모서리를 바꾸거나, 정면 벽 유닛이 더 이상 들어가지 않으면 페이지가 정면 벽 조합을 즉시 다시 고르고 m 번호가 바뀐다. 그 경우 같은 요청 안에서 m 유닛을 고치지 말고, reply에서 결과를 보고 다시 말해 달라고 안내한다. 코너 내부(cf, cu) 수정은 corner 뒤에 써도 된다.
 - {"op":"pick","no":후보번호} 또는 {"op":"pick","id":"후보 id"}  state.candidates 중 하나를 적용
@@ -1520,6 +1555,10 @@ function applyOps(ops) {
           if (['closed', 'left', 'right', 'both'].includes(o.ends)) S.ends = o.ends;
           if (['left', 'center', 'right'].includes(o.align)) S.align = o.align;
           break;
+        case 'split':
+          if (typeof o.on === 'boolean') S.split.on = o.on;
+          if (o.a != null) S.split.a = Math.round(num(o.a, 0, 10) * 2) / 2;
+          rerank = true; break;
         case 'room': {
           if (typeof o.on === 'boolean') S.room.on = o.on;
           [['depth', 150, 600], ['winStart', 0, 500], ['winW', 30, 400], ['doorFromE', 0, 500], ['doorW', 60, 200]].forEach(([k, lo, hi]) => { if (o[k] != null) S.room[k] = num(o[k], lo, hi); });
