@@ -1,0 +1,9 @@
+{
+  "name": "pax-planner",
+  "private": true,
+  "type": "module",
+  "description": "IKEA PAX 옷장 플래너: 정적 페이지 + 말로 바꾸기용 Claude API 함수",
+  "dependencies": {
+    "@anthropic-ai/sdk": "1.1.0"
+  }
+}
