@@ -738,8 +738,8 @@ function rankCandidates() {
 /* 유력안: the user's own quote (₩917,500) - corner unit on the door wall, 100 frame at the corner of the main wall */
 function favCand() {
   const mk = (base, list) => Object.assign(base, {items:list.map(([t, n]) => ({t, n}))});
-  const units = [mk({k:'f', w:75, own:'s', p:''}, [['drawer', 0], ['drawer', 5], ['drawer', 10], ['drawer', 15], ['rail', 54]]), mkUnit('f', 50, 'b', 'double')];
-  const cf = mk({k:'cf', kind:'58', w:100, own:'a', p:''}, [['drawer', 0], ['drawer', 5], ['shelf', 25], ['rail', 54]]);
+  const units = [mk({k:'f', w:75, own:'s', p:''}, [['drawer', 0], ['drawer', 5], ['drawer', 10], ['drawer', 15], ['rail', 51], ['shelf', 53]]), mkUnit('f', 50, 'b', 'double')];
+  const cf = mk({k:'cf', kind:'58', w:100, own:'a', p:''}, [['drawer', 0], ['drawer', 5], ['shelf', 23], ['rail', 51], ['shelf', 53]]);
   const cu = mk({k:'cu', kind:'58', w:CU_W, own:'a', p:''}, [['rail', 28], ['rail', 57], ['shelf', 29]]);
   const cc = {side:'left', place:'side', kind:'58', own:'a'}, all = [...units, cf, cu], g = cornerGeoOf(cc);
   return {id:'fav', fav:true, units, cf, cu, cc, pct:fit(all, S.inv).pct, cost:all.reduce((s, u) => s + unitCost(u, false), 0), sum:125,
