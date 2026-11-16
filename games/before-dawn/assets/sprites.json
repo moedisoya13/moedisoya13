@@ -1,0 +1,67 @@
+{
+ "hero_front": {
+  "file": "hero/hero_front.webp",
+  "w": 186,
+  "h": 256
+ },
+ "hero_back": {
+  "file": "hero/hero_back.webp",
+  "w": 191,
+  "h": 254
+ },
+ "hero_side": {
+  "file": "hero/hero_side.webp",
+  "w": 180,
+  "h": 257
+ },
+ "hero_slash": {
+  "file": "hero/hero_slash.webp",
+  "w": 290,
+  "h": 196
+ },
+ "hero_dash": {
+  "file": "hero/hero_dash.webp",
+  "w": 246,
+  "h": 214
+ },
+ "hero_hurt": {
+  "file": "hero/hero_hurt.webp",
+  "w": 206,
+  "h": 234
+ },
+ "slime": {
+  "file": "enemies/slime.webp",
+  "w": 131,
+  "h": 130
+ },
+ "goblin": {
+  "file": "enemies/goblin.webp",
+  "w": 181,
+  "h": 170
+ },
+ "skeleton_archer": {
+  "file": "enemies/skeleton_archer.webp",
+  "w": 200,
+  "h": 210
+ },
+ "ghoul": {
+  "file": "enemies/ghoul.webp",
+  "w": 189,
+  "h": 200
+ },
+ "mage": {
+  "file": "enemies/mage.webp",
+  "w": 172,
+  "h": 220
+ },
+ "dark_knight": {
+  "file": "enemies/dark_knight.webp",
+  "w": 194,
+  "h": 260
+ },
+ "demon_king": {
+  "file": "boss/demon_king.webp",
+  "w": 261,
+  "h": 420
+ }
+}
