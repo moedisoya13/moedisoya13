@@ -8,8 +8,11 @@ are in. Every number that differs from GDD-V2 is under **Tuning** at the end.
 Files: `src/content/cards/*.js` (levels next to each card's rules and drawers),
 `src/content/cards/_altar.js` (the altar), `src/content/boons/{body,long,step,wide}.js`,
 `tests/cards/*` (levels_table, levels_more, boons, offers, altar + the v1 files moved to the v2
-level-1 numbers), `tests/cards/balance.js` (the balance runs below), `tests/cards/combos.js` (816
-hands at mixed levels).
+level-1 numbers), and three scripts that are not tests: `tests/cards/balance.js` (the balance
+runs of §5), `tests/cards/combos.js` (V8 at mixed levels: all 816 hands, every card at every level,
+20 s each on 3F — `816 hands … no exceptions, no NaN`, 72 s on 4 cores) and `tests/cards/shoot.js`
+(the frames and contact sheets in `docs/screens/v2-cards/`: each card at levels 1, 3, 5, frozen
+the moment its own effect fires with ≥ 15 enemies in view).
 
 ## 1. The altar — the hook the floors agent calls (GDD-V2 §4.6, §5.5, §10.3)
 
@@ -105,6 +108,10 @@ level 5 meet elites only after the merge; their tests stage elites directly.
 | `src/core/50_app.js` | `app.cmd('choice', …)` goes to `BD.cardAltar.cmd` while the open choice is the altar | §10.3 `('choice', 'slot' / 'pray' / 'later')` |
 | `src/bot/bot.js` | `BD.bot.choose` answers an altar choice with `BD.cardAltar.choose` | the bot's altar policy (§10.3 `mixed` / `card` / `pray`) |
 | `tools/scenarios.js` | criterion 15's 망자의 안식 scenario kills `def.goal` undead (150) instead of 12 | §4.4 goal |
+| `tests/ui/hud.test.js` | the slot test reads the quest goal (`'7/' + goal`) instead of `7/12` | §4.4 goal (UI agent's file: three lines) |
+
+Not touched, for whoever owns it: `catalog/sync.js` can now read `def.levels[1..5].text` for every
+card, `def.unlockText`, and `BD.boons` (7) — GDD-V2 §12.
 
 ## 4. Interpretations (where GDD-V2 §4.4 allowed more than one reading)
 
@@ -144,4 +151,77 @@ level 5 meet elites only after the merge; their tests stage elites directly.
 
 ## 5. Tuning
 
-(filled in below after the balance runs)
+Method: the human-like pilot of `tools/fun/lib.js` (the same as `measure.js`), mixed choice
+policy, one card alone against no card (`node tests/cards/balance.js --seeds 1-24 --jobs 4`; in
+a one-card hand the card reaches level 5 by the fourth choice, so this mostly measures level 5),
+then the outliers again over seeds 1–48 with only their numbers changed. Dealt three-card hands
+(all 18 unlocked, seeds 1–80) as a check. Every run is deterministic; the scripts re-derive every
+number here.
+
+**Changed against GDD-V2 §4.4 (level numbers only, no rule changed):**
+
+| card | level | GDD-V2 | now | why |
+|---|---|---|---|---|
+| 불의 순례 `fire_pilgrimage` | 1 (awakened burst) | 12 in 1.5u | **6 in 1.0u** | the awakened burst ignites every enemy it reaches (not bound by the spread cap of 2 per tick), so in a horde each burning death lit the next ring: alone it won 14 of 24 (27 of 48), 63 % of all damage, the hero hit 0.8×/min |
+| 불의 순례 | 3 (burst radius) | 2.0u | **1.3u** | the same chain |
+| 불의 순례 | 4 (burst damage) | 18 | **10** | the same chain |
+| 뇌전 `lightning` | 3 (chain damage) | 80 % | **70 %** | the second outlier: alone 5 of 48 wins, 64 % of damage, mean floor 5.3 |
+| 뇌전 | 4 (jumps, reach) | 6 (wet 8) in 3.5u | **5 (wet 7) in 3.2u** | the same |
+
+Effect (seeds 1–24 alone; 1–48 in brackets):
+
+| card | wins | mean floor | card share of damage | hits taken /min |
+|---|---|---|---|---|
+| 불의 순례, GDD numbers | 14 / 24 (27 / 48) | 5.92 (5.88) | 63 % | 0.87 |
+| 불의 순례, tuned | 2 / 24 (6 / 48) | 5.38 (5.33) | 52 % | 0.9 |
+| 뇌전, GDD numbers | 3 / 24 (5 / 48) | 5.46 (5.30) | 64 % | 1.2 |
+| 뇌전, tuned | 0 / 24 (0 / 48) | 5.13 (5.21) | 59 % | 1.4 |
+
+**화염 (the designer's flag) — not changed.** Alone it wins 1 of 24 (3 of 48), mean floor 4.4
+(4.6), 47 % of damage: the top of the main group (일섬 4.3, 관통 4.3, 검기 4.1, 해류 4.0), not
+above it. The slice's spread cap (a burning enemy lights at most 2 others per tick, a just-lit
+enemy spreads from the next tick, `src/core/24_status.js`) already took out the prototype's
+runaway (GDD-V2 §3.8); the fire runaway that remained was 불의 순례's burst above, which ignites
+without that cap.
+
+**Every card after tuning** (`node tests/cards/balance.js --seeds 1-24 --jobs 4`, each card alone):
+
+| card | wins / 24 | floor (median) | kills/min | swings/kill | card dmg % | hits/min |
+|---|---|---|---|---|---|---|
+| (no card) | 0 | 3 | 147.7 | 0.62 | 6.9 | 1.7 |
+| 관통 pierce | 0 | 5 | 186.3 | 0.48 | 85.3 | 1.3 |
+| 회전베기 whirl | 0 | 3 | 161.1 | 0.52 | 45.3 | 2.3 |
+| 검기 sword_wave | 0 | 4 | 181.6 | 0.52 | 76.7 | 1.4 |
+| 화염 flame | 1 | 4 | 183.8 | 0.48 | 47.3 | 2.2 |
+| 뇌전 lightning | 0 | 6 | 193.1 | 0.43 | 59.2 | 1.4 |
+| 해류 tide | 0 | 4 | 171.1 | 0.52 | 27.4 | 2.0 |
+| 흡수 leech | 0 | 3 | 145.7 | 0.62 | 9.2 | 2.2 |
+| 반격 riposte | 0 | 3 | 141.5 | 0.59 | 30.0 | 2.5 |
+| 발도 drawcut | 0 | 4 | 173.1 | 0.51 | 2.5 | 1.9 |
+| 성광 holy_light | 0 | 3 | 151.3 | 0.55 | 30.1 | 2.9 |
+| 갑옷 파쇄 armor_break | 0 | 3 | 141.9 | 0.59 | 13.1 | 2.6 |
+| 마력 역류 mana_backlash | 0 | 3 | 148.3 | 0.58 | 11.8 | 1.6 |
+| 망자의 안식 rest_of_dead | 0 | 2 | 134.8 | 0.57 | 21.3 | 3.0 |
+| 왕의 사냥 kings_hunt | 0 | 2 | 139.1 | 0.62 | 6.7 | 2.2 |
+| 불의 순례 fire_pilgrimage | 2 | 6 | 187.1 | 0.46 | 51.9 | 0.9 |
+| 연참 chain_slash | 0 | 3 | 155.3 | 0.57 | 9.3 | 2.0 |
+| 무결 flawless | 1 | 3 | 153.6 | 0.58 | 27.5 | 2.3 |
+| 일섬 one_flash | 2 | 4 | 184.0 | 0.48 | 49.8 | 1.7 |
+
+(`card dmg %` counts hits whose source is not the bare blade or the dash, so flat and multiplier
+cards — 발도, 연참, the target cards — show little there; read them by kills/min and floor.)
+
+**Left as they are, with the reason.** At the bottom alone are 왕의 사냥, 반격, 망자의 안식, 갑옷
+파쇄, 성광 and 회전베기 (mean floor 2.6–3.0 against 3.2 for no card: a card that does little alone
+costs the four choices that would have gone to boons). The target cards and 망자의 안식 work on one
+floor type in four by design; 왕의 사냥 meets no elites on this branch (the director's
+`eliteEvery` is the enemies agent's), so its quest can only use guardians; 반격 is paced by the
+hits the hero takes (≈ 2.5 a minute in a horde) and a bigger radius did not move it (radius
+3.2 / 3.8: 0 wins, mean floor 3.00 against 2.67). Re-measure these after the enemies and floors
+merge. Dealt hands (seeds 1–80, before tuning): 9 wins in 80; per card the win share was 불의 순례
+45 %, 뇌전 29 %, the rest 0–33 % on 6–21 hands each — too few to tune from, so used only as a check.
+
+V13 (`--cards`: 회전베기 +20 %p of 2+-hit swings, 관통·검기 +10 %p) is a tuning target: against no
+card (66.3 %) 회전베기 gives 76.6 % (+10.3), 관통 79.8 % (+13.5), 검기 24.5 % — 검기's aim range of
+6.5u makes the hero swing at far targets whose only hit is the crescent, which `swing_end`'s
+`hitCount` does not count.
