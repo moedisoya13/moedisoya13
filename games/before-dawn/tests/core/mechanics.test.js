@@ -185,7 +185,7 @@ module.exports = {
     const ev = r.app.world.bus.recent(4000);
     const swaps = ev.filter((x) => x.type === 'card_swap');
     t.assert(swaps.length >= 1, 'a swap happened');
-    t.assert(swaps.every((x) => ['test_flame', 'test_tide', 'pierce', 'chain_slash'].includes(x.inId)));
+    t.assert(swaps.every((x) => BD.cardRt.pool(['test_flame', 'test_tide']).includes(x.inId)));
     t.eq(swaps[0].slot, 1); // slot 0 holds the combo card (conditional) → leftmost non-conditional
   },
 };
