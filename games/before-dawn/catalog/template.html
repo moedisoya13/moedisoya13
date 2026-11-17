@@ -87,6 +87,8 @@ dl.kv dd { margin: 0; min-width: 0; }
 .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(76px, 1fr)); border: 2px solid var(--ink); border-radius: 3px; overflow: hidden; }
 .stats div { padding: 6px 8px; box-shadow: 1px 1px 0 var(--ink); background: var(--paper-2); min-width: 0; }
 .stats b { display: block; font-size: 11px; color: #4a4655; font-weight: 700; }
+.chg s { color: #8a5560; font-size: 12px; }
+.chg { color: #9b1c1c; font-weight: 700; }
 .stats span { font-family: var(--f-mono); font-size: 14px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .attack { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 12px; align-items: start; }
 .attack canvas { width: 112px; height: 76px; border: 2px solid var(--ink); border-radius: 3px; background: #262a42; }
@@ -137,7 +139,7 @@ footer { margin-top: 48px; color: var(--mist); font-size: 13px; }
       <h1>여명 전야 <span>도감</span></h1>
       <p>노용사가 동트기 전 마천루를 오르며 만나는 것 전부. 성인(카드) 18장, 물건과 장치, 적 7종과 정예·수호자, 마왕까지 한 곳에 모았다.</p>
       <div class="notes">
-        <span class="note"><b>수치</b> 기획서 기준, 튜닝 전 값</span>
+        <span class="note"><b>수치</b> 게임 데이터 기준. 기획서와 다르면 <s>기획서</s> → 현재</span>
         <span class="note"><b>피드백</b> 고칠 항목에 바로 댓글을 남겨 주세요</span>
         <span class="note"><b>단위</b> 1u = 바닥 한 칸</span>
         <span class="note"><b>아이콘</b> 게임 안 코등이 홈에 그려지는 그대로</span>
@@ -453,13 +455,19 @@ function stage(sprite, type, cls = '', badge) {
     cls === 'guard' ? $('span', { class: 'crown', html: '<svg viewBox="0 0 40 30" aria-hidden="true"><path d="M3 26V8l9 8 8-13 8 13 9-8v18z" fill="#c9a44a" stroke="#0b0b10" stroke-width="3" stroke-linejoin="round"/></svg>' }) : null);
 }
 function stats(rows) { return $('div', { class: 'stats' }, rows.map(([k, v]) => $('div', {}, $('b', {}, k), $('span', {}, v)))); }
+// "GDD → now" when the game's number differs from the design document
+function val(o, key) {
+  const was = o.gdd && o.gdd[key];
+  if (was == null || was === o[key]) return o[key];
+  return $('span', { class: 'chg', title: '기획서 ' + was + ' → 현재 ' + o[key] }, $('s', {}, String(was)), ' ', o[key]);
+}
 
 function enemyPanel(e) {
   const t = TYPES[e.type];
   return $('article', { class: 'panel', id: 'enemy-' + e.id },
     $('div', { class: 'vis' }, stage(e.sprite, e.type, '', t.name + ' · ' + t.icon)),
     $('div', { class: 'body' }, $('h3', {}, e.name, $('span', { class: 'id' }, e.id)),
-      stats([['HP', e.hp], ['속도', e.speed], ['피해', e.dmg], ['반경', e.radius], ['비용', e.cost]]),
+      stats([['HP', val(e, 'hp')], ['속도', val(e, 'speed')], ['피해', val(e, 'dmg')], ['반경', val(e, 'radius')], ['비용', val(e, 'cost')]]),
       $('p', { class: 'lead' }, e.behavior),
       $('div', { class: 'attack' }, teleCanvas(ENEMY_TELE[e.id]), $('p', {}, $('strong', {}, '공격: ' + e.attack), e.tele)),
       $('p', { class: 'counter' }, $('b', {}, '대처 '), e.counter)));
@@ -513,14 +521,14 @@ function build() {
     $('div', { class: 'vis' }, stage('goblin', 'undead', 'elite', '정예 예시 · 고블린')),
     $('div', { class: 'body' }, $('h3', {}, '정예', $('span', { class: 'id' }, 'elite')), kv([['규칙', D.elite.rule], ['수', D.elite.count], ['표시', D.elite.mark]])));
   const gRule = $('article', { class: 'panel', id: 'guardian-rule' },
-    $('div', { class: 'body' }, $('h3', {}, '수호자 공통', $('span', { class: 'id' }, 'guardian')), kv([['규칙', D.guardian.rule], ['HP', D.guardian.hp], ['표시', D.guardian.mark]])));
+    $('div', { class: 'body' }, $('h3', {}, '수호자 공통', $('span', { class: 'id' }, 'guardian')), kv([['규칙', D.guardian.rule], ['HP', val(D.guardian, 'hp')], ['표시', D.guardian.mark]])));
   sg.append($('div', { class: 'grid' }, elite, gRule, D.guardians.map(guardianPanel)));
 
   // Boss
   const b = D.boss, sb = chap('boss', '마왕', '옥상에서 기다리는 마지막 상대. 세 단계로 기술이 늘고 빨라진다.', 1);
   const bossPanel = $('article', { class: 'panel', id: 'boss-demon_king' },
     $('div', { class: 'vis' }, stage('demon_king', 'boss', '', '보스 · 옥상')),
-    $('div', { class: 'body' }, $('h3', {}, b.name, $('span', { class: 'id' }, b.id)), stats([['HP', b.hp], ['속도', b.speed], ['반경', b.radius]]), $('p', { class: 'lead' }, b.note)));
+    $('div', { class: 'body' }, $('h3', {}, b.name, $('span', { class: 'id' }, b.id)), stats([['HP', val(b, 'hp')], ['속도', b.speed], ['반경', b.radius]]), $('p', { class: 'lead' }, b.note)));
   const phases = $('div', { class: 'tablebox', id: 'boss-phases' }, $('table', {},
     $('thead', {}, $('tr', {}, ['단계', 'HP', '속도', '기술 순환', '소환'].map(h => $('th', { scope: 'col' }, h)))),
     $('tbody', {}, b.phases.map(p => $('tr', { id: 'boss-phase-' + p.n[0] }, $('td', { class: 'ph' }, $('b', {}, p.n)), $('td', { class: 'num' }, p.hp), $('td', { class: 'num' }, p.speed), $('td', {}, p.cycle), $('td', {}, p.summon))))));
