@@ -147,14 +147,14 @@ BD.enemies.register({
   },
   update(e, w, dt) {
     const m = e.mem, P = T.phases[m.phase];
+    if (P.summonEvery) { // counts from the phase entry, roar included
+      m.summonT -= dt;
+      if (m.summonT <= 0) { m.summonT = P.summonEvery; summon(w, e); }
+    }
     if (m.roarT > 0) { m.roarT -= dt; e.state = 'roar'; return; }
     const frac = e.hp / e.maxHp;
     const want = frac <= T.phaseAt[1] ? 3 : frac <= T.phaseAt[0] ? 2 : 1;
     if (want > m.phase) { m.phase++; roar(w, e); return; }
-    if (P.summonEvery) {
-      m.summonT -= dt;
-      if (m.summonT <= 0) { m.summonT = P.summonEvery; summon(w, e); }
-    }
     if (m.busyT > 0) { m.busyT -= dt; if (m.busyT <= 0) e.state = 'idle'; return; }
     m.cd -= dt;
     const scale = e.speed / e.def.speed; // tier speed modifier

@@ -6,10 +6,20 @@ BD.gen.patterns.register({
   firstFloor: false,
   T,
   apply(grid, ctx) {
-    const along = ctx.rng.chance(0.5); // true: desks run along x
-    const bw = along ? T.len : 1, bh = along ? 1 : T.len;
+    const K = BD.roomKit, base = grid.cells.slice();
     const want = ctx.rng.int(T.min, T.max);
-    BD.roomKit.placeBlocks(grid, ctx.rng, want, (r) => BD.roomKit.rectCells(r.int(0, grid.w - bw), r.int(0, grid.h - bh), bw, bh), T.wallGap, T.solidGap, 40, 300);
+    const place = (along) => { // along: desks run along x
+      const bw = along ? T.len : 1, bh = along ? 1 : T.len;
+      return K.placeBlocks(grid, ctx.rng, want, (r) => K.rectCells(r.int(0, grid.w - bw), r.int(0, grid.h - bh), bw, bh), T.wallGap, T.solidGap, 40, 300);
+    };
+    const first = ctx.rng.chance(0.5);
+    const a = place(first);
+    if (a.length >= T.min) return;
+    // a bitten or narrow room may not take two rows this way round: try the other orientation
+    const got = grid.cells.slice();
+    grid.cells.set(base);
+    const b = place(!first);
+    if (b.length < a.length) grid.cells.set(got);
   },
 });
 
