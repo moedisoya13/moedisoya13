@@ -51,7 +51,7 @@ BD.C = {
   INTERACT: { ring: 0.9, altar: 0.8, trial: 1.5, stairs: 1.0, stairsRingOffset: 1.2, blackout: 0.6, closeInvuln: 0.5, flaskTouch: 0.6 },
   FLASK: 30, PRAY: 25, RADIANCE_MAX: 9, // radiance max 9: GDD-V2 §4.6 (v1: 5)
   DAWN: { firstSec: 60, rate1: 1, rate2: 3 },
-  ENEMY: { keepOut: 0.8, meleeCap: 3, rangedCap: 2, flowEvery: 0.2, minTelegraph: 0.45 },
+  ENEMY: { keepOut: 0.8, meleeCap: 3, rangedCap: 2, flowEvery: 0.2, minTelegraph: 0.5 }, // minTelegraph: GDD-V2 §3.5 (v1 0.45)
   ELITE: { size: 1.3, hp: 2.5, dmg: 1.25, tg: 1.2, perFloor: [0, 0, 0, 1, 1, 2, 0] },
   // guardian HP per floor (GDD §6.3, set by docs/CONTROLS-REVIEW.md §3.1; earlier ×3 tuning: docs/requests/enemies.md)
   // v2: HP 400 / 700 / 1000 / 1300 / 1600 (GDD-V2 §3.6; v1 tuned row was 385 / 530 / 675 / 815 / 960)

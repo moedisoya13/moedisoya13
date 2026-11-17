@@ -8,4 +8,4 @@ BD.gen.bundles.register({
 });
 
 // v2 horde mix (GDD-V2 §3.3): 굶주린 망자 85 %, 고블린 15 %; archers and ghouls 2 : 1.
-BD.director.mixes.register({ id: 'undead', fodder: { husk: 85, goblin: 15 }, threats: { skel_archer: 2, ghoul: 1 } });
+BD.director.mixes.register({ id: 'undead', fodder: { husk: 85, goblin: 15 }, threats: { skel_archer: 2, ghoul: 1 }, elite: 'ghoul' });

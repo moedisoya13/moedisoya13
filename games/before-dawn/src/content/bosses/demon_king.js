@@ -1,20 +1,22 @@
-// 마왕 (boss, rooftop) — GDD §6.4. Three phases by HP; each phase runs its skill cycle with a
-// fixed gap between skills, and phases 2 and 3 summon minions. Not knocked back (engine).
+// 마왕 (boss, rooftop) — GDD-V2 §3.6 (skills: v1 §6.4). Three phases by HP; each phase runs its skill
+// cycle with a fixed gap between skills. HP 6000 on the 28 × 28 rooftop. **Minions come from the
+// rooftop director the whole fight** (fodder of the four types in equal shares, want 8 / 12 / 16 by
+// phase — C.DIRECTOR.floors[6].phases), so the v1 summon skill is gone. Not knocked back (engine).
 //
-//   phase  HP          speed  cycle (gap)                                   summon
-//   1 강림  100 → 66 %  1.6    cleave ↔ dark_bolts (2.2 s)                   —
-//   2 침식  66 → 33 %   1.6    cleave → dark_bolts → thorns (2.0 s)          on entry, then every 20 s
-//   3 결계  33 → 0      2.4    cleave → collapse → dark_bolts → thorns (1.6) on entry, then every 15 s
+//   phase  HP          speed  cycle (gap)
+//   1 강림  100 → 66 %  1.6    cleave ↔ dark_bolts (2.2 s)
+//   2 침식  66 → 33 %   1.6    cleave → dark_bolts → thorns (2.0 s)
+//   3 결계  33 → 0      2.4    cleave → collapse → dark_bolts → thorns (1.6 s)
 //
 // cleave      front fan 140°, r 3.6, 0.9 s (0.7 s in phase 3), only when the hero is within 4u; 22.
 //             When it is cleave's turn and the hero is farther, the cycle moves on to the next skill.
 // dark_bolts  phase 1: three lines, each aimed at the hero when it appears, 0.35 s apart, 0.6 s each.
 //             From phase 2: five lines fanned over ±30° (every 15°) around the hero's bearing at the
-//             start, appearing one after another 0.35 s apart. Bolts 12u/s, 12 each, stopped by pillars.
+//             start, appearing one after another 0.35 s apart. Bolts 12u/s, 12 each, at most 12u
+//             (§5.6-3), stopped by pillars.
 // thorns      five circles r 1.2 (under the hero + four within 3u of the hero), 1.0 s, 18 each.
 // collapse    rings 0–3, 3–6, 6–9u around the boss, inner first, 0.5 s apart, 0.8 s each, 20 each.
-// summon      at the rooftop's two rifts (1.2 s warning): this run's summon type's 3F non-dominant
-//             bundle (w.floor.summon, chosen by the generator). Skipped while more than 8 minions live.
+// **Thorns and collapse also hit the minions inside: 40 each** (§3.2; the kills drop shards).
 // Phase change: 1.5 s roar — the hero is pushed 3u away (no damage) and the boss's own warnings in
 // progress are wiped; the boss still takes damage. Minions' warnings are left alone (their
 // behaviours wait for their own telegraphs to fire).
@@ -25,15 +27,15 @@ const W = BD.W;
 const T = {
   phaseAt: [0.66, 0.33],
   phases: [null,
-    { speed: 1.6, cycle: ['cleave', 'dark_bolts'], gap: 2.2, summonEvery: 0 },
-    { speed: 1.6, cycle: ['cleave', 'dark_bolts', 'thorns'], gap: 2.0, summonEvery: 20 },
-    { speed: 2.4, cycle: ['cleave', 'collapse', 'dark_bolts', 'thorns'], gap: 1.6, summonEvery: 15 },
+    { speed: 1.6, cycle: ['cleave', 'dark_bolts'], gap: 2.2 },
+    { speed: 1.6, cycle: ['cleave', 'dark_bolts', 'thorns'], gap: 2.0 },
+    { speed: 2.4, cycle: ['cleave', 'collapse', 'dark_bolts', 'thorns'], gap: 1.6 },
   ],
   cleave: { trigger: 4, half: 70, r: 3.6, time: 0.9, time3: 0.7, dmg: 22 },
-  bolts: { n: 3, every: 0.35, time: 0.6, speed: 12, dmg: 12, width: 0.4, fanN: 5, fanHalf: 30 },
+  bolts: { n: 3, every: 0.35, time: 0.6, speed: 12, dmg: 12, width: 0.4, fanN: 5, fanHalf: 30, lineMax: 12 },
   thorns: { n: 5, r: 1.2, spread: 3, time: 1.0, dmg: 18 },
   collapse: { rings: [[0, 3], [3, 6], [6, 9]], every: 0.5, time: 0.8, dmg: 20 },
-  summonCap: 8,
+  minionDmg: 40,   // §3.2: thorns and collapse on the minions inside
   roar: { time: 1.5, push: 3 },
   stop: 2.0,       // walks until edgeDist ≤ this between skills
   firstDelay: 1.5, // after the floor-entry freeze
@@ -41,6 +43,8 @@ const T = {
 };
 
 const dmgOf = (e, base) => Math.round(base * e.dmgMul);
+// a warning of the boss that also crushes the minions standing in it when it fires
+const crush = (e) => (w2, tg) => BD.foes.hitFoes(w2, e, (o) => M.shapeHits(tg, o.x, o.y, o.r), T.minionDmg);
 
 // ---- skills ---------------------------------------------------------------------------------
 
@@ -56,7 +60,7 @@ function cleave(w, e) {
 function bolt(w, e, gen, dir) {
   const S = T.bolts, m = e.mem;
   if (m.gen !== gen || e.dead) return;
-  const len = BD.nav.rayLen(w.grid, e.x, e.y, dir, 30);
+  const len = BD.nav.rayLen(w.grid, e.x, e.y, dir, S.lineMax);
   A.telegraph(w, e, {
     shape: 'line', x: e.x, y: e.y, dir, len, width: S.width, time: S.time, dmg: 0, danger: true, attack: 'dark_bolts',
     onFire(w2, tg) {
@@ -89,7 +93,7 @@ function thorns(w, e) {
     const x = h.x + Math.cos(a) * d, y = h.y + Math.sin(a) * d;
     if (w.grid.walkable(Math.floor(x), Math.floor(y))) spots.push([x, y]);
   }
-  for (const [x, y] of spots) A.telegraph(w, e, { shape: 'circle', x, y, r: S.r, time: S.time, dmg: dmgOf(e, S.dmg), attack: 'thorns' });
+  for (const [x, y] of spots) A.telegraph(w, e, { shape: 'circle', x, y, r: S.r, time: S.time, dmg: dmgOf(e, S.dmg), attack: 'thorns', onFire: crush(e) });
   return S.time;
 }
 
@@ -98,24 +102,12 @@ function collapse(w, e) {
   e.state = 'cast'; e.squash = 1;
   S.rings.forEach(([r0, r1], i) => W.after(w, i * S.every, (w2) => {
     if (m.gen !== gen || e.dead) return;
-    A.telegraph(w2, e, { shape: 'ring', x, y, r0, r1, time: S.time, dmg: dmgOf(e, S.dmg), attack: 'collapse' });
+    A.telegraph(w2, e, { shape: 'ring', x, y, r0, r1, time: S.time, dmg: dmgOf(e, S.dmg), attack: 'collapse', onFire: crush(e) });
   }));
   return (S.rings.length - 1) * S.every + S.time;
 }
 
 const SKILLS = { cleave, dark_bolts: darkBolts, thorns, collapse };
-
-function minions(w) {
-  let n = 0;
-  for (const o of w.enemies) if (!o.dead && !o.boss) n++;
-  return n + w.rifts.length + w.queue.length;
-}
-
-function summon(w, e) {
-  const kinds = w.floor.summon || [];
-  if (!kinds.length || minions(w) > T.summonCap) return;
-  A.summon(w, kinds);
-}
 
 function roar(w, e) {
   const m = e.mem, h = w.hero;
@@ -129,8 +121,6 @@ function roar(w, e) {
   W.emit(w, 'boss_phase', { phase: m.phase });
   W.emit(w, 'vfx', { kind: 'boss_roar', x: e.x, y: e.y, life: T.roar.time });
   W.banner(w, m.phase === 2 ? '마왕 — 침식' : '마왕 — 결계', 'boss');
-  const P = T.phases[m.phase];
-  if (P.summonEvery) { summon(w, e); m.summonT = P.summonEvery; }
 }
 
 BD.enemies.register({
@@ -143,14 +133,10 @@ BD.enemies.register({
   T,
   create(e) {
     const m = e.mem;
-    m.phase = 1; m.cycleI = 0; m.cd = T.firstDelay; m.busyT = 0; m.gen = 0; m.summonT = 0; m.roarT = 0;
+    m.phase = 1; m.cycleI = 0; m.cd = T.firstDelay; m.busyT = 0; m.gen = 0; m.roarT = 0;
   },
   update(e, w, dt) {
     const m = e.mem, P = T.phases[m.phase];
-    if (P.summonEvery) { // counts from the phase entry, roar included
-      m.summonT -= dt;
-      if (m.summonT <= 0) { m.summonT = P.summonEvery; summon(w, e); }
-    }
     if (m.roarT > 0) { m.roarT -= dt; e.state = 'roar'; return; }
     const frac = e.hp / e.maxHp;
     const want = frac <= T.phaseAt[1] ? 3 : frac <= T.phaseAt[0] ? 2 : 1;

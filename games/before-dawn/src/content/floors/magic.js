@@ -8,4 +8,4 @@ BD.gen.bundles.register({
 });
 
 // v2 horde mix (GDD-V2 §3.3): 마력 슬라임 85 %, 고블린 15 %; mages.
-BD.director.mixes.register({ id: 'magic', fodder: { mana_slime: 85, goblin: 15 }, threats: { mage: 1 } });
+BD.director.mixes.register({ id: 'magic', fodder: { mana_slime: 85, goblin: 15 }, threats: { mage: 1 }, elite: 'mage' });

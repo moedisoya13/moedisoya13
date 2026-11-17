@@ -50,7 +50,7 @@ D.start = function (w) {
   if (!row) { w.director = null; return; }
   const h = w.hero;
   w.director = {
-    tau: 0, tokens: DC.tokensAtEntry, decideT: 0, threatT: row.threatEvery || 0, want: 0, have: 0,
+    tau: 0, tokens: DC.tokensAtEntry, decideT: 0, threatT: row.threatEvery || 0, eliteT: row.eliteEvery || 0, want: 0, have: 0,
     surge: 0, surgeN: 0, surgeEnd: -1, nextSurge: DC.surge.first, state: w.floorN === 6 ? 'boss' : 'normal',
     overtime: false, off: false, trail: [[h.x, h.y]], trailT: 0, packs: 0, flip: 0,
   };
@@ -101,7 +101,7 @@ function walkDir(w) {
 
 // Place up to n enemies around p (within packR, each on a reachable cell; off screen unless
 // `inside`). kinds: fodder from the mix; `threat` (a kind) replaces the first member.
-function spawnPack(w, p, n, threat, inside) {
+function spawnPack(w, p, n, threat, inside, firstOpts) {
   const rng = w.rng.spawn, mix = D.mixOf(w);
   if (!mix) return 0;
   let made = 0;
@@ -112,7 +112,7 @@ function spawnPack(w, p, n, threat, inside) {
       const x = p[0] + Math.cos(a) * r, y = p[1] + Math.sin(a) * r;
       if (!reachable(w, x, y)) continue;
       if (!inside && W.onScreen(w, x, y)) continue;
-      W.makeEnemy(w, kind, x, y, { via: 'director' });
+      W.makeEnemy(w, kind, x, y, i === 0 && firstOpts ? Object.assign({ via: 'director' }, firstOpts) : { via: 'director' });
       made++;
       break;
     }
@@ -190,6 +190,7 @@ D.update = function (w, dt) {
   const slow = d.state === 'guardian' ? DC.guardianMult : 1;
   d.tokens = Math.min(DC.tokenMax, d.tokens + row.rate * slow * dt);
   if (row.threatEvery) d.threatT -= dt;
+  if (row.eliteEvery) d.eliteT -= dt * (d.overtime ? 2 : 1); // §3.4 overtime: elites twice as often
   // surges (몰려온다) and overtime (밤이 깊어진다), floors 1–5 before the guardian
   if (d.state === 'normal') {
     if (d.tau >= d.nextSurge) {
@@ -213,6 +214,11 @@ D.update = function (w, dt) {
   if (size < row.pack[0] && !(size >= 1 && d.tokens >= DC.tokenMax - 1e-9)) return;
   let threat = null;
   if (d.state === 'normal' && row.threatEvery && d.threatT <= 0 && n.threats < row.threatCap) threat = pickThreat(w);
+  // GDD-V2 §3.6 (v2-enemies): every eliteEvery s, while no elite the director sent lives, the next pack
+  // brings one — the mix's `elite` kind — in place of its threat
+  const mixE = D.mixOf(w), elite = d.state === 'normal' && row.eliteEvery && d.eliteT <= 0 && mixE && mixE.elite &&
+    !w.enemies.some((e) => !e.dead && e.flags.directorElite) ? mixE.elite : null;
+  if (elite) threat = null;
   // direction: 60 % within ±60° of the way he walks, else anywhere; a surge comes from two sides
   const rng = w.rng.spawn, walk = walkDir(w);
   let ang = walk !== null && rng.chance(DC.ahead) ? walk + rng.range(-1, 1) * DC.aheadHalf * M.DEG : rng.range(0, M.TAU);
@@ -220,9 +226,10 @@ D.update = function (w, dt) {
   for (let tries = 0; tries < 12; tries++, ang += (tries % 2 ? 1 : -1) * tries * 0.45) {
     const p = edgePoint(w, ang, rng.range(DC.spawnOut[0], DC.spawnOut[1]));
     if (!p) continue;
-    const made = spawnPack(w, p, size, threat, false);
+    const made = spawnPack(w, p, size, elite || threat, false, elite ? { elite: true, flags: { directorElite: true } } : null);
     d.tokens -= made;
     if (threat && made) d.threatT = row.threatEvery;
+    if (elite && w.enemies.some((e) => !e.dead && e.flags.directorElite)) d.eliteT = row.eliteEvery;
     return;
   }
 };

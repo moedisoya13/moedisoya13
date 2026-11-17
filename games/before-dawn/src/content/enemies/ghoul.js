@@ -1,6 +1,6 @@
-// 구울 (undead) — GDD §6.2 / §6.3. Walks after the hero without stopping. Lunge: within 2.2u a
-// 90° fan of radius 2.0 fills over 0.6 s, hits for 14 and the ghoul leaps 1.5u forward.
-// At HP 0 it goes down (`down`); the corpse has HP 20 and rises 2.5 s later with HP 40, once.
+// 구울 (undead threat) — GDD-V2 §3.2 (behaviour v1 §6.2). Walks after the hero without stopping.
+// Lunge: within 2.2u a 90° fan of radius 2.0 fills over 0.6 s, hits for 12 and the ghoul leaps 1.5u
+// forward. At HP 0 it goes down (`down`); the corpse has HP 20 and rises 2.5 s later with HP 20, once.
 // The engine applies the ways to stop it: e.flags.noRevive (holy_light, awakened rest_of_dead),
 // cutting the corpse to 0 (it then dies with `kill`), burning when it falls (no `down`).
 // Guardian 구울 폭군: rises with 50 % of its maximum HP instead.
@@ -16,10 +16,10 @@ const T = {
 
 BD.enemies.register({
   id: 'ghoul', name: '구울', type: 'undead', sprite: 'ghoul',
-  hp: 45, speed: 2.4, dmg: 14, radius: 0.45, cost: 3, role: 'threat', shards: 4, // HP: GDD-V2 §3.2 (v1 tuned 120)
+  hp: 45, speed: 2.6, dmg: 12, radius: 0.45, cost: 3, role: 'threat', shards: 4, // GDD-V2 §3.2 (v1 tuned: 120 HP, 2.4 u/s, 14)
   attacks: { lunge: { name: '달려들기' } },
   T,
-  guardian: { name: '구울 폭군' }, // the 50 % rise is read from e.guardian in revive()
+  guardian: { name: '구울 폭군', update(e, w) { BD.foes.clamp(w, e); } }, // the 50 % rise is read from e.guardian in revive()
   revive(e, w) {
     if (e.revives >= 1) return null;
     const k = e.maxHp / e.def.hp;
@@ -27,7 +27,7 @@ BD.enemies.register({
     BD.W.emit(w, 'vfx', { kind: 'ghoul_down', enemyId: e.id, life: T.reviveDelay + 0.1 }); // corpse timer ring
     return { delay: T.reviveDelay, hp, corpseHp: Math.round(T.corpseHp * k) };
   },
-  create(e, w) { e.mem.cd = A.rng(w).range(0.3, 1.0); e.mem.rev = 0; },
+  create(e, w) { e.mem.cd = A.rng(w).range(0.3, 1.0); e.mem.rev = 0; BD.foes.born(e, w); },
   update(e, w, dt) {
     const m = e.mem, T = e.def.T; // variants (husk) bring their own T
     if (m.rev !== e.revives) { // just rose: the lunge in progress when it fell was cancelled
@@ -36,8 +36,9 @@ BD.enemies.register({
     m.cd -= dt;
     if (e.lunge) { e.state = 'jump'; return; }
     if (m.windup) { e.state = 'windup'; return; }
+    if (BD.foes.leash(w, e, dt)) return;
     const ed = A.edgeDist(w, e);
-    if (A.canAttack(w, e) && m.cd <= 0 && ed <= T.range && A.slot(w, e, 'melee')) {
+    if (A.canAttack(w, e) && m.cd <= 0 && ed <= T.range && BD.foes.slot(w, e, 'melee')) {
       m.windup = true; e.state = 'windup'; e.squash = 1;
       const dir = A.angleToHero(w, e);
       e.face = dir;

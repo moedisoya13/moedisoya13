@@ -1,35 +1,46 @@
-// 마도사 (magic) — GDD §6.2 / §6.3. Walks to keep 4–7u from the hero. When the hero stays
-// within 2.0u for 0.5 s it teleports to a free cell at least 6u from the hero (the arrival
-// point is marked for 0.4 s; teleport cooldown 5 s; not while bound — mana_backlash's `bind`).
-// Fire circle: a radius-1.3 circle where the hero stood fills over 1.1 s, hits for 12 and
-// leaves a 2.5 s fire zone (3 every 0.5 s to the hero inside; enemies inside catch fire).
-// No line of sight needed. Guardian 대마도사: three circles at once (the hero's spot and 2.2u to
-// either side, across the mage→hero line); teleport cooldown 4 s.
-// Counterplay (§6.5): lure the circle onto other enemies; strike in the 5 s after a teleport.
+// 마도사 (magic threat) — GDD-V2 §3.2. Walks to keep 4–7u from the hero (drifting sideways in the
+// band). Fire circle: a radius-1.3 circle where the hero stood fills over 1.1 s, hits for 10 and leaves
+// a 2.5 s fire zone (3 every 0.5 s to the hero inside; enemies inside catch fire — the zone burns the
+// horde). No line of sight needed; never from farther than 9u.
+// **It teleports once per life**: the first time its HP falls to half or less it marks a free cell
+// 4–6u from the hero inside the combat window (the arrival mark fills 0.4 s) and appears there. It
+// waits while bound (mana_backlash) and goes when the bind ends. An elite never teleports.
+// Guardian 대마도사: three circles at once (the hero's spot and 2.2u to either side, across the
+// mage→hero line); when the hero stays within 2u for 0.5 s it teleports to a cell of the stairs zone
+// (cooldown 6 s) — it moves only inside the zone.
+// Counterplay (§6.5): lure the circle onto other enemies; finish it after the teleport.
 const A = BD.ai;
 const M = BD.math;
 
 const T = {
   keepMin: 4, keepMax: 7, castMax: 9,          // edgeDist band; no cast from farther than castMax
-  near: 2.0, nearTime: 0.5, blinkMin: 6, blinkTg: 0.4, blinkCd: 5, guardianBlinkCd: 4,
+  blinkAt: 0.5, blinkMin: 4, blinkMax: 6, blinkTg: 0.4, // §3.2: once, at half HP, 4–6u away, mark 0.4 s
+  near: 2.0, nearTime: 0.5, guardianBlinkCd: 6, guardianBlinkMin: 4, // the guardian's (§3.6)
   tgR: 1.3, tgTime: 1.1, cd: 3.0, side: 2.2, // tgTime 1.1: docs/CONTROLS-REVIEW.md §3.1
   zoneLife: 2.5, zoneTick: 0.5, zoneDmg: 3,
   strafe: 0.45,                                // fraction of speed used to drift sideways in band
 };
 
-function startBlink(w, e) {
-  const m = e.mem, h = w.hero;
-  const cells = [];
-  for (let y = 0; y < w.grid.h; y++) for (let x = 0; x < w.grid.w; x++) {
-    if (!w.grid.walkable(x, y)) continue;
-    const cx = x + 0.5, cy = y + 0.5;
-    if (M.dist(cx, cy, h.x, h.y) < T.blinkMin) continue;
-    if (w.field && w.field[y * w.grid.w + x] < 0) continue;
-    let free = true;
-    for (const o of w.enemies) if (o !== e && !o.dead && M.dist(o.x, o.y, cx, cy) < o.r + e.r + 0.3) { free = false; break; }
-    if (free) cells.push([cx, cy]);
+function freeCell(w, e, x, y) {
+  for (const o of w.enemies) if (o !== e && !o.dead && M.dist(o.x, o.y, x, y) < o.r + e.r + 0.3) return false;
+  return true;
+}
+// §3.2: walkable, reachable, inside the combat window, 4–6u from the hero, not on another enemy
+function blinkCells(w, e) {
+  const h = w.hero, g = w.grid, out = [];
+  const x0 = Math.max(0, Math.floor(h.x - T.blinkMax)), x1 = Math.min(g.w - 1, Math.ceil(h.x + T.blinkMax));
+  const y0 = Math.max(0, Math.floor(h.y - T.blinkMax)), y1 = Math.min(g.h - 1, Math.ceil(h.y + T.blinkMax));
+  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+    if (!g.walkable(x, y) || (w.field && w.field[y * g.w + x] < 0)) continue;
+    const cx = x + 0.5, cy = y + 0.5, d = M.dist(cx, cy, h.x, h.y);
+    if (d < T.blinkMin || d > T.blinkMax || !BD.W.inView(w, cx, cy, e.r) || !freeCell(w, e, cx, cy)) continue;
+    out.push([cx, cy]);
   }
-  if (!cells.length) { m.blinkCdT = 1; return; }
+  return out;
+}
+
+function startBlink(w, e, cells) {
+  const m = e.mem;
   const [tx, ty] = A.rng(w).pick(cells);
   m.blinking = true; e.state = 'cast';
   A.telegraph(w, e, {
@@ -37,8 +48,8 @@ function startBlink(w, e) {
     attack: 'blink', style: 'blink', noScale: true,
     onFire(w2) {
       m.blinking = false; m.nearT = 0;
-      m.blinkCdT = e.guardian ? T.guardianBlinkCd : T.blinkCd;
-      if (e.statuses.bind) return; // bound while channelling: the teleport fizzles
+      if (e.guardian) m.blinkCdT = T.guardianBlinkCd;
+      if (e.statuses.bind) { if (!e.guardian) { m.blinked = false; m.blinkDue = true; } return; } // bound while channelling: fizzles, goes when the bind ends
       const fx = e.x, fy = e.y;
       const [x, y] = BD.nav.resolve(w2.grid, tx, ty, e.r);
       e.x = x; e.y = y; e.face = A.angleToHero(w2, e);
@@ -73,23 +84,37 @@ function castFire(w, e) {
 
 BD.enemies.register({
   id: 'mage', name: '마도사', type: 'magic', sprite: 'mage',
-  hp: 30, speed: 2.0, dmg: 12, radius: 0.35, cost: 2.5, role: 'threat', shards: 4, // HP: GDD-V2 §3.2 (v1 tuned 54)
+  hp: 30, speed: 2.0, dmg: 10, radius: 0.35, cost: 2.5, role: 'threat', shards: 4, // GDD-V2 §3.2 (v1 tuned: 54 HP, 12)
   attacks: { fire_circle: { name: '불 원', sfx: 'fire_circle' }, fire_zone: { name: '불 장판' } }, // the blink warning sounds by its style
   T,
-  guardian: { name: '대마도사' }, // three circles and the 4 s teleport are read from e.guardian
+  guardian: { name: '대마도사', update(e, w) { BD.foes.clamp(w, e); } }, // three circles, the zone teleport: e.guardian
   create(e, w) {
     const r = A.rng(w);
-    e.mem.cd = r.range(0.6, 1.8); e.mem.blinkCdT = 0; e.mem.nearT = 0;
+    e.mem.cd = r.range(0.6, 1.8); e.mem.blinkCdT = 0; e.mem.nearT = 0; e.mem.blinkDue = false; e.mem.blinked = false;
     e.mem.side = r.chance(0.5) ? 1 : -1; e.mem.sideT = r.range(1.5, 3);
+    BD.foes.born(e, w);
   },
   update(e, w, dt) {
     const m = e.mem;
     m.cd -= dt; m.blinkCdT -= dt;
     if (m.blinking) { e.state = 'cast'; return; } // channels in place
     const ed = A.edgeDist(w, e);
-    m.nearT = ed <= T.near ? m.nearT + dt : 0;
-    if (m.nearT >= T.nearTime && m.blinkCdT <= 0 && !e.statuses.bind) { startBlink(w, e); if (m.blinking) return; }
-    if (A.canAttack(w, e) && m.cd <= 0 && ed <= T.castMax && A.slot(w, e, 'ranged')) castFire(w, e);
+    if (e.guardian) {
+      m.nearT = ed <= T.near ? m.nearT + dt : 0;
+      if (m.nearT >= T.nearTime && m.blinkCdT <= 0 && !e.statuses.bind) {
+        const cells = BD.foes.boxCells(w, e, T.guardianBlinkMin).filter(([x, y]) => freeCell(w, e, x, y));
+        if (cells.length) { startBlink(w, e, cells); return; }
+        m.blinkCdT = 1;
+      }
+    } else if (!e.elite && !m.blinked) {
+      if (e.hp <= e.maxHp * T.blinkAt) m.blinkDue = true;
+      if (m.blinkDue && !e.statuses.bind) {
+        const cells = blinkCells(w, e);
+        m.blinked = true; m.blinkDue = false; // once per life (no room for it: it stays)
+        if (cells.length) { startBlink(w, e, cells); return; }
+      }
+    }
+    if (A.canAttack(w, e) && m.cd <= 0 && ed <= T.castMax && BD.foes.slot(w, e, 'ranged')) castFire(w, e);
     const st = A.keepRange(w, e, T.keepMin, T.keepMax, e.speed, dt);
     if (st === 'in') {
       m.sideT -= dt;
