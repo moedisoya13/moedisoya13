@@ -470,12 +470,9 @@ outline, crown, type icon, burn/wet/bind/sunder marks, the white border on a sam
 (LEAD §7) and the target chevron are drawn by the engine. Add: telegraph styles
 (`BD.render.telegraphs`), projectile looks by `kind` (`BD.render.projectiles`, e.g. `'arrow'`),
 zone looks by `kind` (`BD.render.zones`), per-kind decor (`BD.render.decor` with `target:
-'dark_knight'` for the shield spark), obstacle looks per pattern id
-(`BD.render.obstacles.register({id: 'aisle', draw(g, view, cx, cy, w, t)})` — called only for
-cells near the screen on big floors; use
-`BD.client.render.prism(g, view, x, y, dw, dh, hPx, top, left, right)`; guard with
-`if (BD.client)` only if you call client code at load time — inside `draw` it always exists),
-and `vfx` events. Frame animation per kind comes from `assets/anim/manifest.json` (§9.5); a
+'dark_knight'` for the shield spark) and `vfx` events. Obstacles are drawn by the stage's prop
+catalogue (§10): name a look with `floor.stage.props` or let the shape choose it;
+`BD.render.obstacles` drawers are no longer called. Frame animation per kind comes from `assets/anim/manifest.json` (§9.5); a
 behaviour only has to keep `e.state = 'windup'` and its telegraphs honest — the attack clip's
 wind-up follows the telegraph's fill and the strike frame lands when it fires. Flag anything the
 player must find with `e.flags.marker = 'objective' | 'threat'` (§9.4).
@@ -984,3 +981,140 @@ back from ≥ 6 enemies within 2.2u; shards within 6u when < 4 enemies within 3u
 off-screen goal; else hold the nearest at reach − 0.5u). `BD.bot.choose(w, {policy: 'mixed' | 'card'
 | 'pray'})` answers the choice or the altar. The gate is `node tools/fun/measure.js --seeds 1-20`
 (also `tools/accept.js` #7); `tools/feel/human_bot.js` and `tools/fun/lib.js` answer choices with it.
+
+## 11. The stage: props, zone fills, sites, walls, sky (art, v2)
+
+Everything of the environment that is not a character is drawn in code by `src/client/31_kit.js`
+… `39_sites.js` and staged for tuning by `96_artstage.js`. It is presentation only: nothing here
+writes simulation state or changes a hash, and it reads only the fields named below. What the
+generator or content controls is **which ids stand where**; how they look is the art's.
+
+| file | what |
+|---|---|
+| `31_kit.js` `R.kit` | the facet kit: `box` (taper), `bevelBox`, `prismN`, `shard` (crystal), `spike`, `rock`, `shadowBox`/`shadowDisc` (cast shadow + halftone), `halftone`, `brush`, `pal(base)` → two tones, `sprite`/`blit` (LRU canvases at the screen's pixel density) |
+| `33_props.js` `R.props` | the prop catalogue (§11.2), `piece(inst, dx, dy)` = the slice of one footprint cell, `whole`, `shadow` |
+| `36_stage.js` `R.stage` | the stage model of a floor: layout, zones, props (given or inferred), voids, floor marks, wall bays, growths; `R.invalidate()` |
+| `37_paint.js` `R.paint` | the static painter (facade, floor and its marks, shadows, back walls, wall items, elevator, furniture, back growths) for v1 rooms and big-floor chunks |
+| `38_sky.js` `R.sky` | flat sky bands, stars, moon, three parallax skyline strips (night/dawn), drawn only where the stage leaves the sky open |
+| `39_sites.js` `R.sites` | site drawers, the stairs door, spawn rift marks, and `R.stage.pushItems` (the depth-sorted pass) |
+| `96_artstage.js` | showcase floors and the prop sheet (`?artstage=office&theme=magic`, `?propsheet=1`) |
+
+**One light** comes from the screen's left and above: tops and the +y face (screen lower-left) are
+lit, the +x face (screen lower-right) is the shadow face with a light halftone, cast shadows fall to
+the screen right. Two tones per surface; ink heaviest on the ground line and the silhouette. The
+floor stays **one flat colour per floor type** (`C.FLOOR_COLORS`): every mark on it is a step of
+that colour or thin ink, and litter lies only against walls and props.
+
+### 11.1 What a floor may say (all optional)
+
+```js
+floor.stage = {
+  layout: 'plaza' | 'office' | 'atrium' | 'hall' | 'ruin',      // GDD-V2 §5.3 배치 유형
+  zones:  [{ zx, zy, fill }],                                   // 16 × 16 zones; fill = a §5.2 id
+  props:  [{ id, x, y, w, h, v?, state? }],                     // footprint cells must be SOLID
+};
+w.sites = [{ id, x, y, state }];      // or floor.sites — places to go (§11.4), drawn depth-sorted
+```
+
+* With no `floor.stage`, the layout comes from the v1 pattern (`aisle`/`cover` → office,
+  `pillars`/`open` → plaza, `ring` → ruin), zones are the 16-u squares of a floor ≥ 32 × 32, and
+  props are **inferred**: SOLID cells are grouped (4-neighbour), split greedily into rectangles, and
+  each rectangle gets the id §11.2 gives for its shape, the layout and the floor type. A thin
+  component of ≥ 8 cells (a `chamber` ring, an `office` boundary) is all `wall`.
+* Every SOLID cell belongs to exactly one prop and a prop's footprint is SOLID only, so what is
+  drawn is what collides (tests/art/stage.test.js checks it on every layout and on engine floors).
+  Given props are trusted; cells they leave are inferred. An unknown id draws as `block` and is
+  listed in `R.props.unknown` (one console warning).
+* The floor type is `floor.domType` (`beast|undead|magic|heavy|rooftop`): it picks the prop mix,
+  wall items, furniture, litter, floor marks and growth density (§11.5).
+* A prop is drawn cell by cell (each slice keyed `x + y + 1`, like a 1 × 1 obstacle), so actors
+  sort against a 1 × 5 desk row or a 2 × 2 column correctly. A `tall` slice that covers the hero,
+  an on-screen enemy or a warning behind it is drawn at 42 % (GDD-V2 §5.9); slab-edge growths too.
+
+### 11.2 Prop catalogue (ids, footprints in cells w × h, either orientation)
+
+| id | footprint | height px | tall | inferred for |
+|---|---|---|---|---|
+| `pillar` | 1×1 | 106 | ✓ | 1×1 (`open`) in plaza/atrium/hall; state `broken` (ruin), `castle` (rooftop) |
+| `pillar_big` | 2×2 | 112 | ✓ | 2×2 in plaza/atrium/hall (`pillars`) |
+| `planter` | 1×N, N ≥ 2 | 62 | | 1×2–3 in plaza/atrium (`planters`) |
+| `partition` | 1×N, N ≥ 2 | 64 | ✓ | 1×2–3 in office (`planters`, v1 `cover`) |
+| `bench` | 1×N | 30 | | 1×2–3 in hall |
+| `sandbags` | any | 30 | | half the 1×2–3 rows on the heavy floor outside offices |
+| `desk_row` | 1×N, N ≥ 2 | 54 | | 1×4–5 (`aisle`) in office/plaza/atrium |
+| `server_rack` | 1×N, N ≥ 2 | 80 | ✓ | 1×4–5 in hall |
+| `bookshelf` | 1×N | 82 | ✓ | 1×4–5 in hall on magic; a third of the rows on magic |
+| `weapon_rack` | 1×N | 70 | ✓ | a third of the 1×4–5 rows on heavy |
+| `cubicle` | 2×2 | 62 | ✓ | 2×2 in office (`cubicles`) |
+| `crate` | any | 64 / 88 | | 2×2 in ruin and on heavy; leftovers of odd shapes |
+| `crystal_block` | any | 64 + 16·min(w,h) | ✓ | ruin 1×1 / 2×2; odd shapes on magic and in ruin |
+| `spike_mass` | any | 54 + 18·min | ✓ | ruin 1×1 / 2×2; k×k centres on undead/heavy; rooftop rows |
+| `crystal_mass` | any | 60 + 22·min | ✓ | k×k centres (`ring`) in ruin/hall and on magic; rooftop |
+| `fountain` | k×k, k ≥ 2 | 40 + 22k | ✓ | k×k centres (`ring`) in plaza/atrium |
+| `reception` | ≥ 3×3 | 96 | ✓ | ≥ 3×3 centres (`ring`) in office |
+| `wall` | 1×N | 62 / 74 | ✓ | runs ≥ 6 and thin components; state `glass` (office, translucent), `stone` (hall), `concrete` (others) |
+| `rubble` | any | 46 | | ruin singles and short rows |
+| `cabinet` | 1×N | 60 | ✓ | office singles |
+| `vending` / `copier` / `plant` | 1×1 | 84 / 46 / 76 | ✓ / – / – | office singles |
+| `ac_unit` | w·h ≤ 2 | 44 | | rooftop singles and pairs |
+| `water_tank` | 2×2 | 128 | ✓ | rooftop 2×2 |
+| `block` | any | 40 | | the fallback for an unknown id |
+
+Furniture along the back walls (decor, not obstacles, baked into the static layer; 1–2 u along the
+wall × 0.56 u deep, never in front of the stairs): `wall_desk`, `wall_cabinet`, `water_cooler`,
+`potted_plant`, `printer`, `wall_rack`, `wall_crates`, `wall_shelf`, `ac_unit_decor` — a decor id
+draws its base prop squashed along the wall's depth. The stage places these itself.
+
+### 11.3 Zone fills (GDD-V2 §5.2) and what the floor shows for them
+
+| fill | props it gets | floor |
+|---|---|---|
+| `open` | `pillar` | an inlaid ring emblem (45 %); a rune circle on magic, the helipad on the rooftop |
+| `pillars` | `pillar_big` (cubicles in office, crates/crystals in ruin) | inlaid ring emblem |
+| `planters` | `planter` / `partition` / `bench` / `rubble` / `sandbags` | — |
+| `aisle` | `desk_row` / `server_rack` / `bookshelf` / `weapon_rack` | carpet over the zone (runner in hall) |
+| `cubicles` | `cubicle` (crates in ruin) | carpet over the zone |
+| `ring` | `fountain` / `reception` / `crystal_mass` / `spike_mass` | inlaid ring emblem |
+| `chamber` | `wall` (stone in hall, glass in office) | dark carpet inside the room |
+| `island` | void shaft with railings round it and along the bridges | inlay on the island; the shaft's walls show the floors below |
+
+Zone borders get a doubled expansion joint. A zone without a `fill` is read from what stands in it.
+
+### 11.4 Sites (`w.sites[]`, plus the world's own objects)
+
+| id | states (first = default) | drawn from |
+|---|---|---|
+| `altar` | `off`, `lit` (also `open`), `used` | `w.altar` (v1) or a site entry |
+| `spring` | `full`, `dry` | site |
+| `chest` | `closed`, `open` | site |
+| `rift` | `available`, `active`, `spent` | `w.trial` (the v1 trial rift) or a site |
+| `seal` | `intact`, `cracked`, `broken` | site (seals task) |
+| `nest` | `alive`, `dead` | site (nests task) |
+| `brazier` | `cold`, `lit` | site (hold task) |
+| `spawn_rift` | — | `floor.layout.rifts` (a flat mark) |
+| stairs door | locked / open | `w.stairs` (`side`, `x` or `y`, `open`), set into its back wall |
+
+Stay rings, progress arcs and markers stay the engine's (§9.4); a site is only the object.
+
+### 11.5 Walls, sky and the floor types
+
+Back walls (the `x = 0` and `y = 0` sides) are 4-u bays: glass curtain wall with the city in it
+(62 %; smashed panes on beast/undead) or concrete with wall items (`clock exit board whiteboard tv
+vent extinguisher poster`, and the floor type's own: `claws` beast, `cobweb` undead, `sigil` magic,
+`shield banner` heavy); pilasters between bays; one broken `elevator` bay away from the stairs; the
+section cut on top. The rooftop has a parapet with a rail instead. Front edges: the slab lip, the
+facade's lit storeys down to the frame, crystals grown into it. The demon castle's growths
+(spikes, crystals; density per floor type in `R.stage.GROW`) mass at the corners and clump along
+the walls and the slab edge. Floor types also differ in the floor (beast claw gouges, undead cracks,
+magic cracks that glow, a heavy 4-u steel deck with rivets, rooftop gravel and drains) and in the
+litter against walls (twigs, bones and candles, shardlets and orbs, bolts and chains, gravel).
+
+### 11.6 Cost and tools
+
+Static parts go into the v1 screen cache or the 512-px chunks (one chunk painted ahead per frame,
+3–10 ms each); props, front growths, sites and the stairs door are cached sprites blitted in depth
+order; the sky is culled to what the stage leaves open (nothing mid-floor). Nothing on the stage
+fills a halftone pattern per frame (that makes the browser raster pending blits synchronously).
+Measurements: docs/screens/v2-art/ROUNDS.md. Tools: `node tests/art/shoot.js <dir> [--engine]
+[--layout L]`, `node tests/art/sheet.js <png>`, `node tests/art/extra.js <dir>`,
+`node tests/art/perf.js [--art]`.

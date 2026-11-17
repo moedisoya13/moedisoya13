@@ -23,7 +23,6 @@ function poly(g, pts) { g.beginPath(); g.moveTo(pts[0][0], pts[0][1]); for (let 
 R.poly = poly;
 function ink(g, wdt) { g.lineJoin = 'round'; g.lineWidth = wdt || 2; g.strokeStyle = U.INK; g.stroke(); }
 R.ink = ink;
-function localRng(key) { return BD.Rng(BD.hash32('render:' + key)); }
 
 R.floorColor = (w) => C.FLOOR_COLORS[w.floor.domType] || '#888888';
 const hueOf = {};
@@ -45,50 +44,10 @@ R.onWorld = function (w) {
   });
 };
 
-// window grid on one tower face segment a→b (two columns per 1u segment)
-function windows(g, rng, a, b, top, bottom, lit, dark, pLit) {
-  const dx = b[0] - a[0], dy = b[1] - a[1];
-  for (let row = 0; row < 40; row++) {
-    const y0 = top + 12 + row * 24;
-    if (a[1] + y0 > bottom) break;
-    for (let col = 0; col < 2; col++) {
-      const t0 = 0.12 + col * 0.46, t1 = t0 + 0.3;
-      const p0 = [a[0] + dx * t0, a[1] + dy * t0 + y0], p1 = [a[0] + dx * t1, a[1] + dy * t1 + y0];
-      poly(g, [p0, p1, [p1[0], p1[1] + 12], [p0[0], p0[1] + 12]]);
-      g.fillStyle = rng.next() < pLit ? rng.pick(lit) : dark; g.fill();
-    }
-  }
-}
-
-R.windows = windows;
-
 // ---- static layers ----------------------------------------------------------------------------
-// One wall segment a→b of a back wall (glass panel and reflection), and a purple crystal cluster
-// of n spires at (cx, cy) drawn from rng — shared by the v1 screen cache and big-floor chunks.
-function wallSeg(g, a, b, face) {
-  const WH = C.WALL_H;
-  poly(g, [a, b, [b[0], b[1] - WH], [a[0], a[1] - WH]]);
-  g.fillStyle = face; g.fill(); ink(g, 2);
-  const inset = 0.12;
-  const ga = [a[0] + (b[0] - a[0]) * inset, a[1] + (b[1] - a[1]) * inset], gb = [a[0] + (b[0] - a[0]) * (1 - inset), a[1] + (b[1] - a[1]) * (1 - inset)];
-  poly(g, [[ga[0], ga[1] - 14], [gb[0], gb[1] - 14], [gb[0], gb[1] - WH + 10], [ga[0], ga[1] - WH + 10]]);
-  g.fillStyle = '#16213a'; g.fill();
-  g.strokeStyle = 'rgba(120,160,220,0.25)'; g.lineWidth = 1; g.beginPath(); g.moveTo(ga[0] + 4, ga[1] - 20); g.lineTo(gb[0] - 4, gb[1] - WH + 18); g.stroke();
-  ink(g, 1.2);
-}
-R.wallSeg = wallSeg;
-function crystal(g, rng, cx, cy, n) {
-  for (let i = 0; i < n; i++) {
-    const h = rng.range(26, 64), wdt = rng.range(7, 13), ox = rng.range(-14, 14), lean = rng.range(-10, 10);
-    const base = [cx + ox, cy];
-    poly(g, [[base[0] - wdt, base[1]], [base[0] + lean, base[1] - h], [base[0] + wdt, base[1]]]);
-    g.fillStyle = '#5b2d91'; g.fill();
-    poly(g, [[base[0], base[1]], [base[0] + lean, base[1] - h], [base[0] + wdt, base[1]]]);
-    g.fillStyle = '#8a4fd0'; g.fill();
-    poly(g, [[base[0] - wdt, base[1]], [base[0] + lean, base[1] - h], [base[0] + wdt, base[1]]]); ink(g, 1.5);
-  }
-}
-R.crystal = crystal;
+// The stage (floor, facade, back walls, wall furniture, growths) is painted by R.paint
+// (37_paint.js) from the stage model (36_stage.js); the far sky by R.sky (38_sky.js). A v1 room
+// (fits the screen) is painted once into one screen-sized canvas; a big floor in chunks (32_bigfloor.js).
 function layerCanvas(v) {
   const s = Math.min(2, v.dpr * v.scale * 1.0) || 1;
   const cv = document.createElement('canvas');
@@ -97,115 +56,13 @@ function layerCanvas(v) {
   g.scale(s, s);
   return { cv, g };
 }
-// Far skyline in two looks: night (lit windows) and dawn (hazy lighter silhouettes, windows
-// going out). drawWorld cross-fades them from 03:00 to 06:00 (GDD §3.6), the sky behind
-// brightening with them. The buildings are drawn once from the floor's rng, then painted twice.
-function skylineData(rng) {
-  const out = [];
-  for (let layer = 0; layer < 2; layer++) {
-    let x = -20;
-    while (x < C.VIEW_W + 20) {
-      const bw = rng.range(40, 110), bh = rng.range(120, 360) * (layer ? 0.75 : 1);
-      const top = C.VIEW_H - bh - (layer ? 0 : 60);
-      const b = { layer, x, top, bw, wins: [] };
-      for (let wy = top + 10; wy < C.VIEW_H - 8; wy += 14) for (let wx = x + 6; wx < x + bw - 8; wx += 12) {
-        if (rng.next() < (layer ? 0.12 : 0.08)) b.wins.push([wx, wy, rng.pick(['#f2b84a', '#e9a33c', '#c94fa0', '#4fb7d8', '#f2b84a']), rng.range(0.35, 0.9)]);
-      }
-      out.push(b);
-      x += bw + rng.range(-10, 14);
-    }
-  }
-  return out;
-}
-R.skylineData = skylineData;
-function paintSkyline(v, data, dawn) {
-  const { cv, g } = layerCanvas(v);
-  for (const b of data) {
-    g.fillStyle = dawn ? (b.layer ? '#4a3b52' : '#3a3046') : (b.layer ? '#0c0d16' : '#090a12');
-    g.fillRect(b.x, b.top, b.bw, C.VIEW_H - b.top);
-    if (dawn) { g.fillStyle = 'rgba(255,190,130,0.22)'; g.fillRect(b.x + b.bw - 6, b.top, 6, C.VIEW_H - b.top); } // rim light
-    b.wins.forEach((p, i) => {
-      if (dawn && i % 4) return; // most windows are out by dawn
-      g.fillStyle = p[2]; g.globalAlpha = dawn ? p[3] * 0.35 : p[3];
-      g.fillRect(p[0], p[1], 5, 7);
-      g.globalAlpha = 1;
-    });
-  }
-  return cv;
-}
-R.paintSkyline = paintSkyline;
 R.layerCanvas = layerCanvas;
 
 function buildStatic(w, v) {
   const { cv, g } = layerCanvas(v);
-  const grid = w.grid, W = grid.w, H = grid.h, col = R.floorColor(w);
-  const rng = localRng(w.seed + ':' + w.floorN);
-  // far skyline (its own layers, under this one)
-  const sky = skylineData(rng);
-  R.skyNight = paintSkyline(v, sky, false);
-  R.skyDawn = paintSkyline(v, sky, true);
-  const P = v.proj;
-  // tower body + slab sides: per edge cell, painter's order (back to front)
-  const cells = [];
-  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (grid.get(x, y) !== BD.CELL.VOID) cells.push([x, y]);
-  cells.sort((a, b) => a[0] + a[1] - (b[0] + b[1]) || a[0] - b[0]);
-  const SLAB = 14, BOTTOM = C.VIEW_H + 40;
-  for (const [x, y] of cells) {
-    const front = grid.get(x, y + 1), right = grid.get(x + 1, y);
-    if (front === -1 || front === BD.CELL.VOID) {
-      const a = P(x, y + 1), b = P(x + 1, y + 1);
-      poly(g, [a, b, [b[0], BOTTOM], [a[0], BOTTOM]]); g.fillStyle = '#1a1b24'; g.fill();
-      poly(g, [a, b, [b[0], b[1] + SLAB], [a[0], a[1] + SLAB]]); g.fillStyle = shade(col, 0.55); g.fill(); ink(g, 1.5);
-      windows(g, rng, a, b, SLAB, BOTTOM, ['rgba(242,184,74,0.8)', 'rgba(242,184,74,0.8)', 'rgba(79,183,216,0.6)'], 'rgba(36,40,58,0.95)', 0.16);
-    }
-    if (right === -1 || right === BD.CELL.VOID) {
-      const a = P(x + 1, y), b = P(x + 1, y + 1);
-      poly(g, [a, b, [b[0], BOTTOM], [a[0], BOTTOM]]); g.fillStyle = '#121319'; g.fill();
-      poly(g, [a, b, [b[0], b[1] + SLAB], [a[0], a[1] + SLAB]]); g.fillStyle = shade(col, 0.42); g.fill(); ink(g, 1.5);
-      windows(g, rng, a, b, SLAB, BOTTOM, ['rgba(201,79,160,0.65)', 'rgba(242,184,74,0.7)'], 'rgba(26,29,44,0.95)', 0.12);
-    }
-  }
-  // floor tiles
-  for (const [x, y] of cells) {
-    poly(g, [P(x, y), P(x + 1, y), P(x + 1, y + 1), P(x, y + 1)]);
-    g.fillStyle = (x + y) % 2 ? col : shade(col, 0.94);
-    g.fill();
-    g.strokeStyle = 'rgba(0,0,0,0.10)'; g.lineWidth = 1; g.stroke();
-    if (rng.next() < 0.12) { // grime specks
-      const c = P(x + rng.next(), y + rng.next());
-      g.fillStyle = 'rgba(10,10,12,0.25)'; g.beginPath(); g.ellipse(c[0], c[1], rng.range(2, 5), rng.range(1, 2.5), 0, 0, M.TAU); g.fill();
-    }
-  }
-  // floor outline
-  for (const [x, y] of cells) {
-    const edges = [[0, -1, [x, y], [x + 1, y]], [-1, 0, [x, y], [x, y + 1]], [0, 1, [x, y + 1], [x + 1, y + 1]], [1, 0, [x + 1, y], [x + 1, y + 1]]];
-    for (const [ox, oy, a, b] of edges) {
-      const n = grid.get(x + ox, y + oy);
-      if (n === -1 || n === BD.CELL.VOID) { g.beginPath(); g.moveTo(...P(a[0], a[1])); g.lineTo(...P(b[0], b[1])); g.lineWidth = 2.5; g.strokeStyle = U.INK; g.stroke(); }
-    }
-  }
-  // back walls
-  const WH = C.WALL_H;
-  for (let x = 0; x < W; x++) if (grid.get(x, 0) !== BD.CELL.VOID) wallSeg(g, P(x, 0), P(x + 1, 0), '#2b2c36');
-  for (let y = 0; y < H; y++) if (grid.get(0, y) !== BD.CELL.VOID) wallSeg(g, P(0, y), P(0, y + 1), '#363744');
-  // wall props: desks with monitors (decor only, GDD §7.2)
-  const stairs = w.stairs;
-  for (let i = 0; i < 4; i++) {
-    const alongX = rng.next() < 0.5;
-    const t = rng.range(1, (alongX ? W : H) - 2);
-    if (stairs && ((alongX && stairs.side === 'y0' && Math.abs(stairs.x - t) < 2) || (!alongX && stairs.side === 'x0' && Math.abs(stairs.y - t) < 2))) continue;
-    const bx = alongX ? t : 0.05, by = alongX ? 0.05 : t;
-    const dw = alongX ? 1.0 : 0.35, dh = alongX ? 0.35 : 1.0;
-    R.prism(g, v, bx, by, dw, dh, 12, '#4a3f36', '#5d5045', '#3a312a');
-    const m = P(bx + dw / 2, by + dh / 2, 12);
-    g.fillStyle = '#0d1a24'; g.fillRect(m[0] - 7, m[1] - 14, 14, 10); g.strokeStyle = U.INK; g.lineWidth = 1.5; g.strokeRect(m[0] - 7, m[1] - 14, 14, 10);
-    g.fillStyle = 'rgba(79,183,216,0.6)'; g.fillRect(m[0] - 5, m[1] - 12, 10, 6);
-  }
-  // purple crystal clusters at the side corners
-  const c1 = P(W, 0), c2 = P(0, H), c0 = P(0, 0);
-  crystal(g, rng, c1[0] + 4, c1[1] + 6, 4);
-  crystal(g, rng, c2[0] - 4, c2[1] + 6, 4);
-  crystal(g, rng, c0[0], c0[1] - WH + 6, 3);
+  R.sky.prepare(w, v);
+  const bottom = C.VIEW_H + 40;
+  R.paint.region(g, v.proj, w, R.stageCells(w, bottom).map((it) => it.c), null, bottom);
   return cv;
 }
 
@@ -227,7 +84,7 @@ R.bake = function (fn) {
 };
 
 function ensureStatic(w, v) {
-  const key = w.seed + ':' + w.floorN + ':' + v.dpr + ':' + v.scale.toFixed(3);
+  const key = w.seed + ':' + w.floorN + ':' + v.dpr + ':' + v.scale.toFixed(3) + ':' + R.stage.of(w).key;
   if (R.floorKey === key && R.cache && R.cacheGrid === w.grid) return;
   const floorChanged = !R.floorKey || R.cacheGrid !== w.grid || R.floorKey.split(':').slice(0, 2).join(':') !== key.split(':').slice(0, 2).join(':');
   R.cacheGrid = w.grid;
@@ -244,23 +101,9 @@ function ensureStatic(w, v) {
 
 // ---- sky -------------------------------------------------------------------------------------
 // 0 until 03:00 (75 % of the night), 1 at 06:00
+// The bands, stars and moon (R.drawSky) and the parallax skyline (R.drawSkyline) are R.sky's
+// (src/client/38_sky.js).
 R.dawnK = (w) => (w ? M.clamp((BD.flow.clockMin(w) - 540) / 180, 0, 1) : 0);
-R.drawSky = function (g, w) {
-  const grad = g.createLinearGradient(0, 0, 0, C.VIEW_H);
-  const k = R.dawnK(w);
-  grad.addColorStop(0, k > 0 ? mix('#05060d', '#2c2444', k) : '#05060d');
-  grad.addColorStop(0.55, k > 0 ? mix('#141128', '#8c5a6c', k) : '#141128');
-  grad.addColorStop(1, k > 0 ? mix('#221a36', '#f2a462', k) : '#221a36');
-  g.fillStyle = grad;
-  g.fillRect(0, 0, C.VIEW_W, C.VIEW_H);
-};
-// far skyline: night, cross-faded to dawn
-function drawSkyline(g, w) {
-  if (!R.skyNight) return;
-  g.drawImage(R.skyNight, 0, 0, C.VIEW_W, C.VIEW_H);
-  const k = R.dawnK(w);
-  if (k > 0 && R.skyDawn) { g.globalAlpha = k; g.drawImage(R.skyDawn, 0, 0, C.VIEW_W, C.VIEW_H); g.globalAlpha = 1; }
-}
 
 // Floor cells as one path: warnings and baked decals are clipped to it, so nothing lies on the
 // facade below the floor edge. Built once per floor in map px (one parallelogram per run of
@@ -287,11 +130,6 @@ R.floorPath = function (w) {
 R.clipFloor = function (g, v, w) {
   g.translate(v.rox, v.roy); g.clip(R.floorPath(w)); g.translate(-v.rox, -v.roy);
 };
-function mix(a, b, t) {
-  const x = parseInt(a.slice(1), 16), y = parseInt(b.slice(1), 16);
-  const c = (s) => Math.round(((x >> s) & 255) * (1 - t) + ((y >> s) & 255) * t);
-  return 'rgb(' + c(16) + ',' + c(8) + ',' + c(0) + ')';
-}
 
 // ---- floor marks -------------------------------------------------------------------------------
 function ellipse(g, v, x, y, r, fill, stroke, lw) {
@@ -634,36 +472,9 @@ function drawFlask(g, v, p, t) {
   g.restore();
 }
 
-function drawAltar(g, v, a, t) {
-  const lit = a.state === 'lit' || a.state === 'open';
-  R.prism(g, v, a.x - 0.4, a.y - 0.4, 0.8, 0.8, 18, lit ? '#d9d2c3' : '#8d8a84', lit ? '#b1aa9b' : '#6c6964', lit ? '#9a9385' : '#5a5853');
-  if (lit) {
-    const c = v.proj(a.x, a.y, 26 + Math.sin(t * 3) * 3);
-    const gr = g.createRadialGradient(c[0], c[1], 1, c[0], c[1], 22);
-    gr.addColorStop(0, 'rgba(255,230,160,0.95)'); gr.addColorStop(1, 'rgba(255,200,90,0)');
-    g.fillStyle = gr; g.beginPath(); g.arc(c[0], c[1], 22, 0, M.TAU); g.fill();
-  }
-}
-
-function drawDoor(g, v, w, t) {
-  const s = w.stairs;
-  if (!s) return;
-  const P = v.proj, WH = 62;
-  let a, b;
-  if (s.side === 'y0') { a = P(s.x - 0.7, 0); b = P(s.x + 0.7, 0); } else { a = P(0, s.y - 0.7); b = P(0, s.y + 0.7); }
-  poly(g, [a, b, [b[0], b[1] - WH], [a[0], a[1] - WH]]);
-  g.fillStyle = s.open ? '#2a2216' : '#23252d'; g.fill(); ink(g, 2.5);
-  if (s.open) {
-    poly(g, [[a[0] + 4, a[1] - 2], [b[0] - 4, b[1] - 2], [b[0] - 4, b[1] - WH + 6], [a[0] + 4, a[1] - WH + 6]]);
-    g.fillStyle = 'rgba(255,214,140,' + (0.55 + 0.15 * Math.sin(t * 4)) + ')'; g.fill();
-  } else {
-    const m = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
-    g.beginPath(); g.moveTo(m[0], m[1]); g.lineTo(m[0], m[1] - WH); g.strokeStyle = U.INK; g.lineWidth = 2; g.stroke();
-    g.strokeStyle = '#9b59d0'; g.lineWidth = 4; g.setLineDash([7, 4]);
-    g.beginPath(); g.moveTo(a[0], a[1] - 6); g.lineTo(b[0], b[1] - WH + 6); g.moveTo(b[0], b[1] - 6); g.lineTo(a[0], a[1] - WH + 6); g.stroke();
-    g.setLineDash([]);
-  }
-}
+// the altar and the stairs door are sites (src/client/39_sites.js)
+function drawAltar(g, v, a, t, w) { R.sites.draw(g, v, 'altar', a.x, a.y, a.state, t, R.stage.themeOf(w)); }
+function drawDoor(g, v, w, t) { R.sites.door(g, v, w, t); }
 
 // The blade's reach (docs/CONTROLS-REVIEW.md §3.6 b): while a living enemy is in the room, a
 // dashed orange circle of radius hero.stats.reach (cards included) at the hero's feet; with a
@@ -707,12 +518,6 @@ function drawChevron(g, v, e, t) {
 // ---- main ---------------------------------------------------------------------------------------
 // Culling margins (logical px) for things anchored at their feet: sprites rise far above them.
 const CULL = { side: 110, top: 220, bottom: 60, flat: 100 };
-const solidCells = new WeakMap();
-function solidsOf(grid) {
-  let l = solidCells.get(grid);
-  if (!l) { l = []; for (let y = 0; y < grid.h; y++) for (let x = 0; x < grid.w; x++) if (grid.get(x, y) === BD.CELL.SOLID) l.push([x, y]); solidCells.set(grid, l); }
-  return l;
-}
 // a flat floor mark of radius r (u) around (x, y) may touch the screen
 const flatOn = (v, x, y, r) => v.worldOnScreen(x, y, CULL.flat + (r || 0) * 57);
 R.flatOn = flatOn;
@@ -725,30 +530,26 @@ R.drawWorld = function (g, ui, dt) {
   BD.client.camera.update(ui, dt);
   R.anim.update(ui, dt);
   const big = !BD.view.fits(w.grid);
-  R.drawSky(g, w);
+  R.kit.s = Math.min(2, v.dpr * v.scale) || 1; // pixel density of cached stage sprites
+  if (big) R.big.prepare(w, v); else ensureStatic(w, v);
+  R.drawSky(g, w, v);
   g.save();
   if (ui.camera) g.translate(ui.camera.x || 0, ui.camera.y || 0);
   if (big) {
-    R.big.prepare(w, v);
-    drawSkyline(g, w);
+    R.drawSkyline(g, w, v);
     R.big.drawStatic(g, v, w);
   } else {
-    ensureStatic(w, v);
-    drawSkyline(g, w);
+    R.drawSkyline(g, w, v);
     g.drawImage(R.cache, 0, 0, C.VIEW_W, C.VIEW_H);
     if (R.bakeCanvas) g.drawImage(R.bakeCanvas, 0, 0, C.VIEW_W, C.VIEW_H);
   }
   drawDoor(g, v, w, t);
-  const L = w.floor.layout;
-  // rifts
-  for (const r of L.rifts) if (flatOn(v, r[0], r[1], 0.6)) { ellipse(g, v, r[0], r[1], 0.55, '#3b1a63', '#140820', 2.5); ellipse(g, v, r[0], r[1], 0.32, '#7a3fc0', null); }
+  // rifts (spawn marks; the trial rift is a standing site, depth-sorted below)
+  R.sites.spawnMarks(g, v, w, t);
   for (const r of w.rifts) {
     if (!flatOn(v, r.x, r.y, 0.8)) continue;
     const p = 1 - r.remain / r.time;
     ellipse(g, v, r.x, r.y, 0.35 + 0.45 * p, r.opts.guardian ? 'rgba(255,210,74,0.35)' : 'rgba(155,89,208,0.5)', '#2a0f40', 2.5);
-  }
-  if (w.trial && (w.trial.state === 'available' || w.trial.state === 'active')) {
-    ellipse(g, v, w.trial.x, w.trial.y, 0.6, 'rgba(40,10,60,0.85)', '#9b59d0', 3);
   }
   // rings
   const I = w.interact;
@@ -779,13 +580,12 @@ R.drawWorld = function (g, ui, dt) {
   ui.drawEffects(g, 'floor');
   // depth-sorted things
   const items = [];
-  const obst = BD.render.obstacles.has(w.floor.pattern) ? BD.render.obstacles.get(w.floor.pattern) : null;
-  for (const [x, y] of solidsOf(w.grid)) if (actorOn(v, x + 0.5, y + 0.5, 0.6)) items.push({ k: x + y + 1, f: () => (obst ? obst.draw(g, v, x, y, w, t) : R.prism(g, v, x + 0.04, y + 0.04, 0.92, 0.92, 34, '#6b6e7a', '#4a4c57', '#3a3c45')) });
+  R.stage.pushItems(items, g, v, w, t, actorOn); // props cell by cell, front growths, sites
   for (const e of w.enemies) if (!e.dead && actorOn(v, e.x, e.y, e.size * (e.boss ? 1.6 : 1))) items.push({ k: e.x + e.y + (e.down ? -0.3 : 0), f: () => drawEnemy(g, v, e, w, t) });
   R.anim.ghostItems(items, g, v, w, t);
   items.push({ k: w.hero.x + w.hero.y, f: () => drawHero(g, v, w, t) });
   for (const p of w.pickups) if (actorOn(v, p.x, p.y, 0.3)) items.push({ k: p.x + p.y, f: () => drawFlask(g, v, p, t) });
-  if (w.altar) items.push({ k: w.altar.x + w.altar.y, f: () => drawAltar(g, v, w.altar, t) });
+  if (w.altar) items.push({ k: w.altar.x + w.altar.y, f: () => drawAltar(g, v, w.altar, t, w) });
   items.sort((a, b) => a.k - b.k);
   for (const it of items) it.f();
   for (const p of w.projectiles) if (flatOn(v, p.x, p.y, 1)) (BD.render.projectiles.has(p.kind) ? BD.render.projectiles.get(p.kind) : BD.render.projectiles.get('default')).draw(g, v, p, w, t);
