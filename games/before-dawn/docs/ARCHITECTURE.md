@@ -105,6 +105,7 @@ H.start({ seed: 5, hand: ['pierce'], floor: 2 });   // hand: [] = no cards; omit
 const w = H.world(); H.killAll(); w.wave.n = 3;      // stop waves for a scenario
 H.give('chain_slash', 1); H.input({ mx: 1, my: 0 }); H.step(60);
 H.state(); H.hash(); H.events(20); H.sim({ seed: 1 }); H.gen(1, 0); H.setHp(30); H.goto(4);
+// events: [{event: 'hit', type: 'undead', …}]  (ev.event = name, §2);  killAll() emits kill events
 H.cmd('altar', 'pick', 0);
 // H.sim({seed, tier, hand, maxSec, bot, trial, floor, unlocked: [ids], hashAt: [sec]}) → {result, floor, sec, kills, cards, events, hashes}
 ```
@@ -149,11 +150,21 @@ rotate|pause|help|settings|altar|null`. Browser and Node drive the same app.
 ### Events
 
 All of GDD §5.2 with exactly the GDD payloads, plus these engine extras (presentation hooks; rules
-must not depend on them): `strike {source, shapes, x, y, aim, elements}`, `telegraph`,
-`telegraph_fire`, `projectile`, `spawn {enemyId, kind, x, y, via}`, `rift`, `pickup`, `revive`,
-`stairs_open`, `guard`, `slam`, `steam`, `toast {text}`, `banner {text, kind}`, `altar_close`,
-`boss_phase {phase}`, `vfx {kind, …}`. Some GDD payloads carry one extra field (`hurt.enemyId`).
+must not depend on them): `strike {source, shapes, x, y, aim, elements}`, `telegraph {id, shape,
+ownerId, ownerKind, attack, time, style}`, `telegraph_fire {id, attack, ownerId, ownerKind}`,
+`projectile`, `spawn {enemyId, kind, x, y, via}`, `rift`, `pickup`, `revive`, `stairs_open`,
+`guard`, `slam`, `steam`, `toast {text}`, `banner {text, kind}`, `altar_close`, `boss_phase
+{phase}`, `vfx {kind, …}`. Some GDD payloads carry one extra field (`hurt.enemyId`).
 Declare a new event with `BD.events.declare(name, [fields], {extra: true})` in your own file.
+
+**The event name is `ev.event`.** `emit` stamps it on every payload (and on the `__BD.events()` /
+`bus.recent()` log), so filter with `x.event === 'hit'`. `type` is never touched: in `hit` and
+`kill` it is the GDD §5.2 enemy type (`beast|undead|magic|heavy|boss`). `event` is a reserved
+payload key (declaring it throws).
+
+Banners the engine emits (`banner.kind`): `floor` (`3F — 중갑`), `guardian` (`수호자 — <guardian
+name>` when a guardian appears, GDD §9.2), `awaken`, `stairs`, `boss` (phase change, from the boss
+file), `trial` (`시련 — 균열이 열렸다`), `trial_clear` (`시련을 넘었다 — 제단이 다시 켜졌다`).
 
 ---
 
@@ -258,6 +269,8 @@ Other APIs:
 * **Marks on enemies/hero**: `BD.render.decor.register({ id: 'kings_hunt_mark', target: 'enemy'
   | '<kind>' | 'hero_back' | 'hero_front', draw(g, view, obj, w, box, t) })` — `box` has the
   sprite's screen `x, y (feet), top, w`. Check `BD.cardRt.has(w, 'kings_hunt')` inside.
+* **Slot geometry** is the engine's: `BD.slotRect(i)` → `{x, y, w, h}` (logical px, from
+  `BD.C.SLOTS`), `BD.slotCenter(i)` → `[x, y]` — fly the quest dot there; the UI draws the slots there.
 * **Slot**: `hud(state, ctx)` → `{text: '7/12' | '×3', ring: 0..1, pips: n, glow: bool, badge}`;
   the UI agent draws it. Toasts via `ctx.toast`. Sounds are the UI agent's (map your events).
   Drawers live in your card file next to the rules; they are only ever called in the browser.
@@ -334,7 +347,9 @@ BD.enemies.register({
   id, name, type,              // type: beast|undead|magic|heavy|boss
   sprite,                      // key of assets/sprites.json (skel_archer → 'skeleton_archer')
   hp, speed, dmg, radius, cost,// GDD §6.2 (cost not needed for the boss)
-  attacks: { <attackId>: { name: '찌르기' } },   // names feed the death cause "고블린의 찌르기에"
+  attacks: { <attackId>: { name: '찌르기', sfx, sfxStart } }, // names feed the death cause "고블린의 찌르기에";
+                               // sfx / sfxStart (optional): BD.ui.sfx ids played when the blow lands
+                               // (telegraph_fire) / when its warning starts (telegraph)
   T: { … },                    // convention: your tuning numbers in one place
   create(e, w),                // init e.mem
   update(e, w, dt),            // behaviour; only called while active (see below)
@@ -359,7 +374,8 @@ knockScale, state, face (rad), mem (yours), flags, statuses {burn, wet, sunder, 
 lunge, lunging, lastLunge {wall, t}, noAttackT, stunT, down, revives`.
 
 Elites, guardians and tiers are applied by the engine (size, HP, damage, telegraph scale, knock,
-guardian HP per floor, elite flask drop). Guardian behaviour differences: read `e.guardian` in
+guardian HP per floor, elite flask drop). Guardian HP per floor is `BD.C.GUARDIAN.hp` (the tuned
+row 480 / 660 / 840 / 1020 / 1200, GDD ×3); `guardian.create` is for behaviour state only. Guardian behaviour differences: read `e.guardian` in
 your `update`/`revive`, and put the extra skill in `guardian.update`.
 
 ### 4.3 Behaviour toolkit — `BD.ai`
@@ -404,6 +420,10 @@ BD.ai.telegraph(w, e, {
 ```
 
 The engine fills it from the inside out, hits at completion, emits `telegraph` / `telegraph_fire`.
+Telegraph drawers run clipped to the floor cells (`BD.client.render.clipFloor`), so a warning that
+reaches past the floor edge (the boss's collapse ring) never paints the facade. The bot treats
+every `danger` telegraph, every damaging zone and every hostile projectile in flight (as a line
+over the next 0.6 s of its path) as danger.
 
 ### 4.5 Boss
 
@@ -508,7 +528,10 @@ actors) layers. `on` handlers are subscribed to each new world's bus (`reset` ru
 
 `app, world (getter), view, g, time (real s), dt, camera {x, y}` (world offset — screen shake),
 `fx` (particle pool: `ui.fx.emit({x, y, z, vx, vy, vz, g, life, color, size, shape: 'dot'|'text',
-text, layer, screen})`, capped at 300, oldest dropped), `render` (`bake(fn(g, view))` paints on
+text, layer, screen})`, capped at 300, oldest dropped), `hold` (hit-stop: seconds the frame loop
+holds the world, counted down in real time; no tick is skipped or added; `__BD.step` ignores it),
+`isFocused(b)` (a menu button's keyboard focus, from the last frame's complete menu list — the
+list arrows/Enter act on), `render` (`floorPath(w, v)` / `clipFloor(g, v, w)`, `bake(fn(g, view))` paints on
 this floor's permanent decal layer — ink splats; `prism`, `ellipse`, `sprite`, `typeIcon`,
 `ELEMENT_COLORS`), `assets` (`img[id]`, `white[id]`), `button({x, y, w, h, label, onTap, onPress,
 menu, style: 'primary'|'plain'|'none', size})` (declares a hit area this frame; `menu` buttons get
@@ -537,7 +560,7 @@ Hero HP/radiance/dashCd, `BD.flow.clockStr(w)`, `BD.flow.clockMin(w)`, `w.mods.r
 `w.floorN`, `w.floor.domType/nextDomType`, `w.wave.n`, `w.trial.state`, the living guardian/boss
 (`e.guardian || e.boss`, `def.guardian.name`, `e.mem.phase`), `w.cards[i].def` + `def.hud(state,
 ctx)` (`BD.cardRt.ctx(w, card)`), `def.targetType` vs `w.floor.domType`, `w.interact`. Toasts
-and banners arrive as `toast` / `banner` events. Settings live in `app.save.settings`
+and banners arrive as `toast` / `banner` events (guardian and trial banners included, §2). Settings live in `app.save.settings`
 (`sfx, shake, dashSide, hints`).
 
 ### 5.5 Getting on screen / sound
@@ -546,9 +569,12 @@ and banners arrive as `toast` / `banner` events. Settings live in `app.save.sett
   `src/ui/basic/effects.js`).
 * Cape (length = combo stacks), gold rings, awaken glow on the hero: `BD.render.decor` with
   `target: 'hero_back'` / `'hero_front'`.
-* Dawn edge glow, flashes: effects `draw` on layer `'screen'`. The sky already brightens from 03:00.
+* Dawn edge glow, flashes: effects `draw` on layer `'screen'`. From 03:00 to 06:00 the engine
+  brightens the sky and cross-fades the far skyline to its dawn look (lighter silhouettes, windows
+  going out) (`R.dawnK(w)` 0→1).
 * Sound: `BD.ui.sfx.register({id: 'slash', play(ac, dest, opts) {…}})`, then play from an effect:
-  `on: { swing(ev, ui) { ui.sfx('slash'); } }`. The AudioContext is created on the first input;
+  `on: { swing(ev, ui) { ui.sfx('slash'); } }`. The AudioContext is created on the first input
+  and resumed on touchend/click and before every sound (iOS);
   `?mute=1` mutes; same id within 50 ms is skipped.
 * The dash button is declared by the HUD: `ui.button({…, style: 'none', onPress: () => {
   BD.client.input.st.dashReq = true; }})`; card slots and the Ⅱ button call `app.pause()`.
