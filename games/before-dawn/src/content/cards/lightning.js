@@ -90,7 +90,7 @@ BD.cards.register({
     ctx.credit(total);
     K.vfx(ctx, 'chain_bolt', { points: [[K.r3(e.x), K.r3(e.y)]].concat(path.map((o) => [K.r3(o.x), K.r3(o.y)])), wet, life: 0.28 });
   },
-  hud() { return {}; },
+  hud(state, ctx) { return ctx && ctx.lv.bolt ? { pips: state.n % 5 } : {}; }, // 5단계: swings toward the bolt (GDD-V2 §4.4)
 });
 
 BD.render.vfx.register({
