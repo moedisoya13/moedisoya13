@@ -21,7 +21,7 @@ const FLAGS_WITH_VALUE = ['--layout', '--only', '--spots', '--sizes'];
 const positional = argv.filter((a, i) => !a.startsWith('--') && !FLAGS_WITH_VALUE.includes(argv[i - 1]));
 const OUT = path.resolve(positional[0] || path.join(ROOT, 'docs/screens/v2-art/tmp'));
 const ENGINE = argv.includes('--engine');
-const LAYOUT = opt('layout', 'office');
+const LAYOUT = opt('layout', 'showcase');
 const TYPES = opt('only', 'beast,undead,magic,heavy,rooftop').split(',');
 const SPOTS = opt('spots', 'mid,back,front').split(',');
 const SIZES = opt('sizes', '1280x720,667x375').split(',').map((s) => {
