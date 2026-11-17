@@ -2,7 +2,8 @@
 // Acceptance criteria of GDD §13.2 as GDD-V2 §10.4 keeps and replaces them. Prints one line per criterion:
 // (v2: #4 checks the v2 generator (V6); #6 runs at 3F level 10 plus each levelled card at level 5
 // (V8); #7 is the proof-slice gate of GDD-V2 §11.1 (tools/fun/measure.js, seeds 1–20); #10 holds the
-// world under the growth choice; #12 is V3 + V7 + V11; #16 is V4; #17 is V12, a tuning target.)
+// world under the growth choice; #12 is V3 + V7 + V11; #16 is V4; #17 is V12, a tuning target;
+// #19 is V10: each task started with &task=, the bot finishes it and the guardian within budget × 1.5.)
 //   PASS | FAIL | PENDING (depends on content not registered yet) | TARGET (tuning goal, informational)
 // Usage: node tools/accept.js [--only 1,3,7] [--skip-browser]
 // Exit code 1 if any criterion FAILs.
@@ -128,6 +129,7 @@ async function main() {
         const f = run.floors[n];
         const why = BD.gen.checkV2(BD.Grid.fromString(f.w, f.h, f.cells), f.layout);
         if (why) bad.push(`seed ${s} ${n}F: ${why}`);
+        if (f.fallback) bad.push(`seed ${s} ${n}F: fell back to plaza`);
         if (f.w !== 48 || f.h !== 48) bad.push(`seed ${s} ${n}F: ${f.w}x${f.h}`);
       }
       const o = run.domOrder;
@@ -136,9 +138,10 @@ async function main() {
       if (o.some((t, i) => i && o[i - 1] === t)) bad.push(`seed ${s}: neighbours share a type`);
       const others = BD.tasks.ids().filter((t) => t !== 'purge');
       if (others.length >= 4 && new Set(run.tasks.slice(1)).size !== 4) bad.push(`seed ${s}: 2F–5F tasks repeat`);
+      if (BD.gen.checkRunV2) { const w7 = BD.gen.checkRunV2(run); if (w7) bad.push(`seed ${s}: ${w7}`); }
     }
     if (bad.length) report(4, 'FAIL', `${bad.length} problems, first: ${bad[0]}`);
-    else report(4, 'PASS', `200 seeds (GDD-V2 V6): 48×48 floors, §5.8 1–5, 1F beast, every type on 2F–5F, neighbours differ; tasks registered: ${BD.tasks.ids().join(',')}`);
+    else report(4, 'PASS', `200 seeds (GDD-V2 V6): 48×48 floors, §5.8 1–7 (sites included), no fallback, 1F beast, every type on 2F–5F, neighbours differ; tasks ${BD.tasks.ids().join(',')}, layouts ${BD.gen.layouts.ids().join(',')}`);
   }
 
   // 5
@@ -486,6 +489,29 @@ async function main() {
     }
   }
   if (want(18)) report(18, 'PENDING', `tuning target; needs rest_of_dead, flawless and full content`);
+
+  // 19 (GDD-V2 V10): each task started on 1F with &task= — the shipped bot finishes it and brings the
+  // guardian down within the floor budget × 1.5 in at least 8 of seeds 1–10
+  if (want(19)) {
+    const tasks = BD.tasks.ids(), budget = BD.C.DIRECTOR.floors[1].budget, out = [];
+    let ok = tasks.length >= 5;
+    for (const task of tasks) {
+      let good = 0;
+      for (let seed = 1; seed <= 10; seed++) {
+        const app = BD.createApp({ storage: BD.progress.memoryStorage(), params: { nosave: true } });
+        app.botOn = true; app.startRun({ seed, task });
+        const w = app.world;
+        let down = null, done = false;
+        w.bus.on('task_clear', () => { done = true; });
+        w.bus.on('floor_clear', () => { if (down === null) down = w.t; });
+        while (app.mode === 'play' && down === null && w.t < budget * 1.5) app.step();
+        if (done && down !== null && down <= budget * 1.5) good++;
+      }
+      out.push(`${task} ${good}/10`);
+      if (good < 8) ok = false;
+    }
+    report(19, ok ? 'PASS' : 'FAIL', `V10 bot on 1F, guardian down within ${budget * 1.5} s: ${out.join(', ')}`);
+  }
 
   if (browser) await browser.close();
   const fails = results.filter((r) => r.status === 'FAIL').length;
