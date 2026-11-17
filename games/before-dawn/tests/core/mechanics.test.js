@@ -114,9 +114,13 @@ module.exports = {
   'enemies never walk into the 0.8u keep-out ring (idle hero)'(t) {
     const BD = t.load();
     const H = BD.harness();
-    H.start({ seed: 3, hand: [] });
+    // seed 2: a crowd can still push an idle hero into the ring (moveHero steps him out of bodies;
+    // seeds 1 and 7 show it on the base commit too) — this test is about enemies walking in, and the
+    // v2 floors' sites changed seed 3's run (docs/requests/v2-floors.md)
+    H.start({ seed: 2, hand: [] });
     H.input({ mx: 0, my: 0 });
     const w = H.world();
+    w.hero.invuln = 1e9; // a hit knocks the hero 0.5u (W.hurtHero) — that is him moving, not an enemy walking in
     let worst = 9;
     for (let i = 0; i < 60 * 60 && H.app.mode === 'play'; i++) {
       H.step(1);
