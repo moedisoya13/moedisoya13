@@ -29,7 +29,7 @@ function drawHp(g, ui, w) {
     K.poly(g, [[x, y - 8], [x + 7, y], [x, y + 8], [x - 7, y]]);
     g.fillStyle = on ? '#ffd24a' : '#2a2830'; g.fill(); K.ink(g, 2.5);
   }
-  if (h.radiance > 0) K.text(ui, '광휘 ' + h.radiance, 104 + 5 * 22 + 4, 69, { size: 17, color: '#ffd24a', stroke: 3, weight: 800 });
+  if (h.radiance > 0) K.text(ui, '광휘 ' + h.radiance, 104 + 5 * 22 + 4, 70, { size: 18, color: '#ffd24a', stroke: 3, weight: 800 });
 }
 
 // ---- top centre: waves / trial / guardian / boss ---------------------------------------------------
@@ -140,7 +140,7 @@ function drawToasts(g, ui) {
     const age = ui.time - t.t, life = BD.ui.msg.TOAST_LIFE;
     const a = age > life - 0.4 ? (life - age) / 0.4 : 1;
     const slide = age < 0.15 ? (1 - age / 0.15) * -30 : 0;
-    const y = 402 + i * 44, size = 21;
+    const y = 400 + i * 44, size = 22;
     const tag = t.kind === 'hint' ? '안내' : null;
     const tw = K.measure(g, t.text, size, 700) + (tag ? 56 : 0);
     const x = 16 + slide;
@@ -148,7 +148,7 @@ function drawToasts(g, ui) {
     g.globalAlpha = Math.max(0, a);
     g.fillStyle = KIND_COLOR[t.kind] || KIND_COLOR.info; g.fillRect(x + 6, y + 6, 5, 24);
     let tx = x + 20;
-    if (tag) { K.text(ui, tag, tx, y + 25, { size: 17, color: K.SKY, weight: 900 }); tx += 50; }
+    if (tag) { K.text(ui, tag, tx, y + 26, { size: 18, color: K.SKY, weight: 900 }); tx += 50; }
     K.text(ui, t.text, tx, y + 26, { size, color: K.PAPER, weight: 700, maxW: 520 });
     g.globalAlpha = 1;
   });
@@ -284,11 +284,11 @@ function drawSlot(g, ui, w, i) {
   }
   // stage badge (top edge)
   if (hd.badge) {
-    const bw2 = K.measure(g, hd.badge, 15, 800) + 14;
+    const bw2 = K.measure(g, hd.badge, 18, 800) + 16;
     const bk = s.badgeAt !== undefined && now - s.badgeAt < 0.3 ? 1.2 : 1;
-    g.save(); g.translate(x + sz / 2, y - 6); g.scale(bk, bk);
-    K.poly(g, K.slantPts(-bw2 / 2, -12, bw2, 22, 4)); g.fillStyle = '#3a1f5a'; g.fill(); K.ink(g, 2.5);
-    K.text(ui, hd.badge, 0, 4, { size: 15, align: 'center', color: '#efe2ff', weight: 800 });
+    g.save(); g.translate(x + sz / 2, y - 8); g.scale(bk, bk);
+    K.poly(g, K.slantPts(-bw2 / 2, -14, bw2, 26, 4)); g.fillStyle = '#3a1f5a'; g.fill(); K.ink(g, 2.5);
+    K.text(ui, hd.badge, 0, 5, { size: 18, align: 'center', color: '#efe2ff', weight: 800 });
     g.restore();
   }
   // flash (riposte, leech, target hit, drawcut ready)
