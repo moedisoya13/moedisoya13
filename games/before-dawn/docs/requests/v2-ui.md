@@ -122,6 +122,32 @@ own `unlockText` / `unlockProgress(save) → [cur, goal]`, which wins.
 | card levels | `card.level`, `BD.cardRt.maxLevel`, `levelText` | no pips for unlevelled cards |
 | result | `app.lastResult` (+ the UI's run log of the same seed) | summary-only lines |
 
+## Frames and measurements (docs/screens/v2-ui/)
+
+- `desktop/`, `phone/`, `forced/` — `node tests/ui/shoot_v2.js screens`: title, prep, codex,
+  settings, help; one play frame per floor colour (1F–5F, rooftop) with a director crowd, the
+  task of each kind, places staged; the choice (locked, open, the pick's flight, a chest), pause,
+  surge, level up + 촤악! + streak, a seal breaking, task done (crown), guardian + low HP, boss,
+  result (death, win); a contact sheet per size.
+- `pilot-<size>-<n>F/` — `node tests/ui/shoot_v2.js pilot`: the human-like pilot of
+  tools/fun/lib.js at normal speed (choices answered after 1.2 s). 1F whole (seed 21: task done
+  at ~60 s, floor left at 124 s, 337 kills, 7 choices, Lv 8; 55.6 / 58.9 / 57.2 fps at desktop /
+  phone / forced, no errors, no requests) and 30 s on each of 2F–5F and the rooftop (45–59 fps).
+- Frame time with the feedback at full load — `node tests/ui/perf_feedback.js` (48×48 floor, the
+  crowd held at ~100, 13–18 kills a second, whirl 5단계), base build `daa5a7e` against this
+  branch, interleaved, headless Chromium on a shared machine (`perf-feedback-ab.txt`):
+
+  | profile | base js p50 / p95 (ms) | v2-ui js p50 / p95 (ms) |
+  |---|---|---|
+  | desktop 1280×720 | 14.4 / 34.9 · 16.3 / 48.9 | 16.9 / 30.0 · 18.6 / 36.4 |
+  | phone 667×375 ×2, CPU ×4 | 109.1 / 187.9 · 96.6 / 182.1 | 106.9 / 202.7 · 109.9 / 189.6 |
+
+  Per frame the UI's own layers cost ~0.85 ms (HUD 0.5, minimap 0.14, markers 0.04, feel incl.
+  ink marks 0.22) against ~0.75 ms before; a CPU profile shows no UI function above 1 % self time
+  — the frame is the world's raster (`restore`/`drawImage`, the engine's). The desktop p50 moved
+  +2 ms between runs of a noisy machine; p95 fell (no splat baked per kill). Not measured on a
+  real phone.
+
 ## Caps (GDD-V2 §3.7, §7)
 
 - Sounds: crowd sounds (kill, hit, shard, slash, warnings …) play while < 8 voices sound, others

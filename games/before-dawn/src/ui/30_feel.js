@@ -392,15 +392,19 @@ BD.ui.hud.register({
     const w = ui.world;
     if (!w || ui.app.overlay()) return;
     drawDawn(g, ui, w);
-    // §7.3: HP ≤ 30 — the edges pulse red, slowly
+    // on the red (heavy) floor danger is ink and white, as its warnings are (LEAD §4)
+    const redFloor = w.floor && w.floor.domType === 'heavy';
+    const dangerDots = redFloor ? '#0a0a0c' : '#d62828', dangerBand = redFloor ? '#ffffff' : '#d62828';
+    // §7.3: HP ≤ 30 — the edges pulse, slowly
     if (w.hero.hp <= 30 && !w.hero.dead && !w.ending) {
       const p = 0.5 + 0.5 * Math.sin(ui.time * 3.2);
-      halftoneEdge(g, '#d62828', 46 + 12 * p, 0.28 + 0.22 * p);
+      halftoneEdge(g, dangerDots, 46 + 12 * p, (redFloor ? 0.4 : 0.28) + 0.22 * p);
+      edgeBand(g, dangerBand, 6, 0.25 + 0.35 * p);
     }
     if (WASH.hurt > 0) {
       const k = WASH.hurt / 0.32;
-      edgeBand(g, '#d62828', 14, 0.55 * k);
-      halftoneEdge(g, '#d62828', 70, 0.7 * k);
+      edgeBand(g, dangerBand, 14, 0.55 * k);
+      halftoneEdge(g, dangerDots, 70, 0.7 * k);
     }
     if (BD.ui.fb && BD.ui.fb.drawWash) BD.ui.fb.drawWash(g, ui, w);
     if (WASH.flash > 0) { g.globalAlpha = Math.min(0.3, WASH.flash * 0.7); g.fillStyle = WASH.flashColor; g.fillRect(0, 0, C.VIEW_W, C.VIEW_H); g.globalAlpha = 1; }
