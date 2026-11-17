@@ -531,6 +531,8 @@ function drawHero(g, v, w, t) {
   R.decor('hero_front', g, v, h, w, box, t);
 }
 function drawHeroSprite(g, v, w, t, h, pose, o) {
+  // post-hit invulnerability blinks for all of its 1.0 s, swings included, so its end is visible
+  if (h.invuln > 0 && !h.dead && Math.floor(t * 14) % 2 === 0) o.alpha = 0.45;
   if (h.swingT > 0 && !h.dead) {
     const k = h.swingT / C.HERO.trail;
     const [ax, ay] = v.worldDirToScreen(Math.cos(h.aim), Math.sin(h.aim));
@@ -543,7 +545,6 @@ function drawHeroSprite(g, v, w, t, h, pose, o) {
     return;
   }
   if (h.dead) { o.rot = pose.flip ? -1.2 : 1.2; o.sy = 0.95; }
-  if (h.invuln > 0 && !h.dead && Math.floor(t * 14) % 2 === 0) o.alpha = 0.45;
   R.sprite(g, v, pose.id, h.x, h.y, o);
 }
 
@@ -592,22 +593,27 @@ function drawDoor(g, v, w, t) {
 // dashed orange circle of radius hero.stats.reach (cards included) at the hero's feet; with a
 // target, the swing's arc toward it (± halfArc) solid, brighter for 0.1 s after each swing. Only
 // the blade's own reach, even when a card aims farther. Orange is the hero's blade colour.
-const REACH = { dash: [7, 6], ring: 0.18, ringW: 1.5, arc: 0.45, arcSwing: 0.8, arcW: 2.5, swingT: 0.1 };
+// Each line has a faint ink edge under it: orange alone vanishes on the yellow beast floor (see
+// the review's 구현 메모).
+const REACH = { dash: [7, 6], ring: 0.18, ringW: 1.5, ringInk: 0.22, arc: 0.45, arcSwing: 0.8, arcW: 2.5, arcInk: 0.35, swingT: 0.1 };
+function inkUnder(g, width, a) { g.lineWidth = width + 2; g.strokeStyle = 'rgba(10,10,12,' + a + ')'; g.stroke(); }
 function drawReach(g, v, w, target) {
   const h = w.hero;
   if (h.dead || !w.enemies.some((e) => !e.dead && !e.down)) return;
   const r = h.stats.reach, c = v.proj(h.x, h.y);
   g.beginPath(); g.ellipse(c[0], c[1], r * C.ISO_X * 1.414, r * C.ISO_Y * 1.414, 0, 0, M.TAU);
-  g.setLineDash(REACH.dash); g.lineWidth = REACH.ringW; g.strokeStyle = 'rgba(255,154,60,' + REACH.ring + ')'; g.stroke(); g.setLineDash([]);
+  g.setLineDash(REACH.dash); inkUnder(g, REACH.ringW, REACH.ringInk);
+  g.lineWidth = REACH.ringW; g.strokeStyle = 'rgba(255,154,60,' + REACH.ring + ')'; g.stroke(); g.setLineDash([]);
   if (!target) return;
   const aim = Math.atan2(target.y - h.y, target.x - h.x), half = h.stats.halfArc * M.DEG;
-  const swung = h.swingT > 0 && C.HERO.trail - h.swingT < REACH.swingT;
+  const swung = h.swingT > 0 && C.HERO.trail - h.swingT < REACH.swingT, a = swung ? REACH.arcSwing : REACH.arc;
   g.beginPath();
   for (let i = 0; i <= 24; i++) {
-    const a = aim - half + (2 * half * i) / 24, p = v.proj(h.x + Math.cos(a) * r, h.y + Math.sin(a) * r);
+    const an = aim - half + (2 * half * i) / 24, p = v.proj(h.x + Math.cos(an) * r, h.y + Math.sin(an) * r);
     if (i) g.lineTo(p[0], p[1]); else g.moveTo(p[0], p[1]);
   }
-  g.lineCap = 'round'; g.lineWidth = REACH.arcW; g.strokeStyle = 'rgba(255,154,60,' + (swung ? REACH.arcSwing : REACH.arc) + ')'; g.stroke(); g.lineCap = 'butt';
+  g.lineCap = 'round'; inkUnder(g, REACH.arcW, REACH.arcInk * a / REACH.arc);
+  g.lineWidth = REACH.arcW; g.strokeStyle = 'rgba(255,154,60,' + a + ')'; g.stroke(); g.lineCap = 'butt';
 }
 
 function drawChevron(g, v, e, t) {
