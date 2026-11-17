@@ -77,27 +77,30 @@ module.exports = {
     t.assert(!f1.layout.sites.some((s) => s.kind === 'rift'), '1F: no rift');
   },
 
-  'altar: known and lit from the start; 0.8 s opens it (the v1 altar until the cards side defines BD.altar.open); a prayer uses it; 나중에 re-arms once he has left the ring': (t) => {
+  'altar: known and lit from the start; 0.8 s opens the cards side’s altar choice; 나중에 re-arms once he has left the ring; a prayer uses it': (t) => {
     const { BD, H, w } = K.start(t, { task: 'purge', seed: 2, keepGuards: false, hand: ['pierce'] });
     const a = K.site(w, 'altar');
     t.eq([a.known, a.state, a.phase], [true, 'lit', 'idle']);
     K.place(BD, w, a.x, a.y); H.step(50);
-    t.assert(w.altarOpen && H.app.overlay() === 'altar', 'open');
-    t.eq([w.altar.x, w.altar.y, w.altar.state, a.phase], [a.x, a.y, 'open', 'active']);
-    t.assert(w.altar.offers.length > 0, 'offers from the cards side');
-    H.cmd('altar', 'later');
-    t.eq([a.phase, a.needExit, w.altar], ['idle', true, null]);
+    t.assert(w.choiceOpen && w.choice.kind === 'altar' && H.app.overlay() === 'choice', 'open');
+    t.eq([a.phase, w.altar], ['active', null], 'no v1 altar on a v2 floor');
+    t.assert(w.choice.offers.length > 0, 'offers from the cards side');
+    const offers = w.choice.offers.slice();
+    H.cmd('choice', 'later');
+    t.eq([a.phase, a.needExit, w.choiceOpen], ['idle', true, false]);
     H.step(120);
-    t.assert(!w.altarOpen, 'not again while he stands there');
+    t.assert(!w.choiceOpen, 'not again while he stands there');
     K.place(BD, w, a.x + 3, a.y); H.step(2);
     t.eq(a.needExit, false);
     K.place(BD, w, a.x, a.y); H.step(50);
-    t.assert(w.altarOpen, 'again after stepping out and back');
+    t.assert(w.choiceOpen && w.choice.kind === 'altar', 'again after stepping out and back');
+    t.eq(w.choice.offers, offers, 'the same offers');
     w.hero.hp = 40;
-    H.cmd('altar', 'pray');
-    t.eq([a.phase, a.state, w.altar], ['used', 'used', null]);
+    H.cmd('choice', 'pray');
+    t.eq([a.phase, a.state, w.choiceOpen], ['used', 'used', false]);
     t.assert(w.hero.hp > 40, 'prayer heals');
     t.eq(K.evs(w, 'altar_open').length, 2);
+    t.eq(K.evs(w, 'site_clear').map((x) => x.kind), ['altar']);
   },
 
   'unknown until near: an optional site shows its kind within 16u (the altar from the start); the dump carries phase, state, known': (t) => {

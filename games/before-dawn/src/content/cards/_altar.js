@@ -1,13 +1,14 @@
 // The v2 altar (제단) — GDD-V2 §4.6, §5.5, §10.3: what the altar does to the hand. The floor puts an
 // altar site down (the floors agent registers the site kind 'altar'); its `use` and `update` call
 // this module, which opens a choice overlay of kind 'altar' and answers it. One altar per floor,
-// lit from the start, used once: swap a card or pray, one of the two.
+// lit from the start, used once: swap a card or pray, one of the two. The site
+// (src/content/sites/altar.js) owns its phase: it listens to altar_close (card / pray → used,
+// later → idle once the hero has stepped out of the ring).
 //
-//   BD.cardAltar.use(w, site)          site def's use(w, site): opens the altar (false: the site stays
-//                                      'active' until a swap or a prayer clears it)
-//   BD.cardAltar.update(w, site, dt)   site def's update: after 나중에 the site re-arms (state 'idle')
-//                                      once the hero has stepped out of its ring
+//   BD.cardAltar.use(w, site)          the site's use(w, site): opens the altar (false: the site stays
+//                                      'active' until altar_close)
 //   BD.cardAltar.open(w, site|null)    open now (tests, staging); a site keeps its offers across 나중에
+//                                      (site.mem.offers)
 //   BD.cardAltar.offers(w)             the three offers of this floor (§4.6 rule below)
 //   BD.cardAltar.cmd(w, cmd, arg)      'pick' i | 'slot' s | 'back' | 'pray' | 'later'
 //                                      (app.cmd('choice', cmd, arg) routes here while the altar is open)
@@ -90,7 +91,7 @@ function optionsFor(w, ch) {
 A.open = function (w, site) {
   if (w.choiceOpen) BD.fail('altar: a choice is already open');
   let offers;
-  if (site) { if (!site.offers) site.offers = A.offers(w); offers = site.offers; } else offers = A.offers(w);
+  if (site) { const mem = site.mem || (site.mem = {}); if (!mem.offers) mem.offers = A.offers(w); offers = mem.offers; } else offers = A.offers(w);
   const prev = (w.choice && w.choice.lastCards) || w.lastCards || [];
   const ch = {
     kind: 'altar', step: 'choose', offers: offers.slice(), pick: null, options: null, floor: w.floorN,
@@ -108,25 +109,12 @@ A.open = function (w, site) {
 
 A.use = function (w, site) { A.open(w, site); return false; };
 
-A.update = function (w, site) {
-  if (!site.altarWait) return;
-  const def = BD.sites.has(site.kind) ? BD.sites.get(site.kind) : null;
-  const ring = (def && def.ring) || C.INTERACT.ring;
-  if (M.dist(w.hero.x, w.hero.y, site.x, site.y) <= ring) return;
-  site.altarWait = false; site.state = 'idle'; site.progress = 0;
-};
-
-const siteOf = (w, ch) => (ch.site === null ? null : (w.sites || []).find((s) => s.id === ch.site) || null);
-
 function close(w, ch, choice) {
   w.choiceOpen = false;
   const h = w.hero;
   h.invuln = Math.max(h.invuln, C.INTERACT.closeInvuln);
-  W.emit(w, 'altar_close', { floor: w.floorN, choice });
-  const site = siteOf(w, ch);
-  if (choice === 'later') { if (site) site.altarWait = true; return; }
-  w.botAltarUsed = true; // the bot's 'smart' site rule visits one altar a run (GDD-V2 §10.3)
-  if (site) BD.siteRt.clear(w, site);
+  if (choice !== 'later') w.botAltarUsed = true; // the bot's 'smart' site rule visits one altar a run (GDD-V2 §10.3)
+  W.emit(w, 'altar_close', { floor: w.floorN, choice }); // the site listens: used, or idle again after 나중에
 }
 
 A.swap = function (w, slot, inId) {

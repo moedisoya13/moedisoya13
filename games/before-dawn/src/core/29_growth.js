@@ -116,18 +116,20 @@ const breath = () => ({ kind: 'breath', id: 'breath', name: '여명의 숨', fro
 // kind 'level' (§4.3): two cards that can still grow + one boon (one card + two boons when only one
 // can grow, three boons when none can); then, once no boon is left, the other growable card before
 // 여명의 숨 — never a dead offer while something can still grow (cards owner: docs/requests/v2-cards.md).
-// kind 'chest' (§4.6): each equipped card that can grow, in slot order; a slot whose card is at its
-// top level (or an empty slot) is filled with a boon, then 여명의 숨.
+// kind 'chest' (§4.6): one option per slot in slot order — its card while it can grow; a slot whose
+// card is at its top level (or an empty slot) is filled with a boon ("5단계인 카드 자리는 단련으로
+// 채운다"), then 여명의 숨.
 G.options = function (w, kind) {
   const rng = w.rng.choice, last = (w.choice && w.choice.lastCards) || w.lastCards || [];
   const U = w.cards.filter((c) => c && (c.level || 1) < BD.cardRt.maxLevel(c.def));
   const B = BD.boons.ids().filter((id) => (w.hero.boons[id] || 0) < BD.boons.get(id).max);
-  if (kind === 'chest') {
-    const out = U.slice().sort((a, b) => a.slot - b.slot).map(cardOption);
+  if (kind === 'chest') { // one option per slot, in slot order: the card, or a boon in its place
     const boons = rng.shuffle(B);
-    while (out.length < 3 && boons.length) out.push(boonOption(w, boons.shift()));
-    while (out.length < 3) out.push(breath());
-    return out;
+    return [0, 1, 2].map((s) => {
+      const c = w.cards[s];
+      if (c && U.includes(c)) return cardOption(c);
+      return boons.length ? boonOption(w, boons.shift()) : breath();
+    });
   }
   const nCards = U.length >= 2 ? C.V2.choice.cardSlots : U.length;
   // cards not offered last time first (any card gets its chance within two choices), then slot order

@@ -68,10 +68,10 @@ module.exports = {
     t.eq(o.map((x) => [x.kind, x.id, x.from, x.to]), [['card', 'pierce', 1, 2], ['card', 'flame', 1, 2], ['card', 'leech', 1, 2]]);
     maxCard(BD, w, 'flame');
     o = BD.growth.options(w, 'chest');
-    t.eq(kinds(o), ['card', 'card', 'boon']);
-    t.eq(o.slice(0, 2).map((x) => x.id), ['pierce', 'leech']);
+    t.eq(kinds(o), ['card', 'boon', 'card'], 'the boon takes flame\'s place (GDD-V2 §4.6 "5단계인 카드 자리")');
+    t.eq([o[0].id, o[2].id], ['pierce', 'leech']);
     maxBoons(BD, w);
-    t.eq(kinds(BD.growth.options(w, 'chest')), ['card', 'card', 'breath']);
+    t.eq(kinds(BD.growth.options(w, 'chest')), ['card', 'breath', 'card']);
     const { BD: B2, w: w2 } = world(t, { hand: ['whirl'] });
     t.eq(kinds(B2.growth.options(w2, 'chest')), ['card', 'boon', 'boon'], 'empty slots: boons');
     // a chest is a choice of its own kind; picking a card raises it; it leaves the rotation alone
