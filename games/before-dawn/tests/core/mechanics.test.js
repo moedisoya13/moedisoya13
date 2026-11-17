@@ -87,12 +87,14 @@ module.exports = {
     t.eq(w.hero.hp, 100);
     t.assert(Math.hypot(w.hero.x - e.x, w.hero.y - e.y) > 0.5, 'went through');
   },
-  'hurt: 0.6 s invulnerability and knock'(t) {
+  'hurt: 1.0 s invulnerability and knock'(t) {
     const { BD, H, w } = world(t);
     const hit1 = BD.W.hurtHero(w, 10, { source: 'goblin', attack: 'stab', x: w.hero.x - 1, y: w.hero.y });
     const hit2 = BD.W.hurtHero(w, 10, { source: 'goblin', attack: 'stab', x: w.hero.x - 1, y: w.hero.y });
     t.eq([hit1, hit2], [true, false]);
-    H.step(37);
+    H.step(58);
+    t.eq(BD.W.hurtHero(w, 10, { source: 'goblin', attack: 'stab' }), false, 'still invulnerable at 0.97 s');
+    H.step(3);
     t.eq(BD.W.hurtHero(w, 10, { source: 'goblin', attack: 'stab' }), true);
     t.eq(w.hero.hp, 80);
   },

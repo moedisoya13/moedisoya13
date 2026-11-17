@@ -14,7 +14,7 @@ BD.C = {
   RUN_SEC: 900, CLOCK_START_MIN: 18 * 60,
   CAP: { enemies: 80, projectiles: 60, particles: 300 },
   HERO: {
-    maxHp: 100, speed: 4.2, radius: 0.35, hurtInvuln: 0.6, hurtKnock: 0.5,
+    maxHp: 100, speed: 4.2, radius: 0.35, hurtInvuln: 1.0, hurtKnock: 0.5,
     dmg: 10, interval: 0.6, reach: 1.9, halfArc: 50, switchMargin: 0.4,
     trail: 0.15, aimHold: 0.25, spriteH: 90,
   },
@@ -28,8 +28,8 @@ BD.C = {
   DAWN: { firstSec: 60, rate1: 1, rate2: 3 },
   ENEMY: { keepOut: 0.8, meleeCap: 3, rangedCap: 2, flowEvery: 0.2, minTelegraph: 0.45 },
   ELITE: { size: 1.3, hp: 2.5, dmg: 1.25, tg: 1.2, perFloor: [0, 0, 0, 1, 1, 2, 0] },
-  // guardian HP per floor: tuned ×3 from GDD §6.3 (160/220/280/340/400) by the enemies agent, docs/requests/enemies.md
-  GUARDIAN: { size: 1.6, dmg: 1.3, tg: 1.4, knock: 0.33, hp: [0, 480, 660, 840, 1020, 1200] },
+  // guardian HP per floor (GDD §6.3, set by docs/CONTROLS-REVIEW.md §3.1; earlier ×3 tuning: docs/requests/enemies.md)
+  GUARDIAN: { size: 1.6, dmg: 1.3, tg: 1.4, knock: 0.33, hp: [0, 385, 530, 675, 815, 960] },
   STATUS: {
     burnTick: 0.5, burnDmg: 3, burnDur: 3, burnSpread: 0.6, burnImmune: 2,
     wetDur: 4, steamDmg: 8, steamR: 1.2, steamCd: 1, slamDmg: 8, slamStun: 0.5, knockTime: 0.15,

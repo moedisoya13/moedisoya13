@@ -1,7 +1,6 @@
 // 구울 (undead) — GDD §6.2 / §6.3. Walks after the hero without stopping. Lunge: within 2.2u a
 // 90° fan of radius 2.0 fills over 0.6 s, hits for 14 and the ghoul leaps 1.5u forward.
-// At HP 0 it goes down (`down`); the corpse has HP 20 and rises 2.5 s later with HP 60 (GDD 30,
-// tuned), once.
+// At HP 0 it goes down (`down`); the corpse has HP 20 and rises 2.5 s later with HP 40, once.
 // The engine applies the ways to stop it: e.flags.noRevive (holy_light, awakened rest_of_dead),
 // cutting the corpse to 0 (it then dies with `kill`), burning when it falls (no `down`).
 // Guardian 구울 폭군: rises with 50 % of its maximum HP instead.
@@ -11,13 +10,13 @@ const M = BD.math;
 
 const T = {
   range: 2.2, half: 45, tgR: 2.0, tgTime: 0.6, leap: 1.5, leapTime: 0.2, cd: 2.0,
-  reviveDelay: 2.5, reviveHp: 60, corpseHp: 20, guardianRevive: 0.5, // tuned: GDD reviveHp 30
+  reviveDelay: 2.5, reviveHp: 40, corpseHp: 20, guardianRevive: 0.5, // revive HP: docs/CONTROLS-REVIEW.md §3.1
   riseCd: 0.8, // after rising: no lunge for this long (on top of the engine's 0.3 s no-attack)
 };
 
 BD.enemies.register({
   id: 'ghoul', name: '구울', type: 'undead', sprite: 'ghoul',
-  hp: 180, speed: 2.4, dmg: 14, radius: 0.45, cost: 3, // tuned: GDD HP 60
+  hp: 120, speed: 2.4, dmg: 14, radius: 0.45, cost: 3, // HP: docs/CONTROLS-REVIEW.md §3.1
   attacks: { lunge: { name: '달려들기' } },
   T,
   guardian: { name: '구울 폭군' }, // the 50 % rise is read from e.guardian in revive()

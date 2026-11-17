@@ -111,6 +111,12 @@ the real 18 cards are registered. No trials. Measured with
 Elite multipliers, damage of the other enemies, every telegraph time, every cooldown, the boss
 attacks and every other bundle are still the GDD values.
 
+> **Superseded (HP rows):** `docs/CONTROLS-REVIEW.md` §3.1 re-tuned every HP above to about 2/3
+> (goblin 40, slime 60, archer 40, ghoul 120 + revive 40, mage 54, knight 240, guardians
+> 385 / 530 / 675 / 815 / 960, boss 3000), with post-hit invulnerability 1.0 s and the mage's fire
+> circle warning 1.1 s, against a human-like pilot instead of the perfect bot. Those values are now
+> the GDD's own (§2.2, §6.2–6.4). The damage rows and the mage counts above still stand.
+
 **Bot results** (criterion 17 targets: median death floor 3–4F, 5–30 % wins, median win length
 11–15 min):
 

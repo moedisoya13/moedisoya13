@@ -107,14 +107,14 @@ module.exports = {
     until(H, () => w.projectiles.length >= 3, 80);
     t.eq(w.projectiles.filter((p) => p.ownerId === e.id).length, 3);
   },
-  'mage: fire circle r 1.3 at the hero spot, 0.9 s, 12 dmg, then a 2.5 s zone that burns 3 per 0.5 s'(t) {
+  'mage: fire circle r 1.3 at the hero spot, 1.1 s (docs/CONTROLS-REVIEW.md §3.1), 12 dmg, then a 2.5 s zone that burns 3 per 0.5 s'(t) {
     const { BD, H, w } = arena(t, { w: 16, h: 16 });
     pacify(w);
     const e = BD.W.makeEnemy(w, 'mage', w.hero.x + 5, w.hero.y, {});
     e.mem.cd = 0;
     H.step(1);
     const [tg] = tgOf(w, e);
-    t.eq(tg.shape, 'circle'); t.near(tg.r, 1.3); t.near(tg.total, 0.9); t.eq(tg.dmg, 12); t.eq(tg.attack, 'fire_circle');
+    t.eq(tg.shape, 'circle'); t.near(tg.r, 1.3); t.near(tg.total, 1.1); t.eq(tg.dmg, 12); t.eq(tg.attack, 'fire_circle');
     t.near(tg.x, w.hero.x, 1e-9); t.near(tg.y, w.hero.y, 1e-9);
     const n0 = w.bus.count();
     until(H, () => w.zones.length > 0, 80);

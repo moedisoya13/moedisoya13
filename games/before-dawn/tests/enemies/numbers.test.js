@@ -1,28 +1,30 @@
 // Every enemy number against GDD §6.2–6.4 / §7.4. A number that tuning changed is listed in
 // TUNED with the GDD value next to it (docs/requests/enemies.md "tuning" has the reasons);
-// everything else must equal the GDD exactly. Behaviour tests read the same defs, so this file
+// everything else must equal the GDD exactly. The HP column, the ghoul's revive HP, the mage's
+// fire-circle warning and the guardian row are the GDD's own since docs/CONTROLS-REVIEW.md §3.1
+// (the GDD lines were changed with it), so they are no longer listed as tuned. Behaviour tests read the same defs, so this file
 // is the one place that pins the numbers.
 'use strict';
 
 // [path, GDD value]
 const GDD = {
-  slime: [['hp', 30], ['speed', 1.6 / 1.1], ['dmg', 10], ['radius', 0.45], ['cost', 1.5], ['type', 'beast'], ['sprite', 'slime'],
+  slime: [['hp', 60], ['speed', 1.6 / 1.1], ['dmg', 10], ['radius', 0.45], ['cost', 1.5], ['type', 'beast'], ['sprite', 'slime'],
     ['T.hopDist', 1.6], ['T.hopEvery', 1.1], ['T.range', 3.0], ['T.tgR', 0.9], ['T.tgTime', 0.7], ['T.flat', 0.8], ['T.cd', 2.2]],
-  goblin: [['hp', 20], ['speed', 4.5], ['dmg', 6], ['radius', 0.35], ['cost', 1], ['type', 'beast'], ['sprite', 'goblin'],
+  goblin: [['hp', 40], ['speed', 4.5], ['dmg', 6], ['radius', 0.35], ['cost', 1], ['type', 'beast'], ['sprite', 'goblin'],
     ['T.range', 1.0], ['T.half', 30], ['T.tgR', 1.3], ['T.tgTime', 0.45], ['T.backDist', 1.2], ['T.backTime', 0.3], ['T.cd', 1.6]],
-  skel_archer: [['hp', 25], ['speed', 2.6], ['dmg', 9], ['radius', 0.35], ['cost', 1.5], ['type', 'undead'], ['sprite', 'skeleton_archer'],
+  skel_archer: [['hp', 40], ['speed', 2.6], ['dmg', 9], ['radius', 0.35], ['cost', 1.5], ['type', 'undead'], ['sprite', 'skeleton_archer'],
     ['T.keepMin', 5], ['T.keepMax', 7], ['T.tooClose', 3.5], ['T.width', 0.3], ['T.tgTime', 0.8], ['T.arrowSpeed', 14], ['T.cd', 2.4], ['T.fan', 15]],
-  ghoul: [['hp', 60], ['speed', 2.4], ['dmg', 14], ['radius', 0.45], ['cost', 3], ['type', 'undead'], ['sprite', 'ghoul'],
+  ghoul: [['hp', 120], ['speed', 2.4], ['dmg', 14], ['radius', 0.45], ['cost', 3], ['type', 'undead'], ['sprite', 'ghoul'],
     ['T.range', 2.2], ['T.half', 45], ['T.tgR', 2.0], ['T.tgTime', 0.6], ['T.leap', 1.5], ['T.cd', 2.0],
-    ['T.reviveDelay', 2.5], ['T.reviveHp', 30], ['T.corpseHp', 20], ['T.guardianRevive', 0.5]],
-  mage: [['hp', 40], ['speed', 2.0], ['dmg', 12], ['radius', 0.35], ['cost', 2.5], ['type', 'magic'], ['sprite', 'mage'],
+    ['T.reviveDelay', 2.5], ['T.reviveHp', 40], ['T.corpseHp', 20], ['T.guardianRevive', 0.5]],
+  mage: [['hp', 54], ['speed', 2.0], ['dmg', 12], ['radius', 0.35], ['cost', 2.5], ['type', 'magic'], ['sprite', 'mage'],
     ['T.keepMin', 4], ['T.keepMax', 7], ['T.near', 2.0], ['T.nearTime', 0.5], ['T.blinkMin', 6], ['T.blinkTg', 0.4], ['T.blinkCd', 5],
-    ['T.guardianBlinkCd', 4], ['T.tgR', 1.3], ['T.tgTime', 0.9], ['T.cd', 3.0], ['T.side', 2.2], ['T.zoneLife', 2.5], ['T.zoneTick', 0.5], ['T.zoneDmg', 3]],
-  dark_knight: [['hp', 120], ['speed', 2.0], ['dmg', 20], ['radius', 0.55], ['cost', 6], ['type', 'heavy'], ['sprite', 'dark_knight'],
+    ['T.guardianBlinkCd', 4], ['T.tgR', 1.3], ['T.tgTime', 1.1], ['T.cd', 3.0], ['T.side', 2.2], ['T.zoneLife', 2.5], ['T.zoneTick', 0.5], ['T.zoneDmg', 3]],
+  dark_knight: [['hp', 240], ['speed', 2.0], ['dmg', 20], ['radius', 0.55], ['cost', 6], ['type', 'heavy'], ['sprite', 'dark_knight'],
     ['T.turn', 100], ['T.guardHalf', 60], ['T.guardMul', 0.2], ['T.range', 5], ['T.coneHalf', 30], ['T.width', 1.4], ['T.len', 5],
     ['T.guardianLen', 7], ['T.tgTime', 0.9], ['T.chargeSpeed', 10], ['T.recover', 1.4], ['T.wallRecover', 2.8], ['T.cd', 3.5],
     ['T.sweepR', 2.2], ['T.sweepTime', 0.6], ['knockScale', 0.33]],
-  demon_king: [['hp', 1500], ['speed', 1.6], ['radius', 0.9], ['type', 'boss'], ['sprite', 'demon_king'],
+  demon_king: [['hp', 3000], ['speed', 1.6], ['radius', 0.9], ['type', 'boss'], ['sprite', 'demon_king'],
     ['T.phaseAt', [0.66, 0.33]],
     ['T.phases.1.speed', 1.6], ['T.phases.1.gap', 2.2], ['T.phases.1.cycle', ['cleave', 'dark_bolts']], ['T.phases.1.summonEvery', 0],
     ['T.phases.2.speed', 1.6], ['T.phases.2.gap', 2.0], ['T.phases.2.cycle', ['cleave', 'dark_bolts', 'thorns']], ['T.phases.2.summonEvery', 20],
@@ -49,20 +51,16 @@ const BUNDLES = {
 // Numbers changed by bot tuning: { 'kind.path': [gddValue, tunedValue] }. Kept in sync with
 // docs/requests/enemies.md → "tuning".
 const TUNED = {
-  'slime.hp': [30, 90], 'slime.dmg': [10, 12],
-  'goblin.hp': [20, 60], 'goblin.dmg': [6, 7],
-  'skel_archer.hp': [25, 60],
-  'ghoul.hp': [60, 180], 'ghoul.T.reviveHp': [30, 60],
-  'mage.hp': [40, 80],
-  'dark_knight.hp': [120, 360],
-  'demon_king.hp': [1500, 3600],
+  'slime.dmg': [10, 12],
+  'goblin.dmg': [6, 7],
 };
 const TUNED_BUNDLES = { // { 'type.dom.n': [gddRow, tunedRow] }
   'magic.dom.2': [{ mage: 8 }, { mage: 6 }], 'magic.dom.3': [{ mage: 10 }, { mage: 7 }],
   'magic.dom.4': [{ mage: 12 }, { mage: 8 }], 'magic.dom.5': [{ mage: 13 }, { mage: 9 }],
 };
-// Guardian HP per floor (GDD §6.3; the engine's BD.C.GUARDIAN.hp holds the tuned row).
-const GUARDIAN_HP = { gdd: [0, 160, 220, 280, 340, 400], tuned: [0, 480, 660, 840, 1020, 1200] };
+// Guardian HP per floor (GDD §6.3 = docs/CONTROLS-REVIEW.md §3.1; the engine's BD.C.GUARDIAN.hp
+// holds the row). Before the review: GDD 160/220/280/340/400, tuned ×3 to 480/…/1200.
+const GUARDIAN_HP = { gdd: [0, 385, 530, 675, 815, 960], tuned: [0, 385, 530, 675, 815, 960] };
 
 function get(o, path) { return path.split('.').reduce((a, k) => (a === undefined ? a : a[k]), o); }
 

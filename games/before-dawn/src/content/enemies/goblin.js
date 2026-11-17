@@ -5,7 +5,7 @@ const M = BD.math;
 
 BD.enemies.register({
   id: 'goblin', name: '고블린', type: 'beast', sprite: 'goblin',
-  hp: 60, speed: 4.5, dmg: 7, radius: 0.35, cost: 1, // tuned: GDD HP 20, dmg 6
+  hp: 40, speed: 4.5, dmg: 7, radius: 0.35, cost: 1, // tuned: GDD dmg 6 (HP: docs/CONTROLS-REVIEW.md §3.1)
   attacks: { stab: { name: '찌르기' } },
   T: { range: 1.0, half: 30, tgR: 1.3, tgTime: 0.45, backDist: 1.2, backTime: 0.3, cd: 1.6, ring: 0.95, chaseFar: 3.0 },
   guardian: {

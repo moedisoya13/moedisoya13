@@ -42,7 +42,7 @@ module.exports = {
     t.eq(hitsOn(w, inR, 'riposte').map((x) => [x.dmg, x.direct]), [[20, true]]);
     t.assert(inR.statuses.burn, 'flame applies to the counter');
     t.eq(hitsOn(w, outR).length, 0);
-    H.step(45);                                    // 0.9 s after: hurt again, still cooling down
+    H.step(55);                                    // ≈ 1.07 s after (past the 1.0 s post-hit invulnerability): hurt again, still cooling down
     t.eq(hurt(), true);
     H.step(20);
     t.eq(hitsOn(w, inR, 'riposte').length, 1, 'cooldown');

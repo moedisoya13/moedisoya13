@@ -1,7 +1,7 @@
 // 마도사 (magic) — GDD §6.2 / §6.3. Walks to keep 4–7u from the hero. When the hero stays
 // within 2.0u for 0.5 s it teleports to a free cell at least 6u from the hero (the arrival
 // point is marked for 0.4 s; teleport cooldown 5 s; not while bound — mana_backlash's `bind`).
-// Fire circle: a radius-1.3 circle where the hero stood fills over 0.9 s, hits for 12 and
+// Fire circle: a radius-1.3 circle where the hero stood fills over 1.1 s, hits for 12 and
 // leaves a 2.5 s fire zone (3 every 0.5 s to the hero inside; enemies inside catch fire).
 // No line of sight needed. Guardian 대마도사: three circles at once (the hero's spot and 2.2u to
 // either side, across the mage→hero line); teleport cooldown 4 s.
@@ -12,7 +12,7 @@ const M = BD.math;
 const T = {
   keepMin: 4, keepMax: 7, castMax: 9,          // edgeDist band; no cast from farther than castMax
   near: 2.0, nearTime: 0.5, blinkMin: 6, blinkTg: 0.4, blinkCd: 5, guardianBlinkCd: 4,
-  tgR: 1.3, tgTime: 0.9, cd: 3.0, side: 2.2,
+  tgR: 1.3, tgTime: 1.1, cd: 3.0, side: 2.2, // tgTime 1.1: docs/CONTROLS-REVIEW.md §3.1
   zoneLife: 2.5, zoneTick: 0.5, zoneDmg: 3,
   strafe: 0.45,                                // fraction of speed used to drift sideways in band
 };
@@ -73,7 +73,7 @@ function castFire(w, e) {
 
 BD.enemies.register({
   id: 'mage', name: '마도사', type: 'magic', sprite: 'mage',
-  hp: 80, speed: 2.0, dmg: 12, radius: 0.35, cost: 2.5, // tuned: GDD HP 40
+  hp: 54, speed: 2.0, dmg: 12, radius: 0.35, cost: 2.5, // HP: docs/CONTROLS-REVIEW.md §3.1
   attacks: { fire_circle: { name: '불 원', sfx: 'fire_circle' }, fire_zone: { name: '불 장판' } }, // the blink warning sounds by its style
   T,
   guardian: { name: '대마도사' }, // three circles and the 4 s teleport are read from e.guardian
