@@ -22,8 +22,10 @@ games/before-dawn/
                                        combat, cards runtime, statuses, hazards, ai, flow, tick,
                                        progress (save), app, harness
   src/bot/                    engine   the deterministic bot (§13.1)
-  src/client/                 engine   browser only: view/projection, assets, renderer, input,
-                                       audio base, particle pool, shell (loop, URL params, __BD)
+  src/client/                 engine   browser only: view/projection, follow camera, assets, renderer
+                                       (+ big-floor chunks, character animation), input, audio base,
+                                       particle pool, off-screen markers/minimap, clip viewer, shell
+                                       (loop, URL params, __BD)  — v2 APIs: §9
   src/boot.js                 engine
   src/content/cards/          CARDS    one file per card (pierce.js, chain_slash.js are references)
   src/content/enemies/        ENEMIES  one file per enemy (slime.js, goblin.js are references)
@@ -81,13 +83,15 @@ Node (`tools/load.js`) evaluates 1–3 the same way, then `BD.finalize()`.
 ### Commands
 
 ```
-node build.js                                   build dist/before-dawn.html
+node build.js [--placeholders]                  build dist/before-dawn.html (+ assets/anim/_placeholder strips)
 node tools/sim.js --seed 1 --bot                one headless bot run
 node tools/sim.js --seeds 1-20 --hand pierce,chain_slash
 node tools/sim.js --seed 3 --gen --grid         print the six generated floors
 node tools/test.js [filter]                     run tests/**/*.test.js
 node tools/accept.js [--only 3,7] [--skip-browser]   GDD §13.2, one line per criterion
 dist/before-dawn.html?seed=123&tier=0&hand=pierce,flame,leech&floor=3&bot=1&speed=8&mute=1&nosave=1
+dist/before-dawn.html?anim=1   (or ?anim=goblin)  every animation clip of every character (§9.5)
+__BD.stage({size: [48, 48], enemies: 150})       a big floor with a crowd, in the page or H.stage() in Node (§9.6)
 ```
 
 `accept.js` prints PASS / FAIL / PENDING / SKIP; PENDING means the criterion needs content that is
@@ -394,6 +398,7 @@ your `update`/`revive`, and put the extra skill in `guardian.update`.
 | `hitbox(w, e, {r, dmg, attack, life, follow})` | one-shot contact damage |
 | `summon(w, kinds, opts)` | spawn at the floor's rifts with the 1.2 s warning |
 | `randomCell(w, minDist, maxDist)`, `dirToHero`, `dirTo`, `clearPath`, `fieldTo`, `edgeDist`, `angleToHero`, `rng(w)` | helpers |
+| `inView(w, x, y, pad)`, `seen(w, e)` | is the point (circle of `pad` u) / the enemy inside the view every client shows this tick — the "nothing hits from off screen" hook for big floors (§9.2). Always true in v1 rooms |
 
 Also: `BD.W.makeEnemy(w, kind, x, y, opts)` (now), `BD.W.spawnAt(w, kind, x, y, {warn, elite,
 guardian, via})` (with warning, respects the 80 cap), `BD.W.hurtHero(w, dmg, {source, attack,
@@ -443,7 +448,8 @@ BD.gen.patterns.register({ id: 'pillars', firstFloor: true, apply(grid, ctx) { /
 BD.gen.bundles.register({ id: 'undead', dom: [null, {skel_archer:5, ghoul:2}, …5F], nondom: [null, {skel_archer:2}, …] });
 ```
 
-`ctx = {n (floor), rng (gen sub-stream), W, H, grid}`; `BD.CELL.{FLOOR, SOLID, VOID}`. Helpers:
+`ctx = {n (floor), rng (gen sub-stream), W, H, grid}`; `BD.CELL.{FLOOR, SOLID, VOID}`. Shapes and
+patterns must work at any size: floors larger than the screen come from a floor plan (§9.3). Helpers:
 `BD.gen.tryBlock(grid, rng, bw, bh, tries, gap)`, `BD.gen.canPlace(grid, cells, gap = 2)`,
 `BD.gen.fill`. Bundle arrays have 6 entries (index 0 unused); `null` = "—" in §7.4; on 1F a type
 can only be dominant if `dom[1]` exists. The engine does the rest: dominant order (§7.5),
@@ -462,10 +468,14 @@ outline, crown, type icon, burn/wet/bind/sunder marks, the white border on a sam
 (`BD.render.telegraphs`), projectile looks by `kind` (`BD.render.projectiles`, e.g. `'arrow'`),
 zone looks by `kind` (`BD.render.zones`), per-kind decor (`BD.render.decor` with `target:
 'dark_knight'` for the shield spark), obstacle looks per pattern id
-(`BD.render.obstacles.register({id: 'aisle', draw(g, view, cx, cy, w, t)})` — use
+(`BD.render.obstacles.register({id: 'aisle', draw(g, view, cx, cy, w, t)})` — called only for
+cells near the screen on big floors; use
 `BD.client.render.prism(g, view, x, y, dw, dh, hPx, top, left, right)`; guard with
 `if (BD.client)` only if you call client code at load time — inside `draw` it always exists),
-and `vfx` events.
+and `vfx` events. Frame animation per kind comes from `assets/anim/manifest.json` (§9.5); a
+behaviour only has to keep `e.state = 'windup'` and its telegraphs honest — the attack clip's
+wind-up follows the telegraph's fill and the strike frame lands when it fires. Flag anything the
+player must find with `e.flags.marker = 'objective' | 'threat'` (§9.4).
 
 ### 4.8 Worked example — `src/content/enemies/goblin.js` (abridged; read the file)
 
@@ -537,7 +547,10 @@ this floor's permanent decal layer — ink splats; `prism`, `ellipse`, `sprite`,
 menu, style: 'primary'|'plain'|'none', size})` (declares a hit area this frame; `menu` buttons get
 arrow/Enter/1–9 focus), `text(str, x, y, {size, color, align, base, weight, stroke, maxW})`,
 `sfx(id)` (throws on unknown), `sfxSafe(id)`, `startRun(opts)` (URL params + opts), `focus`.
-`view.proj(wx, wy, z)`, `view.toLogical(clientX, clientY)`. Logical canvas 1280 × 720.
+`view.proj(wx, wy, z)`, `view.toLogical(clientX, clientY)`, `view.toWorld(lx, ly)`,
+`view.clientToWorld(cx, cy)`, `view.onScreen(x, y, margin)`, `view.worldOnScreen(wx, wy, margin)`.
+Logical canvas 1280 × 720. `view.proj` includes the follow camera (§9.1): world-anchored UI drawn
+through it follows the camera by itself; `ui.camera` is only the screen-shake offset.
 
 ### 5.3 The app (DOM-free; `ui.app`)
 
@@ -632,3 +645,143 @@ engine change.
 
 `node build.js && node tools/test.js && node tools/accept.js` — no FAIL; your PENDING lines turned
 PASS where your content completes them; open `dist/before-dawn.html` and look at your work.
+
+---
+
+## 9. v2 engine: floors larger than the screen, the camera, off-screen awareness, animation
+
+Added for v2 (docs/V2-DIRECTION.md). Nothing here changes v1 rooms: every v1 room fits the
+screen, so its camera stands still exactly where it stood (pixel-equal static layer and clip), the
+view rectangle covers the whole room, markers and minimap are off, and bot hashes for the same
+seeds are unchanged. What v1 rooms do get: sprites breathe, bounce and lunge, and deaths dissolve.
+
+### 9.1 Camera and mapping (client)
+
+The renderer places the world through `view.rox / view.roy`, set every frame by
+`BD.client.camera.update(ui, dt)` (src/client/15_camera.js). Everything drawn with `view.proj`
+— renderer, card/enemy drawers, UI effects, particles — follows it; `view.toWorld(lx, ly)` and
+`view.clientToWorld(cx, cy)` go back (through the forced-landscape quarter turn too). Per axis:
+if the floor's projected box plus `C.CAM.fit` margins fits 1280 × 720 the camera stands still with
+the room centred; otherwise it eases toward the hero (`C.CAM.follow` s) plus a look-ahead along the
+walk or dash (`C.CAM.lookahead` u, eased over `lookTime`), never lags or leads by more than
+`C.CAM.slack` px, and is clamped to the floor box plus `C.CAM.frame` margins (room for the HUD bars
+and the card tray). It snaps on a new floor; `BD.client.camera.snap()` after a teleport.
+Everything is in logical px, so it is the same on every screen size and in forced landscape.
+
+Drawing on a big floor: only what is near the screen is drawn (`R.actorOn(v, x, y, scale)`,
+`R.flatOn(v, x, y, r)` are the engine's culling tests — use them in a drawer that loops over many
+things). The static layer is painted lazily in 512 px chunks; `R.bake(fn)` decals go into one
+floor-wide canvas (≤ 4.2 M px, so slightly softer on very large floors) and `R.clipFloor(g, v, w)`
+works with any view, the bake view included. Shadows use `R.shadow(g, v, x, y, r, alpha)`.
+
+### 9.2 The view rectangle — "nothing hits from off screen" (simulation, deterministic)
+
+`src/core/05_view.js`. The camera math is pure, so the simulation knows what every client shows
+without asking any device: the hero-centred (clamped) view inset by the camera's slack.
+
+```js
+BD.view.inView(w, x, y, pad)  // the circle of radius pad u at (x, y) is on every screen this tick
+BD.ai.inView(w, x, y, pad)    // same, for behaviours;  BD.ai.seen(w, e) = inView(w, e.x, e.y, e.r)
+BD.view.rect(w, pad)          // {x0, x1, y0, y1} in map px;  BD.view.corners(w, pad) → 4 world points
+BD.view.map(x, y) / unmap(mx, my)   // map px: mx = (x − y)·40, my = (x + y)·20 (1u ≈ 57 px across)
+BD.view.frame(grid), fits(grid), focus(grid, mx, my)   // what the camera does (the client uses these)
+```
+
+`pad > 0` keeps a margin inside the edge (the HUD covers ~90 px at the top and the card tray the
+bottom 110 px: about 2u and 3u), `pad < 0` accepts points just outside. Use it in a behaviour,
+e.g. `if (!A.seen(w, e)) { A.chase(…); return; }` before starting a telegraph, or in a spawn rule.
+It is a query, not a rule: the designer decides where it applies. Tests: tests/core/view.test.js
+(it holds for any camera lag within the slack).
+
+### 9.3 Generating big floors
+
+```js
+BD.gen.plans.register({                  // at most one plan; floors 1–5
+  id: 'v2',
+  size(n, ctx) { return n === 1 ? null : [48, 48]; },   // null = the GDD §7 size (and rng draw)
+  offscreen(n) { return { indicators: true, minimap: true }; },   // optional, per floor (§9.4)
+});
+BD.gen.floor(seed, tier, n, dom, next, { size: [W, H] });  BD.gen.run(seed, tier, { sizes: { 3: [64, 40] } });
+```
+
+`ctx = {seed, tier, domType, rng}` (rng is its own sub-stream `plan<n>`). Sides are integers in
+`C.GEN_SIZE` (8..128; others throw). Unsized floors draw the same rng as before, so existing
+seeds generate identically (600 seed/tier runs compared). All §7.6 checks hold at any size (one
+BFS per try; a 96×96 floor generates in < 15 ms). The §7.3 placement itself (start corner, three
+rifts, one altar, door on a back wall) is still v1's: places scattered over a big floor are yours
+to add. Shapes and patterns place a fixed number of blocks, so a big floor is mostly open until
+patterns scale with the room. The rooftop stays 13 × 13.
+
+Simulation at scale: the distance field is one BFS per 0.2 s (2 304 cells at 48×48), separation and
+burn spread use position buckets (same pair order, same results), `clearPath` has an exact fast
+path, the per-target field cache keeps 64 targets, long rays are no longer capped at 256 steps.
+`C.CAP.enemies` (80, spawnAt's queue) is still v1's number: raise it when the design needs it.
+Measured at 48×48 with 150 live enemies converging on a walking hero: ~0.9–1.7 ms per tick in Node.
+
+### 9.4 Off-screen awareness (client, switchable per floor)
+
+Edge-of-screen markers and a minimap, src/client/70_offscreen.js. On per floor:
+`w.floor.offscreen = {indicators, minimap}` (from the floor plan) wins, else `C.OFFSCREEN`
+(`'auto'` = on when the floor does not fit the screen — never in a v1 room).
+
+```js
+e.flags.marker = 'threat' | 'objective'          // any enemy (or pickup.marker): shown when off screen
+BD.render.markers.register({ id, collect(w, out) { out.push({ x, y, kind: 'objective', color, icon(g, x, y, r) }); } })
+BD.client.offscreen.INSET = { x0, y0, x1, y1 }   // where markers may sit (clear of the v1 HUD)
+BD.client.offscreen.MINIMAP = { x, y, w, h }     // default under the floor box, top right
+BD.client.offscreen.drawIndicators(g, ui, rect) / drawMinimap(g, ui, rect) / markers(w) / enabled(w)
+```
+
+Built-in sources: guardians and the boss are threats; a lit altar, open stairs and an available
+trial are objectives. Threats sort first, nearest first, at most `MAX` (12). The minimap is the
+floor in the screen's own isometric orientation with enemies, markers, the hero and the screen
+frame. The UI agent may move them (INSET, MINIMAP) or draw them itself in a HUD layer.
+
+### 9.5 Character animation
+
+Contract: assets/anim/README.md. `node build.js` embeds the strips named in
+`assets/anim/manifest.json` (`--placeholders` adds `_placeholder/` ones) and refuses a wrong clip
+name, a missing field, a `strike` outside the clip, or a strip whose pixel size is not
+`frames × fw` by `fh`. Strips decode after the sprites; a clip falls back until its strip is ready.
+
+Which clip (src/core/07_anim.js, pure; tests/core/anim.test.js):
+
+| state | action |
+|---|---|
+| enemy: a telegraph of its own is filling | `attack`, frames 0..strike follow the fill (1 − remain/total) |
+| enemy: its telegraph fired < follow-through ago | `attack`, frames strike..last over the clip's own time (≤ 0.8 s) |
+| enemy: hit < 0.22 s ago / down (ghoul) / killed | `hurt` / `die` held on its last frame / `die` on its ghost |
+| hero: < wind s before his swing, target held | `attack_<dir>` frames 0..strike — the strike frame is drawn on the swing's tick |
+| hero: after the swing | follow-through; wind + follow fit `stats.interval` (0.6 s: ~0.24 + 0.36 s) |
+| hero: dash / hurt pose / dead | `dash_side` / `hurt` / `hurt` (falls) |
+| measured walking speed > 0.45 u/s | `move` (cycle speed × speed / own speed, 0.55–1.5) else `idle` |
+
+Fallback chain when a clip is missing: (1) exact, (2) the action's `_side` clip, (3) hero dash
+and hurt: v1's dedicated static pose (`hero_dash`, `hero_hurt`) — not the run cycle the README's
+step 3 would give, (4) the clip of how the body moves (`move` / `idle`) with the action's code
+motion on top, (5) the static sprite with code motion: breathing (idle), walking bounce (move),
+lean-and-lunge (attack), shake (hurt), ink dissolve (death). A standing body with no idle clip
+uses the static sprite breathing (move's frame 0 is mid-stride; `BD.anim.IDLE_HOLDS_MOVE = true`
+holds it instead). Frames are scaled so `charH` equals the static sprite's on-screen height ×
+size, mirrored for left, outlined (elite/guardian/same-hue) and hit-flashed like the static
+sprite. A killed enemy leaves a client ghost for its `die` clip (+0.15 s fade) or the 0.7 s ink
+dissolve with ink motes; the simulation has already removed it.
+
+APIs (browser): `BD.client.render.anim.clip(char, name)`, `.drawFrame(g, v, def, img, f, x, y, o,
+scale)`, `.frameScale(char, def, size)`, `.ghosts`, `.live()` (decoded clips). Pure:
+`BD.anim.resolve(meta, char, action, dir, moving)`, `.frame(clip, phase)`, `.heroAction`,
+`.enemyAction`, `.heroAttackTiming`, `.enemyFollow`, `.strikeOf` (default `round(frames × 0.4)`).
+
+Viewer: `?anim=1` shows every character's row of the clip table — present clips play (attack:
+0.6 s wind-up, strike frame outlined orange, follow-through), missing ones show what the game
+draws instead and which rule chose it. Click a row (or `?anim=<char>`) for large cells with frame
+numbers; Space pauses, `.` steps.
+
+### 9.6 Testing at scale
+
+`BD.stageFloor(w, {size, enemies, kinds, floor, minDist})` / `H.stage(o)` / `__BD.stage(o)`
+replaces floor n (default 2) of the running world with a generated floor of that size and puts
+`enemies` (default 150) on random cells ≥ minDist from the hero; waves stop. Engine tests:
+tests/core/view.test.js, bigfloor.test.js (generation, buckets, staging, measured tick),
+anim.test.js, camera.test.js (headless Chromium: mapping in normal and forced landscape, decals,
+clip, particles, markers, animation, ghosts).
