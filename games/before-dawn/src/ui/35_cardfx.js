@@ -7,7 +7,9 @@
 //   combo timer < 1 s ring blinks red, red ring at the hero's feet, combo_warn
 //   combo reset       slot shakes, ×0 grey, ink drips off the cape, combo_break, the reason as a toast
 //   leech / riposte / drawcut / target hits / steam: slot flashes, sounds, first-steam toast
-// Per-card attack visuals (white cross, armour shards, chains, lightning …) are drawn by the cards.
+// Per-card attack visuals (white cross, armour shards, chains, lightning …) are drawn by the cards,
+// and so are the 연참 timer ring at the feet, the max afterglow, 반격's pauldron flash and 발도's
+// white blade; the UI's versions of those four only stand in when the card's decor is missing.
 
 const C = BD.C;
 const K = BD.ui.K;
@@ -23,10 +25,13 @@ const slotCenter = (i) => { const r = BD.ui.slotRect(i); return [r.x + r.w / 2, 
 const typeOf = (kind) => (BD.enemies.has(kind) ? BD.enemies.get(kind).type : null);
 const slotOf = (w, id) => w.cards.findIndex((c) => c && c.id === id);
 const nameOf = (id) => (BD.cards.has(id) ? BD.cards.get(id).name : id);
-const FX = { awakenAt: -9, flashAt: -9, riposteAt: -9, dripAt: -9, cardLabelAt: -9, maxSparkT: 0, steamToast: false, lastKill: null, lastHurt: null, pending: [], targetFlashAt: {}, charged: false, capeTip: null };
+const FX = { awakenAt: -9, flashAt: -9, riposteAt: -9, dripAt: -9, cardLabelAt: -9, inkAt: -9, motes: [], maxSparkT: 0, steamToast: false, lastKill: null, lastHurt: null, pending: [], targetFlashAt: {}, charged: false, capeTip: null };
 BD.ui.cardfx = FX;
 
 function slot(i) { return S.slots[i] || (S.slots[i] = {}); }
+// The cards draw some §9.3 feedback themselves (docs/requests/cards.md); the UI's own version
+// of it stands in only when that decor is not registered.
+const cardDraws = (decorId) => BD.render.decor.has(decorId);
 function flyTo(ui, wx, wy, i, color) {
   const [x0, y0] = ui.view.proj(wx, wy, 40);
   const [x1, y1] = slotCenter(i);
@@ -55,7 +60,7 @@ BD.ui.effects.register({
   id: 'cardfx',
   reset(ui) {
     S.slots = [{}, {}, {}]; S.flights = [];
-    Object.assign(FX, { awakenAt: -9, flashAt: -9, riposteAt: -9, dripAt: -9, cardLabelAt: -9, maxSparkT: 0, steamToast: false, lastKill: null, lastHurt: null, pending: [], targetFlashAt: {}, charged: false, capeTip: null });
+    Object.assign(FX, { awakenAt: -9, flashAt: -9, riposteAt: -9, dripAt: -9, cardLabelAt: -9, inkAt: -9, motes: [], maxSparkT: 0, steamToast: false, lastKill: null, lastHurt: null, pending: [], targetFlashAt: {}, charged: false, capeTip: null });
   },
   on: {
     run_start(ev, ui) {
@@ -74,8 +79,10 @@ BD.ui.effects.register({
       if (i < 0) return;
       const s = slot(i);
       s.popAt = ui.time + 0.5;
+      // the gold dot to the slot: most quest cards fly their own (vfx quest_mote, sent right
+      // after this event); ours waits for the end of the tick and is dropped if theirs came
       const from = FX.lastKill || w.hero;
-      flyTo(ui, from.x, from.y, i);
+      FX.motes.push(() => flyTo(ui, from.x, from.y, i));
       ui.sfxSafe('quest_tick');
       const left = ev.goal - ev.value;
       if (left > 0 && left <= 2) MSG.toast(nameOf(ev.cardId) + ': 앞으로 ' + left, 'gain');
@@ -115,7 +122,8 @@ BD.ui.effects.register({
       ui.sfxSafe('heal_small');
       const w = ui.world, i = slotOf(w, ev.source);
       if (i >= 0) slot(i).flashAt = ui.time;
-      // ink drawn into the blade from the last kill
+      // ink drawn into the blade from the last kill (unless the card drew its own: vfx leech_ink)
+      if (ui.time - FX.inkAt < 0.05) return;
       const from = FX.lastKill || w.hero, h = w.hero;
       for (let k = 0; k < 8; k++) {
         const t = k / 8;
@@ -142,7 +150,11 @@ BD.ui.effects.register({
         ui.sfxSafe('hit_type');
       }
     },
-    vfx(ev, ui) { if (ev.kind === 'combo_label') FX.cardLabelAt = ui.time; },
+    vfx(ev, ui) {
+      if (ev.kind === 'combo_label') FX.cardLabelAt = ui.time;
+      if (ev.kind === 'leech_ink') FX.inkAt = ui.time;
+      if (ev.kind === 'quest_mote') FX.motes = [];
+    },
     steam(ev, ui) {
       if (!FX.steamToast) { FX.steamToast = true; MSG.toast('증기: 젖은 적에 불이 닿았다', 'info'); }
     },
@@ -150,6 +162,8 @@ BD.ui.effects.register({
   update(dt, ui) {
     const w = ui.world;
     if (!w || ui.app.mode !== 'play') return;
+    for (const f of FX.motes) f();
+    FX.motes = [];
     // reset reasons the card did not put into words itself
     for (const p of FX.pending) if (!p.covered) MSG.toast(resetText(p.card, p.reason), 'break');
     FX.pending = [];
@@ -180,7 +194,7 @@ BD.ui.effects.register({
       for (let k = 0; k < 3; k++) if (w.cards[k] && (k === i || i < 0) && w.cards[k].def.family === 'trigger') slot(k).flashAt = ui.time;
     }
     FX.charged = charged;
-    if (anyMax && !w.hero.dead) {
+    if (anyMax && !w.hero.dead && !cardDraws('combo_afterglow')) {
       FX.maxSparkT -= dt;
       if (FX.maxSparkT <= 0) {
         FX.maxSparkT = 0.12;
@@ -198,8 +212,8 @@ BD.ui.effects.register({
     if (!w || ui.app.mode !== 'play') return;
     if (layer === 'floor') {
       const v = ui.view, h = w.hero;
-      // red ring at the feet while a combo timer is about to run out
-      if (S.slots.some((s) => s && s.warn) && Math.floor(ui.time * 8) % 2 === 0) BD.client.render.ellipse(g, v, h.x, h.y, 0.62, null, '#ff3b3b', 3.5);
+      // red ring at the feet while a combo timer is about to run out (연참 draws its own)
+      if (!cardDraws('chain_slash_ring') && S.slots.some((s) => s && s.warn) && Math.floor(ui.time * 8) % 2 === 0) BD.client.render.ellipse(g, v, h.x, h.y, 0.62, null, '#ff3b3b', 3.5);
       // gold ring spreading from the hero on awakening
       const ak = (ui.time - FX.awakenAt) / 1.2;
       if (ak >= 0 && ak < 1) {
@@ -291,7 +305,7 @@ BD.render.decor.register({
     const fk = (now - FX.flashAt) / 0.3;
     if (fk >= 0 && fk < 1) star(box.x + (box.flip ? -22 : 22), box.y - hh * 0.32, 16 * (1 - fk * 0.4), 1 - fk);
     const rk = (now - FX.riposteAt) / 0.25;
-    if (rk >= 0 && rk < 1) star(box.x + (box.flip ? 10 : -10), box.top + hh * 0.24, 14, 1 - rk);
-    if (FX.charged && !h.dead) star(box.x + (box.flip ? -24 : 24), box.y - hh * 0.36, 6 + Math.sin(t * 10) * 2, 0.85);
+    if (rk >= 0 && rk < 1 && !cardDraws('riposte_flash')) star(box.x + (box.flip ? 10 : -10), box.top + hh * 0.24, 14, 1 - rk);
+    if (FX.charged && !h.dead && !cardDraws('drawcut_blade')) star(box.x + (box.flip ? -24 : 24), box.y - hh * 0.36, 6 + Math.sin(t * 10) * 2, 0.85);
   },
 });

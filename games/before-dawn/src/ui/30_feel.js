@@ -132,6 +132,7 @@ const KILL_WORDS = ['촤악!', '서걱!', '콰직!'];
 
 // ---- screen washes ------------------------------------------------------------------------------
 const WASH = { hurt: 0, flash: 0, flashColor: '#ffffff', ending: 0 };
+const HEALQ = [];
 function edgeBand(g, color, wdt, alpha) {
   g.globalAlpha = alpha;
   g.fillStyle = color;
@@ -231,8 +232,12 @@ BD.ui.effects.register({
     heal(ev, ui) {
       const h = ui.world.hero;
       const col = ev.source === 'leech' || ev.source === 'kings_hunt' ? K.GREEN : ev.source === 'flask' ? '#8fd3ff' : K.DAWN;
-      ui.fx.emit({ x: h.x, y: h.y, z: 110, vz: 40, life: 0.9, shape: 'text', text: '+' + ev.amount, color: col, size: 26 });
+      const show = () => ui.fx.emit({ x: h.x, y: h.y, z: 110, vz: 40, life: 0.9, shape: 'text', text: '+' + ev.amount, color: col, size: 26 });
+      // card heals: the card usually draws its own green number (vfx leech_heal / royal_heal);
+      // ours waits for the end of the tick and is dropped if the card's arrived
+      if (ev.source === 'leech' || ev.source === 'kings_hunt') HEALQ.push(show); else show();
     },
+    vfx(ev) { if (/heal/.test(ev.kind)) HEALQ.length = 0; },
     pickup(ev, ui) {
       for (let i = 0; i < 10; i++) ui.fx.emit({ x: ev.x, y: ev.y, z: 14, vx: rng.range(-1.2, 1.2), vy: rng.range(-1.2, 1.2), vz: rng.range(60, 140), g: 200, life: 0.5, color: i % 2 ? '#8fd3ff' : '#ffffff', size: 3 });
     },
@@ -255,6 +260,8 @@ BD.ui.effects.register({
     win(ev, ui) { FEEL.releaseHitstop(); WASH.flash = 0.4; WASH.flashColor = '#fff6e0'; },
   },
   update(dt, ui) {
+    for (const f of HEALQ) f();
+    HEALQ.length = 0;
     updateHitstop(dt);
     if (ui.app.mode !== 'play') { FEEL.releaseHitstop(); SHK.t = 0; }
     updateShake(dt, ui);
