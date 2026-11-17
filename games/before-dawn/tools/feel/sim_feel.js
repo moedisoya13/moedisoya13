@@ -148,9 +148,9 @@ if (want('dash')) {
       const h = w.hero;
       H.input({ mx: 1, my: 0, dash: true }); H.step(1); H.input({ mx: 1, my: 0 });
       while (h.dashCd > early / 60 + 1e-9) H.step(1);
-      const n0 = w.bus.recent(4000).filter((e) => e.type === 'dash').length;
+      const n0 = w.bus.recent(4000).filter((e) => e.event === 'dash').length;
       H.input({ mx: 1, my: 0, dash: true }); H.step(1); H.input({ mx: 1, my: 0 }); H.step(30);
-      r.buffer[early + ' ticks early'] = w.bus.recent(4000).filter((e) => e.type === 'dash').length > n0 ? 'dashes' : 'DROPPED';
+      r.buffer[early + ' ticks early'] = w.bus.recent(4000).filter((e) => e.event === 'dash').length > n0 ? 'dashes' : 'DROPPED';
     }
   }
   { // direction with no input: facing; facing while a swing's aim is held
@@ -303,7 +303,7 @@ if (want('target')) {
         const q = Math.abs(sx) > Math.abs(sy) * 2 ? (sx > 0 ? 'R' : 'L') : (sy > 0 ? 'F' : 'B');
         if (q !== lastQuad) { if (lastQuad && (w.ticks - lastQuadT) < 18) quadFlips++; lastQuad = q; lastQuadT = w.ticks; }
       },
-    }).app.world.bus.recent(1e6).forEach((e) => { if (e.type === 'swing') swings++; });
+    }).app.world.bus.recent(1e6).forEach((e) => { if (e.event === 'swing') swings++; });
   }
   // scripted, pilot-independent: back away from a slow chaser (ghoul) in a straight line for 6 s.
   // The hero should look like he is doing one thing; count how often the drawn body flips.

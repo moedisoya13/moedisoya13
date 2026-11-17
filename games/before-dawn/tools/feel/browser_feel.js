@@ -42,7 +42,7 @@ const show = (obj) => Object.keys(obj).map((k) => '  ' + k + ': ' + JSON.stringi
         const frames = [], ms = [];
         for (let i = 0; i < 30; i++) {
           await raf(); await sleep(Math.random() * 15);
-          const x0 = h.x, y0 = h.y, t0 = performance.now(), d0 = B.events(50).filter((e) => e.type === 'dash').length;
+          const x0 = h.x, y0 = h.y, t0 = performance.now(), d0 = B.events(50).filter((e) => e.event === 'dash').length;
           fire();
           let n = 0;
           while (n < 30) { await raf(); n++; if (moved(x0, y0, d0)) break; }
@@ -69,7 +69,7 @@ const show = (obj) => Object.keys(obj).map((k) => '  ' + k + ': ' + JSON.stringi
         fr.sort((a, b) => a - b); return { framesMedian: fr[10], framesMax: fr[19] };
       })();
       res.touchMove = await sample(() => { ptr('pointerdown', 300, 400); ptr('pointermove', 345, 400); }, () => { ptr('pointerup', 345, 400); window.BD.client.input.st.lastUp = -1; }, posMoved);
-      res.keyDash = await sample(() => key('keydown', 'Space'), () => key('keyup', 'Space'), (x0, y0, d0) => B.events(50).filter((e) => e.type === 'dash').length > d0, 24);
+      res.keyDash = await sample(() => key('keydown', 'Space'), () => key('keyup', 'Space'), (x0, y0, d0) => B.events(50).filter((e) => e.event === 'dash').length > d0, 24);
       return res;
     });
     out.latency = r;
@@ -107,7 +107,7 @@ const show = (obj) => Object.keys(obj).map((k) => '  ' + k + ': ' + JSON.stringi
     const r = out.touch = {};
     const T = await playing(PHONE, '', true);
     const st = () => T.eval(() => window.BD.client.input.stick());
-    const dashes = () => T.eval(() => window.__BD.events(400).filter((e) => e.type === 'dash').length);
+    const dashes = () => T.eval(() => window.__BD.events(400).filter((e) => e.event === 'dash').length);
     const reset = () => T.eval(() => { const h = window.__BD.world().hero; h.dashCd = 0; window.BD.client.input.st.lastUp = -1; window.BD.client.input.st.dashReq = false; });
     const heroPos = () => T.eval(() => { const h = window.__BD.world().hero; return [h.x, h.y]; });
     // pointercancel (palm, OS gesture, finger off the glass edge on some browsers)
@@ -172,11 +172,11 @@ const show = (obj) => Object.keys(obj).map((k) => '  ' + k + ': ' + JSON.stringi
       await reset(); await T.wait(50);
       const res = await T.eval(async (early) => {
         const B = window.__BD, h = B.world().hero;
-        const n0 = B.events(400).filter((e) => e.type === 'dash').length;
+        const n0 = B.events(400).filter((e) => e.event === 'dash').length;
         h.dashCd = early;
         window.BD.client.input.st.dashReq = true; // what the button's onPress and the Space key do
         await new Promise((res) => setTimeout(res, 500));
-        return B.events(400).filter((e) => e.type === 'dash').length > n0;
+        return B.events(400).filter((e) => e.event === 'dash').length > n0;
       }, early);
       r.dashDuringCooldown[early + ' s before ready'] = res ? 'dashes when ready' : 'DROPPED';
     }
@@ -234,10 +234,10 @@ const show = (obj) => Object.keys(obj).map((k) => '  ' + k + ': ' + JSON.stringi
         const t = await raf(); frames++;
         if (t - last > 25) slow++; last = t;
         if (B.app.overlay()) continue;
-        if (B.params.speed === 0) { held++; run++; longest = Math.max(longest, run); } else { if (run) runs++; run = 0; }
+        if (B.ui.hold > 0) { held++; run++; longest = Math.max(longest, run); } else { if (run) runs++; run = 0; }
       }
       const ev = B.events(4000);
-      return { frames, heldFrames: held, heldShare: +(held / frames).toFixed(3), holdsPerMin: +(runs / ((performance.now() - t0) / 60000)).toFixed(0), longestHoldFrames: longest, slowFrames: slow, worldSecPerRealSec: +((B.world().t - wt0) / ((performance.now() - t0) / 1000)).toFixed(2), swings: ev.filter((e) => e.type === 'swing').length, kills: ev.filter((e) => e.type === 'kill').length, hurts: ev.filter((e) => e.type === 'hurt').length };
+      return { frames, heldFrames: held, heldShare: +(held / frames).toFixed(3), holdsPerMin: +(runs / ((performance.now() - t0) / 60000)).toFixed(0), longestHoldFrames: longest, slowFrames: slow, worldSecPerRealSec: +((B.world().t - wt0) / ((performance.now() - t0) / 1000)).toFixed(2), swings: ev.filter((e) => e.event === 'swing').length, kills: ev.filter((e) => e.event === 'kill').length, hurts: ev.filter((e) => e.event === 'hurt').length };
     });
     out.hitstop = r;
     console.log('== hitstop (bot, 30 s real time, speed 1) ==\n' + show(r));

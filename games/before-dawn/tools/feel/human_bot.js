@@ -160,7 +160,7 @@ function run(seed, pilotName, aware) {
   return {
     seed, result: s ? s.result : 'timeout', floor: w.floorN, sec: w.t, cause: s ? s.cause : null, hurts: w.stats.hurts, dodges: w.stats.dodges,
     dmgTaken: Object.assign({}, w.stats.dmgTaken), uptime: swingTicks / Math.max(1, enemyTicks), floorT, cards: w.cards.filter(Boolean).map((c) => c.id),
-    blockedShare: blocked / Math.max(1, moveTicks), dashes: ev.filter((e) => e.type === 'dash').length,
+    blockedShare: blocked / Math.max(1, moveTicks), dashes: ev.filter((e) => e.event === 'dash').length,
   };
 }
 
