@@ -154,7 +154,8 @@ sites themselves set `w.sitesLive = true`.
 - `src/client/96_artstage.js` — the showcase's display sites go in `floor.sites`, `w.sites = []` — art
   test fix (§6).
 - `src/bot/bot.js` — §10.3 rules ②③④⑦ for tasks and sites; the goal order guardian → task places →
-  optional sites → stairs; a goal off screen pulls (shard fetches only on the way).
+  a rift's elite → optional sites → stairs (a wanted optional site within 10u first); the guardian, a
+  chief or a nest in view is held at reach; a goal off screen pulls (shard fetches only on the way).
 - `tools/fun/lib.js`, `tools/fun/measure.js` — `--task`, `--floors`, a task-by-task table.
 - `tools/accept.js` — #4 also checks sites, fallbacks, §5.8-7; new #19 is V10.
 - Tests: `tests/core/v2.test.js` (the generation test expects each task's layout; the site hook test
@@ -183,6 +184,52 @@ sites themselves set `w.sitesLive = true`.
 - The cap of §6 ("층에 남는 수가 찼으면 떨구지 않는다") is read as applying to the chance drops; the
   "반드시 하나" drops always come.
 - The bot takes optional sites in rule ④'s order (after the task places and the guardian, before the
-  stairs), so it opens chests after the floor clear; a human may well take them on the way.
+  stairs), except that one it wants within 10u comes first, on the way: walking back over an emptied
+  floor after the clear made the screen sparse (slice gate 15.6 % > 15 %; with the detour 11.5 %). It
+  also fights the guardian, a chief or a nest in view, and finishes a rift it opened.
 - A staged scenario leaves sites alone (§2.8); the chest's waiting guards scatter at the floor clear with
   the rest of the horde (§5.5-4), the rift's own enemies do not (the rift still works after the clear).
+
+## 8. Measurements (human-like pilot, `tools/fun/measure.js`)
+
+V10 by task on 1F (`--seeds 1-10 --task <id> --floors 1`; seconds from floor entry, median):
+
+| task | task done | guardian down ≤ 165 s | task s | guardian down s | floor s |
+|---|---|---|---|---|---|
+| purge | 10/10 | 10/10 | 64 | 101 | 106 |
+| seals | 10/10 | 10/10 | 72 | 104 | 121 |
+| nests | 10/10 | 10/10 | 75 | 114 | 123 |
+| hold | 10/10 | 10/10 | 48 | 88 | 117 |
+| hunt | 10/10 | 10/10 | 44 | 80 | 94 |
+
+Whole runs, seeds 1–40 (2F–5F carry the four tasks in seeded orders):
+
+| task | floors | task done | guardian down | ≤ budget × 1.5 | task s | guardian down s | floor s |
+|---|---|---|---|---|---|---|---|
+| purge (1F) | 40 | 100 % | 100 % | 100 % | 63 | 98 | 104 |
+| seals | 40 | 100 % | 100 % | 83 % | 63 | 163 | 185 |
+| nests | 40 | 100 % | 98 % | 75 % | 70 | 157 | 180 |
+| hold | 40 | 100 % | 100 % | 90 % | 49 | 114 | 148 |
+| hunt | 39 | 100 % | 100 % | 92 % | 41 | 126 | 150 |
+
+Runs: 17/40 wins (the slice: 9/20), winning run 14.5 min (12.5–15.5 ✓), 3F 172 s (110–170, just
+over), final level 26, < 3 on screen 11.5 % (≤ 15 ✓), kills/min 153, hits/min 2.0. Misses outside the
+floors' reach, as in the slice: 3+ in reach 24 %, none in reach 50 %, 4F ÷ 1F 1.13 / 1.29. New misses:
+median gap between choices 12.9 s (< 15: optional sites and chests count as choices) and the longest
+wait 86 s (≤ 75; it falls in the guardian fights). The time after a task is mostly the guardian: its 6u
+leash (§3.6) is not in yet, so 2F–5F guardians follow the hero round the floor and the fight takes
+60–120 s with this pilot.
+
+## 9. What the pictures show (docs/screens/v2-floors/, `node tests/floors/shoot.js`)
+
+- `sheet-overview.jpg`: the five layouts read as five places with the floor colour set aside — plaza
+  (open, single and big pillars, planters, fountains), office (glass walls with doors, cubicles, desk rows,
+  partitions), atrium (the shaft round the island, railings), hall (the stone room round the brazier,
+  server racks or bookshelves), ruin (crates, crystals, spike masses round the central ring).
+- Every place stands on a clear 5 × 5 at its zone centre and none is behind a tall prop (a tall prop in
+  front of a site now turns see-through). Ways are 2+ cells everywhere (§5.8-3, checked on 1 000 floors
+  in the tests), so nothing traps the hero.
+- In play (`sheet-play-*.jpg`), task places are gold edge markers from the start and ringed gold dots on
+  the minimap; optional sites are `?` dots until near; at 667 × 375 they stay readable. A layout clash for
+  the UI: an edge marker on the right side between y 150 and 274 sits under the minimap (`OS.INSET` vs
+  `OS.MINIMAP` in `70_offscreen.js`).
