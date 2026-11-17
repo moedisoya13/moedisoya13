@@ -1,7 +1,9 @@
-// First-run hints (GDD §9.3 last line): one toast each, when the situation first comes up —
-// moving, the target chevron, a floor warning, the dash, the altar, the sealed stairs.
+// First-run hints (GDD §9.3 last line, GDD-V2 §2): one toast each, when the situation first comes
+// up — moving, the target chevron, a floor warning, the dash, the altar, the sealed stairs; and the
+// v2 loop: shards are drawn in, light grows the cards, the gold edge marks are the floor's task,
+// the minimap's ? are places to visit, the guardian comes once the task is done.
 // Shown while settings.hints is on; the first finished run turns it off (설정 → 첫 판 안내
-// 다시 보기 turns it back on).
+// 다시 보기 turns it back on). Hints wait while an overlay is up and never stack more than two.
 
 const S = BD.ui.S;
 const MSG = BD.ui.msg;
@@ -16,6 +18,11 @@ const TEXT = {
   altar: () => '빛나는 제단에 머물면 성인을 바꿉니다',
   sealed: () => '수호자를 베어야 계단이 열립니다',
   trial: () => '보라 균열에 머물면 시련 — 이기면 새 제단',
+  shards: () => '빛 조각에 다가가면 빨려 온다',
+  grow: () => '빛을 모으면 성인이 자란다',
+  edge: () => '화면 가장자리의 금색 표시가 이 층의 과업이다',
+  sites: () => '미니맵의 ?는 들를 곳이다',
+  guardian: () => '과업을 끝내면 수호자가 계단을 지킨다',
 };
 
 function on(ui) { return !!ui.app.save.settings.hints; }
@@ -33,8 +40,13 @@ BD.ui.effects.register({
     telegraph(ev, ui) { H.show(ui, 'telegraph', 0); },
     hurt(ev, ui) { H.show(ui, 'dash', 0.3); },
     dodge(ev, ui) { H.shown.dash = true; },
-    stairs_open(ev, ui) { H.show(ui, 'altar', 1.4); if (ui.world.trial) H.show(ui, 'trial', 4.6); },
+    stairs_open(ev, ui) { if (!(ui.world.run && ui.world.run.v2)) { H.show(ui, 'altar', 1.4); if (ui.world.trial) H.show(ui, 'trial', 4.6); } },
     toast(ev, ui) { if (ev.text === '계단이 봉인되어 있다') H.show(ui, 'sealed', 0.2); },
+    // GDD-V2 §2: the new loop, each the first time it matters
+    shard_drop(ev, ui) { H.show(ui, 'shards', 0.6); },
+    choice_pick(ev, ui) { H.show(ui, 'grow', 0.3); },
+    task_progress(ev, ui) { if (ev.goal > 0 && ev.value / ev.goal >= 0.4) H.show(ui, 'guardian', 0.5); },
+    task_clear(ev, ui) { H.show(ui, 'guardian', 0); },
   },
   update(dt, ui) {
     const w = ui.world;
@@ -45,10 +57,18 @@ BD.ui.effects.register({
     }
     if (!w || ui.app.mode !== 'play') return;
     if (w.hero.targetId && !H.shown.target && H.shown.move) H.show(ui, 'target', 0.4);
+    const M = BD.ui.map;
+    if (!H.shown.edge && M && M.last && M.last.some((m) => m.kind === 'task')) H.show(ui, 'edge', 0.2);
+    if (!H.shown.sites && M && M.shown && (w.sites || []).some((s) => s.optional && !s.known) && w.t > 8) H.show(ui, 'sites', 0);
+    if (!H.shown.altar && (w.sites || []).some((s) => s.kind === 'altar' && s.state === 'idle' && Math.hypot(s.x - w.hero.x, s.y - w.hero.y) < 9)) H.show(ui, 'altar', 0);
     if (ui.app.overlay()) return;
+    // at most two hints on screen; the rest wait their turn (a second apart)
+    const onScreen = BD.ui.S.toasts.filter((t) => t.kind === 'hint').length;
+    let shown = 0;
     H.queue = H.queue.filter((q) => {
-      if (ui.time < q.at) return true;
+      if (ui.time < q.at || onScreen + shown >= 2 || (shown && ui.time - (H.lastAt || 0) < 1)) return true;
       MSG.toast(TEXT[q.key](ui), 'hint');
+      shown++; H.lastAt = ui.time;
       return false;
     });
   },

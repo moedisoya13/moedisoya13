@@ -19,8 +19,9 @@ function statRows(s) {
     ['최고 층', s.bestFloor ? K.floorName(s.bestFloor) : '—'],
     ['최단 승리', s.bestWinSec === null || s.bestWinSec === undefined ? '—' : K.clockOf(s.bestWinSec) + ' (' + K.mmss(s.bestWinSec) + ')'],
     ['깊이별 승리', tierWins || '—'],
+    ['최고 레벨', s.bestLevel ? 'Lv ' + s.bestLevel : '—'],          // GDD-V2 §8
+    ['한 판 최다 처치', s.bestKills ? String(s.bestKills) : '—'],
     ['누적 처치', String(s.counters.kills)],
-    ['누적 회피', String(s.counters.dodges)],
   ];
 }
 
@@ -33,7 +34,7 @@ BD.ui.screens.register({
     // stats
     K.panel(g, 24, 92, 324, 488, { edge: '#8d877c', facetK: 0.1 });
     statRows(s).forEach(([k, v], i) => {
-      const y = 128 + i * 64;
+      const y = 124 + i * 58;
       K.text(ui, k, 44, y, { size: 21, color: K.DIM, weight: 700 });
       const vs = v.length > 12 ? 20 : 27;
       K.text(ui, v, 44, y + 30, { size: vs, color: K.PAPER, weight: 900, maxW: 290 });
@@ -51,8 +52,14 @@ BD.ui.screens.register({
       const b = K.button(ui, { id: 'card:' + def.id, x, y, w: tw, h: th, menu: true, slant: 0, kind: 'quiet', selected: sel === def.id, onTap: () => { BD.ui.codexSel = def.id; } });
       if (unlocked) IC.card(g, def, x + tw / 2, y + 50, 56);
       else { IC.card(g, def, x + tw / 2, y + 50, 56, { alpha: 0.12 }); IC.lock(g, x + tw / 2, y + 50, 40); }
-      K.text(ui, def.name, x + tw / 2, y + th - 16, { size: 21, align: 'center', weight: 800, color: unlocked ? K.famColor(def.family) : K.MUTED, maxW: tw - 12 });
+      K.text(ui, def.name, x + tw / 2, y + th - 26, { size: 21, align: 'center', weight: 800, color: unlocked ? K.famColor(def.family) : K.MUTED, maxW: tw - 12 });
       if (cx.wins > 0) IC.stamp(g, x + tw - 30, y + 30, 44, '승리');
+      // GDD-V2 §8: the best level this card reached, as five pips under its name
+      const max = def.levels ? BD.cardRt.maxLevel(def) : 0;
+      if (unlocked && max > 1) {
+        const best = Math.min(max, cx.bestLevel || 0);
+        for (let k = 0; k < max; k++) { const px = x + tw / 2 + (k - (max - 1) / 2) * 13; K.circle(g, px, y + th - 11, 4.2); g.fillStyle = k < best ? (best >= max ? '#fff1cf' : K.GOLD_HI) : '#2a2830'; g.fill(); K.ink(g, 1.8); }
+      }
       b.card = def;
     });
     // details of the selected card
@@ -62,7 +69,7 @@ BD.ui.screens.register({
       const unlocked = CI.isUnlocked(def, s), cx = s.codex[def.id] || { held: 0, wins: 0, best: 0 };
       IC.card(g, def, gx + 52, 552, 64, { alpha: unlocked ? 1 : 0.3 });
       K.text(ui, def.name, gx + 100, 532, { size: 25, weight: 900, color: K.PAPER });
-      const head = BD.ui.familyLine(def) + (unlocked ? '  ·  사용 ' + cx.held + '판 · 승리 ' + cx.wins + '회' + (cx.best ? ' · 최고 ' + (def.family === 'quest' ? '각성' : '×' + cx.best) : '') : '');
+      const head = BD.ui.familyLine(def) + (unlocked ? '  ·  사용 ' + cx.held + '판 · 승리 ' + cx.wins + '회' + (cx.bestLevel ? ' · 최고 ' + cx.bestLevel + '단계' : '') + (cx.best ? ' · 최고 ' + (def.family === 'quest' ? '각성' : '×' + cx.best) : '') : '');
       K.text(ui, head, gx + 100 + K.measure(g, def.name, 25, 900) + 16, 532, { size: 18, weight: 700, color: K.famColor(def.family), maxW: 640 });
       if (unlocked) K.para(ui, def.desc || '', gx + 100, 562, 770, { size: 19, maxLines: 2, color: '#e9e1cf' });
       else {

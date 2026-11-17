@@ -68,11 +68,46 @@ BD.ui.cardFace = function (ui, def, x, y, w, h, o) {
     if (state) K.text(ui, state, tx, iy + nameSize + 56, { size: 19, weight: 800, color: stateCol, maxW: tw });
   }
   // full effect text: under the icon, or (wide) to the right of it under the name
-  const top = wide ? iy + nameSize + 10 : iy + ib + 16, bottom = y + h - 14 - (o.warn ? 28 : 0);
+  const top = wide ? iy + nameSize + 10 : iy + ib + 16;
+  let bottom = y + h - 14 - (o.warn ? 28 : 0);
   const dx = wide ? tx : x + 24, dw = wide ? x + w - tx - 18 : w - 44;
-  const f = fit(g, def.desc || '', dw, bottom - top, o.sizes || [21, 19, 17]);
+  // GDD-V2 §4.4: a levelled card lists what each level adds under its effect (o.levels), the levels
+  // it has in gold, the next one marked; its level as pips beside the name (o.level)
+  const max = def.levels ? BD.cardRt.maxLevel(def) : 1;
+  const lv = o.level || (o.card && o.card.level) || 0;
+  if (lv && max > 1) drawPips(g, x + w - 18, y + 18, lv, max, wide);
+  if (o.levels && max > 1) {
+    const rows = [];
+    for (let k = 2; k <= max; k++) rows.push({ k, text: BD.cardRt.levelText(def, k) || '' });
+    const ls = o.levelSize || (o.sizes ? Math.max(16, o.sizes[o.sizes.length - 1]) : 17), llh = Math.round(ls * 1.3);
+    const lines = rows.map((r) => ({ r, L: K.wrap(g, r.text, dw - 30, ls, 600) }));
+    const need = lines.reduce((s, x) => s + x.L.length * llh, 0) + 8;
+    let yy = bottom - need + ls;
+    g.fillStyle = 'rgba(255,255,255,0.1)'; g.fillRect(dx, yy - ls - 6, dw, 1.5);
+    for (const { r, L } of lines) {
+      const have = lv >= r.k, next = lv + 1 === r.k;
+      K.circle(g, dx + 9, yy - ls * 0.36, 9); g.fillStyle = have ? K.GOLD : next ? '#3a3420' : '#24222a'; g.fill(); K.ink(g, 2, next ? K.GOLD : K.INK);
+      K.text(ui, String(r.k), dx + 9, yy - ls * 0.36 + 1, { size: 13, align: 'center', base: 'middle', weight: 900, color: have ? K.INK : K.DIM });
+      L.forEach((ln, i) => K.text(ui, ln, dx + 26, yy + i * llh, { size: ls, weight: 600, color: have ? K.GOLD_HI : next ? '#f3ead8' : '#9c9588' }));
+      yy += L.length * llh;
+    }
+    bottom -= need + 6;
+  }
+  let f = fit(g, o.text !== undefined ? o.text : def.desc || '', dw, bottom - top, o.sizes || [21, 19, 17]);
+  // a long v1-style description that does not fit gives way to the card's own level-1 line
+  if (o.text === undefined && def.levels && def.levels[1] && def.levels[1].text && /…$/.test(f.lines[f.lines.length - 1] || '')) f = fit(g, def.levels[1].text, dw, bottom - top, o.sizes || [21, 19, 17]);
   const lh = Math.round(f.size * 1.36);
   f.lines.forEach((ln, i) => K.text(ui, ln, dx, top + f.size + i * lh, { size: f.size, weight: 500, color: '#e9e1cf' }));
   if (o.warn) K.text(ui, o.warn, x + 24, y + h - 18, { size: 18, weight: 800, color: '#ff7a6a', maxW: w - 44 });
   g.globalAlpha = 1;
 };
+
+// Level pips right-aligned at (rx, cy): filled to the level, the top level in pale gold.
+function drawPips(g, rx, cy, lv, max, small) {
+  const r = small ? 5 : 6, sp = r * 2 + 5;
+  for (let k = 0; k < max; k++) {
+    const x = rx - (max - 1 - k) * sp - r;
+    K.circle(g, x, cy, r); g.fillStyle = k < lv ? (lv >= max ? '#fff1cf' : K.GOLD_HI) : '#2a2830'; g.fill(); K.ink(g, 2);
+  }
+}
+BD.ui.levelPips = drawPips;

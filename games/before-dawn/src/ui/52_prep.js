@@ -31,9 +31,11 @@ BD.ui.screens.register({
     BG.draw(g, ui, { variant: 'night', dim: 0.6 });
     K.letter(g, '이번 밤의 성인', 640, 76, { size: 50, fill: K.PAPER, fill2: '#e8c47a' });
     const hand = NAV.hand();
+    // GDD-V2 §4.4: each card starts at level 1 and grows to 5 — its effect, then what levels 2–5 add
     for (let i = 0; i < 3; i++) {
       const id = hand[i], def = id ? BD.cards.get(id) : null;
-      BD.ui.cardFace(ui, def, 58 + i * 396, 104, 372, 334, { sizes: [27, 25, 23, 21, 19, 17] });
+      const lv = def && def.levels ? 1 : 0;
+      BD.ui.cardFace(ui, def, 58 + i * 396, 104, 372, 340, { sizes: lv ? [21, 20, 19, 18, 17] : [27, 25, 23, 21, 19, 17], levels: !!lv, level: lv, levelSize: K.phone(ui) ? 18 : 17 });
     }
     // big 오른다 first, so Enter starts the night
     K.button(ui, { id: 'ascend', label: '오른다', kind: 'primary', size: 38, x: 470, y: 578, w: 340, h: 84, menu: true, onTap: () => NAV.ascend(ui) });
