@@ -237,6 +237,21 @@ async function main() {
       H.step(1);
       if (Math.abs(w.t - 450) < 1e-6) clock450 = BD.flow.clockStr(w);
     }
+    // (enemies agent) An idle hero dies to the 1F archers and mage (they keep 4–7u, it never
+    // reaches them) long before 450 s, so the clock is then read on the same idle seed with enemy
+    // hits kept off (invuln each tick; the dawn drain ignores it) — docs/requests/enemies.md.
+    if (clock450 === null) {
+      const H2 = BD.harness();
+      H2.start({ seed: 1 });
+      const w2 = H2.world();
+      while (H2.app.mode === 'play' && w2.t < 1200) {
+        w2.hero.invuln = 1;
+        H2.step(1);
+        if (Math.abs(w2.t - 450) < 1e-6) clock450 = BD.flow.clockStr(w2);
+      }
+      const r2 = H2.app.lastResult;
+      if (!r2 || r2.result !== 'death' || r2.sec >= 1200) clock450 = 'no dawn death (' + (r2 ? r2.result + ' ' + r2.sec : 'none') + ')';
+    }
     const r = H.app.lastResult;
     const ok = r && r.result === 'death' && r.sec < 1200 && clock450 === '00:00';
     report(8, ok ? 'PASS' : 'FAIL', `idle seed 1: ${r ? r.result + ' at ' + r.sec + 's (' + r.causeText + ')' : 'no result'}, clock at 450 s = ${clock450}`);
