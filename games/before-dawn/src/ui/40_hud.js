@@ -232,7 +232,7 @@ function drawBanner(g, ui, w) {
 BD.ui.hud.register({
   id: 'messages',
   order: 40,
-  draw(g, ui) { drawToasts(g, ui); drawBanner(g, ui, ui.world); },
+  draw(g, ui) { if (ui.app.overlay()) return; drawToasts(g, ui); drawBanner(g, ui, ui.world); }, // not under an overlay's title
 });
 
 // ---- the crossguard: three sockets ---------------------------------------------------------------------

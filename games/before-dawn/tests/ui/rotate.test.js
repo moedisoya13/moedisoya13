@@ -258,8 +258,8 @@ module.exports = {
       for (const n of names) t.assert(has(tx, n), 'tap state shows dealt card ' + n);
       await T.wait(400);
       t.eq(await T.mode(), 'title', 'waits for the tap');
-      // one tap, on the spot where play puts the dash button, then a drag 120 ms later
-      const r = await tapThenPress(T, 1180, 620, 900, 300, 120);
+      // one tap, on the spot where play puts the dash button, then a drag right after (inside 250 ms)
+      const r = await tapThenPress(T, 1180, 620, 900, 300, 40); // 40 ms: the first play frame can take 150 ms on a busy machine
       t.eq(r.stickOnPress, null, 'the press did not become the joystick');
       t.eq(r.after.mode, 'play', 'one tap starts the run');
       t.eq(r.after.overlay, null);

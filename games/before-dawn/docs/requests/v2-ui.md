@@ -102,6 +102,10 @@ own `unlockText` / `unlockProgress(save) → [cur, goal]`, which wins.
 - Slow motion (§7.1 "느린 화면") is the UI holding one frame in every 1/k (`ui.hold = 1e-6` from an
   effect's update) at speed 1 only; no tick is skipped or added. A `ui.slow = k` in the shell's
   frame loop would be smoother at 30 fps.
+- GDD-V2 §4.3 "게이지가 차면 0.25초 느려진 뒤 오버레이가 열린다": `growth.update` opens the queued
+  choice on the next tick, so the level-up ring and the slow motion the UI starts on `level_up`
+  play behind the overlay's dim. Opening the choice 15 ticks after `level_up` (a
+  `w.choiceDelay`) would let the player see the ring before the cards rise.
 - `C.CAP.particles` (300) is the engine pool's; the UI keeps kill/hit motes to ≤ 1 per event above
   180 live and none above 240 (`FEEL.budget`).
 
