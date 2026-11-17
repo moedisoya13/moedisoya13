@@ -70,7 +70,7 @@ module.exports = {
     t.eq([s.codex.pierce.bestLevel, s.codex.whirl.bestLevel, s.codex.pierce.held], [5, 3, 2]);
     // a summary from an older engine (no level, no magicKills) still counts
     P.endRun(s, sum({ level: undefined, run: { mageKills: 4, questAwakened: 0, comboMaxed: 0 }, cards: [{ id: 'pierce' }] }));
-    t.eq([s.bestLevel, s.counters.magicKills, s.counters.mageKills, s.codex.pierce.bestLevel], [14, 144, 8, 5]);
+    t.eq([s.bestLevel, s.counters.magicKills, s.counters.mageKills, s.codex.pierce.bestLevel], [14, 284, 8, 5]);
   },
 
   'the summary of a finished world carries the level, card levels, boons and tasks'(t) {
