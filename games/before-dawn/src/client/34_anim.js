@@ -198,7 +198,7 @@ AN.drawHero = function (g, v, w, t, pose, o, drawStatic) {
 // ---- deaths ------------------------------------------------------------------------------------
 function addGhost(w, ev) {
   const e = BD.W.enemyById(w, ev.enemyId);
-  if (!e) return;
+  if (!e || e.role === 'object') return; // a task object (nest) has no body to dissolve: its site turns dead
   const st = AN.st.get(e.id);
   const die = live()[e.kind] && live()[e.kind].die ? AN.clip(e.kind, 'die') : null;
   const gh = {

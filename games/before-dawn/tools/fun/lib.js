@@ -135,7 +135,7 @@ function makeMetrics(BD) {
     R.seed = w.seed;
     const on = (name, fn) => { if (has(name)) w.bus.on(name, fn, M); };
     on('run_start', (e) => { R.hand = e.hand.slice(); });
-    on('floor_enter', (e) => { floorKey = e.floor; if (!R.floorOrder.includes(e.floor)) R.floorOrder.push(e.floor); fl().dom = e.domType; lastX = w.hero.x; lastY = w.hero.y; note('floor ' + e.floor + ' ' + e.domType); });
+    on('floor_enter', (e) => { floorKey = e.floor; if (!R.floorOrder.includes(e.floor)) R.floorOrder.push(e.floor); fl().dom = e.domType; fl().taskKind = w.floor.task || null; fl().enterT = w.t; lastX = w.hero.x; lastY = w.hero.y; note('floor ' + e.floor + ' ' + e.domType); });
     on('spawn', (e) => { each((b) => { b.kinds[e.kind] = (b.kinds[e.kind] || 0) + 1; }); });
     on('swing', (e) => {
       let n = 0;
@@ -172,7 +172,8 @@ function makeMetrics(BD) {
     // v2 choices: every pick in a choice overlay, and stepping into an optional site
     on('choice_pick', (e) => choice((e.kind || '') + ' ' + (e.pick || '')));
     on('site_start', (e) => { if (e.optional) choice('site ' + e.kind); });
-    on('task_clear', (e) => { if (floorKey !== null) fl().task = e.task; note('task clear: ' + e.task); });
+    on('task_clear', (e) => { if (floorKey !== null) { fl().task = e.task; fl().taskSec = +(w.t - fl().enterT).toFixed(1); } note('task clear: ' + e.task); });
+    on('floor_clear', () => { if (floorKey !== null) fl().clearSec = +(w.t - fl().enterT).toFixed(1); });
     on('site_clear', (e) => { each((b) => { b.sites[e.kind] = (b.sites[e.kind] || 0) + 1; }); gain('site ' + e.kind); });
     // gains: something the hero keeps
     on('card_swap', (e) => gain('card ' + e.inId));
@@ -226,7 +227,7 @@ function makeMetrics(BD) {
       noEnemyPct: pct(b.noEnemyTicks, b.ticks), choices: b.choices, gains: b.gains, pickups: b.pickups,
       hurtsPerMin: r1(b.hurts / Math.max(1e-9, sec(b) / 60)), dmgTaken: b.dmgTaken, moved: r1(b.moved),
       hitsPerSwing: r1(b.hitSum / Math.max(1, b.swings)), multiSwingPct: pct(b.multiSwings, b.swings), swings: b.swings,
-      kinds: b.kinds, sites: b.sites, dom: b.dom, task: b.task,
+      kinds: b.kinds, sites: b.sites, dom: b.dom, task: b.task, taskKind: b.taskKind, taskSec: b.taskSec, clearSec: b.clearSec,
     });
     const gaps = (ts, end) => {
       const g = []; let p = 0;
@@ -274,18 +275,19 @@ function makeMetrics(BD) {
   return M;
 }
 
-// One whole run in Node with the pilot and the collector. o: {seed, hand, tier, altar, trial, maxSec}
+// One whole run in Node with the pilot and the collector. o: {seed, hand, tier, altar, trial, maxSec,
+// task (1F's task, v2), maxFloor (stop once this floor is left)}
 function runNode(BD, o) {
   const app = BD.createApp({ storage: BD.progress.memoryStorage(), params: { nosave: true } });
   app.botOn = false;
   const met = makeMetrics(BD);
   app.onWorld((w) => met.attach(w));
-  app.startRun({ seed: o.seed, tier: o.tier || 0, hand: o.hand });
+  app.startRun({ seed: o.seed, tier: o.tier || 0, hand: o.hand, task: o.task });
   const w = app.world;
   const pilot = makePilot(BD, o.seed, o);
   const maxTicks = Math.round((o.maxSec || 1500) * 60);
   let guard = 0;
-  while (app.mode === 'play' && w.ticks < maxTicks && guard++ < maxTicks * 3) {
+  while (app.mode === 'play' && w.ticks < maxTicks && guard++ < maxTicks * 3 && !(o.maxFloor && w.floorN > o.maxFloor)) {
     if (pilot.choiceOpen(w)) { const c = pilot.choose(w); app.cmd(c[0], c[1], c[2]); continue; }
     app.input = pilot.think(w);
     if (app.step()) met.tick(w);

@@ -11,6 +11,9 @@
 //   BD.taskRt.floorClear(w)       the guardian is down: floor_clear, the horde scatters, every shard
 //                                 flies to the hero (called by flow.guardianKilled)
 // A task def listens to events with on: {kill(ev, w, task) …}; the listeners live while its floor does.
+// v2 task defs (src/content/tasks/): {id, name, layout (§5.3), icon?, places?(n) → [{kind, zone: [zx, zy],
+// at?: [dx, dy]}] (where its sites / targets stand: the generator keeps their 5 × 5 clear), goal(n, w),
+// start?, update?, on?, label?, wantMult?(w, task) → the director's want × this while it holds}.
 
 const C = BD.C;
 const W = BD.W;
@@ -53,6 +56,7 @@ T.complete = function (w) {
 T.update = function (w, dt) {
   const t = w.task;
   if (!t) return;
+  if (BD.places) BD.places.wake(w); // dormant groups (a chest's guards, a chief's pack) wake together in view
   const def = BD.tasks.get(t.kind);
   if (def.update) def.update(w, t, dt);
 };

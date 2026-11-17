@@ -158,6 +158,9 @@ function wanted(w) {
   if (d.state === 'guardian') want *= DC.guardianMult;
   else if (d.surge) want *= DC.surge.mult;
   if (d.overtime) want *= DC.overtimeMult;
+  // a task may ask for more while its place is held (hold: × 1.4 in the brazier's ring, GDD-V2 §5.4)
+  const td = d.state === 'normal' && w.task && BD.tasks.has(w.task.kind) ? BD.tasks.get(w.task.kind) : null;
+  if (td && td.wantMult) want *= td.wantMult(w, w.task) || 1;
   return want;
 }
 

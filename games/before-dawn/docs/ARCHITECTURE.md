@@ -918,27 +918,46 @@ guardian's death (`flow.guardianKilled` → `BD.taskRt.floorClear`): radiance +1
 `purge` in a shuffled order (`BD.gen.taskOrder`); while only `purge` exists every floor is purge.
 A task def's `layout` names its floor layout.
 
-**Sites** (§5.5): `BD.sites.register({id, name, stay, total?, ring?, optional?, known?, use(w, site) →
-true when finished at once, update?(w, site, dt)})`; place them in the generator with
-`floor.layout.sites = [{kind, x, y, optional?}]`. `w.sites = [{id, kind, x, y, state:
-'idle'|'active'|'used', known, optional, progress, need}]`; standing in the ring for `stay` s emits
-`site_start` and calls `use`; a site that is not done at once stays `active` (its `update` runs)
-until it calls `BD.siteRt.clear(w, site)` (`site_clear`). `total: true` keeps the stay time when the
-hero leaves (seal stones). The bot's goal rule (§10.3 rule 4) already walks to task sites and, with
-`opts.sites`, to optional ones. Example: tests/fixtures/test_site.js. No kind is registered yet.
+**Sites** (§5.5; src/core/32_sites.js, kinds in src/content/sites/ and the task files): `BD.sites.register({id,
+name, stay, total?, ring?, ringColor?, optional?, known?, states?, passive?, enter?(w, site), first?(w, site),
+ready?(w, site), look?(w, site) → state, use(w, site) → true when finished at once, update?(w, site, dt),
+on?: {event(ev, w, site)}})`. The generator lists them in `floor.layout.sites = [{kind, x, y, zx, zy,
+optional}]`. `w.sites = [{id (number), kind, x, y, zx, zy, phase: 'idle'|'active'|'used', state (the look the
+art draws: def.states[0] first, then def.look), known, optional, progress, need, needExit, mem}]`. Standing in
+the ring for `stay` s emits `site_start` and calls `use`; a site not done at once stays `active` until
+`BD.siteRt.clear(w, site)` (`site_clear`); `BD.siteRt.release` puts it back to idle (re-armed once the hero has
+left the ring). `total: true` keeps the stay time when he leaves (seals, the brazier). `passive` sites have no
+ring (the nests: their task runs them). A staged scenario (`BD.W.scenario`) leaves sites alone unless
+`w.sitesLive`. Kinds: altar, spring, chest, rift (optional, §4.6) and seal, nest, brazier (tasks). The altar's
+call into the cards side, the chest's choice (`BD.growth.kinds.chest`) and everything a site relies on:
+docs/requests/v2-floors.md.
 
-**Floor generation** (§5.2, §5.3): `BD.gen.fills.register({id, apply(grid, zone, rng)})` (zone = `{zx,
-zy, x0, y0, size: 16, cx, cy, keep(x, y)}`; set SOLID/VOID inside the inner 12 × 12, keep the
-`keep` cells floor) and `BD.gen.layouts.register({id, centre: fillId, fills: [ids]})` —
-src/content/zones/plaza.js has `open`, `pillars`, `plaza`. `BD.gen.floorV2` puts start (2, 2) and
-stairs (0, 0) zones `open`, checks §5.8 1–5 (`BD.gen.checkV2`) with 20 retries, then all-open.
-`floor = {n, v2, domType, nextDomType, w, h, cells, floorKind, task, guardian, layout: {start,
-stairs, flasks, sites, zones}, offscreen}`. Zone walls (office), void (atrium) and site placement
-belong to the generation agent. The slice keeps v1's one flask per floor.
+**Tasks** (src/content/tasks/): purge (plaza), seals (office), nests (atrium), hold (hall), hunt (ruin). A
+task def adds `places?(n) → [{kind, zone: [zx, zy], at?: [dx, dy]}]` (its sites or targets; the generator keeps
+their 5 × 5 clear), `wantMult?(w, task)` (the director's want × it; hold: 1.4 in the brazier's ring) and
+`icon`. 1F is purge (or `&task=`); 2F–5F the other four once each in a seeded order (`BD.gen.taskOrder`).
+Dormant groups (a chest's guards, a chief's pack: `flags.wake`) wake together in view (`BD.places.wake`).
 
-**Touch pickups** (§6): `BD.pickups.register({id, touch, take(w, p) → bool})`; place with
-`w.pickups.push({id: BD.W.id(w), kind, x, y, value})`; a use emits `pickup {kind, x, y, value}`.
-`flask` is registered in core (src/core/33_pickups.js). Shards are not touch pickups (§10.3).
+**Floor generation** (§5.1–5.3, §5.8; the v2 part of src/core/11_gen.js, src/content/zones/): fills
+`BD.gen.fills.register({id, centre?, apply(grid, zone, rng)})` with `zone = {zx, zy, x0, y0, size, cx, cy, site,
+keep(x, y), put(x, y, w, h, kind, {inner}) → bool, free(x, y, w, h, gap), carve(x, y, cell)}` — `put` records a
+block of a kind (post, column, planter, row, cube, mass, wall) that becomes one named prop; layouts
+`BD.gen.layouts.register({id, centre, fills, walls?, props: {kind: [ids]}})` and `BD.gen.propFor(kind, layout,
+theme, rng)`. Per floor: task → layout → places (`BD.gen.sitePlan`: task places, then four optional sites in
+four other zones, never the start or stairs zone; 1F has a second chest instead of the rift) → fills (a zone
+whose centre holds a place does not take a `centre` fill) → office walls (two 3-wide doors per 16 cells) →
+stairs → `BD.gen.checkV2(grid, layout)` (§5.8 1–6) with 20 retries, then plaza all-open; `BD.gen.checkRunV2(run)`
+is §5.8-7. `floor = {…, floorKind, task, guardian, layout: {start, stairs, flasks: [], sites, targets, zones},
+stage: {layout, zones: [{zx, zy, fill}], props: [{id, x, y, w, h, state?}]}}` — every SOLID cell belongs to
+exactly one named prop. The rooftop is 28 × 28 with its four pillars named (`pillar_big`, castle).
+
+**Touch pickups** (§6; src/core/33_pickups.js, src/content/pickups/): `BD.pickups.register({id, touch, take(w, p)
+→ bool})`; `BD.pickupRt.drop(w, kind, x, y, {always})`. flask, halo (every shard flies in), holy_stone (7u:
+fodder die, others 40 and 2u). Supply: an elite's flask, a chest's halo and a rift's stone always; a threat's
+death 4 % / 2 % / 1.5 % while fewer than 4 / 2 / 2 lie on the floor; no generator flask on 1F–5F, two on the
+rooftop. Drawers: `BD.render.pickups` by kind. A pickup emits `pickup {kind, x, y, value}`. Task objects (the
+nests) are enemy-like bodies made with `BD.W.makeEnemy(w, def, …)` from a def that is not an enemy kind,
+`role: 'object'`, drawn by `BD.render.objects`.
 
 ### 10.5 Events and the state dump
 
@@ -970,8 +989,10 @@ New GDD-V2 §4.7 events: `level_up {level}`, `choice_open {kind, options}` (opti
   `level_up`, `choice_open`, `choice_pick`, `surge`, `floor_clear`, `dissolve`. Sounds added:
   `shard` (opts.step 0–12 semitones), `level_up`, `choice_open`, `multi_kill`; `kill` ≤ 8/s, `hit` ≤ 10/s.
 * **Minimap / edge markers:** the engine's §9.4 ones are on for v2 floors (`floor.offscreen`);
-  guardians are threats, open stairs an objective. Sites and task targets: add `e.flags.marker` or a
-  `BD.render.markers` source.
+  guardians are threats, open stairs an objective. Sites and task targets come from the `places` source
+  (src/content/sites/markers.js): task places gold on the edge and the minimap, optional sites on the
+  minimap only (`edge: false`; '?' until known, grey once used), the spring and flasks on the edge at
+  HP ≤ 50 (`mini: false`); a marker may carry `miniIcon(g, x, y)` for its minimap glyph.
 
 ### 10.7 Bot and measurement
 
@@ -1013,7 +1034,8 @@ floor.stage = {
   zones:  [{ zx, zy, fill }],                                   // 16 × 16 zones; fill = a §5.2 id
   props:  [{ id, x, y, w, h, v?, state? }],                     // footprint cells must be SOLID
 };
-w.sites = [{ id, x, y, state }];      // or floor.sites — places to go (§11.4), drawn depth-sorted
+w.sites = [{ kind, x, y, state, … }]; // the engine's running list (§10.4); floor.sites = [{ id, x, y, state }]
+                                      // for display only (the showcase) — places to go (§11.4), depth-sorted
 ```
 
 * With no `floor.stage`, the layout comes from the v1 pattern (`aisle`/`cover` → office,

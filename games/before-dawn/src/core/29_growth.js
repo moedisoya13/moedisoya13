@@ -7,7 +7,7 @@
 //   BD.growth.need(level)            shards from `level` to the next (C.V2.xp)
 //   BD.growth.addXp(w, n)            gauge +n; a full gauge levels up and queues a choice
 //   BD.growth.update(w, dt)          per tick: shards pop, get drawn in, are picked up; opens a queued choice
-//   BD.growth.open(w, kind)          opens the choice overlay now (kind 'level'; 'chest' later)
+//   BD.growth.open(w, kind)          opens the choice overlay now (kind 'level'; 'chest': BD.growth.kinds)
 //   BD.growth.options(w)             the three options §4.3 would offer now
 //   BD.growth.pick(w, i)             answer the open choice (app.cmd('choice', 'pick', i))
 //   BD.growth.boonStats(w, s)        boons' stats hooks (hero.computeStats)
@@ -127,8 +127,11 @@ G.options = function (w) {
   return out;
 };
 
+// Other choices built on the same overlay give their own options by kind (the chest: one of your
+// own cards, src/content/sites/chest.js): BD.growth.kinds[kind] = (w) → options.
+G.kinds = {};
 G.open = function (w, kind) {
-  const options = G.options(w);
+  const options = G.kinds[kind] ? G.kinds[kind](w) : G.options(w);
   w.choice = { kind: kind || 'level', options, level: w.hero.level - (w.choiceQueue || 0), lastCards: options.filter((o) => o.kind === 'card').map((o) => o.id) };
   w.choiceOpen = true;
   w.hero.dashBuf = 0;

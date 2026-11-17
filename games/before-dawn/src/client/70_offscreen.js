@@ -3,7 +3,8 @@
 //   w.floor.offscreen = {indicators, minimap} (set by a floor plan, BD.gen.plans) wins, else
 //   C.OFFSCREEN ('auto' = on when the floor does not fit the screen). Every v1 room fits → off.
 // Markers come from BD.render.markers sources (DOM-free, content may register its own):
-//   collect(w, out) → out.push({x, y, kind: 'objective'|'threat', color?, icon?(g, x, y, r), id?})
+//   collect(w, out) → out.push({x, y, kind: 'objective'|'threat', color?, icon?(g, x, y, r), id?,
+//                               edge? (false: minimap only), mini? (false: edge only), r? (minimap dot radius)})
 // Built in: 'flagged' (enemies or pickups with .flags.marker / .marker = 'threat'|'objective';
 // guardians and the boss count as threats) and 'flow' (lit altar, open stairs, available trial).
 //
@@ -67,6 +68,7 @@ OS.drawIndicators = function (g, ui, rect) {
   const cx = (R.x0 + R.x1) / 2, cy = (R.y0 + R.y1) / 2, t = ui.time;
   const list = [];
   for (const m of OS.markers(w)) {
+    if (m.edge === false) continue; // minimap only (GDD-V2 §5.7: altar, chest, rift)
     const [sx, sy0] = v.proj(m.x, m.y), sy = sy0 - 30;
     if (sx >= 0 && sx <= C.VIEW_W && sy >= 0 && sy <= C.VIEW_H) continue; // on screen
     list.push({ m, sx, sy, d: Math.hypot(sx - cx, sy - cy) });
@@ -127,8 +129,10 @@ OS.drawMinimap = function (g, ui, rect) {
   g.fillStyle = 'rgba(232,52,44,0.85)';
   for (const e of w.enemies) { if (e.dead) continue; const p = M(e.x, e.y); g.fillRect(p[0] - 1, p[1] - 1, 2, 2); }
   for (const m of OS.markers(w)) {
+    if (m.mini === false) continue;
     const p = M(m.x, m.y);
-    g.beginPath(); g.arc(p[0], p[1], 3.2, 0, Math.PI * 2); g.fillStyle = m.color || OS.COLORS[m.kind]; g.fill(); g.lineWidth = 1.2; g.strokeStyle = U.INK; g.stroke();
+    if (m.miniIcon) { m.miniIcon(g, p[0], p[1]); continue; }
+    g.beginPath(); g.arc(p[0], p[1], m.r || 3.2, 0, Math.PI * 2); g.fillStyle = m.color || OS.COLORS[m.kind]; g.fill(); g.lineWidth = 1.2; g.strokeStyle = U.INK; g.stroke();
   }
   // the screen (an upright rectangle in this projection)
   const sx = ox + (-v.rox) * k, sy = oy + (-v.roy) * k;

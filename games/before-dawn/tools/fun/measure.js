@@ -6,6 +6,9 @@
 //   node tools/fun/measure.js --seeds 1-40 --json out.json    also write every run's summary
 //   node tools/fun/measure.js --seeds 1-40 --check            compare with the v2 targets, exit 1 on a miss
 //   node tools/fun/measure.js --seeds 1-30 --cards            each of the cards alone vs an empty hand
+//   node tools/fun/measure.js --seeds 1-10 --task seals --floors 1   1F's task (GDD-V2 V10), stop after 1F
+// The table "task by task" gives, per floor task, how often it was finished and the guardian brought
+// down, and the times from floor entry (task done, guardian down, floor left).
 //
 // The numbers are per run; the table shows the median over runs (and the 10th–90th percentile).
 'use strict';
@@ -34,7 +37,7 @@ function runAll(hand, quiet) {
   const out = [];
   const t0 = Date.now();
   for (const s of seeds) {
-    const r = L.runNode(BD, { seed: s, hand, altar: o.altar || 'mixed', trial: !!o.trial, tier: Number(o.tier || 0) });
+    const r = L.runNode(BD, { seed: s, hand, altar: o.altar || 'mixed', trial: !!o.trial, tier: Number(o.tier || 0), task: o.task || undefined, maxFloor: o.floors ? Number(o.floors) : undefined });
     out.push(r);
     if (!quiet && o.verbose) console.log(`seed ${s}: ${r.result} ${r.floor}F ${r.sec}s kills/min ${r.total.killsPerMin} sparse ${r.total.sparsePct}% choices ${r.choiceGap.n} hand ${r.hand.join(',')}`);
   }
@@ -62,6 +65,25 @@ function table(runs) {
   for (let n = 1; n <= 6; n++) {
     if (!runs.some((r) => r.floors.some((y) => y.floor === n))) continue;
     console.log([n + 'F', f(n, 'sec'), f(n, 'killsPerMin'), f(n, 'onScreenMean'), f(n, 'sparsePct'), f(n, 'attackPct'), f(n, 'hurtsPerMin'), f(n, 'moved'), f(n, 'choices'), f(n, 'gains')].map((s) => String(s).padStart(10)).join(''));
+  }
+  // task by task: every floor entered with that task (GDD-V2 §5.4; V10: guardian down within budget × 1.5)
+  const tasks = {};
+  for (const r of runs) for (const x of r.floors) {
+    if (!x.taskKind || x.sec < 1) continue; // a floor only just entered when the run stopped
+    const k = tasks[x.taskKind] || (tasks[x.taskKind] = { n: 0, done: 0, down: 0, inBudget: 0, taskSec: [], clearSec: [], sec: [], floors: {} });
+    const budget = BD.C.DIRECTOR.floors[x.floor] ? BD.C.DIRECTOR.floors[x.floor].budget : 150;
+    k.n++; k.floors[x.floor] = (k.floors[x.floor] || 0) + 1;
+    if (x.taskSec !== undefined) { k.done++; k.taskSec.push(x.taskSec); }
+    if (x.clearSec !== undefined) { k.down++; k.clearSec.push(x.clearSec); if (x.clearSec <= budget * 1.5) k.inBudget++; }
+    k.sec.push(x.sec);
+  }
+  if (Object.keys(tasks).length) {
+    console.log('\ntask by task (floors entered with it; seconds from floor entry, median):');
+    console.log(['task', 'floors', 'task done', 'guard down', '≤ budget×1.5', 'task s', 'guard s', 'floor s', 'on floors'].map((s, i) => (i ? s.padStart(13) : s.padEnd(7))).join(''));
+    for (const id of Object.keys(tasks).sort()) {
+      const k = tasks[id], pc = (a) => Math.round((100 * a) / k.n) + ' %';
+      console.log([id.padEnd(7), k.n, pc(k.done), pc(k.down), pc(k.inBudget), q(k.taskSec, 0.5), q(k.clearSec, 0.5), q(k.sec, 0.5), Object.keys(k.floors).map((f) => f + 'F×' + k.floors[f]).join(' ')].map((s, i) => (i ? String(s).padStart(13) : s)).join(''));
+    }
   }
   const ttk = {};
   for (const r of runs) for (const k of Object.keys(r.ttk)) { const x = ttk[k] || (ttk[k] = { n: 0, hits: 0, sec: 0 }); x.n += r.ttk[k].n; x.hits += r.ttk[k].swingsToKill * r.ttk[k].n; x.sec += r.ttk[k].secToKill * r.ttk[k].n; }

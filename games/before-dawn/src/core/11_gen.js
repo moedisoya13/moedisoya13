@@ -264,49 +264,150 @@ G.runV2 = function (seed, tier, opts) {
   return { seed, tier, v2: true, domOrder: od.order, tasks, reduced: od.reduced, floors };
 };
 
-// One zone (16 × 16 cells) for a fill: x0/y0 its corner cell, cx/cy its centre (u), keep(x, y) →
-// true for cells that must stay floor (the start's 5u, a site's 5 × 5 centre).
-function zoneOf(zx, zy, keep) {
-  const Z = C.V2.floor.zone;
-  return { zx, zy, x0: zx * Z, y0: zy * Z, size: Z, cx: zx * Z + Z / 2, cy: zy * Z + Z / 2, keep };
+// ---- v2 floor generation (GDD-V2 §5.1–5.3, §5.5, §5.8) ----------------------------------------------
+// Per floor: task → layout → where the places go (task anchors, optional sites) → zone fills → zone
+// walls (office) → stairs → §5.8 checks; 20 retries on derived streams, then `plaza` with every zone
+// `open` (the places stay). The floor carries floor.stage = {layout, zones, props} for the art: every
+// block a fill or a wall puts is one catalogue prop whose footprint is exactly its SOLID cells.
+//
+//   floor.layout.sites   [{kind, x, y, zx, zy, optional}]   BD.sites kinds; w.sites is built from it
+//   floor.layout.targets [{kind, x, y, zx, zy}]              task places that are not sites (hunt's chiefs)
+//   floor.layout.zones   [fill × 9]                          zone order (0,0) (1,0) (2,0) (0,1) …
+//
+// The optional sites (들를 곳, §5.5): four per floor, one per zone without a task place, never in the
+// start or stairs zone; 1F has a second chest instead of the rift. Unregistered kinds are skipped.
+G.OPTIONAL_SITES = { first: ['altar', 'spring', 'chest', 'chest'], later: ['altar', 'spring', 'chest', 'rift'] };
+G.START_ZONE = [2, 2]; G.STAIRS_ZONE = [0, 0];
+const SITE_CLEAR = 2.6;  // keep: cells whose centre is within this of a place on both axes (the 5 × 5 and a bit)
+const ZK = (zx, zy) => zx + ',' + zy;
+
+// Where floor n's places stand. task.places(n) → [{kind, zone: [zx, zy], at?: [dx, dy]}] (the zone
+// centre unless `at` moves it); then the optional sites in shuffled free zones.
+// → [{kind, x, y, zx, zy, task, optional, site (a BD.sites kind), centre (on the zone centre)}]
+G.sitePlan = function (n, task, rng) {
+  const Z = C.V2.floor.zone, tdef = BD.tasks.get(task), out = [];
+  const used = new Set([ZK(G.START_ZONE[0], G.START_ZONE[1]), ZK(G.STAIRS_ZONE[0], G.STAIRS_ZONE[1])]);
+  for (const p of tdef.places ? tdef.places(n) : []) {
+    const [zx, zy] = p.zone, at = p.at || [0, 0];
+    out.push({ kind: p.kind, x: zx * Z + Z / 2 + at[0], y: zy * Z + Z / 2 + at[1], zx, zy, task: true, optional: false, site: BD.sites.has(p.kind), centre: !p.at });
+    used.add(ZK(zx, zy));
+  }
+  const free = [];
+  for (let zy = 0; zy < 3; zy++) for (let zx = 0; zx < 3; zx++) if (!used.has(ZK(zx, zy))) free.push([zx, zy]);
+  const kinds = rng.shuffle((n === 1 ? G.OPTIONAL_SITES.first : G.OPTIONAL_SITES.later).filter((k) => BD.sites.has(k)));
+  const zones = rng.shuffle(free);
+  for (let i = 0; i < kinds.length && i < zones.length; i++) {
+    const [zx, zy] = zones[i];
+    out.push({ kind: kinds[i], x: zx * Z + Z / 2, y: zy * Z + Z / 2, zx, zy, task: false, optional: true, site: true, centre: true });
+  }
+  return out;
+};
+
+// One zone for a fill (src/content/zones/fills.js): put / free / carve record what they place.
+function makeZone(grid, zx, zy, keep, site, blocks) {
+  const Z = C.V2.floor.zone, x0 = zx * Z, y0 = zy * Z;
+  const within = (x, y, w, h, lo, hi) => x >= x0 + lo && y >= y0 + lo && x + w - 1 <= x0 + hi && y + h - 1 <= y0 + hi;
+  const z = { zx, zy, x0, y0, size: Z, cx: x0 + Z / 2, cy: y0 + Z / 2, site, keep };
+  z.put = function (x, y, w, h, kind, o) {
+    const inner = !!(o && o.inner);
+    if (!within(x, y, w, h, inner ? 2 : 3, inner ? Z - 3 : Z - 4)) return false;
+    for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) if (!grid.walkable(x + i, y + j) || keep(x + i, y + j)) return false;
+    for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) grid.set(x + i, y + j, BD.CELL.SOLID);
+    blocks.push({ kind, x, y, w, h });
+    return true;
+  };
+  z.free = function (x, y, w, h, gap) {
+    for (let j = -gap; j < h + gap; j++) for (let i = -gap; i < w + gap; i++) if (grid.get(x + i, y + j) !== BD.CELL.FLOOR) return false;
+    return true;
+  };
+  z.carve = function (x, y, cell) { if (within(x, y, 1, 1, 2, Z - 3) && !keep(x, y)) grid.set(x, y, cell); };
+  return z;
 }
 
-// §5.1–5.3, §5.8 for the slice: a 48 × 48 floor of 3 × 3 zones; the task names its layout (§5.3,
-// purge → plaza); start (2, 2) and stairs (0, 0) are 'open', the centre zone takes the layout's
-// centre fill, the others one of its fills. The stairs door is on a back wall of the stairs zone.
-// Checks: connected, start / ring / sites on floor, no 1-cell passage, solid ≤ 14 %, the start's 5u
-// clear. 20 retries on derived streams, then every zone 'open'.
+// office (§5.2): one 1-cell wall on one of the two lines along each inner zone border, with two
+// 3-wide doors per 16 cells (starting 2–4 and 9–11 cells into the border: 4+ cells apart, never at
+// a crossing). Vertical lines run the whole floor; horizontal runs stop at them.
+function zoneWalls(grid, rng, blocks) {
+  const Z = C.V2.floor.zone, S = grid.w, segs = S / Z;
+  const vx = [Z, 2 * Z].map((b) => b - (rng.chance(0.5) ? 1 : 0)), hy = [Z, 2 * Z].map((b) => b - (rng.chance(0.5) ? 1 : 0));
+  const doors = () => { const d = []; for (let s = 0; s < segs; s++) { const a = rng.int(2, 4); d.push(s * Z + a, s * Z + rng.int(a + 7, 11)); } return d; };
+  const open = (ds, k) => ds.some((d) => k >= d && k <= d + 2);
+  const run = (cells, horiz) => { // consecutive wall cells → wall props
+    let i = 0;
+    while (i < cells.length) {
+      let j = i;
+      while (j + 1 < cells.length && cells[j + 1][horiz ? 0 : 1] === cells[j][horiz ? 0 : 1] + 1) j++;
+      const [x, y] = cells[i], len = j - i + 1;
+      blocks.push(horiz ? { kind: 'wall', x, y, w: len, h: 1 } : { kind: 'wall', x, y, w: 1, h: len });
+      i = j + 1;
+    }
+  };
+  for (const x of vx) {
+    const ds = doors(), cells = [];
+    for (let y = 0; y < S; y++) if (!open(ds, y) && grid.walkable(x, y)) { grid.set(x, y, BD.CELL.SOLID); cells.push([x, y]); }
+    run(cells, false);
+  }
+  for (const y of hy) {
+    const ds = doors(), cells = [];
+    for (let x = 0; x < S; x++) {
+      if (vx.includes(x)) { run(cells.splice(0), true); continue; }
+      if (!open(ds, x) && grid.walkable(x, y)) { grid.set(x, y, BD.CELL.SOLID); cells.push([x, y]); } else run(cells.splice(0), true);
+    }
+    run(cells, true);
+  }
+}
+
 G.floorV2 = function (seed, tier, n, domType, nextDomType, task) {
-  const F = C.V2.floor, S = F.size, Z = F.zone;
+  const F = C.V2.floor, S = F.size;
   const tdef = BD.tasks.get(task);
   const layoutId = tdef.layout && BD.gen.layouts.has(tdef.layout) ? tdef.layout : BD.gen.layouts.has('plaza') ? 'plaza' : BD.gen.layouts.ids()[0];
-  const lay = BD.gen.layouts.get(layoutId);
   const gk = G.guardianKinds(domType);
   const guardian = gk.length ? BD.sub(seed, 'gen', 'guardian' + n).pick(gk) : null;
-  const start = F.start.slice();
+  const start = F.start.slice(), gd = F.guardianAt;
   let out = null;
   for (let a = 0; a <= C.GEN_RETRIES && !out; a++) {
     const rng = BD.sub(seed, 'gen', 'v2floor' + n + '/try' + a), fallback = a === C.GEN_RETRIES;
-    const grid = BD.Grid(S, S);
-    const keep = (x, y) => M.dist(x + 0.5, y + 0.5, start[0], start[1]) <= 5.5;
+    const lid = fallback && BD.gen.layouts.has('plaza') ? 'plaza' : layoutId, lay = BD.gen.layouts.get(lid);
+    const plan = G.sitePlan(n, task, rng);
+    const grid = BD.Grid(S, S), blocks = [];
+    // cells that stay floor: the start's 5u, the guardian's spot, every place's 5 × 5 centre
+    const keep = (x, y) => {
+      const cx = x + 0.5, cy = y + 0.5;
+      if (M.dist(cx, cy, start[0], start[1]) <= 5.5 || M.dist(cx, cy, gd[0], gd[1]) <= 1.6) return true;
+      for (const p of plan) if (Math.abs(cx - p.x) <= SITE_CLEAR && Math.abs(cy - p.y) <= SITE_CLEAR) return true;
+      return false;
+    };
     const zones = [];
     for (let zy = 0; zy < 3; zy++) for (let zx = 0; zx < 3; zx++) {
-      const fill = fallback || (zx === 2 && zy === 2) || (zx === 0 && zy === 0) ? 'open' : zx === 1 && zy === 1 ? lay.centre : rng.pick(lay.fills);
-      BD.gen.fills.get(fill).apply(grid, zoneOf(zx, zy, keep), rng);
+      const centred = plan.some((p) => p.zx === zx && p.zy === zy && p.centre);
+      let fill;
+      if (fallback || (zx === G.START_ZONE[0] && zy === G.START_ZONE[1]) || (zx === G.STAIRS_ZONE[0] && zy === G.STAIRS_ZONE[1])) fill = 'open';
+      else if (zx === 1 && zy === 1) fill = lay.centre;
+      else {
+        const ok = lay.fills.filter((f) => !(centred && BD.gen.fills.get(f).centre));
+        fill = ok.length ? rng.pick(ok) : 'open';
+      }
+      BD.gen.fills.get(fill).apply(grid, makeZone(grid, zx, zy, keep, centred, blocks), rng);
       zones.push(fill);
     }
+    if (lay.walls) zoneWalls(grid, rng, blocks);
     // the stairs door: on the wy = 0 edge at wx 4..11 or the wx = 0 edge at wy 4..11 (§5.1)
     const side = rng.chance(0.5) ? 'y0' : 'x0', k = rng.int(4, 11);
     const ring = C.INTERACT.stairsRingOffset;
     const stairs = side === 'y0' ? { side, x: k + 0.5, y: 0, ringX: k + 0.5, ringY: ring } : { side, x: 0, y: k + 0.5, ringX: ring, ringY: k + 0.5 };
-    const flaskZones = [[0, 2], [2, 0], [1, 0], [0, 1], [2, 1], [1, 2]];
-    const fz = rng.pick(flaskZones), flask = BD.nav.resolve(grid, fz[0] * Z + Z / 2 + rng.range(-3, 3), fz[1] * Z + Z / 2 + rng.range(-3, 3), 0.3);
-    const layout = { start, stairs, altar: null, trialRift: null, rifts: [], flasks: [[flask[0], flask[1]]], wave1: [], sites: [], zones };
+    const strip = (p) => ({ kind: p.kind, x: p.x, y: p.y, zx: p.zx, zy: p.zy, optional: p.optional });
+    const layout = {
+      start, stairs, altar: null, trialRift: null, rifts: [], flasks: [], wave1: [], zones,
+      sites: plan.filter((p) => p.site).map(strip), targets: plan.filter((p) => !p.site).map(strip),
+    };
     const reason = G.checkV2(grid, layout);
     if (reason) { if (fallback) BD.fail(`gen: v2 floor ${n} failed even with every zone open: ${reason}`); continue; }
+    const prng = BD.sub(seed, 'gen', 'props' + n);
+    const props = blocks.map((b) => Object.assign({ x: b.x, y: b.y, w: b.w, h: b.h }, BD.gen.propFor(b.kind, lid, domType, prng)));
     out = {
-      n, v2: true, domType, nextDomType, w: S, h: S, cells: grid.toString(), shape: 'rect', pattern: layoutId, floorKind: layoutId,
+      n, v2: true, domType, nextDomType, w: S, h: S, cells: grid.toString(), shape: 'rect', pattern: lid, floorKind: lid,
       task, guardian, attempts: a + 1, fallback, layout,
+      stage: { layout: lid, zones: zones.map((fill, i) => ({ zx: i % 3, zy: Math.floor(i / 3), fill })), props },
       spawns: { w1: [], w2: [], w3: [], elites: [], guardian }, trial: null,
       offscreen: { indicators: true, minimap: true },
     };
@@ -314,45 +415,84 @@ G.floorV2 = function (seed, tier, n, domType, nextDomType, task) {
   return out;
 };
 
-// §5.8 1–5 for what the slice places.
+// §5.8 1–6 on one floor (7 is the run's: G.checkRunV2). null if every guarantee holds, else the
+// first broken one. ① every floor cell joins the start (4-way) ② start, stairs ring, every site and
+// target on floor (so joined) ③ every floor cell lies in a 2 × 2 of floor (no 1-cell way; doors and
+// bridges are 3) ④ SOLID ≤ 14 % of floor ⑤ a site's centre 5 × 5 is floor, places 12u apart, nothing
+// within 5u of the start ⑥ task places in different zones, optional sites in different zones, none
+// in the start or stairs zone.
 G.checkV2 = function (grid, layout) {
-  const pts = [layout.start, [layout.stairs.ringX, layout.stairs.ringY]].concat(layout.flasks, layout.sites.map((s) => [s.x, s.y]));
-  for (const p of pts) if (!grid.walkable(Math.floor(p[0]), Math.floor(p[1]))) return '§5.8-2 key point not on floor';
+  const sites = layout.sites || [], targets = layout.targets || [], places = sites.concat(targets);
+  const pts = [layout.start, [layout.stairs.ringX, layout.stairs.ringY]].concat(layout.flasks || [], places.map((s) => [s.x, s.y]));
+  for (const p of pts) if (!grid.walkable(Math.floor(p[0]), Math.floor(p[1]))) return '§5.8-2 key point not on floor at ' + p[0] + ',' + p[1];
   let floorN = 0;
   for (let i = 0; i < grid.cells.length; i++) if (grid.cells[i] === BD.CELL.FLOOR) floorN++;
   const field = BD.nav.bfs(grid, Math.floor(layout.start[0]), Math.floor(layout.start[1]));
   let reach = 0;
   for (let i = 0; i < field.length; i++) if (field[i] >= 0) reach++;
   if (reach !== floorN) return '§5.8-1 floor not connected';
-  for (let y = 0; y < grid.h; y++) for (let x = 0; x < grid.w; x++) {
-    if (!grid.walkable(x, y)) continue;
-    let ok = false;
-    for (let oy = -1; oy <= 0 && !ok; oy++) for (let ox = -1; ox <= 0 && !ok; ox++) {
-      if (grid.walkable(x + ox, y + oy) && grid.walkable(x + ox + 1, y + oy) && grid.walkable(x + ox, y + oy + 1) && grid.walkable(x + ox + 1, y + oy + 1)) ok = true;
-    }
-    if (!ok) return '§5.8-3 one-cell passage at ' + x + ',' + y;
+  const W = grid.w, c = grid.cells, FL = BD.CELL.FLOOR;
+  const fl = (x, y) => x >= 0 && y >= 0 && x < W && y < grid.h && c[y * W + x] === FL;
+  for (let y = 0; y < grid.h; y++) for (let x = 0; x < W; x++) {
+    if (c[y * W + x] !== FL) continue;
+    if (!((fl(x - 1, y - 1) && fl(x, y - 1) && fl(x - 1, y)) || (fl(x, y - 1) && fl(x + 1, y - 1) && fl(x + 1, y)) ||
+      (fl(x - 1, y) && fl(x - 1, y + 1) && fl(x, y + 1)) || (fl(x + 1, y) && fl(x, y + 1) && fl(x + 1, y + 1)))) return '§5.8-3 one-cell passage at ' + x + ',' + y;
   }
   const solid = grid.count(BD.CELL.SOLID);
-  if (solid > 0.14 * floorN) return '§5.8-4 solid cells above 14 %';
-  for (let y = 0; y < grid.h; y++) for (let x = 0; x < grid.w; x++) {
-    if (grid.walkable(x, y)) continue;
-    if (M.dist(x + 0.5, y + 0.5, layout.start[0], layout.start[1]) < 5) return '§5.8-5 obstacle within 5u of the start';
+  if (solid > 0.14 * floorN) return '§5.8-4 solid cells above 14 % (' + solid + ' of ' + floorN + ')';
+  for (let y = Math.floor(layout.start[1] - 5); y <= layout.start[1] + 5; y++) for (let x = Math.floor(layout.start[0] - 5); x <= layout.start[0] + 5; x++) {
+    if (!grid.walkable(x, y) && M.dist(x + 0.5, y + 0.5, layout.start[0], layout.start[1]) < 5) return '§5.8-5 obstacle within 5u of the start';
+  }
+  for (const s of sites) {
+    const sx = Math.floor(s.x), sy = Math.floor(s.y);
+    for (let oy = -2; oy <= 2; oy++) for (let ox = -2; ox <= 2; ox++) if (!grid.walkable(sx + ox, sy + oy)) return '§5.8-5 ' + s.kind + ' at ' + s.x + ',' + s.y + ': centre 5 × 5 not clear';
+  }
+  for (let i = 0; i < places.length; i++) for (let j = i + 1; j < places.length; j++) {
+    if (M.dist(places[i].x, places[i].y, places[j].x, places[j].y) < 12 - 1e-9) return '§5.8-5 ' + places[i].kind + ' and ' + places[j].kind + ' closer than 12u';
+  }
+  const zoneKey = (p) => (p.zx !== undefined ? p.zx + ',' + p.zy : Math.floor(p.x / 16) + ',' + Math.floor(p.y / 16));
+  const banned = [ZK(G.START_ZONE[0], G.START_ZONE[1]), ZK(G.STAIRS_ZONE[0], G.STAIRS_ZONE[1])];
+  for (const group of [places.filter((p) => !p.optional), places.filter((p) => p.optional)]) {
+    const keys = group.map(zoneKey);
+    if (new Set(keys).size !== keys.length) return '§5.8-6 two ' + (group[0].optional ? 'optional sites' : 'task places') + ' in one zone';
+    if (keys.some((k) => banned.includes(k))) return '§5.8-6 a place in the start or stairs zone';
+  }
+  return null;
+};
+
+// §5.8-7 on a whole run: 1F beast, every other type on 2F–5F, neighbours differ; 2F–5F's tasks are
+// each registered non-purge task once (while there are four). null or the reason.
+G.checkRunV2 = function (run) {
+  const o = run.domOrder;
+  if (o[0] !== 'beast') return '§5.8-7 1F is ' + o[0];
+  const types = BD.director.mixes.ids().filter((t) => C.TYPES.includes(t) && t !== 'beast');
+  if (!types.every((t) => o.slice(1).includes(t))) return '§5.8-7 a type missing on 2F–5F';
+  if (o.some((t, i) => i && o[i - 1] === t)) return '§5.8-7 neighbouring floors share a type';
+  const others = BD.tasks.ids().filter((t) => t !== 'purge');
+  if (others.length >= 4) {
+    const later = run.tasks.slice(1);
+    if (new Set(later).size !== 4 || later.some((t) => t === 'purge')) return '§5.8-7 2F–5F tasks are not four different ones: ' + later.join(',');
   }
   return null;
 };
 
 // GDD-V2 §5.1: the rooftop is 28 × 28 open with four 2 × 2 pillars centred on (8, 8) (20, 8) (8, 20)
 // (20, 20); the boss in the centre, the hero at (24, 24), flasks at (4, 22) and (22, 4). Minions come
-// from the director (its rooftop mix); the boss's v1 summon list is empty.
+// from the director (its rooftop mix); the boss's v1 summon list is empty. The stage names the four
+// pillars (castle stone) and keeps domType 'rooftop' (the art's parapet, growths, gravel).
 G.rooftopV2 = function (seed) {
   const R = C.V2.roof, S = R.size;
-  const grid = BD.Grid(S, S);
-  for (const [px, py] of R.pillars) for (let oy = -1; oy <= 0; oy++) for (let ox = -1; ox <= 0; ox++) grid.set(px + ox, py + oy, BD.CELL.SOLID);
+  const grid = BD.Grid(S, S), props = [];
+  for (const [px, py] of R.pillars) {
+    for (let oy = -1; oy <= 0; oy++) for (let ox = -1; ox <= 0; ox++) grid.set(px + ox, py + oy, BD.CELL.SOLID);
+    props.push({ id: 'pillar_big', x: px - 1, y: py - 1, w: 2, h: 2, state: 'castle' });
+  }
   const boss = BD.enemies.all().filter((d) => d.type === 'boss')[0].id;
   return {
     n: 6, v2: true, domType: 'rooftop', nextDomType: null, w: S, h: S, cells: grid.toString(), shape: 'rect', pattern: 'rooftop', floorKind: 'rooftop',
     task: null, guardian: null, attempts: 1, fallback: false,
-    layout: { start: R.start.slice(), stairs: null, altar: null, trialRift: null, rifts: [], flasks: R.flasks.map((p) => p.slice()), wave1: [], sites: [], bossPos: R.boss.slice() },
+    layout: { start: R.start.slice(), stairs: null, altar: null, trialRift: null, rifts: [], flasks: R.flasks.map((p) => p.slice()), wave1: [], sites: [], targets: [], zones: [], bossPos: R.boss.slice() },
+    stage: { layout: 'rooftop', zones: [], props },
     spawns: { w1: [], w2: [], w3: [], elites: [], guardian: null, boss },
     summonType: null, summon: [], trial: null,
     offscreen: { indicators: true, minimap: true },

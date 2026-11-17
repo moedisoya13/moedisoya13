@@ -76,6 +76,7 @@ F.enterFloorV2 = function (w, n) {
     BD.taskRt.start(w);
   }
   BD.siteRt.start(w);
+  BD.pickupRt.start(w); // GDD-V2 §6: what threats leave behind
   BD.director.start(w);
 };
 
@@ -149,6 +150,7 @@ F.heroDies = function (w, cause) {
 };
 
 F.dropFlask = function (w, x, y) {
+  if (w.floor && w.floor.v2) { BD.pickupRt.drop(w, 'flask', x, y, { always: true }); return; } // GDD-V2 §6 (반드시 하나)
   const [px, py] = BD.nav.resolve(w.grid, x, y, 0.3);
   w.pickups.push({ id: W.id(w), kind: 'flask', x: px, y: py });
 };

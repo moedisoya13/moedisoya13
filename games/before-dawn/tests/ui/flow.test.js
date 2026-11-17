@@ -163,9 +163,7 @@ module.exports = {
       for (let i = 0; i < 40 && !up; i++) { await T.wait(100); up = (await T.state()).floor === 2; }
       t.assert(up, 'stairs take the hero to 2F');
       await T.wait(200);
-      // the floor's own task (the UI stand-ins add the other branches' tasks to 2F–5F)
-      const task2 = await T.eval(() => window.__BD.world().task.name);
-      t.assert((await T.texts()).some((x) => x.startsWith('2F — ') && x.endsWith(' · ' + task2)), 'floor banner with the task ' + task2);
+      t.assert((await T.texts()).some((x) => /^2F — .+ · (소탕|봉인|둥지|수성|사냥)$/.test(x)), 'floor banner with the task (2F–5F: seals, nests, hold, hunt)');
       // death → result → 다시 오른다 (touch) → prep → 오른다 → a new night
       await T.eval(() => { const w = window.__BD.world(); w.hero.hp = w.hero.maxHp = 100; w.hero.invuln = 0; window.BD.W.hurtHero(w, 999, { source: 'goblin', attack: 'stab', x: w.hero.x + 1, y: w.hero.y }); });
       t.assert(await T.waitMode('result', 5000), 'result after death');

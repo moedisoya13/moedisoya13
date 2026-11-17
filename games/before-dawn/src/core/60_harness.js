@@ -46,7 +46,7 @@ BD.dump = function (app) {
     // GDD-V2 §10.3
     shards: w.shards.length,
     task: w.task ? { kind: w.task.kind, value: w.task.value, goal: w.task.goal, done: w.task.done } : null,
-    sites: w.sites.map((x) => ({ id: x.id, kind: x.kind, x: r4(x.x), y: r4(x.y), state: x.state, known: x.known, optional: x.optional })),
+    sites: w.sites.map((x) => ({ id: x.id, kind: x.kind, x: r4(x.x), y: r4(x.y), phase: x.phase, state: x.state, known: x.known, optional: x.optional, progress: r4(x.progress) })),
     director: w.director ? { want: r4(w.director.want), have: w.director.have, tokens: r4(w.director.tokens), surge: w.director.surge, state: w.director.state } : null,
     choice: w.choiceOpen && w.choice ? { kind: w.choice.kind, options: w.choice.options.map((o) => o.pick) } : null,
     unseenHits: w.stats.unseenHits,

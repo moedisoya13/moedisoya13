@@ -271,6 +271,8 @@ ST.pushItems = function (items, g, v, w, t, actorOn) {
     behind.push([e.x + e.y, p[0], p[1] - 34 * (e.size || 1)]);
   }
   for (const tg of w.telegraphs) { const p = v.proj(tg.x, tg.y); behind.push([tg.x + tg.y, p[0], p[1]]); }
+  // a place to go is never hidden by a tall prop in front of it (GDD-V2 §5.5: it must be found)
+  for (const s of w.sites) { if (!actorOn(v, s.x, s.y, 1)) continue; const p = v.proj(s.x, s.y); behind.push([s.x + s.y, p[0], p[1] - 30]); }
   const covers = (k, x0, y0, x1, y1) => {
     for (const b of behind) if (b[0] < k - 0.3 && b[1] > x0 && b[1] < x1 && b[2] > y0 && b[2] < y1) return true;
     return false;
@@ -297,7 +299,7 @@ ST.pushItems = function (items, g, v, w, t, actorOn) {
     items.push({ k: tr.x + tr.y, f: () => SI.draw(g, v, 'rift', tr.x, tr.y, tr.state, t, theme) });
   }
   for (const list of [w.sites, w.floor.sites]) if (Array.isArray(list)) for (const s of list) {
-    const id = s.id || s.kind;
+    const id = s.kind || s.id; // the engine's w.sites carry kind (id is a number); floor.sites may name it by id
     if (!SI.defs.has(id) || !actorOn(v, s.x, s.y, 1)) continue;
     items.push({ k: s.x + s.y, f: () => SI.draw(g, v, id, s.x, s.y, s.state === undefined ? SI.defs.get(id).states[0] : s.state, t, theme) });
   }

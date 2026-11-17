@@ -70,14 +70,18 @@ W.enemyById = (w, id) => { for (const e of w.enemies) if (e.id === id) return e;
 
 // ---- enemies -------------------------------------------------------------------------
 
-// Create an enemy now (no warning). opts: elite, guardian, via, trial, wave, noAttack, dormant.
+// Create an enemy now (no warning). opts: elite, guardian, via, trial, wave, noAttack, dormant,
+// flags (copied onto e.flags: keep, marker, and the tags tasks and sites put on what they spawn).
 // v2: def.role ('fodder' | 'threat'; guardians, elites and the boss are their own roles), def.scale
 // (sprite size of a variant: e.size = scale × elite/guardian size, the body radius is def.radius ×
 // the elite/guardian size only), the floor's director row multiplies a regular enemy's HP and
 // damage (GDD-V2 §3.4). opts.dormant {r}: stands still until the hero comes within r u.
+// `kind` may also be a def object that is not an enemy kind — a task object such as a nest
+// (src/content/tasks/nests.js): it gets the same bookkeeping without joining BD.enemies.
 W.makeEnemy = function (w, kind, x, y, opts) {
   opts = opts || {};
-  const def = BD.enemies.get(kind);
+  const def = typeof kind === 'string' ? BD.enemies.get(kind) : kind;
+  kind = def.id;
   const boss = def.type === 'boss';
   let size = 1, hpMul = w.mods.enemyHp, dmgMul = 1, tg = 1, knock = def.knockScale !== undefined ? def.knockScale : 1;
   let hp = def.hp;
@@ -98,7 +102,7 @@ W.makeEnemy = function (w, kind, x, y, opts) {
     speed: def.speed * w.mods.enemySpeed, dmg: Math.round(def.dmg * dmgMul), dmgMul, tgScale: tg, knockScale: knock,
     state: 'idle', face: Math.atan2(w.hero.y - y, w.hero.x - x),
     noAttackT: opts.noAttack || 0, stunT: 0, knock: null, lunging: false,
-    statuses: {}, flags: {}, mem: {}, slot: null, down: null, revives: 0, dead: false,
+    statuses: {}, flags: Object.assign({}, opts.flags), mem: {}, slot: null, down: null, revives: 0, dead: false,
     lastSource: null, squash: 0, bornT: w.t,
     // §5.6-1: seconds inside the combat window (an enemy made inside it counts as having been there,
     // so placed enemies and rifts keep their v1 timing; the director spawns outside S);
