@@ -3,7 +3,7 @@
 const { world, place, evs, hitsOn, swingOnce, until } = require('./_kit');
 
 const kill = (BD, w) => { const e = place(BD, w, 'goblin', 3, 3); BD.combat.kill(w, e); };
-const reasons = (w, id) => w.bus.recent(4000).filter((x) => x.type === 'combo_change' && x.cardId === id).map((x) => [x.from, x.to, x.reason]);
+const reasons = (w, id) => w.bus.recent(4000).filter((x) => x.event === 'combo_change' && x.cardId === id).map((x) => [x.from, x.to, x.reason]);
 
 module.exports = {
   'chain_slash: +1 per kill (any source) to 5; +2 swing damage per stack; toast at ×5'(t) {
@@ -153,7 +153,7 @@ module.exports = {
     e.x += 6; w.hero.atkTimer = 99;
     H.step(4 * 60 + 2);                                                                       // timeout: only 연참
     t.eq(BD.cardRt.get(w, 'chain_slash').state.stack, 0);
-    const bad = w.bus.recent(4000).filter((x) => x.type === 'combo_change' && x.to < x.from)
+    const bad = w.bus.recent(4000).filter((x) => x.event === 'combo_change' && x.to < x.from)
       .filter((x) => !({ chain_slash: 'timeout', flawless: 'hurt', one_flash: 'too_close' })[x.cardId].includes(x.reason));
     t.eq(bad, []);
   },

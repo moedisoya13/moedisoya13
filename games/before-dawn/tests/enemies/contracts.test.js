@@ -58,7 +58,7 @@ module.exports = {
     const bindLeft = e.statuses.bind.t;
     t.near(bindLeft, BD.cards.get('mana_backlash').T.bind, 3 * TICK, 'bind 2.5 s');
     H.step(Math.floor((bindLeft - 0.05) / TICK));
-    const blinks = () => w.bus.recent(4000).filter((x) => x.type === 'telegraph' && x.ownerId === e.id && x.attack === 'blink');
+    const blinks = () => w.bus.recent(4000).filter((x) => x.event === 'telegraph' && x.ownerId === e.id && x.attack === 'blink');
     t.eq(blinks().length, 0, 'no teleport warning while bound (hero within 2u all along)');
     t.assert(BD.W.edgeDist(w, e) <= T.near, 'still within 2u, cornered');
     until(H, () => !e.statuses.bind, 30);
@@ -114,7 +114,7 @@ module.exports = {
       g.stunT = 1e9; g.hp = 3;
       until(H, () => g.dead, 240);
       t.assert(g.dead, 'goblin died');
-      const kill = w.bus.recent(4000).find((x) => x.type === 'kill' && x.enemyId === g.id);
+      const kill = w.bus.recent(4000).find((x) => x.event === 'kill' && x.enemyId === g.id);
       t.eq(kill.burning, true, 'died burning');
       t.eq(BD.cardRt.get(w, 'fire_pilgrimage').state.progress, 1, 'quest +1');
     }

@@ -16,7 +16,7 @@ function place(BD, w, kind, dx, dy, opts) {
   const e = BD.W.makeEnemy(w, kind, w.hero.x + dx, w.hero.y + dy, opts || {});
   return e;
 }
-function hitsOn(w, id) { return w.bus.recent(4000).filter((ev) => ev.type === 'hit' && ev.enemyId === id); }
+function hitsOn(w, id) { return w.bus.recent(4000).filter((ev) => ev.event === 'hit' && ev.enemyId === id); }
 
 function guard(BD, withBreak) {
   const { H, w } = setup(BD, withBreak ? ['armor_break'] : []);
@@ -42,7 +42,7 @@ exports.run = function (BD) {
     e.hp = 1; e.stunT = 1e9;
     H.step(40);
     const ev = w.bus.recent(4000);
-    const down = ev.some((x) => x.type === 'down' && x.enemyId === e.id), kill = ev.some((x) => x.type === 'kill' && x.enemyId === e.id);
+    const down = ev.some((x) => x.event === 'down' && x.enemyId === e.id), kill = ev.some((x) => x.event === 'kill' && x.enemyId === e.id);
     out.push({ name: 'holy_light ghoul: kill without down', ok: kill && !down, why: `kill=${kill} down=${down}` });
   }
   {
@@ -50,7 +50,7 @@ exports.run = function (BD) {
     const e = place(BD, w, 'slime', 1.2, 0); // slimes are always wet
     e.hp = 999; e.stunT = 1e9;
     H.step(40);
-    const steam = w.bus.recent(4000).some((x) => x.type === 'hit' && x.source === 'steam');
+    const steam = w.bus.recent(4000).some((x) => x.event === 'hit' && x.source === 'steam');
     out.push({ name: 'flame on a wet enemy → steam hit', ok: steam, why: `steam hit=${steam}` });
   }
   {

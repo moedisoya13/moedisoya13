@@ -10,7 +10,7 @@ function world(t, o) {
   H.input({ mx: 0, my: 0 });
   return { BD, H, w };
 }
-const types = (w, from) => w.bus.recent(4000).slice(from || 0).map((e) => e.type);
+const types = (w, from) => w.bus.recent(4000).slice(from || 0).map((e) => e.event);
 
 module.exports = {
   'swing processing order ①…⑧'(t) {
@@ -19,7 +19,7 @@ module.exports = {
     e.hp = 1; e.stunT = 99;
     const n0 = w.bus.count();
     H.step(2);
-    const seq = w.bus.recent(w.bus.count() - n0).map((x) => x.type).filter((x) => ['swing', 'strike', 'hit', 'kill', 'swing_end'].includes(x));
+    const seq = w.bus.recent(w.bus.count() - n0).map((x) => x.event).filter((x) => ['swing', 'strike', 'hit', 'kill', 'swing_end'].includes(x));
     t.eq(seq, ['swing', 'strike', 'hit', 'kill', 'swing_end']);
   },
   'first enemy in reach is cut at once; no swing without a target'(t) {
@@ -44,7 +44,7 @@ module.exports = {
     const e = BD.W.makeEnemy(w, 'slime', w.hero.x + 1.2, w.hero.y, {});
     e.hp = 500; e.stunT = 99;
     H.step(2);
-    const steam = w.bus.recent(200).filter((x) => x.type === 'hit' && x.source === 'steam');
+    const steam = w.bus.recent(200).filter((x) => x.event === 'hit' && x.source === 'steam');
     t.assert(steam.length >= 1, 'steam hit');
     t.eq(steam[0].dmg, 8); t.eq(steam[0].direct, false);
     t.assert(e.statuses.wet, 'slime stays wet');
@@ -56,7 +56,7 @@ module.exports = {
     a.hp = b.hp = 500; a.stunT = b.stunT = 99;
     BD.status.apply(w, a, 'burn', { direct: true });
     H.step(31);
-    const burns = w.bus.recent(400).filter((x) => x.type === 'hit' && x.source === 'burn' && x.enemyId === a.id);
+    const burns = w.bus.recent(400).filter((x) => x.event === 'hit' && x.source === 'burn' && x.enemyId === a.id);
     t.eq(burns.length, 1); t.eq(burns[0].dmg, 3);
     t.assert(b.statuses.burn, 'spread to the neighbour');
   },
@@ -66,7 +66,7 @@ module.exports = {
     const e = BD.W.makeEnemy(w, 'goblin', 1.1, w.hero.y, {});
     e.hp = 500; e.stunT = 0;
     H.step(20);
-    const slam = w.bus.recent(400).filter((x) => x.type === 'hit' && x.source === 'slam');
+    const slam = w.bus.recent(400).filter((x) => x.event === 'hit' && x.source === 'slam');
     t.assert(slam.length >= 1, 'slam hit'); t.eq(slam[0].dmg, 8);
   },
   'dash: passes enemies, 5 dmg body hit, dodge once per attack'(t) {
@@ -81,9 +81,9 @@ module.exports = {
     H.input({ mx: 0, my: 0 });
     H.step(12);
     const ev = w.bus.recent(400);
-    const dashHit = ev.find((x) => x.type === 'hit' && x.source === 'dash');
+    const dashHit = ev.find((x) => x.event === 'hit' && x.source === 'dash');
     t.assert(dashHit && dashHit.dmg === 5 && dashHit.direct, 'dash body hit');
-    t.eq(ev.filter((x) => x.type === 'dodge').length, 1);
+    t.eq(ev.filter((x) => x.event === 'dodge').length, 1);
     t.eq(w.hero.hp, 100);
     t.assert(Math.hypot(w.hero.x - e.x, w.hero.y - e.y) > 0.5, 'went through');
   },
@@ -156,7 +156,7 @@ module.exports = {
     const far = BD.W.makeEnemy(w, 'goblin', 1.5, 1.5, {}); far.stunT = 99;
     H.step(60 * 4 + 2);
     t.eq(c.state.stack, 0);
-    const ev = w.bus.recent(400).filter((x) => x.type === 'combo_change');
+    const ev = w.bus.recent(400).filter((x) => x.event === 'combo_change');
     t.eq(ev.map((x) => x.reason), ['gain', 'timeout']);
   },
   'hero projectile (wave): ranged acquire with LOS, hits at 0.6 factor, skips blade hits'(t) {
@@ -164,7 +164,7 @@ module.exports = {
     w.hero.x = 2.5; w.hero.y = 2.5;
     const e = BD.W.makeEnemy(w, 'slime', 7.5, 2.5, {}); e.hp = 500; e.stunT = 99;
     H.step(40);
-    const hits = w.bus.recent(400).filter((x) => x.type === 'hit' && x.source === 'wave');
+    const hits = w.bus.recent(400).filter((x) => x.event === 'hit' && x.source === 'wave');
     t.assert(hits.length >= 1, 'wave hit');
     t.eq(hits[0].dmg, Math.round(10 * 0.6));
   },
@@ -174,7 +174,7 @@ module.exports = {
     H.step(1);
     const swings = w.bus.counts().swing;
     H.step(13);
-    const echo = w.bus.recent(400).filter((x) => x.type === 'hit' && x.source === 'echo');
+    const echo = w.bus.recent(400).filter((x) => x.event === 'hit' && x.source === 'echo');
     t.eq(echo.length, 1); t.eq(echo[0].dmg, 5);
     t.eq(w.bus.counts().swing, swings);
     t.eq(w.bus.counts().vfx, swings);
@@ -183,7 +183,7 @@ module.exports = {
     const BD = t.load({ extraFiles: [t.fixture('test_cards.js')] });
     const r = BD.simRun({ seed: 4, unlocked: ['test_flame', 'test_tide'], hand: ['chain_slash', 'pierce'] });
     const ev = r.app.world.bus.recent(4000);
-    const swaps = ev.filter((x) => x.type === 'card_swap');
+    const swaps = ev.filter((x) => x.event === 'card_swap');
     t.assert(swaps.length >= 1, 'a swap happened');
     t.assert(swaps.every((x) => BD.cardRt.pool(['test_flame', 'test_tide']).includes(x.inId)));
     t.eq(swaps[0].slot, 1); // slot 0 holds the combo card (conditional) → leftmost non-conditional

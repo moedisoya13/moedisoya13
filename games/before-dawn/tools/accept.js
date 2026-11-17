@@ -369,7 +369,7 @@ async function main() {
       await touch('pointerdown', 600, 380);
       await p.waitForTimeout(150);
       await touch('pointerup', 600, 380);
-      const dashes = await p.evaluate(() => window.__BD.events(400).filter((e) => e.type === 'dash').length);
+      const dashes = await p.evaluate(() => window.__BD.events(400).filter((e) => e.event === 'dash').length);
       await p.setViewportSize({ width: 720, height: 1280 });
       await p.waitForTimeout(200);
       const r0 = await p.evaluate(() => window.__BD.state());

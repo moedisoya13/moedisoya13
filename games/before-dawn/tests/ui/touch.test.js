@@ -12,7 +12,7 @@ async function playing(t, extra) {
   return T;
 }
 const hero = (T) => T.eval(() => { const h = window.__BD.world().hero; return { x: h.x, y: h.y }; });
-const dashes = (T) => T.eval(() => window.__BD.events(400).filter((e) => e.type === 'dash').length);
+const dashes = (T) => T.eval(() => window.__BD.events(400).filter((e) => e.event === 'dash').length);
 const stick = (T) => T.eval(() => window.BD.client.input.stick());
 const has = (arr, x) => arr.some((s) => s === x);
 

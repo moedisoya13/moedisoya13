@@ -32,7 +32,7 @@ function place(BD, w, kind, dx, dy, opts) {
   return e;
 }
 
-const evs = (w, type, pred) => w.bus.recent(4000).filter((e) => e.type === type && (!pred || pred(e)));
+const evs = (w, type, pred) => w.bus.recent(4000).filter((e) => e.event === type && (!pred || pred(e)));
 const hitsOn = (w, e, source) => evs(w, 'hit', (h) => h.enemyId === e.id && (!source || h.source === source));
 
 // Step until fn() is true (max n ticks). Returns ticks used, or -1.

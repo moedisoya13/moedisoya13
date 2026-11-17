@@ -103,7 +103,7 @@ module.exports = {
       t.assert(engrave && !engrave.disabled, '새긴다 enabled after choosing a slot');
       await T.tap('engrave');
       t.eq(await T.overlay(), null);
-      t.assert((await T.events(50)).some((e) => e.type === 'card_swap' && e.slot === 2));
+      t.assert((await T.events(50)).some((e) => e.event === 'card_swap' && e.slot === 2));
       await openAltar(T); await T.wait();
       await T.tap('later');
       t.eq(await T.overlay(), null, '나중에 closes');

@@ -37,7 +37,7 @@ module.exports = {
     B2.combat.damage(w2, b, 1, { source: 'burst', direct: false });
     H2.step(1);
     t.assert(b.dead, 'the corpse is finished on the next tick');
-    t.eq(w2.bus.recent(400).filter((x) => x.type === 'revive').length, 0);
+    t.eq(w2.bus.recent(400).filter((x) => x.event === 'revive').length, 0);
   },
   'armor_break: ignores the front guard; cracks +15 % each, max 5, kept on the enemy'(t) {
     const { BD, H, w } = world(t);
@@ -50,7 +50,7 @@ module.exports = {
     for (let i = 0; i < 7; i++) swingOnce(B2, H2, w2);
     t.eq(hitsOn(w2, k).map((x) => x.dmg), [10, 12, 13, 15, 16, 18, 18]);
     t.eq(k.statuses.sunder.n, 5);
-    t.eq(w2.bus.recent(4000).filter((x) => x.type === 'vfx' && x.kind === 'armor_shards').length, 7);
+    t.eq(w2.bus.recent(4000).filter((x) => x.event === 'vfx' && x.kind === 'armor_shards').length, 7);
     B2.cardRt.unequip(w2, 0);
     t.eq(k.statuses.sunder.n, 5, 'permanent on that enemy');
   },

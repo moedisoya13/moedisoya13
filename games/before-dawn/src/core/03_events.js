@@ -2,11 +2,14 @@
 // undeclared name or a payload missing a declared field throws.
 // GDD §5.2 events are declared here. Engine extras (presentation hooks) are declared
 // below them. Content may declare its own with BD.events.declare(name, fields).
+// emit() stamps the event name on the payload as `ev.event` (reserved key); `type` stays
+// the payload's own field (the enemy type in hit/kill, GDD §5.2).
 
 BD.events = {
   decl: Object.create(null),
   declare(name, fields, opts) {
     if (BD.events.decl[name]) BD.fail(`event '${name}' declared twice`);
+    if (fields && fields.includes('event')) BD.fail(`event '${name}': 'event' is reserved for the event name`);
     BD.events.decl[name] = { fields: fields || [], extra: !!(opts && opts.extra) };
   },
   names() { return Object.keys(BD.events.decl).sort(); },
@@ -91,7 +94,7 @@ BD.Bus = function () {
       if (!d) BD.fail(`bus.emit: undeclared event '${name}'`);
       payload = payload || {};
       for (const f of d.fields) if (payload[f] === undefined) BD.fail(`event '${name}' missing field '${f}'`);
-      payload.type = name;
+      payload.event = name;   // the event name; never 'type', which hit/kill carry as the enemy type (GDD §5.2)
       if (name !== 'tick') {
         log[count % LOG_MAX] = payload;
         count++;

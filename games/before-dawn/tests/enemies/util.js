@@ -35,7 +35,7 @@ function until(H, pred, max) {
 // Events of `type` since index `from` of the bus log.
 function evs(w, type, from) {
   const n = w.bus.count() - (from || 0);
-  return w.bus.recent(Math.min(n, 4000)).filter((e) => !type || e.type === type);
+  return w.bus.recent(Math.min(n, 4000)).filter((e) => !type || e.event === type);
 }
 
 // Count living enemies of a kind.
