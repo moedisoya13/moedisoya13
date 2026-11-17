@@ -47,11 +47,7 @@ F.born = function (e, w) {
   e.hp = e.maxHp = hp;
   e.flags.marker = 'threat'; // §5.7: shown at the screen edge while it lives
 };
-F.eliteKind = function (w, type) { // the horde mix's `elite` (src/content/floors/*.js)
-  type = type || (w.floor && w.floor.domType);
-  const mx = BD.director.mixes.has(type) ? BD.director.mixes.get(type) : null;
-  return (mx && mx.elite) || 'slime';
-};
+F.eliteKind = (w, type) => BD.director.eliteKind(w, type); // the horde mix's `elite` (src/core/28_director.js)
 
 // ---- attack slots (§3.5) --------------------------------------------------------------------------
 function waiting(w) {

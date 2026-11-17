@@ -1,6 +1,6 @@
 // 사냥 (hunt) — GDD-V2 §5.4. Three chiefs in different zones — (0, 2), (2, 0) and beside the ring of
 // (1, 1). A chief is an elite of the floor's type (BD.places.eliteKind) standing with a pack of six;
-// the group moves when any of it comes into view. Marked on the minimap and the screen edge from the
+// the group stands until any of it is seen (dormant {view: true}), then moves together. Marked on the minimap and the screen edge from the
 // start. All three down → the guardian. Layout: ruin (planters, cubicles, rings and pillars).
 const PACK = 6;
 
@@ -15,7 +15,7 @@ BD.tasks.register({
     task.chiefs = [];
     (w.floor.layout.targets || []).filter((t) => t.kind === 'chief').forEach((t, i) => {
       const group = 'hunt:' + i;
-      const chief = BD.W.makeEnemy(w, kind, t.x, t.y, { via: 'placed', elite: true, dormant: { r: 7 }, flags: { keep: true, target: true, chief: true, wake: group } });
+      const chief = BD.W.makeEnemy(w, kind, t.x, t.y, { via: 'placed', elite: true, dormant: { view: true }, flags: { keep: true, target: true, chief: true, wake: group } });
       task.chiefs.push(chief.id);
       const pack = [];
       for (let k = 0; k < PACK; k++) pack.push(P.fodder(w, rng));

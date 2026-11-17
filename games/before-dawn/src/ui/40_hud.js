@@ -426,7 +426,8 @@ BD.ui.hud.register({
     const ra = BD.client.input.st ? ui.time - BD.client.input.st.refusedAt : 9;
     const hx = cx;
     if (ra >= 0 && ra < 0.15) cx += Math.sin(ra * Math.PI * 2 / 0.075) * 3 / sc;
-    const cd = K.clamp(h.dashCd / C.DASH.cd, 0, 1), ready = cd <= 0;
+    // the arc runs against the cooldown this dash started (가벼운 발 lowers it: hero.stats.dashCd)
+    const cd = K.clamp(h.dashCd / ((h.stats && h.stats.dashCd) || C.DASH.cd), 0, 1), ready = cd <= 0;
     K.circle(g, cx + 3, cy + 4, r); g.fillStyle = K.INK; g.fill();
     K.circle(g, cx, cy, r); g.fillStyle = ready ? '#1e1b16' : '#0f0f13'; g.fill();
     g.save(); K.circle(g, cx, cy, r); g.clip(); g.fillStyle = ready ? '#2c271d' : '#17161c'; g.fillRect(cx - r, cy - r, 2 * r, r * 0.85); g.restore();

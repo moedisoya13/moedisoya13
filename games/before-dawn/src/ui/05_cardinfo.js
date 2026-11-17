@@ -11,7 +11,8 @@ CI.ORDER = ['pierce', 'whirl', 'sword_wave', 'flame', 'lightning', 'tide', 'leec
   'chain_slash', 'flawless', 'one_flash'];
 
 // Unlock conditions in words (GDD §11 as GDD-V2 §8 changes them). prog(save) → [current, goal].
-// A card def may carry its own words and progress (unlockText, unlockProgress(save)); they win.
+// The card defs carry their own words (def.unlockText, the cards side's — they win); the texts here
+// stay only as the fallback for a def without them, the progress readers are this table's.
 const UNLOCK = {
   sword_wave: { text: '3층에 처음 도달', prog: (s) => [Math.min(3, s.bestFloor || 0), 3] },
   tide: { text: '누적 처치 4000', prog: (s) => [Math.min(4000, s.counters.kills || 0), 4000] },

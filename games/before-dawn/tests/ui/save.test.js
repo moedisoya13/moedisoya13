@@ -113,7 +113,12 @@ module.exports = {
     try {
       t.assert(has(await T.texts(), '최고 기록: 옥상 · 승리 1회'), 'record line from the v1 save');
       t.eq(await T.eval(() => window.__BD.app.save.counters.magicKills), 13, 'mageKills → magicKills');
-      await T.key('Enter'); await T.key('Enter');
+      // the title, then the preparation screen: Enter once each screen's menu is drawn (a busy page may
+      // still be on the previous screen after one key's wait)
+      await T.key('Enter');
+      t.assert(await T.waitMode('prep', 4000), 'preparation');
+      await T.wait(200); await T.key('Enter');
+      t.assert(await T.waitMode('play', 4000), 'the run starts');
       await T.eval(() => { const w = window.__BD.world(); w.t = 200; w.hero.level = 7; window.__BD.app.giveUp(); });
       t.assert(await T.waitMode('result', 4000));
       const v2 = await stored(T);

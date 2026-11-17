@@ -203,7 +203,7 @@ A.update = function (w, dt) {
     // GDD-V2 §5.6 / §3.5 bookkeeping: time inside the combat window, time near the hero
     e.viewT = W.inView(w, e.x, e.y) ? e.viewT + dt : 0;
     e.nearT = M.dist(e.x, e.y, h.x, h.y) - e.r <= near ? e.nearT + dt : 0;
-    if (e.dormant && M.dist(e.x, e.y, h.x, h.y) <= e.dormant.r) { e.dormant = null; W.emit(w, 'wake', { enemyId: e.id }); }
+    if (e.dormant && (e.dormant.view ? e.viewT > 0 : M.dist(e.x, e.y, h.x, h.y) <= e.dormant.r)) { e.dormant = null; W.emit(w, 'wake', { enemyId: e.id }); }
     if (e.down) {
       e.down.t -= dt;
       if (e.flags.noRevive) { BD.combat.kill(w, e); continue; }

@@ -15,8 +15,9 @@
 //    thumb steering, not a choice). The thumb already holding the stick when the overlay opens is
 //    the joystick's pointer and never reaches the overlay;
 //  - on a phone (picture below ×0.74) the cards fill the height and the type is ~35 % larger.
-// Option kinds other branches may add (chest, altar, unknown) draw by name and text with a
-// lettered seal; a card without level text shows its level number.
+// Option kinds other branches may add (unknown) draw by name and text with a lettered seal; a card
+// without level text shows its level number. The altar (kind 'altar', src/content/cards/_altar.js) is
+// this overlay too: its offers, then its three slots, with 기도한다 (4) and 나중에 / 돌아가기 (Esc) under them.
 
 const C = BD.C;
 const K = BD.ui.K;
@@ -34,13 +35,28 @@ const GR = BD.ui.growth = { gaugeFlash: 0, tipFlash: 0, shown: 0, lastShard: -9,
 // ---- what an option is ---------------------------------------------------------------------------
 const cardDef = (id) => (id && BD.cards.has(id) ? BD.cards.get(id) : null);
 const boonDef = (id) => (id && BD.boons.has(id) ? BD.boons.get(id) : null);
-function optionInfo(o) {
+// what an altar swap takes away with the emptied slot's card (quest progress, combo stacks)
+function lossLine(card) {
+  if (!card || !card.state) return null;
+  const st = card.state;
+  if (card.def.family === 'quest' && !st.awakened && st.progress > 0) return '진행 ' + st.progress + '/' + st.goal + '이 사라진다';
+  if (card.def.family === 'quest' && st.awakened) return '각성이 사라진다';
+  if (card.def.family === 'combo' && st.stack > 0) return '스택 ×' + st.stack + '이 사라진다';
+  return null;
+}
+function optionInfo(o, w) {
   const def = o.kind === 'card' ? cardDef(o.id) : null;
   if (o.kind === 'card') {
     const max = def ? BD.cardRt.maxLevel(def) : C.V2.maxCardLevel;
     const fam = def ? def.family : null;
-    const text = o.text && (!def || o.text !== def.desc || !def.levels) ? o.text : o.to ? o.to + '단계로 오른다' : '';
-    return { def, color: K.famColor(fam), tag: (K.FAMILY_NAMES[fam] ? K.FAMILY_NAMES[fam] + ' 성인' : '성인'), max: Math.max(max, o.to || 1), from: o.from || 0, to: o.to || 0, text, shape: o.to === 3 || o.to === 5, glyph: null };
+    let text = o.text && (!def || o.text !== def.desc || !def.levels) ? o.text : o.to ? o.to + '단계로 오른다' : '';
+    let tag = K.FAMILY_NAMES[fam] ? K.FAMILY_NAMES[fam] + ' 성인' : '성인';
+    if (o.altar === 'slot') { // the altar's second step: this slot is emptied for the new card
+      tag = '이 홈을 비운다';
+      const loss = w && o.slot !== undefined ? lossLine(w.cards[o.slot]) : null;
+      if (loss) text += ' — ' + loss;
+    } else if (o.altar === 'offer') tag = '새길 성인 · ' + tag;
+    return { def, color: K.famColor(fam), tag, max: Math.max(max, o.to || 1), from: o.altar ? 0 : o.from || 0, to: o.to || 0, text, shape: !o.altar && (o.to === 3 || o.to === 5), glyph: null };
   }
   if (o.kind === 'boon') {
     const b = boonDef(o.id);
@@ -49,13 +65,17 @@ function optionInfo(o) {
   if (o.kind === 'breath') return { def: null, color: '#ffe2a8', tag: '회복', max: 0, from: 0, to: 0, text: o.text || '', shape: false, glyph: 'breath' };
   return { def: null, color: '#c9c2b4', tag: o.tag || '선택', max: 0, from: 0, to: 0, text: o.text || '', shape: false, glyph: o.glyph || o.kind + ':' + (o.id || '') };
 }
-const TITLES = { level: (w) => '성장 — Lv ' + ((w.choice && w.choice.level) || w.hero.level), chest: () => '상자 — 성인 하나를 올린다', altar: () => '제단' };
+const TITLES = {
+  level: (w) => '성장 — Lv ' + ((w.choice && w.choice.level) || w.hero.level),
+  chest: () => '상자 — 성인 하나를 올린다',
+  altar: (w) => (w.choice.step === 'slot' ? '제단 — 비울 홈을 고른다' : '제단 — 다음 층: ' + K.typeName(w.choice.nextDomType || 'rooftop')),
+};
 function titleOf(w) { const k = w.choice && w.choice.kind; return (TITLES[k] || (() => '셋 중 하나'))(w); }
 
 // ---- layout ------------------------------------------------------------------------------------------
-function layout(ui, n) {
+function layout(ui, n, acts) {
   const ph = K.phone(ui);
-  const top = ph ? 96 : 120, h = ph ? 590 : 430, gap = ph ? 18 : 30;
+  const top = ph ? 96 : 120, h = (ph ? 590 : 430) - (acts ? (ph ? 92 : 20) : 0), gap = ph ? 18 : 30;
   const cw = Math.min(ph ? 404 : 372, (C.VIEW_W - (ph ? 28 : 70) - (n - 1) * gap) / Math.max(1, n));
   const x0 = C.VIEW_W / 2 - (n * cw + (n - 1) * gap) / 2;
   const out = [];
@@ -73,7 +93,7 @@ function fitLines(g, text, maxW, maxH, sizes, weight) {
 }
 
 function drawOption(ui, o, i, r, st) {
-  const g = ui.g, ph = K.phone(ui), info = optionInfo(o);
+  const g = ui.g, ph = K.phone(ui), info = optionInfo(o, ui.world);
   const { x, w, h } = r;
   const y = r.y + st.lift;
   const cx = x + w / 2;
@@ -133,10 +153,44 @@ function drawOption(ui, o, i, r, st) {
   g.restore();
 }
 
+// ---- the altar's own answers (GDD-V2 §4.6, §10.3): 기도한다 (key 4), 나중에 / 돌아가기 (Esc) --------
+// drawn under the three cards; answered with app.cmd('choice', 'pray' | 'later' | 'back')
+function actsFor(w) {
+  const ch = w && w.choice;
+  if (!ch || ch.kind !== 'altar') return null;
+  const out = [{ id: 'pray', label: '기도한다 · HP +' + ch.pray, cmd: 'pray', key: '4', primary: true }];
+  out.push(ch.step === 'slot' ? { id: 'back', label: '돌아가기', cmd: 'back', key: 'Esc' } : { id: 'later', label: '나중에', cmd: 'later', key: 'Esc' });
+  return out;
+}
+function actRects(ui, acts) {
+  const ph = K.phone(ui), y = ph ? 604 : 568, h = ph ? 80 : 60, gap = ph ? 28 : 24;
+  const ws = acts.map((a) => (a.primary ? (ph ? 440 : 360) : ph ? 280 : 220));
+  let x = C.VIEW_W / 2 - (ws.reduce((t, v) => t + v, 0) + gap * (acts.length - 1)) / 2;
+  return acts.map((a, i) => { const r = { x, y, w: ws[i], h }; x += ws[i] + gap; return r; });
+}
+function drawAct(ui, a, r, st) {
+  const g = ui.g, ph = K.phone(ui);
+  const edge = st.locked ? '#34323a' : st.focused ? K.PAPER : a.primary ? K.GOLD : '#7d7a74';
+  K.panel(g, r.x, r.y, r.w, r.h, { slant: 8, edge, edgeW: st.focused ? 5 : 3, facet: a.primary ? '#2c2618' : K.INK2, facetK: 0.36, shadow: 4 });
+  g.save(); if (st.locked) g.globalAlpha *= 0.55;
+  const ks = ph ? 24 : 18, kw = K.measure(g, a.key, ks, 900) + 16;
+  K.poly(g, K.slantPts(r.x + 14, r.y + r.h / 2 - ks * 0.75, kw, ks * 1.5, 3)); g.fillStyle = '#121117'; g.fill(); K.ink(g, 2);
+  K.text(ui, a.key, r.x + 14 + kw / 2, r.y + r.h / 2 + 1, { size: ks, align: 'center', base: 'middle', weight: 900, color: K.DIM });
+  K.text(ui, a.label, r.x + (r.w + kw + 14) / 2, r.y + r.h / 2 + 1, { size: ph ? 32 : 25, align: 'center', base: 'middle', weight: 900, color: a.primary ? K.GOLD_HI : K.PAPER, stroke: 4, maxW: r.w - kw - 40 });
+  g.restore();
+}
+CH.act = function (ui, id) {
+  const w = ui.world, a = (actsFor(w) || []).find((x) => x.id === id);
+  if (!a || !w.choiceOpen) return false;
+  ui.app.cmd('choice', a.cmd);
+  return true;
+};
+
 // ---- input -----------------------------------------------------------------------------------------
 const openFor = (ui) => ui.time - CH.openAt;
 const locked = (ui) => openFor(ui) < LOCK;
 function at(x, y) { for (let i = 0; i < CH.rects.length; i++) { const r = CH.rects[i]; if (x >= r.x - 8 && x <= r.x + r.w + 8 && y >= r.y && y <= r.y + r.h) return i; } return -1; }
+function atAct(x, y) { for (let i = 0; i < (CH.actRects || []).length; i++) { const r = CH.actRects[i]; if (x >= r.x - 6 && x <= r.x + r.w + 6 && y >= r.y - 6 && y <= r.y + r.h + 6) return i; } return -1; }
 CH.pick = function (ui, i) {
   const w = ui.world;
   if (!w || !w.choiceOpen || !w.choice || !w.choice.options[i]) return false;
@@ -151,11 +205,14 @@ BD.ui.overlays.register({
   draw(g, ui) {
     const w = ui.world, ch = w && w.choice;
     if (!ch) return;
-    if (CH.key !== ch) { CH.key = ch; CH.openAt = ui.time; CH.focus = 0; CH.press = null; CH.exit = null; NAV.focus0(ui); }
+    // a new choice, or the altar's next step (the same object): the cards rise again behind a new lock
+    const key = ch.kind === 'altar' ? ch.step + ':' + ch.pick : '';
+    if (CH.key !== ch || CH.stepKey !== key) { CH.key = ch; CH.stepKey = key; CH.openAt = ui.time; CH.focus = 0; CH.press = null; CH.exit = null; NAV.focus0(ui); }
     const age = openFor(ui), lk = age < LOCK, ph = K.phone(ui);
     K.dim(g, 0.72);
-    const n = ch.options.length;
-    CH.rects = layout(ui, n);
+    const n = ch.options.length, acts = actsFor(w);
+    CH.rects = layout(ui, n, acts);
+    CH.acts = acts; CH.actRects = acts ? actRects(ui, acts) : [];
     CH.lineSize = 99;
     const rise = (1 - K.ease(Math.min(1, age / RISE))) * 90;
     // the title on its own ink ribbon, over the HUD's top bar
@@ -172,8 +229,13 @@ BD.ui.overlays.register({
     });
     // the 0.35 s lock as a thin bar under the title (the borders are dark until it ends)
     if (lk) { const k = age / LOCK; g.fillStyle = '#8d877c'; g.fillRect(640 - 120, (ph ? 86 : 96), 240 * k, 3); }
-    const hint = S.lastInput === 'touch' ? '카드를 두드려 고른다' : '1 · 2 · 3   또는   ← → + Enter';
-    if (!ph) K.text(ui, hint, 640, 576, { size: 19, align: 'center', color: K.DIM, weight: 700, stroke: 4 });
+    if (acts) {
+      acts.forEach((a, i) => { const pr = CH.press && CH.press.a === i && !CH.press.moved && !lk; drawAct(ui, a, CH.actRects[i], { locked: lk, focused: pr || (!lk && CH.hoverAct === i) }); });
+      K.text(ui, 'HP ' + w.hero.hp + ' / ' + w.hero.maxHp, 640, ph ? 712 : 660, { size: ph ? 26 : 20, align: 'center', weight: 800, color: w.hero.hp < 50 ? '#ff8a7a' : K.DIM, stroke: 4 });
+    } else {
+      const hint = S.lastInput === 'touch' ? '카드를 두드려 고른다' : '1 · 2 · 3   또는   ← → + Enter';
+      if (!ph) K.text(ui, hint, 640, 576, { size: 19, align: 'center', color: K.DIM, weight: 700, stroke: 4 });
+    }
   },
   key(ev, ui) {
     const w = ui.world, ch = w && w.choice;
@@ -181,7 +243,8 @@ BD.ui.overlays.register({
     if (locked(ui) || ev.repeat) return true; // swallow keys during the lock and key repeats
     const n = ch.options.length;
     const d = /^Digit([1-9])$/.exec(ev.code) || /^Numpad([1-9])$/.exec(ev.code);
-    if (d) { if (+d[1] <= n) CH.pick(ui, +d[1] - 1); return true; }
+    if (d) { if (+d[1] <= n) CH.pick(ui, +d[1] - 1); else if (+d[1] === 4) CH.act(ui, 'pray'); return true; }
+    if (ev.code === 'Escape' && ch.kind === 'altar') { CH.act(ui, ch.step === 'slot' ? 'back' : 'later'); return true; }
     if (ev.code === 'ArrowLeft' || ev.code === 'ArrowUp' || ev.code === 'KeyA' || ev.code === 'KeyW') { if (CH.kbd) CH.focus = (CH.focus + n - 1) % n; CH.kbd = true; ui.sfxSafe('ui_move'); return true; }
     if (ev.code === 'ArrowRight' || ev.code === 'ArrowDown' || ev.code === 'KeyD' || ev.code === 'KeyS') { if (CH.kbd) CH.focus = (CH.focus + 1) % n; CH.kbd = true; ui.sfxSafe('ui_move'); return true; }
     if (ev.code === 'Enter' || ev.code === 'NumpadEnter') { CH.pick(ui, Math.min(n - 1, CH.focus)); return true; }
@@ -198,7 +261,7 @@ BD.ui.overlays.register({
       // over it): it never picks
       const [dx, dy] = BD.ui.dashCenter(ui), dh = BD.ui.dashSize(ui).hit / 2;
       const onDash = Math.abs(ev.x - dx) <= dh && Math.abs(ev.y - dy) <= dh;
-      CH.press = { id: ev.id, i: locked(ui) || onDash ? -1 : at(ev.x, ev.y), x: ev.x, y: ev.y, moved: false };
+      CH.press = { id: ev.id, i: locked(ui) || onDash ? -1 : at(ev.x, ev.y), a: locked(ui) || onDash ? -1 : atAct(ev.x, ev.y), x: ev.x, y: ev.y, moved: false };
       return true;
     }
     const p = CH.press;
@@ -207,6 +270,7 @@ BD.ui.overlays.register({
     if (ev.type === 'up') {
       CH.press = null;
       if (p.i >= 0 && !p.moved && at(ev.x, ev.y) === p.i) { ui.sfxSafe('ui_ok'); CH.pick(ui, p.i); }
+      else if (p.a >= 0 && !p.moved && atAct(ev.x, ev.y) === p.a && CH.acts && CH.acts[p.a]) { ui.sfxSafe('ui_ok'); CH.act(ui, CH.acts[p.a].id); }
     }
     return true;
   },
@@ -222,6 +286,7 @@ if (typeof window !== 'undefined') {
     if (!cv) return;
     const r = cv.getBoundingClientRect(), [x, y] = ui.view.toLogical(ev.clientX - r.left, ev.clientY - r.top);
     CH.hover = at(x, y);
+    CH.hoverAct = atAct(x, y);
     if (CH.hover >= 0) { CH.kbd = false; CH.focus = CH.hover; }
   });
 }

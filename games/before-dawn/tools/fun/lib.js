@@ -171,7 +171,8 @@ function makeMetrics(BD) {
     on('trial_start', () => { if (!has('choice_pick')) choice('trial'); });
     // v2 choices: every pick in a choice overlay, and stepping into an optional site
     on('choice_pick', (e) => choice((e.kind || '') + ' ' + (e.pick || '')));
-    on('site_start', (e) => { if (e.optional) choice('site ' + e.kind); });
+    // opening a rift (시련) is a choice (GDD-V2 §10.1); an altar or a chest is counted by its choice_pick
+    on('site_start', (e) => { if (e.optional && e.kind === 'rift') choice('site ' + e.kind); });
     on('task_clear', (e) => { if (floorKey !== null) { fl().task = e.task; fl().taskSec = +(w.t - fl().enterT).toFixed(1); } note('task clear: ' + e.task); });
     on('floor_clear', () => { if (floorKey !== null) fl().clearSec = +(w.t - fl().enterT).toFixed(1); });
     on('site_clear', (e) => { each((b) => { b.sites[e.kind] = (b.sites[e.kind] || 0) + 1; }); gain('site ' + e.kind); });

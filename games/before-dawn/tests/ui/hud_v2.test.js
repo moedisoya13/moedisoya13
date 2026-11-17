@@ -270,6 +270,8 @@ module.exports = {
       await T.eval(() => { const B = window.BD, w = window.__BD.world(); B.growth.drop(w, w.hero.x + 5, w.hero.y, 1); });
       await T.wait(900); await collect();
       await T.eval(() => { const B = window.BD, w = window.__BD.world(); w.scenario = false; B.growth.addXp(w, w.hero.xpNeed - w.hero.xp); });
+      // the overlay opens 0.25 s after the level (GDD-V2 §4.3), then takes no key for 0.35 s
+      await T.page.waitForFunction(() => window.__BD.world().choiceOpen, null, { timeout: 4000 });
       await T.wait(500); await T.key('Digit1'); await T.wait(700); await collect();
       await T.eval(() => { const B = window.BD, w = window.__BD.world(); w.scenario = true; B.uiTest.stageSites(w, { task: 'seals' }); w.t = 12; });
       await collect(4000);

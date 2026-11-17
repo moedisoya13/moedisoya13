@@ -55,7 +55,7 @@ BD.C = {
   ELITE: { size: 1.3, hp: 2.5, dmg: 1.25, tg: 1.2, perFloor: [0, 0, 0, 1, 1, 2, 0] },
   // guardian HP per floor (GDD §6.3, set by docs/CONTROLS-REVIEW.md §3.1; earlier ×3 tuning: docs/requests/enemies.md)
   // v2: HP 400 / 700 / 1000 / 1300 / 1600 (GDD-V2 §3.6; v1 tuned row was 385 / 530 / 675 / 815 / 960)
-  GUARDIAN: { size: 1.6, dmg: 1.3, tg: 1.4, knock: 0.33, hp: [0, 400, 700, 1000, 1300, 1600] },
+  GUARDIAN: { size: 1.6, dmg: 1.3, tg: 1.4, knock: 0.33, hp: [0, 280, 480, 680, 880, 1090] }, // hp: GDD-V2 400…1600, tuned (v2-enemies.md §5)
   STATUS: {
     burnTick: 0.5, burnDmg: 3, burnDur: 3, burnSpread: 0.6, burnImmune: 2, spreadPerTick: 2, // spreadPerTick: GDD-V2 §4.4
     wetDur: 4, steamDmg: 8, steamR: 1.2, steamCd: 1, slamDmg: 8, slamStun: 0.5, knockTime: 0.15,
@@ -86,20 +86,25 @@ BD.C = {
 // The horde director (§3.4). Row = floor (6 = rooftop). from → to: wanted enemies on screen from
 // floor entry to the end of the time budget; rate: spawn tokens per second (one per enemy, at most
 // tokenMax banked); threatEvery / threatCap: seconds between threats and how many may live;
-// eliteEvery: not used by the slice (elites are the enemies agent's, §3.6); hp / dmg: multipliers
+// eliteEvery: seconds between the director's elites (§3.6, from 2F); hp / dmg: multipliers
 // for regular enemies (fodder and threats) made on that floor; melee / ranged: concurrent wind-up
 // caps (§3.5); pack: fodder per pack [min, max]. The rooftop's want is per boss phase.
 BD.C.DIRECTOR = {
   every: 0.4, tokenMax: 12, tokensAtEntry: 6,
-  // tuned (docs/requests/v2-tuning.md): rate ×1.3 and from/to raised, rooftop phases +2 — with the GDD
-  // values the hero killed packs as fast as they arrived and the screen held 11.7 enemies (gate ≥ 12)
+  // tuned against GDD-V2 §3.4: want and rate (docs/requests/v2-tuning.md §1: with the GDD values the
+  // hero killed packs as fast as they arrived); the enemy columns — dmg, melee/ranged caps,
+  // threatEvery, threatCap, the rooftop's phases and rate — by the enemies agent
+  // (docs/requests/v2-enemies.md §5, pinned by tests/enemies/numbers.test.js); later rounds in
+  // docs/requests/v2-tuning.md
   floors: [null,
-    { budget: 110, from: 14, to: 24, rate: 4.0, threatEvery: 8, threatCap: 3, eliteEvery: 0, hp: 1.0, dmg: 1.0, melee: 4, ranged: 2, pack: [4, 6] },
-    { budget: 130, from: 16, to: 30, rate: 4.5, threatEvery: 8, threatCap: 3, eliteEvery: 60, hp: 1.2, dmg: 1.0, melee: 4, ranged: 2, pack: [4, 8] },
-    { budget: 140, from: 20, to: 36, rate: 5.0, threatEvery: 7, threatCap: 4, eliteEvery: 50, hp: 1.4, dmg: 1.15, melee: 5, ranged: 3, pack: [4, 8] },
-    { budget: 150, from: 24, to: 42, rate: 6.0, threatEvery: 6, threatCap: 5, eliteEvery: 45, hp: 1.6, dmg: 1.15, melee: 5, ranged: 3, pack: [4, 8] },
-    { budget: 160, from: 28, to: 48, rate: 6.8, threatEvery: 5, threatCap: 6, eliteEvery: 40, hp: 1.8, dmg: 1.3, melee: 6, ranged: 3, pack: [4, 8] },
-    { budget: 150, phases: [10, 14, 18], rate: 2.6, threatEvery: 0, threatCap: 0, eliteEvery: 0, hp: 1.5, dmg: 1.15, melee: 3, ranged: 2, pack: [4, 6] },
+    { budget: 110, from: 14, to: 24, rate: 4.0, threatEvery: 6, threatCap: 3, eliteEvery: 0, hp: 1.0, dmg: 1.3, melee: 4, ranged: 2, pack: [4, 6] },
+    { budget: 130, from: 16, to: 30, rate: 4.5, threatEvery: 6, threatCap: 4, eliteEvery: 60, hp: 1.2, dmg: 1.8, melee: 4, ranged: 3, pack: [4, 8] },
+    { budget: 140, from: 20, to: 36, rate: 5.0, threatEvery: 5, threatCap: 5, eliteEvery: 50, hp: 1.4, dmg: 2.2, melee: 5, ranged: 3, pack: [4, 8] },
+    { budget: 150, from: 24, to: 42, rate: 6.0, threatEvery: 5, threatCap: 6, eliteEvery: 45, hp: 1.6, dmg: 2.7, melee: 5, ranged: 4, pack: [4, 8] },
+    { budget: 160, from: 28, to: 48, rate: 6.8, threatEvery: 4, threatCap: 7, eliteEvery: 40, hp: 1.8, dmg: 3.1, melee: 6, ranged: 4, pack: [4, 8] },
+    // the rooftop's want is per boss phase; more minions than the slice's 10 / 14 / 18 at 2.6/s: in the
+    // boss fight they are the only light (the longest wait for a choice fell on the rooftop)
+    { budget: 150, phases: [12, 16, 20], rate: 3.2, threatEvery: 0, threatCap: 0, eliteEvery: 0, hp: 1.5, dmg: 1.9, melee: 3, ranged: 2, pack: [4, 6] },
   ],
   surge: { first: 25, every: 35, dur: 8, mult: 1.5 },     // 몰려온다
   guardianMult: 0.5,   // want and token rate while the guardian is up
@@ -128,7 +133,8 @@ BD.C.V2 = {
   // level curve (§4.2): need(1) = 12, need(2) = 24, need(L ≥ 3) = round(base + per × L)
   xp: { first: [12, 24], base: 30, per: 7 },
   // growth choice (§4.3)
-  choice: { cardSlots: 2, shoveR: 3, shoveDist: 1.5, invuln: 0.5, breathHp: 20 },
+  // delay: s between a level_up and its overlay (§4.3 "0.25초 느려진 뒤": the ring and the slow motion are seen)
+  choice: { cardSlots: 2, shoveR: 3, shoveDist: 1.5, invuln: 0.5, breathHp: 20, delay: 0.25 },
   maxCardLevel: 5,
   // floors (§5.1): 48 × 48 of 16 × 16 zones; start (40, 40); the guardian at the stairs zone centre
   floor: { size: 48, zone: 16, start: [40, 40], guardianAt: [8, 8], guardianWarn: 2.0, guardianWake: 10 },

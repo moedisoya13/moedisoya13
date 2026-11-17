@@ -40,6 +40,14 @@ D.mixOf = (w) => {
   const t = w.floorN === 6 ? 'rooftop' : w.floor.domType;
   return D.mixes.has(t) ? D.mixes.get(t) : null;
 };
+// The elite of a floor (§3.6): its horde mix's `elite` (the dominant type's threat; undead → ghoul),
+// or of the given type. One rule for the director's elites, the rift, the hold's door and the hunt's
+// chiefs (BD.places.eliteKind, BD.foes.eliteKind).
+D.eliteKind = (w, type) => {
+  type = type || (w.floor && w.floor.domType);
+  const mx = type && D.mixes.has(type) ? D.mixes.get(type) : null;
+  return (mx && mx.elite) || 'slime';
+};
 D.threatCost = (e) => {
   const m = D.mixes.has(e.type) ? D.mixes.get(e.type) : null;
   return (m && m.threatCost && m.threatCost[e.kind]) || 1;
@@ -220,7 +228,7 @@ D.update = function (w, dt) {
   // GDD-V2 §3.6 (v2-enemies): every eliteEvery s, while no elite the director sent lives, the next pack
   // brings one — the mix's `elite` kind — in place of its threat
   const mixE = D.mixOf(w), elite = d.state === 'normal' && row.eliteEvery && d.eliteT <= 0 && mixE && mixE.elite &&
-    !w.enemies.some((e) => !e.dead && e.flags.directorElite) ? mixE.elite : null;
+    !w.enemies.some((e) => !e.dead && e.flags.directorElite) ? D.eliteKind(w) : null;
   if (elite) threat = null;
   // direction: 60 % within ±60° of the way he walks, else anywhere; a surge comes from two sides
   const rng = w.rng.spawn, walk = walkDir(w);

@@ -25,6 +25,10 @@ module.exports = {
       if (!e.lunging && d1 - e.r < 0.8 - 1e-6 && d1 < d0 - 1e-6) { e._nudged = w.ticks; engineNudges++; }
       return out;
     };
+    // a knock that starts and hits a wall in the same tick is moved and cleared within that tick, so
+    // e.knock never shows it: mark every enemy a knock moved this tick (the hero's doing, not walking)
+    const updateKnock = BD.combat.updateKnock;
+    BD.combat.updateKnock = function (w, e, dt) { e._knocked = w.ticks; return updateKnock(w, e, dt); };
     for (const r of runs) {
       let prev = new Map();
       BD.simRun({ seed: r.seed, floor: r.floor, maxSec: 45, onTick(app) {
@@ -63,7 +67,7 @@ module.exports = {
           // lunges may enter the ring; knockback (dash body hit, tide) is the hero's doing, not walking;
           // a stunned enemy does not walk (separation + wall resolution can nudge it: engine, see requests).
           // p[2]: knocked on the previous tick — the knock's last step moves the enemy and clears e.knock
-          if (!p || e.down || e.lunging || e.lunge || e.knock || p[2] || e.stunT > 0 || e._nudged === w.ticks || w._hurtTick === w.ticks || w.blackoutT > 0) continue;
+          if (!p || e.down || e.lunging || e.lunge || e.knock || p[2] || e._knocked === w.ticks || e.stunT > 0 || e._nudged === w.ticks || w._hurtTick === w.ticks || w.blackoutT > 0) continue;
           const before = Math.hypot(p[0] - h.x, p[1] - h.y), after = Math.hypot(e.x - h.x, e.y - h.y);
           const justLunged = e.lastLunge && w.t - e.lastLunge.t < 0.05;
           if (!justLunged && after - e.r < 0.8 - 1e-6 && after < before - 1e-6) bad.push(`${e.kind} walked inside 0.8u (${(after - e.r).toFixed(3)}) seed ${r.seed} t ${w.t.toFixed(2)}`);
@@ -81,7 +85,7 @@ module.exports = {
         if (w.stats.unseenHits) bad.push('hit by an attack that began off screen (seed ' + r.seed + ')');
       } });
     }
-    BD.ai.move = move;
+    BD.ai.move = move; BD.combat.updateKnock = updateKnock;
     t.assert(!bad.length, [...new Set(bad)].slice(0, 8).join('\n'));
     if (process.env.RULES_VERBOSE) console.log('     engine ai.move inward nudges:', engineNudges, 'of', stats.ticks, 'ticks');
     t.assert(stats.capMelee === 1 && stats.melee >= 4 && stats.ranged >= 2, `caps reached (${stats.melee}/${stats.ranged})`);

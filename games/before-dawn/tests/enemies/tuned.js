@@ -1,8 +1,8 @@
 // Enemy numbers tuned away from GDD-V2 (not a test file): { key: [GDD-V2 value, tuned value] }.
 //   '<kind>.<path>'        an enemy def field (numbers.test.js GDD table)
 //   'row.<col>.<floor>'    a column of BD.C.DIRECTOR.floors (hp, dmg, melee, ranged, threatEvery, threatCap,
-//                          eliteEvery), set by src/content/floors/00_rows.js
-//   'eliteHp.<floor>'      BD.foes.T.eliteHp      'guardianHp.<floor>'  BD.C.GUARDIAN.hp (00_rows.js)
+//                          eliteEvery), in BD.C.DIRECTOR.floors (src/core/00_base.js)
+//   'eliteHp.<floor>'      BD.foes.T.eliteHp      'guardianHp.<floor>'  BD.C.GUARDIAN.hp (src/core/00_base.js)
 // Each entry has its reason in docs/requests/v2-enemies.md, "tuning" (human-like pilot, seeds 1–100).
 'use strict';
 

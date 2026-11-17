@@ -70,6 +70,7 @@ G.addXp = function (w, n) {
     h.xpNeed = G.need(h.level);
     w.stats.levels++;
     w.choiceQueue = (w.choiceQueue || 0) + 1;
+    if (!w.choiceOpen && !(w.choiceWait > 0)) w.choiceWait = C.V2.choice.delay; // the overlay opens 0.25 s later
     W.emit(w, 'level_up', { level: h.level });
   }
 };
@@ -99,7 +100,8 @@ G.update = function (w, dt) {
       w.shards = w.shards.filter((s) => !s.taken);
     }
   }
-  if (w.choiceQueue > 0 && !w.choiceOpen && !h.dead && !w.ending && !W.scenario(w)) { w.choiceQueue--; G.open(w, 'level'); }
+  if (w.choiceWait > 0) w.choiceWait = Math.max(0, w.choiceWait - dt);
+  if (w.choiceQueue > 0 && !w.choiceOpen && !(w.choiceWait > 0) && !h.dead && !w.ending && !W.scenario(w)) { w.choiceQueue--; G.open(w, 'level'); }
 };
 
 // ---- the growth choice (§4.3) ------------------------------------------------------------------

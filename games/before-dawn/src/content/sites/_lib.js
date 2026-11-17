@@ -5,8 +5,8 @@
 //
 //   BD.places.mix(w)                    the floor's horde mix (rooftop: 'rooftop')
 //   BD.places.fodder(w, rng) / threat(w, rng)   a weighted kind from it
-//   BD.places.eliteKind(w)              the elite of this floor (§3.6: the dominant type's threat,
-//                                       a ghoul on undead floors); BD.director.eliteKind(w) wins if defined
+//   BD.places.eliteKind(w)              the elite of this floor (§3.6: BD.director.eliteKind, the horde
+//                                       mix's elite — the dominant type's threat, a ghoul on undead floors)
 //   BD.places.spots(w, x, y, n, r0, r1, rng)   n free floor points r0..r1 u round (x, y), ≥ 0.9u apart
 //   BD.places.guard(w, x, y, kinds, o)  enemies standing round a place, dormant until one of their
 //                                       group is in the combat window (o: {r0, r1, group, elite: kind})
@@ -36,13 +36,7 @@ function pickW(rng, table) {
 }
 P.fodder = (w, rng) => { const m = P.mix(w); return m ? pickW(rng, m.fodder) : null; };
 P.threat = (w, rng) => { const m = P.mix(w); return m ? pickW(rng, m.threats) || pickW(rng, m.fodder) : null; };
-P.eliteKind = function (w) {
-  if (BD.director.eliteKind) return BD.director.eliteKind(w);
-  const m = P.mix(w), t = m ? m.threats : {};
-  if (w.floor.domType === 'undead' && t.ghoul !== undefined) return 'ghoul';
-  const ks = Object.keys(t).sort((a, b) => t[b] - t[a] || (a < b ? -1 : 1));
-  return ks[0] || (m ? Object.keys(m.fodder).sort()[0] : 'goblin');
-};
+P.eliteKind = (w) => BD.director.eliteKind(w); // §3.6, the enemies' rule (src/core/28_director.js)
 
 P.spots = function (w, x, y, n, r0, r1, rng) {
   const out = [], g = w.grid;
@@ -64,7 +58,7 @@ P.guard = function (w, x, y, kinds, o) {
     const p = pts[i] || [x, y];
     const elite = !!(o.elite && i === 0);
     const flags = Object.assign({ keep: true, wake: o.group }, o.flags || {}, elite && o.eliteFlags ? o.eliteFlags : {});
-    list.push(W.makeEnemy(w, k, p[0], p[1], { via: 'placed', elite, dormant: { r: o.wakeR || 7 }, flags }));
+    list.push(W.makeEnemy(w, k, p[0], p[1], { via: 'placed', elite, dormant: o.wakeR ? { r: o.wakeR } : { view: true }, flags }));
   });
   return list;
 };
@@ -107,7 +101,7 @@ P.count = function (w, pred) {
 P.wake = function (w) {
   let groups = null;
   for (const e of w.enemies) {
-    if (e.dead || !e.flags.wake || !e.dormant) continue;
+    if (e.dead || !e.flags.wake) continue; // a member the engine already woke (dormant {view}) still calls its group
     if (BD.view.inView(w, e.x, e.y)) (groups || (groups = new Set())).add(e.flags.wake);
   }
   if (!groups) return;

@@ -33,7 +33,13 @@ const flagOf = (o) => (o.marker || (o.flags && o.flags.marker) || null);
 const siteGlyph = (kind) => 'site:' + kind;
 function taskGlyph(w) { return w.task ? 'task:' + w.task.kind : 'site:seal'; }
 function isTaskSite(s) { return s.optional === false || (s.optional === undefined && TASK_SITE[s.kind]); }
-const used = (s) => s.state === 'used' || s.state === 'done' || s.state === 'dead' || s.state === 'broken' || s.state === 'dry' || s.state === 'open' || s.state === 'spent';
+// a site is used by its phase (src/core/32_sites.js: idle → active → used; docs/requests/v2-floors.md
+// §2.1); a site without a phase (staged, foreign) by the look words
+const used = (s) => (s.phase ? s.phase === 'used' : s.state === 'used' || s.state === 'done' || s.state === 'dead' || s.state === 'broken' || s.state === 'dry' || s.state === 'open' || s.state === 'spent');
+// a task target that is an enemy: the hunt's chiefs (flags.chief / target), a task object, or anything
+// flagged objective — gold like the task's places, even when it is also an elite. A nest's body stands
+// on its own 'nest' site (flags.nest), which is marked already.
+const isTarget = (e) => !(e.flags && e.flags.nest) && (e.role === 'object' || (e.flags && (e.flags.chief || e.flags.target)) || flagOf(e) === 'objective');
 
 // ---- what is marked -------------------------------------------------------------------------------
 MAP.collect = function (w, ui) {
@@ -42,8 +48,8 @@ MAP.collect = function (w, ui) {
   for (const e of w.enemies) {
     if (e.dead) continue;
     if (e.guardian || e.role === 'guardian' || e.boss) out.push({ x: e.x, y: e.y, kind: 'guardian', pri: 0, glyph: 'crown', color: GOLD, id: 'e' + e.id });
+    else if (isTarget(e)) out.push({ x: e.x, y: e.y, kind: 'task', pri: 2, glyph: taskGlyph(w), color: GOLD, id: 'e' + e.id });
     else if (e.elite || e.role === 'elite') out.push({ x: e.x, y: e.y, kind: 'elite', pri: 3, glyph: 'skull', color: heavy ? WHITE : RED, id: 'e' + e.id });
-    else if (e.role === 'object' || flagOf(e) === 'objective') out.push({ x: e.x, y: e.y, kind: 'task', pri: 2, glyph: taskGlyph(w), color: GOLD, id: 'e' + e.id });
     else if (flagOf(e) === 'threat') out.push({ x: e.x, y: e.y, kind: 'elite', pri: 3, glyph: 'skull', color: heavy ? WHITE : RED, id: 'e' + e.id });
   }
   if (MAP.blink && ui && ui.time - MAP.blink.t0 < 1.8 && !w.enemies.some((e) => !e.dead && e.guardian)) out.push({ x: MAP.blink.x, y: MAP.blink.y, kind: 'guardian', pri: 0, glyph: 'crown', color: GOLD, blink: MAP.blink.t0, id: 'blink' });
@@ -54,9 +60,10 @@ MAP.collect = function (w, ui) {
     else if (s.kind === 'spring' && low && s.known) out.push({ x: s.x, y: s.y, kind: 'spring', pri: 5, glyph: 'site:spring', color: BLUE, id: 's' + s.id });
   }
   if (low) for (const p of w.pickups || []) if (p.kind === 'flask') out.push({ x: p.x, y: p.y, kind: 'flask', pri: 4, glyph: 'flask', color: BLUE, id: 'p' + p.id });
-  // marker sources other branches register (the engine's own two are read above in v2 terms)
+  // marker sources other branches register (the engine's own two and the floors' 'places' — the
+  // fallback's data for sites, chiefs and flasks — are read above in v2 terms)
   for (const src of BD.render.markers.all()) {
-    if (src.id === 'flagged' || src.id === 'flow') continue;
+    if (src.id === 'flagged' || src.id === 'flow' || src.id === 'places') continue;
     const list = [];
     try { src.collect(w, list); } catch (err) { continue; }
     for (const m of list) out.push({ x: m.x, y: m.y, kind: m.kind || 'objective', pri: m.kind === 'threat' ? 3 : 6, glyph: m.glyph || null, icon: m.icon || null, color: m.color || (m.kind === 'threat' ? RED : GOLD), id: m.id || src.id + ':' + m.x + ',' + m.y });
@@ -201,8 +208,8 @@ MAP.items = function (w) {
   for (const e of w.enemies) {
     if (e.dead) continue;
     if (e.guardian || e.boss) out.push({ x: e.x, y: e.y, glyph: 'crown', color: GOLD, kind: 'guardian' });
+    else if (isTarget(e)) out.push({ x: e.x, y: e.y, glyph: taskGlyph(w), color: GOLD, kind: 'task' });
     else if (e.elite || e.role === 'elite') out.push({ x: e.x, y: e.y, dot: RED, kind: 'elite' });
-    else if (e.role === 'object' || flagOf(e) === 'objective') out.push({ x: e.x, y: e.y, glyph: taskGlyph(w), color: GOLD, kind: 'task' });
   }
   return out;
 };

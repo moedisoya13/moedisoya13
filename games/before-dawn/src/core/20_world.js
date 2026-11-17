@@ -75,7 +75,8 @@ W.enemyById = (w, id) => { for (const e of w.enemies) if (e.id === id) return e;
 // v2: def.role ('fodder' | 'threat'; guardians, elites and the boss are their own roles), def.scale
 // (sprite size of a variant: e.size = scale × elite/guardian size, the body radius is def.radius ×
 // the elite/guardian size only), the floor's director row multiplies a regular enemy's HP and
-// damage (GDD-V2 §3.4). opts.dormant {r}: stands still until the hero comes within r u.
+// damage (GDD-V2 §3.4). opts.dormant {r}: stands still until the hero comes within r u; {view: true}:
+// until it is inside the combat window (BD.W.inView — seen, docs/requests/v2-enemies.md §3).
 // `kind` may also be a def object that is not an enemy kind — a task object such as a nest
 // (src/content/tasks/nests.js): it gets the same bookkeeping without joining BD.enemies.
 W.makeEnemy = function (w, kind, x, y, opts) {

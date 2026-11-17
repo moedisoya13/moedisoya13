@@ -115,7 +115,8 @@ P.endRun = function (save, sum) {
   if (!save.rerollUnlocked && save.runs >= 3) { save.rerollUnlocked = true; news.push({ kind: 'reroll' }); }
   const c = save.counters;
   c.kills += sum.kills; c.dodges += sum.dodges; c.mageKills += sum.run.mageKills || 0;
-  c.magicKills = (c.magicKills || 0) + (sum.run.magicKills || 0); // GDD-V2 §8 (마력 역류)
+  // GDD-V2 §8 (마력 역류); a summary from an older engine without the count falls back to mage kills
+  c.magicKills = (c.magicKills || 0) + (sum.run.magicKills !== undefined ? sum.run.magicKills : sum.run.mageKills || 0);
   c.questAwakened += sum.run.questAwakened; c.comboMaxed += sum.run.comboMaxed;
   save.bestLevel = Math.max(save.bestLevel || 0, sum.level || 0); // GDD-V2 §8
   save.bestKills = Math.max(save.bestKills || 0, sum.kills || 0);
