@@ -47,6 +47,11 @@ BD.gen.shapes = BD.makeRegistry('room shape', {
 BD.gen.patterns = BD.makeRegistry('obstacle pattern', {
   required: ['apply'],
 });
+// Floor plan (v2, optional, at most one): sizes floors 1–5 beyond GDD §7's room sizes.
+//   BD.gen.plans.register({ id, size(n, ctx) → [W, H] | null, offscreen?(n) → {indicators, minimap} })
+// ctx = {seed, tier, domType, rng (its own gen sub-stream 'plan<n>')}. null keeps the §7 size
+// (and the §7 random draw, so unsized floors generate exactly as before).
+BD.gen.plans = BD.makeRegistry('floor plan', { required: ['size'] });
 // Spawn bundles per type (GDD §7.4). dom[n] / nondom[n] for floor n = 1..5, each {kind: count} or null.
 BD.gen.bundles = BD.makeRegistry('spawn bundle', {
   required: ['dom', 'nondom'],
@@ -84,7 +89,8 @@ BD.onFinalize(function () {
   }
   const bosses = BD.enemies.all().filter((d) => d.type === 'boss');
   if (bosses.length !== 1) BD.fail(`exactly one boss enemy must be registered, found ${bosses.length}`);
+  if (BD.gen.plans.ids().length > 1) BD.fail(`at most one floor plan may be registered, found ${BD.gen.plans.ids().join(', ')}`);
   if (!BD.gen.shapes.has('rect')) BD.fail("room shape 'rect' must be registered (fallback)");
   if (!BD.gen.patterns.has('open')) BD.fail("obstacle pattern 'open' must be registered (fallback)");
-  for (const r of [BD.cards, BD.enemies, BD.gen.shapes, BD.gen.patterns, BD.gen.bundles]) r.freeze();
+  for (const r of [BD.cards, BD.enemies, BD.gen.shapes, BD.gen.patterns, BD.gen.bundles, BD.gen.plans]) r.freeze();
 });

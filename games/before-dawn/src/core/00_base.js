@@ -11,6 +11,15 @@ BD.C = {
   // HUD card slots (GDD §9.2): three 84 px sockets, gap 12, centred, top at y 616 (logical px)
   SLOTS: { size: 84, gap: 12, y: 616 },
   ISO_X: 40, ISO_Y: 20, ROOM_CX: 640, ROOM_CY: 350, WALL_H: 80,
+  // Camera (src/core/05_view.js, src/client/15_camera.js). On an axis where the floor plus FRAME
+  // margins fits the 1280 × 720 view the camera stands still with the room centred (every v1
+  // room); on other axes it follows the hero, clamped so the view stays inside the frame.
+  //   frame: map-px margins around the floor's projected box (top includes the back walls)
+  //   slack: the most the client camera may lag or lead the hero on a following axis (map px);
+  //          the simulation's view rectangle is the hero-centred view inset by it, so whatever
+  //          the simulation calls "in view" is on every screen
+  //   follow: time constant (s) of the smooth follow; lookahead (u) along the walk, eased over lookTime s
+  CAM: { frame: { x: 60, top: 100, bottom: 80 }, slack: { x: 112, y: 64 }, follow: 0.14, lookahead: 1.6, lookTime: 0.4 },
   RUN_SEC: 900, CLOCK_START_MIN: 18 * 60,
   CAP: { enemies: 80, projectiles: 60, particles: 300 },
   HERO: {
@@ -54,6 +63,8 @@ BD.C = {
   TYPE_NAMES: { beast: '마물', undead: '언데드', magic: '마법', heavy: '중갑', boss: '마왕', rooftop: '옥상' },
   FLOOR_COLORS: { beast: '#f2c230', undead: '#4fa94d', magic: '#5c4d8e', heavy: '#e0392f', rooftop: '#7d8597' },
   ROOM_SIZES: [[16, 10], [10, 16], [13, 13], [14, 12], [12, 14]],
+  // limits for a floor size asked by a floor plan (BD.gen.plans) or gen opts: sides in cells
+  GEN_SIZE: { min: 8, max: 128 },
   FLOORS: 6,
   GEN_RETRIES: 20,
 };

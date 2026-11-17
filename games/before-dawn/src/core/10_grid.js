@@ -80,7 +80,9 @@ N.rayLen = function (g, x, y, dir, maxLen) {
   const tdx = Math.abs(1 / (dx || 1e-12)), tdy = Math.abs(1 / (dy || 1e-12));
   let tx = dx > 0 ? (cx + 1 - x) * tdx : (x - cx) * tdx;
   let ty = dy > 0 ? (cy + 1 - y) * tdy : (y - cy) * tdy;
-  for (let i = 0; i < 256; i++) {
+  // the ray leaves the grid (outer wall: blocks) within w + h steps; a fixed cap would report a
+  // long ray on a big floor as clear
+  for (let i = 0, n = g.w + g.h + 4; i < n; i++) {
     let t;
     if (tx < ty) { t = tx; tx += tdx; cx += stepX; } else { t = ty; ty += tdy; cy += stepY; }
     if (t >= maxLen) return maxLen;
@@ -124,4 +126,48 @@ N.downhill = function (g, field, x, y) {
   }
   if (bx < 0) return null;
   return [bx + 0.5, by + 0.5];
+};
+
+// Uniform buckets of list indices by position, cell size s (items: {x, y}). near(x, y) → the
+// ascending indices in the 3×3 buckets around (x, y): every item within s on both axes of it.
+// Callers keep the order of the plain i < j loop they replace (separation, burn spread).
+N.buckets = function (items, s) {
+  const map = new Map(), inv = 1 / s;
+  const key = (cx, cy) => (cx + 4096) * 8192 + (cy + 4096);
+  for (let i = 0; i < items.length; i++) {
+    const it = items[i], k = key(Math.floor(it.x * inv), Math.floor(it.y * inv));
+    let b = map.get(k);
+    if (!b) map.set(k, (b = []));
+    b.push(i);
+  }
+  return {
+    near(x, y, out) {
+      out = out || [];
+      out.length = 0;
+      const cx = Math.floor(x * inv), cy = Math.floor(y * inv);
+      for (let oy = -1; oy <= 1; oy++) for (let ox = -1; ox <= 1; ox++) {
+        const b = map.get(key(cx + ox, cy + oy));
+        if (b) for (let i = 0; i < b.length; i++) out.push(b[i]);
+      }
+      return out.sort((a, b) => a - b);
+    },
+  };
+};
+
+// Count of non-floor cells (solid, void) per rectangle, from a summed-area table cached per grid:
+// blockedIn(g, x0, y0, x1, y1) (inclusive cells) → count; cells outside the grid count as blocked.
+const sats = new WeakMap();
+N.blockedIn = function (g, x0, y0, x1, y1) {
+  if (x0 < 0 || y0 < 0 || x1 >= g.w || y1 >= g.h) return 1;
+  let t = sats.get(g);
+  if (!t || t.ver !== g.cells) {
+    const W = g.w + 1, a = new Int32Array(W * (g.h + 1));
+    for (let y = 0; y < g.h; y++) for (let x = 0; x < g.w; x++) {
+      a[(y + 1) * W + x + 1] = (g.cells[y * g.w + x] !== FLOOR ? 1 : 0) + a[y * W + x + 1] + a[(y + 1) * W + x] - a[y * W + x];
+    }
+    t = { a, W, ver: g.cells };
+    sats.set(g, t);
+  }
+  const { a, W } = t;
+  return a[(y1 + 1) * W + x1 + 1] - a[y0 * W + x1 + 1] - a[(y1 + 1) * W + x0] + a[y0 * W + x0];
 };

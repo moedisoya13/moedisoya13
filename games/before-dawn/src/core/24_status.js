@@ -90,10 +90,17 @@ S.update = function (w, dt) {
       if (!e.dead && b.t <= 1e-9) { S.remove(w, e, 'burn'); e.burnImmuneT = C.burnImmune; }
     }
   }
-  // spread
+  // spread (in list order; buckets only skip enemies too far apart to touch)
+  let burning = false, maxR = 0;
+  for (const e of list) { if (e.statuses.burn && !e.dead && !e.down) burning = true; if (e.r > maxR) maxR = e.r; }
+  if (!burning) return;
+  const B = BD.nav.buckets(list, 2 * maxR + C.burnSpread + 0.01), n0 = list.length;
   for (const e of list) {
     if (e.dead || e.down || !e.statuses.burn) continue;
-    for (const o of list) {
+    const near = B.near(e.x, e.y);
+    for (let i = n0; i < list.length; i++) near.push(i); // anything that appeared during the spread
+    for (const oi of near) {
+      const o = list[oi];
       if (o === e || o.dead || o.statuses.burn || o.burnImmuneT > 0) continue;
       if (BD.math.dist(o.x, o.y, e.x, e.y) - o.r - e.r <= C.burnSpread) S.apply(w, o, 'burn', {});
     }

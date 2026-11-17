@@ -15,6 +15,10 @@ A.canAttack = (w, e) => e.noAttackT <= 0 && w.freezeT <= 0 && !w.hero.dead;
 A.edgeDist = (w, e) => W.edgeDist(w, e);
 A.angleToHero = (w, e) => Math.atan2(w.hero.y - e.y, w.hero.x - e.x);
 A.rng = (w) => w.rng.ai;
+// "Nothing hits from off screen" (big floors): is (x, y) — with a margin of pad u — inside the
+// view every client shows this tick (BD.view.rect: deterministic, device-independent).
+A.inView = (w, x, y, pad) => BD.view.inView(w, x, y, pad);
+A.seen = (w, e) => BD.view.inView(w, e.x, e.y, e.r);
 
 // Attack slots (§6.1 동시 공격 상한). cat: 'melee' | 'ranged'.
 A.slot = function (w, e, cat) {
@@ -53,6 +57,8 @@ A.move = function (w, e, dx, dy) {
 
 // Is the straight path from e to (x, y) free of obstacles (for direct steering)?
 A.clearPath = function (w, e, x, y) {
+  // fast path, same answer: no blocked cell in the box around the segment (rays offset < 1u)
+  if (!BD.nav.blockedIn(w.grid, Math.floor(Math.min(e.x, x)) - 1, Math.floor(Math.min(e.y, y)) - 1, Math.floor(Math.max(e.x, x)) + 1, Math.floor(Math.max(e.y, y)) + 1)) return true;
   const dir = Math.atan2(y - e.y, x - e.x), L = M.dist(e.x, e.y, x, y);
   const nx = -Math.sin(dir) * e.r * 0.9, ny = Math.cos(dir) * e.r * 0.9;
   return BD.nav.rayLen(w.grid, e.x + nx, e.y + ny, dir, L) >= L - 1e-6 && BD.nav.rayLen(w.grid, e.x - nx, e.y - ny, dir, L) >= L - 1e-6 && blockFreeVoid(w, e.x, e.y, x, y);
@@ -72,12 +78,16 @@ A.dirToHero = function (w, e) {
   return M.norm(wp[0] - e.x, wp[1] - e.y);
 };
 
-// Distance field to an arbitrary cell, cached per floor.
+// Distance field to an arbitrary cell, cached per floor (the FIELD_CACHE most recent targets).
+const FIELD_CACHE = 64;
 A.fieldTo = function (w, cx, cy) {
   w.fieldCache = w.fieldCache && w.fieldCache.floor === w.floorN ? w.fieldCache : { floor: w.floorN, map: new Map() };
-  const key = cy * w.grid.w + cx;
-  let f = w.fieldCache.map.get(key);
-  if (!f) { f = BD.nav.bfs(w.grid, cx, cy); w.fieldCache.map.set(key, f); }
+  const key = cy * w.grid.w + cx, map = w.fieldCache.map;
+  let f = map.get(key);
+  if (f) { map.delete(key); map.set(key, f); return f; } // most recent last
+  f = BD.nav.bfs(w.grid, cx, cy);
+  map.set(key, f);
+  if (map.size > FIELD_CACHE) map.delete(map.keys().next().value); // a big floor has many targets
   return f;
 };
 A.dirTo = function (w, e, x, y) {
@@ -197,12 +207,22 @@ A.update = function (w, dt) {
 };
 
 // Enemies push each other apart (never into the keep-out ring).
+// Pairs are visited in the order of the plain i < j loop; buckets (cell 2·max r + SEP_MARGIN, by
+// the positions at the start) only skip pairs that cannot touch, so big crowds stay linear.
+const SEP_MARGIN = 1.0;
+const sepNear = [];
 A.separate = function (w) {
   const L = w.enemies;
+  let maxR = 0;
+  for (const e of L) if (e.r > maxR) maxR = e.r;
+  const B = BD.nav.buckets(L, 2 * maxR + SEP_MARGIN), start = L.map((e) => [e.x, e.y]);
   for (let i = 0; i < L.length; i++) {
     const a = L[i];
     if (a.dead || a.down) continue;
-    for (let j = i + 1; j < L.length; j++) {
+    const near = B.near(start[i][0], start[i][1], sepNear);
+    for (let q = 0; q < near.length; q++) {
+      const j = near[q];
+      if (j <= i) continue;
       const b = L[j];
       if (b.dead || b.down) continue;
       const dx = b.x - a.x, dy = b.y - a.y, rr = a.r + b.r;

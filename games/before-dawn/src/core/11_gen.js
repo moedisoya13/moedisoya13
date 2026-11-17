@@ -120,9 +120,18 @@ G.guardianKinds = function (type) {
   return BD.enemies.all().filter((d) => d.type === type && d.guardian).map((d) => d.id);
 };
 
-function buildRoom(seed, n, attempt, forceFallback) {
+// A floor size from a plan or gen opts: integer sides within C.GEN_SIZE (throws otherwise).
+G.checkSize = function (size, who) {
+  const L = C.GEN_SIZE;
+  if (!Array.isArray(size) || size.length !== 2 || !size.every((v) => Number.isInteger(v) && v >= L.min && v <= L.max)) {
+    BD.fail(`gen: ${who || 'floor'} size must be [W, H], integers ${L.min}..${L.max}, got ${JSON.stringify(size)}`);
+  }
+  return size;
+};
+
+function buildRoom(seed, n, attempt, forceFallback, forced) {
   const rng = BD.sub(seed, 'gen', 'floor' + n + '/try' + attempt);
-  const size = n === 1 ? [12, 12] : rng.pick(C.ROOM_SIZES);
+  const size = forced || (n === 1 ? [12, 12] : rng.pick(C.ROOM_SIZES));
   const W = size[0], H = size[1];
   const shapes = BD.gen.shapes.all().filter((s) => n > 1 || s.firstFloor);
   const patterns = BD.gen.patterns.all().filter((p) => n > 1 || p.firstFloor);
@@ -135,7 +144,11 @@ function buildRoom(seed, n, attempt, forceFallback) {
   return { grid, rng, shape: shape.id, pattern: pattern.id };
 }
 
-G.floor = function (seed, tier, n, domType, nextDomType) {
+// opts (optional): {size: [W, H]} — a floor of that size (big floors, v2); offscreen: copied to
+// the floor for the client's off-screen indicators / minimap switches.
+G.floor = function (seed, tier, n, domType, nextDomType, opts) {
+  opts = opts || {};
+  const forced = opts.size ? G.checkSize(opts.size) : null;
   const mods = BD.tierMods(tier);
   const srng = BD.sub(seed, 'gen', 'spawns' + n);
   const all = srng.shuffle(G.spawnList(n, domType));
@@ -157,7 +170,7 @@ G.floor = function (seed, tier, n, domType, nextDomType) {
   let room, layout, reason, attempts = 0, fallback = false;
   for (let a = 0; a <= C.GEN_RETRIES; a++) {
     attempts = a + 1;
-    room = buildRoom(seed, n, a, a === C.GEN_RETRIES);
+    room = buildRoom(seed, n, a, a === C.GEN_RETRIES, forced);
     fallback = a === C.GEN_RETRIES;
     layout = G.place(room.grid, room.rng, spawns.w1.length);
     if (typeof layout === 'string') { reason = layout; continue; }
@@ -168,6 +181,7 @@ G.floor = function (seed, tier, n, domType, nextDomType) {
   return {
     n, domType, nextDomType, w: room.grid.w, h: room.grid.h, cells: room.grid.toString(),
     shape: room.shape, pattern: room.pattern, attempts, fallback, layout, spawns, trial,
+    ...(opts.offscreen ? { offscreen: opts.offscreen } : {}),
   };
 };
 
@@ -190,10 +204,20 @@ G.rooftop = function (seed) {
 };
 
 // Whole run: six floors (§7.1). Pure function of (seed, tier).
-G.run = function (seed, tier) {
+// opts (optional): {sizes: {n: [W, H]}} overrides the floor plan per floor (tests, staging).
+G.run = function (seed, tier, opts) {
+  opts = opts || {};
   const od = G.domOrder(BD.sub(seed, 'gen', 'domOrder'));
+  const plan = BD.gen.plans.all()[0] || null;
   const floors = [null];
-  for (let n = 1; n <= 5; n++) floors.push(G.floor(seed, tier, n, od.order[n - 1], n < 5 ? od.order[n] : 'rooftop'));
+  for (let n = 1; n <= 5; n++) {
+    const dom = od.order[n - 1], next = n < 5 ? od.order[n] : 'rooftop';
+    let size = opts.sizes && opts.sizes[n];
+    if (!size && plan) size = plan.size(n, { seed, tier, domType: dom, rng: BD.sub(seed, 'gen', 'plan' + n) }) || null;
+    const fo = size ? { size: G.checkSize(size, plan ? `plan '${plan.id}' floor ${n}` : 'floor ' + n) } : {};
+    if (size && plan && plan.offscreen) fo.offscreen = plan.offscreen(n);
+    floors.push(G.floor(seed, tier, n, dom, next, fo));
+  }
   floors.push(G.rooftop(seed));
   return { seed, tier, domOrder: od.order, reduced: od.reduced, floors };
 };

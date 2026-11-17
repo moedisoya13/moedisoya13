@@ -78,6 +78,29 @@ BD.simRun = function (o) {
   };
 };
 
+// Stage floor n of the running world at any size with `enemies` live enemies (tests, profiling,
+// screenshots; never used by the game). Waves stop (wave 3, no guardian), the entry freeze is
+// skipped, enemies stand on random floor cells at least minDist from the hero (bottom corner).
+// o: {size: [W, H] (default [48, 48]), enemies (150), kinds (every non-boss kind), floor (2), minDist (6)}
+BD.stageFloor = function (w, o) {
+  o = o || {};
+  const n = o.floor || 2, old = w.run.floors[n];
+  const f = BD.gen.floor(w.seed, w.tier, n, old.domType, old.nextDomType, { size: o.size || [48, 48], offscreen: o.offscreen });
+  w.run.floors[n] = f;
+  BD.flow.enterFloor(w, n);
+  w.enemies = []; w.rifts = []; w.queue = []; w.wave.n = 3; w.freezeT = 0;
+  const kinds = o.kinds || BD.enemies.all().filter((d) => d.type !== 'boss').map((d) => d.id);
+  const rng = BD.sub(w.seed, 'stage', 'spawn' + n);
+  let cells = [];
+  for (let y = 0; y < w.grid.h; y++) for (let x = 0; x < w.grid.w; x++) {
+    if (w.grid.walkable(x, y) && M.dist(x + 0.5, y + 0.5, w.hero.x, w.hero.y) >= (o.minDist || 6)) cells.push([x + 0.5, y + 0.5]);
+  }
+  cells = rng.shuffle(cells);
+  const count = o.enemies === undefined ? 150 : o.enemies;
+  for (let i = 0; i < count && i < cells.length; i++) BD.W.makeEnemy(w, kinds[i % kinds.length], cells[i][0], cells[i][1], { via: 'placed' });
+  return { floor: n, w: w.grid.w, h: w.grid.h, enemies: w.enemies.length };
+};
+
 BD.harness = function (app) {
   app = app || BD.createApp({ storage: BD.progress.memoryStorage(), params: { nosave: true } });
   const need = () => { if (!app.world) BD.fail('no run in progress'); return app.world; };
@@ -99,6 +122,7 @@ BD.harness = function (app) {
     start: (o) => { app.startRun(o); return api.state(); },
     give: (cardId, slot) => { const w = need(); BD.cardRt.equip(w, slot === undefined ? 0 : slot, cardId); },
     goto: (floor) => { const w = need(); BD.flow.enterFloor(w, floor); },
+    stage: (o) => BD.stageFloor(need(), o),
     setHp: (n) => { need().hero.hp = Math.max(0, Math.min(need().hero.maxHp, n | 0)); },
     killAll: () => { const w = need(); for (const e of w.enemies.slice()) if (!e.dead) BD.combat.kill(w, e); w.rifts = []; w.queue = []; },
     events: (n) => need().bus.recent(n || 20).map((e) => JSON.parse(JSON.stringify(e, (k, v) => (k === 'shapes' ? undefined : v)))),
