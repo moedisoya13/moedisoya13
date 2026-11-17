@@ -7,7 +7,7 @@
 const STAY = 5.0, RING = 2.2, SHOCK = 5, PACKS = 2, THREATS = 1;
 
 BD.sites.register({
-  id: 'seal', name: '봉인석', stay: STAY, total: true, ring: RING, known: true, states: ['intact', 'cracked', 'broken'],
+  id: 'seal', name: '봉인석', stay: STAY, total: true, ring: RING, known: true, ringColor: '#ffd24a', states: ['intact', 'cracked', 'broken'],
   first(w, site) {
     const rng = w.rng.spawn, P = BD.places, row = BD.director.row(w), kinds = [];
     for (let i = 0; i < THREATS; i++) kinds.push(P.threat(w, rng));

@@ -398,6 +398,8 @@ function crown(g, x, y) {
 }
 
 function drawEnemy(g, v, e, w, t) {
+  // task objects (role 'object': the nests) are drawn by the stage as sites; only their own overlay here
+  if (e.role === 'object') { if (BD.render.objects.has(e.kind)) BD.render.objects.get(e.kind).draw(g, v, e, w, t); return; }
   const def = e.def;
   const id = def.sprite;
   const [fx] = v.worldDirToScreen(Math.cos(e.face), Math.sin(e.face));
@@ -556,6 +558,12 @@ R.drawWorld = function (g, ui, dt) {
   if (w.stairs) ringProgress(g, v, w.stairs.ringX, w.stairs.ringY, C.INTERACT.ring, I.target === 'stairs' && I.need ? I.progress / I.need : 0, w.stairs.open ? '#ffd56a' : '#9b59d0');
   if (w.altar && w.altar.state === 'lit') ringProgress(g, v, w.altar.x, w.altar.y, C.INTERACT.ring, I.target === 'altar' ? I.progress / I.need : 0);
   if (w.trial && w.trial.state === 'available') ringProgress(g, v, w.trial.x, w.trial.y, C.INTERACT.ring, I.target === 'trial' ? I.progress / I.need : 0, '#c9a0ff');
+  // v2 sites (GDD-V2 §5.7): the stay ring of every idle site, its time so far as the arc
+  for (const s of w.sites) {
+    const d = BD.sites.has(s.kind) ? BD.sites.get(s.kind) : null;
+    if (!d || d.passive || s.phase !== 'idle' || !flatOn(v, s.x, s.y, (d.ring || 1) + 0.5)) continue;
+    ringProgress(g, v, s.x, s.y, d.ring || C.INTERACT.ring, s.need ? s.progress / s.need : 0, d.ringColor);
+  }
   // zones, telegraphs
   for (const z of w.zones) if (flatOn(v, z.x, z.y, z.r)) (BD.render.zones.has(z.kind) ? BD.render.zones.get(z.kind) : BD.render.zones.get('fire')).draw(g, v, z, w, t);
   if (w.telegraphs.length) {
@@ -584,7 +592,7 @@ R.drawWorld = function (g, ui, dt) {
   for (const e of w.enemies) if (!e.dead && actorOn(v, e.x, e.y, e.size * (e.boss ? 1.6 : 1))) items.push({ k: e.x + e.y + (e.down ? -0.3 : 0), f: () => drawEnemy(g, v, e, w, t) });
   R.anim.ghostItems(items, g, v, w, t);
   items.push({ k: w.hero.x + w.hero.y, f: () => drawHero(g, v, w, t) });
-  for (const p of w.pickups) if (actorOn(v, p.x, p.y, 0.3)) items.push({ k: p.x + p.y, f: () => drawFlask(g, v, p, t) });
+  for (const p of w.pickups) if (actorOn(v, p.x, p.y, 0.3)) items.push({ k: p.x + p.y, f: () => (BD.render.pickups.has(p.kind) ? BD.render.pickups.get(p.kind).draw(g, v, p, t, w) : drawFlask(g, v, p, t)) });
   if (w.altar) items.push({ k: w.altar.x + w.altar.y, f: () => drawAltar(g, v, w.altar, t, w) });
   items.sort((a, b) => a.k - b.k);
   for (const it of items) it.f();

@@ -297,7 +297,7 @@ ST.pushItems = function (items, g, v, w, t, actorOn) {
     items.push({ k: tr.x + tr.y, f: () => SI.draw(g, v, 'rift', tr.x, tr.y, tr.state, t, theme) });
   }
   for (const list of [w.sites, w.floor.sites]) if (Array.isArray(list)) for (const s of list) {
-    const id = s.id || s.kind;
+    const id = s.kind || s.id; // the engine's w.sites carry kind (id is a number); floor.sites may name it by id
     if (!SI.defs.has(id) || !actorOn(v, s.x, s.y, 1)) continue;
     items.push({ k: s.x + s.y, f: () => SI.draw(g, v, id, s.x, s.y, s.state === undefined ? SI.defs.get(id).states[0] : s.state, t, theme) });
   }

@@ -90,7 +90,7 @@ P.shock = function (w, x, y, r, o) {
     BD.combat.damage(w, e, o.dmg, { source: 'burst', direct: false, fromX: x, fromY: y });
     if (o.push && !e.dead) BD.combat.knock(w, e, nx, ny, o.push, {});
   }
-  if (o.vfx !== false) W.emit(w, 'vfx', { kind: 'shock', x, y, r });
+  if (o.vfx !== false) W.emit(w, 'vfx', { kind: 'shock', x, y, r, life: 0.5 });
 };
 
 P.count = function (w, pred) {

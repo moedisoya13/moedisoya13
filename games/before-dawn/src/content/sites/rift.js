@@ -5,7 +5,7 @@
 const PACKS = 2;
 
 BD.sites.register({
-  id: 'rift', name: '시련의 균열', stay: 1.5, optional: true, states: ['available', 'active', 'spent'],
+  id: 'rift', name: '시련의 균열', stay: 1.5, optional: true, ringColor: '#c9a0ff', states: ['available', 'active', 'spent'],
   use(w, site) {
     const rng = w.rng.spawn, P = BD.places, row = BD.director.row(w), tag = { rift: site.id, keep: true };
     P.warn(w, site.x, site.y, [P.eliteKind(w)], { r0: 1.2, r1: 2.0, elite: true, flags: Object.assign({ marker: 'threat', riftElite: true }, tag) });

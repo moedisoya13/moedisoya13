@@ -107,7 +107,9 @@ AS.stage = function (w, o) {
   w.run.floors[n] = f;
   BD.flow.enterFloor(w, n);
   w.enemies = []; w.rifts = []; w.queue = []; w.wave.n = 3; w.freezeT = 0;
-  w.sites = SITES.map(([id, state, zx, zy], i) => { const [x, y] = freeNear(w.grid, zx * Z + 8 + (i % 2 ? 2.5 : -2.5), zy * Z + 8 + (i % 3) - 1); return { id, state, x, y }; });
+  // display-only sites: floor.sites (the art draws them; w.sites is the engine's running list)
+  w.sites = [];
+  f.sites = SITES.map(([id, state, zx, zy], i) => { const [x, y] = freeNear(w.grid, zx * Z + 8 + (i % 2 ? 2.5 : -2.5), zy * Z + 8 + (i % 3) - 1); return { id, state, x, y }; });
   const kinds = BD.enemies.all().filter((d) => d.type !== 'boss').map((d) => d.id), rng = BD.sub(w.seed, 'stage', 'art');
   let free = [];
   for (let y = 0; y < w.grid.h; y++) for (let x = 0; x < w.grid.w; x++) if (w.grid.walkable(x, y) && Math.hypot(x + 0.5 - w.hero.x, y + 0.5 - w.hero.y) >= 6) free.push([x + 0.5, y + 0.5]);

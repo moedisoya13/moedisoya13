@@ -7,7 +7,7 @@
 const NEED = 40, RING = 3.5, WANT = 1.4, ELITE_AT = 20;
 
 BD.sites.register({
-  id: 'brazier', name: '화로', stay: NEED, total: true, ring: RING, known: true, states: ['cold', 'lit'],
+  id: 'brazier', name: '화로', stay: NEED, total: true, ring: RING, known: true, ringColor: '#ff9a3a', states: ['cold', 'lit'],
   first(w) { BD.W.banner(w, '화로에 불이 붙었다 — 지켜라', 'task'); },
   use(w, site) {
     for (const e of w.enemies.slice()) if (!e.dead && e.role === 'fodder' && BD.W.onScreen(w, e.x, e.y)) { e.lastSource = 'burst'; BD.combat.kill(w, e); }

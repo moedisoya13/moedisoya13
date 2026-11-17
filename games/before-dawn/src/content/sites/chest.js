@@ -5,7 +5,7 @@
 const GUARDS = { threats: 2, fodder: 6 };
 
 BD.sites.register({
-  id: 'chest', name: '상자', stay: 0.8, optional: true, states: ['closed', 'open'],
+  id: 'chest', name: '상자', stay: 0.8, optional: true, ringColor: '#e0b23e', states: ['closed', 'open'],
   enter(w, site) {
     const rng = w.rng.spawn, P = BD.places, kinds = [];
     for (let i = 0; i < GUARDS.threats; i++) kinds.push(P.threat(w, rng));

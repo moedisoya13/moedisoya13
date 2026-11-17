@@ -6,8 +6,9 @@ const PACK = 6;
 
 BD.tasks.register({
   id: 'hunt', name: '사냥', layout: 'ruin', icon: 'chief',
-  // the middle chief stands beside the ruin's centre ring (4u off the zone centre on both axes)
-  places() { return [{ kind: 'chief', zone: [0, 2] }, { kind: 'chief', zone: [2, 0] }, { kind: 'chief', zone: [1, 1], at: [4, 4] }]; },
+  // the middle chief stands beside the ruin's centre ring (5u off the zone centre on both axes: its 5 × 5
+  // stays clear of the ring, and 12u from the optional sites at the neighbouring zone centres)
+  places() { return [{ kind: 'chief', zone: [0, 2] }, { kind: 'chief', zone: [2, 0] }, { kind: 'chief', zone: [1, 1], at: [5, 5] }]; },
   goal() { return 3; },
   start(w, task) {
     const P = BD.places, rng = w.rng.spawn, kind = P.eliteKind(w);
