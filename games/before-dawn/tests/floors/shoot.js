@@ -49,8 +49,8 @@ const STAGE = `(function (seed, task, type, roof) {
 // in the page: the whole floor on one canvas → PNG data URL
 const OVERVIEW = `(function (label) {
   const BD = window.BD, R = BD.client.render, KIT = R.kit, w = window.__BD.world(), grid = w.grid, C = BD.C;
-  const f = BD.view.frame(grid), bottom = f.y1 + 40, k = 0.5;
-  const x0 = -grid.h * C.ISO_X - 90, x1 = grid.w * C.ISO_X + 90, y0 = -190, y1 = bottom + 40;
+  const bottom = (grid.w + grid.h) * C.ISO_Y + 150, k = 0.5; // a strip of the facade below the slab
+  const x0 = -grid.h * C.ISO_X - 90, x1 = grid.w * C.ISO_X + 90, y0 = -190, y1 = bottom + 10;
   const cv = document.createElement('canvas'); cv.width = Math.ceil((x1 - x0) * k); cv.height = Math.ceil((y1 - y0) * k);
   const g = cv.getContext('2d'); g.fillStyle = '#0b0c12'; g.fillRect(0, 0, cv.width, cv.height);
   g.scale(k, k);

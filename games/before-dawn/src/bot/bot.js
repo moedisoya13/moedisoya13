@@ -16,7 +16,8 @@
 //  ② HP ≤ 45: a flask within 20u → go to it; else an unused spring (a site of kind 'spring')
 //  ③ a halo, or a holy stone with ≥ 8 enemies within 3u, within 8u and not inside a warning → go to it
 //  ④ the goal, chosen every 2 s: the guardian → the nearest task place left (a seal, nest or brazier
-//     site; a chief of the hunt) → the elite of a rift he opened → sites by opts.sites ('smart' default:
+//     site; a chief of the hunt; an optional site he wants within 10u comes first, on the way) → the
+//     elite of a rift he opened → sites by opts.sites ('smart' default:
 //     chests always, the altar once, a rift at HP ≥ 70; 'all': every optional site, a spring only below
 //     full HP; 'none') → open stairs
 //  ⑤ ≥ 6 enemies within 2.2u: step away from the centroid of those within 4u, keeping the nearest
@@ -33,6 +34,7 @@ const M = BD.math;
 const B = BD.bot = {};
 const SAMPLE_DIRS = 16;
 const SHOT_LOOKAHEAD = 0.6; // s of a hostile projectile's flight treated as danger
+const NEAR_SITE = 10;       // u: an optional site this close comes before the task places (rule ④)
 
 // The stretch a hostile projectile covers in the next SHOT_LOOKAHEAD s, as a line shape.
 // remain = time until it reaches the hero's position along its path (Infinity once past).
@@ -192,7 +194,9 @@ function goal(w, opts) {
     if (s.optional && mode === 'all') want = s.kind !== 'spring' || h.hp < h.maxHp;
     else if (s.optional && mode === 'smart') want = s.kind === 'chest' || (s.kind === 'altar' && !w.botAltarUsed) || (s.kind === 'rift' && h.hp >= 70);
     if (!want) continue;
-    const d = M.dist(h.x, h.y, s.x, s.y) + (s.optional ? 1000 : 0); // task places first
+    // task places first; an optional site he wants within 10u is taken on the way (a short detour while
+    // the horde is about, not a walk back over an empty floor after the clear)
+    const dd = M.dist(h.x, h.y, s.x, s.y), d = dd + (s.optional && dd > NEAR_SITE ? 1000 : 0);
     if (!best || d < best.d) best = { d, g: { x: s.x, y: s.y, kind: 'site', site: s } };
   }
   for (const e of w.enemies) {
