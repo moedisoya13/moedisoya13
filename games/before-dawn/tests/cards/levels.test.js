@@ -73,17 +73,17 @@ module.exports = {
     H.step(1);
     t.eq(ring.filter((e) => e.statuses.burn).length, 2);
   },
-  'lightning: 3 → 4 jumps → 80 % → 6 jumps in 3.5u; level 5 strikes the target every fifth hitting swing (r 1.6, × 1.5, 0.5 s stun)'(t) {
+  'lightning: 3 → 4 jumps → 70 % → 5 jumps in 3.2u (tuned, GDD 80 % / 6 in 3.5u); level 5 strikes the target every fifth hitting swing (r 1.6, × 1.5, 0.5 s stun)'(t) {
     const { BD, H, w } = world(t, { hand: ['lightning'] });
     t.eq([lv(BD, w, 'lightning').jumps, lv(BD, w, 'lightning').pct], [3, 0.6]);
     up(BD, w, 'lightning', 2); t.eq([lv(BD, w, 'lightning').jumps, lv(BD, w, 'lightning').jumpsWet], [4, 6]);
-    up(BD, w, 'lightning', 3); t.eq(lv(BD, w, 'lightning').pct, 0.8);
-    up(BD, w, 'lightning', 4); t.eq([lv(BD, w, 'lightning').jumps, lv(BD, w, 'lightning').range], [6, 3.5]);
+    up(BD, w, 'lightning', 3); t.eq(lv(BD, w, 'lightning').pct, 0.7);
+    up(BD, w, 'lightning', 4); t.eq([lv(BD, w, 'lightning').jumps, lv(BD, w, 'lightning').jumpsWet, lv(BD, w, 'lightning').range], [5, 7, 3.2]);
     const p = place(BD, w, 'goblin', 1.2, 0, { hp: 9999 });
     const chainTo = [1, 2, 3, 4, 5, 6, 7].map((i) => place(BD, w, 'goblin', 1.2 + i * 2.5, 0, { hp: 9999 }));
     swingOnce(BD, H, w);
-    t.eq(chainTo.filter((e) => hitsOn(w, e, 'chain').length).length, 6, 'six jumps');
-    t.eq(hitsOn(w, chainTo[0], 'chain')[0].dmg, Math.round(10 * 0.8));
+    t.eq(chainTo.filter((e) => hitsOn(w, e, 'chain').length).length, 5, 'five jumps');
+    t.eq(hitsOn(w, chainTo[0], 'chain')[0].dmg, Math.round(10 * 0.7));
     up(BD, w, 'lightning', 5);
     const side = place(BD, w, 'goblin', 1.2, 1.2, { hp: 9999 });
     const n = [];

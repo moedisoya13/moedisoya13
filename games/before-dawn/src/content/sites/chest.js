@@ -23,21 +23,5 @@ BD.sites.register({
   look(w, s) { return s.phase === 'idle' ? 'closed' : 'open'; },
   guards: GUARDS,
 });
-
-// The chest's three options: one per equipped card, slot order — "+1 level" while it can grow, else a
-// boon in its place (distinct, drawn with w.rng.choice); 여명의 숨 if nothing is left (GDD-V2 §4.6).
-BD.growth.kinds.chest = function (w) {
-  const C = BD.C, out = [], rng = w.rng.choice;
-  const boons = rng.shuffle(BD.boons.ids().filter((id) => (w.hero.boons[id] || 0) < BD.boons.get(id).max));
-  for (let i = 0; i < 3; i++) {
-    const c = w.cards[i];
-    if (c && (c.level || 1) < BD.cardRt.maxLevel(c.def)) {
-      const to = (c.level || 1) + 1;
-      out.push({ kind: 'card', id: c.id, name: c.def.name, from: c.level || 1, to, text: BD.cardRt.levelText(c.def, to), pick: 'card:' + c.id });
-    } else if (boons.length) {
-      const id = boons.shift(), b = BD.boons.get(id), to = (w.hero.boons[id] || 0) + 1;
-      out.push({ kind: 'boon', id, name: b.name, from: to - 1, to, text: b.text(to), pick: 'boon:' + id });
-    } else out.push({ kind: 'breath', id: 'breath', name: '여명의 숨', from: 0, to: 0, text: 'HP +' + C.V2.choice.breathHp, pick: 'breath' });
-  }
-  return out;
-};
+// The chest's three options are the cards side's: BD.growth.options(w, 'chest') (src/core/29_growth.js,
+// GDD-V2 §4.6) — each equipped card that can grow in slot order, a boon in a top card's place, then 여명의 숨.

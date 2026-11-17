@@ -1,37 +1,59 @@
-// 망자의 안식 (quest: collection) — GDD §5.4, §4.
-// Before: +4 damage to undead. Quest: 12 undead kills (any source) while equipped.
-// Awakened (permanent): +3 to every enemy and +10 to undead (the undead bonus replaces the +3,
-// it is not +13 — see docs/requests/cards.md "Interpretations"). An undead kill bursts for 20
-// on every other enemy whose edge is within 1.8u. Ghouls no longer rise (as 성광).
-// Altar: offered only when the floors after this one still hold ≥ 12 undead (§5.6 ①).
-// On screen: before — a pale white glow on undead the blade hits (vfx 'rod_glow') and a gold
-// mote flying from each counted kill to the slot (vfx 'quest_mote'); after — a white rim on
-// every trail (the card trail drawers check it; vfx 'rod_rim' rims the engine-drawn base fan)
-// and a white explosion where undead die (vfx 'rod_burst'). Slot: "7/12", then "각성".
+// 망자의 안식 (quest: collection) — GDD §5.4, §4, GDD-V2 §4.4.
+// Before: extra damage to undead. Quest: undead kills (any source) while equipped.
+// Awakened (permanent): extra damage to every enemy and more to undead (the undead bonus replaces
+// the all-enemy one, it does not add — docs/requests/cards.md "Interpretations"); an undead kill
+// bursts on every other enemy whose edge is within the radius; ghouls no longer rise (as 성광).
+// Levels (cumulative, ctx.lv):
+//   1 before +4 undead, quest 150; after +3 all / +10 undead, undead kill bursts 20 in 1.8u
+//   2 before +6 undead, quest 120 (a card already past 120 awakens at once)
+//   3 after: burst radius 2.4u   4 after: +5 all / +14 undead
+//   5 after: every 8th kill of any type bursts as well (one burst per kill at most)
+// Altar: offered only while a floor above this one (up to 5F) is an undead floor (GDD-V2 §4.4).
+// On screen: before — a pale white glow on undead the blade hits (vfx 'rod_glow') and a gold mote
+// flying from each counted kill to the slot (vfx 'quest_mote'); after — a white rim on every trail
+// (the card trail drawers check it; vfx 'rod_rim' rims the engine-drawn base fan) and a white
+// explosion where they die (vfx 'rod_burst'). Slot: "37/150", then "각성" (+ pips toward the 8th kill).
 const K = BD.cardKit;
-const T = { goal: 12, flat: 4, awakeAll: 3, awakeUndead: 10, burstR: 1.8, burstDmg: 20 };
+const T = { goal: 150 };
 
 BD.cards.register({
   id: 'rest_of_dead', name: '망자의 안식', family: 'quest', goal: T.goal, unlock: 'base', icon: 'rest_of_dead',
-  desc: '언데드에게 피해 +4. 퀘스트: 언데드 12 처치. 각성: 모든 적에게 +3, 언데드에게 +10. 언데드를 처치하면 반경 1.8u 폭발 20. 구울 부활 없음.',
+  desc: '언데드에게 피해 +4. 퀘스트: 언데드 150 처치. 각성: 모든 적에게 +3, 언데드에게 +10. 언데드를 처치하면 반경 1.8u 폭발 20. 구울 부활 없음.',
   T,
-  offerable: (info) => info.byType.undead >= T.goal,
+  levels: [null,
+    { text: '각성 전: 언데드 +4. 퀘스트: 언데드 150 처치. 각성 후: 모든 적 +3, 언데드 +10, 언데드 처치 시 반경 1.8u 폭발 20, 구울 부활 없음', goal: 150, before: 4, all: 3, undead: 10, r: 1.8, dmg: 20, every: 0 },
+    { text: '각성 전 언데드 +6, 목표 120', before: 6, goal: 120 },
+    { text: '각성 후 폭발 반경 2.4u', r: 2.4 },
+    { text: '각성 후 모든 적 +5, 언데드 +14', all: 5, undead: 14 },
+    { text: '각성 후 유형과 상관없이 처치 8번째마다 폭발', every: 8 },
+  ],
+  offerable: (info) => K.typesLeft(info).includes('undead'),
+  init(ctx) { ctx.state.goal = ctx.lv.goal; ctx.state.kills = 0; },
+  onLevel(ctx) {
+    const st = ctx.state;
+    st.goal = ctx.lv.goal;
+    if (!st.awakened && st.progress >= st.goal) { st.progress = st.goal; ctx.awaken(); }
+  },
   flat(ctx, e) {
-    const a = ctx.state.awakened;
-    if (e.type === 'undead') return a ? T.awakeUndead : T.flat;
-    return a ? T.awakeAll : 0;
+    const a = ctx.state.awakened, lv = ctx.lv;
+    if (e.type === 'undead') return a ? lv.undead : lv.before;
+    return a ? lv.all : 0;
   },
   onHit(ctx, e) {
     if (e.type === 'undead' && !ctx.state.awakened) K.vfx(ctx, 'rod_glow', { x: K.r3(e.x), y: K.r3(e.y), life: 0.35 });
   },
   on: {
     kill(ev, ctx) {
-      if (K.etype(ev) !== 'undead') return;
-      if (ctx.state.awakened) {
-        K.burst(ctx, ev.x, ev.y, T.burstR, T.burstDmg, ev.enemyId);
-        K.vfx(ctx, 'rod_burst', { x: ev.x, y: ev.y, r: T.burstR, life: 0.45 });
+      const st = ctx.state, lv = ctx.lv, undead = K.etype(ev) === 'undead';
+      if (st.awakened) {
+        let go = undead;
+        if (lv.every) { st.kills++; if (st.kills >= lv.every) { st.kills = 0; go = true; } }
+        if (!go) return;
+        K.burst(ctx, ev.x, ev.y, lv.r, lv.dmg, ev.enemyId);
+        K.vfx(ctx, 'rod_burst', { x: ev.x, y: ev.y, r: lv.r, life: 0.45 });
         return;
       }
+      if (!undead) return;
       ctx.addProgress(1);
       K.vfx(ctx, 'quest_mote', { x: ev.x, y: ev.y, slot: ctx.card.slot, life: 0.7 });
       K.questToast(ctx);
@@ -48,7 +70,12 @@ BD.cards.register({
       if (shapes.length) K.vfx(ctx, 'rod_rim', { shapes, elements: ev.elements.slice(), life: 0.2 });
     },
   },
-  hud(state) { return { text: state.awakened ? '각성' : state.progress + '/' + state.goal, glow: !!state.awakened }; },
+  hud(state, ctx) {
+    if (!state.awakened) return { text: state.progress + '/' + state.goal, glow: false };
+    const o = { text: '각성', glow: true };
+    if (ctx && ctx.lv.every) o.pips = Math.floor(state.kills / 2);
+    return o;
+  },
 });
 
 BD.render.vfx.register({

@@ -61,10 +61,10 @@ module.exports = {
     t.eq(hitsOn(w, g).map((x) => x.dmg), [10, 10]);
     t.assert(!g.statuses.sunder);
   },
-  'mana_backlash: unlock at 20 mage kills; +5 to magic; a hit mage is bound 2.5 s'(t) {
+  'mana_backlash: unlock at 1200 magic-type kills (GDD-V2 §8); +5 to magic; a hit mage is bound 2.5 s'(t) {
     const { BD, H, w } = world(t, { hand: ['mana_backlash'] });
     const d = BD.cards.get('mana_backlash'), s = BD.progress.fresh();
-    s.counters.mageKills = 19; t.eq(d.unlock(s), false); s.counters.mageKills = 20; t.eq(d.unlock(s), true);
+    s.counters.mageKills = 5000; s.counters.magicKills = 1199; t.eq(d.unlock(s), false); s.counters.magicKills = 1200; t.eq(d.unlock(s), true);
     const m = place(BD, w, 'mage', 1.2, 0, { hp: 999 });
     swingOnce(BD, H, w);
     t.eq(hitsOn(w, m).map((x) => x.dmg), [15]);
@@ -76,14 +76,14 @@ module.exports = {
     t.eq(hitsOn(w, g).map((x) => x.dmg), [10]);
     t.assert(!g.statuses.bind);
   },
-  'mana_backlash: a magic kill (any source) bursts 25 on others within 2.5u'(t) {
+  'mana_backlash: a magic kill (any source) bursts 12 on others within 1.8u (GDD-V2 §4.4 level 1)'(t) {
     const { BD, H, w } = world(t, { hand: ['mana_backlash'] });
     const m = place(BD, w, 'mage', 3, 3, { hp: 1 });
-    const near = place(BD, w, 'goblin', 3, 5.4, { hp: 999 });   // edge 2.05
-    const far = place(BD, w, 'goblin', 3, 6.0, { hp: 999 });    // edge 2.65
+    const near = place(BD, w, 'goblin', 3, 5.0, { hp: 999 });   // edge 1.68
+    const far = place(BD, w, 'goblin', 3, 5.2, { hp: 999 });    // edge 1.88
     BD.combat.damage(w, m, 5, { source: 'burn', direct: false });
     t.assert(m.dead);
-    t.eq(hitsOn(w, near).map((x) => [x.source, x.dmg, x.direct]), [['burst', 25, false]]);
+    t.eq(hitsOn(w, near).map((x) => [x.source, x.dmg, x.direct]), [['burst', 12, false]]);
     t.eq(hitsOn(w, far).length, 0);
     t.eq(evs(w, 'vfx', (x) => x.kind === 'mana_burst').length, 1);
   },

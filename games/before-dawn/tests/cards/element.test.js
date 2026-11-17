@@ -54,10 +54,10 @@ module.exports = {
     t.eq(hitsOn(w, s).map((x) => x.dmg), [10]);
     t.eq(hitsOn(w, o, 'chain').map((x) => x.dmg), [10]);
   },
-  'tide: unlock at 150 kills; push 1.2u away from the hero, wet 4 s'(t) {
+  'tide: unlock at 4000 kills (GDD-V2 §8); push 1.2u away from the hero, wet 4 s'(t) {
     const { BD, H, w } = world(t, { hand: ['tide'] });
     const d = BD.cards.get('tide'), s = BD.progress.fresh();
-    s.counters.kills = 149; t.eq(d.unlock(s), false); s.counters.kills = 150; t.eq(d.unlock(s), true);
+    s.counters.kills = 3999; t.eq(d.unlock(s), false); s.counters.kills = 4000; t.eq(d.unlock(s), true);
     const e = place(BD, w, 'goblin', 1.2, 0, { hp: 999 });
     const x0 = e.x;
     swingOnce(BD, H, w);

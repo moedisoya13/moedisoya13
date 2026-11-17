@@ -113,6 +113,9 @@ BD.createApp = function (opts) {
   app.cmd = function (name, a, b) {
     if (name === 'altar') return BD.flow.altarCmd(app.world, a, b);
     if (name === 'choice') {
+      // the v2 altar (GDD-V2 §4.6, §10.3): pick / slot / back / pray / later — src/content/cards/_altar.js
+      const cw = app.world;
+      if (cw && cw.choiceOpen && cw.choice && cw.choice.kind === 'altar') return BD.cardAltar.cmd(cw, a, b);
       if (a === 'pick') return BD.growth.pick(app.world, b);
       BD.fail(`choice command '${a}' is not available for a growth choice`);
     }

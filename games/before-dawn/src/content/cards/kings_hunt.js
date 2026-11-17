@@ -1,15 +1,19 @@
-// 왕의 사냥 (quest: challenge) — GDD §5.4, §4.
-// Before: +3 damage to guardians, elites and the demon king. Quest: kill 3 floor guardians
-// while equipped (`guardian_kill`; the rooftop boss is not a floor guardian).
-// Awakened (permanent): ×1.6 instead of +3 against the same targets; a guardian kill heals
-// the hero fully, an elite kill heals 15 (heal source 'kings_hunt').
-// Altar: offered only while ≥ 3 guardians remain above (floors 1–2, §5.6 ①).
-// On screen: a gold target sigil over every guardian / elite / the boss while equipped, a gold
-// crown once awakened (decor 'kings_hunt_mark'); a gold "+N" when it heals (vfx 'royal_heal');
-// a gold mote to the slot for each counted guardian. Slot: "1/3", then "각성".
+// 왕의 사냥 (quest: challenge) — GDD §5.4, §4, GDD-V2 §4.4.
+// Targets: elites, guardians and the demon king. Before: extra damage to them. Quest: 5 kills of
+// elites or floor guardians while equipped (the demon king is not one).
+// Awakened (permanent): × instead of + against the same targets; a guardian kill heals the hero
+// fully, an elite kill heals 15 (heal source 'kings_hunt').
+// Levels (cumulative, ctx.lv):
+//   1 before +3; after ×1.6   2 before +6   3 a target kill drops one more big shard (25)
+//   4 after ×1.9   5 the first blow on each target is ×3 (once per target)
+// Altar: offered only while two or more floors remain above this one (GDD-V2 §4.4 "남은 층 ≥ 2").
+// On screen: a gold target sigil over every target while equipped, a gold crown once awakened
+// (decor 'kings_hunt_mark', a white flash around it while the ×3 first blow is still unspent); a
+// gold "+N" when it heals (vfx 'royal_heal'); a gold mote to the slot for each counted kill; a gold
+// spear-flash on the ×3 blow (vfx 'royal_first'). Slot: "1/5", then "각성".
 const K = BD.cardKit;
 const M = BD.math;
-const T = { goal: 3, flat: 3, mult: 1.6, eliteHeal: 15 };
+const T = { goal: 5, eliteHeal: 15, shard: 25, first: 3 };
 const royal = (e) => !!(e.guardian || e.elite || e.boss);
 
 function heal(ctx, amount) {
@@ -19,24 +23,42 @@ function heal(ctx, amount) {
 
 BD.cards.register({
   id: 'kings_hunt', name: '왕의 사냥', family: 'quest', goal: T.goal, unlock: 'base', icon: 'kings_hunt',
-  desc: '수호자·정예·마왕에게 피해 +3. 퀘스트: 층 수호자 3 처치. 각성: 수호자·정예·마왕에게 피해 ×1.6. 수호자를 처치하면 HP 전부 회복, 정예는 HP +15.',
+  desc: '정예·수호자·마왕에게 피해 +3. 퀘스트: 정예·수호자 5 처치. 각성: 정예·수호자·마왕에게 피해 ×1.6. 수호자를 처치하면 HP 전부 회복, 정예는 HP +15.',
   T,
-  offerable: (info) => info.guardians >= T.goal,
-  flat(ctx, e) { return !ctx.state.awakened && royal(e) ? T.flat : 0; },
-  mult(ctx, e) { return ctx.state.awakened && royal(e) ? T.mult : 1; },
+  levels: [null,
+    { text: '각성 전: 정예·수호자·마왕 +3. 퀘스트: 정예·수호자 5 처치. 각성 후: × 1.6, 수호자 처치 시 HP 전부, 정예 처치 시 HP +15', flat: 3, mult: 1.6, shard: 0, first: 0 },
+    { text: '각성 전 +6', flat: 6 },
+    { text: '대상을 처치하면 큰 빛 조각(25) 하나를 더 떨군다', shard: T.shard },
+    { text: '각성 후 × 1.9', mult: 1.9 },
+    { text: '대상에게 넣는 첫 일격이 × 3(대상마다 한 번)', first: T.first },
+  ],
+  offerable: (info) => K.floorsLeft(info) >= 2,
+  flat(ctx, e) { return !ctx.state.awakened && royal(e) ? ctx.lv.flat : 0; },
+  mult(ctx, e) {
+    if (!royal(e)) return 1;
+    let m = ctx.state.awakened ? ctx.lv.mult : 1;
+    if (ctx.lv.first && !e.flags.royalStruck) m *= ctx.lv.first;
+    return m;
+  },
+  onHit(ctx, e) {
+    if (!ctx.lv.first || !royal(e) || e.flags.royalStruck) return;
+    e.flags.royalStruck = true;
+    K.vfx(ctx, 'royal_first', { x: K.r3(e.x), y: K.r3(e.y), life: 0.5 });
+  },
   on: {
-    guardian_kill(ev, ctx) {
-      if (ctx.state.awakened) return;
-      const st = ctx.state, h = ctx.w.hero;
-      ctx.addProgress(1);
-      K.vfx(ctx, 'quest_mote', { x: st.gx !== undefined ? st.gx : K.r3(h.x), y: st.gy !== undefined ? st.gy : K.r3(h.y), slot: ctx.card.slot, life: 0.7 });
-      K.questToast(ctx);
-    },
     kill(ev, ctx) {
-      if (ev.guardian) { ctx.state.gx = ev.x; ctx.state.gy = ev.y; } // guardian_kill follows this event
-      if (!ctx.state.awakened) return;
-      if (ev.guardian) heal(ctx, ctx.hero.maxHp);
-      else if (ev.elite) heal(ctx, T.eliteHeal);
+      const st = ctx.state;
+      if (!(ev.guardian || ev.elite || ev.boss)) return;
+      if (ctx.lv.shard && !ev.boss) BD.growth.drop(ctx.w, ev.x, ev.y, ctx.lv.shard);
+      if (st.awakened) {
+        if (ev.guardian) heal(ctx, ctx.hero.maxHp);
+        else if (ev.elite) heal(ctx, T.eliteHeal);
+        return;
+      }
+      if (ev.boss) return;
+      ctx.addProgress(1);
+      K.vfx(ctx, 'quest_mote', { x: ev.x, y: ev.y, slot: ctx.card.slot, life: 0.7 });
+      K.questToast(ctx);
     },
     quest_awaken(ev, ctx) { if (ev.cardId === ctx.card.id) ctx.toast('각성: ' + ctx.def.name); },
   },
@@ -52,6 +74,9 @@ BD.render.decor.register({
     const x = box.x, y = box.top - (e.guardian ? 40 : 22) + Math.sin(t * 3 + e.id) * 2;
     g.save(); g.translate(x, y);
     g.lineWidth = 2;
+    if (BD.cardRt.lv(c.def, c.level || 1).first && !e.flags.royalStruck) { // the ×3 first blow waits
+      g.beginPath(); g.arc(0, 0, 15 + 2 * Math.sin(t * 9), 0, M.TAU); g.strokeStyle = 'rgba(255,255,255,' + (0.6 + 0.4 * Math.sin(t * 9)) + ')'; g.lineWidth = 2.5; g.stroke();
+    }
     if (c.state.awakened) {
       K.draw.path(g, [[-11, 5], [-11, -6], [-5, -1], [0, -10], [5, -1], [11, -6], [11, 5]], true);
       g.fillStyle = K.GOLD; g.fill(); g.lineWidth = 2.5; g.strokeStyle = K.INK; g.stroke();
@@ -74,5 +99,22 @@ BD.render.vfx.register({
   draw(g, v, ev, k, w) {
     const h = w.hero, c = v.proj(h.x, h.y, 108 + 28 * k);
     K.draw.text(g, '+' + ev.amount, c[0] - 18, c[1], 24, K.GOLD, 1 - k * k);
+  },
+});
+
+// 5단계: the ×3 first blow — a gold star burst on the target and "×3"
+BD.render.vfx.register({
+  id: 'royal_first',
+  draw(g, v, ev, k) {
+    const D = K.draw, a = 1 - k, c = v.proj(ev.x, ev.y, 50);
+    g.save(); g.translate(c[0], c[1]); g.globalAlpha = a;
+    const s = 18 + 26 * k;
+    for (let i = 0; i < 8; i++) {
+      const an = (i / 8) * M.TAU + 0.2, L = i % 2 ? s * 0.55 : s;
+      D.path(g, [[Math.cos(an + 0.2) * 5, Math.sin(an + 0.2) * 5], [Math.cos(an) * L, Math.sin(an) * L], [Math.cos(an - 0.2) * 5, Math.sin(an - 0.2) * 5]], true);
+      g.fillStyle = i % 2 ? '#ffffff' : K.GOLD; g.fill(); g.lineWidth = 1.5; g.strokeStyle = K.INK; g.stroke();
+    }
+    g.restore();
+    D.text(g, '×3', c[0], c[1] - 30 - 20 * k, 26, K.GOLD, a);
   },
 });

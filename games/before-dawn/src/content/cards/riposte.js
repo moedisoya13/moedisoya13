@@ -1,18 +1,22 @@
-// 반격 (trigger) — GDD §5.3, §2.4.
-// Hurt → 0.15 s later a counter: a circle of radius 2.6u around the hero at ×2 swing damage
-// (source 'riposte', direct; elements apply). A dash that lets an attack pass (`dodge`) → an
-// immediate ×3 counter and the dash cooldown is reset. Either counter puts the card on a 2.0 s
-// cooldown; while it is cooling down, hurts and dodges do nothing (and the dash is not reset).
-// On screen: the pauldron flashes (decor 'riposte_flash') and an orange double ring bursts
-// out (trail 'riposte'). Slot: ring = cooldown left (the "대기 가림막").
+// 반격 (trigger) — GDD §5.3, §2.4, GDD-V2 §4.4.
+// Hurt → 0.15 s later a counter: a circle around the hero at ×2 swing damage (source 'riposte',
+// direct; elements apply). A dash that lets an attack pass (`dodge`) → an immediate ×3 counter and
+// the dash cooldown is reset. Either counter puts the card on its cooldown; while it is cooling
+// down, hurts and dodges do nothing (and the dash is not reset).
+// Levels (cumulative, ctx.lv):
+//   1 radius 2.6u, ×2 / ×3, cooldown 2.0 s   2 radius 3.2u   3 cooldown 1.2 s   4 ×3 / ×4
+//   5 every dash ends in a counter where it stops: radius 2.2u at ×1.5 (no cooldown of its own;
+//     the dash's own cooldown paces it)
+// On screen: the pauldron flashes (decor 'riposte_flash') and an orange double ring bursts out
+// (trail 'riposte'). Slot: ring = cooldown left (the "대기 가림막").
 const K = BD.cardKit;
 const M = BD.math;
-const T = { r: 2.6, hurtScale: 2, dodgeScale: 3, delay: 0.15, cd: 2.0 };
+const T = { delay: 0.15, dashR: 2.2, dashScale: 1.5 };
 
-function counter(w, card, scale) {
+function counter(w, card, r, scale) {
   const ctx = BD.cardRt.ctx(w, card);
   card.state.flashT = w.t;
-  ctx.strike({ shapes: [{ kind: 'circle', r: T.r, factor: 1, source: 'riposte', card: 'riposte' }], factorScale: scale, source: 'riposte' });
+  ctx.strike({ shapes: [{ kind: 'circle', r, factor: 1, source: 'riposte', card: 'riposte' }], factorScale: scale, source: 'riposte' });
 }
 function ready(ctx) { return ctx.w.t >= ctx.state.readyAt - 1e-9; }
 
@@ -20,25 +24,38 @@ BD.cards.register({
   id: 'riposte', name: '반격', family: 'trigger', unlock: 'base', icon: 'riposte',
   desc: '피격 0.15초 뒤 반경 2.6u 원형 반격(베기 피해 ×2, 속성 적용). 돌진으로 공격을 흘리면 즉시 ×3 반격 + 돌진 대기 초기화. 반격 재사용 2.0초.',
   T,
-  init(ctx) { ctx.state.readyAt = 0; ctx.state.flashT = -99; },
+  levels: [null,
+    { text: '피격 0.15초 뒤 반경 2.6u 반격(× 2). 돌진으로 흘리면 × 3 + 돌진 대기 초기화. 재사용 2.0초', r: 2.6, hurt: 2, dodge: 3, cd: 2.0, dashEnd: false },
+    { text: '반경 3.2u', r: 3.2 },
+    { text: '재사용 1.2초', cd: 1.2 },
+    { text: '배율 × 3 / × 4', hurt: 3, dodge: 4 },
+    { text: '모든 돌진이 끝나는 자리에서 반경 2.2u 반격(× 1.5)', dashEnd: true },
+  ],
+  init(ctx) { ctx.state.readyAt = 0; ctx.state.flashT = -99; ctx.state.dashing = false; },
   on: {
     hurt(ev, ctx) {
       if (!ready(ctx)) return;
-      const card = ctx.card, w = ctx.w, floor = w.floorN;
-      ctx.state.readyAt = w.t + T.cd;
+      const card = ctx.card, w = ctx.w, floor = w.floorN, lv = ctx.lv;
+      ctx.state.readyAt = w.t + lv.cd;
       ctx.after(T.delay, (w2) => {
         if (w2.cards[card.slot] !== card || w2.hero.dead || w2.floorN !== floor) return;
-        counter(w2, card, T.hurtScale);
+        counter(w2, card, lv.r, lv.hurt);
       });
     },
     dodge(ev, ctx) {
       if (!ready(ctx)) return;
-      ctx.state.readyAt = ctx.w.t + T.cd;
-      counter(ctx.w, ctx.card, T.dodgeScale);
+      ctx.state.readyAt = ctx.w.t + ctx.lv.cd;
+      counter(ctx.w, ctx.card, ctx.lv.r, ctx.lv.dodge);
       ctx.hero.dashCd = 0;
     },
+    // 5단계: the tick after a dash ends (the hero has stepped out of whatever he stopped in)
+    tick(ev, ctx) {
+      const h = ctx.hero, st = ctx.state, dashing = h.dashT > 0;
+      if (st.dashing && !dashing && ctx.lv.dashEnd && !h.dead) counter(ctx.w, ctx.card, T.dashR, T.dashScale);
+      st.dashing = dashing;
+    },
   },
-  hud(state, ctx) { return { ring: M.clamp((state.readyAt - ctx.w.t) / T.cd, 0, 1) }; },
+  hud(state, ctx) { return { ring: M.clamp((state.readyAt - ctx.w.t) / ctx.lv.cd, 0, 1) }; },
 });
 
 BD.render.trails.register({

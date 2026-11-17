@@ -93,7 +93,7 @@ P.summary = function (w, result, cause) {
     clock: BD.flow.clockStr(w), kills: w.stats.kills, trials: w.stats.trials, trialSec: BD.math.round(w.stats.trialSec, 1),
     dodges: w.stats.dodges, hurts: w.stats.hurts, cards, heldIds: Object.keys(w.stats.cards).sort(), topDamage: top,
     seed: w.seed, tier: w.tier, events: w.bus.count(),
-    run: { mageKills: w.stats.mageKills, magicKills: w.stats.magicKills !== undefined ? w.stats.magicKills : w.stats.mageKills, questAwakened: w.stats.questAwakened, comboMaxed: w.stats.comboMaxed },
+    run: { mageKills: w.stats.mageKills, magicKills: w.stats.magicKills || 0, questAwakened: w.stats.questAwakened, comboMaxed: w.stats.comboMaxed },
     // GDD-V2 §8: the level reached, the boons taken, the floor tasks finished
     level: w.hero.level || 1, boons: Object.assign({}, w.hero.boons || {}), tasks: (w.stats.tasks || []).slice(), shards: w.stats.shards || 0,
   };
@@ -115,7 +115,7 @@ P.endRun = function (save, sum) {
   if (!save.rerollUnlocked && save.runs >= 3) { save.rerollUnlocked = true; news.push({ kind: 'reroll' }); }
   const c = save.counters;
   c.kills += sum.kills; c.dodges += sum.dodges; c.mageKills += sum.run.mageKills || 0;
-  c.magicKills = (c.magicKills || 0) + (sum.run.magicKills !== undefined ? sum.run.magicKills : sum.run.mageKills || 0);
+  c.magicKills = (c.magicKills || 0) + (sum.run.magicKills || 0); // GDD-V2 §8 (마력 역류)
   c.questAwakened += sum.run.questAwakened; c.comboMaxed += sum.run.comboMaxed;
   save.bestLevel = Math.max(save.bestLevel || 0, sum.level || 0); // GDD-V2 §8
   save.bestKills = Math.max(save.bestKills || 0, sum.kills || 0);

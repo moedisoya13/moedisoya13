@@ -113,26 +113,41 @@ const boonOption = (w, id) => {
 };
 const breath = () => ({ kind: 'breath', id: 'breath', name: '여명의 숨', from: 0, to: 0, text: 'HP +' + C.V2.choice.breathHp, pick: 'breath' });
 
-G.options = function (w) {
+// kind 'level' (§4.3): two cards that can still grow + one boon (one card + two boons when only one
+// can grow, three boons when none can); then, once no boon is left, the other growable card before
+// 여명의 숨 — never a dead offer while something can still grow (cards owner: docs/requests/v2-cards.md).
+// kind 'chest' (§4.6): each equipped card that can grow, in slot order; a slot whose card is at its
+// top level (or an empty slot) is filled with a boon, then 여명의 숨.
+G.options = function (w, kind) {
   const rng = w.rng.choice, last = (w.choice && w.choice.lastCards) || w.lastCards || [];
   const U = w.cards.filter((c) => c && (c.level || 1) < BD.cardRt.maxLevel(c.def));
   const B = BD.boons.ids().filter((id) => (w.hero.boons[id] || 0) < BD.boons.get(id).max);
+  if (kind === 'chest') {
+    const out = U.slice().sort((a, b) => a.slot - b.slot).map(cardOption);
+    const boons = rng.shuffle(B);
+    while (out.length < 3 && boons.length) out.push(boonOption(w, boons.shift()));
+    while (out.length < 3) out.push(breath());
+    return out;
+  }
   const nCards = U.length >= 2 ? C.V2.choice.cardSlots : U.length;
   // cards not offered last time first (any card gets its chance within two choices), then slot order
-  const cards = rng.shuffle(U).sort((a, b) => (last.includes(a.id) ? 1 : 0) - (last.includes(b.id) ? 1 : 0)).slice(0, nCards);
-  const out = cards.sort((a, b) => a.slot - b.slot).map(cardOption);
+  const order = rng.shuffle(U).sort((a, b) => (last.includes(a.id) ? 1 : 0) - (last.includes(b.id) ? 1 : 0));
+  const out = order.slice(0, nCards).sort((a, b) => a.slot - b.slot).map(cardOption);
   const boons = rng.shuffle(B);
   while (out.length < 3 && boons.length) out.push(boonOption(w, boons.shift()));
+  for (const c of order.slice(nCards)) if (out.length < 3) out.push(cardOption(c));
   while (out.length < 3) out.push(breath());
   return out;
 };
 
-// Other choices built on the same overlay give their own options by kind (the chest: one of your
-// own cards, src/content/sites/chest.js): BD.growth.kinds[kind] = (w) → options.
+// Other choices built on the same overlay may give their own options by kind:
+// BD.growth.kinds[kind] = (w) → options (none is registered now: the chest's are G.options(w, 'chest')).
 G.kinds = {};
 G.open = function (w, kind) {
-  const options = G.kinds[kind] ? G.kinds[kind](w) : G.options(w);
-  w.choice = { kind: kind || 'level', options, level: w.hero.level - (w.choiceQueue || 0), lastCards: options.filter((o) => o.kind === 'card').map((o) => o.id) };
+  const options = G.kinds[kind] ? G.kinds[kind](w) : G.options(w, kind);
+  // a chest offers every card: it does not change which cards the next level choice puts first
+  const prev = (w.choice && w.choice.lastCards) || w.lastCards || [];
+  w.choice = { kind: kind || 'level', options, level: w.hero.level - (w.choiceQueue || 0), lastCards: kind === 'chest' ? prev : options.filter((o) => o.kind === 'card').map((o) => o.id) };
   w.choiceOpen = true;
   w.hero.dashBuf = 0;
   W.emit(w, 'choice_open', { kind: w.choice.kind, options: options.map((o) => o.pick) });

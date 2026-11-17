@@ -20,13 +20,26 @@ K.card = (w, id) => BD.cardRt.get(w, id);
 K.has = (w, id) => BD.cardRt.has(w, id);
 K.stack = (w, id) => { const c = BD.cardRt.get(w, id); return c ? c.state.stack || 0 : 0; };
 K.awakened = (w, id) => { const c = BD.cardRt.get(w, id); return !!(c && c.state.awakened); };
+// the merged level numbers (ctx.lv) of an equipped card, or null
+K.lvOf = (w, id) => { const c = BD.cardRt.get(w, id); return c ? BD.cardRt.lv(c.def, c.level || 1) : null; };
 
-// 관통 geometry (GDD §5.3) and 일섬's stages (§5.5): ≥4 the swing has a pierce line, at 8 the
-// pierce line (the card's or the one 일섬 adds) is 6.0u × 1.4u.
+// 관통 geometry (GDD §5.3) and 일섬's stages (§5.5, GDD-V2 §4.4): from its pierce stack (4, or 3 at
+// 일섬 4단계) the swing has a pierce line, at 8 the pierce line (the card's or 일섬's) is 6.0u × 1.4u.
 K.PIERCE = { len: 4.2, width: 0.9 };
 K.PIERCE_BIG = { len: 6.0, width: 1.4 };
-K.hasPierce = (w) => K.has(w, 'pierce') || K.stack(w, 'one_flash') >= 4;
+K.flashPierce = (w) => { const lv = K.lvOf(w, 'one_flash'); return !!lv && K.stack(w, 'one_flash') >= lv.pierceAt; };
+K.hasPierce = (w) => K.has(w, 'pierce') || K.flashPierce(w);
 K.pierceSize = (w) => (K.stack(w, 'one_flash') >= 8 ? K.PIERCE_BIG : K.PIERCE);
+
+// Quest feasibility at the altar (GDD-V2 §4.4): info from BD.cardAltar.remaining — {floor,
+// floorsLeft, domTypes} for the floors after this one (up to 5F). The v1 runtime's offers pass
+// {byType, guardians, floor}: read as "floors left = guardians left".
+K.floorsLeft = (info) => (info.floorsLeft !== undefined ? info.floorsLeft : info.guardians || 0);
+K.typesLeft = (info) => info.domTypes || Object.keys(info.byType || {}).filter((k) => info.byType[k] > 0);
+
+// Every Nth hitting swing (GDD-V2 §4.4 "베기 N번째마다", only swings that hit count): a card keeps
+// state.n += 1 on each swing_end with hits; the swing whose earlier count is ≡ N − 1 (mod N) is it.
+K.nthSwing = (state, every) => every > 0 && (state.n || 0) % every === every - 1;
 
 // Enemy type of a `hit` / `kill` payload. The bus overwrites the payload's GDD `type` field with
 // the event name (docs/requests/cards.md #1), so read it from the kind instead.

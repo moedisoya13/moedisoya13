@@ -47,17 +47,18 @@ module.exports = {
   async 'slots: quest progress and awakening, combo stacks, max, stage badge, reset reasons'(t) {
     const T = await playing(t, 'rest_of_dead,chain_slash,flawless');
     try {
+      const goal = await T.eval(() => window.__BD.world().cards[0].state.goal); // GDD-V2 §4.4: 150 (v1 12)
       await T.eval(() => { const w = window.__BD.world(); window.BD.cardRt.addProgress(w, w.cards[0], 7); });
       await T.wait();
-      t.assert(has(await T.texts(), '7/12'), 'quest progress in the slot');
-      await T.eval(() => { const w = window.__BD.world(); window.BD.cardRt.addProgress(w, w.cards[0], 3); });
+      t.assert(has(await T.texts(), '7/' + goal), 'quest progress in the slot');
+      await T.eval((g) => { const w = window.__BD.world(); window.BD.cardRt.addProgress(w, w.cards[0], g - 9); }, goal);
       await T.wait();
       t.assert(has(await toasts(T), '망자의 안식: 앞으로 2'), 'two to go');
       await T.eval(() => { const w = window.__BD.world(); window.BD.cardRt.addProgress(w, w.cards[0], 2); });
       await T.wait();
       // GDD §5.4: once awakened the slot turns gold for good; the card's own hud() shows 각성
       t.assert(has(await T.texts(), '각성'), 'awakened slot text');
-      t.assert(!(await T.texts()).includes('12/12'), 'the count is replaced');
+      t.assert(!(await T.texts()).includes(goal + '/' + goal), 'the count is replaced');
       t.eq(await T.eval(() => { const w = window.__BD.world(); return window.BD.ui.cards.hud(w, w.cards[0]).awakened; }), true, 'gold frame state');
       t.assert(has(await toasts(T), '각성: 망자의 안식'), 'awaken toast');
       t.assert((await T.texts()).includes('각성: 망자의 안식'), 'awaken banner');

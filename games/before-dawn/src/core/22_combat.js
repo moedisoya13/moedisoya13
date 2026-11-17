@@ -181,6 +181,7 @@ K.kill = function (w, e) {
   BD.hazards.cancelOwned(w, e.id);
   w.stats.kills++;
   if (e.kind === 'mage') w.stats.mageKills++;
+  if (e.type === 'magic') w.stats.magicKills++; // 마력 역류's v2 unlock (GDD-V2 §8)
   W.emit(w, 'kill', {
     enemyId: e.id, kind: e.kind, type: e.type, elite: e.elite, guardian: e.guardian, boss: e.boss,
     burning: !!e.statuses.burn, wet: !!e.statuses.wet, source: e.lastSource || 'slash', x: M.round(e.x, 3), y: M.round(e.y, 3),
@@ -194,11 +195,12 @@ K.kill = function (w, e) {
 
 // Knockback (tide, dash). dist is scaled by the enemy's knockScale (guardian 0.33, boss 0).
 // opts.slam: hitting a wall/obstacle deals the fixed slam damage and stuns (§5.3 tide).
+// opts.slamDmg: that damage instead of STATUS.slamDmg (해류 2·4단계, GDD-V2 §4.4).
 K.knock = function (w, e, nx, ny, dist, opts) {
   const d = dist * e.knockScale;
   if (d <= 0 || e.dead) return;
   const T = C.STATUS.knockTime;
-  e.knock = { vx: (nx * d) / T, vy: (ny * d) / T, t: T, slam: !!(opts && opts.slam) };
+  e.knock = { vx: (nx * d) / T, vy: (ny * d) / T, t: T, slam: !!(opts && opts.slam), slamDmg: (opts && opts.slamDmg) || 0 };
 };
 
 K.updateKnock = function (w, e, dt) {
@@ -211,7 +213,7 @@ K.updateKnock = function (w, e, dt) {
     e.knock = null;
     W.emit(w, 'slam', { enemyId: e.id, x: M.round(e.x, 3), y: M.round(e.y, 3) });
     e.stunT = Math.max(e.stunT, C.STATUS.slamStun);
-    K.damage(w, e, C.STATUS.slamDmg, { source: 'slam', direct: false });
+    K.damage(w, e, k.slamDmg || C.STATUS.slamDmg, { source: 'slam', direct: false });
     return;
   }
   if (hit || k.t <= 0) e.knock = null;
