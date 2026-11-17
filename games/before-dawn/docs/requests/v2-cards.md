@@ -211,6 +211,34 @@ without that cap.
 (`card dmg %` counts hits whose source is not the bare blade or the dash, so flat and multiplier
 cards — 발도, 연참, the target cards — show little there; read them by kills/min and floor.)
 
+`node tools/fun/measure.js --seeds 1-12 --cards` after tuning (the engine's own report, the same
+pilot; 12 seeds because it runs serially):
+
+```
+one card alone, seeds 1-12, human-like pilot (card-blind steering)
+
+card                    wins   med floor      1F sec   kills/min multi-hit %  card dmg % card ev/min
+(no card)                  0           3       149.2       151.9        72.4         5.4        48.3
+armor_break                0           3       149.6       148.9        69.1        10.5          73
+chain_slash                0           3       140.4       159.6        62.6         8.2       101.8
+drawcut                    0           5       120.5       183.3        59.7         2.8        37.8
+fire_pilgrimage            2           6       136.2       188.7          48          52       436.6
+flame                      1           6       129.9       189.2        50.2        46.6       415.7
+flawless                   1           4       120.9       171.7        59.7          28       165.8
+holy_light                 0           3       176.2       161.7        63.4        31.6          97
+kings_hunt                 0           3       144.9       140.6        74.3         4.5          33
+leech                      0           3       182.7       150.9        69.1         9.3        62.6
+lightning                  0           6       113.3       193.2        45.5        59.5       295.8
+mana_backlash              0           3       158.8       144.8        70.6         5.9          39
+one_flash                  2           5       114.6       188.2        71.3        46.1       146.7
+pierce                     0           5       132.9       186.1        80.5        85.3       289.6
+rest_of_dead               0           3       162.7       158.9        63.2        26.5        96.5
+riposte                    0           3       156.4       143.9        64.7        27.7        74.5
+sword_wave                 0           4       143.7       179.7        25.6        76.2       330.1
+tide                       0           4       162.4       171.4        61.1        28.8       175.1
+whirl                      0           3       123.7       164.2        79.8        45.6         186
+```
+
 **Left as they are, with the reason.** At the bottom alone are 왕의 사냥, 반격, 망자의 안식, 갑옷
 파쇄, 성광 and 회전베기 (mean floor 2.6–3.0 against 3.2 for no card: a card that does little alone
 costs the four choices that would have gone to boons). The target cards and 망자의 안식 work on one
