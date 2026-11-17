@@ -415,7 +415,7 @@ PR.register({
   id: 'bookshelf', name: '책장', tall: true, fit: (w, h) => Math.min(w, h) === 1, height: () => 82,
   draw(g, P, it, ctx) {
     const ax = it.w >= it.h, rng = ctx.rng, sd = ax ? 'l' : 'r';
-    KIT.box(g, P, 0.06, 0.12, it.w - 0.12, it.h - 0.24, 0, 78, ctx.theme === 'magic' ? pal('#5a4a6e') : MAT.wood);
+    KIT.box(g, P, 0.06, 0.12, it.w - 0.12, it.h - 0.24, 0, 78, ctx.theme === 'magic' ? pal('#5e4a3a') : MAT.wood); // walnut: never the purple floor's hue
     const n = Math.max(it.w, it.h);
     for (let s = 0; s < 4; s++) {
       const z0 = 6 + s * 18;

@@ -257,27 +257,37 @@ const growthSprite = (c, theme) => KIT.sprite('G:' + c.seed + '|' + theme + '|' 
 ST.pushItems = function (items, g, v, w, t, actorOn) {
   const m = ST.of(w), W = m.W, grid = w.grid, theme = m.theme, layout = m.layout;
   if (!m.solids) { m.solids = []; for (let y = 0; y < m.H; y++) for (let x = 0; x < W; x++) if (grid.get(x, y) === BD.CELL.SOLID) m.solids.push([x, y]); }
-  const h = w.hero, hp = v.proj(h.x, h.y), hk = h.x + h.y;
-  const hx0 = hp[0] - 26, hx1 = hp[0] + 26, hy0 = hp[1] - 96, hy1 = hp[1];
+  // who could be hidden this frame: the hero, every enemy on screen and every warning — their
+  // screen boxes and depth keys. A tall prop slice or a front growth that covers one of them from
+  // in front turns see-through (GDD-V2 §5.9: figures behind tall props stay visible).
+  const behind = [];
+  const h = w.hero, hp = v.proj(h.x, h.y);
+  behind.push([h.x + h.y, hp[0] - 26, hp[1] - 96, hp[0] + 26, hp[1]]);
+  for (const e of w.enemies) {
+    if (e.dead || !actorOn(v, e.x, e.y, e.size)) continue;
+    const p = v.proj(e.x, e.y), s = e.size || 1;
+    behind.push([e.x + e.y, p[0] - 24 * s, p[1] - 80 * s, p[0] + 24 * s, p[1]]);
+  }
+  for (const tg of w.telegraphs) { const p = v.proj(tg.x, tg.y); behind.push([tg.x + tg.y, p[0] - 30, p[1] - 15, p[0] + 30, p[1] + 15]); }
+  const covers = (k, x0, y0, x1, y1) => {
+    for (const b of behind) if (b[0] < k - 0.3 && b[1] < x1 && b[3] > x0 && b[2] < y1 - 6 && b[4] > y0) return true;
+    return false;
+  };
   for (const [x, y] of m.solids) {
     if (!actorOn(v, x + 0.5, y + 0.5, 0.6)) continue;
     const i = m.cellProp[y * W + x];
     if (i < 0) continue;
-    const p = m.props[i];
+    const p = m.props[i], tall = R.props.get(p.id).tall;
     items.push({ k: x + y + 1, f: () => {
       const sp = R.props.piece(p, x - p.x, y - p.y, theme, layout), q = v.proj(x, y);
-      let a;
-      // a tall prop in front of the hero turns see-through where it covers him
-      if (x + y + 1 > hk + 0.35 && R.props.get(p.id).tall && q[0] + sp.x0 < hx1 && q[0] + sp.x0 + sp.w > hx0 && q[1] + sp.y0 < hy1 - 6 && q[1] + sp.y0 + sp.h > hy0) a = 0.42;
-      KIT.blit(g, sp, q[0], q[1], a);
+      KIT.blit(g, sp, q[0], q[1], tall && covers(x + y + 1, q[0] + sp.x0, q[1] + sp.y0, q[0] + sp.x0 + sp.w, q[1] + sp.y0 + sp.h) ? 0.42 : undefined);
     } });
   }
   for (const c of m.growth.front) {
     if (!actorOn(v, c.x, c.y, 0.8)) continue;
     items.push({ k: c.x + c.y, f: () => {
       const q = v.proj(c.x, c.y), sp = growthSprite(c, theme);
-      const cover = c.x + c.y > hk && q[0] + sp.x0 < hx1 && q[0] + sp.x0 + sp.w > hx0 && q[1] + sp.y0 < hy1 - 6 && q[1] + sp.y0 + sp.h > hy0;
-      KIT.blit(g, sp, q[0], q[1], cover ? 0.42 : undefined);
+      KIT.blit(g, sp, q[0], q[1], covers(c.x + c.y + 0.3, q[0] + sp.x0 + 10, q[1] + sp.y0 + 10, q[0] + sp.x0 + sp.w - 10, q[1] + sp.y0 + sp.h) ? 0.42 : undefined);
     } });
   }
   if (w.trial && (w.trial.state === 'available' || w.trial.state === 'active')) {
