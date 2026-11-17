@@ -75,6 +75,10 @@ BD.render.decor = BD.makeRegistry('decor', {
 });
 BD.render.obstacles = BD.makeRegistry('obstacle drawer', { required: ['draw'] });   // by obstacle pattern id
 BD.render.vfx = BD.makeRegistry('vfx drawer', { required: ['draw'] });             // by vfx event kind
+// Off-screen awareness sources (big floors): collect(w, out) pushes markers
+//   {x, y, kind: 'objective'|'threat', color?, icon?(g, x, y, r), id?}
+// shown as edge-of-screen markers and on the minimap when they are switched on (src/client/70_offscreen.js).
+BD.render.markers = BD.makeRegistry('marker source', { required: ['collect'] });
 
 BD.onFinalize(function () {
   const meta = BD.assetMeta || {};

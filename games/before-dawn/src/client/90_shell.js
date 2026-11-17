@@ -14,6 +14,7 @@ SH.params = function (search) {
     seed: num('seed'), tier: num('tier') || 0, hand: q.get('hand') || undefined, floor: num('floor'),
     bot: q.get('bot') === '1', speed: Math.max(1, Math.min(64, num('speed') || 1)),
     mute: q.get('mute') === '1', nosave: q.get('nosave') === '1',
+    anim: q.get('anim') || null, // clip viewer: ?anim=1 (all characters) or ?anim=<char>
   };
 };
 
@@ -136,6 +137,7 @@ SH.start = function () {
   });
   window.__BD = Object.assign(BD.harness(app), { ui, params });
   BD.client.input.attach(canvas, ui);
+  if (params.anim) BD.client.animView.attach(canvas, ui, params.anim);
   window.addEventListener('resize', () => view.resize());
   const autoPause = () => { if (!app.botOn) app.pause(); };
   document.addEventListener('visibilitychange', () => { if (document.hidden) autoPause(); });
@@ -184,6 +186,8 @@ SH.start = function () {
     if (!ready) {
       g.fillStyle = '#05060d'; g.fillRect(0, 0, C.VIEW_W, C.VIEW_H);
       ui.text('불러오는 중…', C.VIEW_W / 2, C.VIEW_H / 2, { align: 'center', size: 24 });
+    } else if (params.anim) {
+      BD.client.animView.draw(g, ui, dt);
     } else {
       if (app.mode === 'play' && app.world) {
         BD.client.render.drawWorld(g, ui, app.overlay() ? 0 : dt);

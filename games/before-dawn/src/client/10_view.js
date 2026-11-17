@@ -80,8 +80,17 @@ BD.client.createView = function (canvas) {
     v.rox = C.ROOM_CX - (W / 2 - H / 2) * C.ISO_X;
     v.roy = C.ROOM_CY - (W / 2 + H / 2) * C.ISO_Y;
   };
-  // world → logical screen (z = height in px)
+  // world → logical screen (z = height in px). rox / roy are set by the camera
+  // (src/client/15_camera.js) every frame; setRoom is the v1 fixed placement it reproduces.
   v.proj = (wx, wy, z) => [v.rox + (wx - wy) * C.ISO_X, v.roy + (wx + wy) * C.ISO_Y - (z || 0)];
+  // logical screen → world on the ground plane (z = 0): touches, clicks, minimap picks
+  v.toWorld = (lx, ly) => BD.view.unmap(lx - v.rox, ly - v.roy);
+  // client px (pointer clientX/Y relative to the canvas) → world, through the turn and the camera
+  v.clientToWorld = (cx, cy) => { const [lx, ly] = v.toLogical(cx, cy); return v.toWorld(lx, ly); };
+  // culling: is logical point (x, y) on screen, with margins l, t, r, b px (default 0)
+  v.onScreen = (x, y, l, t, r, b) => x >= -(l || 0) && x <= C.VIEW_W + (r === undefined ? l || 0 : r) && y >= -(t === undefined ? l || 0 : t) && y <= C.VIEW_H + (b === undefined ? l || 0 : b);
+  // world point on screen (feet at the ground), margins as onScreen
+  v.worldOnScreen = (wx, wy, l, t, r, b) => { const p = v.proj(wx, wy); return v.onScreen(p[0], p[1], l, t, r, b); };
   // screen-space direction → normalised world direction
   v.screenDirToWorld = function (sx, sy) {
     const wx = sx / (2 * C.ISO_X) + sy / (2 * C.ISO_Y), wy = -sx / (2 * C.ISO_X) + sy / (2 * C.ISO_Y);

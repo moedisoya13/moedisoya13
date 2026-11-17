@@ -28,6 +28,7 @@ FX.draw = function (g, v, layer) {
     if (p.layer !== layer) continue;
     const k = 1 - p.age / p.life;
     const [x, y] = p.screen ? [p.x, p.y] : v.proj(p.x, p.y, p.z);
+    if (!p.screen && !v.onScreen(x, y, 60)) continue; // world particles follow the camera; skip off screen
     g.globalAlpha = Math.max(0, Math.min(1, k * (p.alpha || 1)));
     if (p.shape === 'text') {
       g.font = BD.ui.font(p.size || 22, 900);

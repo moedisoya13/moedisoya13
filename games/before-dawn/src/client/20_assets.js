@@ -49,15 +49,21 @@ function prepare(id, bmp) {
   AS.white[id] = c;
 }
 
+function decode(url) {
+  const b64 = url.slice(url.indexOf(',') + 1);
+  const blob = new Blob([b64ToBytes(b64)], { type: 'image/webp' });
+  const viaBitmap = typeof createImageBitmap === 'function' ? createImageBitmap(blob) : Promise.reject(new Error('no createImageBitmap'));
+  return viaBitmap.catch(() => new Promise((res, rej) => {
+    const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = url;
+  }));
+}
+
+// Sprites first (the game can start), animation strips (BD.animData, file → data URL) after:
+// AS.anim[file] is set as each strip decodes; until then its clips fall back (src/client/34_anim.js).
+AS.anim = {};
 AS.load = function () {
   const ids = Object.keys(BD.assetData || {});
-  return Promise.all(ids.map((id) => {
-    const url = BD.assetData[id];
-    const b64 = url.slice(url.indexOf(',') + 1);
-    const blob = new Blob([b64ToBytes(b64)], { type: 'image/webp' });
-    const viaBitmap = typeof createImageBitmap === 'function' ? createImageBitmap(blob) : Promise.reject(new Error('no createImageBitmap'));
-    return viaBitmap.catch(() => new Promise((res, rej) => {
-      const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = url;
-    })).then((bmp) => prepare(id, bmp));
-  })).then(() => { AS.ready = true; });
+  const sprites = Promise.all(ids.map((id) => decode(BD.assetData[id]).then((bmp) => prepare(id, bmp)))).then(() => { AS.ready = true; });
+  AS.animReady = sprites.then(() => Promise.all(Object.keys(BD.animData || {}).map((f) => decode(BD.animData[f]).then((bmp) => { AS.anim[f] = bmp; }, (err) => { console.warn('anim strip ' + f + ': ' + err); }))));
+  return sprites;
 };

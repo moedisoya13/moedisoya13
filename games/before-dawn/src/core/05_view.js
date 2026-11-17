@@ -8,12 +8,12 @@
 // view shows map x ∈ [fx − 640, fx + 640], y ∈ [fy − 350, fy + 370]. Logical size is always
 // 1280 × 720 (letterboxed, also in forced landscape), so the view is the same on every device.
 //
-// Per axis: if the floor's projected box plus C.CAM.frame margins fits the view, the focus is the
+// Per axis: if the floor's projected box plus C.CAM.fit margins fits the view, the focus is the
 // room centre (v1: every room fits on both axes, so v1 is unchanged); else the focus follows and
-// is clamped so the view stays inside the frame.
+// is clamped so the view stays inside the frame (the box plus C.CAM.frame margins).
 //
 //   BD.view.map(x, y) → [mx, my]            BD.view.unmap(mx, my) → [x, y] (ground plane)
-//   BD.view.frame(grid) → {x0, x1, y0, y1 (map px, with margins), fitX, fitY, cx, cy (room centre)}
+//   BD.view.frame(grid) → {x0, x1, y0, y1 (map px, box + frame margins), fitX, fitY, cx, cy (room centre)}
 //   BD.view.fits(grid) → both axes fit (the camera never moves)
 //   BD.view.focus(grid, mx, my) → [fx, fy]  the focus for a wanted focus (clamped / centred)
 //   BD.view.rect(w, pad) → {x0, x1, y0, y1} map px every client is guaranteed to show this tick
@@ -32,12 +32,12 @@ const frames = new WeakMap();
 V.frame = function (grid) {
   let f = frames.get(grid);
   if (f) return f;
-  const W = grid.w, H = grid.h, m = C.CAM.frame;
-  const x0 = -H * C.ISO_X - m.x, x1 = W * C.ISO_X + m.x;
-  const y0 = -m.top, y1 = (W + H) * C.ISO_Y + m.bottom; // top margin covers the back walls (WALL_H)
+  const W = grid.w, H = grid.h, m = C.CAM.frame, q = C.CAM.fit;
+  const bx0 = -H * C.ISO_X, bx1 = W * C.ISO_X, by1 = (W + H) * C.ISO_Y; // the floor's projected box (by0 = 0)
+  const fitX = bx1 - bx0 + 2 * q.x <= C.VIEW_W, fitY = by1 + q.top + q.bottom <= C.VIEW_H;
+  const x0 = bx0 - m.x, x1 = bx1 + m.x, y0 = -m.top, y1 = by1 + m.bottom; // top margin covers the back walls
   f = {
-    x0, x1, y0, y1, w: x1 - x0, h: y1 - y0,
-    fitX: x1 - x0 <= C.VIEW_W, fitY: y1 - y0 <= C.VIEW_H,
+    x0, x1, y0, y1, w: x1 - x0, h: y1 - y0, fitX, fitY,
     cx: (W / 2 - H / 2) * C.ISO_X, cy: (W / 2 + H / 2) * C.ISO_Y,
   };
   frames.set(grid, f);

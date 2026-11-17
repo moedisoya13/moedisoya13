@@ -14,12 +14,18 @@ BD.C = {
   // Camera (src/core/05_view.js, src/client/15_camera.js). On an axis where the floor plus FRAME
   // margins fits the 1280 × 720 view the camera stands still with the room centred (every v1
   // room); on other axes it follows the hero, clamped so the view stays inside the frame.
-  //   frame: map-px margins around the floor's projected box (top includes the back walls)
+  //   fit: map-px margins around the floor's projected box that must fit for the camera to stand
+  //        still on that axis (top includes the back walls; sized so every v1 room fits)
+  //   frame: margins the following camera may show around the box (room for the HUD bars and the
+  //          card tray, so the hero at the floor's edge is not under them)
   //   slack: the most the client camera may lag or lead the hero on a following axis (map px);
   //          the simulation's view rectangle is the hero-centred view inset by it, so whatever
   //          the simulation calls "in view" is on every screen
   //   follow: time constant (s) of the smooth follow; lookahead (u) along the walk, eased over lookTime s
-  CAM: { frame: { x: 60, top: 100, bottom: 80 }, slack: { x: 112, y: 64 }, follow: 0.14, lookahead: 1.6, lookTime: 0.4 },
+  // off-screen awareness default per floor: 'auto' = on when the floor does not fit the screen
+  // (never in a v1 room); a generated floor's `offscreen` {indicators, minimap} overrides it
+  OFFSCREEN: { indicators: 'auto', minimap: 'auto' },
+  CAM: { fit: { x: 60, top: 100, bottom: 80 }, frame: { x: 140, top: 220, bottom: 230 }, slack: { x: 112, y: 64 }, follow: 0.14, lookahead: 1.6, lookTime: 0.4 },
   RUN_SEC: 900, CLOCK_START_MIN: 18 * 60,
   CAP: { enemies: 80, projectiles: 60, particles: 300 },
   HERO: {

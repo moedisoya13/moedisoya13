@@ -10,7 +10,7 @@ const C = BD.C;
 const M = BD.math;
 const U = BD.ui;
 const AS = BD.client.assets;
-const R = BD.client.render = { trails: [], vfx: [], cache: null, bakeCanvas: null, floorKey: null };
+const R = BD.client.render = { trails: [], vfx: [], cache: null, bakeCanvas: null, floorKey: null, cacheGrid: null };
 const K = C.HERO.spriteH / 256; // sprite pixels → logical px
 
 function shade(hex, f) {
@@ -29,6 +29,8 @@ R.floorColor = (w) => C.FLOOR_COLORS[w.floor.domType] || '#888888';
 
 // ---- events → trails ----------------------------------------------------------------------
 R.onWorld = function (w) {
+  R.anim.onWorld(w);
+  BD.client.camera.snap();
   R.trails = [];
   R.vfx = [];
   R.floorKey = null;
@@ -56,7 +58,35 @@ function windows(g, rng, a, b, top, bottom, lit, dark, pLit) {
   }
 }
 
+R.windows = windows;
+
 // ---- static layers ----------------------------------------------------------------------------
+// One wall segment a→b of a back wall (glass panel and reflection), and a purple crystal cluster
+// of n spires at (cx, cy) drawn from rng — shared by the v1 screen cache and big-floor chunks.
+function wallSeg(g, a, b, face) {
+  const WH = C.WALL_H;
+  poly(g, [a, b, [b[0], b[1] - WH], [a[0], a[1] - WH]]);
+  g.fillStyle = face; g.fill(); ink(g, 2);
+  const inset = 0.12;
+  const ga = [a[0] + (b[0] - a[0]) * inset, a[1] + (b[1] - a[1]) * inset], gb = [a[0] + (b[0] - a[0]) * (1 - inset), a[1] + (b[1] - a[1]) * (1 - inset)];
+  poly(g, [[ga[0], ga[1] - 14], [gb[0], gb[1] - 14], [gb[0], gb[1] - WH + 10], [ga[0], ga[1] - WH + 10]]);
+  g.fillStyle = '#16213a'; g.fill();
+  g.strokeStyle = 'rgba(120,160,220,0.25)'; g.lineWidth = 1; g.beginPath(); g.moveTo(ga[0] + 4, ga[1] - 20); g.lineTo(gb[0] - 4, gb[1] - WH + 18); g.stroke();
+  ink(g, 1.2);
+}
+R.wallSeg = wallSeg;
+function crystal(g, rng, cx, cy, n) {
+  for (let i = 0; i < n; i++) {
+    const h = rng.range(26, 64), wdt = rng.range(7, 13), ox = rng.range(-14, 14), lean = rng.range(-10, 10);
+    const base = [cx + ox, cy];
+    poly(g, [[base[0] - wdt, base[1]], [base[0] + lean, base[1] - h], [base[0] + wdt, base[1]]]);
+    g.fillStyle = '#5b2d91'; g.fill();
+    poly(g, [[base[0], base[1]], [base[0] + lean, base[1] - h], [base[0] + wdt, base[1]]]);
+    g.fillStyle = '#8a4fd0'; g.fill();
+    poly(g, [[base[0] - wdt, base[1]], [base[0] + lean, base[1] - h], [base[0] + wdt, base[1]]]); ink(g, 1.5);
+  }
+}
+R.crystal = crystal;
 function layerCanvas(v) {
   const s = Math.min(2, v.dpr * v.scale * 1.0) || 1;
   const cv = document.createElement('canvas');
@@ -85,6 +115,7 @@ function skylineData(rng) {
   }
   return out;
 }
+R.skylineData = skylineData;
 function paintSkyline(v, data, dawn) {
   const { cv, g } = layerCanvas(v);
   for (const b of data) {
@@ -100,6 +131,8 @@ function paintSkyline(v, data, dawn) {
   }
   return cv;
 }
+R.paintSkyline = paintSkyline;
+R.layerCanvas = layerCanvas;
 
 function buildStatic(w, v) {
   const { cv, g } = layerCanvas(v);
@@ -151,19 +184,8 @@ function buildStatic(w, v) {
   }
   // back walls
   const WH = C.WALL_H;
-  const wallSeg = (a, b, face) => {
-    poly(g, [a, b, [b[0], b[1] - WH], [a[0], a[1] - WH]]);
-    g.fillStyle = face; g.fill(); ink(g, 2);
-    // glass panel
-    const inset = 0.12;
-    const ga = [a[0] + (b[0] - a[0]) * inset, a[1] + (b[1] - a[1]) * inset], gb = [a[0] + (b[0] - a[0]) * (1 - inset), a[1] + (b[1] - a[1]) * (1 - inset)];
-    poly(g, [[ga[0], ga[1] - 14], [gb[0], gb[1] - 14], [gb[0], gb[1] - WH + 10], [ga[0], ga[1] - WH + 10]]);
-    g.fillStyle = '#16213a'; g.fill();
-    g.strokeStyle = 'rgba(120,160,220,0.25)'; g.lineWidth = 1; g.beginPath(); g.moveTo(ga[0] + 4, ga[1] - 20); g.lineTo(gb[0] - 4, gb[1] - WH + 18); g.stroke();
-    ink(g, 1.2);
-  };
-  for (let x = 0; x < W; x++) if (grid.get(x, 0) !== BD.CELL.VOID) wallSeg(P(x, 0), P(x + 1, 0), '#2b2c36');
-  for (let y = 0; y < H; y++) if (grid.get(0, y) !== BD.CELL.VOID) wallSeg(P(0, y), P(0, y + 1), '#363744');
+  for (let x = 0; x < W; x++) if (grid.get(x, 0) !== BD.CELL.VOID) wallSeg(g, P(x, 0), P(x + 1, 0), '#2b2c36');
+  for (let y = 0; y < H; y++) if (grid.get(0, y) !== BD.CELL.VOID) wallSeg(g, P(0, y), P(0, y + 1), '#363744');
   // wall props: desks with monitors (decor only, GDD §7.2)
   const stairs = w.stairs;
   for (let i = 0; i < 4; i++) {
@@ -178,21 +200,10 @@ function buildStatic(w, v) {
     g.fillStyle = 'rgba(79,183,216,0.6)'; g.fillRect(m[0] - 5, m[1] - 12, 10, 6);
   }
   // purple crystal clusters at the side corners
-  const crystal = (cx, cy, n) => {
-    for (let i = 0; i < n; i++) {
-      const h = rng.range(26, 64), wdt = rng.range(7, 13), ox = rng.range(-14, 14), lean = rng.range(-10, 10);
-      const base = [cx + ox, cy];
-      poly(g, [[base[0] - wdt, base[1]], [base[0] + lean, base[1] - h], [base[0] + wdt, base[1]]]);
-      g.fillStyle = '#5b2d91'; g.fill();
-      poly(g, [[base[0], base[1]], [base[0] + lean, base[1] - h], [base[0] + wdt, base[1]]]);
-      g.fillStyle = '#8a4fd0'; g.fill();
-      poly(g, [[base[0] - wdt, base[1]], [base[0] + lean, base[1] - h], [base[0] + wdt, base[1]]]); ink(g, 1.5);
-    }
-  };
   const c1 = P(W, 0), c2 = P(0, H), c0 = P(0, 0);
-  crystal(c1[0] + 4, c1[1] + 6, 4);
-  crystal(c2[0] - 4, c2[1] + 6, 4);
-  crystal(c0[0], c0[1] - WH + 6, 3);
+  crystal(g, rng, c1[0] + 4, c1[1] + 6, 4);
+  crystal(g, rng, c2[0] - 4, c2[1] + 6, 4);
+  crystal(g, rng, c0[0], c0[1] - WH + 6, 3);
   return cv;
 }
 
@@ -215,8 +226,9 @@ R.bake = function (fn) {
 
 function ensureStatic(w, v) {
   const key = w.seed + ':' + w.floorN + ':' + v.dpr + ':' + v.scale.toFixed(3);
-  if (R.floorKey === key && R.cache) return;
-  const floorChanged = !R.floorKey || R.floorKey.split(':').slice(0, 2).join(':') !== key.split(':').slice(0, 2).join(':');
+  if (R.floorKey === key && R.cache && R.cacheGrid === w.grid) return;
+  const floorChanged = !R.floorKey || R.cacheGrid !== w.grid || R.floorKey.split(':').slice(0, 2).join(':') !== key.split(':').slice(0, 2).join(':');
+  R.cacheGrid = w.grid;
   R.floorKey = key;
   R.cache = buildStatic(w, v);
   if (floorChanged || !R.bakeCanvas) {
@@ -248,23 +260,31 @@ function drawSkyline(g, w) {
   if (k > 0 && R.skyDawn) { g.globalAlpha = k; g.drawImage(R.skyDawn, 0, 0, C.VIEW_W, C.VIEW_H); g.globalAlpha = 1; }
 }
 
-// Floor cells as one path (per floor and room origin): warnings and baked decals are clipped to
-// it, so nothing lies on the facade below the floor edge.
-const floorPathCache = { key: null, path: null };
-R.floorPath = function (w, v) {
-  const key = w.seed + ':' + w.floorN + ':' + v.rox + ':' + v.roy;
-  if (floorPathCache.key !== key) {
-    const p = new Path2D();
-    for (let y = 0; y < w.grid.h; y++) for (let x = 0; x < w.grid.w; x++) {
-      if (w.grid.get(x, y) === BD.CELL.VOID) continue;
-      const a = v.proj(x, y), b = v.proj(x + 1, y), c = v.proj(x + 1, y + 1), d = v.proj(x, y + 1);
+// Floor cells as one path: warnings and baked decals are clipped to it, so nothing lies on the
+// facade below the floor edge. Built once per floor in map px (one parallelogram per run of
+// non-void cells in a row) and placed through the view's camera origin, so the same path serves
+// the screen at any camera position and the floor-wide decal canvas (R.bake's view).
+const floorPaths = new WeakMap();
+R.floorPath = function (w) {
+  let p = floorPaths.get(w.grid);
+  if (!p) {
+    p = new Path2D();
+    const g = w.grid, P = BD.view.map;
+    for (let y = 0; y < g.h; y++) for (let x = 0; x < g.w;) {
+      if (g.get(x, y) === BD.CELL.VOID) { x++; continue; }
+      let x1 = x;
+      while (x1 < g.w && g.get(x1, y) !== BD.CELL.VOID) x1++;
+      const a = P(x, y), b = P(x1, y), c = P(x1, y + 1), d = P(x, y + 1);
       p.moveTo(a[0], a[1]); p.lineTo(b[0], b[1]); p.lineTo(c[0], c[1]); p.lineTo(d[0], d[1]); p.closePath();
+      x = x1;
     }
-    floorPathCache.key = key; floorPathCache.path = p;
+    floorPaths.set(w.grid, p);
   }
-  return floorPathCache.path;
+  return p;
 };
-R.clipFloor = function (g, v, w) { g.clip(R.floorPath(w, v)); };
+R.clipFloor = function (g, v, w) {
+  g.translate(v.rox, v.roy); g.clip(R.floorPath(w)); g.translate(-v.rox, -v.roy);
+};
 function mix(a, b, t) {
   const x = parseInt(a.slice(1), 16), y = parseInt(b.slice(1), 16);
   const c = (s) => Math.round(((x >> s) & 255) * (1 - t) + ((y >> s) & 255) * t);
@@ -432,7 +452,8 @@ function tinted(id, color) {
   g.drawImage(src, 0, 0); g.globalCompositeOperation = 'source-in'; g.fillStyle = color; g.fillRect(0, 0, c.width, c.height);
   return (tintCache[key] = c);
 }
-// opts: {scale, flip, alpha, rot, sx, sy (squash), lift, white (0..1), outline: color, outlinePx}
+R.tinted = tinted;
+// opts: {scale, flip, alpha, rot, sx, sy (squash), lift, dx, dy (screen offset px), white (0..1), outline: color, outlinePx}
 R.sprite = function (g, v, id, x, y, o) {
   o = o || {};
   const img = AS.img[id];
@@ -441,7 +462,7 @@ R.sprite = function (g, v, id, x, y, o) {
   const wpx = img.width * sc, hpx = img.height * sc;
   const p = v.proj(x, y, o.lift || 0);
   g.save();
-  g.translate(p[0], p[1]);
+  g.translate(p[0] + (o.dx || 0), p[1] + (o.dy || 0));
   if (o.rot) g.rotate(o.rot);
   g.scale((o.flip ? -1 : 1) * (o.sx || 1), o.sy || 1);
   if (o.alpha !== undefined) g.globalAlpha = o.alpha;
@@ -500,7 +521,7 @@ function drawEnemy(g, v, e, w, t) {
   else if (e.elite) o.outline = '#ffffff';
   else if (hue !== null && hue !== undefined && Math.abs(((hue - floorHue + 540) % 360) - 180) <= 40) { o.outline = '#ffffff'; o.outlinePx = 1.5; }
   if (e.statuses.wet) ellipse(g, v, e.x, e.y, e.r * 1.25, 'rgba(58,160,255,0.35)', null);
-  const box = R.sprite(g, v, id, e.x, e.y, o);
+  const box = R.anim.drawEnemy(g, v, e, w, t, o); // clip frame or static sprite + code motion
   if (!box || e.down) return;
   if (e.statuses.burn) {
     for (let i = 0; i < 3; i++) {
@@ -527,7 +548,7 @@ function drawHero(g, v, w, t) {
   const hp = v.proj(h.x, h.y), hh = R.spriteHeight(pose.id);
   const box = { x: hp[0], y: hp[1], top: hp[1] - hh, w: 0, pose: pose.id, flip: pose.flip };
   R.decor('hero_back', g, v, h, w, box, t);
-  drawHeroSprite(g, v, w, t, h, pose, o);
+  R.anim.drawHero(g, v, w, t, pose, o, (p, oo) => drawHeroSprite(g, v, w, t, h, p, oo));
   R.decor('hero_front', g, v, h, w, box, t);
 }
 function drawHeroSprite(g, v, w, t, h, pose, o) {
@@ -629,21 +650,45 @@ function drawChevron(g, v, e, t) {
 }
 
 // ---- main ---------------------------------------------------------------------------------------
+// Culling margins (logical px) for things anchored at their feet: sprites rise far above them.
+const CULL = { side: 160, top: 300, bottom: 80, flat: 120 };
+const solidCells = new WeakMap();
+function solidsOf(grid) {
+  let l = solidCells.get(grid);
+  if (!l) { l = []; for (let y = 0; y < grid.h; y++) for (let x = 0; x < grid.w; x++) if (grid.get(x, y) === BD.CELL.SOLID) l.push([x, y]); solidCells.set(grid, l); }
+  return l;
+}
+// a flat floor mark of radius r (u) around (x, y) may touch the screen
+const flatOn = (v, x, y, r) => v.worldOnScreen(x, y, CULL.flat + (r || 0) * 57);
+R.flatOn = flatOn;
+// an actor standing at (x, y) may touch the screen (scale: sprite size factor)
+const actorOn = (v, x, y, scale) => v.worldOnScreen(x, y, CULL.side * (scale || 1), CULL.top * (scale || 1), CULL.side * (scale || 1), CULL.bottom);
+R.actorOn = actorOn;
+
 R.drawWorld = function (g, ui, dt) {
   const w = ui.app.world, v = ui.view, t = ui.time;
-  v.setRoom(w.grid.w, w.grid.h);
+  BD.client.camera.update(ui, dt);
+  R.anim.update(ui, dt);
+  const big = !BD.view.fits(w.grid);
   R.drawSky(g, w);
   g.save();
   if (ui.camera) g.translate(ui.camera.x || 0, ui.camera.y || 0);
-  ensureStatic(w, v);
-  drawSkyline(g, w);
-  g.drawImage(R.cache, 0, 0, C.VIEW_W, C.VIEW_H);
-  if (R.bakeCanvas) g.drawImage(R.bakeCanvas, 0, 0, C.VIEW_W, C.VIEW_H);
+  if (big) {
+    R.big.prepare(w, v);
+    drawSkyline(g, w);
+    R.big.drawStatic(g, v, w);
+  } else {
+    ensureStatic(w, v);
+    drawSkyline(g, w);
+    g.drawImage(R.cache, 0, 0, C.VIEW_W, C.VIEW_H);
+    if (R.bakeCanvas) g.drawImage(R.bakeCanvas, 0, 0, C.VIEW_W, C.VIEW_H);
+  }
   drawDoor(g, v, w, t);
   const L = w.floor.layout;
   // rifts
-  for (const r of L.rifts) { ellipse(g, v, r[0], r[1], 0.55, '#3b1a63', '#140820', 2.5); ellipse(g, v, r[0], r[1], 0.32, '#7a3fc0', null); }
+  for (const r of L.rifts) if (flatOn(v, r[0], r[1], 0.6)) { ellipse(g, v, r[0], r[1], 0.55, '#3b1a63', '#140820', 2.5); ellipse(g, v, r[0], r[1], 0.32, '#7a3fc0', null); }
   for (const r of w.rifts) {
+    if (!flatOn(v, r.x, r.y, 0.8)) continue;
     const p = 1 - r.remain / r.time;
     ellipse(g, v, r.x, r.y, 0.35 + 0.45 * p, r.opts.guardian ? 'rgba(255,210,74,0.35)' : 'rgba(155,89,208,0.5)', '#2a0f40', 2.5);
   }
@@ -656,15 +701,16 @@ R.drawWorld = function (g, ui, dt) {
   if (w.altar && w.altar.state === 'lit') ringProgress(g, v, w.altar.x, w.altar.y, C.INTERACT.ring, I.target === 'altar' ? I.progress / I.need : 0);
   if (w.trial && w.trial.state === 'available') ringProgress(g, v, w.trial.x, w.trial.y, C.INTERACT.ring, I.target === 'trial' ? I.progress / I.need : 0, '#c9a0ff');
   // zones, telegraphs
-  for (const z of w.zones) (BD.render.zones.has(z.kind) ? BD.render.zones.get(z.kind) : BD.render.zones.get('fire')).draw(g, v, z, w, t);
+  for (const z of w.zones) if (flatOn(v, z.x, z.y, z.r)) (BD.render.zones.has(z.kind) ? BD.render.zones.get(z.kind) : BD.render.zones.get('fire')).draw(g, v, z, w, t);
   if (w.telegraphs.length) {
     g.save(); R.clipFloor(g, v, w); // warnings stay on the floor (the boss's collapse ring reaches past the roof)
-    for (const tg of w.telegraphs) BD.render.telegraphs.get(tg.style).draw(g, v, tg, w, t);
+    for (const tg of w.telegraphs) if (flatOn(v, tg.x, tg.y, (tg.r || tg.len || tg.r1 || 1) + 0.5)) BD.render.telegraphs.get(tg.style).draw(g, v, tg, w, t);
     g.restore();
   }
   // shadows
   ellipse(g, v, w.hero.x, w.hero.y, 0.38, 'rgba(0,0,0,0.38)', null);
-  for (const e of w.enemies) if (!e.dead) ellipse(g, v, e.x, e.y, e.r * 1.05, 'rgba(0,0,0,0.38)', null);
+  for (const e of w.enemies) if (!e.dead && flatOn(v, e.x, e.y, e.r)) ellipse(g, v, e.x, e.y, e.r * 1.05, 'rgba(0,0,0,0.38)', null);
+  R.anim.drawGhostShadows(g, v, w);
   // dash cooldown arc
   if (w.hero.dashCd > 0) {
     const p = 1 - w.hero.dashCd / C.DASH.cd, pts = [];
@@ -679,14 +725,15 @@ R.drawWorld = function (g, ui, dt) {
   // depth-sorted things
   const items = [];
   const obst = BD.render.obstacles.has(w.floor.pattern) ? BD.render.obstacles.get(w.floor.pattern) : null;
-  for (let y = 0; y < w.grid.h; y++) for (let x = 0; x < w.grid.w; x++) if (w.grid.get(x, y) === BD.CELL.SOLID) items.push({ k: x + y + 1, f: () => (obst ? obst.draw(g, v, x, y, w, t) : R.prism(g, v, x + 0.04, y + 0.04, 0.92, 0.92, 34, '#6b6e7a', '#4a4c57', '#3a3c45')) });
-  for (const e of w.enemies) if (!e.dead) items.push({ k: e.x + e.y + (e.down ? -0.3 : 0), f: () => drawEnemy(g, v, e, w, t) });
+  for (const [x, y] of solidsOf(w.grid)) if (actorOn(v, x + 0.5, y + 0.5, 0.6)) items.push({ k: x + y + 1, f: () => (obst ? obst.draw(g, v, x, y, w, t) : R.prism(g, v, x + 0.04, y + 0.04, 0.92, 0.92, 34, '#6b6e7a', '#4a4c57', '#3a3c45')) });
+  for (const e of w.enemies) if (!e.dead && actorOn(v, e.x, e.y, e.size * (e.boss ? 1.6 : 1))) items.push({ k: e.x + e.y + (e.down ? -0.3 : 0), f: () => drawEnemy(g, v, e, w, t) });
+  R.anim.ghostItems(items, g, v, w, t);
   items.push({ k: w.hero.x + w.hero.y, f: () => drawHero(g, v, w, t) });
-  for (const p of w.pickups) items.push({ k: p.x + p.y, f: () => drawFlask(g, v, p, t) });
+  for (const p of w.pickups) if (actorOn(v, p.x, p.y, 0.3)) items.push({ k: p.x + p.y, f: () => drawFlask(g, v, p, t) });
   if (w.altar) items.push({ k: w.altar.x + w.altar.y, f: () => drawAltar(g, v, w.altar, t) });
   items.sort((a, b) => a.k - b.k);
   for (const it of items) it.f();
-  for (const p of w.projectiles) (BD.render.projectiles.has(p.kind) ? BD.render.projectiles.get(p.kind) : BD.render.projectiles.get('default')).draw(g, v, p, w, t);
+  for (const p of w.projectiles) if (flatOn(v, p.x, p.y, 1)) (BD.render.projectiles.has(p.kind) ? BD.render.projectiles.get(p.kind) : BD.render.projectiles.get('default')).draw(g, v, p, w, t);
   // trails
   for (const tr of R.trails) {
     const k = tr.age / tr.life;
@@ -701,6 +748,8 @@ R.drawWorld = function (g, ui, dt) {
   R.vfx = R.vfx.filter((x) => x.age < x.life);
   ui.drawEffects(g, 'world');
   g.restore();
+  // off-screen awareness (edge markers, minimap) when switched on for this floor
+  BD.client.offscreen.draw(g, ui);
   // blackout / endings
   if (w.blackoutT > 0) { g.fillStyle = 'rgba(0,0,0,' + M.clamp(1 - w.blackoutT / C.INTERACT.blackout + 0.4, 0, 1) + ')'; g.fillRect(0, 0, C.VIEW_W, C.VIEW_H); }
   if (w.ending) {
