@@ -65,24 +65,31 @@ module.exports = {
     const c = BD.cardRt.get(w, 'riposte');
     t.near(c.def.hud(c.state, BD.cardRt.ctx(w, c)).ring, 1, 1e-9, 'slot shows the full cooldown');
   },
-  'drawcut: unlock at 15 dodges; 3.0u of movement readies ×2.5 and +0.6u for the next swing only'(t) {
+  // GDD-V2 §4.4 level 1 (v1: 3.0u without swinging; any swing reset the count)
+  'drawcut: unlock at 15 dodges; every 8u of movement (swings do not reset it) readies ×2.5 and +0.6u for the next swing only'(t) {
     const { BD, H, w } = world(t, { hand: ['drawcut'] });
     const d = BD.cards.get('drawcut'), s = BD.progress.fresh();
     s.counters.dodges = 14; t.eq(d.unlock(s), false); s.counters.dodges = 15; t.eq(d.unlock(s), true);
     const c = BD.cardRt.get(w, 'drawcut');
     w.hero.x = 2.5;
     H.input({ mx: 1, my: 0 });
-    H.step(40);
-    t.eq(c.state.ready, false, 'not yet: 40 ticks × 0.07u = 2.8u');
-    H.step(4);
+    H.step(60);
+    const g = place(BD, w, 'goblin', 1.2, 0, { hp: 999 }); // an uncharged swing on the way
+    swingOnce(BD, H, w);
+    t.eq(evs(w, 'swing').map((x) => x.charged), [false]);
+    t.assert(c.state.dist > 4, 'the swing kept the distance: ' + c.state.dist);
+    g.x += 30; w.hero.atkTimer = 99;
+    H.step(114 - 61 - 1);
+    t.eq(c.state.ready, false, 'not yet: 113 ticks × 0.07u < 8u');
+    H.step(2);
     t.eq(c.state.ready, true);
     H.input({ mx: 0, my: 0 });
     H.step(1);
     t.eq([w.hero.stats.reach, w.hero.stats.charged], [2.5, true]);
     t.eq(evs(w, 'vfx', (x) => x.kind === 'drawcut_ready').length, 1);
-    const e = place(BD, w, 'goblin', 2.65, 0, { hp: 999 });     // edge 2.3: only the charged blade reaches
+    const e = place(BD, w, 'goblin', 2.65, 0, { hp: 999 });     // edge 2.33: only the charged blade reaches
     swingOnce(BD, H, w);
-    t.eq(evs(w, 'swing').map((x) => x.charged), [true]);
+    t.eq(evs(w, 'swing').map((x) => x.charged), [false, true]);
     t.eq(hitsOn(w, e).map((x) => x.dmg), [25]);
     t.eq([c.state.ready, c.state.dist], [false, 0]);
     H.step(1);
@@ -95,9 +102,10 @@ module.exports = {
     const { BD, H, w } = world(t, { hand: ['drawcut', 'sword_wave'] });
     const c = BD.cardRt.get(w, 'drawcut');
     w.hero.x = 1.5;
+    c.state.dist = 4.9;
     H.input({ mx: 1, my: 0, dash: true }); H.step(1);
     H.input({ mx: 0, my: 0 }); H.step(14);
-    t.eq(c.state.ready, true, 'dash 3.2u');
+    t.eq(c.state.ready, true, '4.9 + dash 3.2u ≥ 8');
     w.hero.x = 1.5; w.hero.y = 6.5;
     const e = place(BD, w, 'goblin', 5.0, 0, { hp: 999 });
     swingOnce(BD, H, w);

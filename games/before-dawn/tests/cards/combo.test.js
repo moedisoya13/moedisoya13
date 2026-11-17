@@ -3,6 +3,7 @@
 const { world, place, evs, hitsOn, swingOnce, until } = require('./_kit');
 
 const kill = (BD, w) => { const e = place(BD, w, 'goblin', 3, 3); BD.combat.kill(w, e); };
+const killN = (BD, w, n) => { for (let i = 0; i < n; i++) kill(BD, w); };
 const reasons = (w, id) => w.bus.recent(4000).filter((x) => x.event === 'combo_change' && x.cardId === id).map((x) => [x.from, x.to, x.reason]);
 
 module.exports = {
@@ -53,19 +54,21 @@ module.exports = {
     H.step(30);
     t.eq(c.state.timer, 2.0);
   },
-  'flawless: +1 per kill to 6; ≥ 2 interval 0.51 s, ≥ 4 blade +0.4u; labels; toast at ×6'(t) {
+  // GDD-V2 §4.4 level 1 (v1: +1 per kill to 6)
+  'flawless: +1 per 25 unhurt kills to 6; ≥ 2 interval 0.51 s, ≥ 4 blade +0.4u; labels; toast at ×6'(t) {
     const { BD, H, w } = world(t, { hand: ['flawless'] });
     const c = BD.cardRt.get(w, 'flawless'), st = () => BD.hero.computeStats(w);
     t.eq([st().interval, st().reach], [0.6, 1.9]);
-    kill(BD, w); kill(BD, w);
+    killN(BD, w, 24); t.eq(c.state.stack, 0, '24 kills: nothing yet');
+    killN(BD, w, 26);
     t.near(st().interval, 0.51, 1e-9); t.eq(st().reach, 1.9);
-    kill(BD, w); kill(BD, w);
+    killN(BD, w, 50);
     t.near(st().reach, 2.3, 1e-9);
-    kill(BD, w); kill(BD, w); kill(BD, w);
+    killN(BD, w, 75);
     t.eq(c.state.stack, 6);
     t.eq(evs(w, 'vfx', (x) => x.kind === 'combo_label').map((x) => x.text), ['간격↑', '칼 길이↑', '잔영']);
     t.assert(evs(w, 'toast').some((x) => x.text === '무결 ×6'));
-    t.eq(c.def.hud(c.state, BD.cardRt.ctx(w, c)), { text: '×6', badge: '잔영' });
+    t.eq(c.def.hud(c.state, BD.cardRt.ctx(w, c)), { text: '×6', badge: '잔영', ring: 0 });
   },
   'flawless ×6: an echo 0.2 s after each swing, same shapes at half factor, no swing events'(t) {
     const { BD, H, w } = world(t, { hand: ['flawless', 'whirl'] });
@@ -83,7 +86,7 @@ module.exports = {
   'flawless: only a landed hurt resets it (reason hurt, toast names the attack); the dawn drain does not'(t) {
     const { BD, H, w } = world(t, { hand: ['flawless'] });
     const c = BD.cardRt.get(w, 'flawless');
-    kill(BD, w); kill(BD, w); kill(BD, w);
+    killN(BD, w, 75);
     w.t = w.mods.runSec + 0.5;
     H.step(150);
     t.assert(evs(w, 'drain').length >= 2, 'drained');

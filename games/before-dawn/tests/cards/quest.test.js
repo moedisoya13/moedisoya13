@@ -1,29 +1,31 @@
 // GDD §5.4 quest cards: 망자의 안식, 왕의 사냥, 불의 순례 — before / quest / awakened, altar
-// feasibility, progress events, toasts.
+// feasibility, progress events, toasts. Numbers are GDD-V2 §4.4 level 1 (goals 150 / 5 / 150; v1
+// 12 / 3 / 12); the other levels are in levels.test.js.
 const { world, place, evs, hitsOn, swingOnce } = require('./_kit');
 
 const killAt = (BD, w, kind, x, y, opts) => { const e = place(BD, w, kind, x, y, opts); BD.combat.kill(w, e); return e; };
 
 module.exports = {
-  'rest_of_dead: +4 to undead before awakening; offerable only with ≥ 12 undead left'(t) {
+  'rest_of_dead: +4 to undead before awakening; offerable only while an undead floor is left above'(t) {
     const { BD, H, w } = world(t, { hand: ['rest_of_dead'] });
     const u = place(BD, w, 'skel_archer', 1.2, 0, { hp: 999 });
     swingOnce(BD, H, w);
     t.eq(hitsOn(w, u).map((x) => x.dmg), [14]);
     t.eq(evs(w, 'vfx', (x) => x.kind === 'rod_glow').length, 1);
     const d = BD.cards.get('rest_of_dead');
-    t.eq(d.offerable({ byType: { beast: 30, undead: 11, magic: 9, heavy: 4 }, guardians: 4, floor: 1 }), false);
-    t.eq(d.offerable({ byType: { beast: 0, undead: 12, magic: 0, heavy: 0 }, guardians: 1, floor: 3 }), true);
+    t.eq(d.offerable({ floor: 2, floorsLeft: 3, domTypes: ['magic', 'heavy', 'beast'] }), false);
+    t.eq(d.offerable({ floor: 4, floorsLeft: 1, domTypes: ['undead'] }), true);
+    t.eq(d.offerable({ floor: 5, floorsLeft: 0, domTypes: [] }), false);
   },
-  'rest_of_dead: 12 undead kills awaken it; progress events, toasts from 2 before the goal'(t) {
+  'rest_of_dead: 150 undead kills awaken it; progress events, toasts from 2 before the goal'(t) {
     const { BD, H, w } = world(t, { hand: ['rest_of_dead'] });
     killAt(BD, w, 'goblin', 3, 3);                     // not undead: no progress
-    for (let i = 0; i < 12; i++) killAt(BD, w, i % 2 ? 'ghoul' : 'skel_archer', 3, 3, { hp: 1 });
-    t.eq(evs(w, 'quest_progress').map((x) => x.value), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+    for (let i = 0; i < 150; i++) killAt(BD, w, i % 2 ? 'ghoul' : 'skel_archer', 3, 3, { hp: 1 });
+    t.eq(evs(w, 'quest_progress').map((x) => x.value), Array.from({ length: 150 }, (_, i) => i + 1));
     t.eq(evs(w, 'quest_awaken').map((x) => x.cardId), ['rest_of_dead']);
     const toasts = evs(w, 'toast').map((x) => x.text);
     t.eq(toasts, ['망자의 안식: 앞으로 2', '망자의 안식: 앞으로 1', '각성: 망자의 안식']);
-    t.eq(evs(w, 'vfx', (x) => x.kind === 'quest_mote').length, 12);
+    t.eq(evs(w, 'vfx', (x) => x.kind === 'quest_mote').length, 150);
     const c = BD.cardRt.get(w, 'rest_of_dead');
     t.eq(c.def.hud(c.state, BD.cardRt.ctx(w, c)).text, '각성');
   },
@@ -46,7 +48,7 @@ module.exports = {
     BD.combat.damage(w, gh, 10, { source: 'chain', direct: false });
     t.assert(gh.dead && !gh.down, 'no revival');
   },
-  'kings_hunt: +3 to guardians, elites and the boss; 3 guardian kills awaken; offerable with ≥ 3 guardians left'(t) {
+  'kings_hunt: +3 to guardians, elites and the boss; 5 elite or guardian kills awaken; offerable with ≥ 2 floors left'(t) {
     const { BD, H, w } = world(t, { hand: ['kings_hunt'] });
     const el = place(BD, w, 'goblin', 1.2, 0, { hp: 999, elite: true });
     swingOnce(BD, H, w);
@@ -56,10 +58,11 @@ module.exports = {
     swingOnce(BD, H, w);
     t.eq(hitsOn(w, n).map((x) => x.dmg), [10]);
     const d = BD.cards.get('kings_hunt');
-    t.eq(d.offerable({ byType: {}, guardians: 2, floor: 3 }), false);
-    t.eq(d.offerable({ byType: {}, guardians: 3, floor: 2 }), true);
-    for (let i = 0; i < 3; i++) killAt(BD, w, 'goblin', 3, 3, { guardian: true });
-    t.eq(evs(w, 'quest_progress').map((x) => x.value), [1, 2, 3]);
+    t.eq(d.offerable({ floor: 4, floorsLeft: 1, domTypes: ['heavy'] }), false);
+    t.eq(d.offerable({ floor: 3, floorsLeft: 2, domTypes: ['magic', 'heavy'] }), true);
+    killAt(BD, w, 'goblin', 3, 3);                     // not a target: no progress
+    for (let i = 0; i < 5; i++) killAt(BD, w, 'goblin', 3, 3, i % 2 ? { elite: true } : { guardian: true });
+    t.eq(evs(w, 'quest_progress').map((x) => x.value), [1, 2, 3, 4, 5]);
     t.eq(evs(w, 'quest_awaken').map((x) => x.cardId), ['kings_hunt']);
     t.eq(evs(w, 'toast').map((x) => x.text).filter((x) => x.startsWith('왕의') || x.startsWith('각성')), ['왕의 사냥: 앞으로 2', '왕의 사냥: 앞으로 1', '각성: 왕의 사냥']);
   },
@@ -105,15 +108,17 @@ module.exports = {
     t.eq(evs(w, 'swing_end').map((x) => x.hitCount), [0, 0, 0, 0, 0]);
     t.eq(BD.cardRt.get(w, 'fire_pilgrimage').state.embers, 0);
   },
-  'fire_pilgrimage: 12 kills of burning enemies (any fire) awaken it'(t) {
+  'fire_pilgrimage: 150 kills of burning enemies (any fire) awaken it; offerable while a floor is left'(t) {
     const { BD, H, w } = world(t, { hand: ['fire_pilgrimage'] });
+    const d = BD.cards.get('fire_pilgrimage');
+    t.eq([d.offerable({ floor: 4, floorsLeft: 1, domTypes: ['beast'] }), d.offerable({ floor: 5, floorsLeft: 0, domTypes: [] })], [true, false]);
     killAt(BD, w, 'goblin', 3, 3);                    // not burning: no progress
-    for (let i = 0; i < 12; i++) {
+    for (let i = 0; i < 150; i++) {
       const e = place(BD, w, 'goblin', 3, 3, { hp: 1 });
       BD.status.apply(w, e, 'burn', { direct: true }); // as from a mage's fire zone
       BD.combat.kill(w, e);
     }
-    t.eq(evs(w, 'quest_progress').map((x) => x.value), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+    t.eq(evs(w, 'quest_progress').map((x) => x.value), Array.from({ length: 150 }, (_, i) => i + 1));
     t.eq(evs(w, 'quest_awaken').map((x) => x.cardId), ['fire_pilgrimage']);
   },
   'fire_pilgrimage awakened: every swing ignites; burning deaths burst 12 within 1.5u and ignite; no fire-zone damage'(t) {

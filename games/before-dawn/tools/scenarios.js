@@ -65,7 +65,8 @@ exports.run = function (BD) {
       let k = 0;
       while (!e.dead && k++ < 120) H.step(1);
     }
-    out.push({ name: `rest_of_dead awakens after ${goal} undead kills`, ok: awake && n === goal, why: `awaken=${awake} after ${n}` });
+    const prog = BD.cardRt.get(w, 'rest_of_dead').state.progress;
+    out.push({ name: `rest_of_dead awakens after ${goal} undead kills`, ok: awake && prog === goal, why: `awaken=${awake} progress ${prog}/${goal} (${n} placed)` });
   }
   return out;
 };

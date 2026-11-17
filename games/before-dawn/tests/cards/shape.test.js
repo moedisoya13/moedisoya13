@@ -49,18 +49,21 @@ module.exports = {
     s.bestFloor = 2; t.eq(d.unlock(s), false);
     s.bestFloor = 3; t.eq(d.unlock(s), true);
   },
-  'sword_wave: 6.5u aim range with line of sight, crescent at 13u/s, factor 0.6, gone at the first enemy'(t) {
+  // GDD-V2 §4.4 level 1 (v1: gone at the first enemy)
+  'sword_wave: 6.5u aim range with line of sight, crescent at 13u/s, factor 0.6, through 2 enemies'(t) {
     const { BD, H, w } = world(t, { hand: ['sword_wave'] });
     w.hero.x = 1.5;
     t.eq(BD.hero.computeStats(w).acquire, 6.5);
-    const a = place(BD, w, 'goblin', 5.0, 0, { hp: 999 });   // edge 4.65: beyond the blade, in aim range
-    const b = place(BD, w, 'goblin', 5.8, 0, { hp: 999 });   // behind a
+    const a = place(BD, w, 'goblin', 4.4, 0, { hp: 999 });   // edge 4.08: beyond the blade, in aim range
+    const b = place(BD, w, 'goblin', 5.0, 0, { hp: 999 });   // behind a
+    const c = place(BD, w, 'goblin', 5.6, 0, { hp: 999 });   // behind b
     t.eq(swingOnce(BD, H, w), 1);
     const p = w.projectiles.find((x) => !x.hostile);
-    t.eq([p.kind, p.speed, p.range, p.r * 2, p.factor, p.pierce], ['wave', 13, 6.5, 1, 0.6, 1]);
+    t.eq([p.kind, p.speed, p.range, p.r * 2, p.factor, p.pierce], ['wave', 13, 6.5, 1, 0.6, 2]);
     H.step(40);
     t.eq(hitsOn(w, a).map((x) => [x.source, x.dmg, x.direct]), [['wave', 6, true]]);
-    t.eq(hitsOn(w, b).length, 0, 'the wave stops at the first enemy');
+    t.eq(hitsOn(w, b).map((x) => x.source), ['wave']);
+    t.eq(hitsOn(w, c).length, 0, 'the wave stops after its second enemy');
   },
   'sword_wave: no target beyond 6.5u; a wall blocks the aim'(t) {
     const { BD, H, w } = world(t, { hand: ['sword_wave'] });

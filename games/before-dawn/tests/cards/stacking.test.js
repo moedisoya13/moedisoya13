@@ -3,16 +3,16 @@
 const { world, place, evs, hitsOn, swingOnce } = require('./_kit');
 
 module.exports = {
-  'pierce + sword_wave: the wave passes through up to 3 enemies (also with 일섬 ≥ 4)'(t) {
+  'pierce + sword_wave: the wave passes through 2 more, up to 4 (also with 일섬 ≥ 4; GDD-V2 §4.4)'(t) {
     for (const hand of [['pierce', 'sword_wave'], ['one_flash', 'sword_wave']]) {
       const { BD, H, w } = world(t, { hand });
       if (hand[0] === 'one_flash') BD.cardRt.get(w, 'one_flash').state.stack = 4;
       w.hero.x = 1.5;
-      const es = [4.9, 5.5, 6.1, 6.7].map((dx) => place(BD, w, 'goblin', dx, 0, { hp: 999 }));
+      const es = [4.6, 5.25, 5.9, 6.55, 7.2].map((dx) => place(BD, w, 'goblin', dx, 0, { hp: 999 }));
       swingOnce(BD, H, w);
-      t.eq(w.projectiles.find((x) => !x.hostile).pierce, 3, hand.join('+'));
+      t.eq(w.projectiles.find((x) => !x.hostile).pierce, 4, hand.join('+'));
       H.step(40);
-      t.eq(es.map((e) => hitsOn(w, e, 'wave').length), [1, 1, 1, 0], hand.join('+'));
+      t.eq(es.map((e) => hitsOn(w, e, 'wave').length), [1, 1, 1, 1, 0], hand.join('+'));
     }
   },
   'shapes: union, each enemy once at its best factor (pierce + whirl + fan)'(t) {
