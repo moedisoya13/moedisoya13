@@ -173,6 +173,9 @@ W.hurtHero = function (w, dmg, info) {
   }
   if (h.invuln > 0) return false;
   if (info.source === 'zone' && h.stats.mods.zoneImmune) return false;
+  // a card may take the blow instead (무결 3단계, GDD-V2 §4.4): def.blockHurt(ctx, dmg, info) → true
+  // means no damage and no `hurt`; the hero still gets the usual invulnerability after a blow
+  for (const c of w.cards) if (c && c.def.blockHurt && c.def.blockHurt(BD.cardRt.ctx(w, c, null), dmg, info)) { h.invuln = C.HERO.hurtInvuln; return false; }
   dmg = Math.max(1, Math.round(dmg));
   h.hp = Math.max(0, h.hp - dmg);
   h.invuln = C.HERO.hurtInvuln;

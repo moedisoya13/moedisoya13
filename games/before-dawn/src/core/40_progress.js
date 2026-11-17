@@ -11,7 +11,7 @@ P.fresh = function () {
     v: 1, runs: 0, wins: 0, bestFloor: 0, bestWinSec: null,
     tierUnlocked: 0, tierSelected: 0, tierWins: [0, 0, 0, 0], rerollUnlocked: false,
     unlocked: BD.cards.all().filter((d) => d.unlock === 'base').map((d) => d.id),
-    counters: { kills: 0, dodges: 0, mageKills: 0, questAwakened: 0, comboMaxed: 0 },
+    counters: { kills: 0, dodges: 0, mageKills: 0, magicKills: 0, questAwakened: 0, comboMaxed: 0 },
     codex: {}, history: [],
     settings: { sfx: 0.8, shake: true, dashSide: 'right', hints: true },
     lastSeed: 0,
@@ -61,7 +61,7 @@ P.summary = function (w, result, cause) {
     clock: BD.flow.clockStr(w), kills: w.stats.kills, trials: w.stats.trials, trialSec: BD.math.round(w.stats.trialSec, 1),
     dodges: w.stats.dodges, hurts: w.stats.hurts, cards, heldIds: Object.keys(w.stats.cards).sort(), topDamage: top,
     seed: w.seed, tier: w.tier, events: w.bus.count(),
-    run: { mageKills: w.stats.mageKills, questAwakened: w.stats.questAwakened, comboMaxed: w.stats.comboMaxed },
+    run: { mageKills: w.stats.mageKills, magicKills: w.stats.magicKills || 0, questAwakened: w.stats.questAwakened, comboMaxed: w.stats.comboMaxed },
   };
 };
 
@@ -81,6 +81,7 @@ P.endRun = function (save, sum) {
   if (!save.rerollUnlocked && save.runs >= 3) { save.rerollUnlocked = true; news.push({ kind: 'reroll' }); }
   const c = save.counters;
   c.kills += sum.kills; c.dodges += sum.dodges; c.mageKills += sum.run.mageKills;
+  c.magicKills = (c.magicKills || 0) + (sum.run.magicKills || 0); // GDD-V2 §8 (마력 역류)
   c.questAwakened += sum.run.questAwakened; c.comboMaxed += sum.run.comboMaxed;
   for (const id of sum.heldIds) {
     const e = save.codex[id] || (save.codex[id] = { held: 0, wins: 0, best: 0 });

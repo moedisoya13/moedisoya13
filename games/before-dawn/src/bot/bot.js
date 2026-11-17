@@ -278,6 +278,7 @@ B.choose = function (w, opts) {
   if (w.altarOpen) return ['altar'].concat(B.altar(w, opts));
   const ch = w.choice, policy = opts.policy || 'mixed';
   if (!w.choiceOpen || !ch) BD.fail('bot.choose: no choice is open');
+  if (ch.kind === 'altar') return BD.cardAltar.choose(w, opts); // the v2 altar (src/content/cards/_altar.js)
   const O = ch.options;
   const lowestCard = () => { let bi = -1; for (let i = 0; i < O.length; i++) if (O[i].kind === 'card' && (bi < 0 || O[i].from < O[bi].from)) bi = i; return bi; };
   const first = (pred) => O.findIndex(pred);

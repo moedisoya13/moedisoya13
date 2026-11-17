@@ -65,8 +65,9 @@ BD.cards.register({
     const p = sw.data.projectile;
     let used;
     if (p) {
-      if (p.chained) return;
-      p.chained = true;
+      const g = p.group || p; // the crescents of one swing chain once between them (sword_wave.js)
+      if (g.chained || p.chained) return;
+      g.chained = true; p.chained = true;
       used = new Set(p.hitIds);
     } else {
       if (sw.primaryId) { if (e.id !== sw.primaryId) return; } else {

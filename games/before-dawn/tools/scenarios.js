@@ -57,13 +57,15 @@ exports.run = function (BD) {
     const { H, w } = setup(BD, ['rest_of_dead']);
     let awake = false;
     w.bus.on('quest_awaken', (ev) => { if (ev.cardId === 'rest_of_dead') awake = true; });
-    for (let i = 0; i < 12 && !awake; i++) {
+    const goal = BD.cards.get('rest_of_dead').goal; // v1 12, GDD-V2 §4.4 150
+    let n = 0;
+    for (; n < goal && !awake; n++) {
       const e = place(BD, w, 'skel_archer', 1.2, 0);
       e.hp = 1; e.stunT = 1e9;
       let k = 0;
       while (!e.dead && k++ < 120) H.step(1);
     }
-    out.push({ name: 'rest_of_dead awakens after 12 undead kills', ok: awake, why: `awaken=${awake}` });
+    out.push({ name: `rest_of_dead awakens after ${goal} undead kills`, ok: awake && n === goal, why: `awaken=${awake} after ${n}` });
   }
   return out;
 };

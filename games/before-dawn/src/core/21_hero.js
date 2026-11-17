@@ -26,6 +26,7 @@ H.baseStats = function (radiance) {
     reach: C.HERO.reach, interval: C.HERO.interval, halfArc: C.HERO.halfArc,
     acquireRange: 0, dmgBase: C.HERO.dmg + radiance, charged: false, mods: {},
     pickupR: C.V2.shard.pickR, speedMul: 1,
+    dashCd: C.DASH.cd, // the dash cooldown a dash starts (가벼운 발 lowers it, GDD-V2 §4.5)
   };
 };
 
@@ -174,7 +175,7 @@ H.startDash = function (w) {
   let dx = walked ? h.moveX : Math.cos(h.face), dy = walked ? h.moveY : Math.sin(h.face);
   [dx, dy] = M.norm(dx, dy);
   h.dashDX = dx; h.dashDY = dy;
-  h.dashT = C.DASH.dur; h.dashInvuln = C.DASH.invuln; h.dashCd = C.DASH.cd;
+  h.dashT = C.DASH.dur; h.dashInvuln = C.DASH.invuln; h.dashCd = h.stats.dashCd > 0 ? h.stats.dashCd : C.DASH.cd;
   h.dashHit = new Set(); h.dodged = new Set();
   h.pose = 'dash'; h.poseT = C.DASH.dur + 0.05;
   const end = BD.nav.move(w.grid, h.x, h.y, dx * C.DASH.dist, dy * C.DASH.dist, h.r);
