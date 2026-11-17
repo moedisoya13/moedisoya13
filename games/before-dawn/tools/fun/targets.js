@@ -14,8 +14,8 @@ const atMost = (a) => (v) => v <= a;
 
 const ROWS = [
   // density and killing
-  { id: 'kpm', name: 'kills per minute', get: (r) => r.total.killsPerMin, v1: 15, target: '≥ 60', ok: atLeast(60) },
-  { id: 'onScreen', name: 'enemies on screen, mean', get: (r) => r.total.onScreenMean, v1: 3.7, target: '14–40', ok: between(14, 40) },
+  { id: 'kpm', name: 'kills per minute', get: (r) => r.total.killsPerMin, v1: 15, target: '≥ 100', ok: atLeast(100) },
+  { id: 'onScreen', name: 'enemies on screen, mean', get: (r) => r.total.onScreenMean, v1: 3.7, target: '12–40', ok: between(12, 40) },
   { id: 'sparse', name: 'time with < 3 enemies on screen (%)', get: (r) => r.total.sparsePct, v1: 35.4, target: '≤ 15', ok: atMost(15) },
   { id: 'stk', name: 'swings to kill a regular enemy', get: (r) => r.swingsToKillAll, v1: 4.3, target: '≤ 1.8', ok: atMost(1.8) },
   { id: 'multi', name: 'swings that hit 2+ enemies (%)', get: (r) => r.total.multiSwingPct, v1: 16.9, target: '≥ 50', ok: atLeast(50) },
@@ -25,12 +25,12 @@ const ROWS = [
   { id: 'lastChase', name: 'chasing the last 1–2 enemies (% of time)', get: (r) => r.total.lastChasePct, v1: 11.2, target: '≤ 2', ok: atMost(2) },
   { id: 'movedPerEvent', name: 'distance walked per kill/pickup/choice (u)', get: (r) => r.movedPerEvent, v1: 13.2, target: '≤ 3', ok: atMost(3) },
   // rewards and choices
-  { id: 'pickups', name: 'pickups per minute', get: (r) => perMin(r.total.pickups, r), v1: 1.2, target: '≥ 45', ok: atLeast(45) },
+  { id: 'pickups', name: 'pickups per minute', get: (r) => perMin(r.total.pickups, r), v1: 1.2, target: '≥ 80', ok: atLeast(80) },
   { id: 'choiceGap', name: 'median seconds between choices', get: (r) => r.choiceGap.median, v1: 73.3, target: '15–40', ok: between(15, 40) },
   { id: 'choiceGapMax', name: 'longest wait for a choice (s)', get: (r) => r.choiceGap.max, v1: 106.6, target: '≤ 75', ok: atMost(75) },
   { id: 'firstChoice', name: 'first choice at (s)', get: (r) => (r.first.choice === undefined ? r.sec : r.first.choice), v1: 47.5, target: '≤ 25', ok: atMost(25) },
   // the first minute
-  { id: 'f60kills', name: 'first 60 s: kills', get: (r) => r.first60.kills, v1: 22, target: '≥ 40', ok: atLeast(40) },
+  { id: 'f60kills', name: 'first 60 s: kills', get: (r) => r.first60.kills, v1: 22, target: '≥ 80', ok: atLeast(80) },
   { id: 'f60choices', name: 'first 60 s: choices', get: (r) => r.first60.choices, v1: 1, target: '≥ 2', ok: atLeast(2) },
   { id: 'f60hurts', name: 'first 60 s: hits taken', get: (r) => r.first60.hurts, v1: 5, target: '≤ 3', ok: atMost(3) },
   // pain
@@ -43,7 +43,7 @@ const ROWS = [
   // length
   { id: 'floorSec', name: 'seconds on 3F', get: (r) => (floorOf(r, 4) ? floorOf(r, 3).sec : NaN), v1: 73.7, target: '110–170', ok: between(110, 170) },
   { id: 'winMin', name: 'length of a winning run (min)', get: (r) => (r.result === 'win' ? Math.round(r.sec / 6) / 10 : NaN), v1: 6.7, target: '12.5–15.5', ok: between(12.5, 15.5) },
-  { id: 'level', name: 'hero level at the end of a winning run', get: (r) => (r.result === 'win' && r.level !== null ? r.level : NaN), v1: '—', target: '21–27', ok: between(21, 27) },
+  { id: 'level', name: 'hero level at the end of a winning run', get: (r) => (r.result === 'win' && r.level !== null ? r.level : NaN), v1: '—', target: '22–28', ok: between(22, 28) },
   // fairness
   { id: 'unseen', name: 'hits from attacks that began off screen (max)', get: (r) => (r.unseenHits === null ? NaN : r.unseenHits), v1: '—', target: '0', ok: atMost(0), agg: 'max' },
 ];
