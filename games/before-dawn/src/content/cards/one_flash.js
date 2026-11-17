@@ -54,9 +54,12 @@ BD.render.decor.register({
   draw(g, v, h, w, box, t) {
     if (h.dead || !BD.cardRt.has(w, 'one_flash')) return;
     const D = K.draw, R = h.stats.reach;
-    D.annulus(g, v, h.x, h.y, R - T.tip, R, 'rgba(255,154,60,0.16)');
-    D.ellipse(g, v, h.x, h.y, R, null, 'rgba(255,154,60,0.55)', 1.5);
-    D.ellipse(g, v, h.x, h.y, R - T.tip, null, 'rgba(255,154,60,0.35)', 1);
+    // pale orange band; thin ink edges keep it readable on the yellow beast floor
+    D.annulus(g, v, h.x, h.y, R - T.tip, R, 'rgba(255,154,60,0.22)');
+    D.ellipse(g, v, h.x, h.y, R, null, 'rgba(10,10,12,0.35)', 3.5);
+    D.ellipse(g, v, h.x, h.y, R, null, 'rgba(255,154,60,0.85)', 1.5);
+    D.ellipse(g, v, h.x, h.y, R - T.tip, null, 'rgba(10,10,12,0.25)', 2.5);
+    D.ellipse(g, v, h.x, h.y, R - T.tip, null, 'rgba(255,154,60,0.6)', 1);
     // the guard (too close) as a faint dashed ring
     g.setLineDash([4, 5]);
     D.ellipse(g, v, h.x, h.y, T.guard, null, 'rgba(255,255,255,0.22)', 1);

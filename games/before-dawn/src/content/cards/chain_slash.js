@@ -62,7 +62,13 @@ BD.render.decor.register({
     if (h.dead) return;
     for (const c of BD.cardRt.list(w)) {
       if (c.def.family !== 'combo' || c.state.stack < c.def.maxStack) continue;
-      K.draw.bladeGlow(g, v, h, '#b07ce8', 0.55 + 0.25 * Math.sin(t * 7), 4);
+      const a = 0.75 + 0.25 * Math.sin(t * 7);
+      K.draw.bladeGlow(g, v, h, '#b07ce8', a, 7);
+      const [p0, p1] = K.draw.bladePts(v, h);
+      for (let i = 0; i < 4; i++) { // drifting sparks off the blade
+        const u = (t * 1.3 + i * 0.25) % 1, x = p0[0] + (p1[0] - p0[0]) * u, y = p0[1] + (p1[1] - p0[1]) * u - 10 * ((t * 2 + i * 0.37) % 1);
+        g.beginPath(); g.arc(x, y, 2.4, 0, M.TAU); g.fillStyle = 'rgba(231,210,255,' + a + ')'; g.fill();
+      }
       return;
     }
   },
@@ -71,7 +77,7 @@ BD.render.decor.register({
 BD.render.vfx.register({
   id: 'combo_label',
   draw(g, v, ev, k, w) {
-    const h = w.hero, c = v.proj(h.x, h.y, 104 + 30 * k);
+    const h = w.hero, c = v.proj(h.x, h.y, 104 + 30 * k + (ev.row || 0) * 24);
     K.draw.text(g, ev.text, c[0], c[1], 20, '#e7d2ff', k < 0.7 ? 1 : (1 - k) / 0.3);
   },
 });

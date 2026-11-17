@@ -13,7 +13,7 @@ BD.cards.register({
   desc: '맞은 적 점화: 0.5초마다 3 피해, 3초(합 18). 불타는 적은 가장자리 0.6u 안의 적에게 불을 옮긴다. 다 탄 적은 2초간 옮겨 붙지 않는다(직접 벤 것은 붙는다).',
   onHit(ctx, e) {
     const was = !!e.statuses.burn;
-    if (ctx.status(e, 'burn', { direct: true }) && !was) K.vfx(ctx, 'ignite', { x: K.r3(e.x), y: K.r3(e.y), life: 0.35 });
+    if (ctx.status(e, 'burn', { direct: true }) && !was) K.vfx(ctx, 'ignite', { x: K.r3(e.x), y: K.r3(e.y), life: 0.45 });
   },
   on: {
     steam(ev, ctx) { K.steamFeedback(ctx, ev); },
@@ -24,11 +24,11 @@ BD.cards.register({
 BD.render.vfx.register({
   id: 'ignite',
   draw(g, v, ev, k) {
-    const c = v.proj(ev.x, ev.y, 18), a = 1 - k;
-    for (let i = 0; i < 5; i++) {
-      const an = -Math.PI / 2 + (i - 2) * 0.45, L = (10 + 8 * (i % 2)) * (0.6 + k);
-      const bx = c[0] + Math.cos(an) * 4, by = c[1] + Math.sin(an) * 4;
-      K.draw.path(g, [[bx - 3.5, by], [bx + Math.cos(an) * L, by + Math.sin(an) * L], [bx + 3.5, by]], true);
+    const c = v.proj(ev.x, ev.y, 22), a = 1 - k;
+    for (let i = 0; i < 7; i++) {
+      const an = -Math.PI / 2 + (i - 3) * 0.38, L = (16 + 12 * (i % 2)) * (0.6 + k);
+      const bx = c[0] + Math.cos(an) * 6, by = c[1] + Math.sin(an) * 6;
+      K.draw.path(g, [[bx - 5, by], [bx + Math.cos(an) * L, by + Math.sin(an) * L], [bx + 5, by]], true);
       g.fillStyle = K.draw.rgba(i % 2 ? '#ffd24a' : '#ff5a2a', a); g.fill();
       g.lineWidth = 1.2; g.strokeStyle = 'rgba(10,10,12,' + a + ')'; g.stroke();
     }

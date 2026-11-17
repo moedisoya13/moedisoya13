@@ -29,6 +29,24 @@ BD.cards.register({
   hud(state, ctx) { return K.targetHud(state, ctx, 'heavy'); },
 });
 
+// Bright crack lines, one per stack: the engine's ink cracks do not show on black armour.
+BD.render.decor.register({
+  id: 'armor_cracks', target: 'enemy',
+  draw(g, v, e, w, box) {
+    const s = e.statuses.sunder;
+    if (!s || e.down) return;
+    const hgt = box.y - box.top, D = K.draw;
+    for (let i = 0; i < s.n; i++) {
+      const y0 = box.top + hgt * (0.3 + 0.09 * i), x0 = box.x + (i % 2 ? 2 : -12) * (box.w / 60);
+      const pts = [[x0, y0], [x0 + 6, y0 + 4], [x0 + 3, y0 + 8], [x0 + 11, y0 + 12], [x0 + 9, y0 + 16]];
+      D.path(g, pts);
+      g.lineJoin = 'round';
+      g.strokeStyle = K.INK; g.lineWidth = 4; g.stroke();
+      g.strokeStyle = '#ffe9b0'; g.lineWidth = 2; g.stroke();
+    }
+  },
+});
+
 BD.render.vfx.register({
   id: 'armor_shards',
   draw(g, v, ev, k) {
@@ -37,7 +55,7 @@ BD.render.vfx.register({
       const an = ev.dir + (D.hash(ev.x * 7 + i, ev.y) - 0.5) * 2.2, sp = 0.5 + D.hash(i, ev.x) * 0.9;
       const d = sp * k * 1.4, z = 40 + 60 * k * (1 - k) * 2 - 30 * k * k;
       const c = v.proj(ev.x + Math.cos(an) * d, ev.y + Math.sin(an) * d, Math.max(4, z));
-      const s = 4 + (i % 3) * 2, rot = k * 9 + i;
+      const s = 6 + (i % 3) * 2.5, rot = k * 9 + i;
       g.save(); g.translate(c[0], c[1]); g.rotate(rot); g.globalAlpha = a;
       D.path(g, [[-s, -s * 0.4], [s * 0.8, -s * 0.7], [s * 0.4, s * 0.6], [-s * 0.6, s * 0.5]], true);
       g.fillStyle = i % 2 ? '#8b8f9e' : '#c9ccd6'; g.fill();

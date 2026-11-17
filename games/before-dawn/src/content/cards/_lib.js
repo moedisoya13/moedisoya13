@@ -102,7 +102,14 @@ K.targetFlash = function (ctx) {
 };
 
 // Combo stage label over the hero's head (GDD §9.3 "간격↑ 칼 길이↑ 잔영 관통").
-K.label = (ctx, text) => K.vfx(ctx, 'combo_label', { text, life: 1.0 });
+// Labels that come within a second of each other stack upward instead of overlapping.
+const labelSeen = new WeakMap();
+K.label = function (ctx, text) {
+  const w = ctx.w, last = labelSeen.get(w);
+  const row = last && w.t - last.t < 1.0 ? (last.row + 1) % 3 : 0;
+  labelSeen.set(w, { t: w.t, row });
+  K.vfx(ctx, 'combo_label', { text, row, life: 1.0 });
+};
 
 // Card slot centre on the HUD (GDD §9.2: 3 slots of 84px, gap 12, centred, y 616).
 K.slotCenter = (slot) => [640 - 138 + slot * 96 + 42, 616 + 42];

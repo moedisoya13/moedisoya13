@@ -67,16 +67,18 @@ BD.render.decor.register({
     const c = BD.cardRt.get(w, 'riposte');
     if (!c) return;
     const age = w.t - c.state.flashT;
-    if (age < 0 || age > 0.35) return;
-    const a = 1 - age / 0.35;
-    const sx = box.x + (box.flip ? 9 : -9), sy = box.top + (box.y - box.top) * 0.3;
+    if (age < 0 || age > 0.4) return;
+    const a = 1 - age / 0.4, grow = 0.7 + 0.6 * (1 - a);
+    const sx = box.x + (box.flip ? 10 : -10), sy = box.top + (box.y - box.top) * 0.28;
     g.save(); g.translate(sx, sy);
-    for (let i = 0; i < 8; i++) {
-      const an = (i / 8) * M.TAU, L = (i % 2 ? 10 : 20) * (0.6 + 0.6 * (1 - a));
-      K.draw.path(g, [[Math.cos(an + 0.2) * 3, Math.sin(an + 0.2) * 3], [Math.cos(an) * L, Math.sin(an) * L], [Math.cos(an - 0.2) * 3, Math.sin(an - 0.2) * 3]], true);
+    for (let i = 0; i < 10; i++) {
+      const an = (i / 10) * M.TAU, L = (i % 2 ? 14 : 30) * grow;
+      K.draw.path(g, [[Math.cos(an + 0.22) * 4, Math.sin(an + 0.22) * 4], [Math.cos(an) * L, Math.sin(an) * L], [Math.cos(an - 0.22) * 4, Math.sin(an - 0.22) * 4]], true);
       g.fillStyle = K.draw.rgba(i % 2 ? K.ORANGE : '#ffffff', a); g.fill();
+      g.lineWidth = 1.2; g.strokeStyle = 'rgba(10,10,12,' + a + ')'; g.stroke();
     }
-    g.beginPath(); g.arc(0, 0, 6, 0, M.TAU); g.fillStyle = 'rgba(255,255,255,' + a + ')'; g.fill();
+    g.beginPath(); g.arc(0, 0, 9, 0, M.TAU); g.fillStyle = 'rgba(255,255,255,' + a + ')'; g.fill();
+    g.lineWidth = 3; g.strokeStyle = K.draw.rgba(K.ORANGE, a); g.stroke();
     g.restore();
   },
 });
