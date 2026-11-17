@@ -44,7 +44,7 @@ module.exports = {
     b.mem.cd = 0;
     const L = record(H, w, b, 8);
     const first = L[0].tg;
-    t.eq(first.attack, 'cleave'); t.eq(first.shape, 'fan'); t.near(first.half, 70); t.near(first.r, 3.6); t.near(first.total, 0.9); t.eq(first.dmg, 22);
+    t.eq(first.attack, 'cleave'); t.eq(first.shape, 'fan'); t.near(first.half, 70); t.near(first.r, 3.6); t.near(first.total, 0.9); t.eq(first.dmg, b.def.T.cleave.dmg);
     const bolts = L.filter((x) => x.tg.attack === 'dark_bolts');
     t.assert(bolts.length >= 3, 'three bolt lines');
     const b3 = bolts.slice(0, 3);
@@ -62,9 +62,9 @@ module.exports = {
     const n0 = w.bus.count();
     until(H, () => w.projectiles.some((p) => p.kind === 'dark_bolt'), 120);
     const p = w.projectiles.find((x) => x.kind === 'dark_bolt');
-    t.near(p.speed, 12); t.eq(p.dmg, 12); t.eq(p.attack, 'dark_bolts');
+    t.near(p.speed, 12); t.eq(p.dmg, b.def.T.bolts.dmg); t.eq(p.attack, 'dark_bolts');
     until(H, () => evs(w, 'hurt', n0).length > 0, 120);
-    t.eq(evs(w, 'hurt', n0)[0].dmg, 12);
+    t.eq(evs(w, 'hurt', n0)[0].dmg, b.def.T.bolts.dmg);
     // a bolt aimed at a pillar dies there
     const q = BD.hazards.projectile(w, { owner: b, x: 6.5, y: 6.5, dir: Math.atan2(3.5 - 6.5, 3.5 - 6.5), speed: 12, range: 30, dmg: 12, hostile: true, kind: 'dark_bolt', attack: 'dark_bolts' });
     w.hero.x = 11.5; w.hero.y = 1.5;
@@ -121,7 +121,7 @@ module.exports = {
     t.near(th[0].t - (bolts[4].t + 0.6), T.phases[2].gap, 3 * TICK, '2.0 s gap');
     const hx = w.hero.x, hy = w.hero.y;
     t.assert(th.some((x) => Math.hypot(x.tg.x - hx, x.tg.y - hy) < 1e-6), 'one under the hero');
-    for (const x of th) { t.near(x.tg.r, 1.2); t.near(x.tg.total, 1.0); t.eq(x.tg.dmg, 18); t.assert(Math.hypot(x.tg.x - hx, x.tg.y - hy) <= 3 + 1e-6); }
+    for (const x of th) { t.near(x.tg.r, 1.2); t.near(x.tg.total, 1.0); t.eq(x.tg.dmg, b.def.T.thorns.dmg); t.assert(Math.hypot(x.tg.x - hx, x.tg.y - hy) <= 3 + 1e-6); }
   },
   'phase 3 at 33 %: speed 2.4, cleave 0.7 s, collapse rings 0–3 / 3–6 / 6–9u inner first 0.5 s apart, 0.8 s each, 20'(t) {
     const { H, w, b } = roof(t, { dist: 2.4 });
@@ -146,7 +146,7 @@ module.exports = {
     t.eq(rings.length, 3);
     t.eq(rings.map((x) => [x.tg.r0, x.tg.r1]), [[0, 3], [3, 6], [6, 9]]);
     t.near(rings[1].t - rings[0].t, 0.5, 2 * TICK); t.near(rings[2].t - rings[1].t, 0.5, 2 * TICK);
-    for (const x of rings) { t.eq(x.tg.shape, 'ring'); t.near(x.tg.total, 0.8); t.eq(x.tg.dmg, 20); }
+    for (const x of rings) { t.eq(x.tg.shape, 'ring'); t.near(x.tg.total, 0.8); t.eq(x.tg.dmg, b.def.T.collapse.dmg); }
     t.near(rings[0].t - (L[0].t + 0.7), 1.6, 3 * TICK, '1.6 s gap');
     const after = L.find((x) => x.t > rings[2].t + 0.01);
     t.eq(after.tg.attack, 'dark_bolts', 'cycle: cleave → collapse → bolts → thorns');

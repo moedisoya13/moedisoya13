@@ -43,4 +43,11 @@ function evs(w, type, from) {
 // Count living enemies of a kind.
 function living(w, kind) { return w.enemies.filter((e) => !e.dead && (!kind || e.kind === kind)).length; }
 
-module.exports = { arena, pacify, until, evs, living };
+// What a regular enemy of `kind` hits for on this floor: its damage × the floor's director row (GDD-V2
+// §3.4); `base` overrides the def's damage (a skill's own number).
+function dmgOf(BD, w, kind, base) {
+  const row = BD.director.row(w);
+  return Math.round((base === undefined ? BD.enemies.get(kind).dmg : base) * (row ? row.dmg : 1));
+}
+
+module.exports = { arena, pacify, until, evs, living, dmgOf };

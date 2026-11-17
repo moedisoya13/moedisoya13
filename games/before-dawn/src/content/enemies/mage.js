@@ -16,7 +16,7 @@ const T = {
   keepMin: 4, keepMax: 7, castMax: 9,          // edgeDist band; no cast from farther than castMax
   blinkAt: 0.5, blinkMin: 4, blinkMax: 6, blinkTg: 0.4, // §3.2: once, at half HP, 4–6u away, mark 0.4 s
   near: 2.0, nearTime: 0.5, guardianBlinkCd: 6, guardianBlinkMin: 4, // the guardian's (§3.6)
-  tgR: 1.3, tgTime: 1.1, cd: 3.0, side: 2.2, // tgTime 1.1: docs/CONTROLS-REVIEW.md §3.1
+  tgR: 1.3, tgTime: 1.1, cd: 2.4, side: 2.2, // tgTime 1.1: docs/CONTROLS-REVIEW.md §3.1
   zoneLife: 2.5, zoneTick: 0.5, zoneDmg: 3,
   strafe: 0.45,                                // fraction of speed used to drift sideways in band
 };
@@ -84,7 +84,7 @@ function castFire(w, e) {
 
 BD.enemies.register({
   id: 'mage', name: '마도사', type: 'magic', sprite: 'mage',
-  hp: 30, speed: 2.0, dmg: 10, radius: 0.35, cost: 2.5, role: 'threat', shards: 4, // GDD-V2 §3.2 (v1 tuned: 54 HP, 12)
+  hp: 50, speed: 2.0, dmg: 10, radius: 0.35, cost: 2.5, role: 'threat', shards: 4, // GDD-V2 §3.2 (v1 tuned: 54 HP, 12)
   attacks: { fire_circle: { name: '불 원', sfx: 'fire_circle' }, fire_zone: { name: '불 장판' } }, // the blink warning sounds by its style
   T,
   guardian: { name: '대마도사', update(e, w) { BD.foes.clamp(w, e); } }, // three circles, the zone teleport: e.guardian

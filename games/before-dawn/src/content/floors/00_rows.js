@@ -8,7 +8,7 @@
 //                 1F    2F    3F    4F    5F   rooftop
 const ROWS = {
   hp:          [1.0,  1.2,  1.4,  1.6,  1.8,  1.5],
-  dmg:         [1.3,  1.7,  2.0,  2.3,  2.6,  1.8],
+  dmg:         [1.3,  1.8,  2.2,  2.7,  3.1,  1.9],
   melee:       [4,    4,    5,    5,    6,    3],
   ranged:      [2,    3,    3,    4,    4,    2],
   threatEvery: [6,    6,    5,    5,    4,    0],
@@ -18,4 +18,4 @@ const ROWS = {
 for (const [col, vals] of Object.entries(ROWS)) vals.forEach((v, i) => { BD.C.DIRECTOR.floors[i + 1][col] = v; });
 
 // Guardian HP 1F–5F (§3.6, the knob ③ of §9.2; the engine's BD.C.GUARDIAN.hp is read by makeEnemy)
-BD.C.GUARDIAN.hp = [0, 320, 560, 800, 1040, 1280];
+BD.C.GUARDIAN.hp = [0, 280, 480, 680, 880, 1090];

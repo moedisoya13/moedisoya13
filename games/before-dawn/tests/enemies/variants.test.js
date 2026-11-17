@@ -33,7 +33,7 @@ module.exports = {
       for (const kind of ['slime', 'goblin', 'skel_archer', 'ghoul', 'mage', 'dark_knight']) {
         const d = BD.enemies.get(kind);
         const e = BD.W.makeEnemy(w, kind, 2, 2, { guardian: true });
-        t.eq(e.maxHp, [0, 400, 700, 1000, 1300, 1600][n]); t.eq(e.hp, e.maxHp); t.near(e.size, 1.6, 1e-9); t.eq(e.dmg, Math.round(d.dmg * 1.3)); t.near(e.tgScale, 1.4, 1e-9);
+        t.eq(e.maxHp, BD.C.GUARDIAN.hp[n]); t.eq(e.hp, e.maxHp); // the row: numbers.test.js t.near(e.size, 1.6, 1e-9); t.eq(e.dmg, Math.round(d.dmg * 1.3)); t.near(e.tgScale, 1.4, 1e-9);
         t.assert(e.knockScale <= 0.33 + 1e-9, 'reduced knockback');
         t.eq(BD.ai.slot(w, e, 'melee'), true); t.eq(e.slot, null, 'takes no slot');
       }

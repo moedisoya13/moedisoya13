@@ -3,7 +3,7 @@
 // the mage teleports once per life at half HP, 4–6u from the hero inside the combat window, an elite
 // never; the fire circle, the zone that ignites enemies, the bind, the guardian variants.
 'use strict';
-const { arena, pacify, until, evs } = require('./util');
+const { arena, pacify, until, evs, dmgOf } = require('./util');
 
 const TICK = 1 / 60;
 const tgOf = (w, e) => w.telegraphs.filter((t) => t.ownerId === e.id);
@@ -31,12 +31,12 @@ module.exports = {
     const n0 = w.bus.count();
     until(H, () => w.projectiles.length > 0, 60);
     const p = w.projectiles[0];
-    t.near(p.speed, 14); t.eq(p.dmg, 8); t.eq(p.kind, 'arrow'); t.near(p.r, 0.15); t.near(p.range, tg.len, 1e-9);
+    t.near(p.speed, 14); t.eq(p.dmg, dmgOf(BD, w, 'skel_archer')); t.eq(p.kind, 'arrow'); t.near(p.r, 0.15); t.near(p.range, tg.len, 1e-9);
     const x0 = p.x; H.step(6);
     if (!p.dead) t.near(x0 - p.x, 14 * 6 * TICK, 1e-6, '14u/s');
     until(H, () => evs(w, 'hurt', n0).length > 0, 60);
     const hurt = evs(w, 'hurt', n0)[0];
-    t.eq(hurt.dmg, 8); t.eq(hurt.attack, 'shot'); t.eq(hurt.source, 'skel_archer');
+    t.eq(hurt.dmg, dmgOf(BD, w, 'skel_archer')); t.eq(hurt.attack, 'shot'); t.eq(hurt.source, 'skel_archer');
     // in a long room the line stops at 12u
     const b = arena(t, { w: 30, h: 10, hx: 8.2, hy: 5, floor: 1 });
     pacify(b.w);
@@ -139,18 +139,18 @@ module.exports = {
     e.mem.cd = 0;
     H.step(1);
     const [tg] = tgOf(w, e);
-    t.eq(tg.shape, 'circle'); t.near(tg.r, 1.3); t.near(tg.total, 1.1); t.eq(tg.dmg, 10); t.eq(tg.attack, 'fire_circle');
+    t.eq(tg.shape, 'circle'); t.near(tg.r, 1.3); t.near(tg.total, 1.1); t.eq(tg.dmg, dmgOf(BD, w, 'mage')); t.eq(tg.attack, 'fire_circle');
     t.near(tg.x, w.hero.x, 1e-9); t.near(tg.y, w.hero.y, 1e-9);
     const n0 = w.bus.count();
     until(H, () => w.zones.length > 0, 80);
     const z = w.zones[0];
-    t.near(z.r, 1.3); t.near(z.life, 2.5, 2 * TICK); t.near(z.tick, 0.5); t.eq(z.dmg, 3); t.eq(z.igniteEnemies, true); t.eq(z.attack, 'fire_zone');
-    t.eq(evs(w, 'hurt', n0)[0].dmg, 10);
+    t.near(z.r, 1.3); t.near(z.life, 2.5, 2 * TICK); t.near(z.tick, 0.5); t.eq(z.dmg, Math.round(3 * e.dmgMul)); t.eq(z.igniteEnemies, true); t.eq(z.attack, 'fire_zone');
+    t.eq(evs(w, 'hurt', n0)[0].dmg, dmgOf(BD, w, 'mage'));
     e.mem.cd = 99;
     H.step(Math.round(2.6 / TICK));
     const zh = evs(w, 'hurt', n0).filter((x) => x.attack === 'fire_zone');
     t.assert(zh.length >= 2, 'zone hurts the hero standing in it');
-    for (const x of zh) { t.eq(x.dmg, 3); t.eq(x.source, 'zone'); }
+    for (const x of zh) { t.eq(x.dmg, z.dmg); t.eq(x.source, 'zone'); }
     t.eq(w.zones.length, 0, 'zone gone after 2.5 s');
   },
   'mage: the fire zone burns the horde — enemies inside catch fire, and their kills drop shards'(t) {

@@ -31,10 +31,10 @@ const T = {
     { speed: 1.6, cycle: ['cleave', 'dark_bolts', 'thorns'], gap: 2.0 },
     { speed: 2.4, cycle: ['cleave', 'collapse', 'dark_bolts', 'thorns'], gap: 1.6 },
   ],
-  cleave: { trigger: 4, half: 70, r: 3.6, time: 0.9, time3: 0.7, dmg: 22 },
-  bolts: { n: 3, every: 0.35, time: 0.6, speed: 12, dmg: 12, width: 0.4, fanN: 5, fanHalf: 30, lineMax: 12 },
-  thorns: { n: 5, r: 1.2, spread: 3, time: 1.0, dmg: 18 },
-  collapse: { rings: [[0, 3], [3, 6], [6, 9]], every: 0.5, time: 0.8, dmg: 20 },
+  cleave: { trigger: 4, half: 70, r: 3.6, time: 0.9, time3: 0.7, dmg: 42 },
+  bolts: { n: 3, every: 0.35, time: 0.6, speed: 12, dmg: 20, width: 0.4, fanN: 5, fanHalf: 30, lineMax: 12 },
+  thorns: { n: 5, r: 1.2, spread: 3, time: 1.0, dmg: 32 },
+  collapse: { rings: [[0, 3], [3, 6], [6, 9]], every: 0.5, time: 0.8, dmg: 34 },
   minionDmg: 40,   // §3.2: thorns and collapse on the minions inside
   roar: { time: 1.5, push: 3 },
   stop: 2.0,       // walks until edgeDist ≤ this between skills
@@ -57,9 +57,13 @@ function cleave(w, e) {
   return time;
 }
 
+// A staggered warning (a later bolt, an outer ring) starts only while the boss stands inside the combat
+// window: its origin must be seen (GDD-V2 §5.6-1). The hero may have walked so far that it is not.
+const seen = (w, e) => BD.ai.inView(w, e.x, e.y);
+
 function bolt(w, e, gen, dir) {
   const S = T.bolts, m = e.mem;
-  if (m.gen !== gen || e.dead) return;
+  if (m.gen !== gen || e.dead || !seen(w, e)) return;
   const len = BD.nav.rayLen(w.grid, e.x, e.y, dir, S.lineMax);
   A.telegraph(w, e, {
     shape: 'line', x: e.x, y: e.y, dir, len, width: S.width, time: S.time, dmg: 0, danger: true, attack: 'dark_bolts',
@@ -101,7 +105,7 @@ function collapse(w, e) {
   const S = T.collapse, m = e.mem, gen = m.gen, x = e.x, y = e.y;
   e.state = 'cast'; e.squash = 1;
   S.rings.forEach(([r0, r1], i) => W.after(w, i * S.every, (w2) => {
-    if (m.gen !== gen || e.dead) return;
+    if (m.gen !== gen || e.dead || !seen(w2, e)) return;
     A.telegraph(w2, e, { shape: 'ring', x, y, r0, r1, time: S.time, dmg: dmgOf(e, S.dmg), attack: 'collapse', onFire: crush(e) });
   }));
   return (S.rings.length - 1) * S.every + S.time;

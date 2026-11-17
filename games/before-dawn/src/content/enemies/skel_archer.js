@@ -14,7 +14,7 @@ const M = BD.math;
 const T = {
   hold: 6, leave: 9,                        // edge distance: stops within `hold`, walks again beyond `leave`
   tooClose: 2, backDist: 3, backEvery: 6,   // the step back: 3u, at most once per 6 s
-  width: 0.3, tgTime: 0.8, arrowSpeed: 14, cd: 2.4,
+  width: 0.3, tgTime: 0.8, arrowSpeed: 14, cd: 1.8,
   lineMax: 12,                              // §3.2 / §5.6-3: a shot's line (and range) is at most 12u
   fan: 15,                                  // guardian spread (deg)
   repathEvery: 0.5,                         // seconds between line-of-sight searches
@@ -78,7 +78,7 @@ function shoot(w, e) {
 
 BD.enemies.register({
   id: 'skel_archer', name: '해골 궁수', type: 'undead', sprite: 'skeleton_archer',
-  hp: 20, speed: 2.6, dmg: 11, radius: 0.35, cost: 1.5, role: 'threat', shards: 3, // GDD-V2 §3.2 (v1 tuned: 40 HP, 9)
+  hp: 35, speed: 2.6, dmg: 12, radius: 0.35, cost: 1.5, role: 'threat', shards: 3, // GDD-V2 §3.2 (v1 tuned: 40 HP, 9)
   attacks: { shot: { name: '사격' } },
   T,
   guardian: { name: '해골 명궁', update(e, w) { BD.foes.clamp(w, e); } }, // three arrows: e.guardian in shoot()

@@ -2,7 +2,7 @@
 // mods.ignoreGuard pass), 100°/s turning, the charge (trigger, rectangle, speed, damage, opening,
 // wall stun, cooldown) and the guardian's 7u charge + sweep (GDD §6.2–6.3).
 'use strict';
-const { arena, pacify, until, evs } = require('./util');
+const { arena, pacify, until, evs, dmgOf } = require('./util');
 
 const TICK = 1 / 60;
 const DEG = Math.PI / 180;
@@ -86,7 +86,7 @@ module.exports = {
     until(H, () => !e.lunge, 60);
     t.near(9.5 - e.x, 5 - 0.7, 0.05, 'ran 5u minus the body radius (stays inside the warning)');
     const hurt = evs(w, 'hurt', n0)[0];
-    t.eq(hurt.dmg, BD.enemies.get('dark_knight').dmg); t.eq(hurt.attack, 'charge'); t.eq(hurt.source, 'dark_knight');
+    t.eq(hurt.dmg, dmgOf(BD, w, 'dark_knight')); t.eq(hurt.attack, 'charge'); t.eq(hurt.source, 'dark_knight');
     const fire = w.t - (5 - 0.7) / 10;
     H.step(1);
     const xs = e.x, fs = e.face;

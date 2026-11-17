@@ -9,14 +9,14 @@ const A = BD.ai;
 const M = BD.math;
 
 const T = {
-  range: 2.2, half: 45, tgR: 2.0, tgTime: 0.6, leap: 1.5, leapTime: 0.2, cd: 2.0,
+  range: 2.2, half: 45, tgR: 2.0, tgTime: 0.6, leap: 1.5, leapTime: 0.2, cd: 1.6,
   reviveDelay: 2.5, reviveHp: 20, corpseHp: 20, guardianRevive: 0.5, // revive HP: GDD-V2 §3.2 (+20; v1 tuned 40)
   riseCd: 0.8, // after rising: no lunge for this long (on top of the engine's 0.3 s no-attack)
 };
 
 BD.enemies.register({
   id: 'ghoul', name: '구울', type: 'undead', sprite: 'ghoul',
-  hp: 45, speed: 2.6, dmg: 16, radius: 0.45, cost: 3, role: 'threat', shards: 4, // GDD-V2 §3.2 (v1 tuned: 120 HP, 2.4 u/s, 14)
+  hp: 70, speed: 2.6, dmg: 18, radius: 0.45, cost: 3, role: 'threat', shards: 4, // GDD-V2 §3.2 (v1 tuned: 120 HP, 2.4 u/s, 14)
   attacks: { lunge: { name: '달려들기' } },
   T,
   guardian: { name: '구울 폭군', update(e, w) { BD.foes.clamp(w, e); } }, // the 50 % rise is read from e.guardian in revive()

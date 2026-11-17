@@ -9,10 +9,10 @@ const A = BD.ai;
 
 BD.enemies.register({
   id: 'slime', name: '슬라임', type: 'beast', sprite: 'slime',
-  hp: 30, speed: 1.6 / 1.1, dmg: 14, radius: 0.45, cost: 1.5, role: 'threat', shards: 3, // GDD-V2 §3.2 (v1 tuned: 60 HP, 12)
+  hp: 45, speed: 1.6 / 1.1, dmg: 14, radius: 0.45, cost: 1.5, role: 'threat', shards: 3, // GDD-V2 §3.2 (v1 tuned: 60 HP, 12)
   alwaysWet: true, // §6.1: always wet; steam does not dry it
   attacks: { pounce: { name: '덮치기' } },
-  T: { hopDist: 1.6, hopEvery: 1.1, hopDur: 0.35, range: 3.0, tgR: 0.9, tgTime: 0.7, jump: 0.25, flat: 0.8, cd: 2.2, split: 2 },
+  T: { hopDist: 1.6, hopEvery: 1.1, hopDur: 0.35, range: 3.0, tgR: 0.9, tgTime: 0.7, jump: 0.25, flat: 0.8, cd: 1.8, split: 2 },
   guardian: {
     name: '대왕 슬라임',
     create(e) { e.mem.summoned = 0; },

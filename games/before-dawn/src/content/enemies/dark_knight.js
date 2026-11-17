@@ -16,7 +16,7 @@ const M = BD.math;
 const T = {
   turn: 100, guardHalf: 60, guardMul: 0.2,
   range: 5, coneHalf: 30, width: 1.4, len: 5, guardianLen: 7, tgTime: 0.9, chargeSpeed: 10,
-  recover: 1.4, wallRecover: 2.8, cd: 3.5,
+  recover: 1.4, wallRecover: 2.8, cd: 3.0,
   sweepR: 2.2, sweepTime: 0.6,
   fizzle: 0.3, // knocked this far off the announced line during the wind-up → the charge is dropped
   ffDmg: 30, ffPush: 1, // §3.2: what the charge does to the enemies in its way
@@ -89,14 +89,14 @@ function endCharge(w, e) {
     BD.W.emit(w, 'vfx', { kind: 'knight_slam', x: e.x + Math.cos(e.face) * e.r, y: e.y + Math.sin(e.face) * e.r, life: 0.6 });
   } else m.recoverT = T.recover;
   A.release(w, e);
-  if (e.guardian) {
+  if (e.guardian && A.inView(w, e.x, e.y)) { // §5.6-1: not if the run took it out of the combat window
     A.telegraph(w, e, { shape: 'circle', x: e.x, y: e.y, r: T.sweepR, noScale: true, time: T.sweepTime, attack: 'sweep' });
   }
 }
 
 BD.enemies.register({
   id: 'dark_knight', name: '암흑기사', type: 'heavy', sprite: 'dark_knight',
-  hp: 120, speed: 2.0, dmg: 14, radius: 0.55, cost: 6, role: 'threat', shards: 8, // GDD-V2 §3.2 (v1 tuned: 240 HP, 20)
+  hp: 160, speed: 2.0, dmg: 11, radius: 0.55, cost: 6, role: 'threat', shards: 8, // GDD-V2 §3.2 (v1 tuned: 240 HP, 20)
   knockScale: 0.33,
   attacks: { charge: { name: '돌격', sfx: 'charge' }, sweep: { name: '휩쓸기', sfx: 'boss_cleave' } },
   T,

@@ -1,7 +1,7 @@
 // Slime, goblin and ghoul: movement, attack telegraph shape and timing, damage, recovery,
 // cooldown, the ghoul's fall / rise and the ways to stop it (GDD §6.2).
 'use strict';
-const { arena, pacify, until, evs } = require('./util');
+const { arena, pacify, until, evs, dmgOf } = require('./util');
 
 const TICK = 1 / 60;
 const tgOf = (w, e) => w.telegraphs.filter((t) => t.ownerId === e.id);
@@ -15,13 +15,13 @@ module.exports = {
     H.step(1);
     const [tg] = tgOf(w, e);
     t.assert(tg, 'pounce telegraph');
-    t.eq(tg.shape, 'circle'); t.near(tg.r, T.tgR); t.near(tg.total, T.tgTime); t.eq(tg.dmg, BD.enemies.get('slime').dmg); t.eq(tg.attack, 'pounce');
+    t.eq(tg.shape, 'circle'); t.near(tg.r, T.tgR); t.near(tg.total, T.tgTime); t.eq(tg.dmg, dmgOf(BD, w, 'slime')); t.eq(tg.attack, 'pounce');
     t.near(tg.x, w.hero.x, 1e-9); t.near(tg.y, w.hero.y, 1e-9);
     const n0 = w.bus.count();
     const k = until(H, () => evs(w, 'hurt', n0).length > 0, 120);
     t.near(k * TICK, T.tgTime - TICK, 2 * TICK, 'hit when the fill completes');
     const hurt = evs(w, 'hurt', n0)[0];
-    t.eq(hurt.dmg, BD.enemies.get('slime').dmg); t.eq(hurt.attack, 'pounce'); t.eq(hurt.source, 'slime');
+    t.eq(hurt.dmg, dmgOf(BD, w, 'slime')); t.eq(hurt.attack, 'pounce'); t.eq(hurt.source, 'slime');
     t.assert(BD.math.dist(e.x, e.y, tg.x, tg.y) < 0.6, 'landed on the warned spot');
     H.step(2);
     t.eq(e.state, 'flat');
@@ -57,11 +57,11 @@ module.exports = {
     const k0 = until(H, () => tgOf(w, e).length > 0, 60);
     t.assert(k0 >= 29 && k0 <= 31, 'first stab after 0.5 s next to the hero, got ' + k0 + ' ticks');
     const [tg] = tgOf(w, e);
-    t.eq(BD.enemies.get('goblin').dmg, 4);
-    t.eq(tg.shape, 'fan'); t.near(tg.half, 30); t.near(tg.r, 1.3); t.near(tg.total, 0.6); t.eq(tg.dmg, BD.enemies.get('goblin').dmg); t.eq(tg.attack, 'stab');
+    t.eq(BD.enemies.get('goblin').dmg, 4); // × the floor's damage row
+    t.eq(tg.shape, 'fan'); t.near(tg.half, 30); t.near(tg.r, 1.3); t.near(tg.total, 0.6); t.eq(tg.dmg, dmgOf(BD, w, 'goblin')); t.eq(tg.attack, 'stab');
     const n0 = w.bus.count();
     until(H, () => evs(w, 'hurt', n0).length > 0, 60);
-    t.eq(evs(w, 'hurt', n0)[0].dmg, BD.enemies.get('goblin').dmg);
+    t.eq(evs(w, 'hurt', n0)[0].dmg, dmgOf(BD, w, 'goblin'));
     const d0 = BD.math.dist(e.x, e.y, w.hero.x, w.hero.y);
     H.step(Math.round(T.backTime / TICK) + 1);
     t.near(BD.math.dist(e.x, e.y, w.hero.x, w.hero.y) - d0, 1.2, 0.15, 'backed off 1.2u');
@@ -84,7 +84,7 @@ module.exports = {
   'ghoul: lunge fan 90° r 2.0, 0.6 s, 12 dmg (GDD-V2 §3.2), leaps 1.5u forward, waits 2.0 s'(t) {
     const { BD, H, w } = arena(t, { floor: 1 });
     pacify(w);
-    const T = BD.enemies.get('ghoul').T, dmg = BD.enemies.get('ghoul').dmg;
+    const T = BD.enemies.get('ghoul').T, dmg = dmgOf(BD, w, 'ghoul');
     const e = BD.W.makeEnemy(w, 'ghoul', w.hero.x + 2.3, w.hero.y, {});
     e.mem.cd = 0;
     H.step(1);
