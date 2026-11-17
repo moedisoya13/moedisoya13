@@ -80,6 +80,15 @@ async function main() {
     return { p, ctx, errors, requests };
   }
   let maxParticles = 0;
+  // the title's menu is drawn (Enter acts on the last frame's menu): a fixed 300 ms was not always
+  // enough on a busy machine (#13 then pressed Enter on the loading screen and timed out)
+  async function titleReady(p) {
+    const t0 = Date.now();
+    while (Date.now() - t0 < 10000) {
+      if (await p.evaluate(() => !!(window.__BD && window.__BD.ui && window.__BD.ui.lastButtons && window.__BD.ui.lastButtons.some((x) => x.menu)))) return;
+      await p.waitForTimeout(50);
+    }
+  }
   async function waitMode(p, mode, ms) {
     const t0 = Date.now();
     while (Date.now() - t0 < ms) {
@@ -369,7 +378,7 @@ async function main() {
     if (browser) {
       const a = await page();
       await a.p.goto(fileUrl + '?seed=9&floor=6&bot=1&speed=64&mute=1');
-      await a.p.waitForTimeout(300); await a.p.keyboard.press('Enter');
+      await titleReady(a.p); await a.p.keyboard.press('Enter');
       const done = await waitMode(a.p, 'result', 120000);
       const saved = await a.p.evaluate((key) => { try { return JSON.parse(localStorage.getItem(key)); } catch (e) { return null; } }, P.KEY);
       const b = await page();
@@ -378,7 +387,7 @@ async function main() {
         Object.defineProperty(window, 'localStorage', { get: thrower, configurable: true });
       });
       await b.p.goto(fileUrl + '?seed=9&floor=6&bot=1&speed=64&mute=1');
-      await b.p.waitForTimeout(300); await b.p.keyboard.press('Enter');
+      await titleReady(b.p); await b.p.keyboard.press('Enter');
       const done2 = await waitMode(b.p, 'result', 120000);
       browserOk = done && saved && saved.v === P.VERSION && done2 && !a.errors.length && !b.errors.length;
       browserNote = `browser: saved v=${saved && saved.v} runs=${saved && saved.runs}, throwing localStorage → ${done2 ? 'result reached' : 'STUCK'}${b.errors.length ? ' errors: ' + b.errors[0] : ''}`;

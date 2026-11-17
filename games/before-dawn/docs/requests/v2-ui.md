@@ -33,7 +33,11 @@ The save is a core file but its v2 format is this branch's job. Changes:
 ### E2. `tools/accept.js` #13 — reads the v2 key
 
 `o.v === 1` / `'before-dawn.save.v1'` → `P.VERSION` / `P.KEY`; the line now says
-`key before-dawn.save.v2 written, v=2, fields = GDD-V2 §8`. Nothing else in the criterion changed.
+`key before-dawn.save.v2 written, v=2, fields = GDD-V2 §8`. And a timing fix in the same
+criterion: its two pages pressed Enter a fixed 300 ms after loading, which on a busy machine is
+sometimes still the loading screen (base and this branch alike: the title's menu is ready 160–510 ms
+after `goto` returns, measured five times each), so one of the two runs never started and #13
+failed at random. A `titleReady(p)` helper now waits until the title's menu is drawn (≤ 10 s).
 
 ### Not edited, taken over from the UI side
 
