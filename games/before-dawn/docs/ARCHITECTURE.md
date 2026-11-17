@@ -106,6 +106,7 @@ const w = H.world(); H.killAll(); w.wave.n = 3;      // stop waves for a scenari
 H.give('chain_slash', 1); H.input({ mx: 1, my: 0 }); H.step(60);
 H.state(); H.hash(); H.events(20); H.sim({ seed: 1 }); H.gen(1, 0); H.setHp(30); H.goto(4);
 H.cmd('altar', 'pick', 0);
+// H.sim({seed, tier, hand, maxSec, bot, trial, floor, unlocked: [ids], hashAt: [sec]}) → {result, floor, sec, kills, cards, events, hashes}
 ```
 
 ---

@@ -179,4 +179,14 @@ module.exports = {
     t.eq(w.bus.counts().swing, swings);
     t.eq(w.bus.counts().vfx, swings);
   },
+  'altar: bot picks an offered card into a non-conditional slot (card_swap), offers obey the pool'(t) {
+    const BD = t.load({ extraFiles: [t.fixture('test_cards.js')] });
+    const r = BD.simRun({ seed: 4, unlocked: ['test_flame', 'test_tide'], hand: ['chain_slash', 'pierce'] });
+    const ev = r.app.world.bus.recent(4000);
+    const swaps = ev.filter((x) => x.type === 'card_swap');
+    t.assert(swaps.length >= 1, 'a swap happened');
+    t.assert(swaps.every((x) => ['test_flame', 'test_tide', 'pierce', 'chain_slash'].includes(x.inId)));
+    t.eq(swaps[0].slot, 1); // slot 0 holds the combo card (conditional) → leftmost non-conditional
+  },
 };
+
