@@ -85,8 +85,16 @@ BD.boons = BD.makeRegistry('boon', { required: ['name', 'max', 'text', 'stats'] 
 // on?: {event(ev, w, task)}, label?(task) → HUD text}. src/core/31_tasks.js runs them.
 BD.tasks = BD.makeRegistry('task', { required: ['name', 'goal'] });
 // Sites (거점, GDD-V2 §5.5): {id, name, stay (s), total? (stay time adds up, seals), use(w, site),
-// optional (a 들를 곳), ring?} — src/core/32_sites.js runs the stay rings.
-BD.sites = BD.makeRegistry('site', { required: ['name', 'stay', 'use'] });
+// optional (a 들를 곳), ring?, states?, passive?, enter?, first?, ready?, look?, update?, on?} —
+// src/core/32_sites.js runs the stay rings (the full contract is at its top).
+BD.sites = BD.makeRegistry('site', {
+  required: ['name', 'stay', 'use'],
+  validate(d) {
+    if (d.states !== undefined && (!Array.isArray(d.states) || !d.states.length)) BD.fail(`site '${d.id}': states must be a non-empty array`);
+    for (const f of ['use', 'enter', 'first', 'ready', 'look', 'update']) if (d[f] !== undefined && typeof d[f] !== 'function') BD.fail(`site '${d.id}': ${f} must be a function`);
+    if (d.on) for (const ev of Object.keys(d.on)) if (!BD.events.decl[ev]) BD.fail(`site '${d.id}': listens to undeclared event '${ev}'`);
+  },
+});
 // Touch pickups (GDD-V2 §6; not the shards): {id, touch (u), take(w, p) → bool (false: left lying)}.
 BD.pickups = BD.makeRegistry('pickup', { required: ['touch', 'take'] });
 // Zone fills and floor layouts (GDD-V2 §5.2, §5.3), used by BD.gen.floorV2:
@@ -113,6 +121,11 @@ BD.render.vfx = BD.makeRegistry('vfx drawer', { required: ['draw'] });          
 //   {x, y, kind: 'objective'|'threat', color?, icon?(g, x, y, r), id?}
 // shown as edge-of-screen markers and on the minimap when they are switched on (src/client/70_offscreen.js).
 BD.render.markers = BD.makeRegistry('marker source', { required: ['collect'] });
+// Touch pickups by kind (GDD-V2 §6: halo, holy_stone; a kind without one draws as the v1 flask):
+//   draw(g, v, p, t, w). Task objects (enemies with role 'object', the nests) by kind: draw(g, v, e, w, t)
+//   instead of a sprite — the object itself is drawn as a site by the stage art.
+BD.render.pickups = BD.makeRegistry('pickup drawer', { required: ['draw'] });
+BD.render.objects = BD.makeRegistry('object drawer', { required: ['draw'] });
 
 BD.onFinalize(function () {
   const meta = BD.assetMeta || {};
