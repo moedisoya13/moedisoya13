@@ -93,10 +93,12 @@ function drawClock(g, ui, w) {
   if (late) col = Math.floor(ui.time * 3) % 2 ? '#ff4b4b' : K.PAPER;
   else if (cm >= 660) col = K.AMBER;
   K.text(ui, BD.flow.clockStr(w), 1122, 46, { size: 31, align: 'center', color: col, weight: 900 });
-  // pause button (visual 44, thumb hit area 64)
+  // pause button (visual 44; hit area 72 × 66, and at least 44 CSS px on a phone — docs/CONTROLS-REVIEW.md
+  // §3.7), kept inside the picture's top-right corner
   K.panel(g, 1212, 14, 44, 44, { shadow: 3, edge: '#8d877c' });
   IC.pause(g, 1234, 36, 26);
-  ui.button({ id: 'hud_pause', label: 'Ⅱ', x: 1202, y: 4, w: 72, h: 66, style: 'none', onTap: () => ui.app.pause() });
+  const pmin = 44 / ui.view.scale, pw = Math.max(72, pmin), ph = Math.max(66, pmin);
+  ui.button({ id: 'hud_pause', label: 'Ⅱ', x: Math.min(1202, C.VIEW_W - pw), y: 4, w: pw, h: ph, style: 'none', onTap: () => ui.app.pause() });
 }
 function drawFloors(g, ui, w) {
   K.panel(g, 1046, 66, 210, 70, { slant: 7, shadow: 3 });
@@ -327,35 +329,51 @@ BD.ui.hud.register({
 });
 
 // ---- controls: dash button, joystick ----------------------------------------------------------------------
-BD.ui.dashCenter = (ui) => (ui.app.save.settings.dashSide === 'left' ? [86, 624] : [1194, 624]);
+// Sizes follow docs/CONTROLS-REVIEW.md §3.2 / §3.7: on a phone the logical canvas is drawn at
+// ×0.52, so the dash button is at least 68 CSS px across (touch square 72), and the joystick ring
+// is drawn at its full-speed radius of 48 CSS px. Large screens (scale ≥ 0.74) are unchanged.
+BD.ui.dashSize = (ui) => { const s = ui.view.scale; return { r: Math.max(46, 34 / s), hit: Math.max(104, 72 / s) }; };
+// centre: (1194, 624) (or 86 on the left), moved in so the drawing keeps r + 16 from the edges
+BD.ui.dashCenter = (ui) => {
+  const r = BD.ui.dashSize(ui).r, y = Math.min(624, C.VIEW_H - r - 16);
+  return ui.app.save.settings.dashSide === 'left' ? [Math.max(86, r + 16), y] : [Math.min(1194, C.VIEW_W - r - 16), y];
+};
 BD.ui.hud.register({
   id: 'controls',
   order: 50,
   draw(g, ui) {
-    const w = ui.world, h = w.hero;
-    const [cx, cy] = BD.ui.dashCenter(ui), r = 46;
+    const w = ui.world, h = w.hero, sc = ui.view.scale;
+    const { r, hit } = BD.ui.dashSize(ui);
+    let [cx, cy] = BD.ui.dashCenter(ui);
+    // a dash press the buffer cannot save (cooldown > 0.2 s): shake 3 CSS px left/right for 0.15 s
+    const ra = BD.client.input.st ? ui.time - BD.client.input.st.refusedAt : 9;
+    const hx = cx;
+    if (ra >= 0 && ra < 0.15) cx += Math.sin(ra * Math.PI * 2 / 0.075) * 3 / sc;
     const cd = K.clamp(h.dashCd / C.DASH.cd, 0, 1), ready = cd <= 0;
     K.circle(g, cx + 3, cy + 4, r); g.fillStyle = K.INK; g.fill();
     K.circle(g, cx, cy, r); g.fillStyle = ready ? '#1e1b16' : '#0f0f13'; g.fill();
     g.save(); K.circle(g, cx, cy, r); g.clip(); g.fillStyle = ready ? '#2c271d' : '#17161c'; g.fillRect(cx - r, cy - r, 2 * r, r * 0.85); g.restore();
     K.circle(g, cx, cy, r); K.ink(g, 4);
+    const k = r / 46; // the face scales with the button
     if (!ready) {
-      g.beginPath(); g.arc(cx, cy, r - 6, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (1 - cd));
-      g.lineWidth = 6; g.strokeStyle = '#8d877c'; g.stroke();
+      g.beginPath(); g.arc(cx, cy, r - 6 * k, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (1 - cd));
+      g.lineWidth = 6 * k; g.strokeStyle = '#8d877c'; g.stroke();
     } else {
-      K.circle(g, cx, cy, r - 6); g.lineWidth = 4; g.strokeStyle = K.GOLD_HI; g.stroke();
+      K.circle(g, cx, cy, r - 6 * k); g.lineWidth = 4 * k; g.strokeStyle = K.GOLD_HI; g.stroke();
     }
-    IC.dash(g, cx, cy - 9, 34, ready ? K.PAPER : '#6d6a64');
-    K.text(ui, '돌진', cx, cy + 27, { size: 18, align: 'center', color: ready ? K.PAPER : '#6d6a64', weight: 800 });
+    IC.dash(g, cx, cy - 9 * k, 34 * k, ready ? K.PAPER : '#6d6a64');
+    K.text(ui, '돌진', cx, cy + 27 * k, { size: 18 * k, align: 'center', color: ready ? K.PAPER : '#6d6a64', weight: 800 });
     if (S.lastInput === 'key') K.text(ui, 'Space', cx, cy - r - 8, { size: 15, align: 'center', color: K.DIM, stroke: 3, weight: 700 });
-    ui.button({ id: 'hud_dash', label: '돌진', x: cx - r - 6, y: cy - r - 6, w: 2 * r + 12, h: 2 * r + 12, style: 'none', onPress: () => { BD.client.input.st.dashReq = true; } });
-    // floating joystick (touch / mouse drag)
+    ui.button({ id: 'hud_dash', label: '돌진', x: hx - hit / 2, y: cy - hit / 2, w: hit, h: hit, style: 'none', onPress: () => { BD.client.input.st.dashReq = true; } });
+    // floating joystick (touch / mouse drag): the ring is the full-speed line (48 CSS px), the
+    // knob (20 CSS px) moves inside it
     const st = BD.client.input.stick && BD.client.input.stick();
     if (st && !ui.app.overlay()) {
+      const SZ = BD.client.input.SIZES, R = SZ.FULL / sc, kr = 20 / sc;
       g.globalAlpha = 0.55;
-      K.circle(g, st.ox, st.oy, 40); g.lineWidth = 7; g.strokeStyle = K.INK; g.stroke(); g.lineWidth = 3; g.strokeStyle = K.PAPER; g.stroke();
-      const dx = st.x - st.ox, dy = st.y - st.oy, d = Math.hypot(dx, dy), k = d > 40 ? 40 / d : 1;
-      K.circle(g, st.ox + dx * k, st.oy + dy * k, 17); g.fillStyle = K.PAPER; g.fill(); K.ink(g, 3);
+      K.circle(g, st.ox, st.oy, R); g.lineWidth = 7; g.strokeStyle = K.INK; g.stroke(); g.lineWidth = 3; g.strokeStyle = K.PAPER; g.stroke();
+      const dx = st.x - st.ox, dy = st.y - st.oy, d = Math.hypot(dx, dy), q = d > R ? R / d : 1;
+      K.circle(g, st.ox + dx * q, st.oy + dy * q, kr); g.fillStyle = K.PAPER; g.fill(); K.ink(g, 3);
       g.globalAlpha = 1;
     }
   },

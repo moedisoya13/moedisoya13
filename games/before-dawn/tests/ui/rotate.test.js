@@ -164,6 +164,50 @@ module.exports = {
     } finally { await T.close(); }
   },
 
+  async 'forced landscape keeps the CSS-px stick, the re-grip rule and the phone-sized dash button (docs/CONTROLS-REVIEW.md §3.2, §3.3 c, §3.7)'(t) {
+    const T = await H.open(H.variant(), { query: '?seed=5&hand=pierce&mute=1&nosave=1', context: { viewport: PORTRAIT, hasTouch: true } });
+    try {
+      await T.tapAt(640, 360);
+      t.eq((await view(T)).forced, 'turn');
+      t.eq(await T.mode(), 'play');
+      await calm(T);
+      // a drag of `css` CSS px along the picture's rightward direction (down the glass when turned)
+      const share = (css) => T.eval((css) => {
+        const c = document.getElementById('bd'), v = window.__BD.ui.view;
+        const a = v.toClient(500, 300), b = v.toClient(500 + css / v.scale, 300);
+        const ev = (type, p) => c.dispatchEvent(new PointerEvent(type, { pointerId: 81, pointerType: 'touch', isPrimary: true, clientX: p[0], clientY: p[1], bubbles: true, cancelable: true }));
+        ev('pointerdown', a); ev('pointermove', b);
+        const i = window.BD.client.input.current();
+        ev('pointerup', b); window.BD.client.input.clearDash();
+        return { m: Math.hypot(i.mx, i.my), glass: [b[0] - a[0], b[1] - a[1]] };
+      }, css);
+      const r7 = await share(7), r30 = await share(30), r48 = await share(48);
+      t.assert(Math.abs(r30.glass[1]) > 29 && Math.abs(r30.glass[0]) < 1, 'the drag runs along the glass\'s long side: ' + r30.glass);
+      t.eq(r7.m, 0, '7 CSS px: dead zone');
+      t.assert(r30.m >= 0.45 && r30.m <= 0.65, '30 CSS px: about half (' + r30.m + ')');
+      t.assert(r48.m >= 0.99, '48 CSS px: full');
+      // re-grip: a press 150 CSS px from the lift within 150 ms is no dash; 20 px is a double tap
+      const regrip = (css) => T.eval(async (css) => {
+        const c = document.getElementById('bd'), v = window.__BD.ui.view, B = window.__BD;
+        const ev = (type, lx, ly) => { const p = v.toClient(lx, ly); c.dispatchEvent(new PointerEvent(type, { pointerId: 12, pointerType: 'touch', isPrimary: true, clientX: p[0], clientY: p[1], bubbles: true, cancelable: true })); };
+        const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
+        B.world().hero.dashCd = 0; window.BD.client.input.clearDash();
+        const n0 = B.events(400).filter((e) => e.event === 'dash').length;
+        ev('pointerdown', 500, 300); ev('pointermove', 540, 300); await sleep(150); ev('pointerup', 540, 300);
+        await sleep(120);
+        const x2 = 540 + css / v.scale;
+        ev('pointerdown', x2, 310); ev('pointermove', x2, 260); await sleep(150); ev('pointerup', x2, 260); await sleep(80);
+        return B.events(400).filter((e) => e.event === 'dash').length > n0;
+      }, css);
+      t.eq(await regrip(150), false, 'turned: a re-grip 150 CSS px away is no dash');
+      t.eq(await regrip(20), true, 'turned: a second press 20 CSS px from the lift dashes');
+      // the dash button keeps its phone size in the turned picture
+      const d = await T.eval(() => { const v = window.__BD.ui.view, b = window.__BD.ui.debug.buttons().find((x) => x.id === 'hud_dash'); return [b.w * v.scale, b.h * v.scale]; });
+      t.assert(Math.min(...d) >= 72 - 0.01, 'dash touch square ≥ 72 CSS px when turned: ' + d);
+      t.eq(T.errors, []);
+    } finally { await T.close(); }
+  },
+
   async 'size re-read every frame (no resize event); a tall desktop window takes a click into an upright view'(t) {
     const T = await H.open(H.variant(), { query: '?mute=1&nosave=1', context: { viewport: { width: 500, height: 760 } } });
     try {

@@ -149,6 +149,9 @@ SH.start = function () {
     last = ts;
     ui.time += dt; ui.dt = dt;
     app.setRotate(view.portrait);
+    // an overlay (pause, altar, rotate, tap …) drops a pending dash and the double-tap timer, so
+    // nothing fires the moment play resumes (docs/CONTROLS-REVIEW.md §3.3 c)
+    if (app.overlay()) BD.client.input.clearDash();
     if (ready && app.mode === 'play' && !app.overlay() && ui.hold > 0) {
       ui.hold = Math.max(0, ui.hold - dt); acc = 0; // hit-stop: the world holds, nothing is skipped
     } else if (ready && app.mode === 'play' && !app.overlay()) {

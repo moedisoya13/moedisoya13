@@ -1,7 +1,7 @@
 // Base isometric renderer. Draw order:
 //   sky → cached static layer (skyline, tower, floor slab, back walls, wall props) → baked
 //   floor decals (BD.client.render.bake) → floor marks (rifts, rings, telegraphs, zones,
-//   shadows, target chevron) → effects 'floor' → depth-sorted obstacles/actors/pickups →
+//   shadows, the blade's reach ring, target chevron) → effects 'floor' → depth-sorted obstacles/actors/pickups →
 //   projectiles → slash trails → effects 'world' → blackout/ending fade.
 // Content can add drawers via BD.render.{trails, projectiles, zones, telegraphs, decor,
 // obstacles, vfx}. ui.camera {x, y} offsets the world (screen shake).
@@ -302,22 +302,40 @@ function hatch(g, color) {
 function projPolys(v, polys) { return polys.map((p) => p.map((q) => v.proj(q[0], q[1]))); }
 function pathPolys(g, pp) { g.beginPath(); for (const p of pp) { g.moveTo(p[0][0], p[0][1]); for (let i = 1; i < p.length; i++) g.lineTo(p[i][0], p[i][1]); g.closePath(); } }
 
-// default telegraph style: red hatch filling from the inside out, ink + red outline
+// default telegraph style (GDD §6.1 as changed by docs/CONTROLS-REVIEW.md §3.4): the whole shape
+// reads from its first frame — a red tint (white on the red heavy floor) and the hatch at 0.6 over
+// all of it — and the fill grows from the inside out as an opaque hatch on a deeper tint, so "full
+// = it lands" still reads. For its first 0.12 s the outline starts 6 px white (ink on the heavy
+// floor) and narrows to the usual ink 3.5 + colour 1.5, to pull the eye to the new shape.
+const TG_LOOK = {
+  red: { col: '#d62828', base: 'rgba(214,40,40,0.40)', fill: 'rgba(214,40,40,0.55)', flash: [255, 255, 255] },
+  heavy: { col: '#ffffff', base: 'rgba(255,255,255,0.30)', fill: 'rgba(255,255,255,0.45)', flash: [10, 10, 12] },
+  flashT: 0.12, flashW: 6,
+};
 BD.render.telegraphs.register({
   id: 'hatch',
   draw(g, v, tg, w) {
-    const heavy = w.floor.domType === 'heavy';
-    const col = heavy ? '#ffffff' : '#d62828';
+    const L = w.floor.domType === 'heavy' ? TG_LOOK.heavy : TG_LOOK.red;
     const p = M.clamp(1 - tg.remain / tg.total, 0, 1);
     const full = projPolys(v, M.shapePoly(tg, 1));
     pathPolys(g, full);
-    g.fillStyle = heavy ? 'rgba(255,255,255,0.10)' : 'rgba(214,40,40,0.12)'; g.fill('evenodd');
+    g.fillStyle = L.base; g.fill('evenodd');
+    g.globalAlpha = 0.6; g.fillStyle = hatch(g, L.col); g.fill('evenodd'); g.globalAlpha = 1;
     const part = projPolys(v, M.shapePoly(tg, Math.max(0.02, p)));
     pathPolys(g, part);
-    g.fillStyle = hatch(g, col); g.fill('evenodd');
+    g.fillStyle = L.fill; g.fill('evenodd');
+    g.fillStyle = hatch(g, L.col); g.fill('evenodd');
     pathPolys(g, full);
-    g.lineWidth = 3.5; g.strokeStyle = U.INK; g.stroke();
-    g.lineWidth = 1.5; g.strokeStyle = col; g.stroke();
+    const k = M.clamp((tg.total - tg.remain) / TG_LOOK.flashT, 0, 1);
+    if (k < 1) {
+      const lw = TG_LOOK.flashW + (1.5 - TG_LOOK.flashW) * k;
+      const c = L.flash, to = L === TG_LOOK.heavy ? [255, 255, 255] : [214, 40, 40];
+      g.lineWidth = Math.max(3.5, lw + 2); g.strokeStyle = U.INK; g.stroke();
+      g.lineWidth = lw; g.strokeStyle = 'rgb(' + c.map((q, i) => Math.round(q + (to[i] - q) * k)).join(',') + ')'; g.stroke();
+    } else {
+      g.lineWidth = 3.5; g.strokeStyle = U.INK; g.stroke();
+      g.lineWidth = 1.5; g.strokeStyle = L.col; g.stroke();
+    }
   },
 });
 BD.render.telegraphs.register({
@@ -570,6 +588,28 @@ function drawDoor(g, v, w, t) {
   }
 }
 
+// The blade's reach (docs/CONTROLS-REVIEW.md §3.6 b): while a living enemy is in the room, a
+// dashed orange circle of radius hero.stats.reach (cards included) at the hero's feet; with a
+// target, the swing's arc toward it (± halfArc) solid, brighter for 0.1 s after each swing. Only
+// the blade's own reach, even when a card aims farther. Orange is the hero's blade colour.
+const REACH = { dash: [7, 6], ring: 0.18, ringW: 1.5, arc: 0.45, arcSwing: 0.8, arcW: 2.5, swingT: 0.1 };
+function drawReach(g, v, w, target) {
+  const h = w.hero;
+  if (h.dead || !w.enemies.some((e) => !e.dead && !e.down)) return;
+  const r = h.stats.reach, c = v.proj(h.x, h.y);
+  g.beginPath(); g.ellipse(c[0], c[1], r * C.ISO_X * 1.414, r * C.ISO_Y * 1.414, 0, 0, M.TAU);
+  g.setLineDash(REACH.dash); g.lineWidth = REACH.ringW; g.strokeStyle = 'rgba(255,154,60,' + REACH.ring + ')'; g.stroke(); g.setLineDash([]);
+  if (!target) return;
+  const aim = Math.atan2(target.y - h.y, target.x - h.x), half = h.stats.halfArc * M.DEG;
+  const swung = h.swingT > 0 && C.HERO.trail - h.swingT < REACH.swingT;
+  g.beginPath();
+  for (let i = 0; i <= 24; i++) {
+    const a = aim - half + (2 * half * i) / 24, p = v.proj(h.x + Math.cos(a) * r, h.y + Math.sin(a) * r);
+    if (i) g.lineTo(p[0], p[1]); else g.moveTo(p[0], p[1]);
+  }
+  g.lineCap = 'round'; g.lineWidth = REACH.arcW; g.strokeStyle = 'rgba(255,154,60,' + (swung ? REACH.arcSwing : REACH.arc) + ')'; g.stroke(); g.lineCap = 'butt';
+}
+
 function drawChevron(g, v, e, t) {
   const c = v.proj(e.x, e.y);
   const rx = e.r * 1.414 * C.ISO_X + 6 + Math.sin(t * 8) * 1.5, ry = rx / 2;
@@ -625,8 +665,10 @@ R.drawWorld = function (g, ui, dt) {
     for (let i = 0; i <= 30 * p; i++) { const a = Math.PI / 2 + (i / 30) * M.TAU; pts.push(v.proj(w.hero.x + Math.cos(a) * 0.55, w.hero.y + Math.sin(a) * 0.55)); }
     if (pts.length > 1) { g.beginPath(); g.moveTo(pts[0][0], pts[0][1]); for (const q of pts) g.lineTo(q[0], q[1]); g.strokeStyle = 'rgba(255,255,255,0.7)'; g.lineWidth = 2; g.stroke(); }
   }
-  const target = w.hero.targetId ? BD.W.enemyById(w, w.hero.targetId) : null;
-  if (target && !target.dead) drawChevron(g, v, target, t);
+  const target0 = w.hero.targetId ? BD.W.enemyById(w, w.hero.targetId) : null;
+  const target = target0 && !target0.dead ? target0 : null;
+  drawReach(g, v, w, target);
+  if (target) drawChevron(g, v, target, t);
   ui.drawEffects(g, 'floor');
   // depth-sorted things
   const items = [];
