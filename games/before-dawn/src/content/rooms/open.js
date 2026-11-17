@@ -9,3 +9,8 @@ BD.gen.patterns.register({
     for (let i = 0; i < n; i++) BD.gen.tryBlock(grid, ctx.rng, 1, 1, 40, 2);
   },
 });
+
+BD.render.obstacles.register({
+  id: 'open',
+  draw(g, v, cx, cy) { BD.roomKit.drawPillar(g, v, cx, cy, 64, ['#8c8f9c', '#666976', '#50525d']); },
+});
