@@ -37,3 +37,40 @@ walker({ id: 'skel_archer', name: '해골 궁수', type: 'undead', sprite: 'skel
 walker({ id: 'ghoul', name: '구울', type: 'undead', sprite: 'ghoul', hp: 60, speed: 2.4, dmg: 14, radius: 0.45, attacks: { lunge: { name: '달려들기' } }, guardian: { name: '구울 폭군' } });
 walker({ id: 'mage', name: '마도사', type: 'magic', sprite: 'mage', hp: 40, speed: 2.0, dmg: 12, radius: 0.35, attacks: { fire_circle: { name: '불 원' } }, guardian: { name: '대마도사' } });
 walker({ id: 'dark_knight', name: '암흑기사', type: 'heavy', sprite: 'dark_knight', hp: 120, speed: 2.0, dmg: 20, radius: 0.55, attacks: { charge: { name: '돌격' } }, guardian: { name: '암흑기사 단장' } });
+
+// ---- v2 stand-ins (GDD-V2 §4.5, §5.4–5.5): the boons, tasks and sites other branches add, so the
+// HUD, the minimap, the markers and the screens can be looked at and tested with them. Registered
+// only when missing. Tasks count kills like 소탕 (so a stand-in floor can still be finished); sites
+// finish at once. They carry the GDD names and nothing else of the rules.
+const boon = (d) => { if (!BD.boons.has(d.id)) BD.boons.register(Object.assign({ max: 3, stats() {} }, d)); };
+boon({ id: 'long', name: '긴 칼', text: (r) => '칼 길이 +' + (0.25 * r).toFixed(2) + 'u', stats(s, r) { s.reach += 0.25 * r; } });
+boon({ id: 'wide', name: '넓은 품', text: (r) => '부채꼴 각 +' + 20 * r + '°', stats(s, r) { s.halfArc += (10 * r * Math.PI) / 180; } });
+boon({ id: 'body', name: '굳은 몸', text: (r) => '최대 HP +' + 15 * r, onGain(w) { w.hero.maxHp += 15; w.hero.hp = Math.min(w.hero.maxHp, w.hero.hp + 15); } });
+boon({ id: 'step', name: '가벼운 발', text: (r) => '돌진 대기 −' + (0.4 * r).toFixed(1) + '초' });
+const task = (d) => { if (!BD.tasks.has(d.id)) BD.tasks.register(Object.assign({ layout: 'plaza', on: { kill(ev, w) { if (!ev.guardian && !ev.boss && w.stats.kills % d.per === 0) BD.taskRt.progress(w, 1); } } }, d)); };
+task({ id: 'seals', name: '봉인', per: 40, goal: () => 3, label: (t) => '봉인 ' + t.value + '/' + t.goal });
+task({ id: 'nests', name: '둥지', per: 40, goal: () => 3, label: (t) => '둥지 ' + t.value + '/' + t.goal });
+task({ id: 'hold', name: '수성', per: 3, goal: () => 40, label: (t) => '수성 ' + t.value + '/' + t.goal + '초' });
+task({ id: 'hunt', name: '사냥', per: 40, goal: () => 3, label: (t) => '사냥 ' + t.value + '/' + t.goal });
+const site = (d) => { if (!BD.sites.has(d.id)) BD.sites.register(Object.assign({ stay: 0.8, use() { return true; } }, d)); };
+site({ id: 'seal', name: '봉인석', stay: 5, total: true, ring: 2.2 });
+site({ id: 'nest', name: '둥지', stay: 0.5 });
+site({ id: 'brazier', name: '화로', stay: 40, total: true, ring: 3.5 });
+site({ id: 'altar', name: '제단', stay: 0.8, optional: true, known: true });
+site({ id: 'spring', name: '샘', stay: 1.2, optional: true });
+site({ id: 'chest', name: '상자', stay: 0.8, optional: true });
+site({ id: 'rift', name: '시련의 균열', stay: 1.5, optional: true });
+
+// Put a floor's worth of places on the current v2 floor (tests and screenshots): three task places
+// at the zone centres (0, 2), (2, 0), (1, 1) and four places to visit; o.task restarts the floor's
+// task as that kind.
+BD.uiTest = {
+  stageSites(w, o) {
+    o = o || {};
+    const kind = o.taskSite || 'seal';
+    const mk = (k, x, y, optional) => ({ id: BD.W.id(w), kind: k, x, y, state: 'idle', known: k === 'altar', optional, progress: 0, need: BD.sites.get(k).stay });
+    w.sites = [mk(kind, 8, 40, false), mk(kind, 40, 8, false), mk(kind, 24, 24, false), mk('altar', 8, 24, true), mk('spring', 24, 8, true), mk('chest', 40, 24, true), mk('rift', 24, 40, true)];
+    if (o.task) { w.floor.task = o.task; BD.taskRt.start(w); }
+    return w.sites;
+  },
+};

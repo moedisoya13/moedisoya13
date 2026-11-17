@@ -1,6 +1,9 @@
-// HUD (GDD §9.2, logical 1280 × 720). Every box has an ink-black backing so it reads on all
-// five floor colours. Layers: top (HP, progress, clock, floor), messages (toasts, banners),
-// slots (the sword's crossguard with three sockets), controls (dash, pause, joystick).
+// HUD (GDD §9.2 as GDD-V2 §5.7 changes it, logical 1280 × 720). Every box has an ink-black backing
+// so it reads on all five floor colours and over a crowd. Layers: top (HP, radiance 0–9, kills and
+// the kill streak; the floor's task / guardian / boss at the top centre; clock, pause, floors),
+// messages (toasts, banners), slots (the sword's crossguard with three sockets, level pips under
+// each), controls (dash, joystick). The light gauge is 63_growth.js, the minimap and edge markers
+// 42_map.js. On a phone (picture below ×0.74) the words that are read in play are drawn larger.
 
 const C = BD.C;
 const K = BD.ui.K;
@@ -12,9 +15,9 @@ const M = BD.math;
 const PHASE_NAMES = ['', '강림', '침식', '결계'];
 const KIND_COLOR = { break: '#e05a4a', gain: '#ffd24a', hint: K.SKY, warn: K.AMBER, info: '#8d877c', unlock: '#ffd24a' };
 
-// ---- top: portrait, HP, radiance --------------------------------------------------------------
+// ---- top: portrait, HP, radiance, kills ----------------------------------------------------------
 function drawHp(g, ui, w) {
-  const h = w.hero;
+  const h = w.hero, ph = K.phone(ui);
   IC.portrait(g, 16, 14, 66);
   const chip = S.hpChip;
   if (h.hp > chip.v || chip.run !== w) { chip.v = h.hp; chip.run = w; }
@@ -22,18 +25,51 @@ function drawHp(g, ui, w) {
   const low = h.hp <= 30;
   const col = low ? (Math.floor(ui.time * 4) % 2 ? '#ff4b4b' : '#c8283a') : K.HP;
   K.bar(g, 96, 20, 262, 28, h.hp / h.maxHp, { chip: chip.v / h.maxHp, color: col, slant: 9 });
-  K.text(ui, h.hp + ' / ' + h.maxHp, 227, 41, { size: 20, align: 'center', stroke: 4, weight: 800 });
-  // radiance pips (0..5)
-  for (let i = 0; i < C.RADIANCE_MAX; i++) {
-    const x = 104 + i * 22, y = 63, on = i < h.radiance;
-    K.poly(g, [[x, y - 8], [x + 7, y], [x, y + 8], [x - 7, y]]);
+  K.text(ui, h.hp + ' / ' + h.maxHp, 227, ph ? 44 : 41, { size: ph ? 26 : 20, align: 'center', stroke: 4, weight: 800 });
+  // radiance pips (0..9, GDD-V2 §4.6)
+  const n = C.RADIANCE_MAX, sp = n > 6 ? 19 : 22;
+  for (let i = 0; i < n; i++) {
+    const x = 104 + i * sp, y = 62, on = i < h.radiance;
+    K.poly(g, [[x, y - 7], [x + 6, y], [x, y + 7], [x - 6, y]]);
     g.fillStyle = on ? '#ffd24a' : '#2a2830'; g.fill(); K.ink(g, 2.5);
   }
-  if (h.radiance > 0) K.text(ui, '광휘 ' + h.radiance, 104 + 5 * 22 + 4, 70, { size: 18, color: '#ffd24a', stroke: 3, weight: 800 });
+  // kills this run and the running streak (×41; gone 3 s after the last kill; display only, §5.7)
+  const kills = (w.stats && w.stats.kills) || 0, ks = ph ? 27 : 21;
+  const ky = ph ? 100 : 93;
+  K.text(ui, '처치 ' + kills, 98, ky, { size: ks, weight: 900, color: K.PAPER, stroke: 5 });
+  const st = S.streak;
+  if (st && st.n >= 2 && w.t - st.t < 3) { // play time: a choice or the pause does not end it
+    const kw = K.measure(g, '처치 ' + kills, ks, 900);
+    const pop = st.popAt !== undefined && ui.time - st.popAt < 0.45 ? 1 + 0.55 * Math.sin(((ui.time - st.popAt) / 0.45) * Math.PI) : 1;
+    const fade = w.t - st.t > 2.5 ? 1 - (w.t - st.t - 2.5) / 0.5 : 1;
+    const big = st.n >= 100 ? '#ffe9a8' : st.n >= 25 ? K.GOLD_HI : K.PAPER;
+    g.save(); g.globalAlpha = Math.max(0, fade); g.translate(98 + kw + 16, ky); g.scale(pop, pop);
+    K.letter(g, '×' + st.n, 0, 0, { size: ph ? 34 : 27, align: 'left', fill: big, fill2: '#d6a636', stroke: 6, shadow: 2 });
+    g.restore();
+  }
 }
 
-// ---- top centre: waves / trial / guardian / boss ---------------------------------------------------
+// ---- top centre: the floor's task (GDD-V2 §5.7) / guardian / boss ---------------------------------
+// What the top centre says, read from the world. Tasks this branch has never seen show their label
+// (the def's, else name value/goal) and a bar; goals of 2–6 draw as segments (봉인 1/3).
+function taskState(w) {
+  const t = w.task;
+  if (w.stairs && w.stairs.open) return { label: '계단이 열렸다', color: K.GOLD_HI, glyph: 'stairs' };
+  if (w.trial && w.trial.state === 'active') {
+    const n = w.enemies.filter((e) => !e.dead && e.trial).length + w.rifts.filter((r) => r.opts.trial).length + w.queue.filter((q) => q.opts.trial).length;
+    return { label: '시련 — 남은 적 ' + n, color: '#c9a0ff' };
+  }
+  if (t && t.done) return { label: '수호자가 계단을 지킨다', color: K.GOLD_HI, glyph: 'crown' };
+  if (t) {
+    const goal = Number(t.goal) || 0, value = Math.max(0, Number(t.value) || 0);
+    return { label: BD.ui.taskLabel(w), color: K.PAPER, glyph: 'task:' + t.kind, k: goal > 0 ? Math.min(1, value / goal) : 0, segs: goal >= 2 && goal <= 6 && Number.isInteger(goal) ? goal : 0, value, goal };
+  }
+  if (w.wave && !(w.run && w.run.v2)) { const n = Math.min(3, w.wave.n || 1); return { label: '무리 ' + n + '/3', color: K.PAPER, segs: 3, value: n, k: n / 3 }; }
+  return null;
+}
+BD.ui.taskState = taskState;
 function drawProgress(g, ui, w) {
+  const ph = K.phone(ui);
   const boss = w.enemies.find((e) => !e.dead && e.boss);
   const guard = boss ? null : w.enemies.find((e) => !e.dead && e.guardian);
   if (boss) {
@@ -43,58 +79,73 @@ function drawProgress(g, ui, w) {
     const phase = (boss.mem && boss.mem.phase) || 1;
     const ticks = boss.def.phaseAt || [0.66, 0.33]; // HP fractions where the phases change (GDD §6.4)
     const label = boss.def.name + '  ' + phase + '단계 ' + (PHASE_NAMES[phase] || '');
-    const lw = K.measure(g, label, 21, 800) + 56;
-    K.panel(g, 640 - lw / 2, 10, lw, 34, { slant: 8, edge: '#7a2a8a', shadow: 3, facetK: 0.5 });
-    K.text(ui, label, 640, 34, { size: 21, align: 'center', color: '#efe2ff', weight: 800 });
-    K.bar(g, bx, 48, bw, 20, Math.max(0, boss.hp) / boss.maxHp, { color: '#9b2fd0', ticks, slant: 6 });
+    const fs = ph ? 27 : 21;
+    const lw = K.measure(g, label, fs, 800) + 56;
+    K.panel(g, 640 - lw / 2, 8, lw, ph ? 40 : 34, { slant: 8, edge: '#7a2a8a', shadow: 3, facetK: 0.5 });
+    K.text(ui, label, 640, ph ? 38 : 32, { size: fs, align: 'center', color: '#efe2ff', weight: 800 });
+    K.bar(g, bx, ph ? 52 : 48, bw, ph ? 24 : 20, Math.max(0, boss.hp) / boss.maxHp, { color: '#9b2fd0', ticks, slant: 6 });
     return;
   }
   if (guard) {
-    const bw = 360, bx = 460;
+    const bw = 380, bx = 450;
     const name = (guard.def.guardian && guard.def.guardian.name) || guard.def.name;
-    K.panel(g, bx - 16, 12, bw + 32, 62, { slant: 8, edge: K.GOLD });
-    IC.crown(g, bx + 8, 34, 22);
-    K.text(ui, '수호자 — ' + name, 652, 37, { size: 21, align: 'center', color: K.GOLD_HI, weight: 800, maxW: 320 });
-    K.bar(g, bx, 46, bw, 18, Math.max(0, guard.hp) / guard.maxHp, { color: '#e2b23a', slant: 6 });
+    K.panel(g, bx - 16, 8, bw + 32, ph ? 74 : 64, { slant: 8, edge: K.GOLD });
+    IC.crown(g, bx + 8, ph ? 30 : 28, ph ? 26 : 22);
+    K.text(ui, '수호자 — ' + name, 652, ph ? 39 : 35, { size: ph ? 27 : 21, align: 'center', color: K.GOLD_HI, weight: 800, maxW: 330 });
+    K.bar(g, bx, ph ? 50 : 44, bw, ph ? 22 : 18, Math.max(0, guard.hp) / guard.maxHp, { color: '#e2b23a', slant: 6 });
     return;
   }
   if (w.floorN >= 6) return;
-  let label, segs = 0, segOn = 0, color = K.PAPER;
-  if (w.trial && w.trial.state === 'active') {
-    const n = w.enemies.filter((e) => !e.dead && e.trial).length + w.rifts.filter((r) => r.opts.trial).length + w.queue.filter((q) => q.opts.trial).length;
-    label = '시련 — 남은 적 ' + n; color = '#c9a0ff';
-  } else if (w.stairs && w.stairs.open) {
-    label = w.trial && w.trial.state === 'available' ? '계단이 열렸다 · 시련 가능' : '계단이 열렸다'; color = K.GOLD_HI;
-  } else if (w.task) { // GDD-V2 §5.7: the floor's task, e.g. 소탕 137/200
-    label = BD.ui.taskLabel(w); color = w.task.done ? K.GOLD_HI : K.PAPER;
-    if (w.task.done) label = '수호자가 계단을 지킨다';
+  const T = taskState(w);
+  if (!T) return;
+  const fs = ph ? 29 : 22, hasBar = T.k !== undefined;
+  const pw = ph ? 390 : 340, px = 640 - pw / 2, phh = hasBar ? (ph ? 74 : 60) : (ph ? 52 : 44);
+  const pop = S.taskPop !== undefined && ui.time - S.taskPop < 0.3 ? 1 + 0.12 * Math.sin(((ui.time - S.taskPop) / 0.3) * Math.PI) : 1;
+  K.panel(g, px, 8, pw, phh, { slant: 8, edge: T.color === K.PAPER ? '#8d877c' : T.color });
+  if (T.glyph) IC.glyph(g, T.glyph, px + (ph ? 32 : 28), ph ? 32 : 29, ph ? 32 : 26);
+  g.save(); g.translate(640 + (T.glyph ? 12 : 0), ph ? 41 : 36); g.scale(pop, pop);
+  K.text(ui, T.label, 0, 0, { size: fs, align: 'center', color: T.color, weight: 900, maxW: pw - 76 });
+  g.restore();
+  if (!hasBar) return;
+  const bx = px + 24, bw = pw - 48, by = ph ? 55 : 46, bh = ph ? 12 : 9;
+  if (T.segs) {
+    const sw = (bw - (T.segs - 1) * 6) / T.segs;
+    for (let i = 0; i < T.segs; i++) {
+      K.poly(g, K.slantPts(bx + i * (sw + 6), by, sw, bh, 3));
+      g.fillStyle = i < T.value ? K.GOLD_HI : '#2a2830'; g.fill(); K.ink(g, 2);
+    }
   } else {
-    const n = Math.min(3, (w.wave && w.wave.n) || 1);
-    label = '무리 ' + n + '/3'; segs = 3; segOn = n;
-  }
-  K.panel(g, 470, 12, 340, segs ? 58 : 44, { slant: 8, edge: color === K.PAPER ? '#8d877c' : color });
-  K.text(ui, label, 640, 40, { size: 22, align: 'center', color, weight: 800 });
-  for (let i = 0; i < segs; i++) {
-    const x = 640 - 75 + i * 52;
-    K.poly(g, K.slantPts(x, 52, 44, 9, 3));
-    g.fillStyle = i < segOn ? (i === segOn - 1 ? '#e05a4a' : '#8a3a34') : '#2a2830'; g.fill(); K.ink(g, 2);
+    g.fillStyle = K.INK; g.fillRect(bx - 2, by - 2, bw + 4, bh + 4);
+    g.fillStyle = '#2a2830'; g.fillRect(bx, by, bw, bh);
+    g.fillStyle = '#e8dcc0'; g.fillRect(bx, by, bw * T.k, bh);
+    g.fillStyle = 'rgba(0,0,0,0.2)'; g.fillRect(bx, by + bh * 0.6, bw * T.k, bh * 0.4);
   }
 }
 
 // ---- top right: clock, pause, floors ------------------------------------------------------------------
+// GDD-V2 §9.1: the clock box warms (amber — the hero's orange is his blade's alone) once the run is
+// more than 30 s behind the summed time budgets of the floors so far.
+function behind(w) {
+  const D = C.DIRECTOR && C.DIRECTOR.floors;
+  if (!D || !w.run || !w.run.v2) return false;
+  let sum = 0;
+  for (let n = 1; n <= Math.min(6, w.floorN); n++) sum += (D[n] && D[n].budget) || 0;
+  return w.t > sum + 30;
+}
+BD.ui.behind = behind;
 function drawClock(g, ui, w) {
-  const cm = BD.flow.clockMin(w), late = w.t >= w.mods.runSec;
+  const cm = BD.flow.clockMin(w), late = w.t >= w.mods.runSec, slow = !late && behind(w);
   const k = K.clamp(cm / 720, 0, 1);
   const dawnK = K.clamp((cm - 540) / 180, 0, 1);
-  const edge = late ? '#ff4b4b' : cm >= 660 ? K.AMBER : dawnK > 0 ? '#c99a6a' : '#8d877c';
-  K.panel(g, 1046, 14, 152, 44, { slant: 9, edge, facet: dawnK > 0 ? 'rgb(' + Math.round(27 + 40 * dawnK) + ',' + Math.round(26 + 18 * dawnK) + ',' + Math.round(33 + 4 * dawnK) + ')' : K.INK2 });
+  const edge = late ? '#ff4b4b' : cm >= 660 || slow ? K.AMBER : dawnK > 0 ? '#c99a6a' : '#8d877c';
+  K.panel(g, 1046, 14, 152, 44, { slant: 9, edge, edgeW: slow ? 3 : 2, facet: slow ? '#3a2a14' : dawnK > 0 ? 'rgb(' + Math.round(27 + 40 * dawnK) + ',' + Math.round(26 + 18 * dawnK) + ',' + Math.round(33 + 4 * dawnK) + ')' : K.INK2 });
   // night elapsed: a strip along the bottom of the box, warming toward 06:00
   const sx = 1056, sw = 132;
   g.fillStyle = '#2a2830'; g.fillRect(sx, 50, sw, 4);
-  g.fillStyle = late ? '#ff4b4b' : dawnK > 0 ? K.AMBER : '#6f7aa8'; g.fillRect(sx, 50, sw * k, 4);
+  g.fillStyle = late ? '#ff4b4b' : dawnK > 0 || slow ? K.AMBER : '#6f7aa8'; g.fillRect(sx, 50, sw * k, 4);
   let col = K.PAPER;
   if (late) col = Math.floor(ui.time * 3) % 2 ? '#ff4b4b' : K.PAPER;
-  else if (cm >= 660) col = K.AMBER;
+  else if (cm >= 660 || slow) col = K.AMBER;
   K.text(ui, BD.flow.clockStr(w), 1122, 46, { size: 31, align: 'center', color: col, weight: 900 });
   // pause button (visual 44; hit area 72 × 66, and at least 44 CSS px on a phone — docs/CONTROLS-REVIEW.md
   // §3.7), kept inside the picture's top-right corner
@@ -103,23 +154,25 @@ function drawClock(g, ui, w) {
   const pmin = 44 / ui.view.scale, pw = Math.max(72, pmin), ph = Math.max(66, pmin);
   ui.button({ id: 'hud_pause', label: 'Ⅱ', x: Math.min(1202, C.VIEW_W - pw), y: 4, w: pw, h: ph, style: 'none', onTap: () => ui.app.pause() });
 }
+// One row under the clock: the six floors (past ones in their colour, this one large), 3F, and the
+// next floor's type as its coloured disc after an arrow (the minimap sits under it, 42_map.js).
 function drawFloors(g, ui, w) {
-  K.panel(g, 1046, 66, 210, 70, { slant: 7, shadow: 3 });
+  const ph = K.phone(ui);
+  K.panel(g, 1046, 64, 210, 36, { slant: 6, shadow: 3, facetK: 0.5 });
   for (let n = 1; n <= 6; n++) {
-    const f = w.run.floors[n], x = 1062 + (n - 1) * 17, y = 84;
+    const f = w.run.floors[n], x = 1062 + (n - 1) * 15, y = 82;
     const cur = n === w.floorN, past = n < w.floorN;
     const col = n === 6 ? C.FLOOR_COLORS.rooftop : C.FLOOR_COLORS[f.domType];
-    K.circle(g, x, y, cur ? 8 : 5.5);
-    g.fillStyle = past || cur ? col : '#2a2830'; g.fill(); K.ink(g, 2.5);
-    if (cur) { K.circle(g, x, y, 11); g.lineWidth = 2; g.strokeStyle = K.GOLD_HI; g.stroke(); }
+    K.circle(g, x, y, cur ? 7 : 4.5);
+    g.fillStyle = past || cur ? col : '#2a2830'; g.fill(); K.ink(g, 2.2);
+    if (cur) { K.circle(g, x, y, 10); g.lineWidth = 2; g.strokeStyle = K.GOLD_HI; g.stroke(); }
   }
-  K.text(ui, K.floorName(w.floorN), 1230, 93, { size: 26, align: 'center', weight: 900, color: K.PAPER });
+  K.text(ui, K.floorName(w.floorN), 1176, 92, { size: ph ? 28 : 25, align: 'center', weight: 900, color: K.PAPER });
   const next = w.floorN >= 6 ? null : w.floorN === 5 ? 'rooftop' : w.floor.nextDomType;
   if (next) {
-    K.text(ui, '다음:', 1058, 124, { size: 19, color: K.DIM, weight: 700 });
-    IC.type(g, next, 1118, 117, 22, { disc: C.FLOOR_COLORS[next] || '#7d8597' });
-    K.text(ui, K.typeName(next), 1134, 124, { size: 20, color: K.PAPER, weight: 800 });
-  } else K.text(ui, '마왕을 쓰러뜨려라', 1058, 124, { size: 18, color: '#efe2ff', weight: 700 });
+    K.text(ui, '→', 1210, 91, { size: 20, align: 'center', weight: 900, color: K.DIM });
+    IC.type(g, next, 1236, 82, 24, { disc: C.FLOOR_COLORS[next] || '#7d8597' });
+  } else IC.crown(g, 1230, 82, 22);
 }
 
 BD.ui.hud.register({
@@ -180,20 +233,34 @@ BD.ui.hud.register({
 });
 
 // ---- the crossguard: three sockets ---------------------------------------------------------------------
+// The guard sits under the light gauge (63_growth.js, y 584–604), so its wings and peak start at 608.
 function drawGuard(g) {
-  const pts = [[446, 600], [494, 614], [606, 608], [640, 584], [674, 608], [786, 614], [834, 600], [814, 646], [802, 720], [478, 720], [466, 646]];
+  const pts = [[446, 608], [494, 619], [606, 613], [640, 605], [674, 613], [786, 619], [834, 608], [814, 650], [802, 720], [478, 720], [466, 650]];
   K.poly(g, pts.map((p) => [p[0] + 4, p[1] + 4])); g.fillStyle = K.INK; g.fill();
   K.poly(g, pts); g.fillStyle = '#c9a44a'; g.fill();
   // lower facet in a darker gold (two tones)
   g.save(); K.poly(g, pts); g.clip();
   g.fillStyle = '#8f6f2a'; g.fillRect(440, 668, 400, 60);
-  K.poly(g, [[446, 600], [494, 614], [490, 624], [452, 610]]); g.fillStyle = '#f0d27a'; g.fill();
-  K.poly(g, [[834, 600], [786, 614], [790, 624], [828, 610]]); g.fill();
-  K.poly(g, [[606, 608], [640, 584], [674, 608], [640, 598]]); g.fill();
+  K.poly(g, [[446, 608], [494, 619], [490, 628], [452, 618]]); g.fillStyle = '#f0d27a'; g.fill();
+  K.poly(g, [[834, 608], [786, 619], [790, 628], [828, 618]]); g.fill();
   g.restore();
   K.poly(g, pts); K.ink(g, 4);
-  // the peak's gem
-  K.poly(g, [[640, 592], [647, 601], [640, 610], [633, 601]]); g.fillStyle = '#efe2c0'; g.fill(); K.ink(g, 2);
+}
+// GDD-V2 §4.4 / §5.7: five level pips under each slot; the newest pops when a pick lands
+function drawLevelPips(g, ui, c, r, s) {
+  if (!c) return;
+  const max = Math.max(1, BD.cardRt.maxLevel(c.def)), lv = Math.min(max, c.level || 1), ph = K.phone(ui);
+  if (max < 2) return;
+  const pr = ph ? 5.5 : 4.2, sp = Math.min(ph ? 15 : 14, (r.w - 8) / max), y = r.y + r.h + (ph ? 10 : 9);
+  for (let k = 0; k < max; k++) {
+    const x = r.x + r.w / 2 + (k - (max - 1) / 2) * sp;
+    let rr = pr;
+    const isNew = k === lv - 1 && s.levelAt !== undefined && ui.time - s.levelAt < 0.5 && ui.time >= s.levelAt;
+    if (isNew) rr = pr * (1 + 0.8 * Math.sin(((ui.time - s.levelAt) / 0.5) * Math.PI));
+    else if (k === lv - 1 && s.levelAt !== undefined && ui.time < s.levelAt) { K.circle(g, x, y, pr); g.fillStyle = '#2a2830'; g.fill(); K.ink(g, 2); continue; }
+    K.circle(g, x, y, rr);
+    g.fillStyle = k < lv ? (lv >= max ? '#fff1cf' : K.GOLD_HI) : '#2a2830'; g.fill(); K.ink(g, 2);
+  }
 }
 
 function ringPath(g, x, y, s, k) {
@@ -326,6 +393,7 @@ BD.ui.hud.register({
     for (let i = 0; i < 3; i++) {
       drawSlot(g, ui, w, i);
       const r = BD.ui.slotRect(i), c = w.cards[i];
+      drawLevelPips(g, ui, c, r, S.slots[i] || {});
       ui.button({ id: 'slot' + i, label: c ? c.def.name : '빈 홈', x: r.x, y: r.y - 8, w: r.w, h: r.h + 8, style: 'none', onTap: () => ui.app.pause() });
     }
   },

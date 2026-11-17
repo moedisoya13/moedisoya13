@@ -40,7 +40,14 @@ BD.ui.effects.register({
       else if (ev.direct && rate(ui, 'hit', 10)) ui.sfxSafe('hit');
     },
     guard(ev, ui) { ui.sfxSafe('hit_guard'); },
-    kill(ev, ui) { if (rate(ui, 'kill', 8)) ui.sfxSafe('kill'); },
+    // GDD-V2 §7.1: fodder kills at most 8 a second, ±2 semitones at random (cosmetic rng); a threat
+    // adds a low thump; an elite has its own sound (guardians: guardian_kill below)
+    kill(ev, ui) {
+      if (ev.guardian || ev.boss) return;
+      if (ev.elite) { ui.sfxSafe('elite_down'); return; }
+      const e = BD.W.enemyById(ui.world, ev.enemyId), threat = !(e && e.role === 'fodder');
+      if (threat || rate(ui, 'kill', 8)) ui.sfxSafe('kill', { pitch: BD.ui.K.rng.range(-2, 2), low: threat });
+    },
     status(ev, ui) {
       if (!ev.on) return;
       if (ev.status === 'burn') ui.sfxSafe('ignite');
