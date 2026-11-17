@@ -5,7 +5,7 @@
 // at 1280 × 720 and 667 × 375; plus the rooftop. Not a test (tools/test.js runs *.test.js only).
 // Usage: node build.js && node tests/floors/shoot.js [out-dir] [--only plaza,office] [--types beast,heavy]
 //        [--no-play] [--no-overview] [--seed N] [--sec S]
-// Writes <out>/overview-<layout>-<type>.png, <out>/play-<layout>-<type>-<size>.jpg, contact sheets.
+// Writes <out>/overview-<layout>-<type>.jpg, <out>/play-<layout>-<type>-<size>.jpg, contact sheets.
 'use strict';
 const fs = require('fs');
 const path = require('path');
@@ -71,7 +71,7 @@ const OVERVIEW = `(function (label) {
   if (w.stairs) lab(w.stairs.ringX + 2, w.stairs.ringY + 2, '계단', '#ffffff');
   g.setTransform(1, 0, 0, 1, 0, 0);
   g.font = '800 26px sans-serif'; g.textAlign = 'left'; g.fillStyle = '#f3ead8'; g.fillText(label, 24, 40);
-  return cv.toDataURL('image/png');
+  return cv.toDataURL('image/jpeg', 0.86);
 })`;
 
 async function overviews() {
@@ -81,14 +81,14 @@ async function overviews() {
     const info = await pg.evaluate(`${STAGE}(${SEED}, '${TASK_OF[layout]}', '${type}', false)`);
     await pg.waitForTimeout(150);
     const url = await pg.evaluate(`${OVERVIEW}(${JSON.stringify(`${layout} (${TASK_OF[layout]}) · ${type} · 3F · seed ${SEED} · ${info.sites.join(' ')}`)})`);
-    const file = path.join(OUT, `overview-${layout}-${type}.png`);
+    const file = path.join(OUT, `overview-${layout}-${type}.jpg`);
     fs.writeFileSync(file, Buffer.from(url.split(',')[1], 'base64'));
     shots.push(file); console.log('wrote', path.relative(ROOT, file), info.attempts + ' try');
   }
   await pg.evaluate(`${STAGE}(${SEED}, null, null, true)`);
   await pg.waitForTimeout(150);
   const url = await pg.evaluate(`${OVERVIEW}('rooftop · 28 × 28 · seed ${SEED}')`);
-  fs.writeFileSync(path.join(OUT, 'overview-rooftop.png'), Buffer.from(url.split(',')[1], 'base64'));
+  fs.writeFileSync(path.join(OUT, 'overview-rooftop.jpg'), Buffer.from(url.split(',')[1], 'base64'));
   await browser.close();
   if (errors.length) console.log('PAGE ERRORS', errors);
   return { shots, errors };
