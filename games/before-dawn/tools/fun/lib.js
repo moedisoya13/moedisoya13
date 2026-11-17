@@ -171,7 +171,8 @@ function makeMetrics(BD) {
     on('trial_start', () => { if (!has('choice_pick')) choice('trial'); });
     // v2 choices: every pick in a choice overlay, and stepping into an optional site
     on('choice_pick', (e) => choice((e.kind || '') + ' ' + (e.pick || '')));
-    on('site_start', (e) => { choice('site ' + e.kind); });
+    on('site_start', (e) => { if (e.optional) choice('site ' + e.kind); });
+    on('task_clear', (e) => { if (floorKey !== null) fl().task = e.task; note('task clear: ' + e.task); });
     on('site_clear', (e) => { each((b) => { b.sites[e.kind] = (b.sites[e.kind] || 0) + 1; }); gain('site ' + e.kind); });
     // gains: something the hero keeps
     on('card_swap', (e) => gain('card ' + e.inId));
@@ -225,7 +226,7 @@ function makeMetrics(BD) {
       noEnemyPct: pct(b.noEnemyTicks, b.ticks), choices: b.choices, gains: b.gains, pickups: b.pickups,
       hurtsPerMin: r1(b.hurts / Math.max(1e-9, sec(b) / 60)), dmgTaken: b.dmgTaken, moved: r1(b.moved),
       hitsPerSwing: r1(b.hitSum / Math.max(1, b.swings)), multiSwingPct: pct(b.multiSwings, b.swings), swings: b.swings,
-      kinds: b.kinds, sites: b.sites, dom: b.dom,
+      kinds: b.kinds, sites: b.sites, dom: b.dom, task: b.task,
     });
     const gaps = (ts, end) => {
       const g = []; let p = 0;
@@ -250,6 +251,10 @@ function makeMetrics(BD) {
     const sw = R.reachAtSwing, swN = sw.reduce((s, v) => s + v, 0);
     return {
       seed: R.seed, hand: R.hand, result: R.result || 'running', floor: R.floor, sec: r1(R.endT),
+      level: w && w.hero.level !== undefined ? w.hero.level : null,
+      unseenHits: w && w.stats.unseenHits !== undefined ? w.stats.unseenHits : null,
+      killsPerHurt: r1(t.kills / Math.max(1, t.hurts)),
+      tasks: R.floorOrder.map((n) => R.floors[n].task).filter(Boolean),
       total: view(t),
       choiceGap: gaps(R.choiceT, R.endT), gainGap: gaps(R.gainT, R.endT),
       choicesPerMin: r1(t.choices / Math.max(1e-9, R.endT / 60)),

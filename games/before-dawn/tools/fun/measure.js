@@ -49,11 +49,11 @@ function table(runs) {
   console.log('\n' + ['metric'.padEnd(46), 'median'.padStart(8), 'p10–p90'.padStart(14), 'v1'.padStart(8), 'v2 target'.padStart(12), ''].join(' '));
   let miss = 0;
   for (const row of rows) {
-    const vals = runs.map(row.get);
-    const med = q(vals, 0.5);
-    const ok = row.ok ? row.ok(med) : null;
-    if (ok === false) miss++;
-    console.log([row.name.padEnd(46), String(med).padStart(8), (q(vals, 0.1) + '–' + q(vals, 0.9)).padStart(14), String(row.v1).padStart(8), String(row.target).padStart(12), ok === null ? '' : ok ? 'ok' : 'MISS'].join(' '));
+    const vals = runs.map(row.get).filter((x) => typeof x === 'number' && isFinite(x));
+    const med = !vals.length ? NaN : row.agg === 'max' ? Math.max.apply(null, vals) : q(vals, 0.5);
+    const ok = !vals.length ? false : row.ok(med); // a number the build cannot report counts as a miss
+    if (!ok) miss++;
+    console.log([row.name.padEnd(46), (vals.length ? String(med) : 'n/a').padStart(8), (vals.length ? q(vals, 0.1) + '–' + q(vals, 0.9) : '').padStart(14), String(row.v1).padStart(8), String(row.target).padStart(12), ok ? 'ok' : 'MISS'].join(' '));
   }
   // floor 1 vs floor 4: the same list of numbers side by side
   const f = (n, k) => q(runs.map((r) => { const x = r.floors.find((y) => y.floor === n); return x ? x[k] : NaN; }), 0.5);
