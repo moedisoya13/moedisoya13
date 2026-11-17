@@ -135,7 +135,8 @@ BD.harness = function (app) {
     stage: (o) => BD.stageFloor(need(), o),
     setHp: (n) => { need().hero.hp = Math.max(0, Math.min(need().hero.maxHp, n | 0)); },
     calm: () => { need().scenario = true; },   // a staged scenario: no director, no choice overlay
-    killAll: () => { const w = need(); for (const e of w.enemies.slice()) if (!e.dead) BD.combat.kill(w, e); w.rifts = []; w.queue = []; },
+    // kills until none is left: a death may leave others behind (a slime splits into two slimelets)
+    killAll: () => { const w = need(); for (let pass = 0; pass < 8 && w.enemies.some((e) => !e.dead); pass++) for (const e of w.enemies.slice()) if (!e.dead) BD.combat.kill(w, e); w.rifts = []; w.queue = []; },
     events: (n) => need().bus.recent(n || 20).map((e) => JSON.parse(JSON.stringify(e, (k, v) => (k === 'shapes' ? undefined : v)))),
     cmd: (name, a, b) => app.cmd(name, a, b),
     world: () => app.world,

@@ -64,7 +64,9 @@ BD.enemies.register({
     }
     // the ring point sits 0.08u inside the ring: goTo stops up to 0.1u short, and short must still be in range
     const rr = T.ring + e.r - 0.08, tx = h.x + Math.cos(b) * rr, ty = h.y + Math.sin(b) * rr;
-    if (A.goTo(w, e, tx, ty, e.speed, dt)) e.state = 'idle';
+    // a ring point inside a prop has no way to it (it would walk into the prop for ever): the hero's way
+    if (w.grid.get(Math.floor(tx), Math.floor(ty)) !== BD.CELL.FLOOR) { A.chase(w, e, e.speed, dt); e.state = 'move'; }
+    else if (A.goTo(w, e, tx, ty, e.speed, dt)) e.state = 'idle';
     else e.state = 'move';
     if (ed < 1.5) e.face = A.angleToHero(w, e);
   },

@@ -186,13 +186,14 @@ module.exports = {
   'echo strike via ctx.after + ctx.strike: source echo at half damage, no extra swing events'(t) {
     const { BD, H, w } = world(t, { hand: ['test_echo'] });
     const e = BD.W.makeEnemy(w, 'slime', w.hero.x + 1.2, w.hero.y, {}); e.hp = 500; e.stunT = 99;
+    const vfx0 = w.bus.counts().vfx || 0, swing0 = w.bus.counts().swing || 0; // emptying the floor may have made vfx (a slime's split)
     H.step(1);
     const swings = w.bus.counts().swing;
     H.step(13);
     const echo = w.bus.recent(400).filter((x) => x.event === 'hit' && x.source === 'echo');
     t.eq(echo.length, 1); t.eq(echo[0].dmg, 5);
     t.eq(w.bus.counts().swing, swings);
-    t.eq(w.bus.counts().vfx, swings);
+    t.eq(w.bus.counts().vfx - vfx0, swings - swing0, 'one vfx per swing (the card\'s line), none for the echo');
   },
   // v2 floors have no altar yet (it returns as a site, GDD-V2 §4.6); the altar rules and the bot's
   // answer still hold when one is lit
