@@ -123,8 +123,8 @@ AN.drawFrame = function (g, v, def, img, f, x, y, o, s) {
   g.scale((o.flip ? -1 : 1) * (o.sx || 1), o.sy || 1);
   if (o.alpha !== undefined) g.globalAlpha = o.alpha;
   if (o.outline) {
-    const tc = tintFrame(def, img, f, o.outline), d = o.outlinePx || 2;
-    for (const [ox, oy] of [[-d, 0], [d, 0], [0, -d], [0, d], [-d, -d], [d, d], [-d, d], [d, -d]]) g.drawImage(tc, -ax + ox, -ay + oy, dw, dh);
+    const d = o.outlinePx || 2, ol = R.outlineOf(tintFrame(def, img, f, o.outline), def.file + ':' + f + o.outline, s, d);
+    g.drawImage(ol, -ax - d, -ay - d, dw + 2 * d, dh + 2 * d);
   }
   g.drawImage(img, f * def.fw, 0, def.fw, def.fh, -ax, -ay, dw, dh);
   if (o.white > 0) { g.globalAlpha = (o.alpha === undefined ? 1 : o.alpha) * o.white; g.drawImage(tintFrame(def, img, f, '#ffffff'), -ax, -ay, dw, dh); }
@@ -223,7 +223,7 @@ AN.DISSOLVE = DISSOLVE;
 AN.drawGhostShadows = function (g, v) {
   for (const gh of AN.ghosts) {
     const k = (AN.clock - gh.t0) / gh.dur;
-    if (R.flatOn(v, gh.x, gh.y, gh.r)) R.ellipse(g, v, gh.x, gh.y, gh.r * 1.05 * (1 - 0.5 * k), 'rgba(0,0,0,' + 0.38 * (1 - k) + ')', null);
+    if (R.flatOn(v, gh.x, gh.y, gh.r)) R.shadow(g, v, gh.x, gh.y, gh.r * 1.05, 1 - k);
   }
 };
 AN.ghostItems = function (items, g, v, w, t) {

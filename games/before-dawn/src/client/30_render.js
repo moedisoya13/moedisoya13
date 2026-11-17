@@ -26,6 +26,8 @@ R.ink = ink;
 function localRng(key) { return BD.Rng(BD.hash32('render:' + key)); }
 
 R.floorColor = (w) => C.FLOOR_COLORS[w.floor.domType] || '#888888';
+const hueOf = {};
+R.floorHue = (w) => { const c = R.floorColor(w); return hueOf[c] === undefined ? (hueOf[c] = AS.hexHue(c)) : hueOf[c]; };
 
 // ---- events → trails ----------------------------------------------------------------------
 R.onWorld = function (w) {
@@ -299,6 +301,24 @@ function ellipse(g, v, x, y, r, fill, stroke, lw) {
   if (stroke) { g.strokeStyle = stroke; g.lineWidth = lw || 2; g.stroke(); }
 }
 R.ellipse = ellipse;
+// An actor's ground shadow: the same ellipse as ellipse(…, 'rgba(0,0,0,0.38)'), pre-rendered per
+// radius and pixel density and blitted (a path fill per actor per frame is the dearest thing in a crowd).
+const shadowCache = new Map();
+R.shadow = function (g, v, x, y, r, alpha) {
+  const s = Math.min(2, v.dpr * v.scale) || 1, key = Math.round(r * 100) + ':' + s;
+  let c = shadowCache.get(key);
+  const rx = r * C.ISO_X * 1.414, ry = r * C.ISO_Y * 1.414;
+  if (!c) {
+    c = document.createElement('canvas'); c.width = Math.ceil((2 * rx + 4) * s); c.height = Math.ceil((2 * ry + 4) * s);
+    const cg = c.getContext('2d'); cg.scale(s, s);
+    cg.beginPath(); cg.ellipse(rx + 2, ry + 2, rx, ry, 0, 0, M.TAU); cg.fillStyle = 'rgba(0,0,0,0.38)'; cg.fill();
+    shadowCache.set(key, c);
+  }
+  const p = v.proj(x, y);
+  if (alpha !== undefined) g.globalAlpha = alpha;
+  g.drawImage(c, p[0] - rx - 2, p[1] - ry - 2, c.width / s, c.height / s);
+  if (alpha !== undefined) g.globalAlpha = 1;
+};
 function ringProgress(g, v, x, y, r, p, color) {
   ellipse(g, v, x, y, r, 'rgba(255,255,255,0.06)', 'rgba(255,255,255,0.55)', 2);
   if (p > 0) {
@@ -437,8 +457,16 @@ BD.render.trails.register({
   },
 });
 
+// decor drawers by target, rebuilt when the registry grows (all() sorts on every call)
+const decorBy = { n: -1, map: new Map() };
 R.decor = function (target, g, v, obj, w, box, t) {
-  for (const d of BD.render.decor.all()) if (d.target === target) d.draw(g, v, obj, w, box, t);
+  const ids = BD.render.decor.ids();
+  if (ids.length !== decorBy.n) {
+    decorBy.n = ids.length; decorBy.map = new Map();
+    for (const d of BD.render.decor.all()) { if (!decorBy.map.has(d.target)) decorBy.map.set(d.target, []); decorBy.map.get(d.target).push(d); }
+  }
+  const list = decorBy.map.get(target);
+  if (list) for (const d of list) d.draw(g, v, obj, w, box, t);
 };
 
 // ---- sprites ---------------------------------------------------------------------------------
@@ -453,6 +481,21 @@ function tinted(id, color) {
   return (tintCache[key] = c);
 }
 R.tinted = tinted;
+// The eight offset copies of a silhouette (the ink/gold/white outline) baked into one image.
+// sil: tinted source (image px); sc: image px → logical px; d: outline width (logical px).
+const outlineCache = new Map();
+R.outlineOf = function (sil, key, sc, d) {
+  const k = key + ':' + sc.toFixed(4) + ':' + d;
+  let c = outlineCache.get(k);
+  if (c) return c;
+  const pd = d / sc; // outline in source px
+  c = document.createElement('canvas'); c.width = Math.ceil(sil.width + 2 * pd); c.height = Math.ceil(sil.height + 2 * pd);
+  const cg = c.getContext('2d');
+  for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, 1], [-1, 1], [1, -1]]) cg.drawImage(sil, pd + dx * pd, pd + dy * pd);
+  if (outlineCache.size > 400) outlineCache.delete(outlineCache.keys().next().value);
+  outlineCache.set(k, c);
+  return c;
+};
 // opts: {scale, flip, alpha, rot, sx, sy (squash), lift, dx, dy (screen offset px), white (0..1), outline: color, outlinePx}
 R.sprite = function (g, v, id, x, y, o) {
   o = o || {};
@@ -467,8 +510,8 @@ R.sprite = function (g, v, id, x, y, o) {
   g.scale((o.flip ? -1 : 1) * (o.sx || 1), o.sy || 1);
   if (o.alpha !== undefined) g.globalAlpha = o.alpha;
   if (o.outline) {
-    const t = tinted(id, o.outline), d = o.outlinePx || 2;
-    for (const [dx, dy] of [[-d, 0], [d, 0], [0, -d], [0, d], [-d, -d], [d, d], [-d, d], [d, -d]]) g.drawImage(t, -wpx / 2 + dx, -hpx + dy, wpx, hpx);
+    const d = o.outlinePx || 2, ol = R.outlineOf(tinted(id, o.outline), id + o.outline, sc, d);
+    g.drawImage(ol, -wpx / 2 - d, -hpx - d, wpx + 2 * d, hpx + 2 * d);
   }
   g.drawImage(img, -wpx / 2, -hpx, wpx, hpx);
   if (o.white > 0) { g.globalAlpha = (o.alpha === undefined ? 1 : o.alpha) * o.white; g.drawImage(AS.white[id], -wpx / 2, -hpx, wpx, hpx); }
@@ -489,6 +532,18 @@ function heroPose(w, v) {
   return { id, flip: sx < 0, sx, sy };
 }
 
+// the icon over an enemy's head, pre-rendered per type at the screen's pixel density
+const iconCache = {};
+function typeIconCached(g, v, type, x, y) {
+  const s = Math.min(3, v.dpr * v.scale) || 1, key = type + ':' + s.toFixed(2);
+  let c = iconCache[key];
+  if (!c) {
+    c = document.createElement('canvas'); c.width = c.height = Math.ceil(20 * s);
+    const cg = c.getContext('2d'); cg.scale(s, s); typeIcon(cg, type, 10, 10);
+    iconCache[key] = c;
+  }
+  g.drawImage(c, x - 10, y - 10, 20, 20);
+}
 function typeIcon(g, type, x, y) {
   g.save(); g.translate(x, y);
   g.lineWidth = 2; g.strokeStyle = U.INK; g.fillStyle = '#ffffff';
@@ -515,7 +570,7 @@ function drawEnemy(g, v, e, w, t) {
   else if (e.state === 'jump' || e.lunging) o.lift = 16;
   else if (e.state === 'stunned') o.rot = Math.sin(t * 30) * 0.06;
   if (e.hitT > 0) o.white = Math.min(1, e.hitT / 0.12);
-  const floorHue = AS.hexHue(R.floorColor(w));
+  const floorHue = R.floorHue(w);
   const hue = AS.hue[id];
   if (e.guardian || e.boss) o.outline = '#ffd24a';
   else if (e.elite) o.outline = '#ffffff';
@@ -537,7 +592,7 @@ function drawEnemy(g, v, e, w, t) {
   }
   R.decor(e.kind, g, v, e, w, box, t);
   R.decor('enemy', g, v, e, w, box, t);
-  if (e.type !== 'boss') typeIcon(g, e.type, box.x, box.top - 9);
+  if (e.type !== 'boss') typeIconCached(g, v, e.type, box.x, box.top - 9);
   if (e.guardian) crown(g, box.x, box.top - 18);
 }
 
@@ -651,7 +706,7 @@ function drawChevron(g, v, e, t) {
 
 // ---- main ---------------------------------------------------------------------------------------
 // Culling margins (logical px) for things anchored at their feet: sprites rise far above them.
-const CULL = { side: 160, top: 300, bottom: 80, flat: 120 };
+const CULL = { side: 110, top: 220, bottom: 60, flat: 100 };
 const solidCells = new WeakMap();
 function solidsOf(grid) {
   let l = solidCells.get(grid);
@@ -708,8 +763,8 @@ R.drawWorld = function (g, ui, dt) {
     g.restore();
   }
   // shadows
-  ellipse(g, v, w.hero.x, w.hero.y, 0.38, 'rgba(0,0,0,0.38)', null);
-  for (const e of w.enemies) if (!e.dead && flatOn(v, e.x, e.y, e.r)) ellipse(g, v, e.x, e.y, e.r * 1.05, 'rgba(0,0,0,0.38)', null);
+  R.shadow(g, v, w.hero.x, w.hero.y, 0.38);
+  for (const e of w.enemies) if (!e.dead && flatOn(v, e.x, e.y, e.r)) R.shadow(g, v, e.x, e.y, e.r * 1.05);
   R.anim.drawGhostShadows(g, v, w);
   // dash cooldown arc
   if (w.hero.dashCd > 0) {
