@@ -8,13 +8,18 @@ const L = require('./tools/layers');
 
 const FORBIDDEN = ['http://', 'https://', 'fetch(', 'XMLHttpRequest', '<script src', '<link '];
 
-function build() {
+// opts.placeholders (CLI --placeholders): also embed the assets/anim/_placeholder/ test strips.
+function build(opts) {
+  opts = opts || {};
   const meta = L.assetMeta();
   const data = {};
   for (const [id, m] of Object.entries(meta)) {
     const buf = fs.readFileSync(path.join(L.ROOT, 'assets', m.file));
     data[id] = 'data:image/webp;base64,' + buf.toString('base64');
   }
+  // animation strips named in assets/anim/manifest.json (checked by tools/layers.js)
+  const anim = L.animMeta({ placeholders: !!opts.placeholders }), animData = {};
+  for (const f of anim.files) animData[f] = 'data:image/webp;base64,' + fs.readFileSync(path.join(L.ROOT, 'assets/anim', f)).toString('base64');
   const files = L.simFiles().concat(L.clientFiles(), [L.BOOT]);
   const chunks = [];
   for (const rel of files) {
@@ -28,6 +33,8 @@ function build() {
     "BD.env = 'browser';",
     'BD.assetMeta = ' + JSON.stringify(meta) + ';',
     'BD.assetData = ' + JSON.stringify(data) + ';',
+    'BD.animMeta = ' + JSON.stringify(anim.meta) + ';',
+    'BD.animData = ' + JSON.stringify(animData) + ';',
   ].join('\n');
   const html = `<!doctype html>
 <html lang="ko"><head><meta charset="utf-8">
@@ -46,11 +53,11 @@ ${chunks.join('\n')}
   fs.mkdirSync(path.join(L.ROOT, 'dist'), { recursive: true });
   const out = path.join(L.ROOT, 'dist/before-dawn.html');
   fs.writeFileSync(out, html);
-  return { out, bytes: html.length, files: files.length };
+  return { out, bytes: html.length, files: files.length, clips: Object.values(anim.meta).reduce((n, c) => n + Object.keys(c).length, 0) };
 }
 
 if (require.main === module) {
-  const r = build();
-  console.log(`built ${path.relative(process.cwd(), r.out)} (${(r.bytes / 1024).toFixed(0)} KB, ${r.files} source files)`);
+  const r = build({ placeholders: process.argv.includes('--placeholders') });
+  console.log(`built ${path.relative(process.cwd(), r.out)} (${(r.bytes / 1024).toFixed(0)} KB, ${r.files} source files, ${r.clips} animation clips)`);
 }
 module.exports = { build, FORBIDDEN };

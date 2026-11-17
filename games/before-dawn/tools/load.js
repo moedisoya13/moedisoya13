@@ -11,6 +11,7 @@ function load(opts = {}) {
   const BD = {};
   BD.env = 'node';
   BD.assetMeta = L.assetMeta();
+  BD.animMeta = opts.animMeta || L.animMeta().meta; // clip choice is presentation; tests may pass their own
   const files = L.simFiles().concat(opts.extraFiles || []);
   for (const rel of files) {
     const src = fs.readFileSync(path.join(L.ROOT, rel), 'utf8');
