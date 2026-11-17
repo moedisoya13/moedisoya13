@@ -5,9 +5,9 @@
 'use strict';
 const H = require('./_harness');
 
-const KEY = 'before-dawn.save.v1';
+const KEY = 'before-dawn.save.v2'; // GDD-V2 §8 (the v1 key is migrated: last test)
 const SAVE = {
-  v: 1, runs: 7, wins: 1, bestFloor: 6, bestWinSec: 802.4, tierUnlocked: 2, tierSelected: 1, tierWins: [1, 0, 0, 0], rerollUnlocked: true,
+  v: 2, bestLevel: 0, bestKills: 0, runs: 7, wins: 1, bestFloor: 6, bestWinSec: 802.4, tierUnlocked: 2, tierSelected: 1, tierWins: [1, 0, 0, 0], rerollUnlocked: true,
   unlocked: ['pierce', 'whirl', 'flame', 'lightning', 'leech', 'riposte', 'holy_light', 'armor_break', 'rest_of_dead', 'kings_hunt', 'chain_slash', 'flawless', 'sword_wave'],
   counters: { kills: 87, dodges: 9, mageKills: 13, questAwakened: 0, comboMaxed: 0 },
   codex: { pierce: { held: 3, wins: 1, best: 0 } },
@@ -51,7 +51,7 @@ module.exports = {
       for (const s of ['판 수', '7', '1회', '옥상', '04:41 (13분 22초)', '보통 1 · 깊이1 0 · 깊이2 0', '87', '최근 2판']) t.assert(has(cx, s), 'codex shows ' + s);
       t.assert(cx.some((s) => /^승리 옥상 · 04:41$/.test(s)) && cx.some((s) => /^쓰러짐 4F · /.test(s)), 'last runs');
       await T.tap('card:tide', 'mouse');
-      t.assert(has(await T.texts(), '해금: 누적 처치 150  (87/150)'), 'locked card: condition and progress');
+      t.assert(has(await T.texts(), '해금: 누적 처치 4000  (87/4000)'), 'locked card: condition and progress (GDD-V2 §8)');
       await T.tap('card:pierce', 'mouse');
       t.assert((await T.texts()).some((s) => /사용 3판 · 승리 1회/.test(s)), 'codex counts of an unlocked card');
       t.eq(T.errors, []);
@@ -102,6 +102,24 @@ module.exports = {
       t.eq([s.settings.sfx, s.settings.dashSide], [0.6, 'left'], 'settings kept');
       await T.tap('close', 'mouse');
       t.assert(has(await T.texts(), '최고 기록: — · 승리 0회'));
+    } finally { await T.close(); }
+  },
+
+  async 'a v1 save is carried into v2: the record line on the title, then a finished run writes the v2 key'(t) {
+    const v1 = Object.assign({}, SAVE, { v: 1 });
+    delete v1.bestLevel; delete v1.bestKills;
+    const init = { fn: (s) => { try { if (!sessionStorage.getItem('bd-test-loaded')) { localStorage.setItem('before-dawn.save.v1', s); sessionStorage.setItem('bd-test-loaded', '1'); } } catch (e) { /* ignore */ } }, arg: JSON.stringify(v1) };
+    const T = await H.open(H.variant(), { query: '?mute=1', init });
+    try {
+      t.assert(has(await T.texts(), '최고 기록: 옥상 · 승리 1회'), 'record line from the v1 save');
+      t.eq(await T.eval(() => window.__BD.app.save.counters.magicKills), 13, 'mageKills → magicKills');
+      await T.key('Enter'); await T.key('Enter');
+      await T.eval(() => { const w = window.__BD.world(); w.t = 200; w.hero.level = 7; window.__BD.app.giveUp(); });
+      t.assert(await T.waitMode('result', 4000));
+      const v2 = await stored(T);
+      t.eq([v2.v, v2.runs, v2.wins, v2.bestFloor, v2.tierUnlocked, v2.rerollUnlocked, v2.bestLevel], [2, 8, 1, 6, 2, true, 7], 'v2 key written');
+      t.eq(await T.eval(() => JSON.parse(localStorage.getItem('before-dawn.save.v1')).runs), 7, 'the v1 key is left as it was');
+      t.eq(T.errors, []);
     } finally { await T.close(); }
   },
 

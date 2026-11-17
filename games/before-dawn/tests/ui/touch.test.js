@@ -192,6 +192,7 @@ module.exports = {
       const T = await H.open(H.variant(), { query: '?seed=5&hand=pierce&mute=1&nosave=1', context: { viewport: vp, hasTouch: true } });
       try {
         await T.key('Enter');
+        await T.find('hud_dash'); // the play frame has drawn its buttons (a busy machine may need a moment)
         return await T.eval(() => {
           const B = window.__BD, v = B.ui.view, bs = B.ui.debug.buttons();
           const d = bs.find((b) => b.id === 'hud_dash'), p = bs.find((b) => b.id === 'hud_pause');

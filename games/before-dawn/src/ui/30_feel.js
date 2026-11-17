@@ -291,7 +291,7 @@ BD.ui.effects.register({
       const dx = ev.x - h.x, dy = ev.y - h.y;
       if (role === 'fodder') {
         // §7.1 fodder: the hit's white flash (engine), ≤ 3 ink motes for 0.15 s, a small mark; no word, no stop
-        FEEL.mark(ui, ev.x, ev.y, 6 + r * 8, dx, dy, 0.6);
+        FEEL.mark(ui, ev.x, ev.y, 5 + r * 6, dx, dy, 0.42);
         const n = FEEL.budget(3);
         for (let i = 0; i < n; i++) ui.fx.emit({ x: ev.x, y: ev.y, z: 22, vx: rng.range(-3, 3), vy: rng.range(-3, 3), vz: rng.range(60, 140), g: 520, life: 0.15, color: K.INK, size: rng.range(3, 4.5) });
         return;
