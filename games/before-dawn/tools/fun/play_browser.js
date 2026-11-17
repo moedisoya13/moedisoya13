@@ -5,6 +5,7 @@
 //   node tools/fun/play_browser.js --seed 21 --out /tmp/run21
 //   node tools/fun/play_browser.js --seed 7 --hand whirl,flame,leech --altar card --trial --out DIR
 //   node tools/fun/play_browser.js --seed 7 --phone        667×375 touch viewport
+//   node tools/fun/play_browser.js --seed 7 --floor 3 --sec 150   start on 3F (at its level, GDD-V2 §10.3), stop after 150 s of game time
 //
 // What it does: builds nothing (run `node build.js` first), opens dist/before-dawn.html from
 // file://, takes the title → prep → play path with the keyboard, then replaces the page's input
@@ -44,7 +45,8 @@ fs.mkdirSync(OUT, { recursive: true });
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
   page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
   page.on('request', (r) => { if (!r.url().startsWith('file://') && !r.url().startsWith('data:') && !r.url().startsWith('blob:')) requests.push(r.url()); });
-  const query = `?seed=${seed}&mute=1&nosave=1&tier=${Number(o.tier || 0)}` + (o.hand !== undefined ? '&hand=' + (o.hand === true ? '' : o.hand) : '');
+  const query = `?seed=${seed}&mute=1&nosave=1&tier=${Number(o.tier || 0)}` + (o.hand !== undefined ? '&hand=' + (o.hand === true ? '' : o.hand) : '') + (o.floor ? '&floor=' + Number(o.floor) : '');
+  const maxGameSec = Number(o.sec || 0);
   await page.goto('file://' + HTML + query);
   await page.waitForFunction(() => window.__BD && window.__BD.ui, null, { timeout: 15000 });
 
@@ -88,6 +90,7 @@ fs.mkdirSync(OUT, { recursive: true });
     const s = await page.evaluate(() => { const B = window.__BD, w = B.world(); return { mode: B.app.mode, t: w ? w.t : 0, floor: w ? w.floorN : 0, hp: w ? w.hero.hp : 0 }; });
     last = s;
     if (s.mode !== 'play') break;
+    if (maxGameSec && s.t >= maxGameSec) break;
     if (s.t >= nextShot) { await shoot(s.t); nextShot = s.t < firstDense ? Math.floor(s.t) + 1 : Math.floor(s.t / every) * every + every; }
     if (Date.now() - wall0 > 30 * 60 * 1000) { errors.push('gave up after 30 min of wall clock'); break; }
     await page.waitForTimeout(120);

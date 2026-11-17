@@ -31,7 +31,10 @@ games/before-dawn/
   src/content/enemies/        ENEMIES  one file per enemy (slime.js, goblin.js are references)
   src/content/bosses/         ENEMIES  demon_king.js (placeholder: replace it)
   src/content/rooms/          ENEMIES  room shapes and obstacle patterns (rect.js, open.js)
-  src/content/floors/         ENEMIES  spawn bundles per type (beast.js)
+  src/content/floors/         ENEMIES  spawn bundles per type (beast.js) + v2 horde mixes (§10.2)
+  src/content/boons/          v2       단련 (edge, quick, draw; §10.3)
+  src/content/tasks/          v2       floor tasks (purge; §10.4)
+  src/content/zones/          v2       zone fills and floor layouts (open, pillars, plaza; §10.4)
   src/ui/                     UI       everything on screen above the world; src/ui/basic/* is the
                                        engine's bare placeholder — the UI agent owns, edits,
                                        replaces or deletes it
@@ -650,6 +653,12 @@ PASS where your content completes them; open `dist/before-dawn.html` and look at
 
 ## 9. v2 engine: floors larger than the screen, the camera, off-screen awareness, animation
 
+> **Changed by the v2 proof slice (§10):** the camera centre is now simulation state (`w.cam`,
+> GDD-V2 §5.6). The client no longer eases a camera of its own — it draws `BD.view.focusOf(w)` —
+> so §9.1's follow/slack and §9.2's "hero-centred view inset by the slack" are replaced by §10.1.
+> The floor-plan hook of §9.3 sizes only the v1 room generator (`gen.run(…, {v1: true})`,
+> `BD.stageFloor`); v2 runs build their floors with `BD.gen.floorV2`.
+
 Added for v2 (docs/V2-DIRECTION.md). Nothing here changes v1 rooms: every v1 room fits the
 screen, so its camera stands still exactly where it stood (pixel-equal static layer and clip), the
 view rectangle covers the whole room, markers and minimap are off, and bot hashes for the same
@@ -785,3 +794,193 @@ replaces floor n (default 2) of the running world with a generated floor of that
 tests/core/view.test.js, bigfloor.test.js (generation, buckets, staging, measured tick),
 anim.test.js, camera.test.js (headless Chromium: mapping in normal and forced landscape, decals,
 clip, particles, markers, animation, ghosts).
+
+---
+
+## 10. v2 proof slice: the horde, growth and task loop — where the next agents plug in
+
+Built for docs/GDD-V2.md §11.1 (the proof slice). Every run is now the v2 run: five 48 × 48 floors
+(`purge` on each in the slice), the 28 × 28 rooftop, the director sending packs, shards → gauge →
+level → a choice of three, six levelled cards and three boons. The numbers live in `BD.C.DIRECTOR`,
+`BD.C.V2` (src/core/00_base.js) and the content defs; values tuned away from the GDD are listed in
+docs/requests/v2-tuning.md. Files: src/core/05_view.js (camera), 28_director.js, 29_growth.js,
+31_tasks.js, 32_sites.js, 33_pickups.js; v2 parts of 11_gen.js, 20_world.js, 27_flow.js, 50_app.js;
+src/bot/bot.js (`thinkV2`, `choose`); src/ui/63_growth.js (overlay, gauge, shards).
+
+**Tick order (v2):** hero stats (cards, then boons) → hero move/dash → **camera** → distance field →
+auto-attack → timers → enemies → hazards → statuses → rifts → flow (pickups, stairs, **sites**) →
+**task** → **director** → **shards / levels / opening a queued choice** → deaths → clock → cleanup.
+The world does not advance while `w.choiceOpen` (like the altar). `BD.W.scenario(w)` — set
+`w.scenario = true`, or the v1 test idiom `w.wave.n = 3` — stops the director and keeps the choice
+overlay shut (levels still count): use it in tests that stage a fight.
+
+### 10.1 The camera and "nothing hits from off screen" (GDD-V2 §5.6)
+
+```js
+w.cam = {x, y, lx, ly, grid}          // world u; lx/ly the eased walking direction (dumped as cam{x, y})
+BD.view.updateCam(w, dt)              // every tick after the hero moves: target hero + lead 1.5u, rate 8/s, clamp [5, side − 5]
+BD.view.snapCam(w)                    // floor entry; a hero > 12u (|dx|+|dy|) from it or a new grid snaps on the next tick
+BD.view.camOf(w) / focusOf(w)         // the camera the rules see (pure) / its map-px focus — what the client draws
+BD.W.onScreen(w, x, y, pad)           // S: the whole 1280 × 720 view (spawning, recycling, markers, chain_slash's timer)
+BD.W.inView(w, x, y, pad)             // C: S minus the HUD bands [48,1232]×[84,600] (on an axis where a v1 room fits: all of it)
+BD.view.screen(w) / rect(w) / screenCorners / corners   // the same as map-px rects / world corners
+```
+
+Rules, all in the simulation: an enemy may start an attack only after `e.viewT ≥ 0.5 s` inside C
+(`BD.ai.canAttack`; an enemy made inside C counts as seen, so placed enemies and rifts keep their
+v1 timing); fodder also needs `e.nearT ≥ 0.5 s` within 1.6u of the hero and fewer than 32 warnings on
+the floor (§3.5, §3.7); a warning whose owner or origin is outside C when it starts is `unseen` and a
+hit from it counts in `w.stats.unseenHits` (must stay 0; checked by tests/enemies/rules.test.js and
+`tools/accept.js` #12); hostile shots vanish 2u outside S. The melee / ranged caps come from the
+floor's director row (4/4/5/5/6, rooftop 3; 2/2/3/3/3). A dormant enemy (`opts.dormant = {r}`, the
+guardian: `r` 10) stands still until the hero comes within `r`, then emits `wake`.
+
+### 10.2 Enemies and the director (GDD-V2 §3)
+
+An enemy kind joins the horde by two declarations:
+
+```js
+BD.enemies.register({ id: 'husk', …, role: 'fodder', shards: 1, scale: 0.8, tint: 'pale', variantOf: 'ghoul' });
+//   role 'fodder' | 'threat' (default threat), shards dropped on death (default fodder 1, threat 3),
+//   scale = sprite size of a variant (body radius stays def.radius), tint/variantOf for the codex and the art agent
+BD.director.mixes.register({ id: 'undead', fodder: { husk: 85, goblin: 15 }, threats: { skel_archer: 2, ghoul: 1 }, threatCost: {} });
+//   one mix per dominant type (src/content/floors/*.js) + 'rooftop'; weights, not counts; a kind must be
+//   listed under its own role (finalize checks); threatCost counts a kind as n threats (dark_knight: 2)
+```
+
+Variants reuse the original's `update` and bring their own `T` (registered in the original's file:
+goblin.js → squire, slime.js → slimelet / mana_slime, ghoul.js → husk). `BD.W.makeEnemy` sets
+`e.role` ('fodder' | 'threat' | 'elite' | 'guardian' | 'boss'), `e.size = scale × elite/guardian size`,
+and multiplies a regular enemy's HP and damage by the floor's director row (`hp`, `dmg`).
+
+`BD.C.DIRECTOR.floors[n]` = `{budget, from, to (rooftop: phases[3]), rate, threatEvery, threatCap,
+eliteEvery (not used yet), hp, dmg, melee, ranged, pack: [min, max]}`. Every 0.4 s the director
+compares `have` (on screen + off screen within 22u, guardians and the boss excluded) with `want`
+(`from → to` over the budget × surge 1.5 / guardian 0.5 / overtime 1.25) and sends a pack 1.5–4u
+outside S (60 % within ±60° of the last second of walking), paying one token per enemy (rate per
+second, at most 12). A threat joins a pack when `threatEvery` has passed and live threat cost < cap
+(25 % from another type's mix). Surges at 25 s and every 35 s (8 s, `surge` event, banner); overtime
+banner `밤이 깊어진다`. Recycling: fodder > 24u and threats > 30u off screen for 3 s vanish
+(`W.removeEnemy(w, e, 'recycle')`, no event, no shards); `e.flags.keep = true` exempts a task target.
+Floor entry puts two packs 2u inside the screen edge. `BD.director.clear(w)` (floor clear) dissolves
+every regular enemy (`dissolve` event). State: `w.director = {tau, tokens, want, have, surge, surgeN,
+state: 'normal'|'guardian'|'clear'|'boss', overtime, off}` (`off = true` stops it).
+
+**For the enemies agent (§11.2-5):** elites (`eliteEvery` is in the table, unused), the archer/mage
+behaviour changes, slime split, wide attacks hitting enemies, the guardian's 6u leash, the boss's
+director-only minions (the v2 rooftop already has `summon: []`) and the 0.5 s minimum warning are
+yours; threats still run their v1 behaviour with the GDD-V2 HP. Tint variants are drawn at their
+original colour (sprite scale only) until the art side bakes the tints.
+
+### 10.3 Shards, the gauge, levels and the choice (GDD-V2 §4.1–4.3)
+
+```js
+BD.growth.drop(w, x, y, value)      // a shard pops (0.2 s), then waits; inside hero.pickupR it flies in (6→18 u/s)
+BD.growth.onKill(w, e)              // called by combat.kill: def.shards / elite 25 / guardian 10 × 6 / boss none
+BD.growth.pullAll(w)                // every shard flies in (floor clear; a halo pickup later)
+BD.growth.addXp(w, n) / need(L)     // 12, 24, then round(30 + 7L); a full gauge → level_up, a queued choice
+BD.growth.open(w, kind) / options(w) / pick(w, i)   // §4.3 draw (w.rng.choice), the overlay, the answer
+BD.growth.giveBoon(w, id) / levelCard(w, card)      // what a pick does (also used by `&level=` starts)
+```
+
+`w.shards = [{id, x, y, v, popT, pull, sp}]` (≤ 200; the farthest merges into its nearest).
+`w.hero.level / xp / xpNeed / boons {id: rank} / pickupR`. The choice is `w.choice = {kind, options:
+[{kind: 'card'|'boon'|'breath', id, name, from, to, text, pick}], lastCards}` with `w.choiceOpen`;
+answer with `app.cmd('choice', 'pick', i)` (or `BD.bot.choose(w, {policy})` → the arguments). A
+pick toasts, gives 0.5 s invulnerability and shoves fodder within 3u out by 1.5u; a second queued
+level opens the next choice on the next tick. **A chest** (§4.6) is `BD.growth.open(w, 'chest')` with
+its own options: extend `options` by `kind` (the overlay reads `w.choice` only). `&level=N` /
+`startRun({level})` and `&floor=N` (level `C.V2.levelAtFloor[N]`) pre-pick with the bot's `mixed` policy.
+
+**A card's levels** (§4.4, §4.7): add `levels: [null, L1, …, L5]` to the card def, each `{text, …numbers}`
+(cumulative: L3 holds only what changes). Hooks read `ctx.level` and `ctx.lv` (L1…Lcurrent merged);
+`def.onLevel(ctx, from)` runs after `card_level`. `levels[n].maxStack` overrides a combo's
+`maxStack` (`BD.cardRt.maxStack(card)`). While any card has levels, **only levelled cards are dealt
+and offered** (`BD.cardRt.pool`): a card joins the v2 pool by getting levels. `BD.cardRt.equip(w,
+slot, id, level)` takes the level (the altar swap keeps the slot's level, §4.6). Worked examples:
+pierce.js (shape levels, an `onHit` push), flame.js (status numbers per level, a level-5 hero zone with
+`enemyDmg`), chain_slash.js (per-level timer, haste in `stats`, `maxStack` 15 at level 5).
+
+**A boon** (§4.5): `BD.boons.register({id, name, max: 3, text(rank) → line, stats(s, rank, w), onGain?(w, rank)})`
+in src/content/boons/. `stats` runs every tick with the hero's stats (`dmgBase, interval, reach,
+halfArc, pickupR, speedMul, …`), right after the cards'. `body` (max HP +15 and heal) needs `onGain`.
+
+### 10.4 Tasks, the floor's end, sites, pickups (GDD-V2 §5.4–5.5, §6)
+
+```js
+BD.tasks.register({ id: 'purge', name: '소탕', layout: 'plaza', goal(n, w) → number,
+  start?(w, task), update?(w, task, dt), on?: { kill(ev, w, task) … }, label?(task) → '소탕 137/200' });
+BD.taskRt.progress(w, n) / set(w, value) / complete(w)      // task_progress; at the goal → task_clear
+```
+
+`w.task = {kind, name, value, goal, done}`. Completion: `task_clear`, banner `수호자가 계단을 지킨다`,
+the floor's guardian (`floor.guardian`, of the dominant type) appears at the stairs-zone centre
+(8, 8) after a 2 s warning, dormant until the hero is within 10u; the director runs at half. The
+guardian's death (`flow.guardianKilled` → `BD.taskRt.floorClear`): radiance +1 (max 9), stairs open,
+`floor_clear`, the horde dissolves, every shard flies in. 2F–5F take the registered tasks other than
+`purge` in a shuffled order (`BD.gen.taskOrder`); while only `purge` exists every floor is purge.
+A task def's `layout` names its floor layout.
+
+**Sites** (§5.5): `BD.sites.register({id, name, stay, total?, ring?, optional?, known?, use(w, site) →
+true when finished at once, update?(w, site, dt)})`; place them in the generator with
+`floor.layout.sites = [{kind, x, y, optional?}]`. `w.sites = [{id, kind, x, y, state:
+'idle'|'active'|'used', known, optional, progress, need}]`; standing in the ring for `stay` s emits
+`site_start` and calls `use`; a site that is not done at once stays `active` (its `update` runs)
+until it calls `BD.siteRt.clear(w, site)` (`site_clear`). `total: true` keeps the stay time when the
+hero leaves (seal stones). The bot's goal rule (§10.3 rule 4) already walks to task sites and, with
+`opts.sites`, to optional ones. Example: tests/fixtures/test_site.js. No kind is registered yet.
+
+**Floor generation** (§5.2, §5.3): `BD.gen.fills.register({id, apply(grid, zone, rng)})` (zone = `{zx,
+zy, x0, y0, size: 16, cx, cy, keep(x, y)}`; set SOLID/VOID inside the inner 12 × 12, keep the
+`keep` cells floor) and `BD.gen.layouts.register({id, centre: fillId, fills: [ids]})` —
+src/content/zones/plaza.js has `open`, `pillars`, `plaza`. `BD.gen.floorV2` puts start (2, 2) and
+stairs (0, 0) zones `open`, checks §5.8 1–5 (`BD.gen.checkV2`) with 20 retries, then all-open.
+`floor = {n, v2, domType, nextDomType, w, h, cells, floorKind, task, guardian, layout: {start,
+stairs, flasks, sites, zones}, offscreen}`. Zone walls (office), void (atrium) and site placement
+belong to the generation agent. The slice keeps v1's one flask per floor.
+
+**Touch pickups** (§6): `BD.pickups.register({id, touch, take(w, p) → bool})`; place with
+`w.pickups.push({id: BD.W.id(w), kind, x, y, value})`; a use emits `pickup {kind, x, y, value}`.
+`flask` is registered in core (src/core/33_pickups.js). Shards are not touch pickups (§10.3).
+
+### 10.5 Events and the state dump
+
+New GDD-V2 §4.7 events: `level_up {level}`, `choice_open {kind, options}` (options = pick strings
+`card:<id>` / `boon:<id>` / `breath`), `choice_pick {kind, pick}`, `card_level {cardId, level}`,
+`boon {id, rank}`, `task_progress {floor, task, value, goal}`, `task_clear {floor, task}`,
+`site_start` / `site_clear {kind, id, optional}`, `surge {floor, n}`, `floor_clear {floor}`;
+`pickup` gained `value`. Engine extras: `shard_drop {x, y, value}`, `dissolve {enemyId, kind, x, y}`,
+`wake {enemyId}`. Banner kinds added: `surge`, `overtime`, `task` (floor banners read `3F — 중갑 · 소탕`).
+
+`__BD.state()` adds `floorKind`, `cam{x, y}`, `hero.level / xp / xpNeed / boons / pickupR`,
+`cards[].level`, `enemies[].role / inView`, `shards` (count), `task{kind, value, goal, done}`,
+`sites[]`, `director{want, have, tokens, surge, state}`, `choice{kind, options}` (while open),
+`unseenHits`. URL / `startRun`: `&task=<id>` (1F's task), `&level=N`, `&floor=N` (with its level).
+`H.calm()` marks a staged scenario. `H.sim({…, task, level})`.
+
+### 10.6 What the UI can read
+
+* **Gauge:** `w.hero.level`, `xp`, `xpNeed` (src/ui/63_growth.js draws the 420 × 10 bar at
+  430–850 × 598–608 with `Lv N`; `level_up` flashes it).
+* **Choice overlay** (`app.overlay() === 'choice'`, registered as overlay `choice`): `w.choice.options`
+  (name, `from → to`, the level line `text`, kind and card family for the border); the 0.35 s input
+  lock is the overlay's (real time; the world is stopped anyway).
+* **Task:** `BD.ui.taskLabel(w)` (the def's `label`) for the top centre; `w.task.done` switches it to
+  `수호자가 계단을 지킨다`; the guardian bar takes over while it lives.
+* **Shards:** `w.shards` (pop height from `popT`, trail when `pull`), `w.hero.pickupR` for the ring.
+* **Feedback hooks:** `kill` (fodder: `e.role === 'fodder'` before removal via `BD.W.enemyById` in
+  the same tick), `swing` … `swing_end` for multi-kills, `pickup` (`kind: 'shard'`, `value`),
+  `level_up`, `choice_open`, `choice_pick`, `surge`, `floor_clear`, `dissolve`. Sounds added:
+  `shard` (opts.step 0–12 semitones), `level_up`, `choice_open`, `multi_kill`; `kill` ≤ 8/s, `hit` ≤ 10/s.
+* **Minimap / edge markers:** the engine's §9.4 ones are on for v2 floors (`floor.offscreen`);
+  guardians are threats, open stairs an objective. Sites and task targets: add `e.flags.marker` or a
+  `BD.render.markers` source.
+
+### 10.7 Bot and measurement
+
+`BD.bot.think` uses `thinkV2` on v2 floors (GDD-V2 §10.3 rules 1, 2, 4–8: dodge; flask/spring at
+HP ≤ 45; goal every 2 s — guardian → task site → optional sites by `opts.sites` → open stairs; step
+back from ≥ 6 enemies within 2.2u; shards within 6u when < 4 enemies within 3u; walk to an
+off-screen goal; else hold the nearest at reach − 0.5u). `BD.bot.choose(w, {policy: 'mixed' | 'card'
+| 'pray'})` answers the choice or the altar. The gate is `node tools/fun/measure.js --seeds 1-20`
+(also `tools/accept.js` #7); `tools/feel/human_bot.js` and `tools/fun/lib.js` answer choices with it.

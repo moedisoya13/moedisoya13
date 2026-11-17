@@ -47,18 +47,22 @@ module.exports = {
     } finally { await P.close(); }
   },
 
-  'big floor: follows the hero within the slack, projection round trip, touch → world': async (t) => {
+  'big floor: follows the hero (the simulation camera), projection round trip, touch → world': async (t) => {
     const P = await open(t, { width: 1280, height: 720 });
     try {
       await P.stage();
       t.eq(await P.ev(() => window.BD.client.offscreen.enabled(window.__BD.world())), { indicators: true, minimap: true });
+      // from the middle of the floor: the simulation camera (GDD-V2 §5.6) keeps its centre within
+      // [5, 43], so a walk from the start corner would hit that clamp first
+      await P.ev(() => { const w = window.__BD.world(); w.hero.x = 24; w.hero.y = 24; window.BD.view.snapCam(w); });
+      await P.page.waitForTimeout(100);
       const c0 = await cam(P), h0 = await hero(P);
       await P.page.keyboard.down('KeyW'); await P.page.waitForTimeout(1500);
       const [sx, sy] = await heroScreen(P);
       await P.page.keyboard.up('KeyW');
       const c1 = await cam(P), h1 = await hero(P);
       t.assert(c1.roy > c0.roy + 100, 'the world scrolled down as the hero went up the screen');
-      t.assert(Math.abs(sx - 640) <= 112 + 1 && Math.abs(sy - 350) <= 64 + 1, `hero within the slack of the focus point: ${sx}, ${sy}`);
+      t.assert(Math.abs(sx - 640) <= 112 + 1 && Math.abs(sy - 350) <= 64 + 1, `hero near the focus point (the camera leads by ≤ 1.5u): ${sx}, ${sy}`);
       t.assert(Math.hypot(h1.x - h0.x, h1.y - h0.y) > 4);
       const rt = await P.ev(() => { const v = window.__BD.ui.view; const [lx, ly] = v.proj(17.25, 30.5); return v.toWorld(lx, ly); });
       t.near(rt[0], 17.25, 1e-9); t.near(rt[1], 30.5, 1e-9);

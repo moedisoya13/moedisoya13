@@ -1,5 +1,8 @@
 #!/usr/bin/env node
-// Acceptance criteria of GDD §13.2. Prints one line per criterion:
+// Acceptance criteria of GDD §13.2 as GDD-V2 §10.4 keeps and replaces them. Prints one line per criterion:
+// (v2: #4 checks the v2 generator (V6); #6 runs at 3F level 10 plus each levelled card at level 5
+// (V8); #7 is the proof-slice gate of GDD-V2 §11.1 (tools/fun/measure.js, seeds 1–20); #10 holds the
+// world under the growth choice; #12 is V3 + V7 + V11; #16 is V4; #17 is V12, a tuning target.)
 //   PASS | FAIL | PENDING (depends on content not registered yet) | TARGET (tuning goal, informational)
 // Usage: node tools/accept.js [--only 1,3,7] [--skip-browser]
 // Exit code 1 if any criterion FAILs.
@@ -115,29 +118,27 @@ async function main() {
     report(3, ok ? 'PASS' : 'FAIL', `seed 42 twice: hash@60s ${a.hashes['60']} / ${b.hashes['60']}, summary ${strip(a) === strip(b) ? 'equal' : 'differs'}`);
   }
 
-  // 4
+  // 4 (GDD-V2 V6): the v2 generator over 200 seeds — §5.8 1–5 on every floor, 1F beast, the other
+  // types on 2F–5F, neighbours differ, every 2F–5F task of the registered ones (the slice: purge)
   if (want(4)) {
-    let bad = [], reduced = 0;
+    const bad = [];
     for (let s = 1; s <= 200; s++) {
       const run = BD.gen.run(s, 0);
-      if (run.reduced) reduced++;
       for (let n = 1; n <= 5; n++) {
         const f = run.floors[n];
-        const g = BD.Grid.fromString(f.w, f.h, f.cells);
-        const why = BD.gen.check(g, f.layout);
+        const why = BD.gen.checkV2(BD.Grid.fromString(f.w, f.h, f.cells), f.layout);
         if (why) bad.push(`seed ${s} ${n}F: ${why}`);
+        if (f.w !== 48 || f.h !== 48) bad.push(`seed ${s} ${n}F: ${f.w}x${f.h}`);
       }
       const o = run.domOrder;
-      if (!(o[0] === 'beast' || o[0] === 'undead')) bad.push(`seed ${s}: 1F is ${o[0]}`);
-      if (!run.reduced) {
-        if (!BD.C.TYPES.every((t) => o.includes(t))) bad.push(`seed ${s}: not every type dominant`);
-        if (o.some((t, i) => i && o[i - 1] === t)) bad.push(`seed ${s}: neighbours share a type`);
-      }
+      if (o[0] !== 'beast') bad.push(`seed ${s}: 1F is ${o[0]}`);
+      if (!['undead', 'magic', 'heavy'].every((t) => o.slice(1).includes(t))) bad.push(`seed ${s}: a type missing on 2F–5F`);
+      if (o.some((t, i) => i && o[i - 1] === t)) bad.push(`seed ${s}: neighbours share a type`);
+      const others = BD.tasks.ids().filter((t) => t !== 'purge');
+      if (others.length >= 4 && new Set(run.tasks.slice(1)).size !== 4) bad.push(`seed ${s}: 2F–5F tasks repeat`);
     }
-    const types = BD.gen.bundles.ids();
     if (bad.length) report(4, 'FAIL', `${bad.length} problems, first: ${bad[0]}`);
-    else if (reduced) report(4, 'PENDING', `§7.6-1..3 and 1F rule pass for 200 seeds × 5 floors; §7.6-4 / §7.5 ②③ need all four type bundles (registered: ${types.join(',')})`);
-    else report(4, 'PASS', '200 seeds: §7.6 1–4 and §7.5 order rules hold');
+    else report(4, 'PASS', `200 seeds (GDD-V2 V6): 48×48 floors, §5.8 1–5, 1F beast, every type on 2F–5F, neighbours differ; tasks registered: ${BD.tasks.ids().join(',')}`);
   }
 
   // 5
@@ -167,11 +168,23 @@ async function main() {
       for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) for (let k = j + 1; k < ids.length; k++) {
         n++;
         try {
-          const st = BD.dump(BD.simRun({ seed: n, hand: [ids[i], ids[j], ids[k]], floor: 2, maxSec: 20 }).app);
+          const st = BD.dump(BD.simRun({ seed: n, hand: [ids[i], ids[j], ids[k]], floor: 3, level: 10, maxSec: 20 }).app);
           if (!nanFree(st)) bad.push(`${ids[i]},${ids[j]},${ids[k]}: NaN`);
         } catch (err) { bad.push(`${ids[i]},${ids[j]},${ids[k]}: ${err.message}`); }
       }
-      report(6, bad.length ? 'FAIL' : 'PASS', `${n} combinations × 20 s on 2F${bad.length ? ', ' + bad.length + ' failed, first: ' + bad[0] : ', no exceptions, no NaN'}`);
+      // V8 part 2: every card with levels at level 5 on 2F
+      const levelled = ids.filter((id) => BD.cards.get(id).levels);
+      for (const id of levelled) {
+        try {
+          const r = BD.simRun({ seed: 77, hand: [id], floor: 2, maxSec: 0.02 });
+          const app = r.app, w = app.world, c = BD.cardRt.get(w, id);
+          while (c.level < 5) BD.cardRt.levelUp(w, c);
+          app.botOn = true; let k = 0;
+          while (app.mode === 'play' && w.t < 20 && k++ < 5000) app.step();
+          if (!nanFree(BD.dump(app))) bad.push(id + ' at level 5: NaN');
+        } catch (err) { bad.push(id + ' at level 5: ' + err.message); }
+      }
+      report(6, bad.length ? 'FAIL' : 'PASS', `${n} combinations × 20 s on 3F at level 10, and ${levelled.length} levelled cards at level 5 on 2F (GDD-V2 V8)${bad.length ? ', ' + bad.length + ' failed, first: ' + bad[0] : ', no exceptions, no NaN'}`);
     }
   }
 
@@ -182,11 +195,28 @@ async function main() {
   if (want(7) || want(11) || want(12)) {
     const allowed = { chain_slash: ['timeout', 'swap'], flawless: ['hurt', 'swap'], one_flash: ['too_close', 'swap'] };
     const seen = new Set();
+    var v3 = { screen: 0, shards: 0, tgs: 0, shots: 0 }, unseen = 0, choiceBad = [], choices = 0;
     runs20 = botRuns(Array.from({ length: 20 }, (_, i) => i + 1), {
       onTick(app) {
         const w = app.world;
+        let sc = 0; for (const x of w.enemies) if (!x.dead && BD.view.inView(w, x.x, x.y)) sc++;
+        v3.screen = Math.max(v3.screen, sc); v3.shards = Math.max(v3.shards, w.shards.length); v3.tgs = Math.max(v3.tgs, w.telegraphs.length);
+        v3.shots = Math.max(v3.shots, w.projectiles.filter((p) => p.hostile).length);
+        if (w.over || app.mode !== 'play') unseen = Math.max(unseen, w.stats.unseenHits);
         if (!seen.has(w)) {
           seen.add(w);
+          // V11: three different options, never a card at level 5 or a boon at rank 3
+          w.bus.on('choice_open', (ev) => {
+            choices++;
+            if (ev.options.length !== 3) choiceBad.push(ev.options.length + ' options');
+            for (const o of w.choice.options) {
+              if (o.kind === 'card' && o.from >= 5) choiceBad.push('card at level 5: ' + o.id);
+              if (o.kind === 'boon' && o.from >= BD.boons.get(o.id).max) choiceBad.push('boon at max: ' + o.id);
+            }
+            const real = ev.options.filter((x) => x !== 'breath');
+            if (new Set(real).size !== real.length) choiceBad.push('repeated option ' + ev.options.join(','));
+          });
+          w.bus.on('hurt', () => { unseen = Math.max(unseen, w.stats.unseenHits); });
           w.bus.on('combo_change', (ev) => {
             if (ev.to < ev.from && (!allowed[ev.cardId] || !allowed[ev.cardId].includes(ev.reason))) comboBad.push(`${ev.cardId} ${ev.reason}`);
             if (ev.to > ev.from && ev.reason !== 'gain') comboBad.push(`${ev.cardId} rose with ${ev.reason}`);
@@ -201,10 +231,20 @@ async function main() {
       },
     });
   }
+  // 7 (GDD-V2 §11.1, replaces §13.2-7): the proof-slice gate, tools/fun/measure.js over seeds 1–20 with the
+  // human-like pilot — kills/min ≥ 100, on screen ≥ 12, < 3 on screen ≤ 15 %, swings to kill ≤ 2.0, 2+ hit
+  // swings ≥ 50 %, choice gap ≤ 40 s, first choice ≤ 25 s, hits/min ≤ 5, ≥ 10 of 20 runs reach 3F
   if (want(7)) {
-    const reached = runs20.filter((r) => r.floor >= 2).length;
-    const kinds = BD.enemies.ids();
-    report(7, reached >= 15 ? 'PASS' : 'FAIL', `${reached}/20 bot runs reached 2F (wins ${runs20.filter((r) => r.result === 'win').length}; enemy kinds registered: ${kinds.join(',')} — recheck when content lands)`);
+    const F = require('./fun/lib');
+    const q = (a) => { const v = a.filter(Number.isFinite).sort((x, y) => x - y); return v[Math.floor(v.length / 2)]; };
+    const rs = []; for (let sd = 1; sd <= 20; sd++) rs.push(F.runNode(BD, { seed: sd, altar: 'mixed' }));
+    const m = {
+      kpm: q(rs.map((r) => r.total.killsPerMin)), screen: q(rs.map((r) => r.total.onScreenMean)), sparse: q(rs.map((r) => r.total.sparsePct)),
+      stk: q(rs.map((r) => r.swingsToKillAll)), multi: q(rs.map((r) => r.total.multiSwingPct)), gap: q(rs.map((r) => r.choiceGap.median)),
+      first: q(rs.map((r) => (r.first.choice === undefined ? r.sec : r.first.choice))), hurts: q(rs.map((r) => r.total.hurtsPerMin)), reach3: rs.filter((r) => r.floor >= 3).length,
+    };
+    const ok = m.kpm >= 100 && m.screen >= 12 && m.sparse <= 15 && m.stk <= 2 && m.multi >= 50 && m.gap <= 40 && m.first <= 25 && m.hurts <= 5 && m.reach3 >= 10;
+    report(7, ok ? 'PASS' : 'FAIL', `slice gate (GDD-V2 §11.1, 20 runs): kills/min ${m.kpm}, on screen ${m.screen}, sparse ${m.sparse} %, swings ${m.stk}, 2+ hits ${m.multi} %, choice gap ${m.gap} s, first ${m.first} s, hits/min ${m.hurts}, ${m.reach3}/20 reach 3F`);
   }
   if (want(11)) {
     const missC = missing(['chain_slash', 'flawless', 'one_flash'], BD.cards);
@@ -212,19 +252,23 @@ async function main() {
     else if (missC.length) report(11, 'PENDING', `chain_slash: reset reasons ok, ${timerChecks} empty-room ticks without timer loss; ${missC.join(', ')} not registered`);
     else report(11, 'PASS', `combo resets use only allowed reasons; ${timerChecks} empty-room ticks checked`);
   }
+  // 12 (GDD-V2 V3, V7, V11; replaces §13.2-12): caps over the 20 bot runs and a stress, no hit from an
+  // attack that began off the combat window, valid growth choices
   if (want(12)) {
     const maxE = Math.max(...runs20.map((r) => r.maxE)), maxP = Math.max(...runs20.map((r) => r.maxP));
-    // stress: ask for 150 enemies and 100 projectiles at once
+    // stress: ask for 150 enemies and 100 hostile shots at once
     const H = BD.harness();
     H.start({ seed: 3 });
     const w = H.world();
     w.wave.n = 3;
-    for (let i = 0; i < 150; i++) BD.W.spawnAt(w, 'goblin', 2 + (i % 8), 2 + (i % 8), { warn: 0.1 });
-    for (let i = 0; i < 100; i++) BD.hazards.projectile(w, { x: 6, y: 6, dir: i, speed: 1, range: 50, dmg: 1, ownerKind: 'goblin', attack: 'stab' });
+    for (let i = 0; i < 150; i++) BD.W.spawnAt(w, 'goblin', 30 + (i % 8), 30 + (i % 8), { warn: 0.1 });
+    for (let i = 0; i < 100; i++) BD.hazards.projectile(w, { x: 36, y: 36, dir: i, speed: 1, range: 50, dmg: 1, ownerKind: 'goblin', attack: 'stab' });
     let sE = 0, sP = 0;
-    for (let i = 0; i < 120; i++) { H.step(1); sE = Math.max(sE, w.enemies.filter((e) => !e.dead).length); sP = Math.max(sP, w.projectiles.length); }
-    const ok = maxE <= 80 && maxP <= 60 && sE <= 80 && sP <= 60 && maxParticles <= 300;
-    report(12, ok ? 'PASS' : 'FAIL', `bot runs max enemies ${maxE}, projectiles ${maxP}; stress (150 spawns, 100 shots) max ${sE} / ${sP}, queued ${w.queue.length}; particles (browser, sampled during #2) max ${maxParticles}`);
+    for (let i = 0; i < 120; i++) { H.step(1); sE = Math.max(sE, w.enemies.filter((e) => !e.dead).length); sP = Math.max(sP, w.projectiles.filter((p) => p.hostile).length); }
+    const C = BD.C.CAP;
+    const capsOk = maxE <= C.enemies && v3.screen <= C.onScreen && v3.shots <= C.projectiles && v3.shards <= C.shards && v3.tgs <= C.telegraphs && sE <= C.enemies && sP <= C.projectiles && maxParticles <= C.particles;
+    const ok = capsOk && unseen === 0 && !choiceBad.length && choices > 100;
+    report(12, ok ? 'PASS' : 'FAIL', `V3 bot runs max enemies ${maxE} (≤ ${C.enemies}), in view ${v3.screen} (≤ ${C.onScreen}), hostile shots ${v3.shots}, shards ${v3.shards}, warnings ${v3.tgs}; stress max ${sE} / ${sP}, queued ${w.queue.length}; particles (browser, #2) ${maxParticles} · V7 hits from off-screen attacks ${unseen} · V11 ${choices} choices${choiceBad.length ? ', bad: ' + choiceBad[0] : ', all valid'}`);
   }
 
   // 8
@@ -288,18 +332,14 @@ async function main() {
     H.app.pause();
     const h1 = H.hash(); H.step(600); const h2 = H.hash();
     H.app.resume();
+    // v2: the growth choice holds the world like the altar did (GDD-V2 §4.3, §10.4 V9)
     const w = H.world();
-    H.killAll(); w.wave.n = 3;
-    const g = BD.W.makeEnemy(w, w.floor.spawns.guardian, 2.5, 2.5, { guardian: true });
-    BD.combat.kill(w, g);
-    H.killAll();
-    w.hero.x = w.altar.x; w.hero.y = w.altar.y;
-    H.input({ mx: 0, my: 0 });
+    BD.growth.addXp(w, w.hero.xpNeed - w.hero.xp);
     let k = 0;
-    while (H.state().overlay !== 'altar' && k < 200) { H.step(1); k++; }
+    while (H.state().overlay !== 'choice' && k < 200) { H.step(1); k++; }
     const a1 = H.hash(); H.step(600); const a2 = H.hash();
-    const ok = h1 === h2 && a1 === a2 && H.state().overlay === 'altar';
-    report(10, ok ? 'PASS' : 'FAIL', `pause: ${h1 === h2 ? 'hash unchanged' : 'hash changed'} over 600 ticks; altar (opened after ${(k / 60).toFixed(2)} s): ${a1 === a2 ? 'hash unchanged' : 'hash changed'}`);
+    const ok = h1 === h2 && a1 === a2 && H.state().overlay === 'choice';
+    report(10, ok ? 'PASS' : 'FAIL', `pause: ${h1 === h2 ? 'hash unchanged' : 'hash changed'} over 600 ticks; growth choice (open after ${k} tick): ${a1 === a2 ? 'hash unchanged' : 'hash changed'} over 600 ticks`);
   }
 
   // 13
@@ -400,23 +440,24 @@ async function main() {
     H.killAll(); w.wave.n = 3; w.freezeT = 0;
     const kinds = BD.enemies.all().filter((d) => d.type !== 'boss').map((d) => d.id);
     let i = 0;
-    while (w.enemies.length < 80) {
+    while (w.enemies.length < BD.C.CAP.enemies) {
       const x = 1.5 + (i * 7) % (w.grid.w - 3), y = 1.5 + Math.floor(i / 3) % (w.grid.h - 3);
       BD.W.makeEnemy(w, kinds[i % kinds.length], x, y, {}); i++;
     }
     const refill = () => { while (w.projectiles.length < 60) BD.hazards.projectile(w, { x: w.grid.w / 2, y: w.grid.h / 2, dir: w.projectiles.length * 0.7, speed: 0.5, range: 99, dmg: 1, ownerKind: kinds[0], attack: Object.keys(BD.enemies.get(kinds[0]).attacks)[0] }); };
     w.hero.hp = 1e9; w.hero.maxHp = 1e9;
-    for (let k = 0; k < 60; k++) { refill(); BD.tick(w); }
+    const shards = () => { while (w.shards.length < BD.C.CAP.shards) BD.growth.drop(w, 1.5 + (w.shards.length * 3) % (w.grid.w - 3), 1.5 + Math.floor(w.shards.length / 15) * 2.5 % (w.grid.h - 3), 1); };
+    for (let k = 0; k < 60; k++) { refill(); shards(); BD.tick(w); }
     let total = 0, n = 0;
     for (let k = 0; k < 600; k++) {
-      refill();
-      while (w.enemies.filter((e) => !e.dead).length < 80) BD.W.makeEnemy(w, kinds[k % kinds.length], 1.5 + (k % 5), 1.5, {});
+      refill(); shards();
+      while (w.enemies.filter((e) => !e.dead).length < BD.C.CAP.enemies) BD.W.makeEnemy(w, kinds[k % kinds.length], 1.5 + (k % 5), 1.5, {});
       const t0 = process.hrtime.bigint();
       BD.tick(w);
       total += Number(process.hrtime.bigint() - t0) / 1e6; n++;
     }
     const avg = total / n;
-    report(16, avg < 4 ? 'PASS' : 'FAIL', `80 enemies + 60 projectiles: ${avg.toFixed(3)} ms per logic tick (avg of ${n}; kinds ${kinds.join(',')})`);
+    report(16, avg < 4 ? 'PASS' : 'FAIL', `V4: ${BD.C.CAP.enemies} enemies + 60 projectiles + ${w.shards.length} shards on 48×48: ${avg.toFixed(3)} ms per logic tick (avg of ${n}; kinds ${kinds.length})`);
   }
 
   // 17 (GDD §13.2 as replaced by docs/CONTROLS-REVIEW.md §3.1): the human-like pilot of
@@ -434,8 +475,11 @@ async function main() {
         return { wins: w ? +w[1] : -1, by: d ? JSON.parse(d[1]) : {}, winMin: m ? +m[1] : null };
       };
       const h = pilot('human'), p = pilot('perfect'), early = (h.by['1F'] || 0) + (h.by['2F'] || 0);
-      const ok = h.wins >= 8 && h.wins <= 28 && early <= 22 && p.wins >= 60;
-      report(17, ok ? 'PASS' : 'TARGET', `human-like pilot ${h.wins}/100 wins (8–28), ${early} deaths on 1F–2F (≤ 22), median win ${h.winMin} min; perfect pilot ${p.wins}/100 wins (≥ 60)`);
+      // GDD-V2 §9.2 / V12 (replaces §13.2-17 and docs/CONTROLS-REVIEW.md's 8–28): wins 20–35, ≤ 3 deaths on
+      // 1F, ≤ 15 on 1F–2F, a winning run 12.5–15.5 min, the perfect pilot ≥ 70. A tuning target.
+      const f1 = h.by['1F'] || 0;
+      const ok = h.wins >= 20 && h.wins <= 35 && f1 <= 3 && early <= 15 && h.winMin >= 12.5 && h.winMin <= 15.5 && p.wins >= 70;
+      report(17, ok ? 'PASS' : 'TARGET', `V12: human-like pilot ${h.wins}/100 wins (20–35), ${f1} deaths on 1F (≤ 3), ${early} on 1F–2F (≤ 15), median win ${h.winMin} min (12.5–15.5); perfect pilot ${p.wins}/100 wins (≥ 70)`);
     }
   }
   if (want(18)) report(18, 'PENDING', `tuning target; needs rest_of_dead, flawless and full content`);

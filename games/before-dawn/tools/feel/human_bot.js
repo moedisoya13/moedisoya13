@@ -142,7 +142,7 @@ function run(seed, pilotName, aware) {
   let guard = 0, pendingDash = 0, swingTicks = 0, enemyTicks = 0, blocked = 0, moveTicks = 0;
   const floorT = {}; let lastFloor = w.floorN, floorStart = 0;
   while (app.mode === 'play' && w.ticks < maxTicks && guard++ < maxTicks * 3) {
-    if (w.altarOpen) { const c = BD.bot.altar(w, {}); app.cmd('altar', c[0], c[1]); continue; }
+    if (w.altarOpen || w.choiceOpen) { const c = BD.bot.choose(w, { policy: 'mixed' }); app.cmd(c[0], c[1], c[2]); continue; } // v2: growth choices too
     const inp = pilot(w, { trial: false });
     if (o.buffer) { // dash input buffer model
       if (inp.dash) pendingDash = 12;

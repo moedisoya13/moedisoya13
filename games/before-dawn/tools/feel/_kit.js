@@ -8,7 +8,7 @@ function arena(o) {
   o = o || {};
   const BD = o.BD || load();
   const H = BD.harness();
-  H.start({ seed: o.seed || 7, hand: o.hand || [], floor: o.floor || 2, tier: 0 });
+  H.start({ seed: o.seed || 7, hand: o.hand || [], floor: o.floor || 2, tier: 0, level: 1 }); // level 1: base swing (GDD-V2 §10.3 would start 2F at 6)
   const w = H.world();
   H.killAll(); w.wave.n = 3; w.freezeT = 0;
   const W = o.w || 16, Hh = o.h || 16;

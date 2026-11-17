@@ -15,6 +15,8 @@ const run = (file, args) => execFileSync(process.execPath, [path.join(__dirname,
 const json = (txt) => JSON.parse(txt.split('\n').find((l) => l.startsWith('JSON ')).slice(5));
 let fails = 0;
 function check(id, name, ok, got) { if (!ok) fails++; console.log(`${ok ? 'PASS' : 'FAIL'}  ${id}  ${name}  [${got}]`); }
+// a tuning target (GDD-V2 §10.4 "튜닝 목표"): reported, never a FAIL
+function target(id, name, ok, got) { console.log(`${ok ? 'PASS' : 'TARGET'}  ${id}  ${name}  [${got}]`); }
 
 // ---- sim --------------------------------------------------------------------------------------
 const S = json(run('sim_feel.js', ['--only', 'move,dash,target', '--seeds', '4', '--json']));
@@ -36,14 +38,15 @@ const BD = K.load();
   check('A2', 'while a target exists the hero faces it ≥ 95 % of the time', t.kiteGhoul.shareFacingTarget >= 0.95, t.kiteGhoul.shareFacingTarget);
   const hp = (id) => BD.enemies.get(id).hp;
   const got = { goblin: hp('goblin'), slime: hp('slime'), skel_archer: hp('skel_archer'), ghoul: hp('ghoul'), mage: hp('mage'), dark_knight: hp('dark_knight') };
-  const wantHp = { goblin: 40, slime: 60, skel_archer: 40, ghoul: 120, mage: 54, dark_knight: 240 };
-  check('T1', 'enemy HP = ' + JSON.stringify(wantHp), Object.keys(wantHp).every((k) => got[k] === wantHp[k]), JSON.stringify(got));
+  // GDD-V2 §3.2 replaces the review's §3.1 HP row (v1: goblin 40, slime 60, archer 40, ghoul 120, mage 54, knight 240)
+  const wantHp = { goblin: 10, slime: 30, skel_archer: 20, ghoul: 45, mage: 30, dark_knight: 120 };
+  check('T1', 'enemy HP (GDD-V2 §3.2) = ' + JSON.stringify(wantHp), Object.keys(wantHp).every((k) => got[k] === wantHp[k]), JSON.stringify(got));
   const boss = BD.enemies.has('demon_king') ? hp('demon_king') : (BD.bosses && BD.bosses.get ? BD.bosses.get('demon_king').hp : null);
-  check('T2', 'boss HP 3000, post-hit invulnerability 1.0 s, fire circle warning 1.1 s', boss === 3000 && BD.C.HERO.hurtInvuln === 1.0 && BD.enemies.get('mage').T.tgTime === 1.1, `${boss} / ${BD.C.HERO.hurtInvuln} / ${BD.enemies.get('mage').T.tgTime}`);
+  check('T2', 'boss HP 6000 (GDD-V2 §3.6; v1 3000), post-hit invulnerability 1.0 s, fire circle warning 1.1 s', boss === 6000 && BD.C.HERO.hurtInvuln === 1.0 && BD.enemies.get('mage').T.tgTime === 1.1, `${boss} / ${BD.C.HERO.hurtInvuln} / ${BD.enemies.get('mage').T.tgTime}`);
   // guardian HP as spawned on each floor
   const gh = [];
   for (let fl = 1; fl <= 5; fl++) { const A = K.arena({ BD, floor: fl }); gh.push(K.spawn(BD, A.w, 'goblin', 3, 3, { guardian: true }).maxHp); }
-  check('T3', 'guardian HP 1F–5F = 385 / 530 / 675 / 815 / 960', JSON.stringify(gh) === '[385,530,675,815,960]', JSON.stringify(gh));
+  check('T3', 'guardian HP 1F–5F = 400 / 700 / 1000 / 1300 / 1600 (GDD-V2 §3.6; v1 385 … 960)', JSON.stringify(gh) === '[400,700,1000,1300,1600]', JSON.stringify(gh));
 }
 
 // ---- pilots -------------------------------------------------------------------------------------
@@ -52,9 +55,11 @@ if (o.bots) {
   const m = (name) => { const b = txt.split('-- ' + name)[1] || ''; const w = /wins (\d+)/.exec(b), d = /deaths by floor: (\{.*\})/.exec(b); return { wins: w ? +w[1] : -1, by: d ? JSON.parse(d[1]) : {} }; };
   const h = m('human'), p = m('perfect');
   const early = (h.by['1F'] || 0) + (h.by['2F'] || 0);
-  check('H1', 'human-like pilot, seeds 1–100: 8–28 wins', h.wins >= 8 && h.wins <= 28, h.wins + ' wins');
-  check('H2', 'human-like pilot: at most 22 of 100 runs end on 1F–2F', early <= 22, early + ' runs');
-  check('H3', 'perfect pilot, seeds 1–100: at least 60 wins (the game is beatable by skill)', p.wins >= 60, p.wins + ' wins');
+  // GDD-V2 §9.2 replaces the review's 8–28 wins / ≤ 22 early deaths / perfect ≥ 60 with 20–35 wins,
+  // ≤ 15 runs ending on 1F–2F, perfect ≥ 70 — and makes them tuning targets (§10.4 V12), not gates
+  target('H1', 'human-like pilot, seeds 1–100: 20–35 wins (GDD-V2 §9.2)', h.wins >= 20 && h.wins <= 35, h.wins + ' wins');
+  target('H2', 'human-like pilot: at most 15 of 100 runs end on 1F–2F (GDD-V2 §9.2)', early <= 15, early + ' runs');
+  target('H3', 'perfect pilot, seeds 1–100: at least 70 wins (GDD-V2 §9.2)', p.wins >= 70, p.wins + ' wins');
 }
 
 // ---- browser ------------------------------------------------------------------------------------
