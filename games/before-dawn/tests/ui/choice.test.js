@@ -48,9 +48,18 @@ module.exports = {
     const T = await playing();
     try {
       await openChoice(T, false);
-      await T.key('Digit1');
-      const [c] = (await rects(T)).map(centre);
-      await T.tapAt(c[0], c[1]);
+      // in one go inside the page, the moment the overlay has drawn (a busy machine must not let the
+      // lock run out between a test's steps): a key, a tap on card 1
+      const age = await T.eval(async () => {
+        const ui = window.__BD.ui, CH = window.BD.ui.choice, w = window.__BD.world();
+        for (let i = 0; i < 100 && CH.key !== w.choice; i++) await new Promise((r) => requestAnimationFrame(r));
+        const ov = window.BD.ui.overlays.get('choice'), r = CH.rects[0], x = r.x + r.w / 2, y = r.y + r.h / 2;
+        const a = ui.time - CH.openAt;
+        ov.key({ code: 'Digit1' }, ui);
+        ov.pointer({ type: 'down', x, y, id: 77 }, ui); ov.pointer({ type: 'up', x, y, id: 77 }, ui);
+        return a;
+      });
+      t.assert(age < 0.35, 'tried inside the lock (' + age.toFixed(2) + ' s)');
       t.eq(await picks(T), [], 'nothing picked during the lock');
       t.eq(await T.overlay(), 'choice');
       await T.wait(400);
@@ -112,10 +121,25 @@ module.exports = {
       t.eq(await T.overlay(), null);
       // 5. a re-grip that lands inside the lock and lifts after it: no pick
       await openChoice(T, false);
-      const R2 = await rects(T), d = await T.client(...centre(R2[0]));
-      await T.pointer('pointerdown', d[0], d[1], 34, 'touch'); await T.wait(450);
+      // the press goes down the moment the overlay has drawn (inside the lock), and lifts after it
+      const age = await T.eval(async () => {
+        const ui = window.__BD.ui, CH = window.BD.ui.choice, w = window.__BD.world(), v = ui.view, c = document.getElementById('bd');
+        for (let i = 0; i < 100 && CH.key !== w.choice; i++) await new Promise((r) => requestAnimationFrame(r));
+        const r = CH.rects[0], p = v.toClient(r.x + r.w / 2, r.y + r.h / 2);
+        window.__downAt = p;
+        c.dispatchEvent(new PointerEvent('pointerdown', { pointerId: 34, pointerType: 'touch', isPrimary: true, clientX: p[0], clientY: p[1], bubbles: true, cancelable: true }));
+        return ui.time - CH.openAt;
+      });
+      t.assert(age < 0.35, 'pressed inside the lock (' + age.toFixed(2) + ' s)');
+      await T.wait(450);
+      const d = await T.eval(() => window.__downAt);
       await T.pointer('pointerup', d[0], d[1], 34, 'touch'); await T.wait();
       t.eq((await picks(T)).length, 1, 'a press that began in the lock picks nothing');
+      t.eq(await T.overlay(), 'choice');
+      // 6. the dash thumb: a tap where the dash button sits (under the third card on a phone)
+      const dc = await T.eval(() => window.BD.ui.dashCenter(window.__BD.ui));
+      await T.tapAt(dc[0], dc[1]);
+      t.eq((await picks(T)).length, 1, 'a tap on the dash button spot picks nothing');
       t.eq(await T.overlay(), 'choice');
       t.eq(await T.eval(() => window.__BD.world().hero.dashT || 0), 0, 'no dash from the taps');
       t.eq(T.errors, []);

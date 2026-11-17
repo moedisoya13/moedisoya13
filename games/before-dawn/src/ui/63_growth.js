@@ -194,7 +194,11 @@ BD.ui.overlays.register({
     const slop = 24 / ui.view.scale; // a tap may wander this far (CSS px) and still be a tap
     if (ev.type === 'down') {
       CH.kbd = false;
-      CH.press = { id: ev.id, i: locked(ui) ? -1 : at(ev.x, ev.y), x: ev.x, y: ev.y, moved: false };
+      // a press where the dash button sits is the dash thumb (on a phone the third card reaches
+      // over it): it never picks
+      const [dx, dy] = BD.ui.dashCenter(ui), dh = BD.ui.dashSize(ui).hit / 2;
+      const onDash = Math.abs(ev.x - dx) <= dh && Math.abs(ev.y - dy) <= dh;
+      CH.press = { id: ev.id, i: locked(ui) || onDash ? -1 : at(ev.x, ev.y), x: ev.x, y: ev.y, moved: false };
       return true;
     }
     const p = CH.press;

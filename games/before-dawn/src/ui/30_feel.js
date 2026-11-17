@@ -344,7 +344,7 @@ BD.ui.effects.register({
     },
     vfx(ev) { if (/heal/.test(ev.kind)) HEALQ.length = 0; },
     pickup(ev, ui) {
-      if (ev.kind !== 'flask') return; // shards: 63_growth.js; halo / holy stone: 31_feedback.js
+      if (ev.kind === 'shard' || ev.kind === 'halo' || ev.kind === 'holy_stone') return; // 63_growth.js, 31_feedback.js; flasks and kinds this branch does not know sparkle
       for (let i = 0; i < 10; i++) ui.fx.emit({ x: ev.x, y: ev.y, z: 14, vx: rng.range(-1.2, 1.2), vy: rng.range(-1.2, 1.2), vz: rng.range(60, 140), g: 200, life: 0.5, color: i % 2 ? '#8fd3ff' : '#ffffff', size: 3 });
     },
     dash(ev, ui) {
