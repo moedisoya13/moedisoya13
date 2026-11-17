@@ -39,7 +39,7 @@ BD.ui.overlays.register({
       a.offers.forEach((id, i) => {
         const def = BD.cards.get(id), x = x0 + i * (cw + gap);
         const b = K.button(ui, { id: 'offer' + i, label: def.name, x, y: 120, w: cw, h: 336, menu: true, bare: true, onTap: () => cmd('pick', i) });
-        BD.ui.cardFace(ui, def, x, 120, cw, 336, { focused: b.focused, iconSize: 92 });
+        BD.ui.cardFace(ui, def, x, 120, cw, 336, { focused: b.focused, iconSize: 92, sizes: [26, 24, 22, 20, 18] });
       });
       if (!n) K.text(ui, '이번 제단에는 새길 성인이 없다', 640, 290, { size: 26, align: 'center', color: K.DIM, weight: 700 });
       K.button(ui, { id: 'pray', label: '기도한다 (HP +' + C.PRAY + ')', kind: 'primary', x: 360, y: 478, w: 560, h: 74, menu: true, size: 29, onTap: () => cmd('pray') });
@@ -56,8 +56,9 @@ BD.ui.overlays.register({
           id: 'slot' + i, label: c ? c.def.name : '빈 홈', x, y: 206, w: 366, h: 286, menu: true, bare: true,
           onTap: () => { A.sel = i; if (BD.ui.S.lastInput === 'key') ui.focus = 3; },
         });
-        BD.ui.cardFace(ui, c ? c.def : null, x, 206, 366, 286, { card: c, focused: b.focused, selected: A.sel === i, iconSize: 76, sizes: [19, 17], warn: A.sel === i ? lossLine(c) : null });
-        if (A.sel === i) { K.letter(g, '비운다', x + 290, 206 + 286 - 54, { size: 26, fill: '#ff8a7a', fill2: '#d04a3a', rot: 0.12, stroke: 6, shadow: 2 }); }
+        BD.ui.cardFace(ui, c ? c.def : null, x, 206, 366, 286, { card: c, focused: b.focused, selected: A.sel === i, iconSize: 76, sizes: [22, 20, 19, 17], warn: A.sel === i ? lossLine(c) : null });
+        // the seal that goes: a red stamp across its icon socket
+        if (A.sel === i) K.letter(g, '비운다', x + 22 + 38, 206 + 16 + 50, { size: 30, fill: '#ff8a7a', fill2: '#d04a3a', rot: -0.22, stroke: 7, shadow: 2 });
       }
       K.button(ui, { id: 'engrave', label: '새긴다', kind: 'primary', x: 400, y: 518, w: 260, h: 76, menu: true, size: 31, disabled: A.sel === null, onTap: () => { const s = A.sel; A.sel = null; cmd('slot', s); } });
       K.button(ui, { id: 'back', label: '돌아가기', kind: 'quiet', x: 684, y: 518, w: 220, h: 76, menu: true, size: 25, onTap: () => cmd('back') });

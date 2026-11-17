@@ -98,7 +98,7 @@ const SCENES = {
   'play-heavy': {
     query: PLAY_URL, run: async (T) => {
       await T.key('Enter'); await T.wait(1700);
-      await stagePlay(T, { dom: 'heavy', next: 'undead', hand: ['armor_break', 'riposte', 'kings_hunt'], enemies: [['dark_knight', -2, -2.2, { guardian: true }], ['dark_knight', 2.4, -1], ['goblin', 0, 1.6]], states: [[1, { raw: { cd: 1.1 } }], [2, { progress: 2 }]], radiance: 4, hp: 27, t: 792, wave: 3 });
+      await stagePlay(T, { dom: 'heavy', next: 'undead', hand: ['armor_break', 'riposte', 'kings_hunt'], enemies: [['dark_knight', -2, -2.2, { guardian: true }], ['dark_knight', 2.4, -1], ['goblin', 0, 1.6]], states: [[1, { raw: { readyAt: 794.4 } }], [2, { progress: 2 }]], radiance: 4, hp: 27, t: 792, wave: 3 });
       await T.wait(900);
     },
   },
@@ -149,10 +149,19 @@ const SCENES = {
       await T.waitMode('result', 6000);
     },
   },
+  'play-touch': {
+    init: withSave(Object.assign({}, SAVE, { settings: { sfx: 0.8, shake: true, dashSide: 'left', hints: false } })), query: '?seed=11&hand=whirl,riposte,flawless&mute=1', run: async (T) => {
+      await T.key('Enter'); await T.wait(1700);
+      await stagePlay(T, { hand: ['whirl', 'riposte', 'flawless'], enemies: [['goblin', -2, -1.5], ['slime', 2.2, -0.5]], states: [[2, { stack: 2 }]] });
+      const [x0, y0] = await T.client(900, 420), [x1, y1] = await T.client(950, 390);
+      await T.pointer('pointerdown', x0, y0, 31, 'touch'); await T.wait(60);
+      await T.pointer('pointermove', x1, y1, 31, 'touch'); await T.wait(260);
+    },
+  },
   'hud-dawn-hurt': {
     query: PLAY_URL, run: async (T) => {
       await T.key('Enter'); await T.wait(1200);
-      await stagePlay(T, { hand: ['lightning', 'drawcut', 'chain_slash'], enemies: [['goblin', -1.2, -0.6], ['slime', 1.6, -1.2]], states: [[2, { stack: 2, timer: 0.5 }]], hp: 18, t: 940 });
+      await stagePlay(T, { hand: ['lightning', 'drawcut', 'chain_slash'], enemies: [['goblin', -1.2, -0.6], ['slime', 1.6, -1.2]], states: [[1, { raw: { dist: 3, ready: true } }], [2, { stack: 2, timer: 0.5 }]], hp: 18, t: 940 });
       await T.eval(() => { const w = window.__BD.world(); window.BD.W.hurtHero(w, 6, { source: 'goblin', attack: 'stab', enemyId: 1, x: w.hero.x - 1, y: w.hero.y }); });
       await T.wait(90);
     },
@@ -188,6 +197,37 @@ const ROTATE = { tag: 'portrait', sizes: [{ tag: '375x667', viewport: { width: 3
       await T.close();
     }
     console.log('shot rotate');
+  }
+  if ('card-icons'.includes(filter) || !filter) {
+    // the 18 card icons on one sheet, each in its own socket with the card id under it
+    const T = await H.open(url, { query: '?mute=1&nosave=1', context: { viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1 } });
+    const data = await T.eval(() => {
+      const BD = window.BD, IC = BD.ui.icons, K = BD.ui.K, CI = BD.ui.cards;
+      const ids = CI.ORDER.filter((id) => BD.cards.has(id));
+      const cols = 6, cw = 180, ch = 196, pad = 24, rows = Math.ceil(ids.length / cols);
+      const c = document.createElement('canvas');
+      c.width = cols * cw + pad * 2; c.height = rows * ch + pad * 2;
+      const g = c.getContext('2d');
+      g.fillStyle = '#16151b'; g.fillRect(0, 0, c.width, c.height);
+      ids.forEach((id, i) => {
+        const def = BD.cards.get(id), x = pad + (i % cols) * cw, y = pad + Math.floor(i / cols) * ch;
+        const s = 120, sx = x + (cw - s) / 2, sy = y + 12;
+        K.poly(g, [[sx - 5, sy - 5], [sx + s + 5, sy - 5], [sx + s + 5, sy + s + 5], [sx - 5, sy + s + 5]]); g.fillStyle = '#b08a3a'; g.fill(); K.ink(g, 3);
+        K.poly(g, [[sx, sy], [sx + s, sy], [sx + s, sy + s], [sx, sy + s]]); g.fillStyle = '#121117'; g.fill();
+        g.fillStyle = '#1c1b22'; g.fillRect(sx, sy, s, s * 0.4);
+        K.poly(g, [[sx + 2, sy + 2], [sx + s - 2, sy + 2], [sx + s - 2, sy + s - 2], [sx + 2, sy + s - 2]]); g.lineWidth = 3; g.strokeStyle = K.famColor(def.family); g.stroke();
+        IC.card(g, def, sx + s / 2, sy + s / 2, 84);
+        g.font = '700 20px ' + BD.ui.FONT; g.textAlign = 'center'; g.textBaseline = 'alphabetic'; g.fillStyle = '#f3ead8';
+        g.fillText(id, x + cw / 2, sy + s + 34);
+        g.font = '600 16px ' + BD.ui.FONT; g.fillStyle = K.famColor(def.family);
+        g.fillText(def.name, x + cw / 2, sy + s + 56);
+      });
+      return c.toDataURL('image/png');
+    });
+    fs.writeFileSync(path.join(OUT, 'card-icons.png'), Buffer.from(data.split(',')[1], 'base64'));
+    if (T.errors.length) problems.push('card-icons: ' + T.errors.join(' | '));
+    await T.close();
+    console.log('shot card-icons');
   }
   if (problems.length) { console.log('PROBLEMS\n' + problems.join('\n')); process.exitCode = 1; }
 })();

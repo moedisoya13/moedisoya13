@@ -26,9 +26,9 @@ BD.ui.overlays.register({
     rows.forEach((r, i) => K.text(ui, r, 286, 160 + i * 92, { size: 27, weight: 800, color: K.PAPER }));
     const cx = 610, cw = 380, ch = 66;
     BD.ui.stepper(ui, { id: 'volume', label: NAV.volumeLabel(s), x: cx, y: 118, w: cw, h: ch, onEnter: () => NAV.toggleMute(ui), step: (d) => NAV.volume(ui, d * 0.1) });
-    K.button(ui, { id: 'shake', label: s.shake ? '켬' : '끔', x: cx, y: 210, w: cw, h: ch, menu: true, onTap: () => app.setSettings({ shake: !s.shake }) });
-    K.button(ui, { id: 'dashSide', label: s.dashSide === 'left' ? '왼쪽' : '오른쪽', x: cx, y: 302, w: cw, h: ch, menu: true, onTap: () => app.setSettings({ dashSide: s.dashSide === 'left' ? 'right' : 'left' }) });
-    K.button(ui, { id: 'hints', label: s.hints ? '켜짐 — 다음 판에 안내' : '다시 보기', x: cx, y: 394, w: cw, h: ch, menu: true, size: s.hints ? 22 : 24, onTap: () => { if (!s.hints) app.setSettings({ hints: true }); } });
+    K.button(ui, { id: 'shake', label: s.shake ? '켬' : '끔', x: cx, y: 210, w: cw, h: ch, hitPad: 10, menu: true, onTap: () => app.setSettings({ shake: !s.shake }) });
+    K.button(ui, { id: 'dashSide', label: s.dashSide === 'left' ? '왼쪽' : '오른쪽', x: cx, y: 302, w: cw, h: ch, hitPad: 10, menu: true, onTap: () => app.setSettings({ dashSide: s.dashSide === 'left' ? 'right' : 'left' }) });
+    K.button(ui, { id: 'hints', label: s.hints ? '켜짐 — 다음 판에 안내' : '다시 보기', x: cx, y: 394, w: cw, h: ch, hitPad: 10, menu: true, size: s.hints ? 22 : 24, onTap: () => { if (!s.hints) app.setSettings({ hints: true }); } });
     K.button(ui, {
       id: 'wipe', label: ST.confirmWipe ? '정말 지운다' : ui.time - (ST.wipedAt || -9) < 2 ? '지웠다' : '지우기', sub: ST.confirmWipe ? '판 기록·해금이 사라진다' : null, kind: 'danger', x: cx, y: 486, w: cw, h: ST.confirmWipe ? 80 : ch, menu: true,
       onTap: () => { if (ST.confirmWipe) { ST.confirmWipe = false; wipe(app); ST.wipedAt = ui.time; } else ST.confirmWipe = true; },

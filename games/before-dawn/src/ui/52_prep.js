@@ -33,7 +33,7 @@ BD.ui.screens.register({
     const hand = NAV.hand();
     for (let i = 0; i < 3; i++) {
       const id = hand[i], def = id ? BD.cards.get(id) : null;
-      BD.ui.cardFace(ui, def, 58 + i * 396, 104, 372, 334, { sizes: [23, 21, 19, 17] });
+      BD.ui.cardFace(ui, def, 58 + i * 396, 104, 372, 334, { sizes: [27, 25, 23, 21, 19, 17] });
     }
     // big 오른다 first, so Enter starts the night
     K.button(ui, { id: 'ascend', label: '오른다', kind: 'primary', size: 38, x: 470, y: 578, w: 340, h: 84, menu: true, onTap: () => NAV.ascend(ui) });

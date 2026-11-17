@@ -78,9 +78,10 @@ BD.ui.overlays.register({
     g.fillStyle = '#07070c'; g.fillRect(0, 0, C.VIEW_W, C.VIEW_H);
     g.globalAlpha = 0.3; g.fillStyle = K.halftone(g, '#2a2140', 9); g.fillRect(0, 0, C.VIEW_W, C.VIEW_H); g.globalAlpha = 1;
     const k = (Math.sin(ui.time * 2) + 1) / 2;
-    IC.phone(g, 640, 250, 230, -K.ease(k) * Math.PI / 2);
-    g.beginPath(); g.arc(640, 250, 170, -2.2, -0.9); K.ink(g, 10); g.beginPath(); g.arc(640, 250, 170, -2.2, -0.9); g.lineWidth = 5; g.strokeStyle = K.GOLD_HI; g.stroke();
-    K.letter(g, '화면을 가로로', 640, 520, { size: 92 });
-    K.letter(g, '돌려 주세요', 640, 640, { size: 92 });
+    // a portrait window shows the 1280×720 canvas at about a third of its size: draw large
+    IC.phone(g, 640, 210, 300, -K.ease(k) * Math.PI / 2);
+    g.beginPath(); g.arc(640, 210, 190, -2.2, -0.9); K.ink(g, 12); g.beginPath(); g.arc(640, 210, 190, -2.2, -0.9); g.lineWidth = 6; g.strokeStyle = K.GOLD_HI; g.stroke();
+    K.letter(g, '화면을 가로로', 640, 520, { size: 124 });
+    K.letter(g, '돌려 주세요', 640, 672, { size: 124 });
   },
 });

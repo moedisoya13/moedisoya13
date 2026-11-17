@@ -34,6 +34,9 @@ CI.fallbackBadge = function (id, stack) {
   return '';
 };
 
+// Cards whose hud() ring is a cooldown left (1 = just used) rather than a charge or a timer.
+const COOLDOWN_RING = { riposte: true };
+
 // All registered cards in GDD order (unknown ids after, by id).
 CI.all = function () {
   const rank = (id) => { const i = CI.ORDER.indexOf(id); return i < 0 ? 999 : i; };
@@ -43,7 +46,7 @@ CI.def = (id) => (BD.cards.has(id) ? BD.cards.get(id) : null);
 CI.isUnlocked = (def, save) => def.unlock === 'base' || (save && save.unlocked.includes(def.id));
 
 // HUD state of an equipped card: the card's hud() merged over defaults read from its state.
-// → {text, ring, pips, glow, badge, warn, maxed, awakened, stack, max}
+// → {text, ring, pips, glow, badge, flash, cover, warn, maxed, awakened, stack, max}
 CI.hud = function (w, card) {
   let h = null;
   if (card.def.hud) {
@@ -51,7 +54,9 @@ CI.hud = function (w, card) {
   }
   h = h || {};
   const st = card.state, def = card.def, fam = def.family;
-  const out = { text: h.text, ring: h.ring, pips: h.pips, glow: h.glow, badge: h.badge };
+  const out = { text: h.text, ring: h.ring, pips: h.pips, glow: h.glow, badge: h.badge, flash: !!h.flash, cover: h.cover };
+  // a cooldown ring is also drawn as a shade over the icon (반격's "대기 가림막")
+  if (out.cover === undefined && COOLDOWN_RING[card.id] && typeof out.ring === 'number') out.cover = out.ring;
   if (out.text === undefined || out.text === null) {
     if (fam === 'quest' && st.goal) out.text = (st.awakened ? st.goal : st.progress || 0) + '/' + st.goal;
     else if (fam === 'combo') out.text = '×' + (st.stack || 0);
@@ -63,8 +68,8 @@ CI.hud = function (w, card) {
   out.max = def.maxStack || 0;
   out.maxed = fam === 'combo' && out.max > 0 && out.stack >= out.max;
   out.awakened = !!st.awakened;
-  // a running combo timer close to running out (GDD §9.3: under 1 s)
-  out.warn = fam === 'combo' && out.stack > 0 && typeof st.timer === 'number' && st.timer < 1 && st.timer > 0;
+  // a running combo timer close to running out (GDD §9.3: under 1 s); the card's own flag wins
+  out.warn = h.warn !== undefined ? !!h.warn : fam === 'combo' && out.stack > 0 && typeof st.timer === 'number' && st.timer < 1 && st.timer > 0;
   return out;
 };
 

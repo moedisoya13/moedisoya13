@@ -28,7 +28,7 @@ BD.ui.screens.register({
       { id: 'settings', label: '설정', onTap: () => NAV.openSettings(ui) },
       { id: 'help', label: '도움말', onTap: () => NAV.openHelp(ui) },
     ];
-    items.forEach((it, i) => K.button(ui, Object.assign({ x: 150, y: 312 + i * 80, w: 300, h: 66, menu: true, size: it.size || 27 }, it)));
+    items.forEach((it, i) => K.button(ui, Object.assign({ x: 150, y: 312 + i * 80, w: 300, h: 66, hitPad: 7, menu: true, size: it.size || 27 }, it)));
     // best record
     const line = recordLine(s);
     const tw = K.measure(g, line, 22, 700);

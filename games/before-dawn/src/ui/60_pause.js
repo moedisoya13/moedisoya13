@@ -39,16 +39,16 @@ BD.ui.overlays.register({
     K.text(ui, K.floorName(w.floorN) + ' · ' + BD.flow.clockStr(w) + ' · HP ' + w.hero.hp + '/' + w.hero.maxHp, 1230, 70, { size: 23, align: 'right', weight: 800, color: K.DIM });
     for (let i = 0; i < 3; i++) {
       const c = w.cards[i];
-      BD.ui.cardFace(ui, c ? c.def : null, 50, 100 + i * 172, 750, 160, { card: c, wide: true, iconSize: 84, sizes: [21, 19, 17] });
+      BD.ui.cardFace(ui, c ? c.def : null, 50, 100 + i * 172, 750, 160, { card: c, wide: true, iconSize: 84, sizes: [23, 21, 19, 17] });
     }
     const x = 850, bw = 380;
-    K.button(ui, { id: 'resume', label: '계속', kind: 'primary', x, y: 100, w: bw, h: 76, menu: true, size: 32, onTap: () => { P.confirm = false; app.resume(); } });
-    K.button(ui, { id: 'help', label: '도움말', x, y: 194, w: bw, h: 66, menu: true, onTap: () => { P.confirm = false; NAV.openHelp(ui); } });
+    K.button(ui, { id: 'resume', label: '계속', kind: 'primary', x, y: 100, w: bw, h: 76, hitPad: 8, menu: true, size: 32, onTap: () => { P.confirm = false; app.resume(); } });
+    K.button(ui, { id: 'help', label: '도움말', x, y: 194, w: bw, h: 66, hitPad: 8, menu: true, onTap: () => { P.confirm = false; NAV.openHelp(ui); } });
     stepper(ui, { id: 'volume', label: '소리 ' + NAV.volumeLabel(st), x, y: 278, w: bw, h: 66, onEnter: () => NAV.toggleMute(ui), step: (d) => NAV.volume(ui, d * 0.1) });
-    K.button(ui, { id: 'shake', label: '화면 흔들림 ' + (st.shake ? '켬' : '끔'), x, y: 362, w: bw, h: 66, menu: true, onTap: () => app.setSettings({ shake: !st.shake }) });
+    K.button(ui, { id: 'shake', label: '화면 흔들림 ' + (st.shake ? '켬' : '끔'), x, y: 362, w: bw, h: 66, hitPad: 8, menu: true, onTap: () => app.setSettings({ shake: !st.shake }) });
     K.button(ui, {
       id: 'giveup', label: P.confirm ? '정말 포기한다' : '포기하고 내려간다', sub: P.confirm ? '한 번 더 누르면 판이 끝난다' : null, kind: 'danger',
-      x, y: 518, w: bw, h: P.confirm ? 82 : 66, menu: true, size: 25,
+      x, y: 518, w: bw, h: P.confirm ? 82 : 66, hitPad: 8, menu: true, size: 25,
       onTap: () => { if (P.confirm) { P.confirm = false; app.giveUp(); NAV.focus0(ui); } else P.confirm = true; },
     });
   },

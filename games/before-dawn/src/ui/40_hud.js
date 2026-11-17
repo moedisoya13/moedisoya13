@@ -37,12 +37,16 @@ function drawProgress(g, ui, w) {
   const boss = w.enemies.find((e) => !e.dead && e.boss);
   const guard = boss ? null : w.enemies.find((e) => !e.dead && e.guardian);
   if (boss) {
+    // GDD §9.2: a 560-wide bar with the two phase ticks. The bar carries its own ink frame;
+    // only the name sits on a panel, so the bar never runs into the HP bar on the left.
     const bw = 560, bx = 640 - bw / 2;
     const phase = (boss.mem && boss.mem.phase) || 1;
-    const ticks = boss.def.phaseAt || [0.66, 0.33];
-    K.panel(g, bx - 18, 12, bw + 36, 66, { slant: 8, edge: '#7a2a8a' });
-    K.text(ui, boss.def.name + '  ' + phase + '단계 ' + (PHASE_NAMES[phase] || ''), 640, 38, { size: 21, align: 'center', color: '#efe2ff', weight: 800 });
-    K.bar(g, bx, 46, bw, 20, Math.max(0, boss.hp) / boss.maxHp, { color: '#9b2fd0', ticks, slant: 6 });
+    const ticks = boss.def.phaseAt || [0.66, 0.33]; // HP fractions where the phases change (GDD §6.4)
+    const label = boss.def.name + '  ' + phase + '단계 ' + (PHASE_NAMES[phase] || '');
+    const lw = K.measure(g, label, 21, 800) + 56;
+    K.panel(g, 640 - lw / 2, 10, lw, 34, { slant: 8, edge: '#7a2a8a', shadow: 3, facetK: 0.5 });
+    K.text(ui, label, 640, 34, { size: 21, align: 'center', color: '#efe2ff', weight: 800 });
+    K.bar(g, bx, 48, bw, 20, Math.max(0, boss.hp) / boss.maxHp, { color: '#9b2fd0', ticks, slant: 6 });
     return;
   }
   if (guard) {
@@ -221,8 +225,13 @@ function drawSlot(g, ui, w, i) {
   }
   const def = c.def, hd = CI.hud(w, c);
   const fam = K.famColor(def.family);
-  // target card on a floor of its type: halo
-  if (hd.glow) { g.fillStyle = 'rgba(224,57,47,0.22)'; g.fillRect(x, y, sz, sz); }
+  // glow: a target card on a floor of its type (red), a readied trigger such as 발도 (white,
+  // pulsing), an awakened quest (gold)
+  if (hd.glow) {
+    const pulse = 0.5 + 0.5 * Math.sin(now * 6);
+    g.fillStyle = def.family === 'target' ? 'rgba(224,57,47,0.24)' : def.family === 'quest' ? 'rgba(255,210,74,0.16)' : 'rgba(255,255,255,' + (0.12 + 0.12 * pulse) + ')';
+    g.fillRect(x, y, sz, sz);
+  }
   // icon with stamp-in
   let sc = 1;
   if (s.setAt !== undefined) { const k = (now - s.setAt) / 0.3; if (k < 0) sc = 0; else if (k < 1) sc = 1 + (1 - K.ease(k)) * 0.6; }
@@ -242,6 +251,13 @@ function drawSlot(g, ui, w, i) {
     }
     K.poly(g, [[x + 2, y + 2], [x + sz - 2, y + 2], [x + sz - 2, y + sz - 2], [x + 2, y + sz - 2]]); g.lineWidth = 3; g.strokeStyle = '#c99aff'; g.stroke();
   }
+  // cooldown shade (반격 "대기 가림막", GDD §9.3): ink drawn down over the icon
+  if (typeof hd.cover === 'number' && hd.cover > 0) {
+    g.save(); g.globalAlpha = 0.62; g.fillStyle = K.INK; g.fillRect(x, y, sz, sz * K.clamp(hd.cover, 0, 1)); g.restore();
+    g.fillStyle = '#5c5a58'; g.fillRect(x, y + sz * K.clamp(hd.cover, 0, 1) - 1, sz, 2);
+  }
+  // a readied trigger: white inner edge
+  if (hd.glow && def.family === 'trigger') { K.poly(g, [[x + 6, y + 6], [x + sz - 6, y + 6], [x + sz - 6, y + sz - 6], [x + 6, y + sz - 6]]); g.lineWidth = 2.5; g.strokeStyle = '#ffffff'; g.stroke(); }
   // ring (timer / charge / cooldown): perimeter progress; red blinking near a combo timeout
   if (typeof hd.ring === 'number') {
     const warnBlink = hd.warn && Math.floor(now * 8) % 2 === 0;

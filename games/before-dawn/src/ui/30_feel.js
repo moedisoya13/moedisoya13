@@ -5,6 +5,7 @@
 //  - hurt: red halftone edge, 0.1 s shake (settings.shake), damage number
 //  - the night brightening toward 06:00, and the screen edges burning after dawn
 //  - the endings: speed lines on the win, ink closing in on the death
+// The washes are drawn as the lowest HUD layer (under the HUD boxes, over the world).
 // Particles go through the engine's pool (cap 300); letterings keep their own list (cap 10).
 
 const C = BD.C;
@@ -262,10 +263,18 @@ BD.ui.effects.register({
   },
   draw(g, ui, layer) {
     if (ui.app.mode !== 'play' || !ui.world) return;
-    const w = ui.world;
     if (layer === 'world') drawLetters(g, ui);
-    if (layer !== 'screen') return;
-    if (ui.app.overlay()) return;
+  },
+});
+
+// Screen washes (dawn light, hurt edge, flashes, the endings) sit between the world and the HUD,
+// so the HP bar, the clock and the card slots stay readable through them.
+BD.ui.hud.register({
+  id: 'washes',
+  order: 1,
+  draw(g, ui) {
+    const w = ui.world;
+    if (!w || ui.app.overlay()) return;
     drawDawn(g, ui, w);
     if (WASH.hurt > 0) {
       const k = WASH.hurt / 0.32;

@@ -23,7 +23,7 @@ const slotCenter = (i) => { const r = BD.ui.slotRect(i); return [r.x + r.w / 2, 
 const typeOf = (kind) => (BD.enemies.has(kind) ? BD.enemies.get(kind).type : null);
 const slotOf = (w, id) => w.cards.findIndex((c) => c && c.id === id);
 const nameOf = (id) => (BD.cards.has(id) ? BD.cards.get(id).name : id);
-const FX = { awakenAt: -9, flashAt: -9, riposteAt: -9, dripAt: -9, maxSparkT: 0, steamToast: false, lastKill: null, lastHurt: null, pending: [], targetFlashAt: {}, charged: false, capeTip: null };
+const FX = { awakenAt: -9, flashAt: -9, riposteAt: -9, dripAt: -9, cardLabelAt: -9, maxSparkT: 0, steamToast: false, lastKill: null, lastHurt: null, pending: [], targetFlashAt: {}, charged: false, capeTip: null };
 BD.ui.cardfx = FX;
 
 function slot(i) { return S.slots[i] || (S.slots[i] = {}); }
@@ -55,7 +55,7 @@ BD.ui.effects.register({
   id: 'cardfx',
   reset(ui) {
     S.slots = [{}, {}, {}]; S.flights = [];
-    Object.assign(FX, { awakenAt: -9, flashAt: -9, riposteAt: -9, dripAt: -9, maxSparkT: 0, steamToast: false, lastKill: null, lastHurt: null, pending: [], targetFlashAt: {}, charged: false, capeTip: null });
+    Object.assign(FX, { awakenAt: -9, flashAt: -9, riposteAt: -9, dripAt: -9, cardLabelAt: -9, maxSparkT: 0, steamToast: false, lastKill: null, lastHurt: null, pending: [], targetFlashAt: {}, charged: false, capeTip: null });
   },
   on: {
     run_start(ev, ui) {
@@ -142,6 +142,7 @@ BD.ui.effects.register({
         ui.sfxSafe('hit_type');
       }
     },
+    vfx(ev, ui) { if (ev.kind === 'combo_label') FX.cardLabelAt = ui.time; },
     steam(ev, ui) {
       if (!FX.steamToast) { FX.steamToast = true; MSG.toast('증기: 젖은 적에 불이 닿았다', 'info'); }
     },
@@ -163,8 +164,12 @@ BD.ui.effects.register({
       s.warn = hd.warn;
       if (hd.badge && hd.badge !== s.badge && (s.lastStack || 0) < hd.stack) {
         s.badgeAt = ui.time;
-        BD.ui.feel.letter(ui, hd.badge, w.hero.x, w.hero.y, { z: 135, size: 28, fill: '#efe2ff', fill2: K.VIOLET, always: true, life: 0.9 });
+        // the word over the head: the cards letter their own stages (vfx 'combo_label');
+        // the UI letters it only for a card that does not
+        if (ui.time - FX.cardLabelAt > 0.3) BD.ui.feel.letter(ui, hd.badge, w.hero.x, w.hero.y, { z: 135, size: 28, fill: '#efe2ff', fill2: K.VIOLET, always: true, life: 0.9 });
       }
+      // a card's own flash flag (target hit, at most twice a second)
+      if (hd.flash && !(ui.time - (s.flashAt === undefined ? -9 : s.flashAt) < 0.3)) s.flashAt = ui.time;
       s.badge = hd.badge; s.lastStack = hd.stack;
       if (hd.maxed) anyMax = true;
     }
