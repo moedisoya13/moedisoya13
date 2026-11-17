@@ -277,7 +277,9 @@ async function main() {
     H.start({ seed: 1 });
     let clock450 = null;
     const w = H.world();
+    const answer = (W2) => { if (W2.choiceOpen) { const c = BD.bot.choose(W2, { policy: 'mixed' }); H.app.cmd(c[0], c[1], c[2]); } }; // v2: an idle hero still levels up
     while (H.app.mode === 'play' && w.t < 1200) {
+      answer(w);
       H.step(1);
       if (Math.abs(w.t - 450) < 1e-6) clock450 = BD.flow.clockStr(w);
     }
@@ -289,6 +291,7 @@ async function main() {
       H2.start({ seed: 1 });
       const w2 = H2.world();
       while (H2.app.mode === 'play' && w2.t < 1200) {
+        if (w2.choiceOpen) { const c = BD.bot.choose(w2, { policy: 'mixed' }); H2.app.cmd(c[0], c[1], c[2]); }
         w2.hero.invuln = 1;
         H2.step(1);
         if (Math.abs(w2.t - 450) < 1e-6) clock450 = BD.flow.clockStr(w2);

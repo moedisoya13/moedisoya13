@@ -66,7 +66,7 @@ BD.ui.overlays.register({
       optionFace(ui, o, x, y, cw, 400, b.focused && !locked, locked);
       K.text(ui, String(i + 1), x + 26, y + 36, { size: 26, weight: 900, color: locked ? '#4a4850' : K.DIM });
     });
-    K.text(ui, '1 · 2 · 3 또는 방향키 + Enter · 두드리기', 640, 610, { size: 19, align: 'center', color: K.DIM, weight: 600 });
+    K.text(ui, '1 · 2 · 3 또는 방향키 + Enter · 두드리기', 640, 584, { size: 19, align: 'center', color: K.DIM, weight: 600 });
   },
   key(ev, ui) {
     const w = ui.world, ch = w && w.choice;
