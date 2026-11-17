@@ -3,7 +3,7 @@
 //  - ink splats baked onto the floor where enemies fall (they stay for the whole floor)
 //  - hand-lettered sound words on kills and heavy hits only (촤악! 쾅! 팅! …)
 //  - hurt: red halftone edge, 0.1 s shake (settings.shake), damage number
-//  - the night brightening toward 06:00, and the screen edges burning after dawn
+//  - the screen edges burning after dawn (the night brightening toward 06:00 is the engine's sky)
 //  - the endings: speed lines on the win, ink closing in on the death
 // The washes are drawn as the lowest HUD layer (under the HUD boxes, over the world).
 // Particles go through the engine's pool (cap 300); letterings keep their own list (cap 10).
@@ -51,20 +51,7 @@ function updateShake(dt, ui) {
 }
 
 // ---- ink splats (baked into this floor's decal layer) -------------------------------------------
-const floorClip = { key: null, path: null };
-function clipToFloor(g, v, w) {
-  const key = w.seed + ':' + w.floorN + ':' + v.rox + ':' + v.roy;
-  if (floorClip.key !== key && typeof Path2D !== 'undefined') {
-    const p = new Path2D();
-    for (let y = 0; y < w.grid.h; y++) for (let x = 0; x < w.grid.w; x++) {
-      if (w.grid.get(x, y) === BD.CELL.VOID) continue;
-      const a = v.proj(x, y), b = v.proj(x + 1, y), c = v.proj(x + 1, y + 1), d = v.proj(x, y + 1);
-      p.moveTo(a[0], a[1]); p.lineTo(b[0], b[1]); p.lineTo(c[0], c[1]); p.lineTo(d[0], d[1]); p.closePath();
-    }
-    floorClip.key = key; floorClip.path = p;
-  }
-  if (floorClip.key === key && floorClip.path) g.clip(floorClip.path);
-}
+function clipToFloor(g, v, w) { BD.client.render.clipFloor(g, v, w); } // engine path, shared with the warnings
 // size in px; (dx, dy) world direction the ink flies (away from the blade)
 FEEL.splat = function (ui, x, y, size, dx, dy, alpha) {
   const w = ui.world;
@@ -144,19 +131,9 @@ function halftoneEdge(g, color, wdt, alpha) {
   g.globalAlpha = alpha; g.fillStyle = K.halftone(g, color, 8); g.fillRect(0, 0, C.VIEW_W, C.VIEW_H);
   g.restore();
 }
-// The night lightens toward 06:00 (from 03:00) and the edges burn after dawn (GDD §3.6).
+// The edges burn after dawn (GDD §3.6). The night lightening toward 06:00 is the engine's sky
+// and skyline (src/client/30_render.js).
 function drawDawn(g, ui, w) {
-  const cm = BD.flow.clockMin(w);
-  const k = K.clamp((cm - 540) / 180, 0, 1);
-  if (k > 0) {
-    for (const cx of [0, C.VIEW_W]) {
-      const gr = g.createRadialGradient(cx, C.VIEW_H + 40, 20, cx, C.VIEW_H + 40, 520);
-      gr.addColorStop(0, 'rgba(255,190,120,' + (0.34 * k) + ')');
-      gr.addColorStop(1, 'rgba(255,190,120,0)');
-      g.fillStyle = gr; g.fillRect(cx ? C.VIEW_W - 560 : 0, C.VIEW_H - 520, 560, 520);
-    }
-    g.fillStyle = 'rgba(255,214,170,' + (0.07 * k) + ')'; g.fillRect(0, 0, C.VIEW_W, 64);
-  }
   const over = w.t - w.mods.runSec;
   if (over >= 0) {
     const pulse = 0.5 + 0.5 * Math.sin(ui.time * 3);

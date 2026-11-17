@@ -111,8 +111,8 @@ K.label = function (ctx, text) {
   K.vfx(ctx, 'combo_label', { text, row, life: 1.0 });
 };
 
-// Card slot centre on the HUD (GDD §9.2: 3 slots of 84px, gap 12, centred, y 616).
-K.slotCenter = (slot) => [640 - 138 + slot * 96 + 42, 616 + 42];
+// Card slot centre on the HUD (engine geometry, BD.slotRect; GDD §9.2).
+K.slotCenter = (slot) => BD.slotCenter(slot);
 
 // ---- drawing kit (browser only) -------------------------------------------------------------
 

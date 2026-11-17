@@ -18,9 +18,9 @@ const CI = BD.ui.cards;
 const MSG = BD.ui.msg;
 const rng = K.rng;
 
-// Slot geometry (GDD §9.2: three 84 px slots, gap 12, bottom centre at y 616)
-BD.ui.slotRect = (i) => ({ x: 640 - 138 + i * 96, y: 616, w: 84, h: 84 });
-const slotCenter = (i) => { const r = BD.ui.slotRect(i); return [r.x + r.w / 2, r.y + r.h / 2]; };
+// Slot geometry: the engine's (BD.slotRect, GDD §9.2), shared with the cards' quest dot
+BD.ui.slotRect = BD.slotRect;
+const slotCenter = BD.slotCenter;
 
 const typeOf = (kind) => (BD.enemies.has(kind) ? BD.enemies.get(kind).type : null);
 const slotOf = (w, id) => w.cards.findIndex((c) => c && c.id === id);

@@ -8,6 +8,8 @@ BD.C = {
   TICK: 1 / 60,
   MAX_CATCHUP: 5,
   VIEW_W: 1280, VIEW_H: 720,
+  // HUD card slots (GDD §9.2): three 84 px sockets, gap 12, centred, top at y 616 (logical px)
+  SLOTS: { size: 84, gap: 12, y: 616 },
   ISO_X: 40, ISO_Y: 20, ROOM_CX: 640, ROOM_CY: 350, WALL_H: 80,
   RUN_SEC: 900, CLOCK_START_MIN: 18 * 60,
   CAP: { enemies: 80, projectiles: 60, particles: 300 },
@@ -47,6 +49,14 @@ BD.C = {
   FLOORS: 6,
   GEN_RETRIES: 20,
 };
+
+// Card slot i (0..2) on the HUD in logical px — the one place the slot geometry lives: the UI
+// draws the slots there, the cards fly their quest dot to it.
+BD.slotRect = function (i) {
+  const S = BD.C.SLOTS, x0 = BD.C.VIEW_W / 2 - (3 * S.size + 2 * S.gap) / 2;
+  return { x: x0 + i * (S.size + S.gap), y: S.y, w: S.size, h: S.size };
+};
+BD.slotCenter = function (i) { const r = BD.slotRect(i); return [r.x + r.w / 2, r.y + r.h / 2]; };
 
 // Cumulative tier modifiers.
 BD.tierMods = function (tier) {

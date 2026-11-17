@@ -56,34 +56,59 @@ function windows(g, rng, a, b, top, bottom, lit, dark, pLit) {
   }
 }
 
-// ---- static layer ---------------------------------------------------------------------------
-function buildStatic(w, v) {
+// ---- static layers ----------------------------------------------------------------------------
+function layerCanvas(v) {
   const s = Math.min(2, v.dpr * v.scale * 1.0) || 1;
   const cv = document.createElement('canvas');
   cv.width = Math.ceil(C.VIEW_W * s); cv.height = Math.ceil(C.VIEW_H * s);
   const g = cv.getContext('2d');
   g.scale(s, s);
-  const grid = w.grid, W = grid.w, H = grid.h, col = R.floorColor(w);
-  const rng = localRng(w.seed + ':' + w.floorN);
-  // far skyline
+  return { cv, g };
+}
+// Far skyline in two looks: night (lit windows) and dawn (hazy lighter silhouettes, windows
+// going out). drawWorld cross-fades them from 03:00 to 06:00 (GDD §3.6), the sky behind
+// brightening with them. The buildings are drawn once from the floor's rng, then painted twice.
+function skylineData(rng) {
+  const out = [];
   for (let layer = 0; layer < 2; layer++) {
     let x = -20;
     while (x < C.VIEW_W + 20) {
       const bw = rng.range(40, 110), bh = rng.range(120, 360) * (layer ? 0.75 : 1);
       const top = C.VIEW_H - bh - (layer ? 0 : 60);
-      g.fillStyle = layer ? '#0c0d16' : '#090a12';
-      g.fillRect(x, top, bw, C.VIEW_H - top);
+      const b = { layer, x, top, bw, wins: [] };
       for (let wy = top + 10; wy < C.VIEW_H - 8; wy += 14) for (let wx = x + 6; wx < x + bw - 8; wx += 12) {
-        if (rng.next() < (layer ? 0.12 : 0.08)) {
-          g.fillStyle = rng.pick(['#f2b84a', '#e9a33c', '#c94fa0', '#4fb7d8', '#f2b84a']);
-          g.globalAlpha = rng.range(0.35, 0.9);
-          g.fillRect(wx, wy, 5, 7);
-          g.globalAlpha = 1;
-        }
+        if (rng.next() < (layer ? 0.12 : 0.08)) b.wins.push([wx, wy, rng.pick(['#f2b84a', '#e9a33c', '#c94fa0', '#4fb7d8', '#f2b84a']), rng.range(0.35, 0.9)]);
       }
+      out.push(b);
       x += bw + rng.range(-10, 14);
     }
   }
+  return out;
+}
+function paintSkyline(v, data, dawn) {
+  const { cv, g } = layerCanvas(v);
+  for (const b of data) {
+    g.fillStyle = dawn ? (b.layer ? '#4a3b52' : '#3a3046') : (b.layer ? '#0c0d16' : '#090a12');
+    g.fillRect(b.x, b.top, b.bw, C.VIEW_H - b.top);
+    if (dawn) { g.fillStyle = 'rgba(255,190,130,0.22)'; g.fillRect(b.x + b.bw - 6, b.top, 6, C.VIEW_H - b.top); } // rim light
+    b.wins.forEach((p, i) => {
+      if (dawn && i % 4) return; // most windows are out by dawn
+      g.fillStyle = p[2]; g.globalAlpha = dawn ? p[3] * 0.35 : p[3];
+      g.fillRect(p[0], p[1], 5, 7);
+      g.globalAlpha = 1;
+    });
+  }
+  return cv;
+}
+
+function buildStatic(w, v) {
+  const { cv, g } = layerCanvas(v);
+  const grid = w.grid, W = grid.w, H = grid.h, col = R.floorColor(w);
+  const rng = localRng(w.seed + ':' + w.floorN);
+  // far skyline (its own layers, under this one)
+  const sky = skylineData(rng);
+  R.skyNight = paintSkyline(v, sky, false);
+  R.skyDawn = paintSkyline(v, sky, true);
   const P = v.proj;
   // tower body + slab sides: per edge cell, painter's order (back to front)
   const cells = [];
@@ -204,16 +229,42 @@ function ensureStatic(w, v) {
 }
 
 // ---- sky -------------------------------------------------------------------------------------
+// 0 until 03:00 (75 % of the night), 1 at 06:00
+R.dawnK = (w) => (w ? M.clamp((BD.flow.clockMin(w) - 540) / 180, 0, 1) : 0);
 R.drawSky = function (g, w) {
   const grad = g.createLinearGradient(0, 0, 0, C.VIEW_H);
-  // horizon brightens from 03:00 (75% of the night) to 06:00
-  const k = w ? M.clamp((BD.flow.clockMin(w) - 540) / 180, 0, 1.2) : 0;
-  grad.addColorStop(0, '#05060d');
-  grad.addColorStop(0.55, k > 0 ? mix('#141128', '#3a2a4a', k) : '#141128');
-  grad.addColorStop(1, k > 0 ? mix('#221a36', '#e08a50', Math.min(1, k)) : '#221a36');
+  const k = R.dawnK(w);
+  grad.addColorStop(0, k > 0 ? mix('#05060d', '#2c2444', k) : '#05060d');
+  grad.addColorStop(0.55, k > 0 ? mix('#141128', '#8c5a6c', k) : '#141128');
+  grad.addColorStop(1, k > 0 ? mix('#221a36', '#f2a462', k) : '#221a36');
   g.fillStyle = grad;
   g.fillRect(0, 0, C.VIEW_W, C.VIEW_H);
 };
+// far skyline: night, cross-faded to dawn
+function drawSkyline(g, w) {
+  if (!R.skyNight) return;
+  g.drawImage(R.skyNight, 0, 0, C.VIEW_W, C.VIEW_H);
+  const k = R.dawnK(w);
+  if (k > 0 && R.skyDawn) { g.globalAlpha = k; g.drawImage(R.skyDawn, 0, 0, C.VIEW_W, C.VIEW_H); g.globalAlpha = 1; }
+}
+
+// Floor cells as one path (per floor and room origin): warnings and baked decals are clipped to
+// it, so nothing lies on the facade below the floor edge.
+const floorPathCache = { key: null, path: null };
+R.floorPath = function (w, v) {
+  const key = w.seed + ':' + w.floorN + ':' + v.rox + ':' + v.roy;
+  if (floorPathCache.key !== key) {
+    const p = new Path2D();
+    for (let y = 0; y < w.grid.h; y++) for (let x = 0; x < w.grid.w; x++) {
+      if (w.grid.get(x, y) === BD.CELL.VOID) continue;
+      const a = v.proj(x, y), b = v.proj(x + 1, y), c = v.proj(x + 1, y + 1), d = v.proj(x, y + 1);
+      p.moveTo(a[0], a[1]); p.lineTo(b[0], b[1]); p.lineTo(c[0], c[1]); p.lineTo(d[0], d[1]); p.closePath();
+    }
+    floorPathCache.key = key; floorPathCache.path = p;
+  }
+  return floorPathCache.path;
+};
+R.clipFloor = function (g, v, w) { g.clip(R.floorPath(w, v)); };
 function mix(a, b, t) {
   const x = parseInt(a.slice(1), 16), y = parseInt(b.slice(1), 16);
   const c = (s) => Math.round(((x >> s) & 255) * (1 - t) + ((y >> s) & 255) * t);
@@ -539,6 +590,7 @@ R.drawWorld = function (g, ui, dt) {
   g.save();
   if (ui.camera) g.translate(ui.camera.x || 0, ui.camera.y || 0);
   ensureStatic(w, v);
+  drawSkyline(g, w);
   g.drawImage(R.cache, 0, 0, C.VIEW_W, C.VIEW_H);
   if (R.bakeCanvas) g.drawImage(R.bakeCanvas, 0, 0, C.VIEW_W, C.VIEW_H);
   drawDoor(g, v, w, t);
@@ -559,7 +611,11 @@ R.drawWorld = function (g, ui, dt) {
   if (w.trial && w.trial.state === 'available') ringProgress(g, v, w.trial.x, w.trial.y, C.INTERACT.ring, I.target === 'trial' ? I.progress / I.need : 0, '#c9a0ff');
   // zones, telegraphs
   for (const z of w.zones) (BD.render.zones.has(z.kind) ? BD.render.zones.get(z.kind) : BD.render.zones.get('fire')).draw(g, v, z, w, t);
-  for (const tg of w.telegraphs) BD.render.telegraphs.get(tg.style).draw(g, v, tg, w, t);
+  if (w.telegraphs.length) {
+    g.save(); R.clipFloor(g, v, w); // warnings stay on the floor (the boss's collapse ring reaches past the roof)
+    for (const tg of w.telegraphs) BD.render.telegraphs.get(tg.style).draw(g, v, tg, w, t);
+    g.restore();
+  }
   // shadows
   ellipse(g, v, w.hero.x, w.hero.y, 0.38, 'rgba(0,0,0,0.38)', null);
   for (const e of w.enemies) if (!e.dead) ellipse(g, v, e.x, e.y, e.r * 1.05, 'rgba(0,0,0,0.38)', null);
