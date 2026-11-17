@@ -1,0 +1,532 @@
+<title>여명 전야 도감</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Noto+Sans+KR:wght@400;500;700&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: comic-book panels (paper, thick ink border, offset shadow) laid on a night-sky gutter; one section per catalog chapter. Single deliberate dark look. */
+:root {
+  --night: #11132a;
+  --night-2: #1a1d3a;
+  --ink: #0b0b10;
+  --paper: #f4efe3;
+  --paper-2: #e9e2d1;
+  --dawn: #ff9a3c;
+  --mist: #a9aed0;
+  --danger: #d62828;
+  --gold: #c9a44a;
+  --beast: #f2c230; --undead: #4fa94d; --magic: #5c4d8e; --heavy: #e0392f; --boss: #7d8597;
+  --f-display: "Black Han Sans", "Noto Sans KR", system-ui, sans-serif;
+  --f-body: "Noto Sans KR", system-ui, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { background: var(--night); color: var(--paper); }
+body {
+  font-family: var(--f-body); font-size: 15px; line-height: 1.6;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 64px;
+  background-image: radial-gradient(rgba(169,174,208,.10) 1px, transparent 1.2px);
+  background-size: 7px 7px;
+}
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--night); }
+.wrap { max-width: 1180px; margin: 0 auto; }
+h1, h2, h3 { font-family: var(--f-display); font-weight: 400; text-wrap: balance; margin: 0; letter-spacing: .01em; }
+a { color: var(--dawn); }
+:focus-visible { outline: 3px solid var(--dawn); outline-offset: 2px; }
+
+/* masthead */
+.mast { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 24px; align-items: end; padding-block: 40px 20px; }
+.mast .kicker { font-family: var(--f-mono); font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--mist); }
+.mast h1 { font-size: clamp(40px, 7vw, 76px); line-height: 1; color: var(--paper); margin-top: 6px; text-shadow: 4px 4px 0 var(--ink); }
+.mast h1 span { color: var(--dawn); }
+.mast p { max-width: 62ch; color: var(--mist); margin: 12px 0 0; }
+.mast .heroimg { height: 210px; filter: drop-shadow(5px 5px 0 var(--ink)); }
+.notes { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.note { font-size: 13px; padding: 4px 10px; border: 2px solid var(--ink); background: var(--night-2); border-radius: 3px; color: var(--paper); }
+.note b { color: var(--dawn); font-weight: 700; }
+
+/* nav */
+nav.toc { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--night); border-bottom: 3px solid var(--ink); box-shadow: 0 2px 0 rgba(255,255,255,.04); }
+nav.toc .row { display: flex; gap: 6px; overflow-x: auto; padding-block: 10px; scrollbar-width: none; }
+nav.toc a { flex: none; text-decoration: none; color: var(--paper); font-weight: 700; font-size: 14px; padding: 6px 12px; border: 2px solid var(--ink); background: var(--night-2); border-radius: 3px; }
+nav.toc a .n { font-family: var(--f-mono); color: var(--mist); margin-left: 6px; font-weight: 500; }
+nav.toc a:hover { background: var(--ink); }
+
+section.chap { padding-top: 40px; scroll-margin-top: 64px; }
+.chap-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 16px; margin-bottom: 16px; }
+.chap-head h2 { font-size: clamp(28px, 4vw, 40px); color: var(--paper); text-shadow: 3px 3px 0 var(--ink); }
+.chap-head p { color: var(--mist); margin: 0; flex: 1 1 320px; min-width: 0; }
+
+/* filter chips */
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
+.chip { font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; padding: 5px 11px; border-radius: 3px; border: 2px solid var(--ink); background: var(--night-2); color: var(--paper); }
+.chip[aria-pressed="true"] { background: var(--dawn); color: var(--ink); }
+
+/* panels */
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 330px), 1fr)); gap: 22px; align-items: start; }
+.panel { background: var(--paper); color: var(--ink); border: 3px solid var(--ink); border-radius: 4px; box-shadow: 6px 6px 0 var(--ink); overflow: hidden; scroll-margin-top: 80px; min-width: 0; }
+.panel .vis { position: relative; border-bottom: 3px solid var(--ink); background: #262a42; }
+.panel canvas.diag { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; }
+.panel .body { padding: 14px 16px 16px; display: grid; gap: 10px; }
+.panel h3 { font-size: 26px; line-height: 1.1; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.id { font-family: var(--f-mono); font-size: 12px; color: #5d5a66; background: var(--paper-2); padding: 1px 6px; border-radius: 2px; }
+.tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.tag { font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 2px; border: 2px solid var(--ink); background: var(--paper); }
+.tag.fam { color: var(--paper); background: var(--ink); }
+.tag.lock { background: var(--paper-2); }
+.tag.base { background: #dfe8d0; }
+.lead { margin: 0; font-size: 15px; }
+dl.kv { margin: 0; display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 12px; font-size: 14px; }
+dl.kv dt { font-weight: 700; color: #4a4655; }
+dl.kv dd { margin: 0; min-width: 0; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(76px, 1fr)); border: 2px solid var(--ink); border-radius: 3px; overflow: hidden; }
+.stats div { padding: 6px 8px; box-shadow: 1px 1px 0 var(--ink); background: var(--paper-2); min-width: 0; }
+.stats b { display: block; font-size: 11px; color: #4a4655; font-weight: 700; }
+.stats span { font-family: var(--f-mono); font-size: 14px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.attack { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 12px; align-items: start; }
+.attack canvas { width: 112px; height: 76px; border: 2px solid var(--ink); border-radius: 3px; background: #262a42; }
+.attack p { margin: 0; font-size: 14px; }
+.attack strong { display: block; }
+.counter { font-size: 14px; margin: 0; padding: 8px 10px; background: #fff7e3; border-left: 5px solid var(--dawn); }
+.counter b { color: #a14d00; }
+
+/* sprite stage */
+.stage { position: relative; aspect-ratio: 16 / 10; display: grid; place-items: end center; padding-bottom: 14px; overflow: hidden; }
+.stage::before { content: ""; position: absolute; inset: 0; background-image: radial-gradient(rgba(0,0,0,.16) 1.4px, transparent 1.6px); background-size: 9px 9px; }
+.stage .shadow { position: absolute; bottom: 10px; width: 46%; height: 14px; background: rgba(0,0,0,.28); border-radius: 50%; }
+.stage img { position: relative; max-height: 86%; max-width: 70%; filter: drop-shadow(0 0 0 var(--ink)); }
+.stage .badge { position: absolute; top: 10px; left: 10px; font-weight: 700; font-size: 12px; padding: 2px 8px; background: var(--ink); color: var(--paper); border-radius: 2px; }
+.stage.elite img { filter: drop-shadow(2px 0 0 #fff) drop-shadow(-2px 0 0 #fff) drop-shadow(0 2px 0 #fff) drop-shadow(0 -2px 0 #fff); }
+.stage.guard img { filter: drop-shadow(3px 0 0 var(--gold)) drop-shadow(-3px 0 0 var(--gold)) drop-shadow(0 3px 0 var(--gold)) drop-shadow(0 -3px 0 var(--gold)); }
+.stage .crown { position: absolute; top: 8px; right: 12px; width: 40px; }
+
+/* quest/combo meter */
+.meter { display: flex; gap: 4px; align-items: center; font-family: var(--f-mono); font-size: 12px; }
+.meter i { width: 14px; height: 14px; border: 2px solid var(--ink); border-radius: 50%; background: var(--paper); }
+.meter i.on { background: var(--dawn); }
+
+/* rules, tables */
+.rules { display: grid; gap: 10px; margin-top: 22px; }
+.rule { background: var(--night-2); border: 2px solid var(--ink); border-left: 6px solid var(--dawn); padding: 10px 14px; border-radius: 3px; color: var(--paper); margin: 0; }
+.tablebox { overflow-x: auto; border: 3px solid var(--ink); border-radius: 4px; box-shadow: 6px 6px 0 var(--ink); background: var(--paper); }
+table { border-collapse: collapse; width: 100%; color: var(--ink); font-size: 14px; }
+th, td { text-align: left; padding: 8px 12px; border-bottom: 2px solid var(--paper-2); vertical-align: top; }
+th { background: var(--ink); color: var(--paper); font-weight: 700; white-space: nowrap; }
+td.num { font-family: var(--f-mono); white-space: nowrap; }
+td.ph { white-space: nowrap; }
+.herostrip { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 150px), 1fr)); gap: 14px; }
+.herostrip figure { margin: 0; background: #3b4166; border: 3px solid var(--ink); border-radius: 4px; box-shadow: 4px 4px 0 var(--ink); display: grid; place-items: end center; aspect-ratio: 1; padding: 8px; position: relative; }
+.herostrip img { max-height: 82%; }
+.herostrip figcaption { position: absolute; top: 6px; left: 8px; font-size: 12px; font-weight: 700; color: var(--paper); }
+.split { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 22px; align-items: start; }
+@media (max-width: 860px) { .split { grid-template-columns: minmax(0, 1fr); } .mast { grid-template-columns: minmax(0, 1fr); } .mast .heroimg { display: none; } }
+@media (max-width: 420px) { .attack { grid-template-columns: minmax(0, 1fr); } }
+@media (prefers-reduced-motion: no-preference) { .panel { transition: transform .12s ease; } .panel:hover { transform: translate(-1px, -1px); box-shadow: 7px 7px 0 var(--ink); } }
+footer { margin-top: 48px; color: var(--mist); font-size: 13px; }
+</style>
+
+<div class="wrap">
+  <header class="mast">
+    <div>
+      <div class="kicker">Before Dawn · Field Catalog</div>
+      <h1>여명 전야 <span>도감</span></h1>
+      <p>노용사가 동트기 전 마천루를 오르며 만나는 것 전부. 성인(카드) 18장, 물건과 장치, 적 7종과 정예·수호자, 마왕까지 한 곳에 모았다.</p>
+      <div class="notes">
+        <span class="note"><b>수치</b> 기획서 기준, 튜닝 전 값</span>
+        <span class="note"><b>피드백</b> 고칠 항목에 바로 댓글을 남겨 주세요</span>
+        <span class="note"><b>단위</b> 1u = 바닥 한 칸</span>
+      </div>
+    </div>
+    <img class="heroimg" id="mastHero" alt="노용사 앞 대기 자세">
+  </header>
+</div>
+
+<nav class="toc" aria-label="목차"><div class="wrap row" id="toc"></div></nav>
+
+<main class="wrap" id="main"></main>
+
+<div class="wrap"><footer id="foot"></footer></div>
+
+<script>
+const DATA = /*__DATA__*/null;
+const SPR = /*__SPRITES__*/{};
+const IMG = {};
+for (const [k, v] of Object.entries(SPR)) { const im = new Image(); im.src = v; IMG[k] = im; }
+const imgReady = Promise.all(Object.values(IMG).map(im => im.decode ? im.decode().catch(() => {}) : Promise.resolve()));
+
+const $ = (tag, attrs = {}, ...kids) => {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (v == null) continue;
+    if (k === 'class') el.className = v; else if (k === 'html') el.innerHTML = v; else el.setAttribute(k, v);
+  }
+  for (const c of kids.flat(Infinity)) if (c != null) el.append(c.nodeType ? c : document.createTextNode(c));
+  return el;
+};
+const TYPES = DATA.types, FAM = DATA.families;
+const FAMCOL = { shape: '#ff9a3c', element: '#ff5a2a', trigger: '#c9a44a', target: '#e8e2d0', quest: '#ffd36b', combo: '#9fd0ff' };
+
+/* ---------- canvas helpers ---------- */
+const U = 24;                       // px per world unit in diagrams
+function setup(cv, w = 320, h = 180) {
+  const r = Math.min(2, window.devicePixelRatio || 1);
+  cv.width = w * r; cv.height = h * r; const c = cv.getContext('2d'); c.scale(r, r);
+  c.lineJoin = 'round'; c.lineCap = 'round'; return c;
+}
+function floor(c, col = '#30354f', w = 320, h = 180) {
+  c.fillStyle = col; c.fillRect(0, 0, w, h);
+  c.strokeStyle = 'rgba(0,0,0,.18)'; c.lineWidth = 1;
+  for (let x = 0; x <= w; x += U) { c.beginPath(); c.moveTo(x, 0); c.lineTo(x, h); c.stroke(); }
+  for (let y = 0; y <= h; y += U) { c.beginPath(); c.moveTo(0, y); c.lineTo(w, y); c.stroke(); }
+}
+function spr(c, name, x, y, h, flip = false, alpha = 1) {
+  const im = IMG[name]; if (!im || !im.naturalWidth) return;
+  const w = im.naturalWidth * h / im.naturalHeight;
+  c.save(); c.globalAlpha = alpha;
+  c.fillStyle = 'rgba(0,0,0,.28)'; c.beginPath(); c.ellipse(x, y, w * .32, 4, 0, 0, 7); c.fill();
+  c.translate(x, y); if (flip) c.scale(-1, 1); c.drawImage(im, -w / 2, -h, w, h); c.restore();
+}
+const hero = (c, x, y, flip, a) => spr(c, 'hero_side', x, y, 46, flip, a);
+function inked(c, draw, col, lw = 6) {
+  c.save(); c.strokeStyle = '#0b0b10'; c.lineWidth = lw + 4; c.beginPath(); draw(); c.stroke();
+  c.strokeStyle = col; c.lineWidth = lw; c.beginPath(); draw(); c.stroke(); c.restore();
+}
+function fan(c, x, y, r, dir, deg, col, a = .55) {
+  const h = deg * Math.PI / 360;
+  c.save(); c.globalAlpha = a; c.fillStyle = col; c.beginPath(); c.moveTo(x, y); c.arc(x, y, r, dir - h, dir + h); c.closePath(); c.fill(); c.restore();
+  inked(c, () => c.arc(x, y, r, dir - h, dir + h), col, 5);
+}
+function label(c, t, x, y, col = '#f4efe3', size = 13, align = 'center') {
+  c.save(); c.font = `700 ${size}px "Noto Sans KR", sans-serif`; c.textAlign = align; c.textBaseline = 'middle';
+  c.lineWidth = 4; c.strokeStyle = '#0b0b10'; c.strokeText(t, x, y); c.fillStyle = col; c.fillText(t, x, y); c.restore();
+}
+function sfx(c, t, x, y, col = '#ff9a3c', rot = -0.15, size = 22) {
+  c.save(); c.translate(x, y); c.rotate(rot); c.font = `${size}px "Black Han Sans", sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle';
+  c.lineWidth = 6; c.strokeStyle = '#0b0b10'; c.strokeText(t, 0, 0); c.fillStyle = col; c.fillText(t, 0, 0); c.restore();
+}
+function splat(c, x, y, r, col = '#0b0b10', n = 9, seed = 1) {
+  let s = seed; const rnd = () => (s = (s * 9301 + 49297) % 233280) / 233280;
+  c.save(); c.fillStyle = col;
+  for (let i = 0; i < n; i++) { const a = rnd() * 6.28, d = r * (.4 + rnd() * .9); c.beginPath(); c.arc(x + Math.cos(a) * d, y + Math.sin(a) * d * .6, 1.5 + rnd() * 3.5, 0, 7); c.fill(); }
+  c.restore();
+}
+function hatch(c, path, col = '#d62828') {
+  c.save(); c.beginPath(); path(); c.clip();
+  c.fillStyle = 'rgba(214,40,40,.18)'; c.fillRect(0, 0, 400, 300);
+  c.strokeStyle = col; c.lineWidth = 2.2;
+  for (let i = -300; i < 500; i += 8) { c.beginPath(); c.moveTo(i, 0); c.lineTo(i + 300, 300); c.stroke(); }
+  c.restore();
+  c.save(); c.strokeStyle = '#0b0b10'; c.lineWidth = 2.5; c.beginPath(); path(); c.stroke(); c.restore();
+}
+function zig(c, x1, y1, x2, y2, col, seed = 3) {
+  let s = seed; const rnd = () => (s = (s * 9301 + 49297) % 233280) / 233280;
+  const n = 6, pts = [[x1, y1]];
+  for (let i = 1; i < n; i++) { const t = i / n; pts.push([x1 + (x2 - x1) * t + (rnd() - .5) * 14, y1 + (y2 - y1) * t + (rnd() - .5) * 14]); }
+  pts.push([x2, y2]);
+  inked(c, () => { c.moveTo(...pts[0]); for (const p of pts.slice(1)) c.lineTo(...p); }, col, 3);
+}
+function flameAt(c, x, y, s = 1) {
+  c.save(); c.translate(x, y); c.scale(s, s);
+  for (const [dx, h, col] of [[-6, 16, '#ff5a2a'], [4, 22, '#ff5a2a'], [0, 12, '#ffd36b']]) {
+    c.fillStyle = col; c.strokeStyle = '#0b0b10'; c.lineWidth = 2;
+    c.beginPath(); c.moveTo(dx - 6, 0); c.quadraticCurveTo(dx - 7, -h * .6, dx, -h); c.quadraticCurveTo(dx + 7, -h * .6, dx + 6, 0); c.closePath(); c.fill(); c.stroke();
+  }
+  c.restore();
+}
+function crown(c, x, y, s = 1, col = '#c9a44a') {
+  c.save(); c.translate(x, y); c.scale(s, s); c.fillStyle = col; c.strokeStyle = '#0b0b10'; c.lineWidth = 2.5;
+  c.beginPath(); c.moveTo(-12, 6); c.lineTo(-12, -6); c.lineTo(-6, 0); c.lineTo(0, -9); c.lineTo(6, 0); c.lineTo(12, -6); c.lineTo(12, 6); c.closePath(); c.fill(); c.stroke(); c.restore();
+}
+function pill(c, t, x, y, bg = '#ff9a3c', fg = '#0b0b10') {
+  c.save(); c.font = '700 13px "IBM Plex Mono", monospace'; const w = c.measureText(t).width + 14;
+  c.fillStyle = bg; c.strokeStyle = '#0b0b10'; c.lineWidth = 2.5; c.beginPath(); c.roundRect(x - w / 2, y - 11, w, 22, 4); c.fill(); c.stroke();
+  c.fillStyle = fg; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(t, x, y + 1); c.restore();
+}
+
+/* ---------- card diagrams: what each card does around the hero ---------- */
+const CARD_DRAW = {
+  pierce(c) { floor(c); const hx = 70, hy = 128, cy = hy - 20;
+    spr(c, 'skeleton_archer', 150, 128, 44, true); spr(c, 'goblin', 205, 130, 36, true); spr(c, 'goblin', 255, 128, 36, true);
+    hero(c, hx, hy); fan(c, hx + 6, cy, 1.9 * U, 0, 100, '#ff9a3c', .35);
+    inked(c, () => { c.moveTo(hx + 10, cy); c.lineTo(hx + 10 + 4.2 * U * 1.85, cy); }, '#ff9a3c', 8);
+    label(c, '4.2u', 175, 70); sfx(c, '꿰뚫!', 250, 60); },
+  whirl(c) { floor(c); const hx = 160, hy = 118;
+    for (const [x, y, f] of [[100, 92, 0], [222, 96, 1], [112, 156, 0], [214, 160, 1]]) spr(c, 'goblin', x, y, 34, f);
+    hero(c, hx, hy); c.save(); c.globalAlpha = .3; c.fillStyle = '#ff9a3c'; c.beginPath(); c.arc(hx, hy - 16, 2.6 * U, 0, 7); c.fill(); c.restore();
+    inked(c, () => c.arc(hx, hy - 16, 2.6 * U, 0, 7), '#ff9a3c', 6); label(c, '부채꼴 밖 ×0.7', 160, 20); },
+  sword_wave(c) { floor(c); const hx = 50, hy = 128;
+    spr(c, 'mage', 270, 128, 48, true); hero(c, hx, hy);
+    c.save(); c.setLineDash([4, 6]); c.strokeStyle = 'rgba(244,239,227,.5)'; c.lineWidth = 2; c.beginPath(); c.moveTo(hx + 14, hy - 22); c.lineTo(265, 106); c.stroke(); c.restore();
+    inked(c, () => c.arc(190, 104, 26, -1.1, 1.1), '#ff9a3c', 9);
+    for (const dy of [-12, 0, 12]) inked(c, () => { c.moveTo(150, 104 + dy); c.lineTo(172, 104 + dy); }, 'rgba(255,154,60,.8)', 2);
+    label(c, '사거리 6.5u · 13u/s', 160, 22); },
+  flame(c) { floor(c); const hx = 80, hy = 128;
+    spr(c, 'slime', 165, 130, 34, true); spr(c, 'goblin', 205, 132, 36, true); spr(c, 'goblin', 250, 118, 36, true);
+    hero(c, hx, hy); fan(c, hx + 6, hy - 20, 1.9 * U, 0, 100, '#ff5a2a', .35);
+    flameAt(c, 165, 112); flameAt(c, 207, 108); flameAt(c, 250, 92, .8);
+    label(c, '0.5초마다 3 · 3초 · 번짐', 160, 22); sfx(c, '화르륵', 255, 150, '#ff5a2a', .1, 18); },
+  lightning(c) { floor(c); const hx = 60, hy = 130;
+    const E = [[130, 124], [186, 100], [232, 140], [282, 110]];
+    spr(c, 'goblin', 130, 124, 36, true); spr(c, 'slime', 186, 100, 30, true); spr(c, 'goblin', 232, 140, 36, true); spr(c, 'skeleton_archer', 282, 110, 42, true);
+    hero(c, hx, hy); fan(c, hx + 6, hy - 20, 1.9 * U, 0, 100, '#bfe9ff', .3);
+    for (let i = 0; i < E.length - 1; i++) zig(c, E[i][0], E[i][1] - 18, E[i + 1][0], E[i + 1][1] - 18, '#bfe9ff', i + 2);
+    label(c, '최대 3번 연쇄 · 젖은 적이 끼면 5번', 160, 22); },
+  tide(c) { floor(c); const hx = 80, hy = 128;
+    c.fillStyle = '#4a4f6b'; c.fillRect(272, 40, 48, 140); c.strokeStyle = '#0b0b10'; c.lineWidth = 3; c.strokeRect(272, 40, 48, 140);
+    c.fillStyle = 'rgba(58,160,255,.35)'; c.beginPath(); c.ellipse(220, 132, 34, 8, 0, 0, 7); c.fill();
+    spr(c, 'goblin', 165, 130, 36, true, .35); spr(c, 'goblin', 248, 130, 36, true);
+    inked(c, () => { c.moveTo(178, 110); c.lineTo(232, 110); c.moveTo(222, 102); c.lineTo(232, 110); c.lineTo(222, 118); }, '#3aa0ff', 4);
+    hero(c, hx, hy); fan(c, hx + 6, hy - 20, 1.9 * U, 0, 100, '#3aa0ff', .3);
+    sfx(c, '쾅!', 270, 80, '#3aa0ff', .2, 20); label(c, '1.2u 밀침 · 벽 충돌 8 + 기절', 150, 22); },
+  leech(c) { floor(c); const hx = 90, hy = 130;
+    spr(c, 'goblin', 190, 130, 36, true, .5); splat(c, 190, 118, 16, '#0b0b10', 10, 4);
+    for (let i = 0; i < 6; i++) { const t = i / 6; c.fillStyle = '#0b0b10'; c.beginPath(); c.arc(185 - t * 80, 104 - Math.sin(t * 3.14) * 30, 4 - t * 2, 0, 7); c.fill(); }
+    hero(c, hx, hy); label(c, '+5', hx, 62, '#7fe07a', 22);
+    const pips = (x, y, on) => { for (let i = 0; i < 3; i++) { c.fillStyle = i < on ? '#ff9a3c' : '#f4efe3'; c.strokeStyle = '#0b0b10'; c.lineWidth = 2; c.beginPath(); c.arc(x + i * 18, y, 6, 0, 7); c.fill(); c.stroke(); } };
+    pips(222, 30, 3); label(c, '처치 4회마다', 240, 54, '#f4efe3', 12); },
+  riposte(c) { floor(c); const hx = 160, hy = 120;
+    hatch(c, () => { c.moveTo(214, 108); c.arc(214, 108, 2.0 * U, 2.4, 3.9); c.closePath(); });
+    spr(c, 'ghoul', 222, 126, 42, true); spr(c, 'goblin', 100, 108, 34); spr(c, 'goblin', 118, 160, 34);
+    hero(c, hx, hy); inked(c, () => c.arc(hx, hy - 16, 2.6 * U, 0, 7), '#ff9a3c', 5);
+    sfx(c, '반격!', 160, 30, '#ff9a3c', -.08, 24); label(c, '맞으면 ×2 · 돌진으로 흘리면 ×3', 160, 168, '#f4efe3', 12); },
+  drawcut(c) { floor(c); const hx = 210, hy = 128;
+    c.save(); c.strokeStyle = '#f4efe3'; c.lineWidth = 3; c.setLineDash([10, 6]); c.beginPath(); c.moveTo(40, 136); c.lineTo(hx - 10, 136); c.stroke(); c.restore();
+    label(c, '베지 않고 3.0u 이동', 115, 152, '#f4efe3', 12);
+    hero(c, 70, 128, false, .25); spr(c, 'dark_knight', 285, 128, 50, true); hero(c, hx, hy);
+    fan(c, hx + 6, hy - 20, 2.5 * U, 0, 100, '#ffffff', .45); sfx(c, '발도!', 250, 44, '#ffffff', -.1, 22); label(c, '×2.5 · 칼 길이 +0.6u', 120, 24); },
+  holy_light(c) { floor(c, '#2c4a35'); const hx = 80, hy = 128;
+    spr(c, 'skeleton_archer', 170, 128, 46, true); spr(c, 'ghoul', 245, 130, 46, true);
+    hero(c, hx, hy); fan(c, hx + 6, hy - 20, 1.9 * U, 0, 100, '#ff9a3c', .3);
+    inked(c, () => { c.moveTo(170, 72); c.lineTo(170, 120); c.moveTo(150, 92); c.lineTo(190, 92); }, '#ffffff', 7);
+    label(c, '언데드 +8 · 구울 부활 없음', 160, 22); },
+  armor_break(c) { floor(c, '#4a2a2a'); const hx = 80, hy = 128;
+    spr(c, 'dark_knight', 190, 132, 62, true); hero(c, hx, hy); fan(c, hx + 6, hy - 20, 1.9 * U, 0, 100, '#ff9a3c', .3);
+    inked(c, () => { c.moveTo(178, 84); c.lineTo(188, 98); c.lineTo(182, 108); c.lineTo(194, 120); c.moveTo(200, 90); c.lineTo(196, 104); c.lineTo(206, 112); }, '#f4efe3', 2);
+    for (let i = 0; i < 5; i++) { c.fillStyle = '#9aa0b5'; c.strokeStyle = '#0b0b10'; c.lineWidth = 2; c.beginPath(); const x = 220 + i * 12, y = 70 + (i % 2) * 14; c.moveTo(x, y); c.lineTo(x + 7, y + 3); c.lineTo(x + 2, y + 9); c.closePath(); c.fill(); c.stroke(); }
+    pill(c, '균열 ×3', 268, 150, '#f4efe3'); label(c, '정면 방어 무시 · 균열마다 +15%', 160, 22); },
+  mana_backlash(c) { floor(c, '#3a3260'); const hx = 70, hy = 128;
+    spr(c, 'mage', 160, 128, 50, true); spr(c, 'goblin', 250, 130, 36, true); spr(c, 'slime', 280, 104, 28, true);
+    hero(c, hx, hy);
+    for (let i = 0; i < 7; i++) { c.strokeStyle = '#0b0b10'; c.lineWidth = 5; c.beginPath(); c.ellipse(132 + i * 9, 100 + Math.sin(i) * 4, 6, 4, .5, 0, 7); c.stroke(); c.strokeStyle = '#b07cff'; c.lineWidth = 2.5; c.stroke(); }
+    c.save(); c.globalAlpha = .35; c.fillStyle = '#b07cff'; c.beginPath(); c.arc(250, 112, 2.5 * U, 0, 7); c.fill(); c.restore();
+    inked(c, () => c.arc(250, 112, 2.5 * U, 0, 7), '#b07cff', 3); label(c, '처치하면 2.5u 폭발 25', 160, 22); label(c, '속박 2.5초', 160, 160, '#d9c2ff', 12); },
+  rest_of_dead(c) { floor(c, '#2c4a35'); const hx = 80, hy = 128;
+    spr(c, 'skeleton_archer', 200, 130, 46, true, .6); spr(c, 'skeleton_archer', 262, 104, 40, true);
+    c.save(); c.globalAlpha = .4; c.fillStyle = '#ffffff'; c.beginPath(); c.arc(200, 112, 1.8 * U, 0, 7); c.fill(); c.restore();
+    inked(c, () => c.arc(200, 112, 1.8 * U, 0, 7), '#ffffff', 4);
+    hero(c, hx, hy); pill(c, '7/12', 50, 30, '#f4efe3'); label(c, '각성 후: 언데드 처치마다 폭발 20', 190, 22, '#f4efe3', 12); },
+  kings_hunt(c) { floor(c, '#4a2a2a'); const hx = 70, hy = 132;
+    spr(c, 'dark_knight', 210, 140, 84, true);
+    c.save(); c.strokeStyle = '#c9a44a'; c.lineWidth = 3; c.beginPath(); c.arc(210, 38, 14, 0, 7); c.moveTo(190, 38); c.lineTo(230, 38); c.moveTo(210, 18); c.lineTo(210, 58); c.stroke(); c.restore();
+    crown(c, 262, 36, 1.2); hero(c, hx, hy); pill(c, '수호자 2/3', 64, 30, '#f4efe3'); label(c, '각성 후 ×1.6 · 수호자 처치 시 HP 전부', 160, 168, '#f4efe3', 12); },
+  fire_pilgrimage(c) { floor(c); const hx = 90, hy = 128;
+    spr(c, 'goblin', 200, 130, 36, true); flameAt(c, 200, 110);
+    c.save(); c.globalAlpha = .35; c.fillStyle = '#ff5a2a'; c.beginPath(); c.arc(200, 112, 1.5 * U, 0, 7); c.fill(); c.restore();
+    inked(c, () => c.arc(200, 112, 1.5 * U, 0, 7), '#ff5a2a', 4);
+    hero(c, hx, hy); flameAt(c, hx + 22, hy - 24, .6);
+    for (let i = 0; i < 3; i++) { c.fillStyle = i < 2 ? '#ff5a2a' : '#f4efe3'; c.strokeStyle = '#0b0b10'; c.lineWidth = 2; c.beginPath(); c.arc(40 + i * 18, 30, 6, 0, 7); c.fill(); c.stroke(); }
+    pill(c, '불탄 적 9/12', 250, 30, '#f4efe3'); label(c, '4번째 베기마다 점화', 70, 160, '#f4efe3', 12); },
+  chain_slash(c) { floor(c); const hx = 150, hy = 126;
+    spr(c, 'goblin', 90, 134, 34, false, .35); spr(c, 'goblin', 210, 128, 34, true); spr(c, 'slime', 248, 104, 28, true);
+    splat(c, 90, 122, 18, '#0b0b10', 12, 7); hero(c, hx, hy); fan(c, hx + 6, hy - 20, 1.9 * U, 0, 100, '#ff9a3c', .35);
+    sfx(c, '×3', 64, 44, '#ff9a3c', -.12, 34);
+    c.save(); c.strokeStyle = '#0b0b10'; c.lineWidth = 7; c.beginPath(); c.arc(270, 40, 16, -1.57, -1.57 + 6.28 * .65); c.stroke(); c.strokeStyle = '#9fd0ff'; c.lineWidth = 4; c.stroke(); c.restore();
+    label(c, '4.0초', 270, 40, '#f4efe3', 11); label(c, '스택마다 +2 · 처치·타격마다 타이머 재충전', 160, 166, '#f4efe3', 12); },
+  flawless(c) { floor(c); const hx = 140, hy = 128;
+    hatch(c, () => { c.arc(70, 120, 1.3 * U, 0, 7); });
+    spr(c, 'slime', 70, 128, 30, false, .8); hero(c, hx - 34, hy + 4, false, .3); hero(c, hx, hy);
+    fan(c, hx + 6, hy - 20, 2.3 * U, 0, 100, '#ff9a3c', .35);
+    c.save(); c.globalAlpha = .45; fan(c, hx + 12, hy - 22, 2.3 * U, .2, 100, '#ffd36b', .2); c.restore();
+    spr(c, 'goblin', 222, 130, 36, true); sfx(c, '×6', 270, 46, '#9fd0ff', -.1, 32);
+    label(c, '2: 간격 −15% · 4: 칼 +0.4u · 6: 잔영', 150, 22, '#f4efe3', 12); label(c, '맞으면 0으로', 70, 166, '#ffb3b3', 12); },
+  one_flash(c) { floor(c); const hx = 160, hy = 112;
+    c.save(); c.beginPath(); c.arc(hx, hy, 1.9 * U * 1.5, 0, 7); c.arc(hx, hy, 1.2 * U * 1.5, 0, 7, true); c.fillStyle = 'rgba(255,154,60,.32)'; c.fill('evenodd'); c.restore();
+    inked(c, () => c.arc(hx, hy, 1.9 * U * 1.5, 0, 7), '#ff9a3c', 3);
+    c.save(); c.setLineDash([4, 4]); c.strokeStyle = '#f4efe3'; c.lineWidth = 2; c.beginPath(); c.arc(hx, hy, .7 * U * 1.5, 0, 7); c.stroke(); c.restore();
+    hero(c, hx, hy + 18); spr(c, 'goblin', hx + 60, hy + 18, 30, true); spr(c, 'goblin', hx - 22, hy + 30, 28, false, .9);
+    pill(c, '+1', hx + 60, hy - 30, '#ff9a3c'); pill(c, '초기화', hx - 52, hy + 40, '#f4efe3');
+    label(c, '칼끝 구간에서 벤다', 70, 22, '#f4efe3', 12); label(c, '4: 관통 · 8: 큰 관통', 250, 22, '#f4efe3', 12); }
+};
+
+/* ---------- item / device drawings ---------- */
+const ITEM_DRAW = {
+  flask(c) { floor(c); hero(c, 90, 136, false, .9);
+    c.save(); c.translate(200, 118); c.strokeStyle = '#0b0b10'; c.lineWidth = 4;
+    c.fillStyle = '#3aa0ff'; c.beginPath(); c.moveTo(-8, -34); c.lineTo(8, -34); c.lineTo(8, -20); c.quadraticCurveTo(24, -10, 22, 8); c.quadraticCurveTo(18, 24, 0, 24); c.quadraticCurveTo(-18, 24, -22, 8); c.quadraticCurveTo(-24, -10, -8, -20); c.closePath(); c.fill(); c.stroke();
+    c.fillStyle = '#f4efe3'; c.fillRect(-8, -44, 16, 10); c.strokeRect(-8, -44, 16, 10);
+    c.strokeStyle = '#f4efe3'; c.lineWidth = 3; c.beginPath(); c.moveTo(0, -12); c.lineTo(0, 12); c.moveTo(-8, -2); c.lineTo(8, -2); c.stroke(); c.restore();
+    label(c, '+30', 200, 40, '#7fe07a', 22); },
+  altar(c) { floor(c);
+    c.save(); c.translate(160, 130); c.fillStyle = '#6b6f86'; c.strokeStyle = '#0b0b10'; c.lineWidth = 4;
+    c.beginPath(); c.moveTo(-60, 0); c.lineTo(0, 24); c.lineTo(60, 0); c.lineTo(60, -26); c.lineTo(0, -2); c.lineTo(-60, -26); c.closePath(); c.fill(); c.stroke();
+    c.fillStyle = '#9aa0b5'; c.beginPath(); c.moveTo(-60, -26); c.lineTo(0, -50); c.lineTo(60, -26); c.lineTo(0, -2); c.closePath(); c.fill(); c.stroke();
+    for (const [dx, r] of [[-22, -.12], [22, .12]]) { c.save(); c.translate(dx, -70); c.rotate(r); c.fillStyle = '#f4efe3'; c.fillRect(-16, -24, 32, 46); c.strokeRect(-16, -24, 32, 46); c.fillStyle = '#ff9a3c'; c.beginPath(); c.arc(0, -2, 7, 0, 7); c.fill(); c.restore(); }
+    c.restore(); label(c, '고르는 동안 시간 정지', 160, 166, '#f4efe3', 12); },
+  trial(c) { floor(c);
+    c.save(); c.translate(160, 96); c.fillStyle = '#7b3fbf'; c.strokeStyle = '#0b0b10'; c.lineWidth = 4;
+    c.beginPath(); c.moveTo(0, -56); c.quadraticCurveTo(26, -10, 6, 50); c.quadraticCurveTo(-24, 0, 0, -56); c.closePath(); c.fill(); c.stroke();
+    c.fillStyle = '#d9c2ff'; c.beginPath(); c.moveTo(0, -36); c.quadraticCurveTo(10, -4, 3, 30); c.quadraticCurveTo(-10, 0, 0, -36); c.fill(); c.restore();
+    c.save(); c.strokeStyle = '#f4efe3'; c.lineWidth = 3; c.beginPath(); c.ellipse(160, 154, 34, 10, 0, 0, 7); c.stroke(); c.restore();
+    label(c, '1.5초 머물기', 160, 22, '#f4efe3', 12); },
+  stairs(c) { floor(c);
+    c.save(); c.translate(160, 150); c.fillStyle = '#2b2f45'; c.strokeStyle = '#0b0b10'; c.lineWidth = 4;
+    c.fillRect(-44, -112, 88, 112); c.strokeRect(-44, -112, 88, 112);
+    c.fillStyle = '#4a4f6b'; for (let i = 0; i < 4; i++) { c.fillRect(-36 + i * 6, -22 - i * 22, 72 - i * 12, 18); c.strokeRect(-36 + i * 6, -22 - i * 22, 72 - i * 12, 18); }
+    c.strokeStyle = '#0b0b10'; c.lineWidth = 7; c.beginPath(); c.moveTo(-50, -100); c.lineTo(50, -20); c.moveTo(50, -100); c.lineTo(-50, -20); c.stroke();
+    c.strokeStyle = '#b07cff'; c.lineWidth = 4; c.stroke(); c.restore(); label(c, '수호자가 살아 있으면 봉인', 160, 22, '#f4efe3', 12); },
+  rift(c) { floor(c);
+    for (const [x, y] of [[90, 110], [230, 80]]) { c.save(); c.fillStyle = '#5a2a8a'; c.strokeStyle = '#0b0b10'; c.lineWidth = 4; c.beginPath(); c.ellipse(x, y, 34, 12, 0, 0, 7); c.fill(); c.stroke(); c.fillStyle = '#b07cff'; c.beginPath(); c.ellipse(x, y, 22, 7, 0, 0, 7); c.fill(); c.restore(); }
+    spr(c, 'goblin', 230, 84, 34, true, .55); label(c, '증원은 미리 예고된다', 160, 160, '#f4efe3', 12); },
+  obstacle(c) { floor(c);
+    const prism = (x, y, w, d, h, top, side) => { c.save(); c.strokeStyle = '#0b0b10'; c.lineWidth = 3;
+      c.fillStyle = side; c.beginPath(); c.moveTo(x, y); c.lineTo(x + w, y + d); c.lineTo(x + w, y + d - h); c.lineTo(x, y - h); c.closePath(); c.fill(); c.stroke();
+      c.fillStyle = top; c.beginPath(); c.moveTo(x, y - h); c.lineTo(x + w, y + d - h); c.lineTo(x + w + 26, y + d - h - 12); c.lineTo(x + 26, y - h - 12); c.closePath(); c.fill(); c.stroke(); c.restore(); };
+    prism(110, 120, 46, 18, 40, '#8a8fa8', '#555a73');
+    spr(c, 'skeleton_archer', 270, 112, 40, true); hero(c, 70, 146);
+    c.save(); c.setLineDash([5, 5]); c.strokeStyle = '#ffb3b3'; c.lineWidth = 2.5; c.beginPath(); c.moveTo(262, 92); c.lineTo(170, 104); c.stroke(); c.restore();
+    sfx(c, '탁', 172, 70, '#f4efe3', -.1, 20); label(c, '화살·검기는 막고 칼은 통과', 160, 22, '#f4efe3', 12); }
+};
+
+/* ---------- telegraph thumbnails ---------- */
+const TELE = {
+  circle: (c, w, h) => hatch(c, () => c.arc(w / 2, h / 2, 26, 0, 7)),
+  circleZone: (c, w, h) => { hatch(c, () => c.arc(w / 2, h / 2, 28, 0, 7)); c.save(); c.strokeStyle = '#f4efe3'; c.setLineDash([3, 3]); c.lineWidth = 2; c.beginPath(); c.arc(w / 2, h / 2, 33, 0, 7); c.stroke(); c.restore(); },
+  fan60: (c, w, h) => hatch(c, () => { c.moveTo(20, h / 2); c.arc(20, h / 2, 70, -.52, .52); c.closePath(); }),
+  fan90: (c, w, h) => hatch(c, () => { c.moveTo(20, h / 2); c.arc(20, h / 2, 72, -.78, .78); c.closePath(); }),
+  fan140: (c, w, h) => hatch(c, () => { c.moveTo(18, h / 2); c.arc(18, h / 2, 76, -1.22, 1.22); c.closePath(); }),
+  line: (c, w, h) => hatch(c, () => c.rect(8, h / 2 - 4, w - 16, 8)),
+  lines3: (c, w, h) => { for (const a of [-.3, 0, .3]) hatch(c, () => { c.save(); c.translate(10, h / 2); c.rotate(a); c.rect(0, -3, w, 6); c.restore(); }); },
+  rect: (c, w, h) => hatch(c, () => c.rect(8, h / 2 - 12, w - 16, 24)),
+  circles5: (c, w, h) => { for (const [x, y] of [[56, 38], [26, 22], [86, 24], [30, 58], [84, 58]]) hatch(c, () => c.arc(x, y, 12, 0, 7)); },
+  rings3: (c, w, h) => { const cx = w / 2, cy = h / 2; hatch(c, () => c.arc(cx, cy, 12, 0, 7)); c.save(); c.globalAlpha = .7; hatch(c, () => { c.arc(cx, cy, 26, 0, 7); c.arc(cx, cy, 16, 0, 7, true); }); c.globalAlpha = .45; hatch(c, () => { c.arc(cx, cy, 38, 0, 7); c.arc(cx, cy, 30, 0, 7, true); }); c.restore(); },
+  rifts: (c, w, h) => { for (const x of [30, 82]) { c.fillStyle = '#5a2a8a'; c.strokeStyle = '#0b0b10'; c.lineWidth = 3; c.beginPath(); c.ellipse(x, h / 2, 20, 8, 0, 0, 7); c.fill(); c.stroke(); } }
+};
+const ENEMY_TELE = { slime: 'circle', goblin: 'fan60', skel_archer: 'line', ghoul: 'fan90', mage: 'circleZone', dark_knight: 'rect' };
+const BOSS_TELE = { cleave: 'fan140', dark_bolts: 'lines3', thorns: 'circles5', collapse: 'rings3', summon: 'rifts' };
+function teleCanvas(kind) { const cv = $('canvas', { width: 112, height: 76, 'aria-hidden': 'true' }); const c = setup(cv, 112, 76); c.fillStyle = '#262a42'; c.fillRect(0, 0, 112, 76); TELE[kind](c, 112, 76); return cv; }
+
+/* ---------- builders ---------- */
+const later = [];
+function diag(drawFn, alt) { const cv = $('canvas', { class: 'diag', role: 'img', 'aria-label': alt }); later.push(() => { const c = setup(cv); drawFn(c); }); return cv; }
+const kv = pairs => $('dl', { class: 'kv' }, pairs.filter(p => p[1]).map(([k, v]) => [$('dt', {}, k), $('dd', {}, v)]));
+const unlockTag = u => u ? $('span', { class: 'tag lock' }, '해금: ' + u) : $('span', { class: 'tag base' }, '처음부터');
+
+function cardPanel(cd) {
+  const fam = FAM[cd.family];
+  const tags = $('div', { class: 'tags' }, $('span', { class: 'tag fam', style: `box-shadow: inset 0 -4px 0 ${FAMCOL[cd.family]}` }, fam.name),
+    cd.kind ? $('span', { class: 'tag' }, cd.kind) : null,
+    cd.target ? $('span', { class: 'tag', style: `background:${TYPES[cd.target].floor}; color:${cd.target === 'magic' || cd.target === 'heavy' ? '#f4efe3' : '#0b0b10'}` }, TYPES[cd.target].name + ' 상대') : null,
+    unlockTag(cd.unlock));
+  let body;
+  if (cd.family === 'quest') {
+    body = [kv([['각성 전', cd.before], ['퀘스트', cd.quest], ['각성 후', cd.after], ['화면', cd.visible]])];
+  } else if (cd.family === 'combo') {
+    const m = $('div', { class: 'meter', 'aria-label': `최대 ${cd.max}스택` }, Array.from({ length: cd.max }, (_, i) => $('i', { class: i < Math.ceil(cd.max / 2) ? 'on' : '' })), ` 최대 ${cd.max}`);
+    body = [m, kv([['쌓이는 것', cd.gain], ['초기화', cd.reset], ['스택 효과', cd.stacks], ['요구하는 움직임', cd.move]])];
+  } else {
+    body = [$('p', { class: 'lead' }, cd.effect), kv([['화면', cd.visible], ['좋은 자리', cd.spot]])];
+  }
+  return $('article', { class: 'panel', id: 'card-' + cd.id, 'data-family': cd.family },
+    $('div', { class: 'vis' }, diag(CARD_DRAW[cd.id], cd.name + ' 효과 그림')),
+    $('div', { class: 'body' }, $('h3', {}, cd.name, $('span', { class: 'id' }, cd.id)), tags, body));
+}
+
+function itemPanel(it) {
+  return $('article', { class: 'panel', id: 'item-' + it.id },
+    $('div', { class: 'vis' }, diag(ITEM_DRAW[it.id], it.name + ' 그림')),
+    $('div', { class: 'body' }, $('h3', {}, it.name, $('span', { class: 'id' }, it.id)),
+      $('div', { class: 'tags' }, $('span', { class: 'tag fam' }, it.kind)),
+      kv([['효과', it.effect], ['쓰는 법', it.how], ['위치', it.where], ['메모', it.note]])));
+}
+
+function stage(sprite, type, cls = '', badge) {
+  const t = TYPES[type];
+  return $('div', { class: 'stage ' + cls, style: `background:${t.floor}` }, $('span', { class: 'shadow' }),
+    $('img', { src: SPR[sprite], alt: '' }), badge ? $('span', { class: 'badge' }, badge) : null,
+    cls === 'guard' ? $('span', { class: 'crown', html: '<svg viewBox="0 0 40 30" aria-hidden="true"><path d="M3 26V8l9 8 8-13 8 13 9-8v18z" fill="#c9a44a" stroke="#0b0b10" stroke-width="3" stroke-linejoin="round"/></svg>' }) : null);
+}
+function stats(rows) { return $('div', { class: 'stats' }, rows.map(([k, v]) => $('div', {}, $('b', {}, k), $('span', {}, v)))); }
+
+function enemyPanel(e) {
+  const t = TYPES[e.type];
+  return $('article', { class: 'panel', id: 'enemy-' + e.id },
+    $('div', { class: 'vis' }, stage(e.sprite, e.type, '', t.name + ' · ' + t.icon)),
+    $('div', { class: 'body' }, $('h3', {}, e.name, $('span', { class: 'id' }, e.id)),
+      stats([['HP', e.hp], ['속도', e.speed], ['피해', e.dmg], ['반경', e.radius], ['비용', e.cost]]),
+      $('p', { class: 'lead' }, e.behavior),
+      $('div', { class: 'attack' }, teleCanvas(ENEMY_TELE[e.id]), $('p', {}, $('strong', {}, '공격: ' + e.attack), e.tele)),
+      $('p', { class: 'counter' }, $('b', {}, '대처 '), e.counter)));
+}
+
+function guardianPanel(g) {
+  const t = TYPES[g.type];
+  return $('article', { class: 'panel', id: 'guardian-' + g.base },
+    $('div', { class: 'vis' }, stage(g.base, g.type, 'guard', t.name + ' 수호자')),
+    $('div', { class: 'body' }, $('h3', {}, g.name, $('span', { class: 'id' }, 'guardian · ' + g.base)),
+      kv([['추가 기술', g.skill]])));
+}
+
+function build() {
+  const D = DATA, main = document.getElementById('main'), toc = document.getElementById('toc');
+  const chap = (id, title, desc, n) => { toc.append($('a', { href: '#' + id }, title, n != null ? $('span', { class: 'n' }, n) : null)); const s = $('section', { class: 'chap', id }, $('div', { class: 'chap-head' }, $('h2', {}, title), $('p', {}, desc))); main.append(s); return s; };
+
+  document.getElementById('mastHero').src = SPR.hero_front;
+
+  // Hero
+  const sh = chap('hero', '용사', '카드가 바꾸는 바탕. 플레이어는 움직이기만 하고, 용사는 칼 길이 안의 가장 가까운 적을 스스로 벤다.', null);
+  sh.append($('div', { class: 'split' },
+    $('div', { class: 'herostrip' }, D.hero.poses.map(([k, n]) => $('figure', { id: 'pose-' + k }, $('img', { src: SPR[k], alt: n }), $('figcaption', {}, n)))),
+    $('div', { class: 'tablebox' }, $('table', {}, $('tbody', {}, D.hero.stats.map(([k, v]) => $('tr', {}, $('th', { scope: 'row' }, k), $('td', {}, v))))))));
+
+  // Cards
+  const sc = chap('cards', '성인 18장', '성검 코등이의 홈 세 개에 새기는 패시브 카드. 전부 자동 공격을 바꾼다. 그림은 용사(왼쪽)를 기준으로 효과가 닿는 범위를 보여 준다.', D.cards.length);
+  const chips = $('div', { class: 'chips', role: 'group', 'aria-label': '계열로 거르기' });
+  const fams = [['all', '전체'], ...Object.entries(FAM).map(([k, v]) => [k, v.name])];
+  for (const [k, n] of fams) {
+    const cnt = k === 'all' ? D.cards.length : D.cards.filter(c => c.family === k).length;
+    const b = $('button', { class: 'chip', type: 'button', id: 'f-' + k, 'aria-pressed': k === 'all' ? 'true' : 'false' }, `${n} ${cnt}`);
+    b.addEventListener('click', () => { for (const x of chips.children) x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); for (const p of grid.children) p.hidden = k !== 'all' && p.dataset.family !== k; try { localStorage.setItem('bd-cat-fam', k); } catch (e) {} });
+    chips.append(b);
+  }
+  const grid = $('div', { class: 'grid' }, D.cards.map(cardPanel));
+  sc.append(chips, grid, $('div', { class: 'rules' }, D.startRules.map(r => $('p', { class: 'rule' }, r))));
+  try { const k = localStorage.getItem('bd-cat-fam'); if (k && k !== 'all') document.getElementById('f-' + k)?.click(); } catch (e) {}
+
+  // Items
+  const si = chap('items', '물건과 장치', '줍는 물건은 성수 하나뿐이다. 나머지는 머물러서 쓰는 장치와 지형이다.', D.items.length);
+  si.append($('div', { class: 'grid' }, D.items.map(itemPanel)));
+
+  // Enemies
+  const se = chap('enemies', '적 7종', '모든 공격에는 바닥 예고(빨강 빗금, 빨강 바닥에서는 흰 빗금)가 먼저 뜬다. 무대 색은 그 적이 우세하게 나오는 층의 바닥색이다.', D.enemies.length + 1);
+  se.append($('div', { class: 'grid' }, D.enemies.map(enemyPanel)));
+
+  // Elite & guardians
+  const sg = chap('variants', '정예와 수호자', '새 그림 없이 크기와 테두리로 만드는 변종. 수호자를 베야 계단이 열린다.', D.guardians.length + 1);
+  const elite = $('article', { class: 'panel', id: 'elite' },
+    $('div', { class: 'vis' }, stage('goblin', 'undead', 'elite', '정예 예시 · 고블린')),
+    $('div', { class: 'body' }, $('h3', {}, '정예', $('span', { class: 'id' }, 'elite')), kv([['규칙', D.elite.rule], ['수', D.elite.count], ['표시', D.elite.mark]])));
+  const gRule = $('article', { class: 'panel', id: 'guardian-rule' },
+    $('div', { class: 'body' }, $('h3', {}, '수호자 공통', $('span', { class: 'id' }, 'guardian')), kv([['규칙', D.guardian.rule], ['HP', D.guardian.hp], ['표시', D.guardian.mark]])));
+  sg.append($('div', { class: 'grid' }, elite, gRule, D.guardians.map(guardianPanel)));
+
+  // Boss
+  const b = D.boss, sb = chap('boss', '마왕', '옥상에서 기다리는 마지막 상대. 세 단계로 기술이 늘고 빨라진다.', 1);
+  const bossPanel = $('article', { class: 'panel', id: 'boss-demon_king' },
+    $('div', { class: 'vis' }, stage('demon_king', 'boss', '', '보스 · 옥상')),
+    $('div', { class: 'body' }, $('h3', {}, b.name, $('span', { class: 'id' }, b.id)), stats([['HP', b.hp], ['속도', b.speed], ['반경', b.radius]]), $('p', { class: 'lead' }, b.note)));
+  const phases = $('div', { class: 'tablebox', id: 'boss-phases' }, $('table', {},
+    $('thead', {}, $('tr', {}, ['단계', 'HP', '속도', '기술 순환', '소환'].map(h => $('th', { scope: 'col' }, h)))),
+    $('tbody', {}, b.phases.map(p => $('tr', { id: 'boss-phase-' + p.n[0] }, $('td', { class: 'ph' }, $('b', {}, p.n)), $('td', { class: 'num' }, p.hp), $('td', { class: 'num' }, p.speed), $('td', {}, p.cycle), $('td', {}, p.summon))))));
+  const skills = $('div', { class: 'grid' }, b.skills.map(s => $('article', { class: 'panel', id: 'boss-skill-' + s.id },
+    $('div', { class: 'body' }, $('h3', {}, s.name, $('span', { class: 'id' }, s.id)),
+      $('div', { class: 'attack' }, teleCanvas(BOSS_TELE[s.id]), $('p', {}, $('strong', {}, '예고'), s.tele)), kv([['판정', s.hit]])))));
+  sb.append($('div', { class: 'split' }, bossPanel, phases), $('div', { style: 'height:22px' }), skills);
+
+  document.getElementById('foot').append(`출처: ${D.source}. 그림: 게임에 넣은 스프라이트 그대로. 카드 효과 그림은 이 도감용 설명도이고 게임 화면과는 다르다.`);
+}
+build();
+imgReady.then(() => (document.fonts ? document.fonts.ready : Promise.resolve())).then(() => later.forEach(f => f()));
+</script>
