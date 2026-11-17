@@ -357,7 +357,7 @@ async function main() {
     while (app.mode === 'play' && guard++ < 200000) app.step();
     const raw = mem.getItem(P.KEY);
     const o = raw ? JSON.parse(raw) : null;
-    const keysOk = o && o.v === 1 && JSON.stringify(Object.keys(o).sort()) === JSON.stringify(P.FIELDS.slice().sort());
+    const keysOk = o && o.v === P.VERSION && JSON.stringify(Object.keys(o).sort()) === JSON.stringify(P.FIELDS.slice().sort()); // v2 save (GDD-V2 §8, V14)
     // Node: storage that throws
     const boom = { getItem() { throw new Error('denied'); }, setItem() { throw new Error('denied'); } };
     const app2 = BD.createApp({ storage: boom, params: {} });
@@ -371,7 +371,7 @@ async function main() {
       await a.p.goto(fileUrl + '?seed=9&floor=6&bot=1&speed=64&mute=1');
       await a.p.waitForTimeout(300); await a.p.keyboard.press('Enter');
       const done = await waitMode(a.p, 'result', 120000);
-      const saved = await a.p.evaluate(() => { try { return JSON.parse(localStorage.getItem('before-dawn.save.v1')); } catch (e) { return null; } });
+      const saved = await a.p.evaluate((key) => { try { return JSON.parse(localStorage.getItem(key)); } catch (e) { return null; } }, P.KEY);
       const b = await page();
       await b.p.addInitScript(() => {
         const thrower = () => { throw new Error('storage denied'); };
@@ -380,12 +380,12 @@ async function main() {
       await b.p.goto(fileUrl + '?seed=9&floor=6&bot=1&speed=64&mute=1');
       await b.p.waitForTimeout(300); await b.p.keyboard.press('Enter');
       const done2 = await waitMode(b.p, 'result', 120000);
-      browserOk = done && saved && saved.v === 1 && done2 && !a.errors.length && !b.errors.length;
+      browserOk = done && saved && saved.v === P.VERSION && done2 && !a.errors.length && !b.errors.length;
       browserNote = `browser: saved v=${saved && saved.v} runs=${saved && saved.runs}, throwing localStorage → ${done2 ? 'result reached' : 'STUCK'}${b.errors.length ? ' errors: ' + b.errors[0] : ''}`;
       await a.ctx.close(); await b.ctx.close();
     }
     const ok = keysOk && app2.mode === 'result' && browserOk;
-    report(13, ok ? 'PASS' : 'FAIL', `node: key written, v=1, fields ${keysOk ? '= §11' : 'DIFFER'}; throwing storage → ${app2.mode}; ${browserNote}`);
+    report(13, ok ? 'PASS' : 'FAIL', `node: key ${P.KEY} written, v=${o && o.v}, fields ${keysOk ? '= GDD-V2 §8' : 'DIFFER'}; throwing storage → ${app2.mode}; ${browserNote}`);
   }
 
   // 14
