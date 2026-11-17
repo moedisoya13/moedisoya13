@@ -409,7 +409,7 @@ function drawEnemy(g, v, e, w, t) {
   else if (e.state === 'stunned') o.rot = Math.sin(t * 30) * 0.06;
   if (e.hitT > 0) o.white = Math.min(1, e.hitT / 0.12);
   const floorHue = R.floorHue(w);
-  const hue = AS.hue[id];
+  const hue = AS.hue[R.anim.lookOf(e)]; // a tint variant's own hue (v2-enemies)
   if (e.guardian || e.boss) o.outline = '#ffd24a';
   else if (e.elite) o.outline = '#ffffff';
   else if (hue !== null && hue !== undefined && Math.abs(((hue - floorHue + 540) % 360) - 180) <= 40) { o.outline = '#ffffff'; o.outlinePx = 1.5; }
@@ -430,7 +430,8 @@ function drawEnemy(g, v, e, w, t) {
   }
   R.decor(e.kind, g, v, e, w, box, t);
   R.decor('enemy', g, v, e, w, box, t);
-  if (e.type !== 'boss') typeIconCached(g, v, e.type, box.x, box.top - 9);
+  // v2-enemies: fodder carry no type icon, so the few threats in a horde of 30–60 keep theirs as a mark
+  if (e.type !== 'boss' && e.role !== 'fodder') typeIconCached(g, v, e.type, box.x, box.top - 9);
   if (e.guardian) crown(g, box.x, box.top - 18);
 }
 

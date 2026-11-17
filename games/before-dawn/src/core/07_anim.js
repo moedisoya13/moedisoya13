@@ -116,15 +116,19 @@ A.heroAction = function (h, meta, dir, moving) {
 
 // Enemy action. tg: its soonest telegraph or null; fireAge: sim s since its last telegraph fired
 // (Infinity if none); moving: the client's measured walking. hurtAge: s since its last hit.
+// v2-enemies: a variant (def.variantOf) plays its original's clips (assets/anim: fodder variants
+// reuse their base character's clips); fodder never plays `hurt` — a white flash only (GDD-V2 §5.9 ⑥)
+A.charOf = (e) => (e.def && e.def.variantOf) || e.kind;
 A.enemyAction = function (e, meta, tg, fireAge, moving, hurtAge) {
   if (e.dead) return { action: 'die' };
   if (e.down) return { action: 'die', phase: { t: 1e6 } }; // lies at the last frame until it revives
-  const r = A.resolve(meta, e.kind, 'attack', null, moving);
-  const clip = r.name && r.shows === 'attack' ? meta[e.kind][r.name] : null;
+  const ch = A.charOf(e);
+  const r = A.resolve(meta, ch, 'attack', null, moving);
+  const clip = r.name && r.shows === 'attack' ? meta[ch][r.name] : null;
   if (tg) return { action: 'attack', phase: { p: 1 - tg.remain / tg.total } };
   const F = clip ? A.enemyFollow(clip) : 0.25;
   if (fireAge < F) return { action: 'attack', phase: { q: fireAge / F } };
   if (e.state === 'windup') return { action: 'attack', phase: { p: 0.5 } };
-  if (hurtAge < 0.22) return { action: 'hurt', phase: { t: hurtAge } };
+  if (hurtAge < 0.22 && e.role !== 'fodder') return { action: 'hurt', phase: { t: hurtAge } };
   return { action: moving ? 'move' : 'idle' };
 };

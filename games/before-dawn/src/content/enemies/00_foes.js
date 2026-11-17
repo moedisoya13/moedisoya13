@@ -178,6 +178,36 @@ F.pack = function (w, x, y, n, o) {
   return out;
 };
 
+// ---- presentation (data and drawers; only the browser draws) --------------------------------------
+// Tint recipes of the variants (§3.2 "색조", §5.9 ④), baked once per image by src/client/34_anim.js:
+// hue h, saturation s, lightness l0 + l1 × the pixel's luminance; pixels darker than `ink` (the ink
+// line) keep their colour. Chosen against the floors each appears on: the squire on the red heavy
+// floor and the grey rooftop (dark gunmetal), the husk on the green undead floor and the rooftop (bone
+// white), the mana slime on the dark violet magic floor (light lilac, and the same-hue white border).
+BD.render.tints = Object.assign(BD.render.tints || {}, {
+  steel: { h: 214, s: 0.2, l0: 0.16, l1: 0.62, ink: 0.12 },
+  pale: { h: 50, s: 0.14, l0: 0.5, l1: 0.48, ink: 0.12 },
+  violet: { h: 278, s: 0.62, l0: 0.42, l1: 0.55, ink: 0.12 },
+});
+
+// Elite (§3.6 "흰 톱니 테두리"): a slowly turning white saw-tooth ring at its feet, over the white
+// body outline the engine draws.
+BD.render.decor.register({
+  id: 'elite_teeth',
+  target: 'enemy',
+  draw(g, v, e, w, box, t) {
+    if (!e.elite || e.down) return;
+    const r = e.r + 0.3, n = 16, pts = [];
+    for (let i = 0; i < n * 2; i++) {
+      const a = t * 0.7 + (i / (n * 2)) * M.TAU, rr = i % 2 ? r + 0.2 : r;
+      pts.push(v.proj(e.x + Math.cos(a) * rr, e.y + Math.sin(a) * rr, 2));
+    }
+    g.beginPath(); g.moveTo(pts[0][0], pts[0][1]); for (const p of pts) g.lineTo(p[0], p[1]); g.closePath();
+    g.lineJoin = 'miter'; g.strokeStyle = BD.ui.INK; g.lineWidth = 5; g.stroke();
+    g.strokeStyle = '#ffffff'; g.lineWidth = 2.5; g.stroke(); g.lineJoin = 'round';
+  },
+});
+
 // ---- the slime's split (§3.2) -----------------------------------------------------------------------
 // Two slimelets where the slime died: they stand F.T.splitHold s, attack 0.6 s after appearing (§5.6-4).
 F.split = function (w, e, kind, n) {
