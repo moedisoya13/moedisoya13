@@ -188,5 +188,21 @@ module.exports = {
     t.assert(swaps.every((x) => BD.cardRt.pool(['test_flame', 'test_tide']).includes(x.inId)));
     t.eq(swaps[0].slot, 1); // slot 0 holds the combo card (conditional) → leftmost non-conditional
   },
+  'bot: steps out of the path of a hostile arrow already in flight (no telegraph left)'(t) {
+    const run = (botOn) => {
+      const { BD, H, w } = world(t);
+      const h = w.hero;
+      BD.hazards.projectile(w, { x: h.x - 6, y: h.y, dir: 0, speed: 12, range: 12, r: 0.15, dmg: 9, kind: 'arrow', attack: 'shot', ownerKind: 'skel_archer' });
+      H.bot(botOn);
+      const hp0 = h.hp, y0 = h.y;
+      H.step(60);
+      return { hurt: h.hp < hp0, moved: Math.abs(h.y - y0), hash: H.hash() };
+    };
+    const idle = run(false), bot = run(true), again = run(true);
+    t.assert(idle.hurt, 'the arrow hits a hero who stands still');
+    t.assert(!bot.hurt, 'the bot is not hit');
+    t.assert(bot.moved > 0.2, 'the bot stepped sideways out of the line');
+    t.eq(bot.hash, again.hash, 'deterministic');
+  },
 };
 

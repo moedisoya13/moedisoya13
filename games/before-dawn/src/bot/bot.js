@@ -1,6 +1,8 @@
 // Deterministic bot (GDD §13.1). Each tick, first matching rule wins:
 //  ① standing in a telegraph that fires in < 0.6 s → walk to the nearest safe spot;
-//     < 0.2 s and still inside → dash
+//     < 0.2 s and still inside → dash. A hostile projectile already in flight (arrow, dark
+//     bolt) counts as a line telegraph over the stretch it covers in the next 0.6 s, firing
+//     when it reaches the hero: the bot steps out of its path and does not walk back into it
 //  ② HP ≤ 50 and a flask exists → go to it
 //  ③ enemies present → hold edgeDist = reach − 0.5u (4.0u with a ranged acquire) to the nearest
 //  ④ no enemies and altar lit → go to the altar (overlay: pray if HP < 60, else first offer
@@ -12,10 +14,20 @@
 const M = BD.math;
 const B = BD.bot = {};
 const SAMPLE_DIRS = 16;
+const SHOT_LOOKAHEAD = 0.6; // s of a hostile projectile's flight treated as danger
+
+// The stretch a hostile projectile covers in the next SHOT_LOOKAHEAD s, as a line shape.
+// remain = time until it reaches the hero's position along its path (Infinity once past).
+function shotShape(w, p) {
+  const len = BD.nav.rayLen(w.grid, p.x, p.y, p.dir, Math.min(p.range - p.travelled, p.speed * SHOT_LOOKAHEAD));
+  const along = (w.hero.x - p.x) * Math.cos(p.dir) + (w.hero.y - p.y) * Math.sin(p.dir);
+  return { shape: 'line', x: p.x, y: p.y, dir: p.dir, len, width: p.r * 2, remain: along >= 0 ? along / p.speed : Infinity };
+}
 
 function dangerShapes(w) {
   const out = [];
   for (const t of w.telegraphs) if (t.danger) out.push(t);
+  for (const p of w.projectiles) if (p.hostile && !p.dead) out.push(shotShape(w, p));
   return out;
 }
 function insideDanger(w, x, y, r, shapes, horizon) {
