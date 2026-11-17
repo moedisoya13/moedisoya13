@@ -1,0 +1,17 @@
+{
+ "goblin": {
+  "move": {
+   "file": "_placeholder/goblin_move.webp",
+   "frames": 12,
+   "fw": 160,
+   "fh": 144,
+   "fps": 12,
+   "loop": true,
+   "anchor": [
+    80,
+    144
+   ],
+   "scale": 1.0
+  }
+ }
+}
