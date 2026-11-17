@@ -118,6 +118,60 @@ module.exports = {
     } finally { await T.close(); }
   },
 
+  async 'full loop by the GDD paths: guardian → stand on the altar → stairs → death → result → retry'(t) {
+    const T = await H.open(H.variant(), { query: '?mute=1&nosave=1' });
+    const hero = (x, y) => T.eval(([x, y]) => { const h = window.__BD.world().hero; h.x = x; h.y = y; window.__BD.input({ mx: 0, my: 0 }); }, [x, y]);
+    try {
+      await T.key('Enter'); await T.key('Enter');
+      t.eq(await T.mode(), 'play');
+      await T.wait(1700); // the 1.5 s freeze on entering
+      // the guardian falls: stairs open, banner, altar lit
+      await T.eval(() => {
+        const B = window.__BD, w = B.world(), BD = window.BD;
+        B.killAll(); w.wave.n = 3;
+        const g = BD.W.makeEnemy(w, 'goblin', w.hero.x + 3, w.hero.y, { guardian: true });
+        BD.combat.kill(w, g);
+      });
+      await T.wait(300);
+      t.assert(has(await T.texts(), '계단이 열렸다'), 'stairs banner');
+      t.eq(await T.eval(() => window.__BD.world().altar.state), 'lit');
+      // stand on the altar ring for 0.8 s → the altar overlay; the clock stops
+      const altar = await T.eval(() => { const a = window.__BD.world().altar; return [a.x, a.y]; });
+      await hero(altar[0], altar[1]);
+      let opened = false;
+      for (let i = 0; i < 30 && !opened; i++) { await T.wait(100); opened = (await T.overlay()) === 'altar'; }
+      t.assert(opened, 'standing on the altar opens it');
+      const t0 = (await T.state()).t;
+      await T.wait(300);
+      t.eq((await T.state()).t, t0, 'world frozen at the altar');
+      await T.eval(() => window.__BD.setHp(50));
+      await T.tap('pray', 'mouse');
+      t.eq(await T.overlay(), null);
+      t.eq((await T.state()).hero.hp, 75, '기도한다');
+      // stairs ring for 1.0 s → next floor with its banner
+      const st = await T.eval(() => { const s = window.__BD.world().stairs; return [s.ringX, s.ringY]; });
+      await hero(st[0], st[1]);
+      let up = false;
+      for (let i = 0; i < 40 && !up; i++) { await T.wait(100); up = (await T.state()).floor === 2; }
+      t.assert(up, 'stairs take the hero to 2F');
+      await T.wait(200);
+      t.assert((await T.texts()).some((x) => /^2F — /.test(x)), 'floor banner');
+      // death → result → 다시 오른다 (touch) → prep → 오른다 → a new night
+      await T.eval(() => { const w = window.__BD.world(); w.hero.invuln = 0; window.BD.W.hurtHero(w, 999, { source: 'goblin', attack: 'stab', x: w.hero.x + 1, y: w.hero.y }); });
+      t.assert(await T.waitMode('result', 5000), 'result after death');
+      t.assert(has(await T.texts(), '쓰러졌다'));
+      const seed1 = (await T.state()).seed;
+      await T.tap('again');
+      t.eq(await T.mode(), 'prep');
+      await T.tap('ascend');
+      t.eq(await T.mode(), 'play');
+      t.assert((await T.state()).seed !== seed1, 'a new night has a new seed');
+      t.eq((await T.state()).floor, 1);
+      t.eq(T.errors, []);
+      t.eq(T.requests, []);
+    } finally { await T.close(); }
+  },
+
   async 'URL-defined runs skip the preparation screen (test hooks)'(t) {
     const T = await H.open(H.variant(), { query: '?seed=9&hand=pierce&mute=1&nosave=1' });
     try {

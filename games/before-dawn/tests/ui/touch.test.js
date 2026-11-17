@@ -14,6 +14,7 @@ async function playing(t, extra) {
 const hero = (T) => T.eval(() => { const h = window.__BD.world().hero; return { x: h.x, y: h.y }; });
 const dashes = (T) => T.eval(() => window.__BD.events(400).filter((e) => e.type === 'dash').length);
 const stick = (T) => T.eval(() => window.BD.client.input.stick());
+const has = (arr, x) => arr.some((s) => s === x);
 
 module.exports = {
   async 'drag anywhere moves the hero and draws the stick; release stops'(t) {
@@ -72,6 +73,28 @@ module.exports = {
       t.eq(await dashes(T), 1, 'pressing the button dashes');
       const h1 = await hero(T);
       t.assert(Math.hypot(h1.x - h0.x, h1.y - h0.y) > 1.5, 'dash moved the hero');
+    } finally { await T.close(); }
+  },
+
+  async 'portrait: rotate prompt holds the world; back to landscape lands on pause; blur pauses'(t) {
+    const T = await playing(t);
+    try {
+      await T.wait(200);
+      await T.page.setViewportSize({ width: 375, height: 667 });
+      await T.wait(200);
+      t.eq(await T.overlay(), 'rotate');
+      t.assert(has(await T.texts(), '화면을 가로로'), 'rotate prompt drawn');
+      const t0 = (await T.state()).t; await T.wait(400);
+      t.eq((await T.state()).t, t0, 'world held while portrait');
+      await T.page.setViewportSize({ width: 667, height: 375 });
+      await T.wait(200);
+      t.eq(await T.overlay(), 'pause', 'back in landscape: the pause menu');
+      await T.tap('resume');
+      t.eq(await T.overlay(), null);
+      await T.eval(() => window.dispatchEvent(new Event('blur')));
+      await T.wait();
+      t.eq(await T.overlay(), 'pause', 'losing focus pauses');
+      t.eq(T.errors, []);
     } finally { await T.close(); }
   },
 
