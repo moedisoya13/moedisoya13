@@ -19,7 +19,7 @@ F.enterFloor = function (w, n) {
   w.enemies = []; w.projectiles = []; w.telegraphs = []; w.zones = []; w.hitboxes = []; w.pickups = []; w.rifts = []; w.queue = [];
   w.field = null; w.fieldT = 0; w.fieldCell = -1; w.fieldCache = null;
   const h = w.hero, L = f.layout;
-  h.x = L.start[0]; h.y = L.start[1]; h.targetId = null; h.dashT = 0; h.face = Math.atan2(-1, -1);
+  h.x = L.start[0]; h.y = L.start[1]; h.targetId = null; h.dashT = 0; h.dashBuf = 0; h.face = Math.atan2(-1, -1);
   w.stats.floorReached = Math.max(w.stats.floorReached, n);
   w.interact = { target: null, progress: 0, need: 0, sealedToast: false };
   for (const p of L.flasks) w.pickups.push({ id: W.id(w), kind: 'flask', x: p[0], y: p[1] });
@@ -102,7 +102,7 @@ F.bossKilled = function (w) {
 F.heroDies = function (w, cause) {
   const h = w.hero;
   if (h.dead) return;
-  h.dead = true; h.hp = 0; h.pose = 'hurt';
+  h.dead = true; h.hp = 0; h.pose = 'hurt'; h.dashBuf = 0;
   w.ending = { kind: 'death', t: cause === 'giveup' ? 0 : C.ENDING.death, cause };
   w.altarOpen = false;
   W.emit(w, 'death', { cause, floor: w.floorN, t: M.round(w.t, 3) });
@@ -169,6 +169,7 @@ F.openAltar = function (w) {
   const a = w.altar;
   a.state = 'open'; a.step = 'choose'; a.pick = null;
   w.altarOpen = true;
+  w.hero.dashBuf = 0; // a dash pressed on the way in does not fire when the altar closes
   W.emit(w, 'altar_open', { floor: w.floorN });
 };
 

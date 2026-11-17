@@ -206,5 +206,116 @@ module.exports = {
     t.assert(bot.moved > 0.2, 'the bot stepped sideways out of the line');
     t.eq(bot.hash, again.hash, 'deterministic');
   },
+
+  // ---- docs/CONTROLS-REVIEW.md §3.3 (a, b), §3.5, §3.6 (a) ----
+  'dash buffer: a press up to 0.2 s before the cooldown ends fires when it ends; earlier presses are dropped; floor entry and the altar clear it'(t) {
+    // press for one tick `early` ticks before the cooldown ends (hold = keep pressing every tick);
+    // returns the tick after the press on which the second dash starts, or -1
+    const press = (early, hold) => {
+      const { BD, H, w } = world(t);
+      const h = w.hero;
+      w.hero.atkTimer = 1e9;
+      H.input({ mx: 1, my: 0, dash: true }); H.step(1); H.input({ mx: 1, my: 0 });
+      while (h.dashCd > early / 60 + 1e-9) H.step(1);
+      const n0 = types(w).filter((x) => x === 'dash').length;
+      H.input({ mx: 1, my: 0, dash: true }); H.step(1); if (!hold) H.input({ mx: 1, my: 0 });
+      let at = -1;
+      for (let i = 1; i <= 30 && at < 0; i++) { H.step(1); if (types(w).filter((x) => x === 'dash').length > n0) at = i; }
+      return at;
+    };
+    const ready = press(6, true);
+    t.assert(ready >= 4 && ready <= 6, 'held: fires when the cooldown ends (' + ready + ')');
+    t.eq(press(6), ready, '0.1 s early, one tick: fires on the same tick as a held press');
+    t.eq(press(10), press(10, true), '0.17 s early: fires when it ends');
+    t.eq(press(18), -1, '0.3 s early: not remembered');
+    const { BD, H, w } = world(t);
+    w.hero.dashCd = 0.1; H.input({ mx: 0, my: 0, dash: true }); H.step(1); H.input({ mx: 0, my: 0 });
+    t.assert(w.hero.dashBuf > 0, 'buffered');
+    BD.flow.enterFloor(w, 2);
+    t.eq(w.hero.dashBuf, 0, 'a new floor drops the press');
+    w.hero.dashBuf = 0.2; w.altar = w.altar || { x: 0, y: 0, offers: [], offered: [], round: 0 };
+    BD.flow.openAltar(w);
+    t.eq(w.hero.dashBuf, 0, 'opening the altar drops the press');
+  },
+  'idle dash: the last way the hero walked, not the way he faces his target; before any walking, the facing'(t) {
+    const { BD, H, w } = world(t);
+    const h = w.hero;
+    w.hero.atkTimer = 1e9;
+    H.input({ mx: 0, my: 1 }); H.step(10); H.input({ mx: 0, my: 0 });
+    const e = BD.W.makeEnemy(w, 'goblin', h.x + 1.5, h.y, {}); e.stunT = 1e9; e.hp = e.maxHp = 1e6;
+    H.step(5);
+    t.near(h.face, 0, 1e-6, 'standing, he faces the target at +x');
+    const x0 = h.x, y0 = h.y;
+    H.input({ mx: 0, my: 0, dash: true }); H.step(1); H.input({ mx: 0, my: 0 }); H.step(15);
+    t.near(h.x - x0, 0, 1e-6, 'no sideways part');
+    t.assert(h.y - y0 > 3.1, 'dashed the last walked way (+y): ' + (h.y - y0));
+    const fresh = world(t);
+    fresh.w.hero.face = Math.PI; const fx = fresh.w.hero.x;
+    fresh.H.input({ mx: 0, my: 0, dash: true }); fresh.H.step(1); fresh.H.input({ mx: 0, my: 0 }); fresh.H.step(15);
+    t.assert(fx - fresh.w.hero.x > 3.1, 'never walked: along the facing');
+  },
+  'facing: the target every tick while there is one (backing off looks like backing off); 0.25 s after it is gone, the way he walks'(t) {
+    const { BD, H, w } = world(t);
+    const h = w.hero;
+    const e = BD.W.makeEnemy(w, 'goblin', h.x + 1.2, h.y, {}); e.stunT = 1e9; e.hp = e.maxHp = 1e6;
+    let off = 0;
+    H.input({ mx: -1, my: 0 }); // walking away from it, still inside reach
+    for (let i = 0; i < 10; i++) { H.step(1); if (h.targetId !== null && BD.math.angDiff(h.face, Math.atan2(e.y - h.y, e.x - h.x)) > 0.05) off++; }
+    t.eq(off, 0, 'faces the target while walking away');
+    t.assert(h.targetId === e.id, 'still the target');
+    BD.combat.kill(w, e); H.step(1);
+    const faceAtLoss = h.face;
+    H.input({ mx: 0, my: 1 });
+    H.step(13);
+    t.near(h.face, faceAtLoss, 1e-9, 'holds the last face for 0.25 s');
+    H.step(3);
+    t.near(h.face, Math.PI / 2, 1e-9, 'then the way he walks');
+  },
+  'walking shoves regular enemies aside (not guardians, the boss or a lunging enemy); no shove when standing'(t) {
+    const shoved = (opts, setup) => {
+      const { BD, H, w } = world(t);
+      const h = w.hero;
+      h.x = 3; h.y = 4.5; w.hero.atkTimer = 1e9;
+      const e = BD.W.makeEnemy(w, opts.kind || 'goblin', 4.2, 4.55, opts.make || {}); e.stunT = 1e9;
+      if (setup) setup(e);
+      const ex = e.x, ey = e.y;
+      H.input(opts.input || { mx: 1, my: 0 }); H.step(opts.ticks || 45);
+      return { dy: e.y - ey, dx: e.x - ex, heroX: h.x };
+    };
+    const g = shoved({});
+    t.assert(g.dy > 0.3, 'goblin pushed off the line, to its own side (+y): ' + g.dy);
+    t.assert(Math.abs(g.dx) < 1e-6, 'sideways only');
+    t.assert(g.heroX > 5.2, 'the hero got past it: ' + g.heroX);
+    t.assert(shoved({ make: { guardian: true }, kind: 'ghoul' }).dy === 0, 'a guardian is a wall');
+    t.assert(shoved({ input: { mx: 0, my: 0 } }).dy === 0, 'no input, no shove');
+    t.assert(shoved({}, (e) => { e.lunging = true; }).dy === 0, 'a lunging enemy is not shoved');
+  },
+  'corner assist: a pillar corner within reach slides round, a flat face stops; wall slide speed unchanged'(t) {
+    const run = (hy, mx, my, ticks) => {
+      const { BD, H, w } = world(t);
+      let cells = '';
+      for (let y = 0; y < 12; y++) for (let x = 0; x < 12; x++) cells += x === 6 && y === 6 ? '#' : '.';
+      w.grid = BD.Grid.fromString(12, 12, cells); w.field = null; w.hero.atkTimer = 1e9;
+      w.hero.x = 4; w.hero.y = hy;
+      H.input({ mx, my }); H.step(ticks);
+      return [w.hero.x, w.hero.y];
+    };
+    t.assert(run(6.9, 1, 0, 90)[0] > 7, 'corner 0.1u off the line: round it');
+    t.assert(run(6.75, 1, 0, 90)[0] > 7, 'corner 0.25u off the line: round it');
+    t.near(run(6.6, 1, 0, 90)[0], 5.65, 1e-3, 'corner 0.4u off the line: stops at the face');
+    t.near(run(6.5, 1, 0, 90)[0], 5.65, 1e-3, 'dead centre: stops at the face');
+    // pushing into the outer wall at 60°–89°: the slide along it is what it was without the assist
+    // (the probe runs along the wall, so it never steps off a flat wall)
+    const slide = (deg, noAssist) => {
+      const { BD, H, w } = world(t);
+      if (noAssist) BD.C.CORNER.reach = 0;
+      w.grid = BD.Grid(12, 12); w.field = null; // empty room: x = 0 is a flat wall
+      w.hero.atkTimer = 1e9; w.hero.x = 0.36; w.hero.y = 4;
+      const a = deg * Math.PI / 180;
+      H.input({ mx: -Math.sin(a), my: Math.cos(a) }); H.step(60);
+      return w.hero.y - 4;
+    };
+    for (const deg of [60, 75, 80, 89]) t.near(slide(deg), slide(deg, true), 1e-9, 'wall slide at ' + deg + '°');
+  },
 };
 

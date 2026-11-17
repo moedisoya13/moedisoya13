@@ -17,8 +17,16 @@ BD.C = {
     maxHp: 100, speed: 4.2, radius: 0.35, hurtInvuln: 1.0, hurtKnock: 0.5,
     dmg: 10, interval: 0.6, reach: 1.9, halfArc: 50, switchMargin: 0.4,
     trail: 0.15, aimHold: 0.25, spriteH: 90,
+    // walking into a regular enemy shoves it sideways: this share of the overlap per tick, at most
+    // shoveSpeed × speed (u/s); guardians, the boss and lunging enemies stay solid (docs/CONTROLS-REVIEW.md §3.5)
+    shoveShare: 0.6, shoveSpeed: 0.6,
   },
-  DASH: { dur: 0.2, dist: 3.2, invuln: 0.25, dmg: 5, knock: 1.0, cd: 2.5 },
+  // corner assist (walking only): when the grid stops a step below `stuck` of its length, probe
+  // sideways in `step` up to `reach`; the nearest spot that walks ≥ `need` of the step is slid toward
+  // at `speed` × HERO.speed (docs/CONTROLS-REVIEW.md §3.5)
+  CORNER: { stuck: 0.3, step: 0.05, reach: 0.45, need: 0.9, speed: 0.6 }, // reach: spec 0.25, see the review's 구현 메모
+  // buffer: a dash pressed up to this long before it is possible fires when it becomes possible
+  DASH: { dur: 0.2, dist: 3.2, invuln: 0.25, dmg: 5, knock: 1.0, cd: 2.5, buffer: 0.2 },
   WAVES: {
     shares: [0.30, 0.35], wave2Survivors: 2, wave3Survivors: 3, timeout: 28,
     initFreeze: 1.5, riftWarn: 1.2, guardianWarn: 2.0, noAttackAfterSpawn: 0.6,
