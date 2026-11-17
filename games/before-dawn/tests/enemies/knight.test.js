@@ -107,6 +107,7 @@ module.exports = {
     e.face = Math.PI; e.mem.cd = 0;
     H.step(1);
     t.eq(tgOf(w, e).length, 1);
+    t.near(tgOf(w, e)[0].len, 4.6, 0.06, 'the warning stops at the wall');
     H.input({ mx: 0, my: 1 }); H.step(30); H.input({ mx: 0, my: 0 }); // step out of the lane
     const n0 = w.bus.count();
     until(H, () => e.stunT > 0, 120);

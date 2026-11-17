@@ -100,7 +100,10 @@ module.exports = {
     t.eq(tgs.length, 3);
     const base = Math.atan2(w.hero.y - e.y, w.hero.x - e.x);
     for (const a of [base - 15 * DEG, base, base + 15 * DEG]) t.assert(tgs.some((x) => BD.math.angDiff(x.dir, a) < 1e-6), 'line at ' + (a / DEG).toFixed(0) + '°');
-    for (const x of tgs) t.near(x.width, 0.3 * BD.C.GUARDIAN.tg, 1e-9, 'guardian line ×1.4');
+    for (const x of tgs) {
+      t.near(x.width, 0.3 * BD.C.GUARDIAN.tg, 1e-9, 'guardian line ×1.4');
+      t.near(x.len, BD.nav.rayLen(w.grid, x.x, x.y, x.dir, 40), 1e-9, 'line still ends at the wall');
+    }
     until(H, () => w.projectiles.length >= 3, 80);
     t.eq(w.projectiles.filter((p) => p.ownerId === e.id).length, 3);
   },

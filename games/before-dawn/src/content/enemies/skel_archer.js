@@ -66,8 +66,9 @@ function shoot(w, e) {
   let left = dirs.length;
   for (const dir of dirs) {
     const len = BD.nav.rayLen(w.grid, e.x, e.y, dir, 40);
+    // the line ends at the wall, so only its width takes the elite/guardian scale (§6.3)
     A.telegraph(w, e, {
-      shape: 'line', x: e.x, y: e.y, dir, len, width: T.width, time: T.tgTime,
+      shape: 'line', x: e.x, y: e.y, dir, len, width: T.width * e.tgScale, noScale: true, time: T.tgTime,
       dmg: 0, danger: true, attack: 'shot',
       onFire(w2, tg) {
         A.projectile(w2, e, { x: tg.x, y: tg.y, dir: tg.dir, speed: T.arrowSpeed, range: tg.len, r: tg.width / 2, kind: 'arrow', attack: 'shot' });

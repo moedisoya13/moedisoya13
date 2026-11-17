@@ -18,6 +18,18 @@ const T = {
   fizzle: 0.3, // knocked this far off the announced line during the wind-up → the charge is dropped
 };
 
+// Free run along dir before the first wall, obstacle or void cell (centre line), capped at max.
+function clearRun(grid, x, y, dir, max) {
+  const cx = Math.cos(dir), cy = Math.sin(dir), step = 0.05;
+  let d = 0;
+  while (d < max) {
+    const nd = Math.min(max, d + step);
+    if (!grid.walkable(Math.floor(x + cx * nd), Math.floor(y + cy * nd))) break;
+    d = nd;
+  }
+  return d;
+}
+
 function startCharge(w, e) {
   const m = e.mem;
   const dir = A.angleToHero(w, e);
@@ -25,15 +37,17 @@ function startCharge(w, e) {
   m.windup = true; e.state = 'windup'; e.squash = 1;
   // Elite / guardian telegraphs scale ×1.2 / ×1.4 (§6.3); the guardian's 7u is its own fixed
   // number (§6.3 table), so the length is set here and scaling is applied by hand.
-  const k = e.tgScale;
+  // The warning stops at a wall / obstacle / void edge in the way: the run ends there (slam).
+  const k = e.tgScale, full = e.guardian ? T.guardianLen : T.len * k;
   A.telegraph(w, e, {
-    shape: 'line', x: e.x, y: e.y, dir, len: e.guardian ? T.guardianLen : T.len * k, width: T.width * k,
+    shape: 'line', x: e.x, y: e.y, dir, len: clearRun(w.grid, e.x, e.y, dir, full), width: T.width * k,
     noScale: true, time: T.tgTime, dmg: 0, danger: true, attack: 'charge',
     onFire(w2, tg) {
       m.windup = false; m.cd = T.cd;
       if (M.dist(e.x, e.y, tg.x, tg.y) > T.fizzle) { m.recoverT = T.recover; A.release(w2, e); return; }
-      // the body (hitbox radius = half the warned width) stays inside the warned rectangle
-      const hb = tg.width / 2, run = Math.max(0, tg.len - hb);
+      // the body (hitbox radius = half the warned width) stays inside the warned rectangle; a run
+      // cut short by a wall is planned to the full length so the body still reaches the wall
+      const hb = tg.width / 2, run = Math.max(0, full - hb);
       e.face = tg.dir;
       // step 0.02u off any wall it stands flush against, so running along a wall is not a slam
       [e.x, e.y] = BD.nav.resolve(w2.grid, e.x, e.y, e.r + 0.02);
