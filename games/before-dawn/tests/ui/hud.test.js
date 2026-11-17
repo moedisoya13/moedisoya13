@@ -11,7 +11,16 @@ async function playing(t, hand, extra) {
   const T = await H.open(H.variant(), { query: '?seed=5&hand=' + hand + '&mute=1&nosave=1' + (extra || '') });
   await T.key('Enter');
   t.eq(await T.mode(), 'play');
-  await T.eval(() => { const B = window.__BD, w = B.world(); B.killAll(); w.wave.n = 3; w.freezeT = 0; });
+  // a stable state: the room emptied, then the hand dealt again, so the kills of the clear-out
+  // (real undead count toward 망자의 안식, any kill feeds 연참) leave no progress or stacks behind
+  await T.eval(() => {
+    const B = window.__BD, w = B.world();
+    B.killAll(); w.wave.n = 3; w.freezeT = 0;
+    const ids = w.cards.map((c) => c && c.id);
+    ids.forEach((id, i) => { if (id) window.BD.cardRt.unequip(w, i); });
+    ids.forEach((id, i) => { if (id) B.give(id, i); });
+  });
+  t.eq(await T.eval(() => window.__BD.world().cards.filter((c) => c && (c.state.progress || c.state.stack)).map((c) => c.id)), [], 'no progress or stacks left from the clear-out');
   return T;
 }
 const toasts = (T) => T.eval(() => window.BD.ui.S.toasts.map((x) => x.text));
