@@ -17,5 +17,10 @@ const ROWS = {
 };
 for (const [col, vals] of Object.entries(ROWS)) vals.forEach((v, i) => { BD.C.DIRECTOR.floors[i + 1][col] = v; });
 
+// The rooftop's minions (§3.4 옥상 행, §3.6): wanted by boss phase and tokens per second. More than the
+// slice's 10 / 14 / 18 at 2.6/s: in a 140 s boss fight they are the only light, and with fewer the
+// longest wait for a choice (§10.1 #12, ≤ 75 s) fell on the rooftop (85–90 s)
+Object.assign(BD.C.DIRECTOR.floors[6], { phases: [12, 16, 20], rate: 3.2 });
+
 // Guardian HP 1F–5F (§3.6, the knob ③ of §9.2; the engine's BD.C.GUARDIAN.hp is read by makeEnemy)
 BD.C.GUARDIAN.hp = [0, 280, 480, 680, 880, 1090];

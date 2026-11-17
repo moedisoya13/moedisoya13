@@ -103,7 +103,7 @@ module.exports = {
       if (!same(TUNED[key][0], (() => { // the left value must be the GDD-V2 one
         if (GDD[k]) { const r = GDD[k].find(([p]) => key === k + '.' + p); return r ? r[1] : undefined; }
         const [, col, n] = key.split('.');
-        if (k === 'row') return ROWS[col][n - 1];
+        if (k === 'row') return col === 'phases' ? [8, 12, 16] : col === 'rate' ? 2.0 : ROWS[col][n - 1]; // rooftop: GDD-V2 §3.4
         if (k === 'eliteHp') return ELITE_HP[col];
         if (k === 'guardianHp') return GUARDIAN_HP[col];
         return undefined;
@@ -118,6 +118,9 @@ module.exports = {
       const key = `row.${col}.${n}`, w = want(key, vals[n - 1]), got = BD.C.DIRECTOR.floors[n][col];
       if (!same(got, w)) bad.push(`${key}: ${got} ≠ ${w}`);
     }
+    // the rooftop (§3.4 옥상 행): minions wanted by boss phase, tokens per second
+    t.eq(BD.C.DIRECTOR.floors[6].phases, want('row.phases.6', [8, 12, 16]), 'rooftop want by phase');
+    t.eq(BD.C.DIRECTOR.floors[6].rate, want('row.rate.6', 2.0), 'rooftop rate');
     t.assert(!bad.length, bad.join('\n'));
     t.eq(BD.C.ENEMY.minTelegraph, 0.5, '§3.5: every damaging warning ≥ 0.5 s');
     t.eq(BD.C.CAP.enemies, 110); t.eq(BD.C.CAP.onScreen, 80); t.eq(BD.C.CAP.projectiles, 60); t.eq(BD.C.CAP.telegraphs, 32);

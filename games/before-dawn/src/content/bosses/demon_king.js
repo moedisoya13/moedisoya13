@@ -31,10 +31,10 @@ const T = {
     { speed: 1.6, cycle: ['cleave', 'dark_bolts', 'thorns'], gap: 2.0 },
     { speed: 2.4, cycle: ['cleave', 'collapse', 'dark_bolts', 'thorns'], gap: 1.6 },
   ],
-  cleave: { trigger: 4, half: 70, r: 3.6, time: 0.9, time3: 0.7, dmg: 42 },
-  bolts: { n: 3, every: 0.35, time: 0.6, speed: 12, dmg: 20, width: 0.4, fanN: 5, fanHalf: 30, lineMax: 12 },
-  thorns: { n: 5, r: 1.2, spread: 3, time: 1.0, dmg: 32 },
-  collapse: { rings: [[0, 3], [3, 6], [6, 9]], every: 0.5, time: 0.8, dmg: 34 },
+  cleave: { trigger: 4, half: 70, r: 3.6, time: 0.9, time3: 0.7, dmg: 46 },
+  bolts: { n: 3, every: 0.35, time: 0.6, speed: 12, dmg: 22, width: 0.4, fanN: 5, fanHalf: 30, lineMax: 12 },
+  thorns: { n: 5, r: 1.2, spread: 3, time: 1.0, dmg: 36 },
+  collapse: { rings: [[0, 3], [3, 6], [6, 9]], every: 0.5, time: 0.8, dmg: 38 },
   minionDmg: 40,   // §3.2: thorns and collapse on the minions inside
   roar: { time: 1.5, push: 3 },
   stop: 2.0,       // walks until edgeDist ≤ this between skills

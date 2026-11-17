@@ -16,7 +16,10 @@ module.exports = {
   // the charge was half of all damage taken and of all deaths before the rooftop: less per hit
   'dark_knight.hp': [120, 160], 'dark_knight.dmg': [18, 11], 'dark_knight.T.cd': [3.5, 3.0],
   // the rooftop killed 1 in 9 who reached it; the boss's v1 damage was made for a room of 13 × 13
-  'demon_king.T.cleave.dmg': [22, 42], 'demon_king.T.bolts.dmg': [12, 20], 'demon_king.T.thorns.dmg': [18, 32], 'demon_king.T.collapse.dmg': [20, 34],
+  'demon_king.T.cleave.dmg': [22, 46], 'demon_king.T.bolts.dmg': [12, 22], 'demon_king.T.thorns.dmg': [18, 36], 'demon_king.T.collapse.dmg': [20, 38],
+  // more minions on the rooftop (the slice had raised 8 / 12 / 16 at 2.0/s to 10 / 14 / 18 at 2.6/s): the only light in the
+  // boss fight, and the longest wait for a choice (§10.1 #12) fell there
+  'row.phases.6': [[8, 12, 16], [12, 16, 20]], 'row.rate.6': [2.0, 3.2],
   // §9.2 knob ①: damage of regular enemies by floor (deaths spread over 2F–5F)
   'row.dmg.1': [1.0, 1.3], 'row.dmg.2': [1.0, 1.8], 'row.dmg.3': [1.15, 2.2], 'row.dmg.4': [1.15, 2.7], 'row.dmg.5': [1.3, 3.1], 'row.dmg.6': [1.15, 1.9],
   // knob ②: more ranged wind-ups and threats at once, threats more often
