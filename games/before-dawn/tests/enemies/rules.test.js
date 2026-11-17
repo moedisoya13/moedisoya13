@@ -51,11 +51,12 @@ module.exports = {
           if (e.slot === 'melee') melee++;
           if (e.slot === 'ranged') ranged++;
           if (!Number.isFinite(e.x) || !Number.isFinite(e.y) || !Number.isFinite(e.hp)) bad.push(`${e.kind} NaN`);
-          now.set(e.id, [e.x, e.y]);
+          now.set(e.id, [e.x, e.y, !!e.knock]);
           const p = prev.get(e.id);
           // lunges may enter the ring; knockback (dash body hit, tide) is the hero's doing, not walking;
-          // a stunned enemy does not walk (separation + wall resolution can nudge it: engine, see requests)
-          if (!p || e.down || e.lunging || e.lunge || e.knock || e.stunT > 0 || e._nudged === w.ticks || w._hurtTick === w.ticks || w.blackoutT > 0) continue;
+          // a stunned enemy does not walk (separation + wall resolution can nudge it: engine, see requests).
+          // p[2]: knocked on the previous tick — the knock's last step moves the enemy and clears e.knock
+          if (!p || e.down || e.lunging || e.lunge || e.knock || p[2] || e.stunT > 0 || e._nudged === w.ticks || w._hurtTick === w.ticks || w.blackoutT > 0) continue;
           const before = Math.hypot(p[0] - h.x, p[1] - h.y), after = Math.hypot(e.x - h.x, e.y - h.y);
           const justLunged = e.lastLunge && w.t - e.lastLunge.t < 0.05;
           if (!justLunged && after - e.r < 0.8 - 1e-6 && after < before - 1e-6) bad.push(`${e.kind} walked inside 0.8u (${(after - e.r).toFixed(3)}) seed ${r.seed} t ${w.t.toFixed(2)}`);
