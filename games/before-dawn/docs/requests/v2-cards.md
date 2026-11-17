@@ -253,3 +253,12 @@ V13 (`--cards`: 회전베기 +20 %p of 2+-hit swings, 관통·검기 +10 %p) is 
 card (66.3 %) 회전베기 gives 76.6 % (+10.3), 관통 79.8 % (+13.5), 검기 24.5 % — 검기's aim range of
 6.5u makes the hero swing at far targets whose only hit is the crescent, which `swing_end`'s
 `hitCount` does not count.
+
+**Run-level effect (for the §9.2 knobs, not the cards').** `tools/accept.js` on this branch: 16
+pass, 0 fail, 1 pending, as on the base commit. #7 (slice gate): 17 / 20 runs reach 3F (base
+20 / 20; the gate asks ≥ 10). #17 (V12, a tuning target): the human-like pilot wins 12 / 100 (base
+17) and 17 runs die on 1F–2F (base 3, target ≤ 15): all 18 cards are dealt again, and a dealt hand
+can now hold the cards that do little alone or off their floor (target and quest cards). The
+§9.2 order (floor HP / damage multipliers first) is the place to answer it once the enemies and
+floors are merged.
+
