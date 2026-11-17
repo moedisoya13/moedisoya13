@@ -74,6 +74,7 @@ BD.ui.effects.register({
     guardian_kill(ev, ui) { ui.sfxSafe('guardian_down'); },
     stairs_open(ev, ui) { ui.sfxSafe('stairs_open'); },
     altar_open(ev, ui) { ui.sfxSafe('altar_open'); },
+    trial_clear(ev, ui) { ui.sfxSafe('altar_open'); },
     boss_phase(ev, ui) { ui.sfxSafe('boss_roar'); },
     dawn(ev, ui) { ui.sfxSafe('dawn_bell'); },
     death(ev, ui) { ui.sfxSafe('death'); },

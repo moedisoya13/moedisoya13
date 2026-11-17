@@ -60,7 +60,7 @@ function drawProgress(g, ui, w) {
     const n = w.enemies.filter((e) => !e.dead && e.trial).length + w.rifts.filter((r) => r.opts.trial).length + w.queue.filter((q) => q.opts.trial).length;
     label = '시련 — 남은 적 ' + n; color = '#c9a0ff';
   } else if (w.stairs && w.stairs.open) {
-    label = '계단이 열렸다'; color = K.GOLD_HI;
+    label = w.trial && w.trial.state === 'available' ? '계단이 열렸다 · 시련 가능' : '계단이 열렸다'; color = K.GOLD_HI;
   } else {
     const n = Math.min(3, (w.wave && w.wave.n) || 1);
     label = '무리 ' + n + '/3'; segs = 3; segOn = n;

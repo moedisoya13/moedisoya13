@@ -39,6 +39,8 @@ BD.ui.effects.register({
   on: {
     toast(ev) { MSG.toast(ev.text, toastKind(ev.text)); },
     banner(ev) { MSG.banner(ev.text, ev.kind); },
+    trial_start() { MSG.banner('시련 — 균열이 열렸다', 'guardian'); },
+    trial_clear() { MSG.banner('시련을 넘었다 — 제단이 다시 켜졌다', 'stairs'); },
     spawn(ev, ui) {
       // GDD §9.2 banner `수호자 — 암흑기사 단장` when a guardian walks in
       const e = BD.W.enemyById(ui.world, ev.enemyId);

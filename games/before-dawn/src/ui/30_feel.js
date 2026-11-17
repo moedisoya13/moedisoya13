@@ -296,8 +296,15 @@ BD.ui.effects.register({
   },
 });
 
-// Last effect of every frame: closes the per-frame record of drawn text and buttons.
+// Last effect of every frame: closes the per-frame record of drawn text and buttons, and puts
+// the keyboard focus on the first menu item whenever a screen or overlay opens.
+let layerKey = null;
 BD.ui.effects.register({
   id: 'zz_frame',
-  draw(g, ui, layer) { if (layer === 'screen') { K.attach(ui); K.frameEnd(); } },
+  draw(g, ui, layer) {
+    if (layer !== 'screen') return;
+    K.attach(ui); K.frameEnd();
+    const key = ui.app.mode + '/' + (ui.app.overlay() || '');
+    if (key !== layerKey) { layerKey = key; ui.focus = 0; }
+  },
 });

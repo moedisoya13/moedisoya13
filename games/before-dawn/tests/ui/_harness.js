@@ -92,7 +92,7 @@ async function open(url, opts) {
     },
     waitMode: async (mode, ms) => {
       const t0 = Date.now();
-      while (Date.now() - t0 < (ms || 10000)) { if ((await T.mode()) === mode) return true; await T.wait(100); }
+      while (Date.now() - t0 < (ms || 10000)) { if ((await T.mode()) === mode) { await T.wait(80); return true; } await T.wait(100); }
       return false;
     },
     shot: (file) => page.screenshot({ path: file }),

@@ -12,9 +12,10 @@ const TEXT = {
   move: () => (touchy() ? '화면을 끌면 움직입니다. 공격은 자동입니다' : 'WASD·방향키로 움직입니다. 공격은 자동입니다'),
   target: () => '주황 꺾쇠가 다음 표적입니다',
   telegraph: () => '빨간 빗금은 곧 맞는 자리 — 비키세요',
-  dash: () => (touchy() ? '돌진: 오른쪽 아래 버튼, 또는 두 번 두드리기' : '돌진: Space 또는 Shift'),
+  dash: (ui) => (touchy() ? '돌진: ' + (ui.app.save.settings.dashSide === 'left' ? '왼쪽' : '오른쪽') + ' 아래 버튼, 또는 두 번 두드리기' : '돌진: Space 또는 Shift'),
   altar: () => '빛나는 제단에 머물면 성인을 바꿉니다',
   sealed: () => '수호자를 베어야 계단이 열립니다',
+  trial: () => '보라 균열에 머물면 시련 — 이기면 새 제단',
 };
 
 function on(ui) { return !!ui.app.save.settings.hints; }
@@ -32,7 +33,7 @@ BD.ui.effects.register({
     telegraph(ev, ui) { H.show(ui, 'telegraph', 0); },
     hurt(ev, ui) { H.show(ui, 'dash', 0.3); },
     dodge(ev, ui) { H.shown.dash = true; },
-    stairs_open(ev, ui) { H.show(ui, 'altar', 1.4); },
+    stairs_open(ev, ui) { H.show(ui, 'altar', 1.4); if (ui.world.trial) H.show(ui, 'trial', 4.6); },
     toast(ev, ui) { if (ev.text === '계단이 봉인되어 있다') H.show(ui, 'sealed', 0.2); },
   },
   update(dt, ui) {
@@ -47,7 +48,7 @@ BD.ui.effects.register({
     if (ui.app.overlay()) return;
     H.queue = H.queue.filter((q) => {
       if (ui.time < q.at) return true;
-      MSG.toast(TEXT[q.key](), 'hint');
+      MSG.toast(TEXT[q.key](ui), 'hint');
       return false;
     });
   },
