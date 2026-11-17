@@ -7,4 +7,4 @@ BD.gen.bundles.register({
 });
 
 // v2 horde mix (GDD-V2 §3.3): 고블린 병졸 85 %, 고블린 15 %; dark knights, each counting as two threats.
-BD.director.mixes.register({ id: 'heavy', fodder: { squire: 85, goblin: 15 }, threats: { dark_knight: 1 }, threatCost: { dark_knight: 2 } });
+BD.director.mixes.register({ id: 'heavy', fodder: { squire: 85, goblin: 15 }, threats: { dark_knight: 1 }, threatCost: { dark_knight: 2 }, elite: 'dark_knight' });

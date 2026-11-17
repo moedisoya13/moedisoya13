@@ -41,7 +41,13 @@ module.exports = {
           w.bus.on('telegraph', (ev) => {
             const tg = w.telegraphs.find((x) => x.id === ev.id);
             stats.tgs++;
-            if (tg && tg.dmg > 0 && tg.total < 0.45 - 1e-9) bad.push(`${tg.ownerKind}:${tg.attack} warning ${tg.total}s`);
+            // GDD-V2 §3.5: every damaging warning ≥ 0.5 s (fodder 0.6 s); §10.4 V7: no warning from an enemy
+            // outside the combat window or inside it for less than 0.5 s
+            if (tg && tg.dmg > 0 && tg.total < 0.5 - 1e-9) bad.push(`${tg.ownerKind}:${tg.attack} warning ${tg.total}s`);
+            const o = BD.W.enemyById(w, ev.ownerId);
+            if (tg && o && tg.dmg > 0 && o.role === 'fodder' && tg.total < 0.6 - 1e-9) bad.push(`${tg.ownerKind}:${tg.attack} fodder warning ${tg.total}s`);
+            if (tg && tg.danger && tg.unseen) bad.push(`${tg.ownerKind}:${tg.attack} began outside the combat window`);
+            if (tg && tg.danger && o && !o.boss && o.viewT < BD.C.V2.seenFor - 1e-9) bad.push(`${tg.ownerKind}:${tg.attack} after ${o.viewT.toFixed(2)} s in view`);
           });
         }
         stats.ticks++;

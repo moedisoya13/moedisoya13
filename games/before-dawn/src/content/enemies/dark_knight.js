@@ -1,11 +1,14 @@
-// 암흑기사 (heavy) — GDD §6.2 / §6.3. Walks slowly after the hero; the body turns at most
-// 100°/s. Front guard: a direct hit (slash, pierce, whirl, wave, echo, riposte, dash) arriving
-// within 60° of its facing (the front 120°) deals 20 % — unless the hero's stats carry
-// mods.ignoreGuard (armor_break). Burn, chain, burst, steam and slam are not direct and ignore it.
+// 암흑기사 (heavy threat) — GDD-V2 §3.2 (behaviour v1 §6.2). Walks slowly after the hero; the body
+// turns at most 100°/s. Front guard: a direct hit (slash, pierce, whirl, wave, echo, riposte, dash)
+// arriving within 60° of its facing (the front 120°) deals 20 % — unless the hero's stats carry
+// mods.ignoreGuard (armor_break). Burn, chain, burst, steam, slam and foe are not direct and ignore it.
 // Charge: hero within 5u and inside the front 60° → a 1.4u × 5u rectangle fills over 0.9 s,
-// then the knight runs it at 10u/s (20 on contact). Afterwards 1.4 s of opening (no turning,
-// no moving); 2.8 s if the run ended against a wall or obstacle. Charge cooldown 3.5 s.
-// Guardian 암흑기사 단장: 7u charge, then a radius-2.2 sweep around itself (0.6 s, 20 × 1.3).
+// then the knight runs it at 10u/s (18 on contact). **Every other enemy in its way takes 30 and is
+// thrown 1u aside** (§3.2: leading the charge into the horde is the heavy floor's game; those kills drop
+// shards). Afterwards 1.4 s of opening (no turning, no moving); 2.8 s if the run ended against a wall
+// or obstacle. Charge cooldown 3.5 s. Counts as two threats (heavy mix).
+// Guardian 암흑기사 단장: 7u charge, then a radius-2.2 sweep around itself (0.6 s, 18 × 1.3); it
+// keeps to the stairs zone + 6u.
 // Counterplay (§6.5): lure the charge into a wall, strike its back during the opening.
 const A = BD.ai;
 const M = BD.math;
@@ -13,9 +16,10 @@ const M = BD.math;
 const T = {
   turn: 100, guardHalf: 60, guardMul: 0.2,
   range: 5, coneHalf: 30, width: 1.4, len: 5, guardianLen: 7, tgTime: 0.9, chargeSpeed: 10,
-  recover: 1.4, wallRecover: 2.8, cd: 3.5,
+  recover: 1.4, wallRecover: 2.8, cd: 3.0,
   sweepR: 2.2, sweepTime: 0.6,
   fizzle: 0.3, // knocked this far off the announced line during the wind-up → the charge is dropped
+  ffDmg: 30, ffPush: 1, // §3.2: what the charge does to the enemies in its way
 };
 
 // How far a charge along dir can go, capped at max: `body` = how far the centre travels before
@@ -60,9 +64,20 @@ function startCharge(w, e) {
       [e.x, e.y] = BD.nav.resolve(w2.grid, e.x, e.y, e.r + 0.02);
       A.lunge(w2, e, e.x + Math.cos(tg.dir) * run, e.y + Math.sin(tg.dir) * run, run / T.chargeSpeed,
         { hitbox: { r: hb, dmg: e.dmg, attack: 'charge', noScale: true } });
-      m.charging = true;
+      m.charging = true; m.runR = hb; m.trampled = new Set();
     },
   });
+}
+
+// §3.2: every enemy the running body touches (within the warned half-width of its centre) takes the
+// charge once: 30 `foe` damage and 1u thrown to the side of the line it stood on.
+function trample(w, e) {
+  const m = e.mem, r = m.runR || T.width / 2;
+  BD.foes.hitFoes(w, e, (o) => {
+    if (m.trampled.has(o.id) || M.dist(o.x, o.y, e.x, e.y) > r + o.r) return false;
+    m.trampled.add(o.id);
+    return true;
+  }, T.ffDmg, { dist: T.ffPush, dir: e.face, x: e.x, y: e.y });
 }
 
 function endCharge(w, e) {
@@ -74,18 +89,18 @@ function endCharge(w, e) {
     BD.W.emit(w, 'vfx', { kind: 'knight_slam', x: e.x + Math.cos(e.face) * e.r, y: e.y + Math.sin(e.face) * e.r, life: 0.6 });
   } else m.recoverT = T.recover;
   A.release(w, e);
-  if (e.guardian) {
+  if (e.guardian && A.inView(w, e.x, e.y)) { // §5.6-1: not if the run took it out of the combat window
     A.telegraph(w, e, { shape: 'circle', x: e.x, y: e.y, r: T.sweepR, noScale: true, time: T.sweepTime, attack: 'sweep' });
   }
 }
 
 BD.enemies.register({
   id: 'dark_knight', name: '암흑기사', type: 'heavy', sprite: 'dark_knight',
-  hp: 120, speed: 2.0, dmg: 20, radius: 0.55, cost: 6, role: 'threat', shards: 8, // HP: GDD-V2 §3.2 (v1 tuned 240)
+  hp: 160, speed: 2.0, dmg: 11, radius: 0.55, cost: 6, role: 'threat', shards: 8, // GDD-V2 §3.2 (v1 tuned: 240 HP, 20)
   knockScale: 0.33,
   attacks: { charge: { name: '돌격', sfx: 'charge' }, sweep: { name: '휩쓸기', sfx: 'boss_cleave' } },
   T,
-  guardian: { name: '암흑기사 단장' }, // 7u charge and the sweep are read from e.guardian
+  guardian: { name: '암흑기사 단장', update(e, w) { BD.foes.clamp(w, e); } }, // 7u charge and the sweep: e.guardian
   // Front guard (§6.2). info = {source, direct, fromX, fromY}
   defense(e, w, info) {
     if (!info.direct) return 1;
@@ -99,21 +114,23 @@ BD.enemies.register({
     BD.W.emit(w, 'vfx', { kind: 'guard_spark', x: sx, y: sy, dir: a, life: 0.3 });
     return T.guardMul;
   },
-  create(e, w) { e.mem.cd = A.rng(w).range(0.8, 2.0); e.mem.recoverT = 0; },
+  create(e, w) { e.mem.cd = A.rng(w).range(0.8, 2.0); e.mem.recoverT = 0; BD.foes.born(e, w); },
   update(e, w, dt) {
     const m = e.mem;
     m.cd -= dt;
     if (m.charging) {
+      trample(w, e);
       if (e.lunge) { e.state = 'charge'; return; }
       endCharge(w, e);
       return;
     }
     if (m.windup) { e.state = 'windup'; return; }
     if (m.recoverT > 0) { m.recoverT -= dt; e.state = 'recover'; return; }
+    if (BD.foes.leash(w, e, dt)) return;
     const want = A.angleToHero(w, e);
     A.turn(e, want, T.turn * M.DEG, dt);
     const ed = A.edgeDist(w, e);
-    if (A.canAttack(w, e) && m.cd <= 0 && ed <= T.range && M.angDiff(want, e.face) <= T.coneHalf * M.DEG && A.slot(w, e, 'melee')) {
+    if (A.canAttack(w, e) && m.cd <= 0 && ed <= T.range && M.angDiff(want, e.face) <= T.coneHalf * M.DEG && BD.foes.slot(w, e, 'melee')) {
       startCharge(w, e);
       return;
     }

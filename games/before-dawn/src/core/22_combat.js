@@ -7,7 +7,7 @@ const W = BD.W;
 const K = BD.combat = {};
 
 const DIRECT_SOURCES = ['slash', 'pierce', 'whirl', 'wave', 'echo', 'riposte', 'dash'];
-const INDIRECT_SOURCES = ['chain', 'burn', 'steam', 'burst', 'slam'];
+const INDIRECT_SOURCES = ['chain', 'burn', 'steam', 'burst', 'slam', 'foe']; // foe: an enemy's area attack hitting enemies (GDD-V2 §3.2, v2-enemies)
 K.SOURCES = DIRECT_SOURCES.concat(INDIRECT_SOURCES);
 K.isDirect = (src) => DIRECT_SOURCES.includes(src);
 

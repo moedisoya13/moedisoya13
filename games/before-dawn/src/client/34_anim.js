@@ -28,14 +28,73 @@ const R = BD.client.render;
 const S = BD.anim;
 const K = C.HERO.spriteH / 256;
 const DISSOLVE = 0.7, HURT = 0.22, GHOST_FADE = 0.15;
+// fodder (GDD-V2 §5.9 ②⑥, §7.1): a hit is the white flash and a 0.1u (≈ 6 px) recoil for 0.12 s; a death
+// is a 0.18 s ink scatter in four bands with three motes (a die clip is sped up to end within 0.3 s)
+const HURT_FODDER = 0.12, RECOIL = 6, DISSOLVE_FODDER = 0.18, DIE_FODDER = 0.3, MOTES = 9, MOTES_FODDER = 3;
 const AN = R.anim = { clock: 0, st: new Map(), ghosts: [], fireT: new Map(), hurtT: new Map(), tgBy: new Map(), frame: 0 };
 const meta = () => BD.animMeta || {};
 
-AN.clip = function (char, name) {
+AN.clip = function (char, name, tint) {
   const def = meta()[char] && meta()[char][name];
   const img = def && AS.anim[def.file];
-  return img ? { def, img } : null;
+  if (!img) return null;
+  const tinted = tint ? baked.get(def.file + ':' + tint) : null; // baked once (below); until then as drawn
+  return { def, img: tinted || img };
 };
+
+// ---- tint variants (GDD-V2 §5.9 ④, v2-enemies) --------------------------------------------------
+// A variant with def.tint (squire 'steel', husk 'pale', mana_slime 'violet') is drawn from copies of its
+// original's sprite and strips recoloured ONCE, when they have decoded — never per frame. The recipe
+// is content's BD.render.tints[name] = {h, s, l0, l1, ink}: a pixel darker than `ink` (the ink line)
+// keeps its colour; any other takes hue h, saturation s and lightness l0 + l1 × its own luminance.
+// Static sprites get their own asset id `<sprite>@<tint>` (with the original's white silhouette and the
+// tint's hue for the same-hue floor border); strips are keyed `<file>:<tint>`.
+const baked = new Map();
+function hsl(h, s, l) {
+  const k = (n) => (n + h / 30) % 12, a = s * Math.min(l, 1 - l);
+  const f = (n) => l - a * Math.max(-1, Math.min(k(n) - 3, 9 - k(n), 1));
+  return [Math.round(f(0) * 255), Math.round(f(8) * 255), Math.round(f(4) * 255)];
+}
+function recolour(src, spec) {
+  const c = document.createElement('canvas'); c.width = src.width; c.height = src.height;
+  const g = c.getContext('2d');
+  g.drawImage(src, 0, 0);
+  try {
+    const im = g.getImageData(0, 0, c.width, c.height), d = im.data;
+    for (let i = 0; i < d.length; i += 4) {
+      if (!d[i + 3]) continue;
+      const L = (0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]) / 255;
+      if (L < spec.ink) continue;
+      const p = hsl(spec.h, spec.s, Math.min(0.97, spec.l0 + spec.l1 * L));
+      d[i] = p[0]; d[i + 1] = p[1]; d[i + 2] = p[2];
+    }
+    g.putImageData(im, 0, 0);
+  } catch (err) { /* unreadable pixels: the copy keeps the original colours */ }
+  return c;
+}
+AN.recolour = recolour;
+let bakedSprites = false, bakedN = -1;
+function bakeTints() {
+  const T = BD.render.tints || {};
+  const vars = BD.enemies.all().filter((d) => d.tint && T[d.tint]);
+  if (!bakedSprites && AS.ready) {
+    bakedSprites = true;
+    for (const d of vars) {
+      const id = d.sprite + '@' + d.tint;
+      if (AS.img[id] || !AS.img[d.sprite]) continue;
+      AS.img[id] = recolour(AS.img[d.sprite], T[d.tint]); AS.white[id] = AS.white[d.sprite]; AS.hue[id] = T[d.tint].h;
+    }
+  }
+  const n = Object.keys(AS.anim).length;
+  if (n === bakedN) return;
+  bakedN = n;
+  for (const d of vars) for (const clip of Object.values(meta()[d.variantOf] || {})) {
+    const key = clip.file + ':' + d.tint;
+    if (!baked.has(key) && AS.anim[clip.file]) baked.set(key, recolour(AS.anim[clip.file], T[d.tint]));
+  }
+}
+// the sprite id an enemy is drawn with (its tinted copy once baked)
+AN.lookOf = (e) => { const d = e.def; if (!d.tint) return d.sprite; const id = d.sprite + '@' + d.tint; return AS.img[id] ? id : d.sprite; };
 // meta minus clips whose strip has not decoded yet (they fall back until it has)
 let liveMeta = null, liveN = -1;
 function live() {
@@ -59,7 +118,9 @@ AN.onWorld = function (w) {
 
 function state(id, x, y) {
   let s = AN.st.get(id);
-  if (!s) { s = { x, y, speed: 0, moving: false, walkT: 0, seen: AN.frame, last: null }; AN.st.set(id, s); }
+  // walkT starts at a different point of the cycle for every enemy, so a horde does not step in time
+  // (GDD-V2 §5.9 ③)
+  if (!s) { s = { x, y, speed: 0, moving: false, walkT: typeof id === 'number' ? (id * 0.6180339887) % 1 : 0, seen: AN.frame, last: null }; AN.st.set(id, s); }
   s.seen = AN.frame;
   return s;
 }
@@ -81,6 +142,7 @@ AN.update = function (ui, dt) {
   const run = !ui.app.overlay() && !(ui.hold > 0) && !w.over;
   const adt = run ? dt * ((ui.app.params && ui.app.params.speed) || 1) : 0;
   AN.clock += adt; AN.adt = adt; AN.frame++;
+  bakeTints();
   AN.tgBy = new Map();
   for (const tg of w.telegraphs) if (tg.ownerId !== null) { const c = AN.tgBy.get(tg.ownerId); if (!c || tg.remain < c.remain) AN.tgBy.set(tg.ownerId, tg); }
   track('hero', w.hero.x, w.hero.y, C.HERO.speed, adt);
@@ -157,11 +219,17 @@ AN.drawEnemy = function (g, v, e, w, t, o) {
   const st = AN.st.get(e.id) || state(e.id, e.x, e.y), m = live();
   const fireAge = AN.fireT.has(e.id) ? w.t - AN.fireT.get(e.id) : Infinity;
   const hurtAge = AN.hurtT.has(e.id) ? AN.clock - AN.hurtT.get(e.id) : Infinity;
+  const ch = S.charOf(e); // a variant plays its original's clips (in its own tint)
   const act = S.enemyAction(e, m, AN.tgBy.get(e.id) || null, fireAge, st.moving, hurtAge);
-  const r = S.resolve(m, e.kind, act.action, null, st.moving);
+  const r = S.resolve(m, ch, act.action, null, st.moving);
   const [ux, uy] = screenDir(v, e.face);
   if (!e.down) codeMotion(o, r.code, act.phase, st, e.id, ux, uy);
-  const c = r.name ? AN.clip(e.kind, r.name) : null;
+  // fodder hit (GDD-V2 §7.1): the white flash and a 0.1u recoil away from the hero, nothing else
+  if (e.role === 'fodder' && hurtAge < HURT_FODDER) {
+    const [rx, ry] = v.worldDirToScreen(e.x - w.hero.x, e.y - w.hero.y), l = Math.hypot(rx, ry) || 1, k = 1 - hurtAge / HURT_FODDER;
+    o.dx = (o.dx || 0) + (rx / l) * RECOIL * k; o.dy = (o.dy || 0) + (ry / l) * RECOIL * 0.5 * k;
+  }
+  const c = r.name ? AN.clip(ch, r.name, e.def.tint) : null;
   if (c) {
     const ph = r.hold ? { hold: true } : r.shows === act.action && act.phase ? act.phase : { t: st.walkT };
     const f = S.frame(c.def, ph);
@@ -169,7 +237,7 @@ AN.drawEnemy = function (g, v, e, w, t, o) {
     return AN.drawFrame(g, v, c.def, c.img, f, e.x, e.y, o, AN.frameScale(e.kind, c.def, e.size));
   }
   st.last = null;
-  return R.sprite(g, v, e.def.sprite, e.x, e.y, o);
+  return R.sprite(g, v, AN.lookOf(e), e.x, e.y, o);
 };
 
 // ---- hero --------------------------------------------------------------------------------------
@@ -199,18 +267,19 @@ AN.drawHero = function (g, v, w, t, pose, o, drawStatic) {
 function addGhost(w, ev) {
   const e = BD.W.enemyById(w, ev.enemyId);
   if (!e || e.role === 'object') return; // a task object (nest) has no body to dissolve: its site turns dead
-  const st = AN.st.get(e.id);
-  const die = live()[e.kind] && live()[e.kind].die ? AN.clip(e.kind, 'die') : null;
+  const st = AN.st.get(e.id), ch = S.charOf(e), fod = e.role === 'fodder';
+  const die = live()[ch] && live()[ch].die ? AN.clip(ch, 'die', e.def.tint) : null;
+  const dieRate = die && fod ? Math.max(1, S.duration(die.def) / DIE_FODDER) : 1;
   const gh = {
-    id: e.id, kind: e.kind, sprite: e.def.sprite, x: e.x, y: e.y, face: e.face, size: e.size, r: e.r,
+    id: e.id, kind: e.kind, sprite: AN.lookOf(e), x: e.x, y: e.y, face: e.face, size: e.size, r: e.r,
     outline: e.guardian || e.boss ? '#ffd24a' : e.elite ? '#ffffff' : null, t0: AN.clock,
-    die, src: die ? null : st && st.last ? st.last : null,
-    dur: die ? S.duration(die.def) + GHOST_FADE : DISSOLVE, seed: e.id * 7.31,
+    die, dieRate, src: die ? null : st && st.last ? st.last : null, bands: fod ? 4 : 8,
+    dur: die ? S.duration(die.def) / dieRate + GHOST_FADE : fod ? DISSOLVE_FODDER : DISSOLVE, seed: e.id * 7.31,
   };
   AN.ghosts.push(gh);
   if (AN.ghosts.length > 80) AN.ghosts.shift();
   if (!die && BD.client.fx) { // ink motes rising off the body
-    for (let i = 0; i < 9; i++) {
+    for (let i = 0; i < (fod ? MOTES_FODDER : MOTES); i++) {
       const a = Math.random() * M.TAU, sp = 0.4 + Math.random() * 0.9;
       BD.client.fx.emit({ x: e.x, y: e.y, z: 20 + Math.random() * 40 * e.size, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, vz: 30 + Math.random() * 50, g: 60, life: 0.5 + Math.random() * 0.35, color: U.INK, size: 2.5 + Math.random() * 2.5, layer: 'world' });
     }
@@ -232,8 +301,8 @@ AN.ghostItems = function (items, g, v, w, t) {
 
 // The ink dissolve: the body turns to ink at once and comes apart in bands from the head down,
 // each band drifting sideways and up as it fades.
-function dissolve(g, img, ink, sx0, sy0, sw, sh, dx0, dy0, dw, dh, k, seed) {
-  const N = 8, inkA = Math.min(1, k * 3.2);
+function dissolve(g, img, ink, sx0, sy0, sw, sh, dx0, dy0, dw, dh, k, seed, bands) {
+  const N = bands || 8, inkA = Math.min(1, k * 3.2);
   for (let i = 0; i < N; i++) {
     const kb = M.clamp(k * 1.7 - (i / N) * 0.7, 0, 1);
     if (kb >= 1) continue;
@@ -251,7 +320,7 @@ function drawGhost(g, v, gh, age) {
   const [fx] = v.worldDirToScreen(Math.cos(gh.face), Math.sin(gh.face));
   const flip = fx < 0;
   if (gh.die) {
-    const f = S.frame(gh.die.def, { t: age }), fade = Math.max(0, (age - (gh.dur - GHOST_FADE)) / GHOST_FADE);
+    const f = S.frame(gh.die.def, { t: age * (gh.dieRate || 1) }), fade = Math.max(0, (age - (gh.dur - GHOST_FADE)) / GHOST_FADE);
     AN.drawFrame(g, v, gh.die.def, gh.die.img, f, gh.x, gh.y, { flip, alpha: 1 - fade, outline: gh.outline }, AN.frameScale(gh.kind, gh.die.def, gh.size));
     return;
   }
@@ -259,10 +328,10 @@ function drawGhost(g, v, gh, age) {
   g.save(); g.translate(p[0], p[1]); if (flip) g.scale(-1, 1);
   if (gh.src) { // the frame it died on
     const { def, img, f } = gh.src, s = AN.frameScale(gh.kind, def, gh.size);
-    dissolve(g, img, tintFrame(def, img, f, U.INK), f * def.fw, 0, def.fw, def.fh, -def.anchor[0] * s, -def.anchor[1] * s, def.fw * s, def.fh * s, k, gh.seed);
+    dissolve(g, img, tintFrame(def, img, f, U.INK), f * def.fw, 0, def.fw, def.fh, -def.anchor[0] * s, -def.anchor[1] * s, def.fw * s, def.fh * s, k, gh.seed, gh.bands);
   } else if (AS.img[gh.sprite]) {
     const img = AS.img[gh.sprite], s = K * gh.size;
-    dissolve(g, img, R.tinted(gh.sprite, U.INK), 0, 0, img.width, img.height, -img.width * s / 2, -img.height * s, img.width * s, img.height * s, k, gh.seed);
+    dissolve(g, img, R.tinted(gh.sprite, U.INK), 0, 0, img.width, img.height, -img.width * s / 2, -img.height * s, img.width * s, img.height * s, k, gh.seed, gh.bands);
   }
   g.restore();
 }

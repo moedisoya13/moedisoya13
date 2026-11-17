@@ -102,7 +102,7 @@ W.makeEnemy = function (w, kind, x, y, opts) {
     speed: def.speed * w.mods.enemySpeed, dmg: Math.round(def.dmg * dmgMul), dmgMul, tgScale: tg, knockScale: knock,
     state: 'idle', face: Math.atan2(w.hero.y - y, w.hero.x - x),
     noAttackT: opts.noAttack || 0, stunT: 0, knock: null, lunging: false,
-    statuses: {}, flags: Object.assign({}, opts.flags), mem: {}, slot: null, down: null, revives: 0, dead: false,
+    statuses: {}, flags: Object.assign({}, opts.flags), mem: {}, slot: null, down: null, revives: 0, dead: false, // opts.flags: v2-enemies (task marks pass through rifts)
     lastSource: null, squash: 0, bornT: w.t,
     // §5.6-1: seconds inside the combat window (an enemy made inside it counts as having been there,
     // so placed enemies and rifts keep their v1 timing; the director spawns outside S);

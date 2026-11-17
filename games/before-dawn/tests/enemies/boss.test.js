@@ -1,5 +1,6 @@
-// Demon king (GDD §6.4): phase thresholds and roar, speeds, skill cycles and gaps, each skill's
-// telegraphs, summons (entry, period, cap).
+// Demon king (GDD-V2 §3.6, skills v1 §6.4): phase thresholds and roar, speeds, skill cycles and gaps,
+// each skill's telegraphs; the minions come from the rooftop director (no summon skill); thorns and
+// collapse also hit minions.
 'use strict';
 const { until, evs } = require('./util');
 
@@ -43,7 +44,7 @@ module.exports = {
     b.mem.cd = 0;
     const L = record(H, w, b, 8);
     const first = L[0].tg;
-    t.eq(first.attack, 'cleave'); t.eq(first.shape, 'fan'); t.near(first.half, 70); t.near(first.r, 3.6); t.near(first.total, 0.9); t.eq(first.dmg, 22);
+    t.eq(first.attack, 'cleave'); t.eq(first.shape, 'fan'); t.near(first.half, 70); t.near(first.r, 3.6); t.near(first.total, 0.9); t.eq(first.dmg, b.def.T.cleave.dmg);
     const bolts = L.filter((x) => x.tg.attack === 'dark_bolts');
     t.assert(bolts.length >= 3, 'three bolt lines');
     const b3 = bolts.slice(0, 3);
@@ -61,9 +62,9 @@ module.exports = {
     const n0 = w.bus.count();
     until(H, () => w.projectiles.some((p) => p.kind === 'dark_bolt'), 120);
     const p = w.projectiles.find((x) => x.kind === 'dark_bolt');
-    t.near(p.speed, 12); t.eq(p.dmg, 12); t.eq(p.attack, 'dark_bolts');
+    t.near(p.speed, 12); t.eq(p.dmg, b.def.T.bolts.dmg); t.eq(p.attack, 'dark_bolts');
     until(H, () => evs(w, 'hurt', n0).length > 0, 120);
-    t.eq(evs(w, 'hurt', n0)[0].dmg, 12);
+    t.eq(evs(w, 'hurt', n0)[0].dmg, b.def.T.bolts.dmg);
     // a bolt aimed at a pillar dies there
     const q = BD.hazards.projectile(w, { owner: b, x: 6.5, y: 6.5, dir: Math.atan2(3.5 - 6.5, 3.5 - 6.5), speed: 12, range: 30, dmg: 12, hostile: true, kind: 'dark_bolt', attack: 'dark_bolts' });
     w.hero.x = 11.5; w.hero.y = 1.5;
@@ -94,7 +95,7 @@ module.exports = {
     t.eq(w.telegraphs.filter((x) => x.ownerId === b.id).length, 0, 'boss warnings wiped');
     t.eq(w.telegraphs.filter((x) => x.ownerId === g.id).length, 1, 'minion warning kept');
     t.eq(evs(w, 'hurt', n0).length, 0, 'roar deals no damage');
-    t.eq(evs(w, 'rift', n0).length, w.floor.summon.length, 'summon on entry');
+    t.eq(evs(w, 'rift', n0).length, 0, 'no summon (GDD-V2 §3.6: the rooftop director sends the minions)');
     const L = record(H, w, b, 1.45);
     t.eq(L.length, 0, 'nothing during the roar');
     const hp = b.hp; w.hero.atkTimer = 0; w.hero.x = b.x + 1.5; w.hero.y = b.y;
@@ -120,7 +121,7 @@ module.exports = {
     t.near(th[0].t - (bolts[4].t + 0.6), T.phases[2].gap, 3 * TICK, '2.0 s gap');
     const hx = w.hero.x, hy = w.hero.y;
     t.assert(th.some((x) => Math.hypot(x.tg.x - hx, x.tg.y - hy) < 1e-6), 'one under the hero');
-    for (const x of th) { t.near(x.tg.r, 1.2); t.near(x.tg.total, 1.0); t.eq(x.tg.dmg, 18); t.assert(Math.hypot(x.tg.x - hx, x.tg.y - hy) <= 3 + 1e-6); }
+    for (const x of th) { t.near(x.tg.r, 1.2); t.near(x.tg.total, 1.0); t.eq(x.tg.dmg, b.def.T.thorns.dmg); t.assert(Math.hypot(x.tg.x - hx, x.tg.y - hy) <= 3 + 1e-6); }
   },
   'phase 3 at 33 %: speed 2.4, cleave 0.7 s, collapse rings 0–3 / 3–6 / 6–9u inner first 0.5 s apart, 0.8 s each, 20'(t) {
     const { H, w, b } = roof(t, { dist: 2.4 });
@@ -145,36 +146,65 @@ module.exports = {
     t.eq(rings.length, 3);
     t.eq(rings.map((x) => [x.tg.r0, x.tg.r1]), [[0, 3], [3, 6], [6, 9]]);
     t.near(rings[1].t - rings[0].t, 0.5, 2 * TICK); t.near(rings[2].t - rings[1].t, 0.5, 2 * TICK);
-    for (const x of rings) { t.eq(x.tg.shape, 'ring'); t.near(x.tg.total, 0.8); t.eq(x.tg.dmg, 20); }
+    for (const x of rings) { t.eq(x.tg.shape, 'ring'); t.near(x.tg.total, 0.8); t.eq(x.tg.dmg, b.def.T.collapse.dmg); }
     t.near(rings[0].t - (L[0].t + 0.7), 1.6, 3 * TICK, '1.6 s gap');
     const after = L.find((x) => x.t > rings[2].t + 0.01);
     t.eq(after.tg.attack, 'dark_bolts', 'cycle: cleave → collapse → bolts → thorns');
   },
-  'summons: every 20 s in phase 2, every 15 s in phase 3, skipped above 8 living minions'(t) {
+  // GDD-V2 §3.6: no summon skill — the rooftop director sends the four types' fodder the whole fight,
+  // wanting more per phase (C.DIRECTOR.floors[6].phases); never a threat or an elite
+  'minions: the rooftop director keeps fodder of the four types coming, its want rising with the boss phase; no summon skill'(t) {
     const { BD, H, w, b } = roof(t, { dist: 6 });
-    b.hp = Math.floor(b.maxHp * 0.6);
-    const n0 = w.bus.count();
-    H.step(1);
-    const per = w.floor.summon.length;
-    t.eq(evs(w, 'rift', n0).length, per);
-    // keep the room clear so the cap never bites; count rifts over 41 s
-    for (let i = 0; i < Math.round(41 / TICK); i++) {
-      H.step(1);
-      for (const e of w.enemies) if (!e.boss && !e.dead) BD.combat.kill(w, e);
+    const row = BD.director.row(w), mix = BD.director.mixes.get('rooftop');
+    t.eq(Object.keys(mix.fodder).sort(), ['goblin', 'husk', 'mana_slime', 'squire']);
+    t.eq(Object.keys(mix.threats).length, 0);
+    t.assert(!('summonEvery' in b.def.T.phases[2]) && !('summonEvery' in b.def.T.phases[3]), 'no summon timers');
+    b.mem.cd = 99;
+    const kinds = new Set(), roles = new Set(), wants = [];
+    for (const [phase, hp] of [[1, 1], [2, 0.6], [3, 0.3]]) {
+      b.hp = Math.floor(b.maxHp * hp);
+      for (let i = 0; i < Math.round(12 / TICK); i++) {
+        H.step(1); b.mem.cd = 99;
+        for (const e of w.enemies) if (!e.boss && !e.dead) { kinds.add(e.kind); roles.add(e.role); }
+      }
+      t.eq(b.mem.phase, phase);
+      wants.push(w.director.want);
     }
-    t.eq(evs(w, 'rift', n0).length, 3 * per, 'entry + two 20 s summons');
-    // phase 3 entry with 9 minions alive: skipped
-    for (let i = 0; i < 9; i++) { const g = BD.W.makeEnemy(w, 'goblin', 1.5 + (i % 3), 4.5 + Math.floor(i / 3), {}); g.stunT = 1e9; }
-    const n1 = w.bus.count();
-    b.hp = Math.floor(b.maxHp * 0.3);
+    t.eq(wants, row.phases, 'want by phase');
+    t.eq([...roles], ['fodder'], 'only fodder');
+    for (const k of kinds) t.assert(mix.fodder[k], 'a rooftop fodder kind: ' + k);
+    t.assert(kinds.size >= 3, 'the four types come: ' + [...kinds].join(','));
+    t.eq(evs(w, 'rift', 0).length, 0, 'nothing comes through rifts');
+  },
+  'thorns and collapse hit the minions inside for 40 (foe damage; the kills drop shards)'(t) {
+    const { BD, H, w, b } = roof(t, { dist: 3 });
+    w.director.off = true;
+    for (const e of w.enemies) if (!e.boss) BD.W.removeEnemy(w, e, 'recycle');
+    b.hp = Math.floor(b.maxHp * 0.6); H.step(1); until(H, () => b.mem.roarT <= 0, 200);
+    b.mem.cd = 99;
+    const h = w.hero;
+    const big = BD.W.makeEnemy(w, 'ghoul', h.x + 0.6, h.y, {}); big.stunT = 1e9; // 68 HP: shows the 40
+    const small = BD.W.makeEnemy(w, 'goblin', h.x - 0.6, h.y, {}); small.stunT = 1e9;
+    const far = BD.W.makeEnemy(w, 'goblin', h.x + 6, h.y + 6, {}); far.stunT = 1e9;
+    const hp0 = big.hp, n0 = w.bus.count();
+    b.mem.cd = 0; b.mem.cycleI = 2; // thorns: one circle under the hero
+    until(H, () => evs(w, 'telegraph_fire', n0).some((x) => x.attack === 'thorns'), 120);
     H.step(1);
-    t.eq(b.mem.phase, 3);
-    t.eq(evs(w, 'rift', n1).length, 0, 'skipped above 8');
-    for (const e of w.enemies) if (!e.boss && !e.dead) BD.combat.kill(w, e);
-    const n2 = w.bus.count();
-    for (let i = 0; i < Math.round(15.2 / TICK); i++) { H.step(1); for (const e of w.enemies) if (!e.boss && !e.dead) BD.combat.kill(w, e); }
-    t.eq(evs(w, 'rift', n2).length, per, 'phase 3 summons after 15 s');
-    t.assert(w.floor.summon.every((k) => BD.enemies.get(k).type === w.floor.summonType));
+    t.eq(hp0 - big.hp, 40, 'ghoul took 40');
+    t.assert(small.dead, 'goblin crushed');
+    t.assert(!far.dead && far.hp === far.maxHp, 'outside the circles: untouched');
+    const hits = evs(w, 'hit', n0).filter((x) => x.enemyId === big.id);
+    t.eq(hits[0].source, 'foe'); t.eq(hits[0].direct, false);
+    t.assert(evs(w, 'kill', n0).some((x) => x.enemyId === small.id), 'kill event');
+    t.assert(evs(w, 'shard_drop', n0).length >= 1, 'the crushed minion drops its shard');
+    // phase 3 collapse: the rings hit what stands in them
+    b.hp = Math.floor(b.maxHp * 0.3); H.step(1); until(H, () => b.mem.roarT <= 0, 200);
+    b.mem.cd = 99;
+    const ringFoe = BD.W.makeEnemy(w, 'ghoul', b.x + 4.5, b.y, {}); ringFoe.stunT = 1e9;
+    const hp1 = ringFoe.hp, n1 = w.bus.count();
+    b.mem.cd = 0; b.mem.cycleI = 1; w.hero.x = b.x + 6; w.hero.y = b.y + 0.5;
+    until(H, () => evs(w, 'telegraph_fire', n1).filter((x) => x.attack === 'collapse').length >= 3, 300);
+    t.eq(hp1 - ringFoe.hp, 40, 'one ring (3–6u) hit it once');
   },
 };
 
