@@ -141,8 +141,8 @@ AS.sheet = function (o) {
   const theme = o.theme || 'beast', layout = o.layout || 'office', col = C.FLOOR_COLORS[theme] || '#888888';
   const props = R.props.all(), sites = [];
   for (const id of R.sites.ids()) for (const s of R.sites.get(id).states) sites.push([id, s]);
-  const walls = ['clock', 'exit', 'board', 'whiteboard', 'tv', 'vent', 'extinguisher', 'poster'];
-  const cols = 6, entries = props.length + sites.length + 4 + 3;
+  const walls = ['clock', 'exit', 'board', 'whiteboard', 'tv', 'vent', 'extinguisher', 'poster', 'claws', 'cobweb', 'sigil', 'shield', 'banner', 'banner'];
+  const cols = 6, entries = props.length + sites.length + walls.length / 2 + 2 + 3;
   const rows = Math.ceil(entries / cols);
   const cv = document.createElement('canvas'), s = o.scale || 1;
   cv.width = cols * CELL.w * s; cv.height = (rows * CELL.h + 60) * s;
@@ -175,7 +175,7 @@ AS.sheet = function (o) {
     tile(g, P, 0, 0, 3, 1.4, col);
     for (let x = 0; x < 3; x++) R.paint.wallSeg(g, P, x, 0, x + 1, 0, 'y0', 'solid', rng, x === 0, x === 2);
     R.paint.wallItem(g, P, 'y0', 0.3, walls[k], 2); R.paint.wallItem(g, P, 'y0', 1.6, walls[k + 1], 5);
-    label(g, cx, cy + CELL.h - 34, 'wall: ' + walls[k] + ', ' + walls[k + 1], '벽 장식 (side y0)');
+    label(g, cx, cy + CELL.h - 34, 'wall: ' + walls[k] + (walls[k + 1] !== walls[k] ? ', ' + walls[k + 1] : ''), k >= 8 ? '층 유형의 벽 장식' : '벽 장식 (side y0)');
   }
   { // the elevator and a glass bay
     const [cx, cy] = slot(), P = KIT.proj(cx - 70, cy + 120), rng = KIT.rng('sheetelev');

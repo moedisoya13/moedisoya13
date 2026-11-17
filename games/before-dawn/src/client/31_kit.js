@@ -220,9 +220,11 @@ KIT.shadowDisc = function (g, P, cx, cy, r, hpx, alpha) {
 };
 
 // ---- sprite cache ---------------------------------------------------------------------------------
-// Canvases at the current pixel density KIT.s (set by the renderer each frame), LRU-bounded.
+// Canvases at the current pixel density KIT.s (set by the renderer each frame), LRU-bounded by
+// device pixels (12 M px ≈ 48 MB; what one screen of a busy floor uses is ~3–7 M px at scale 2).
 const cache = new Map();
-KIT.MAX_SPRITES = 600;
+KIT.MAX_PX = 12e6;
+let cachePx = 0;
 KIT.sprite = function (key, x0, y0, x1, y1, draw) {
   const k = key + '@' + KIT.s;
   let sp = cache.get(k);
@@ -233,17 +235,18 @@ KIT.sprite = function (key, x0, y0, x1, y1, draw) {
   const g = cv.getContext('2d');
   g.scale(cv.width / (x1 - x0), cv.height / (y1 - y0)); g.translate(-x0, -y0);
   draw(g);
-  sp = { cv, x0, y0, w: x1 - x0, h: y1 - y0 };
-  cache.set(k, sp);
-  if (cache.size > KIT.MAX_SPRITES) cache.delete(cache.keys().next().value);
+  sp = { cv, x0, y0, w: x1 - x0, h: y1 - y0, px: cv.width * cv.height };
+  cache.set(k, sp); cachePx += sp.px;
+  while (cachePx > KIT.MAX_PX && cache.size > 1) { const [ok, old] = cache.entries().next().value; cache.delete(ok); cachePx -= old.px; }
   return sp;
 };
 KIT.blit = function (g, sp, x, y, alpha) {
   if (alpha !== undefined && alpha < 1) { const a = g.globalAlpha; g.globalAlpha = a * alpha; g.drawImage(sp.cv, x + sp.x0, y + sp.y0, sp.w, sp.h); g.globalAlpha = a; return; }
   g.drawImage(sp.cv, x + sp.x0, y + sp.y0, sp.w, sp.h);
 };
-KIT.clearCache = function () { cache.clear(); };
+KIT.clearCache = function () { cache.clear(); cachePx = 0; };
 KIT.cacheSize = () => cache.size;
+KIT.cachePx = () => cachePx;
 // a local projection with the map origin at (ox, oy) px
 KIT.proj = (ox, oy) => (wx, wy, z) => [ox + (wx - wy) * BD.C.ISO_X, oy + (wx + wy) * BD.C.ISO_Y - (z || 0)];
 // deterministic rng from a string
