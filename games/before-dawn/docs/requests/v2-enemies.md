@@ -134,9 +134,32 @@ reached the roof 64 (≥ 45), median win 14.2 min (12.5–15.5), median death 12
 (`BD.simRun`): 75 wins (≥ 70). Deaths by type of floor entered: beast 1/145, heavy 9/99, undead 14/96, magic
 12/104 — the beast floor stays the gentle one (one-swing goblins, the pilot reads the pounce).
 
-`node tools/fun/measure.js --seeds 1-20 --check` (final): see the report; the misses are the slice's
-(3+ in reach 18 %, "alive but none in reach" 54 % — counts off-screen enemies, 4F ÷ 1F kills 1.44 — the
-director's rate, different tasks 1 — the floors agent's).
+`node tools/fun/measure.js --seeds 1-20 --check` (final; base commit daa5a7e in brackets where it differs):
+
+| metric | median | target |
+|---|---|---|
+| kills per minute | 206.2 (193.9) | ≥ 100 |
+| enemies on screen | 14.3 (13.5) | 12–40 |
+| < 3 on screen | 3.9 % | ≤ 15 |
+| swings to kill | 0.9 | ≤ 1.8 |
+| 2+ hit swings | 61.8 % | ≥ 50 |
+| 3+ in reach at a swing | **18.1 %** (18.4) | ≥ 30 — miss, as on base (pilot positioning) |
+| alive but none in reach | **54.1 %** (56) | ≤ 20 — miss, as on base (counts off-screen enemies) |
+| chasing the last 1–2 | 0 | ≤ 2 |
+| walked per event | 0.6u | ≤ 3 |
+| pickups per minute | 210.1 | ≥ 80 |
+| choice gap / longest / first | 26.5 / 68.4 (72.1) / 6.2 s | 15–40 / ≤ 75 / ≤ 25 |
+| first 60 s: kills / choices / hits | 215 / 5 / 1 | ≥ 80 / ≥ 2 / ≤ 3 |
+| hits per minute | **2.0** (1.3, a miss on base) | 1.5–4 |
+| kills per hit | 105 | ≥ 20 |
+| 4F ÷ 1F kills / on screen | **1.44** (1.45) / 1.51 | ≥ 1.6 — miss, as on base (director rate) / ≥ 1.5 |
+| different tasks | **1** | 5 — miss (only purge exists; floors agent) |
+| 3F seconds / winning run / level | 150 s / 13.1 min / 28 | 110–170 / 12.5–15.5 / 22–28 |
+| hits from attacks begun off screen (max) | **0** | 0 |
+
+`node tools/accept.js`: 17 pass, 0 fail, #18 pending (cards); #17 (V12) passes: human-like 25/100 wins, 0 on
+1F, 7 on 1F–2F, win 14.2 min, perfect pilot 71/100. `node tools/test.js`: 241 pass, 2 fail (the two
+`tests/art/stage.test.js` failures of the base commit).
 
 ## 6. Must be re-measured after the merge
 
