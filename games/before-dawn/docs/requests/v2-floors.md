@@ -160,7 +160,8 @@ sites themselves set `w.sitesLive = true`.
 - Tests: `tests/core/v2.test.js` (the generation test expects each task's layout; the site hook test
   reads `phase`, sets `w.sitesLive`), `tests/core/mechanics.test.js` (keep-out ring: seed 2 and an
   invulnerable hero — a crowd or a hit can push an idle hero into the ring; base seeds 1 and 7 show it too),
-  `tests/art/stage.test.js` (§6).
+  `tests/art/stage.test.js` (§6), `tests/ui/flow.test.js` (the 2F banner names any of the five tasks — it
+  expected `소탕`, the slice's only task).
 
 ## 6. The two art stage tests that failed on the base commit
 
