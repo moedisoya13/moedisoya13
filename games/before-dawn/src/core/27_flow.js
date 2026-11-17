@@ -216,6 +216,7 @@ F.startTrial = function (w) {
   t.state = 'active'; t.t0 = w.t;
   w.stats.trials++;
   W.emit(w, 'trial_start', { floor: w.floorN });
+  W.banner(w, '시련 — 균열이 열렸다', 'trial');
   f.trial.kinds.forEach((k, i) => { const p = riftPos(w, i); W.spawnAt(w, k, p[0], p[1], { trial: true }); });
   if (f.trial.elite) { const p = riftPos(w, f.trial.kinds.length); W.spawnAt(w, f.trial.elite, p[0], p[1], { trial: true, elite: true }); }
   W.emit(w, 'wave_start', { floor: w.floorN, wave: 'trial', count: f.trial.kinds.length + (f.trial.elite ? 1 : 0) });
@@ -228,6 +229,7 @@ F.updateTrial = function (w) {
   t.state = 'cleared';
   w.stats.trialSec += w.t - t.t0;
   W.emit(w, 'trial_clear', { floor: w.floorN });
+  W.banner(w, '시련을 넘었다 — 제단이 다시 켜졌다', 'trial_clear');
   F.lightAltar(w);
 };
 

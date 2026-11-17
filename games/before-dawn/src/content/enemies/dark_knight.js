@@ -83,7 +83,7 @@ BD.enemies.register({
   id: 'dark_knight', name: '암흑기사', type: 'heavy', sprite: 'dark_knight',
   hp: 360, speed: 2.0, dmg: 20, radius: 0.55, cost: 6, // tuned: GDD HP 120
   knockScale: 0.33,
-  attacks: { charge: { name: '돌격' }, sweep: { name: '휩쓸기' } },
+  attacks: { charge: { name: '돌격', sfx: 'charge' }, sweep: { name: '휩쓸기', sfx: 'boss_cleave' } },
   T,
   guardian: { name: '암흑기사 단장' }, // 7u charge and the sweep are read from e.guardian
   // Front guard (§6.2). info = {source, direct, fromX, fromY}

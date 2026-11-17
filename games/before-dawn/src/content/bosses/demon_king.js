@@ -138,7 +138,7 @@ BD.enemies.register({
   hp: 3600, speed: 1.6, dmg: 22, radius: 0.9, // tuned: GDD HP 1500
   phaseAt: T.phaseAt, // the UI draws the boss bar's two ticks from this (ARCHITECTURE §4.5)
   attacks: {
-    cleave: { name: '휩쓸기' }, dark_bolts: { name: '암흑탄' }, thorns: { name: '가시' }, collapse: { name: '붕괴' },
+    cleave: { name: '휩쓸기', sfx: 'boss_cleave' }, dark_bolts: { name: '암흑탄' }, thorns: { name: '가시', sfx: 'thorns' }, collapse: { name: '붕괴', sfx: 'boss_cleave' },
   },
   T,
   create(e) {

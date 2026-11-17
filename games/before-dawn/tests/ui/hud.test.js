@@ -128,6 +128,8 @@ module.exports = {
     try {
       const reg = await T.eval((ids) => ids.filter((id) => !window.BD.ui.sfx.has(id)), GDD_SFX);
       t.eq(reg, [], 'all GDD sound ids registered');
+      const atk = await T.eval(() => window.BD.enemies.all().flatMap((d) => Object.entries(d.attacks).flatMap(([a, v]) => ['sfx', 'sfxStart'].filter((k) => v[k] && !window.BD.ui.sfx.has(v[k])).map((k) => d.id + '.' + a + '.' + k + '=' + v[k]))));
+      t.eq(atk, [], 'every enemy attack sound names a registered sound');
       t.eq(await T.eval(() => window.BD.client.audio.ac), null, 'no AudioContext before input');
       await T.page.mouse.click(5, 5);
       await T.wait();

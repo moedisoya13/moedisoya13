@@ -51,8 +51,8 @@ for (const k of Object.keys(GDD_EVENTS)) BD.events.declare(k, GDD_EVENTS[k]);
 // cards must not depend on them for rules (they may change); UI may.
 const EXTRA_EVENTS = {
   strike: ['source', 'shapes', 'x', 'y', 'aim', 'elements'], // drawn trails of a swing/echo/riposte
-  telegraph: ['id', 'shape', 'ownerId', 'attack', 'time'],     // a telegraph started
-  telegraph_fire: ['id', 'attack', 'ownerId'],
+  telegraph: ['id', 'shape', 'ownerId', 'ownerKind', 'attack', 'time', 'style'], // a telegraph started (style: its drawer id)
+  telegraph_fire: ['id', 'attack', 'ownerId', 'ownerKind'],
   projectile: ['id', 'kind', 'hostile', 'x', 'y'],
   spawn: ['enemyId', 'kind', 'x', 'y', 'via'],                  // via: 'placed' | 'rift' | 'door' | 'summon'
   rift: ['x', 'y', 'time', 'guardian'],                          // a rift warning started
@@ -63,7 +63,7 @@ const EXTRA_EVENTS = {
   slam: ['enemyId', 'x', 'y'],
   steam: ['x', 'y'],
   toast: ['text'],
-  banner: ['text', 'kind'],
+  banner: ['text', 'kind'],                                     // kind: floor|guardian|awaken|stairs|boss|trial|trial_clear|info
   altar_close: ['floor', 'choice'],
   boss_phase: ['phase'],
   vfx: ['kind'],                                               // free-form visual from content: drawn by BD.render.vfx[kind]

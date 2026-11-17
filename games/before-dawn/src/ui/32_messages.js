@@ -16,7 +16,9 @@ MSG.toast = function (text, kind) {
   S.toasts.push({ text, kind: kind || 'info', t: now });
   if (S.toasts.length > 3) S.toasts.splice(0, S.toasts.length - 3);
 };
+const BANNER_LOOK = { trial: 'guardian', trial_clear: 'stairs' }; // engine kinds drawn like these
 MSG.banner = function (text, kind) {
+  kind = BANNER_LOOK[kind] || kind;
   const now = clock();
   if (S.banner && S.banner.text === text && now - S.banner.t < 1.0) return;
   S.banner = { text, kind: kind || 'info', t: now, life: MSG.BANNER_LIFE[kind] || 1.2 };
@@ -38,14 +40,7 @@ BD.ui.effects.register({
   reset() { S.toasts = []; S.banner = null; },
   on: {
     toast(ev) { MSG.toast(ev.text, toastKind(ev.text)); },
-    banner(ev) { MSG.banner(ev.text, ev.kind); },
-    trial_start() { MSG.banner('시련 — 균열이 열렸다', 'guardian'); },
-    trial_clear() { MSG.banner('시련을 넘었다 — 제단이 다시 켜졌다', 'stairs'); },
-    spawn(ev, ui) {
-      // GDD §9.2 banner `수호자 — 암흑기사 단장` when a guardian walks in
-      const e = BD.W.enemyById(ui.world, ev.enemyId);
-      if (e && e.guardian) MSG.banner('수호자 — ' + ((e.def.guardian && e.def.guardian.name) || e.def.name), 'guardian');
-    },
+    banner(ev) { MSG.banner(ev.text, ev.kind); }, // floor, guardian (§9.2), awaken, stairs, boss, trial
   },
   update(dt, ui) { MSG.live(ui.time); },
 });

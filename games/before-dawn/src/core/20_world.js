@@ -87,6 +87,7 @@ W.makeEnemy = function (w, kind, x, y, opts) {
   if (def.alwaysWet) e.statuses.wet = { t: Infinity };
   w.enemies.push(e);
   W.emit(w, 'spawn', { enemyId: e.id, kind, x, y, via: opts.via || 'placed' });
+  if (e.guardian) W.banner(w, '수호자 — ' + ((def.guardian && def.guardian.name) || def.name), 'guardian'); // GDD §9.2
   return e;
 };
 

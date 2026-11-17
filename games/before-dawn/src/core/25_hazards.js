@@ -27,7 +27,7 @@ Z.telegraph = function (w, spec) {
   tg.danger = tg.danger || tg.dmg > 0;
   tg.shape = tg.shape || 'circle';
   w.telegraphs.push(tg);
-  W.emit(w, 'telegraph', { id: tg.id, shape: tg.shape, ownerId: tg.ownerId, attack: tg.attack || null, time: tg.time });
+  W.emit(w, 'telegraph', { id: tg.id, shape: tg.shape, ownerId: tg.ownerId, ownerKind: tg.ownerKind, attack: tg.attack || null, time: tg.time, style: tg.style });
   return tg;
 };
 
@@ -101,7 +101,7 @@ Z.update = function (w, dt) {
         if (tg.dmg > 0 && Z.heroInside(w, tg)) {
           W.hurtHero(w, tg.dmg, { source: tg.ownerKind || 'zone', owner: tg.ownerKind, attack: tg.attack, enemyId: tg.ownerId, attackId: 'tg' + tg.id, x: tg.x, y: tg.y });
         }
-        W.emit(w, 'telegraph_fire', { id: tg.id, attack: tg.attack || null, ownerId: tg.ownerId });
+        W.emit(w, 'telegraph_fire', { id: tg.id, attack: tg.attack || null, ownerId: tg.ownerId, ownerKind: tg.ownerKind });
         if (tg.onFire) tg.onFire(w, tg);
       }
     }

@@ -1,13 +1,9 @@
 // Which GDD §10 sound plays on which event (card-state sounds are in 35_cardfx.js).
-// Enemy attacks: an attack may name its own sounds in its def (`attacks.<id>.sfx` when the
-// blow lands, `sfxStart` when the warning starts); otherwise the table below maps the GDD
-// attacks, and every other warning gets the low `telegraph` tick.
+// Enemy attacks name their own sounds in their def (`attacks.<id>.sfx` when the blow lands,
+// `sfxStart` when the warning starts); a `blink` style warning plays `blink`, every other
+// warning the low `telegraph` tick.
 
 const typeOf = (kind) => (BD.enemies.has(kind) ? BD.enemies.get(kind).type : null);
-
-// sounds when a telegraph fills (the blow lands) and when it starts, by attack id
-const ON_FIRE = { fire_circle: 'fire_circle', firecircle: 'fire_circle', fire: 'fire_circle', fire_ring: 'fire_circle', charge: 'charge', cleave: 'boss_cleave', sweep: 'boss_cleave', collapse: 'boss_cleave', thorns: 'thorns' };
-const ON_START = { blink: 'blink', teleport: 'blink' };
 
 function attackSfx(w, kindOrNull, attack, key) {
   if (kindOrNull && BD.enemies.has(kindOrNull)) {
@@ -51,20 +47,13 @@ BD.ui.effects.register({
       else if (ev.source === 'altar') ui.sfxSafe('heal_small');
     },
     telegraph(ev, ui) {
-      const w = ui.world;
-      const tg = w.telegraphs.find((t) => t.id === ev.id);
-      const kind = tg ? tg.ownerKind : null;
-      const own = attackSfx(w, kind, ev.attack, 'sfxStart');
+      const own = attackSfx(ui.world, ev.ownerKind, ev.attack, 'sfxStart');
       if (own) return ui.sfxSafe(own);
-      if ((tg && tg.style === 'blink') || ON_START[ev.attack]) return ui.sfxSafe('blink');
-      ui.sfxSafe('telegraph');
+      ui.sfxSafe(ev.style === 'blink' ? 'blink' : 'telegraph');
     },
     telegraph_fire(ev, ui) {
-      const w = ui.world;
-      const owner = ev.ownerId ? BD.W.enemyById(w, ev.ownerId) : null;
-      const own = attackSfx(w, owner && owner.kind, ev.attack, 'sfx');
-      if (own) return ui.sfxSafe(own);
-      if (ON_FIRE[ev.attack]) ui.sfxSafe(ON_FIRE[ev.attack]);
+      const own = attackSfx(ui.world, ev.ownerKind, ev.attack, 'sfx');
+      if (own) ui.sfxSafe(own);
     },
     rift(ev, ui) { if (!ev.guardian) ui.sfxSafe('spawn'); },
     spawn(ev, ui) {

@@ -31,6 +31,12 @@ BD.enemies = BD.makeRegistry('enemy', {
     if (!BD.C.TYPES.includes(d.type) && d.type !== 'boss') BD.fail(`enemy '${d.id}': type must be one of ${BD.C.TYPES.join('|')}|boss`);
     if (typeof d.update !== 'function') BD.fail(`enemy '${d.id}': update must be a function`);
     if (d.type !== 'boss' && typeof d.cost !== 'number') BD.fail(`enemy '${d.id}': cost required`);
+    // attacks.<id> = {name, sfx?, sfxStart?}: sound ids (BD.ui.sfx) played when the blow lands
+    // (telegraph_fire) and when its warning starts (telegraph); checked against the UI in the browser
+    for (const [a, v] of Object.entries(d.attacks || {})) {
+      if (!v || typeof v.name !== 'string') BD.fail(`enemy '${d.id}': attacks.${a}.name required`);
+      for (const k of ['sfx', 'sfxStart']) if (v[k] !== undefined && typeof v[k] !== 'string') BD.fail(`enemy '${d.id}': attacks.${a}.${k} must be a sound id`);
+    }
   },
 });
 
