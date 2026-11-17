@@ -4,13 +4,13 @@ const A = BD.ai;
 
 BD.enemies.register({
   id: 'slime', name: '슬라임', type: 'beast', sprite: 'slime',
-  hp: 30, speed: 1.6 / 1.1, dmg: 10, radius: 0.45, cost: 1.5,
+  hp: 90, speed: 1.6 / 1.1, dmg: 12, radius: 0.45, cost: 1.5, // tuned: GDD HP 30, dmg 10
   alwaysWet: true, // §6.1: always wet; steam does not dry it
   attacks: { pounce: { name: '덮치기' } },
   T: { hopDist: 1.6, hopEvery: 1.1, hopDur: 0.35, range: 3.0, tgR: 0.9, tgTime: 0.7, jump: 0.25, flat: 0.8, cd: 2.2 },
   guardian: {
     name: '대왕 슬라임',
-    create(e) { e.mem.summoned = 0; },
+    create(e, w) { BD.enemyTune.guardian(e, w); e.mem.summoned = 0; },
   },
   create(e, w) {
     e.mem.hopT = A.rng(w).range(0, 1.1);
