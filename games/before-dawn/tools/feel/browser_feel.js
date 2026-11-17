@@ -200,6 +200,11 @@ const show = (obj) => Object.keys(obj).map((k) => '  ' + k + ': ' + JSON.stringi
     for (const vp of [PHONE, TABLET, LAPTOP]) {
       const T = await playing(vp, '', vp !== LAPTOP);
       const name = vp.width + 'x' + vp.height;
+      // v2: runs start on 48 × 48 floors that scroll under the HUD by design (the rules use the combat
+      // window, GDD-V2 §5.6); the "no floor under the HUD" layout is measured on a room that fits,
+      // the 12 × 12 v1 1F the review measured
+      await T.eval(() => { window.__BD.stage({ size: [12, 12], enemies: 0 }); });
+      await T.wait(150);
       const r = await T.eval(() => {
         const B = window.__BD, v = B.ui.view, w = B.world();
         const bs = B.ui.debug.buttons().filter((b) => b.layer === 'hud');

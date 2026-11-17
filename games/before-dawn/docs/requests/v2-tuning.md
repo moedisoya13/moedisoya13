@@ -50,8 +50,11 @@ choice 6 s, inside the gate.
 
 ## 3. Targets outside the §11.1 gate (not tuned yet)
 
-From the same 20 runs: longest wait for a choice about 80 s (target ≤ 75: the rooftop, where few
-fodder die), 4F ÷ 1F kills per minute 1.5 (≥ 1.6), seconds on 3F about 175 (110–170), winning run
-15.6 min (12.5–15.5), 3+ enemies in reach at a swing 14 % (≥ 30), "enemies alive but none in reach"
-55 % (≤ 20; the metric counts every enemy on the floor, most of them off screen). These belong to
-the tuning rounds of §11.2-7.
+Final run of `node tools/fun/measure.js --seeds 1-20` on the tuned build: every §11.1 pass condition
+holds (and `tools/accept.js` #7 re-checks them: 20/20 runs reach 3F). Of the §10.1 rows outside the
+gate these miss: 3+ enemies in reach at a swing 18.4 % (≥ 30), "enemies alive but none in reach" 56 %
+(≤ 20; the metric counts every enemy on the floor, most of them off screen), hits per minute 1.3
+(1.5–4: the slice is a little safe), 4F ÷ 1F kills/min 1.45 (≥ 1.6) and on screen 1.45 (≥ 1.5),
+different tasks 1 (5: only purge exists). These met: longest choice wait 72 s, 3F 160 s, winning run
+14.6 min, level at the win 28. Win rate 9/20 here; over seeds 1–100 the human-like pilot wins 36
+(target 20–35) and the shipped "perfect" bot 45 (≥ 70) — the §9.2 knobs are for §11.2-7.

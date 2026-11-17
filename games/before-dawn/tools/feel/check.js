@@ -79,7 +79,7 @@ if (!o['skip-browser']) {
   const btn = (vp, id) => B.hud[vp].buttons.find((b) => b.id === id);
   const pd = btn('667x375', 'hud_dash'), pp = btn('667x375', 'hud_pause');
   check('U1', 'phone 667×375: dash hit area ≥ 72 CSS px, pause ≥ 44 CSS px', Math.min(pd.cssW, pd.cssH) >= 72 && Math.min(pp.cssW, pp.cssH) >= 44, `dash ${pd.cssW}×${pd.cssH}, pause ${pp.cssW}×${pp.cssH}`);
-  check('U2', 'no floor cell is drawn under a HUD rectangle (3 viewports)', Object.values(B.hud).every((h) => h.floorCellsUnderHud === 0), Object.values(B.hud).map((h) => h.floorCellsUnderHud).join('/'));
+  check('U2', 'a room that fits the screen (12×12) has no floor cell under a HUD rectangle (3 viewports; big floors scroll under it, GDD-V2 §5.6)', Object.values(B.hud).every((h) => h.floorCellsUnderHud === 0), Object.values(B.hud).map((h) => h.floorCellsUnderHud).join('/'));
   const dists = Object.keys(B.warn).map((k) => `${k} ${B.warn[k].at0_1s.rgbDist}`);
   check('W1', 'a warning 0.1 s old differs from the floor by mean RGB distance ≥ 60 on all five floors', Object.values(B.warn).every((w) => w.at0_1s.rgbDist >= 60), dists.join(', '));
 }
