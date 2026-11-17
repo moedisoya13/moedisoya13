@@ -76,7 +76,7 @@ module.exports = {
     } finally { await T.close(); }
   },
 
-  async 'portrait: rotate prompt holds the world; back to landscape lands on pause; blur pauses'(t) {
+  async 'portrait: rotate prompt holds the world; back to landscape asks for a tap; blur pauses'(t) {
     const T = await playing(t);
     try {
       await T.wait(200);
@@ -88,9 +88,9 @@ module.exports = {
       t.eq((await T.state()).t, t0, 'world held while portrait');
       await T.page.setViewportSize({ width: 667, height: 375 });
       await T.wait(200);
-      t.eq(await T.overlay(), 'pause', 'back in landscape: the pause menu');
-      await T.tap('resume');
-      t.eq(await T.overlay(), null);
+      t.eq(await T.overlay(), 'tap', 'back in landscape: 화면을 터치하면 계속 (tests/ui/rotate.test.js)');
+      await T.tapAt(640, 360);
+      t.eq(await T.overlay(), null, 'one tap resumes');
       await T.eval(() => window.dispatchEvent(new Event('blur')));
       await T.wait();
       t.eq(await T.overlay(), 'pause', 'losing focus pauses');

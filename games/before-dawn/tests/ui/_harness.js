@@ -66,8 +66,8 @@ async function open(url, opts) {
         await T.wait(100);
       }
     },
-    // logical point → client point
-    client: (x, y) => page.evaluate(([x, y]) => { const v = window.__BD.ui.view; return [v.offX + x * v.scale, v.offY + y * v.scale]; }, [x, y]),
+    // logical point → client point (through the view's quarter turn in forced landscape)
+    client: (x, y) => page.evaluate(([x, y]) => { const v = window.__BD.ui.view; return v.toClient ? v.toClient(x, y) : [v.offX + x * v.scale, v.offY + y * v.scale]; }, [x, y]),
     pointer: (type, x, y, id, kind) => page.evaluate(([type, x, y, id, kind]) => {
       const c = document.getElementById('bd');
       c.dispatchEvent(new PointerEvent(type, { pointerId: id, pointerType: kind, isPrimary: true, clientX: x, clientY: y, bubbles: true, cancelable: true }));

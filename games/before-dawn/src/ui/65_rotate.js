@@ -1,19 +1,24 @@
 // 회전 안내 (overlay 'rotate', GDD §2.1 / §9.1) and what follows it, 화면을 터치하면 시작 / 계속
 // (overlay 'tap'): after the rotate prompt, one touch gets the player playing.
 //
-// - A portrait screen holds the game behind the rotate prompt (the client sets app.rotate). The
-//   prompt says what turning the device back will lead to.
-// - At launch, on the title or on the preparation screen: back in landscape, 「화면을 터치하면
-//   시작」 over the title art. The first tap, click, Enter or Space starts a run with the hand the
-//   preparation screen would deal (NAV.deal: a fresh seed, the saved depth, the §5.6 rule, no
-//   reroll spent; on the preparation screen, the hand it shows), skipping that screen for this
-//   path only. With the URL test hooks (?seed, ?hand, ?floor, ?bot) it starts the URL's run, as
-//   출정 does. Esc goes to the title menu instead.
+// - A portrait window holds the game behind the rotate prompt (the client sets app.rotate). The
+//   prompt says what a touch will do.
+// - Touching the prompt (screens that never turn: rotation lock, file viewers, in-app browsers;
+//   or a tall desktop window) switches the view to forced landscape (client view.setForced: the
+//   picture a quarter turn round for a touch, upright and letterboxed for a mouse or key) and at
+//   once does what the tap state below would do. The view drops forced landscape by itself when
+//   the window really turns landscape; play goes on without a restart.
+// - Turning the device back to landscape instead, at launch, on the title or on the preparation
+//   screen: 「화면을 터치하면 시작」 over the title art. The first tap, click, Enter or Space starts
+//   a run with the hand the preparation screen would deal (NAV.deal: a fresh seed, the saved depth,
+//   the §5.6 rule, no reroll spent; on the preparation screen, the hand it shows), skipping that
+//   screen for this path only. With the URL test hooks (?seed, ?hand, ?floor, ?bot) it starts the
+//   URL's run, as 출정 does. Esc goes to the title menu instead.
 // - Mid-run: 「화면을 터치하면 계속」 over the held fight instead of the pause menu; one tap resumes.
 //   Esc / P open the pause menu. Losing focus still opens the pause menu (shell), as before.
 // - Anywhere else (a menu overlay was open, the altar, codex, result, a bot run) the device turns
 //   back to where it was.
-// The overlay claims the press and acts on its release (a user gesture for audio on every
+// Both overlays claim the press and act on its release (a user gesture for audio on every
 // browser, touch included), so the tap never becomes the joystick, never presses the dash button
 // and never arms the double-tap dash.
 
@@ -24,10 +29,11 @@ const NAV = BD.ui.nav;
 const PREP = BD.ui.prep;
 const S = BD.ui.S;
 const TAP = BD.ui.tap = { down: null };
+const ROT = { hooked: false, down: null }; // subscribed to the view's turns; the prompt's pressed pointer
 
 // What landscape leads to from here: 'start', 'continue', or null (back where it was).
 TAP.next = function (app) {
-  if (app.uiOverlay) return null;
+  if (app.uiOverlay && app.uiOverlay !== 'tap') return null;
   if (app.mode === 'title' || app.mode === 'prep') return 'start';
   const w = app.world;
   if (app.mode === 'play' && w && !w.altarOpen && !w.ending && !app.botOn) return 'continue';
@@ -36,7 +42,7 @@ TAP.next = function (app) {
 
 TAP.open = function (ui) {
   const app = ui.app;
-  if (!TAP.next(app)) return;
+  if (!TAP.next(app) || app.uiOverlay === 'tap') return;
   if (app.mode === 'title' && !NAV.urlRun(app)) NAV.deal(ui); // the night 출정 would deal
   TAP.down = null;
   app.openOverlay('tap');
@@ -45,19 +51,31 @@ TAP.open = function (ui) {
 
 // The tap: unlock audio, leave no dash request or double-tap timer behind, then start or resume.
 TAP.go = function (ui) {
+  if (ui.app.overlay() === 'tap') TAP.act(ui);
+};
+TAP.act = function (ui) {
   const app = ui.app;
-  if (app.overlay() !== 'tap') return;
   TAP.down = null;
-  ui.unlockAudio();
-  const ac = BD.client.audio.ac;
-  if (ac && ac.state === 'suspended' && ac.resume) { const p = ac.resume(); if (p && p.catch) p.catch(() => {}); }
+  ui.unlockAudio(); // also resumes a context iOS created suspended
   const st = BD.client.input.st;
   if (st) { st.dashReq = false; st.lastUp = -1; }
-  if (app.mode === 'play') app.closeOverlay();
+  if (app.mode === 'play') { if (app.uiOverlay === 'tap') app.closeOverlay(); }
   else if (app.mode !== 'prep' && NAV.urlRun(app)) ui.startRun();
   else NAV.ascend(ui);
   NAV.focus0(ui);
   ui.sfxSafe('ui_ok');
+};
+
+// The rotate prompt's tap: forced landscape ('turn' for a touch, 'fit' for a mouse or key), then
+// straight into play as the tap state would; elsewhere (a menu, codex, result) just the view.
+TAP.force = function (ui, kind) {
+  const app = ui.app, next = TAP.next(app);
+  ui.view.setForced(kind);
+  app.setRotate(ui.view.portrait);
+  if (app.rotate) return;
+  if (next === 'start' && app.mode === 'title' && app.uiOverlay !== 'tap' && !NAV.urlRun(app)) NAV.deal(ui);
+  if (next) TAP.act(ui);
+  else { ui.unlockAudio(); NAV.focus0(ui); ui.sfxSafe('ui_ok'); }
 };
 
 TAP.dismiss = function (ui) {
@@ -69,20 +87,26 @@ TAP.dismiss = function (ui) {
   ui.sfxSafe('ui_move');
 };
 
-// Turning back to landscape after the rotate prompt opens the tap state (where TAP.next says).
-const ROT = { was: false };
+// Turning back to landscape after the rotate prompt opens the tap state (where TAP.next says), at
+// the moment the view notices it — before the shell can run a tick. Not when the view left the
+// prompt because the player chose forced landscape (TAP.force handles that tap itself).
 BD.ui.effects.register({
   id: 'rotate_tap',
   update(dt, ui) {
-    const now = !!ui.app.rotate;
-    if (ROT.was && !now) TAP.open(ui);
-    ROT.was = now;
+    if (ROT.hooked) return;
+    ROT.hooked = true;
+    ui.view.onTurn((portrait) => { if (!portrait && !ui.view.forced) TAP.open(ui); });
   },
 });
 
 // ---- the rotate prompt -------------------------------------------------------------------------
 // A portrait window shows the 1280×720 canvas at under a third of its size (0.29 on a 375 px
-// wide phone), so everything here is drawn large: 112 px lettering, 54 px for the second line.
+// wide phone), so everything here is drawn large: 112 px lettering, 50–56 px in the panel.
+const PROMPT = {
+  start: '가로 화면으로 바로 시작합니다',
+  continue: '가로 화면으로 바로 이어집니다',
+  none: '가로 화면으로 봅니다',
+};
 BD.ui.overlays.register({
   id: 'rotate',
   draw(g, ui) {
@@ -98,16 +122,24 @@ BD.ui.overlays.register({
     const ax = px + Math.cos(a0) * r, ay = py + Math.sin(a0) * r, tx = Math.sin(a0), ty = -Math.cos(a0); // counter-clockwise tangent
     K.poly(g, [[ax + tx * 30, ay + ty * 30], [ax - ty * 18, ay + tx * 18], [ax + ty * 18, ay - tx * 18]]);
     g.fillStyle = K.GOLD_HI; g.fill(); K.ink(g, 3);
-    // what to do, and what happens then
-    const cx = 830;
-    const y0 = next ? 196 : 300;
-    K.letter(g, '화면을 가로로', cx, y0, { size: 112 });
-    K.letter(g, '돌려 주세요', cx, y0 + 138, { size: 112 });
-    if (next) {
-      K.panel(g, cx - 330, 418, 660, 196, { slant: 12, edge: K.GOLD, edgeW: 3, facet: '#2a2418', shadow: 6 });
-      K.text(ui, '돌린 뒤 화면을 터치하면', cx, 500, { size: 54, weight: 900, color: K.PAPER, align: 'center', maxW: 620 });
-      K.text(ui, next === 'start' ? '바로 시작합니다' : '바로 이어집니다', cx, 578, { size: 54, weight: 900, color: K.GOLD_HI, align: 'center', maxW: 620 });
-    }
+    // what to do, and what a touch does (the whole screen is the button)
+    const cx = 862;
+    K.letter(g, '화면을 가로로', cx, 196, { size: 112 });
+    K.letter(g, '돌려 주세요', cx, 334, { size: 112 });
+    K.panel(g, cx - 384, 414, 768, 200, { slant: 12, edge: K.GOLD, edgeW: 3, facet: '#2a2418', shadow: 6 });
+    K.text(ui, '화면을 터치하면', cx, 498, { size: 56, weight: 900, color: K.PAPER, align: 'center', maxW: 700 });
+    K.text(ui, PROMPT[next || 'none'], cx, 578, { size: 50, weight: 900, color: K.GOLD_HI, align: 'center', maxW: 700 });
+  },
+  // a touch turns the picture (the device is turned by hand); a mouse keeps it upright
+  pointer(ev, ui) {
+    if (ev.type === 'down') ROT.down = ev.id;
+    else if (ev.type === 'up' && ROT.down === ev.id) { ROT.down = null; TAP.force(ui, S.lastInput === 'touch' ? 'turn' : 'fit'); }
+    return true;
+  },
+  key(ev, ui) {
+    const c = ev.code;
+    if (c === 'Enter' || c === 'NumpadEnter' || c === 'Space') { TAP.force(ui, 'fit'); return true; }
+    return false;
   },
 });
 
@@ -168,13 +200,15 @@ function drawContinue(g, ui) {
     if (r > hr) { g.globalAlpha = 0.35; g.fillStyle = K.halftone(g, '#000000', 7); g.fillRect(0, 0, C.VIEW_W, C.VIEW_H); }
     g.restore();
   }
-  // the call to action away from the hero: below when the hero is high, above when low
-  const cx = 640, top = hy < 340 ? 432 : 118, p = pulse(ui);
-  K.panel(g, cx - 300, top, 600, 170, { slant: 14, edge: K.GOLD, edgeW: 3, facet: '#2a2418', shadow: 6 });
+  // the call to action away from the hero: under his feet when he is high, over his head when
+  // low (between the HUD bars and the card tray); the keyboard hint stays inside the panel
+  const hint = keyHint(), ph = hint ? 200 : 170;
+  const cx = 640, top = hy0 < 409 ? 600 - ph : 112, p = pulse(ui);
+  K.panel(g, cx - 300, top, 600, ph, { slant: 14, edge: K.GOLD, edgeW: 3, facet: '#2a2418', shadow: 6 });
   tapGlyph(g, ui, cx - 212, top + 82, 70);
   K.text(ui, '화면을 터치하면', cx + 46, top + 64, { size: 46, weight: 900, color: K.PAPER, align: 'center', maxW: 380 });
   K.letter(g, '계속', cx + 46, top + 148, { size: 92, fill: K.GOLD_HI, fill2: K.GOLD, scale: 1 + 0.035 * p });
-  if (keyHint()) K.text(ui, 'Enter · Space 계속   Esc 일시정지', cx, top + 204, { size: 21, weight: 700, color: K.DIM, align: 'center', stroke: 4 });
+  if (hint) K.text(ui, 'Enter · Space 계속   Esc 일시정지', cx, top + 186, { size: 20, weight: 700, color: K.DIM, align: 'center' });
 }
 
 BD.ui.overlays.register({

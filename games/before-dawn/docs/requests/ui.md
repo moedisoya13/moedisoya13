@@ -1,6 +1,7 @@
 # UI agent — engine requests, interpretations, notes for the lead (ARCHITECTURE §7)
 
-No engine file is edited on the UI branch. Everything below works today through a workaround
+No engine file is edited on the UI branch, except the two hooks of item 8 (the rotate prompt,
+asked for by the lead on `ui-tap-start`). Everything else works today through a workaround
 inside `src/ui/`; each item says what the workaround is and the smallest engine change that
 would replace it. Checked against the merged 18 real cards (`src/content/cards/`).
 
@@ -68,6 +69,34 @@ slot positions; the UI's are `BD.ui.slotRect(i)` (`src/ui/35_cardfx.js`). They a
 (84 px sockets, gap 12, centred, y 616). If either moves, the gold dot flies to the wrong place.
 Suggest the cards call `BD.ui.slotRect` when it exists (both run only in the browser).
 
+### 8. Rotate prompt: one tap to play, and forced landscape (engine hooks made on `ui-tap-start`)
+
+The user's two reports from a phone: "화면 회전 안내 이후 터치하면 자동 시작" and "화면 회전 안내에서
+넘어가지 않습니다" (rotation lock, file viewers and in-app browsers never turn the window, so the
+prompt could never be passed). The UI side is `src/ui/65_rotate.js`; it needed two small, additive
+engine changes, made directly (lead's go-ahead) and listed here so the engine owner can review:
+
+- `src/core/50_app.js`: `BD.UI_OVERLAYS` gains `'tap'` (the 화면을 터치하면 시작 / 계속 state: a UI
+  overlay like `pause`, so `app.step()` and the shell hold the world while it is open). Nothing
+  else in the app changes. ARCHITECTURE §5.1/§5.3 and the GDD §12 state list do not name it yet.
+- `src/client/10_view.js`:
+  - `view.setForced('turn' | 'fit' | null)`: forced landscape on a portrait window. `'turn'` draws
+    the 1280 × 720 picture a quarter turn round to fill the window (`view.rot` = +1 clockwise, the
+    home bar on the right; −1 when `screen.orientation.angle` is 180); `'fit'` keeps it upright and
+    letterboxed (a tall desktop window; chosen for a mouse click or a key). `view.portrait` (which
+    the shell already copies into `app.rotate` every frame) is false while forced. Forced landscape
+    ends by itself as soon as the window is landscape.
+  - `toLogical` maps pointer positions back through the turn, so the joystick, the dash button,
+    the double tap and every menu follow the picture with no change in `40_input.js`.
+    `toClient(lx, ly)` is the inverse (tests use it).
+  - The size is re-read every frame in `begin()`, and on `orientationchange`, `visualViewport`
+    resize and `screen.orientation` change: some browsers turn without a `resize` event or report
+    the new size late.
+  - `view.onTurn(fn)`: `fn(portrait)` the moment `portrait` changes. The UI opens the tap state
+    from it, before the shell can run a tick (the frame loop steps the world before effects
+    update, so an effect-based check let one tick through after turning back).
+- No change to `90_shell.js` or `40_input.js`.
+
 ## Real cards against the GDD (no card edited)
 
 The UI read every card's `hud()`, toasts, vfx kinds and decor ids. Nothing found that contradicts
@@ -94,8 +123,26 @@ checks `각성`, the gold-frame state and that the count is gone.
 - **Toasts the cards and the UI both send** (combo max, quest countdown, awakening) are shown once:
   the same text within a second is dropped. Reset reasons are toasted by the UI only when the
   card did not toast one starting with its name.
-- **Rotating back to landscape** during a run opens the pause menu instead of resuming at once
-  (same courtesy as losing focus, GDD §2.1). The world is held while portrait (engine).
+- **The rotate prompt and what follows** (`src/ui/65_rotate.js`, GDD §2.1 / §9.1 `rotate`). The
+  prompt keeps `화면을 가로로 돌려 주세요` and adds what a touch does: `화면을 터치하면 / 가로 화면으로
+  바로 시작합니다` (title, preparation), `…바로 이어집니다` (mid-run), `…봅니다` (a menu was open).
+  - A touch on the prompt: forced landscape (item 8; `'turn'` for touch, `'fit'` for mouse/keys)
+    and, in the same tap, the run starts or play continues. The run ends forced landscape only
+    when the window is really landscape; play goes on without a restart.
+  - Turning the device instead: on the title or preparation screen (and at launch), `화면을
+    터치하면 시작` over the title art with the night it will be (the three cards); the first tap,
+    click, Enter or Space starts. Mid-run, `화면을 터치하면 계속` over the held fight (dimmed except
+    a window round the hero, the panel away from him) instead of the pause menu; one tap resumes.
+    Esc goes to the title menu / P and Esc to the pause menu. Losing focus still pauses.
+  - The hand is what the preparation screen would deal: `NAV.deal` (a fresh seed, the saved depth,
+    §5.6, no reroll spent), or on the preparation screen the night it shows. The preparation screen
+    is skipped on this path only. With the URL test hooks the URL's run starts, as 출정 does.
+  - The tap is claimed on press and acts on release (a user gesture for audio, touch included); it
+    clears any pending dash request and the double-tap timer, so it is never a move, a dash-button
+    press or half of a double tap. The engine gives no invulnerability on resuming from pause, so
+    none is added here either.
+  - Where a menu overlay was open (pause, help, settings), at the altar, on codex/result, or in a
+    bot run, turning back returns to where it was.
 - **`?seed`, `?hand`, `?floor` or `?bot` in the URL** make 출정 start the run at once (skipping the
   preparation screen), so accept.js criteria 2, 13, 14 keep working with one Enter.
 - **First-run hints** are on while `settings.hints` is true and switch off after the first finished

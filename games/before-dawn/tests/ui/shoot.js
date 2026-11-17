@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 // Screenshots of every screen and overlay at 1280×720 and at 667×375 (a phone in landscape,
 // device scale 2), plus play on each of the five floor colours. Writes docs/screens/ui/.
+// Portrait (375×667 and 720×1280): the rotate prompt at launch and mid-run, and forced
+// landscape (the picture a quarter turn round after a touch on the prompt).
 // States that need content of other branches are staged with tests/ui/fixtures/standins.js
 // and window.__BD. Usage: node tests/ui/shoot.js [scene-filter]
 'use strict';
@@ -64,8 +66,23 @@ async function stagePlay(T, o) {
   }, o);
 }
 
+// the device turned to portrait and back (the rotate prompt, then the tap state)
+async function turnAround(T) {
+  const vp = T.page.viewportSize();
+  await T.page.setViewportSize({ width: vp.height, height: vp.width }); await T.wait(250);
+  await T.page.setViewportSize(vp); await T.wait(300);
+}
+
 const PLAY_URL = '?seed=11&hand=pierce,chain_slash&mute=1&nosave=1';
 const SCENES = {
+  'tap-start': { query: '?mute=1&nosave=1', run: async (T) => { await turnAround(T); } },
+  'tap-continue': {
+    query: PLAY_URL, run: async (T) => {
+      await T.key('Enter'); await T.wait(1200);
+      await stagePlay(T, { hand: ['whirl', 'leech', 'chain_slash'], enemies: [['goblin', -2, -1], ['goblin', 1.2, -1.5], ['slime', -1, 1]], states: [[2, { stack: 2 }]], hp: 72 });
+      await turnAround(T);
+    },
+  },
   title: { query: '?mute=1&nosave=1', run: async () => {} },
   'title-records': { init: withSave(SAVE), query: '?mute=1', run: async () => {} },
   prep: { query: '?mute=1&nosave=1', run: async (T) => { await T.key('Enter'); } },
@@ -188,15 +205,38 @@ const ROTATE = { tag: 'portrait', sizes: [{ tag: '375x667', viewport: { width: 3
     }
     console.log('shot', name);
   }
-  if ('rotate'.includes(filter) || !filter) {
+  if ('rotate'.includes(filter) || 'forced'.includes(filter) || !filter) {
     for (const sz of ROTATE.sizes) {
-      const T = await H.open(url, { query: PLAY_URL, context: { viewport: sz.viewport, deviceScaleFactor: sz.deviceScaleFactor, hasTouch: !!sz.hasTouch } });
-      await T.wait(300);
-      await T.shot(path.join(OUT, 'rotate-' + sz.tag + '.png'));
-      if (T.errors.length) problems.push('rotate: ' + T.errors.join(' | '));
-      await T.close();
+      const ctx = { viewport: sz.viewport, deviceScaleFactor: sz.deviceScaleFactor, hasTouch: !!sz.hasTouch };
+      const shots = [
+        // at launch: the prompt says a touch starts
+        ['rotate-' + sz.tag, '?mute=1&nosave=1', async () => {}],
+        // mid-run: a touch continues
+        ['rotate-continue-' + sz.tag, PLAY_URL, async (T) => {
+          const vp = T.page.viewportSize();
+          await T.page.setViewportSize({ width: vp.height, height: vp.width }); await T.wait(200);
+          await T.key('Enter'); await T.wait(900);
+          await T.page.setViewportSize(vp); await T.wait(300);
+        }],
+        // forced landscape: one touch on the prompt, play drawn a quarter turn round
+        ['forced-' + sz.tag, PLAY_URL, async (T) => {
+          await T.tapAt(640, 360); await T.wait(1500);
+          await stagePlay(T, { hand: ['whirl', 'leech', 'chain_slash'], enemies: [['goblin', -2, -1], ['goblin', 1.2, -1.5], ['slime', -1, 1], ['goblin', 2, 0.5]], states: [[2, { stack: 3 }]], radiance: 2, hp: 72, bot: true });
+          await T.wait(1200);
+        }],
+      ];
+      for (const [name, query, run] of shots) {
+        const T = await H.open(url, { query, context: ctx });
+        try {
+          await T.wait(300);
+          await run(T);
+          await T.shot(path.join(OUT, name + '.png'));
+        } catch (err) { problems.push(name + ': ' + err.message); }
+        if (T.errors.length) problems.push(name + ': ' + T.errors.join(' | '));
+        await T.close();
+      }
     }
-    console.log('shot rotate');
+    console.log('shot rotate, rotate-continue, forced');
   }
   if ('card-icons'.includes(filter) || !filter) {
     // the 18 card icons on one sheet, each in its own socket with the card id under it
