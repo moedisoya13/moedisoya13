@@ -16,7 +16,7 @@ const T = {
 
 BD.enemies.register({
   id: 'ghoul', name: '구울', type: 'undead', sprite: 'ghoul',
-  hp: 45, speed: 2.6, dmg: 12, radius: 0.45, cost: 3, role: 'threat', shards: 4, // GDD-V2 §3.2 (v1 tuned: 120 HP, 2.4 u/s, 14)
+  hp: 45, speed: 2.6, dmg: 16, radius: 0.45, cost: 3, role: 'threat', shards: 4, // GDD-V2 §3.2 (v1 tuned: 120 HP, 2.4 u/s, 14)
   attacks: { lunge: { name: '달려들기' } },
   T,
   guardian: { name: '구울 폭군', update(e, w) { BD.foes.clamp(w, e); } }, // the 50 % rise is read from e.guardian in revive()

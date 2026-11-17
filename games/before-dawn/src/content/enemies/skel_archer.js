@@ -78,7 +78,7 @@ function shoot(w, e) {
 
 BD.enemies.register({
   id: 'skel_archer', name: '해골 궁수', type: 'undead', sprite: 'skeleton_archer',
-  hp: 20, speed: 2.6, dmg: 8, radius: 0.35, cost: 1.5, role: 'threat', shards: 3, // GDD-V2 §3.2 (v1 tuned: 40 HP, 9)
+  hp: 20, speed: 2.6, dmg: 11, radius: 0.35, cost: 1.5, role: 'threat', shards: 3, // GDD-V2 §3.2 (v1 tuned: 40 HP, 9)
   attacks: { shot: { name: '사격' } },
   T,
   guardian: { name: '해골 명궁', update(e, w) { BD.foes.clamp(w, e); } }, // three arrows: e.guardian in shoot()

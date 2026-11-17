@@ -96,7 +96,7 @@ function endCharge(w, e) {
 
 BD.enemies.register({
   id: 'dark_knight', name: '암흑기사', type: 'heavy', sprite: 'dark_knight',
-  hp: 120, speed: 2.0, dmg: 18, radius: 0.55, cost: 6, role: 'threat', shards: 8, // GDD-V2 §3.2 (v1 tuned: 240 HP, 20)
+  hp: 120, speed: 2.0, dmg: 14, radius: 0.55, cost: 6, role: 'threat', shards: 8, // GDD-V2 §3.2 (v1 tuned: 240 HP, 20)
   knockScale: 0.33,
   attacks: { charge: { name: '돌격', sfx: 'charge' }, sweep: { name: '휩쓸기', sfx: 'boss_cleave' } },
   T,
