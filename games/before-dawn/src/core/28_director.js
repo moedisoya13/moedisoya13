@@ -24,7 +24,7 @@ const DC = C.DIRECTOR;
 D.row = (w) => (w.floor && w.floor.v2 ? DC.floors[w.floorN] || null : null);
 D.active = (w) => {
   const d = w.director;
-  return !!(d && !d.off && d.state !== 'clear' && !(w.wave && w.wave.n >= 3) && !w.ending && !w.hero.dead);
+  return !!(d && !d.off && d.state !== 'clear' && !BD.W.scenario(w) && !w.ending && !w.hero.dead);
 };
 
 // The weighted pick of a {kind: weight} table (keys sorted: deterministic).

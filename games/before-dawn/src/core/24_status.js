@@ -26,7 +26,8 @@ S.remove = function (w, e, name) {
 // opts: {direct: bool (ignition by a hit; ignores spread immunity), dur, n, source}
 // burn (v2, GDD-V2 §4.4 화염): opts.dmg (per tick, default STATUS.burnDmg) and opts.spread (u,
 // default STATUS.burnSpread) ride on the burn; a burn that spreads passes both on. One burning
-// enemy lights at most STATUS.spreadPerTick others per tick.
+// enemy lights at most STATUS.spreadPerTick others per tick, and an enemy that caught fire by
+// spreading this tick passes it on from the next tick (no same-tick cascade through a crowd).
 S.apply = function (w, e, name, opts) {
   opts = opts || {};
   if (e.dead) return false;
@@ -104,7 +105,7 @@ S.update = function (w, dt) {
   const B = BD.nav.buckets(list, 2 * maxR + maxS + 0.01), n0 = list.length;
   for (const e of list) {
     const b = e.statuses.burn;
-    if (e.dead || e.down || !b) continue;
+    if (e.dead || e.down || !b || b.litTick === w.ticks) continue; // caught this tick: spreads from the next
     const near = B.near(e.x, e.y);
     for (let i = n0; i < list.length; i++) near.push(i); // anything that appeared during the spread
     let lit = 0;
@@ -112,7 +113,7 @@ S.update = function (w, dt) {
       if (lit >= C.spreadPerTick) break;
       const o = list[oi];
       if (o === e || o.dead || o.statuses.burn || o.burnImmuneT > 0) continue;
-      if (BD.math.dist(o.x, o.y, e.x, e.y) - o.r - e.r <= (b.spread || C.burnSpread) && S.apply(w, o, 'burn', { dmg: b.dmg, spread: b.spread })) lit++;
+      if (BD.math.dist(o.x, o.y, e.x, e.y) - o.r - e.r <= (b.spread || C.burnSpread) && S.apply(w, o, 'burn', { dmg: b.dmg, spread: b.spread })) { lit++; o.statuses.burn.litTick = w.ticks; }
     }
   }
 };

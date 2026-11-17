@@ -62,16 +62,16 @@ module.exports = {
       t.assert(has(await toasts(T), '각성: 망자의 안식'), 'awaken toast');
       t.assert((await T.texts()).includes('각성: 망자의 안식'), 'awaken banner');
       t.assert(await T.eval(() => window.BD.ui.S.slots[0].burstAt > 0), 'gold burst on the slot');
-      // combo up to max
-      for (let i = 1; i <= 5; i++) await T.eval((i) => { const w = window.__BD.world(); window.BD.cardRt.setStack(w, w.cards[1], i, 'gain'); }, i);
+      // combo up to max (연참: 10 at level 1, GDD-V2 §4.4; v1 5)
+      for (let i = 1; i <= 10; i++) await T.eval((i) => { const w = window.__BD.world(); window.BD.cardRt.setStack(w, w.cards[1], i, 'gain'); }, i);
       await T.wait();
-      t.assert(has(await T.texts(), '×5'), 'stack in the slot');
-      t.assert(has(await toasts(T), '연참 ×5'), 'max toast');
+      t.assert(has(await T.texts(), '×10'), 'stack in the slot');
+      t.assert(has(await toasts(T), '연참 ×10'), 'max toast');
       // timeout reset (staged like the card does it): the reason in words
       await T.eval(() => { const w = window.__BD.world(); window.BD.cardRt.setStack(w, w.cards[1], 0, 'timeout'); });
       await T.wait();
       t.assert(has(await T.texts(), '×0'));
-      t.assert(has(await toasts(T), '연참 끊김: 4초 동안 베지 못했다'), 'timeout reason');
+      t.assert(has(await toasts(T), '연참 끊김: 2초 동안 처치가 없었다'), 'timeout reason (GDD-V2: 2 s without a kill)');
       t.assert(await T.eval(() => window.BD.ui.S.slots[1].shakeAt > 0), 'slot shakes');
       // stage badge and a hurt reset with the attack named
       await T.eval(() => { const w = window.__BD.world(); for (let i = 1; i <= 4; i++) window.BD.cardRt.setStack(w, w.cards[2], i, 'gain'); });
@@ -97,26 +97,41 @@ module.exports = {
       await T.wait(120);
       const hud = await T.eval(() => { const w = window.__BD.world(), CI = window.BD.ui.cards; return w.cards.map((c) => CI.hud(w, c)); });
       t.eq(hud[0].glow, true, 'target card glows on a floor of its type');
-      t.eq(hud[1].pips, 2, 'leech pips');
+      t.near(hud[1].ring, 2 / 80, 1e-9, 'leech ring: 2 of 80 kills (GDD-V2 §4.4; v1 pips of 4)');
       t.eq(hud[2].warn, true, 'combo timer under 1 s warns');
       t.assert(await T.eval(() => window.BD.ui.S.slots[2].warn), 'slot warning state');
       t.eq(T.errors, []);
     } finally { await T.close(); }
   },
 
-  async 'kills leave baked ink and a sound word; hit-stop holds the world at speed 1'(t) {
+  // GDD-V2 §7.1: a fodder kill leaves ink but no sound word and no hit-stop (several die every
+  // second); a threat's kill keeps the word. Staged in a room that fits the screen so the decal
+  // layer is in screen pixels.
+  async 'kills leave baked ink; threats get a sound word, fodder does not; hit-stop holds the world at speed 1'(t) {
     const T = await playing(t, 'pierce');
     try {
+      await T.eval(() => { window.__BD.stage({ size: [12, 12], enemies: 0 }); });
+      await T.wait(200); // the renderer sets up the new floor's decal layer on its next frame
       const r = await T.eval(() => {
-        const w = window.__BD.world(), BD = window.BD;
-        const e = BD.W.makeEnemy(w, 'goblin', w.grid.w / 2, w.grid.h / 2, {});
+        const B = window.__BD, BD = window.BD;
+        const w = B.world(); w.freezeT = 0;
+        BD.ui.S.letters.length = 0;
+        const ink = (e) => {
+          const v = B.ui.view, [sx, sy] = v.proj(e.x, e.y);
+          const c = BD.client.render.bakeCanvas, k = c.width / 1280;
+          const d = c.getContext('2d').getImageData(Math.round((sx - 20) * k), Math.round((sy - 10) * k), Math.round(40 * k), Math.round(20 * k)).data;
+          let n = 0; for (let i = 3; i < d.length; i += 4) if (d[i] > 120) n++;
+          return n;
+        };
+        const f = BD.W.makeEnemy(w, 'goblin', 4.5, 6, {});
+        BD.combat.kill(w, f);
+        const fodder = { ink: ink(f), letters: BD.ui.S.letters.length, hold: B.ui.hold };
+        const e = BD.W.makeEnemy(w, 'slime', 7.5, 6, {});
         BD.combat.kill(w, e);
-        const v = window.__BD.ui.view, [sx, sy] = v.proj(e.x, e.y);
-        const c = BD.client.render.bakeCanvas, k = c.width / 1280;
-        const d = c.getContext('2d').getImageData(Math.round((sx - 20) * k), Math.round((sy - 10) * k), Math.round(40 * k), Math.round(20 * k)).data;
-        let ink = 0; for (let i = 3; i < d.length; i += 4) if (d[i] > 120) ink++;
-        return { ink, letters: BD.ui.S.letters.map((l) => l.text) };
+        return { fodder, ink: ink(e), letters: BD.ui.S.letters.map((l) => l.text) };
       });
+      t.assert(r.fodder.ink > 20, 'ink baked at the fodder kill: ' + r.fodder.ink);
+      t.eq([r.fodder.letters, r.fodder.hold], [0, 0], 'no word, no hit-stop for fodder');
       t.assert(r.ink > 20, 'ink baked at the kill point: ' + r.ink);
       t.assert(r.letters.length >= 1 && ['촤악!', '서걱!', '콰직!'].includes(r.letters[0]), 'kill lettering ' + r.letters);
       await T.wait(400);

@@ -4,7 +4,13 @@
 'use strict';
 const H = require('./_harness');
 
-const openAltar = (T) => T.eval(() => { const w = window.__BD.world(), BD = window.BD; BD.flow.lightAltar(w); BD.flow.openAltar(w); });
+// v2 floors have no altar yet (it returns as a site, GDD-V2 §4.6): the overlay is opened on a staged one
+const openAltar = (T) => T.eval(() => {
+  const w = window.__BD.world(), BD = window.BD;
+  if (!w.altar) w.altar = { state: 'off', x: w.hero.x, y: w.hero.y, offers: [], offered: [], round: 0, step: 'choose', pick: null, needExit: false };
+  w.scenario = true; // no horde and no growth choice in the way of the screen walk
+  BD.flow.lightAltar(w); BD.flow.openAltar(w);
+});
 const has = (arr, s) => arr.some((x) => x === s);
 
 module.exports = {
@@ -118,36 +124,38 @@ module.exports = {
     } finally { await T.close(); }
   },
 
-  async 'full loop by the GDD paths: guardian → stand on the altar → stairs → death → result → retry'(t) {
+  // GDD-V2 §5.5 (v1: guardian → altar → stairs): the task done → the guardian waits at the stairs
+  // zone → its fall clears the floor (the horde scatters, the shards fly in) → stairs → 2F
+  async 'full loop by the v2 path: task → guardian at the stairs → floor clear → stairs → death → result → retry'(t) {
     const T = await H.open(H.variant(), { query: '?mute=1&nosave=1' });
     const hero = (x, y) => T.eval(([x, y]) => { const h = window.__BD.world().hero; h.x = x; h.y = y; window.__BD.input({ mx: 0, my: 0 }); }, [x, y]);
     try {
       await T.key('Enter'); await T.key('Enter');
       t.eq(await T.mode(), 'play');
       await T.wait(1700); // the 1.5 s freeze on entering
-      // the guardian falls: stairs open, banner, altar lit
+      t.assert((await T.texts()).some((x) => /^소탕 \d+\/200$/.test(x)), 'the task count at the top');
+      // the task is done: banner, the guardian appears at the stairs zone after its 2 s warning
       await T.eval(() => {
         const B = window.__BD, w = B.world(), BD = window.BD;
-        B.killAll(); w.wave.n = 3;
-        const g = BD.W.makeEnemy(w, 'goblin', w.hero.x + 3, w.hero.y, { guardian: true });
-        BD.combat.kill(w, g);
+        w.hero.hp = w.hero.maxHp = 1e6; w.scenario = true; B.killAll();
+        BD.taskRt.set(w, w.task.goal);
+      });
+      await T.wait(300);
+      t.assert(has(await T.texts(), '수호자가 계단을 지킨다'), 'task banner');
+      let g = null;
+      for (let i = 0; i < 40 && !g; i++) { await T.wait(100); g = await T.eval(() => { const e = window.__BD.world().enemies.find((x) => x.guardian && !x.dead); return e ? { x: e.x, y: e.y } : null; }); }
+      t.assert(g && Math.hypot(g.x - 8, g.y - 8) < 1.5, 'the guardian stands at the stairs zone centre');
+      // its fall clears the floor
+      await T.eval(() => {
+        const w = window.__BD.world(), BD = window.BD;
+        for (let i = 0; i < 6; i++) BD.W.makeEnemy(w, 'goblin', w.hero.x + 3 + i * 0.5, w.hero.y, {}).stunT = 99;
+        BD.growth.drop(w, 20, 20, 1);
+        BD.combat.kill(w, w.enemies.find((x) => x.guardian));
       });
       await T.wait(300);
       t.assert(has(await T.texts(), '계단이 열렸다'), 'stairs banner');
-      t.eq(await T.eval(() => window.__BD.world().altar.state), 'lit');
-      // stand on the altar ring for 0.8 s → the altar overlay; the clock stops
-      const altar = await T.eval(() => { const a = window.__BD.world().altar; return [a.x, a.y]; });
-      await hero(altar[0], altar[1]);
-      let opened = false;
-      for (let i = 0; i < 30 && !opened; i++) { await T.wait(100); opened = (await T.overlay()) === 'altar'; }
-      t.assert(opened, 'standing on the altar opens it');
-      const t0 = (await T.state()).t;
-      await T.wait(300);
-      t.eq((await T.state()).t, t0, 'world frozen at the altar');
-      await T.eval(() => window.__BD.setHp(50));
-      await T.tap('pray', 'mouse');
-      t.eq(await T.overlay(), null);
-      t.eq((await T.state()).hero.hp, 75, '기도한다');
+      t.eq(await T.eval(() => window.__BD.world().enemies.filter((e) => !e.dead).length), 0, 'the horde scattered');
+      t.assert(await T.eval(() => window.__BD.world().shards.every((s) => s.pull)), 'every shard flies to the hero');
       // stairs ring for 1.0 s → next floor with its banner
       const st = await T.eval(() => { const s = window.__BD.world().stairs; return [s.ringX, s.ringY]; });
       await hero(st[0], st[1]);
@@ -155,9 +163,9 @@ module.exports = {
       for (let i = 0; i < 40 && !up; i++) { await T.wait(100); up = (await T.state()).floor === 2; }
       t.assert(up, 'stairs take the hero to 2F');
       await T.wait(200);
-      t.assert((await T.texts()).some((x) => /^2F — /.test(x)), 'floor banner');
+      t.assert((await T.texts()).some((x) => /^2F — .+ · 소탕$/.test(x)), 'floor banner with the task');
       // death → result → 다시 오른다 (touch) → prep → 오른다 → a new night
-      await T.eval(() => { const w = window.__BD.world(); w.hero.invuln = 0; window.BD.W.hurtHero(w, 999, { source: 'goblin', attack: 'stab', x: w.hero.x + 1, y: w.hero.y }); });
+      await T.eval(() => { const w = window.__BD.world(); w.hero.hp = w.hero.maxHp = 100; w.hero.invuln = 0; window.BD.W.hurtHero(w, 999, { source: 'goblin', attack: 'stab', x: w.hero.x + 1, y: w.hero.y }); });
       t.assert(await T.waitMode('result', 5000), 'result after death');
       t.assert(has(await T.texts(), '쓰러졌다'));
       const seed1 = (await T.state()).seed;

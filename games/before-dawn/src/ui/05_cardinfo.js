@@ -65,7 +65,7 @@ CI.hud = function (w, card) {
   if (out.glow === undefined && fam === 'target' && def.targetType) out.glow = !!(w.floor && def.targetType === w.floor.domType);
   if (!out.badge) out.badge = fam === 'combo' ? CI.fallbackBadge(card.id, st.stack) : '';
   out.stack = st.stack || 0;
-  out.max = def.maxStack || 0;
+  out.max = BD.cardRt.maxStack(card) || 0;
   out.maxed = fam === 'combo' && out.max > 0 && out.stack >= out.max;
   out.awakened = !!st.awakened;
   // a running combo timer close to running out (GDD §9.3: under 1 s); the card's own flag wins
@@ -77,6 +77,7 @@ CI.hud = function (w, card) {
 CI.stateLine = function (card) {
   const st = card.state, def = card.def;
   if (def.family === 'quest') return st.awakened ? '각성함' : '진행 ' + (st.progress || 0) + '/' + st.goal;
-  if (def.family === 'combo') return '스택 ×' + (st.stack || 0) + (def.maxStack ? ' (최대 ' + def.maxStack + ')' : '');
+  const max = BD.cardRt.maxStack(card);
+  if (def.family === 'combo') return '스택 ×' + (st.stack || 0) + (max ? ' (최대 ' + max + ')' : '');
   return '';
 };

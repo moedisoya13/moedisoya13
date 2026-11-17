@@ -42,7 +42,7 @@ function flyTo(ui, wx, wy, i, color) {
 // GDD §9.3 reset reasons in words (used when the card itself did not toast)
 function resetText(card, reason) {
   const n = card.def.name;
-  if (reason === 'timeout') return n + ' 끊김: ' + (card.id === 'chain_slash' ? '4초 동안 베지 못했다' : '제때 베지 못했다');
+  if (reason === 'timeout') return n + ' 끊김: ' + (card.id === 'chain_slash' ? (BD.cardRt.lv(card.def, card.level || 1).limit || 2) + '초 동안 처치가 없었다' : '제때 베지 못했다');
   if (reason === 'too_close') return n + ' 흐트러짐: 품을 내줬다';
   if (reason === 'hurt') {
     const h = FX.lastHurt;
@@ -101,7 +101,7 @@ BD.ui.effects.register({
       if (ev.reason === 'gain') {
         s.popAt = ui.time;
         ui.sfxSafe('combo_up', { stack: ev.to });
-        const max = card.def.maxStack;
+        const max = BD.cardRt.maxStack(card); // per card level (GDD-V2 §4.4)
         if (max && ev.to >= max && ev.from < max) {
           s.maxAt = ui.time;
           ui.sfxSafe('combo_max');
