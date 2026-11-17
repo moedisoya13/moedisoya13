@@ -38,6 +38,13 @@ K.ease = (t) => 1 - Math.pow(1 - K.clamp(t, 0, 1), 3);
 // Cosmetic randomness for the UI only (never the sim's streams).
 K.rng = BD.Rng(0x5eed);
 
+// Phones: the 1280 × 720 picture is drawn at about ×0.52 (667 × 375, and forced landscape on a
+// 375 × 667 portrait screen), so 20 logical px is 10 CSS px. Text and marks that must be read in
+// play are drawn larger there: K.big(ui, n) is n on a laptop and n × 1.35 when the picture is
+// drawn below ×0.74 (the same threshold as the dash button's phone size, CONTROLS-REVIEW §3.7).
+K.phone = (ui) => !!(ui && ui.view && ui.view.scale < 0.74);
+K.big = (ui, n, k) => (K.phone(ui) ? Math.round(n * (k || 1.35)) : n);
+
 // ---- per-frame record (tests and screenshots read it) ---------------------------------------
 const REC = { texts: [], last: [] };
 K.frameEnd = function () { REC.last = REC.texts; REC.texts = []; };
