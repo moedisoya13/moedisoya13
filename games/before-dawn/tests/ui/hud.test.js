@@ -107,7 +107,9 @@ module.exports = {
   // GDD-V2 §7.1: a fodder kill leaves ink but no sound word and no hit-stop (several die every
   // second); a threat's kill keeps the word. Staged in a room that fits the screen so the decal
   // layer is in screen pixels.
-  async 'kills leave baked ink; threats get a sound word, fodder does not; hit-stop holds the world at speed 1'(t) {
+  // GDD-V2 §3.7: kill marks are a pool of 150 (not baked into a floor-wide canvas); only a
+  // guardian (or the boss) bakes its splat for good
+  async 'kills leave pooled ink marks (a guardian bakes); threats get a sound word, fodder does not; hit-stop holds the world at speed 1'(t) {
     const T = await playing(t, 'pierce');
     try {
       await T.eval(() => { window.__BD.stage({ size: [12, 12], enemies: 0 }); });
@@ -116,6 +118,8 @@ module.exports = {
         const B = window.__BD, BD = window.BD;
         const w = B.world(); w.freezeT = 0;
         BD.ui.S.letters.length = 0;
+        const marks = BD.ui.feel.marks;
+        const markAt = (e) => marks.some((m) => Math.abs(m.x - e.x) < 0.01 && Math.abs(m.y - e.y) < 0.01);
         const ink = (e) => {
           const v = B.ui.view, [sx, sy] = v.proj(e.x, e.y);
           const c = BD.client.render.bakeCanvas, k = c.width / 1280;
@@ -125,15 +129,20 @@ module.exports = {
         };
         const f = BD.W.makeEnemy(w, 'goblin', 4.5, 6, {});
         BD.combat.kill(w, f);
-        const fodder = { ink: ink(f), letters: BD.ui.S.letters.length, hold: B.ui.hold };
+        const fodder = { mark: markAt(f), baked: ink(f), letters: BD.ui.S.letters.length, hold: B.ui.hold };
         const e = BD.W.makeEnemy(w, 'slime', 7.5, 6, {});
         BD.combat.kill(w, e);
-        return { fodder, ink: ink(e), letters: BD.ui.S.letters.map((l) => l.text) };
+        const threat = { mark: markAt(e), letters: BD.ui.S.letters.map((l) => l.text) };
+        const gd = BD.W.makeEnemy(w, 'goblin', 6, 8.5, { guardian: true });
+        BD.combat.kill(w, gd);
+        return { fodder, threat, guardianInk: ink(gd) };
       });
-      t.assert(r.fodder.ink > 20, 'ink baked at the fodder kill: ' + r.fodder.ink);
+      t.assert(r.fodder.mark, 'a pooled mark at the fodder kill');
+      t.eq(r.fodder.baked, 0, 'nothing baked for fodder');
       t.eq([r.fodder.letters, r.fodder.hold], [0, 0], 'no word, no hit-stop for fodder');
-      t.assert(r.ink > 20, 'ink baked at the kill point: ' + r.ink);
-      t.assert(r.letters.length >= 1 && ['촤악!', '서걱!', '콰직!'].includes(r.letters[0]), 'kill lettering ' + r.letters);
+      t.assert(r.threat.mark, 'a pooled mark at the threat kill');
+      t.assert(r.threat.letters.length >= 1 && ['쾅!', '서걱!'].includes(r.threat.letters[0]), 'threat lettering ' + r.threat.letters);
+      t.assert(r.guardianInk > 20, 'a guardian bakes its splat: ' + r.guardianInk);
       await T.wait(400);
       await T.eval(() => window.BD.ui.feel.hitstop(0.4, true));
       const t0 = (await T.state()).t;
