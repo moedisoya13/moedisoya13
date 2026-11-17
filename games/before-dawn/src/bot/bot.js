@@ -16,15 +16,16 @@
 //  ② HP ≤ 45: a flask within 20u → go to it; else an unused spring (a site of kind 'spring')
 //  ③ a halo, or a holy stone with ≥ 8 enemies within 3u, within 8u and not inside a warning → go to it
 //  ④ the goal, chosen every 2 s: the guardian → the nearest task place left (a seal, nest or brazier
-//     site; a chief of the hunt) → sites by opts.sites ('smart' default: chests always, the altar once,
-//     a rift at HP ≥ 70; 'all': every optional site, a spring only below full HP; 'none') → open stairs
+//     site; a chief of the hunt) → the elite of a rift he opened → sites by opts.sites ('smart' default:
+//     chests always, the altar once, a rift at HP ≥ 70; 'all': every optional site, a spring only below
+//     full HP; 'none') → open stairs
 //  ⑤ ≥ 6 enemies within 2.2u: step away from the centroid of those within 4u, keeping the nearest
 //     within reach
 //  ⑥ < 4 enemies within 3u and a shard within 6u: to the nearest shard (with the goal off screen:
 //     only one on the way to it, or within 2u — the hero does not wander off his errand; ⑤ leans that way)
-//  ⑦ the goal is off screen (or the stairs are open): walk to it; a task site with a ring (seal,
-//     brazier): stay in its ring; a nest or a chief in view: hold reach − 0.5u to it (it becomes the
-//     nearest, so the auto-attack takes it)
+//  ⑦ the goal is off screen (or the stairs are open): walk to it; a site with a ring (seal, brazier,
+//     an optional site): stay in its ring; a nest, a chief or the guardian in view: hold reach − 0.5u
+//     to it (it becomes the nearest, so the auto-attack takes it)
 //  ⑧ else ③ above (no enemy at all: toward the goal, or the floor centre)
 // BD.bot.choose(w, {policy}) answers any open choice overlay with an app.cmd argument list.
 
@@ -181,7 +182,7 @@ function goalLive(w, g) {
 function goal(w, opts) {
   const h = w.hero, g = w.botGoal;
   const guard = w.enemies.find((e) => !e.dead && e.guardian);
-  if (guard) return { x: guard.x, y: guard.y, kind: 'guardian' };
+  if (guard) return { x: guard.x, y: guard.y, kind: 'guardian', enemy: guard };
   if (g && g.kind && g.kind !== 'stairs' && w.t < g.until && goalLive(w, g)) { if (g.kind === 'chief') { g.x = g.enemy.x; g.y = g.enemy.y; } return g; }
   let best = null;
   const mode = opts.sites || 'smart';
@@ -195,8 +196,9 @@ function goal(w, opts) {
     if (!best || d < best.d) best = { d, g: { x: s.x, y: s.y, kind: 'site', site: s } };
   }
   for (const e of w.enemies) {
-    if (e.dead || !e.flags.chief) continue;
-    const d = M.dist(h.x, h.y, e.x, e.y);
+    // a hunt's chief (a task place); the elite of a rift he opened (its reward needs it down)
+    if (e.dead || !(e.flags.chief || e.flags.riftElite)) continue;
+    const d = M.dist(h.x, h.y, e.x, e.y) + (e.flags.riftElite ? 500 : 0);
     if (!best || d < best.d) best = { d, g: { x: e.x, y: e.y, kind: 'chief', enemy: e } };
   }
   const stairs = w.stairs && w.stairs.open ? { x: w.stairs.ringX, y: w.stairs.ringY, kind: 'stairs' } : null;
@@ -307,7 +309,7 @@ function thinkV2(w, opts, shapes) {
     if (obj && !obj.dead) return fight(w, shapes, live, obj, BD.W.edgeDist(w, obj));
     if (!bound || outside(h.x, h.y)) return go(w, g.x, g.y);
   }
-  if (g.kind === 'chief' && !g.enemy.dead) return fight(w, shapes, live, g.enemy, BD.W.edgeDist(w, g.enemy));
+  if ((g.kind === 'chief' || g.kind === 'guardian') && !g.enemy.dead) return fight(w, shapes, live, g.enemy, BD.W.edgeDist(w, g.enemy));
   // ⑧
   if (near) return fight(w, shapes, live, near, nd, bound);
   if (g.kind) return go(w, g.x, g.y);
