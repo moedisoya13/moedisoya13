@@ -24,22 +24,23 @@ module.exports = {
     BD.combat.kill(w, g);
     t.eq(w.pickups.length, p0 + 1, 'flask');
   },
-  'guardian: size ×1.6, damage ×1.3, telegraph ×1.4, HP by floor (385/530/675/815/960, docs/CONTROLS-REVIEW.md §3.1), outside the attack caps'(t) {
+  'guardian: size ×1.6, damage ×1.3, telegraph ×1.4, HP by floor (400/700/1000/1300/1600, GDD-V2 §3.6), outside the attack caps'(t) {
     for (let n = 1; n <= 5; n++) {
       const { BD, w } = arena(t, { floor: n });
       for (const kind of ['slime', 'goblin', 'skel_archer', 'ghoul', 'mage', 'dark_knight']) {
         const d = BD.enemies.get(kind);
         const e = BD.W.makeEnemy(w, kind, 2, 2, { guardian: true });
-        t.eq(e.maxHp, [0, 385, 530, 675, 815, 960][n]); t.eq(e.hp, e.maxHp); t.near(e.size, 1.6, 1e-9); t.eq(e.dmg, Math.round(d.dmg * 1.3)); t.near(e.tgScale, 1.4, 1e-9);
+        t.eq(e.maxHp, [0, 400, 700, 1000, 1300, 1600][n]); t.eq(e.hp, e.maxHp); t.near(e.size, 1.6, 1e-9); t.eq(e.dmg, Math.round(d.dmg * 1.3)); t.near(e.tgScale, 1.4, 1e-9);
         t.assert(e.knockScale <= 0.33 + 1e-9, 'reduced knockback');
         t.eq(BD.ai.slot(w, e, 'melee'), true); t.eq(e.slot, null, 'takes no slot');
       }
     }
   },
+  // the v1 room generator (gen.run(…, {v1: true})); v2 floors: tests/core/gen_v2.test.js
   'generated floors: elites 0/0/1/1/2 from wave 2, dominant type when possible; guardian of the dominant type'(t) {
-    const BD = t.load();
+    const BD = t.load(), V1 = { v1: true };
     for (let s = 1; s <= 120; s++) {
-      const run = BD.gen.run(s, 0);
+      const run = BD.gen.run(s, 0, V1);
       for (let n = 1; n <= 5; n++) {
         const f = run.floors[n], sp = f.spawns;
         t.eq(sp.elites.length, [0, 0, 0, 1, 1, 2][n], `seed ${s} ${n}F elites`);
@@ -50,7 +51,7 @@ module.exports = {
     }
     // every kind of a type can be its guardian
     const seen = new Set();
-    for (let s = 1; s <= 200; s++) { const run = BD.gen.run(s, 0); for (let n = 1; n <= 5; n++) seen.add(run.floors[n].spawns.guardian); }
+    for (let s = 1; s <= 200; s++) { const run = BD.gen.run(s, 0, V1); for (let n = 1; n <= 5; n++) seen.add(run.floors[n].spawns.guardian); }
     t.eq([...seen].sort(), ['dark_knight', 'ghoul', 'goblin', 'mage', 'skel_archer', 'slime']);
   },
   'beast guardians: 대왕 슬라임 drops 2 slimes every third pounce (6 at most); 고블린 족장 calls 3 goblins every 12 s'(t) {

@@ -28,10 +28,13 @@ module.exports = {
     t.assert(worst < 500, 'a big floor generates in under 0.5 s (worst ' + worst + ' ms)');
   },
 
-  'floor plan hook: sizes floors 2–5, 1F and unsized floors generate exactly as without a plan': (t) => {
+  // The plan hook sizes the v1 room generator (gen.run(…, {v1: true}), BD.stageFloor); v2 runs build
+  // their 48 × 48 floors with gen.floorV2 (GDD-V2 §5) and never read a plan.
+  'floor plan hook (v1 generator): sizes floors 2–5, 1F and unsized floors generate exactly as without a plan; v2 runs ignore it': (t) => {
     const plain = t.load(), planned = t.load({ extraFiles: [t.fixture('big_plan.js')] });
     for (const seed of [1, 9, 42]) {
-      const a = plain.gen.run(seed, 0), b = planned.gen.run(seed, 0);
+      t.eq(JSON.stringify(planned.gen.run(seed, 0)), JSON.stringify(plain.gen.run(seed, 0)), 'v2 run unchanged by a plan');
+      const a = plain.gen.run(seed, 0, { v1: true }), b = planned.gen.run(seed, 0, { v1: true });
       t.eq(JSON.stringify(b.floors[1]), JSON.stringify(a.floors[1]), '1F unchanged');
       t.eq(JSON.stringify(b.floors[6]), JSON.stringify(a.floors[6]), 'rooftop unchanged');
       for (let n = 2; n <= 5; n++) {
@@ -39,7 +42,7 @@ module.exports = {
         t.assert(b.floors[n].h >= 36 && b.floors[n].h <= 44);
         t.eq(b.floors[n].offscreen, { indicators: true, minimap: n >= 3 });
       }
-      t.eq(JSON.stringify(plain.gen.run(seed, 0, {})), JSON.stringify(a), 'empty opts change nothing');
+      t.eq(JSON.stringify(plain.gen.run(seed, 0, { v1: true, sizes: {} })), JSON.stringify(a), 'empty sizes change nothing');
     }
   },
 

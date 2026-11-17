@@ -2,6 +2,9 @@
 // their spacing / 12 % limit, placement (§7.3), spawn tables and wave split (§7.4), dominant
 // order (§7.5) and the guarantees of §7.6.
 'use strict';
+// v2 runs build 48 × 48 floors (GDD-V2 §5; tests/core/gen_v2.test.js). The v1 room generator these
+// tests describe still runs on request (gen.run(…, {v1: true}); BD.stageFloor) and keeps its rules.
+const V1 = { v1: true };
 
 const SEEDS = Number(process.env.GEN_SEEDS) || 300; // GEN_SEEDS=2000 for a longer sweep
 const SIZES = ['16x10', '10x16', '13x13', '14x12', '12x14'];
@@ -92,7 +95,7 @@ module.exports = {
     const used = { shape: {}, pattern: {} };
     let fallback = 0;
     for (let s = 1; s <= SEEDS; s++) {
-      const run = BD.gen.run(s, 0);
+      const run = BD.gen.run(s, 0, V1);
       for (let n = 1; n <= 5; n++) {
         const f = run.floors[n];
         if (f.fallback) fallback++;
@@ -109,7 +112,7 @@ module.exports = {
     const BD = t.load();
     const firsts = new Set();
     for (let s = 1; s <= SEEDS; s++) {
-      const run = BD.gen.run(s, 0);
+      const run = BD.gen.run(s, 0, V1);
       const o = run.domOrder;
       t.eq(run.reduced, false);
       t.assert(o[0] === 'beast' || o[0] === 'undead', `seed ${s} 1F ${o[0]}`);
@@ -132,7 +135,7 @@ module.exports = {
   '§7.4: each floor = dominant bundle + the other types\' non-dominant bundles, split 30 % / 35 % / rest'(t) {
     const BD = t.load();
     for (let s = 1; s <= 80; s++) {
-      const run = BD.gen.run(s, 0);
+      const run = BD.gen.run(s, 0, V1);
       for (let n = 1; n <= 5; n++) {
         const f = run.floors[n], sp = f.spawns;
         const want = {};
@@ -152,7 +155,7 @@ module.exports = {
   'trial lists: half the dominant bundle (rounded up) and, from 3F, one dominant elite'(t) {
     const BD = t.load();
     for (let s = 1; s <= 40; s++) {
-      const run = BD.gen.run(s, 0);
+      const run = BD.gen.run(s, 0, V1);
       for (let n = 1; n <= 5; n++) {
         const f = run.floors[n], row = BD.gen.bundles.get(f.domType).dom[n];
         const want = Object.values(row).reduce((a, c) => a + Math.ceil(c / 2), 0);
@@ -166,7 +169,7 @@ module.exports = {
     const BD = t.load();
     const types = new Set();
     for (let s = 1; s <= 60; s++) {
-      const r = BD.gen.run(s, 0).floors[6];
+      const r = BD.gen.run(s, 0, V1).floors[6];
       t.eq([r.w, r.h], [13, 13]);
       const solids = [];
       for (let i = 0; i < r.cells.length; i++) if (r.cells[i] === '#') solids.push([i % 13, Math.floor(i / 13)]);
@@ -181,7 +184,7 @@ module.exports = {
   },
   'same seed and tier → identical floors'(t) {
     const BD = t.load();
-    for (const s of [1, 77, 4242]) t.eq(JSON.stringify(BD.gen.run(s, 0)), JSON.stringify(BD.gen.run(s, 0)));
-    t.assert(JSON.stringify(BD.gen.run(1, 0).floors[1].cells) !== JSON.stringify(BD.gen.run(2, 0).floors[1].cells) || BD.gen.run(1, 0).domOrder.join() !== BD.gen.run(2, 0).domOrder.join());
+    for (const s of [1, 77, 4242]) t.eq(JSON.stringify(BD.gen.run(s, 0, V1)), JSON.stringify(BD.gen.run(s, 0, V1)));
+    t.assert(JSON.stringify(BD.gen.run(1, 0, V1).floors[1].cells) !== JSON.stringify(BD.gen.run(2, 0, V1).floors[1].cells) || BD.gen.run(1, 0, V1).domOrder.join() !== BD.gen.run(2, 0, V1).domOrder.join());
   },
 };

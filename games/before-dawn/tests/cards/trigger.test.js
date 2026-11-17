@@ -8,26 +8,29 @@ function kill(BD, w, opts) {
 }
 
 module.exports = {
-  'leech: every 4th kill heals 5 (pips 0–3); guardian / elite kills heal 10 at once'(t) {
+  // GDD-V2 §4.4 level 1 (v1: every 4th kill heals 5, pips 0–3)
+  'leech: every 80th kill heals 4 (slot ring fills toward it); guardian / elite kills heal 10 at once'(t) {
     const { BD, H, w } = world(t, { hand: ['leech'] });
     const c = BD.cardRt.get(w, 'leech');
     w.hero.hp = 50;
-    const pips = [];
-    for (let i = 0; i < 4; i++) { kill(BD, w); pips.push(c.def.hud(c.state, BD.cardRt.ctx(w, c)).pips); }
-    t.eq(pips, [1, 2, 3, 0]);
-    t.eq(w.hero.hp, 55);
-    t.eq(evs(w, 'heal').map((x) => [x.amount, x.source]), [[5, 'leech']]);
+    for (let i = 0; i < 79; i++) kill(BD, w);
+    t.eq(w.hero.hp, 50);
+    t.near(c.def.hud(c.state, BD.cardRt.ctx(w, c)).ring, 79 / 80, 1e-9);
+    kill(BD, w);
+    t.eq(w.hero.hp, 54);
+    t.eq(c.def.hud(c.state, BD.cardRt.ctx(w, c)).ring, 0);
+    t.eq(evs(w, 'heal').map((x) => [x.amount, x.source]), [[4, 'leech']]);
     kill(BD, w, { elite: true });
-    t.eq(w.hero.hp, 65);
+    t.eq(w.hero.hp, 64);
     t.eq(c.state.kills, 0, 'elite kill does not advance the counter');
     kill(BD, w); kill(BD, w, { guardian: true });
-    t.eq(w.hero.hp, 75); t.eq(c.state.kills, 1);
-    t.eq(evs(w, 'vfx', (x) => x.kind === 'leech_ink').length, 7);
-    t.eq(evs(w, 'vfx', (x) => x.kind === 'leech_heal').map((x) => x.amount), [5, 10, 10]);
+    t.eq(w.hero.hp, 74); t.eq(c.state.kills, 1);
+    t.eq(evs(w, 'vfx', (x) => x.kind === 'leech_ink').length, 83);
+    t.eq(evs(w, 'vfx', (x) => x.kind === 'leech_heal').map((x) => x.amount), [4, 10, 10]);
   },
-  'leech: at full HP the 4th kill heals nothing and the count restarts'(t) {
+  'leech: at full HP the 80th kill heals nothing and the count restarts'(t) {
     const { BD, H, w } = world(t, { hand: ['leech'] });
-    for (let i = 0; i < 4; i++) kill(BD, w);
+    for (let i = 0; i < 80; i++) kill(BD, w);
     t.eq(evs(w, 'heal').length, 0);
     t.eq(BD.cardRt.get(w, 'leech').state.kills, 0);
   },

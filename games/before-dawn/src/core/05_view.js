@@ -60,18 +60,28 @@ V.focus = function (grid, mx, my) {
 // direction), so "is it on screen" is a deterministic rule: the client draws exactly this focus
 // (plus screen shake) and never moves on its own. Updated once per tick after the hero moves.
 //   BD.view.snapCam(w)        jump to the target (floor entry, teleports); the lead is dropped
-//   BD.view.updateCam(w, dt)  ease toward hero + lead (C.V2.cam)
+//   BD.view.updateCam(w, dt)  ease toward hero + lead (C.V2.cam); a hero C.V2.cam.snap u (|dx| + |dy|)
+//                             away from it was teleported (tests, later skills): it snaps
 //   BD.view.focusOf(w) → [fx, fy] map px drawn at logical (ROOM_CX, ROOM_CY): map(cam), clamped
 //                        by BD.view.focus (a fitting axis stays on the room centre, as in v1)
 const clampCam = (v, side) => { const e = Math.min(C.V2.cam.edge, side / 2); return v < e ? e : v > side - e ? side - e : v; };
 V.snapCam = function (w) {
   const h = w.hero, g = w.grid;
-  w.cam = { x: clampCam(h.x, g.w), y: clampCam(h.y, g.h), lx: 0, ly: 0 };
+  w.cam = { x: clampCam(h.x, g.w), y: clampCam(h.y, g.h), lx: 0, ly: 0, grid: g };
   return w.cam;
+};
+// The camera the rules see: w.cam, or — when the hero was moved more than C.V2.cam.snap u away from
+// it or the floor grid was replaced since the last tick (tests, teleports) — the snapped camera the
+// next tick will have. A pure query: it never writes w.cam.
+const stale = (w) => { const c = w.cam, h = w.hero; return !c || c.grid !== w.grid || Math.abs(c.x - h.x) + Math.abs(c.y - h.y) > C.V2.cam.snap; };
+V.camOf = function (w) {
+  if (!stale(w)) return w.cam;
+  const h = w.hero, g = w.grid;
+  return { x: clampCam(h.x, g.w), y: clampCam(h.y, g.h) };
 };
 V.updateCam = function (w, dt) {
   const h = w.hero, g = w.grid, K = C.V2.cam;
-  if (!w.cam) return V.snapCam(w);
+  if (stale(w)) return V.snapCam(w); // first tick, a teleport, a new grid
   const c = w.cam;
   let mx = 0, my = 0;
   if (!h.dead && h.dashT > 0) { mx = h.dashDX; my = h.dashDY; } else if (!h.dead && h.moving) { mx = h.moveX; my = h.moveY; }
@@ -83,7 +93,7 @@ V.updateCam = function (w, dt) {
   return c;
 };
 V.focusOf = function (w) {
-  const p = w.cam || w.hero;
+  const p = V.camOf(w);
   const [mx, my] = V.map(p.x, p.y);
   return V.focus(w.grid, mx, my);
 };

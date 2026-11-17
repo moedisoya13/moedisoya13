@@ -116,7 +116,7 @@ BD.C.DIRECTOR = {
 BD.C.V2 = {
   // the simulation's camera (§5.6): target = hero + walking direction (eased over leadTau s) × lead u;
   // cam += (target − cam)(1 − e^(−follow·dt)); clamped to [edge, side − edge] on each axis
-  cam: { lead: 1.5, leadTau: 0.35, follow: 8, edge: 5 },
+  cam: { lead: 1.5, leadTau: 0.35, follow: 8, edge: 5, snap: 12 },
   // the combat window C in logical px (S is the whole 1280 × 720 view); on an axis where the floor
   // fits the view (a v1 room) both are the whole view, as before
   combat: { x0: 48, x1: 1232, y0: 84, y1: 600 },

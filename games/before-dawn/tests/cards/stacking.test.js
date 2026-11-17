@@ -49,9 +49,10 @@ module.exports = {
     t.eq(evs(w, 'strike')[0].elements, ['tide', 'lightning', 'flame']);
     t.eq(BD.cardRt.onHitOrder(w).map((c) => c.id), ['tide', 'lightning', 'flame']);
   },
+  // 연참 ×4 = +4 (GDD-V2 level 1: +1 per stack; v1 ×2 = +4)
   'flat bonuses add, multipliers multiply: (10 + 연참 4 + 성광 8) × 왕의 사냥 1.6 on an elite undead'(t) {
     const { BD, H, w } = world(t, { hand: ['chain_slash', 'holy_light', 'kings_hunt'] });
-    BD.cardRt.setStack(w, BD.cardRt.get(w, 'chain_slash'), 2, 'gain');
+    BD.cardRt.setStack(w, BD.cardRt.get(w, 'chain_slash'), 4, 'gain');
     BD.cardRt.awaken(w, BD.cardRt.get(w, 'kings_hunt'));
     const e = place(BD, w, 'skel_archer', 1.2, 0, { hp: 999, elite: true });
     swingOnce(BD, H, w);

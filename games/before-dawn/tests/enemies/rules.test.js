@@ -1,7 +1,8 @@
-// Common enemy rules (GDD §6.1) watched over bot runs on every floor: every damaging warning
-// lasts ≥ 0.45 s and every hurt names a declared attack; walking never brings an enemy inside
-// edgeDist 0.8u (only lunges / charges / pounces may); at most 3 melee and 2 ranged attackers
-// at once (guardians and the boss outside the caps); no NaN; caps of 80 enemies / 60 shots.
+// Common enemy rules (GDD §6.1, GDD-V2 §3.5, §3.7, §5.6) watched over bot runs on every floor: every
+// damaging warning lasts ≥ 0.45 s and every hurt names a declared attack; walking never brings an
+// enemy inside edgeDist 0.8u (only lunges / charges / pounces may); the floor's melee and ranged
+// caps (guardians and the boss outside them); no NaN; 110 enemies / 80 on screen / 60 hostile shots;
+// no hit from an attack that began outside the combat window.
 'use strict';
 
 module.exports = {
@@ -63,15 +64,23 @@ module.exports = {
         }
         prev = now;
         stats.melee = Math.max(stats.melee, melee); stats.ranged = Math.max(stats.ranged, ranged);
-        if (melee > 3) bad.push('melee slots ' + melee);
-        if (ranged > 2) bad.push('ranged slots ' + ranged);
-        if (w.enemies.filter((e) => !e.dead).length > 80 || w.projectiles.length > 60) bad.push('cap');
+        // GDD-V2 §3.5 / §3.7: the floor's caps (melee 4/4/5/5/6, rooftop 3; ranged 2/2/3/3/3, rooftop 2)
+        // and 110 enemies, 80 on screen, 60 hostile shots (v1: 3 / 2, 80 enemies, 60 shots)
+        const row = BD.director.row(w);
+        if (melee > row.melee) bad.push(`melee slots ${melee} > ${row.melee} on ${w.floorN}F`);
+        if (ranged > row.ranged) bad.push(`ranged slots ${ranged} > ${row.ranged} on ${w.floorN}F`);
+        stats.capMelee = Math.max(stats.capMelee || 0, melee === row.melee ? 1 : 0);
+        const alive = w.enemies.filter((e) => !e.dead), shown = alive.filter((e) => BD.W.onScreen(w, e.x, e.y));
+        if (alive.length > 110 || shown.length > 80 || w.projectiles.filter((p) => p.hostile).length > 60) bad.push('cap');
+        if (w.stats.unseenHits) bad.push('hit by an attack that began off screen (seed ' + r.seed + ')');
       } });
     }
     BD.ai.move = move;
     t.assert(!bad.length, [...new Set(bad)].slice(0, 8).join('\n'));
     if (process.env.RULES_VERBOSE) console.log('     engine ai.move inward nudges:', engineNudges, 'of', stats.ticks, 'ticks');
-    t.assert(stats.melee === 3 && stats.ranged === 2, `caps reached (${stats.melee}/${stats.ranged})`);
-    t.assert(stats.hurts > 20 && stats.tgs > 200, 'the runs saw combat');
+    t.assert(stats.capMelee === 1 && stats.melee >= 4 && stats.ranged >= 2, `caps reached (${stats.melee}/${stats.ranged})`);
+    // v2: the perfect bot is rarely hit (GDD-V2 §3.5 lowers what one wind-up costs and how many run at
+    // once); the 700+ warnings are the coverage, the hurts only show the hurt checks ran (v1: > 20)
+    t.assert(stats.hurts >= 5 && stats.tgs > 500, 'the runs saw combat: ' + JSON.stringify(stats));
   },
 };

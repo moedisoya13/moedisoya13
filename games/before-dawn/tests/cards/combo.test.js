@@ -6,44 +6,52 @@ const kill = (BD, w) => { const e = place(BD, w, 'goblin', 3, 3); BD.combat.kill
 const reasons = (w, id) => w.bus.recent(4000).filter((x) => x.event === 'combo_change' && x.cardId === id).map((x) => [x.from, x.to, x.reason]);
 
 module.exports = {
-  'chain_slash: +1 per kill (any source) to 5; +2 swing damage per stack; toast at ×5'(t) {
+  // GDD-V2 §4.4 level 1 (v1: +1 per kill to 5, +2 per stack, 4 s without a direct hit)
+  'chain_slash: +1 per 10 kills (any source) to 10; +1 swing damage per stack; toast at ×10'(t) {
     const { BD, H, w } = world(t, { hand: ['chain_slash'] });
     const c = BD.cardRt.get(w, 'chain_slash');
-    for (let i = 0; i < 6; i++) kill(BD, w);
-    t.eq(c.state.stack, 5);
-    t.eq(reasons(w, 'chain_slash').map((x) => x[1]), [1, 2, 3, 4, 5]);
-    t.assert(evs(w, 'toast').some((x) => x.text === '연참 ×5'));
+    for (let i = 0; i < 9; i++) kill(BD, w);
+    t.eq(c.state.stack, 0, 'nine kills: nothing yet');
+    for (let i = 0; i < 101; i++) kill(BD, w);
+    t.eq(c.state.stack, 10);
+    t.eq(reasons(w, 'chain_slash').map((x) => x[1]), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    t.assert(evs(w, 'toast').some((x) => x.text === '연참 ×10'));
     const e = place(BD, w, 'goblin', 1.2, 0, { hp: 999 });
     swingOnce(BD, H, w);
     t.eq(hitsOn(w, e).map((x) => x.dmg), [20]);
   },
-  'chain_slash: direct hits refill the 4 s timer, indirect hits do not; timeout resets with a toast'(t) {
+  'chain_slash: kills refill the 2.0 s timer, hits do not; timeout resets with a toast'(t) {
     const { BD, H, w } = world(t, { hand: ['chain_slash'] });
     const c = BD.cardRt.get(w, 'chain_slash');
-    kill(BD, w); kill(BD, w);
+    for (let i = 0; i < 10; i++) kill(BD, w);
     const far = place(BD, w, 'goblin', 4, 4, { hp: 999 });
-    H.step(120);
-    t.near(c.state.timer, 2.0, 1e-6);
-    BD.combat.damage(w, far, 1, { source: 'chain', direct: false });
-    t.near(c.state.timer, 2.0, 1e-6, 'an indirect hit does not refill');
+    H.step(60);
+    t.near(c.state.timer, 1.0, 1e-6);
     BD.combat.damage(w, far, 1, { source: 'dash', direct: true });
-    t.eq(c.state.timer, 4.0);
-    H.step(239);
-    t.eq(c.state.stack, 2);
+    t.near(c.state.timer, 1.0, 1e-6, 'a direct hit does not refill');
+    kill(BD, w);
+    t.eq(c.state.timer, 2.0);
+    H.step(119);
+    t.eq(c.state.stack, 1);
     H.step(2);
     t.eq(c.state.stack, 0);
-    t.eq(reasons(w, 'chain_slash').slice(-1)[0], [2, 0, 'timeout']);
-    t.assert(evs(w, 'toast').some((x) => x.text === '연참 끊김: 4초 동안 베지 못했다'));
+    t.eq(reasons(w, 'chain_slash').slice(-1)[0], [1, 0, 'timeout']);
+    t.assert(evs(w, 'toast').some((x) => x.text === '연참 끊김: 2초 동안 처치가 없었다'));
   },
-  'chain_slash: the timer stands still while no spawned enemy is in the room'(t) {
+  'chain_slash: the timer stands still while no enemy is on the screen'(t) {
     const { BD, H, w } = world(t, { hand: ['chain_slash'] });
     const c = BD.cardRt.get(w, 'chain_slash');
-    kill(BD, w);
+    for (let i = 0; i < 10; i++) kill(BD, w);
     H.step(600);
-    t.eq([c.state.stack, c.state.timer], [1, 4.0]);
-    BD.W.spawnAt(w, 'goblin', 3, 3, {});            // still a rift: not in the room yet
+    t.eq([c.state.stack, c.state.timer], [1, 2.0]);
+    BD.W.spawnAt(w, 'goblin', w.hero.x + 3, w.hero.y + 3, {}); // still a rift: not on the floor yet
     H.step(30);
-    t.eq(c.state.timer, 4.0);
+    t.eq(c.state.timer, 2.0);
+    const off = place(BD, w, 'goblin', -20, -20, { hp: 999 }); // on the floor, off the screen
+    t.assert(!BD.W.onScreen(w, off.x, off.y));
+    w.rifts = [];
+    H.step(30);
+    t.eq(c.state.timer, 2.0);
   },
   'flawless: +1 per kill to 6; ≥ 2 interval 0.51 s, ≥ 4 blade +0.4u; labels; toast at ×6'(t) {
     const { BD, H, w } = world(t, { hand: ['flawless'] });

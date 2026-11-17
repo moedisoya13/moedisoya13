@@ -149,15 +149,24 @@ module.exports = {
     t.eq(Object.keys(s).sort(), BD.progress.FIELDS.slice().sort());
     t.assert(!s.unlocked.includes('test_flame'));
   },
-  'chain_slash: stack per kill, +2 per stack, timeout reset after 4 s without a direct hit'(t) {
+  // GDD-V2 §4.4 level 1 (v1 was: +1 per kill, +2 per stack, 4 s without a direct hit)
+  'chain_slash: every 10th kill +1 stack, +1 per stack, timeout reset after 2 s without a kill'(t) {
     const { BD, H, w } = world(t, { hand: ['chain_slash'] });
     const c = BD.cardRt.get(w, 'chain_slash');
-    const e = BD.W.makeEnemy(w, 'goblin', w.hero.x + 1.0, w.hero.y, {}); e.hp = 1; e.stunT = 99;
-    H.step(2);
+    for (let i = 0; i < 10; i++) {
+      const e = BD.W.makeEnemy(w, 'goblin', w.hero.x + 1.0, w.hero.y, {}); e.hp = 1; e.stunT = 99;
+      w.hero.atkTimer = 0; H.step(2);
+      t.assert(e.dead, 'kill ' + i);
+    }
     t.eq(c.state.stack, 1);
-    const far = BD.W.makeEnemy(w, 'goblin', 1.5, 1.5, {}); far.stunT = 99;
-    H.step(60 * 4 + 2);
-    t.eq(c.state.stack, 0);
+    const tough = BD.W.makeEnemy(w, 'goblin', w.hero.x + 1.0, w.hero.y, {}); tough.hp = 500; tough.stunT = 99;
+    w.hero.atkTimer = 0; H.step(1);
+    t.eq(w.bus.recent(50).filter((x) => x.event === 'hit' && x.enemyId === tough.id)[0].dmg, 10 + 1);
+    tough.hp = 0; BD.combat.resolveDeaths(w); // the 11th kill refills the timer
+    const far = BD.W.makeEnemy(w, 'goblin', w.hero.x + 5, w.hero.y, {}); far.stunT = 99; // on screen, out of reach
+    w.hero.atkTimer = 99;
+    H.step(60 * 2 - 10); t.eq(c.state.stack, 1, 'still up just before 2 s');
+    H.step(12); t.eq(c.state.stack, 0);
     const ev = w.bus.recent(400).filter((x) => x.event === 'combo_change');
     t.eq(ev.map((x) => x.reason), ['gain', 'timeout']);
   },
@@ -181,10 +190,21 @@ module.exports = {
     t.eq(w.bus.counts().swing, swings);
     t.eq(w.bus.counts().vfx, swings);
   },
+  // v2 floors have no altar yet (it returns as a site, GDD-V2 §4.6); the altar rules and the bot's
+  // answer still hold when one is lit
   'altar: bot picks an offered card into a non-conditional slot (card_swap), offers obey the pool'(t) {
     const BD = t.load({ extraFiles: [t.fixture('test_cards.js')] });
-    const r = BD.simRun({ seed: 4, unlocked: ['test_flame', 'test_tide'], hand: ['chain_slash', 'pierce'] });
-    const ev = r.app.world.bus.recent(4000);
+    const H = BD.harness();
+    H.start({ seed: 4, hand: ['chain_slash', 'pierce'] });
+    const w = H.world();
+    H.killAll(); w.wave.n = 3; w.freezeT = 0;
+    w.unlocked = ['test_flame', 'test_tide'];
+    w.altar = { state: 'off', x: w.hero.x, y: w.hero.y, offers: [], offered: [], round: 0, step: 'choose', pick: null, needExit: false };
+    BD.flow.lightAltar(w);
+    t.assert(w.altar.offers.length >= 1, 'offers');
+    BD.flow.openAltar(w);
+    H.bot(true); H.step(3);
+    const ev = w.bus.recent(4000);
     const swaps = ev.filter((x) => x.event === 'card_swap');
     t.assert(swaps.length >= 1, 'a swap happened');
     t.assert(swaps.every((x) => BD.cardRt.pool(['test_flame', 'test_tide']).includes(x.inId)));

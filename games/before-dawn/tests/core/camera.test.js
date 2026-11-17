@@ -33,9 +33,12 @@ const heroScreen = (P) => P.ev(() => { const w = window.__BD.world(); return win
 const hero = (P) => P.ev(() => { const h = window.__BD.world().hero; return { x: h.x, y: h.y }; });
 
 module.exports = {
-  'v1 room: the camera stands still while the hero walks; markers and minimap off': async (t) => {
+  // v2 runs start on 48×48 floors; a room that fits the screen (a v1 room, staged at 12×12) keeps the v1 camera
+  'a room that fits (v1 size): the camera stands still while the hero walks; markers and minimap off': async (t) => {
     const P = await open(t, { width: 1280, height: 720 });
     try {
+      await P.ev(() => { const B = window.__BD; B.stage({ size: [12, 12], enemies: 0 }); const w = B.world(); w.hero.hp = w.hero.maxHp = 1e6; });
+      await P.page.waitForTimeout(100);
       const c0 = await cam(P);
       await P.page.keyboard.down('KeyA'); await P.page.waitForTimeout(700); await P.page.keyboard.up('KeyA');
       t.eq(await cam(P), c0);

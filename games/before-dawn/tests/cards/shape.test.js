@@ -7,9 +7,10 @@ module.exports = {
     w.hero.x = 1.5;
     const p = place(BD, w, 'goblin', 1.2, 0, { hp: 999 });          // primary (blade)
     const inLine = place(BD, w, 'goblin', 3.5, 0, { hp: 999 });     // beyond reach, on the line
-    const tooFar = place(BD, w, 'goblin', 4.8, 0, { hp: 999 });     // 4.8 − 0.35 > 4.2
-    const edgeIn = place(BD, w, 'goblin', 3.0, 0.78, { hp: 999 });  // |off| 0.78 ≤ 0.45 + 0.35
-    const edgeOut = place(BD, w, 'goblin', 3.0, -0.84, { hp: 999 }); // 0.84 > 0.8
+    // goblin radius 0.32 (GDD-V2 §3.2; v1 0.35, so v1 tested 0.78 in / 0.84 out)
+    const tooFar = place(BD, w, 'goblin', 4.8, 0, { hp: 999 });     // 4.8 − 0.32 > 4.2
+    const edgeIn = place(BD, w, 'goblin', 3.0, 0.76, { hp: 999 });  // |off| 0.76 ≤ 0.45 + 0.32
+    const edgeOut = place(BD, w, 'goblin', 3.0, -0.8, { hp: 999 }); // 0.8 > 0.77
     t.eq(swingOnce(BD, H, w), 1);
     t.eq(hitsOn(w, p).map((x) => [x.source, x.dmg]), [['slash', 10]]);
     t.eq(hitsOn(w, inLine).map((x) => [x.source, x.dmg]), [['pierce', 10]]);

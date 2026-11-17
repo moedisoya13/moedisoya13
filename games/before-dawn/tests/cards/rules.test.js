@@ -25,7 +25,7 @@ module.exports = {
     }
     t.eq(['tide', 'lightning', 'flame'].map((id) => BD.cards.get(id).element), ['tide', 'lightning', 'flame']);
     t.eq(['holy_light', 'armor_break', 'mana_backlash'].map((id) => BD.cards.get(id).targetType), ['undead', 'heavy', 'magic']);
-    t.eq(['chain_slash', 'flawless', 'one_flash'].map((id) => BD.cards.get(id).maxStack), [5, 6, 8]);
+    t.eq(['chain_slash', 'flawless', 'one_flash'].map((id) => BD.cards.get(id).maxStack), [10, 6, 8]); // chain_slash: GDD-V2 §4.4 (v1 5)
     t.eq(['rest_of_dead', 'kings_hunt', 'fire_pilgrimage'].map((id) => BD.cards.get(id).goal), [12, 3, 12]);
     t.eq(BD.progress.fresh().unlocked.slice().sort(), ['armor_break', 'chain_slash', 'flame', 'flawless', 'holy_light', 'kings_hunt', 'leech', 'lightning', 'pierce', 'rest_of_dead', 'riposte', 'whirl']);
   },
@@ -50,27 +50,24 @@ module.exports = {
       t.assert(fam.some((f) => f === 'shape' || f === 'element'), `seed ${s}: ${h}`);
     }
   },
-  'altar offers (§5.6): quests only on 1F–3F and only when still feasible; 왕의 사냥 only on 1F–2F'(t) {
+  // GDD-V2 §11.1-4: while cards carry levels only the levelled cards are dealt and offered (the
+  // slice's six); quest feasibility at the altar comes back with the altar site and the quest
+  // cards' levels (GDD-V2 §4.4, §4.6). v1 asserted quests on 1F–3F only when feasible.
+  'altar offers (v2 slice): two distinct levelled cards, never equipped or already offered on the floor'(t) {
     const { BD } = world(t);
-    const full = Object.keys(GDD);
-    let questOffers = 0;
-    for (let s = 1; s <= 120; s++) {
+    const full = Object.keys(GDD), levelled = BD.cards.ids().filter((id) => BD.cards.get(id).levels);
+    t.eq(levelled, ['chain_slash', 'flame', 'leech', 'lightning', 'pierce', 'whirl']);
+    t.eq(BD.cardRt.pool(full).slice().sort(), levelled);
+    for (let s = 1; s <= 60; s++) {
       const run = BD.gen.run(s, 0);
-      for (let n = 1; n <= 5; n++) for (let round = 0; round < 2; round++) {
-        const o = BD.cardRt.offers(run, n, round, ['pierce', 'flame', 'leech'], [], full);
-        const info = BD.cardRt.remaining(run, n);
-        for (const id of o) {
-          const d = BD.cards.get(id);
-          if (d.family !== 'quest') continue;
-          questOffers++;
-          t.assert(n <= 3, `${id} offered on ${n}F`);
-          t.assert(d.offerable(info), `${id} offered while infeasible on ${n}F`);
-          if (id === 'kings_hunt') t.assert(n <= 2, 'kings_hunt on ' + n + 'F');
-        }
-        t.eq(o.length, 2);
+      for (let n = 1; n <= 5; n++) {
+        const o1 = BD.cardRt.offers(run, n, 0, ['pierce', 'flame', 'leech'], [], full);
+        const o2 = BD.cardRt.offers(run, n, 1, ['pierce', 'flame', 'leech'], o1, full);
+        t.eq(o1.length, 2);
+        for (const id of o1.concat(o2)) t.assert(levelled.includes(id) && !['pierce', 'flame', 'leech'].includes(id), id);
+        t.assert(new Set(o1).size === 2 && o2.every((id) => !o1.includes(id)));
       }
     }
-    t.assert(questOffers > 0, 'quests do get offered');
   },
   'every card hud() returns only the documented slot fields'(t) {
     const { BD, H, w } = world(t, { hand: [] });

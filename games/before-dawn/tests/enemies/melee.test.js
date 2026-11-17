@@ -46,15 +46,19 @@ module.exports = {
     const x1 = e.x; H.step(Math.round(0.2 / TICK));
     t.near(e.x, x1, 1e-9, 'still between hops');
   },
-  'goblin: stab fan 60° r 1.3, 0.45 s, its damage (GDD 6, tuned 7), backs off 1.2u in 0.3 s, waits 1.6 s'(t) {
+  // GDD-V2 §3.2 / §3.5: stab warning 0.6 s (v1 0.45), damage 4 (v1 tuned 7); fodder first stands
+  // within 1.6u of the hero for 0.5 s before it may start an attack
+  'goblin: stab fan 60° r 1.3, 0.6 s, its damage 4, only after 0.5 s next to the hero; backs off 1.2u in 0.3 s, waits 1.6 s'(t) {
     const { BD, H, w } = arena(t);
     pacify(w);
     const T = BD.enemies.get('goblin').T;
     const e = BD.W.makeEnemy(w, 'goblin', w.hero.x + 1.25, w.hero.y, {});
     e.mem.cd = 0;
-    H.step(1);
+    const k0 = until(H, () => tgOf(w, e).length > 0, 60);
+    t.assert(k0 >= 29 && k0 <= 31, 'first stab after 0.5 s next to the hero, got ' + k0 + ' ticks');
     const [tg] = tgOf(w, e);
-    t.eq(tg.shape, 'fan'); t.near(tg.half, 30); t.near(tg.r, 1.3); t.near(tg.total, 0.45); t.eq(tg.dmg, BD.enemies.get('goblin').dmg); t.eq(tg.attack, 'stab');
+    t.eq(BD.enemies.get('goblin').dmg, 4);
+    t.eq(tg.shape, 'fan'); t.near(tg.half, 30); t.near(tg.r, 1.3); t.near(tg.total, 0.6); t.eq(tg.dmg, BD.enemies.get('goblin').dmg); t.eq(tg.attack, 'stab');
     const n0 = w.bus.count();
     until(H, () => evs(w, 'hurt', n0).length > 0, 60);
     t.eq(evs(w, 'hurt', n0)[0].dmg, BD.enemies.get('goblin').dmg);
@@ -96,19 +100,24 @@ module.exports = {
     until(H, () => tgOf(w, e).length > 0, 400);
     t.assert(w.t - fire >= T.cd - 2 * TICK, 'cooldown 2.0 s');
   },
-  'ghoul: falls (down), corpse HP 20, rises after 2.5 s with T.reviveHp (GDD 30, tuned 60), the second death is final'(t) {
+  // GDD-V2 §3.2: revive HP 20 (v1 tuned 40); corpse and revive HP scale with the floor's HP factor
+  // like the elite and tier factors (k = maxHp / def.hp; 2F: 1.2)
+  'ghoul: falls (down), corpse HP 20 × k, rises after 2.5 s with T.reviveHp × k, the second death is final'(t) {
     const { BD, H, w } = arena(t);
     const e = BD.W.makeEnemy(w, 'ghoul', w.hero.x + 1.2, w.hero.y, {});
+    const hk = e.maxHp / BD.enemies.get('ghoul').hp;
+    t.near(hk, 1.2, 1e-9);
     e.hp = 1; e.stunT = 1e9;
     const n0 = w.bus.count();
     H.step(2);
     t.eq(evs(w, 'down', n0).map((x) => x.enemyId), [e.id]);
     t.eq(evs(w, 'kill', n0).length, 0);
-    t.assert(e.down && !e.dead); t.eq(e.hp, 20);
+    t.assert(e.down && !e.dead); t.eq(e.hp, Math.round(20 * hk));
     pacify(w);
     const k = until(H, () => !e.down, 400);
     t.near(k * TICK, 2.5, 2 * TICK, 'rises 2.5 s after falling');
-    t.eq(e.hp, BD.enemies.get('ghoul').T.reviveHp); t.eq(evs(w, 'revive', n0).length, 1);
+    t.eq(BD.enemies.get('ghoul').T.reviveHp, 20);
+    t.eq(e.hp, Math.round(BD.enemies.get('ghoul').T.reviveHp * hk)); t.eq(evs(w, 'revive', n0).length, 1);
     e.hp = 1; w.hero.atkTimer = 0;
     H.step(2);
     t.assert(e.dead, 'second death');

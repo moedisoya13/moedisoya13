@@ -5,7 +5,7 @@
 
 function setup(BD, hand) {
   const H = BD.harness();
-  H.start({ seed: 11, hand, floor: 2 });
+  H.start({ seed: 11, hand, floor: 2, level: 1 }); // level 1: the swing damage the scenarios pin (GDD-V2 §10.3 would start 2F at 6)
   const w = H.world();
   H.killAll(); w.wave.n = 3; w.freezeT = 0;
   w.hero.x = w.grid.w / 2; w.hero.y = w.grid.h / 2;

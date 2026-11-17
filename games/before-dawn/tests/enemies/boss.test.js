@@ -17,6 +17,9 @@ function roof(t, o) {
   w.hero.atkTimer = 1e9;
   if (o.invuln !== false) w.hero.invuln = 1e9;
   if (o.dist !== undefined) { w.hero.x = b.x + o.dist; w.hero.y = b.y; }
+  // GDD-V2 §5.6-1: an enemy attacks only after 0.5 s in the combat window; the hero was just put
+  // next to the boss (the v2 rooftop is 28 × 28 and the boss starts off screen)
+  b.viewT = BD.C.V2.seenFor;
   H.input({ mx: 0, my: 0 });
   return { BD, H, w, b, T: b.def.T };
 }
@@ -122,7 +125,7 @@ module.exports = {
   'phase 3 at 33 %: speed 2.4, cleave 0.7 s, collapse rings 0–3 / 3–6 / 6–9u inner first 0.5 s apart, 0.8 s each, 20'(t) {
     const { H, w, b } = roof(t, { dist: 2.4 });
     // phase-1 speed first
-    b.mem.cd = 99; w.hero.x = 1.5; w.hero.y = 1.5;
+    b.mem.cd = 99; w.hero.x = 1.5; w.hero.y = b.y; // straight across: the v2 rooftop's pillars stand on the diagonals
     H.step(1);
     let x0 = b.x, y0 = b.y; H.step(30);
     t.near(Math.hypot(b.x - x0, b.y - y0) / 0.5, 1.6, 0.05, 'phase 1 walks 1.6u/s');
@@ -130,7 +133,7 @@ module.exports = {
     b.hp = Math.floor(b.maxHp * 0.33); H.step(1);
     t.eq(b.mem.phase, 3);
     until(H, () => b.mem.roarT <= 0, 200);
-    b.mem.cd = 99; b.mem.summonT = 99; b.x = 9.5; b.y = 9.5; w.hero.x = 2.5; w.hero.y = 6.5;
+    b.mem.cd = 99; b.mem.summonT = 99; b.x = 16.5; b.y = 12.5; w.hero.x = 9.5; w.hero.y = 12.5; // clear of the v2 pillars
     H.step(1);
     x0 = b.x; y0 = b.y; H.step(30);
     t.near(Math.hypot(b.x - x0, b.y - y0) / 0.5, 2.4, 0.08, 'phase 3 walks 2.4u/s');
