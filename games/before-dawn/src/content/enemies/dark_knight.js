@@ -18,16 +18,19 @@ const T = {
   fizzle: 0.3, // knocked this far off the announced line during the wind-up → the charge is dropped
 };
 
-// Free run along dir before the first wall, obstacle or void cell (centre line), capped at max.
-function clearRun(grid, x, y, dir, max) {
+// How far a charge along dir can go, capped at max: `body` = how far the centre travels before
+// the body (radius r) first touches a wall, obstacle or void cell — the lunge stops and slams
+// there — and `line` = the free run of the centre line itself.
+function clearRun(grid, x, y, dir, max, r) {
   const cx = Math.cos(dir), cy = Math.sin(dir), step = 0.05;
-  let d = 0;
-  while (d < max) {
-    const nd = Math.min(max, d + step);
-    if (!grid.walkable(Math.floor(x + cx * nd), Math.floor(y + cy * nd))) break;
+  let body = -1, line = -1, d = 0;
+  while (d < max && (body < 0 || line < 0)) {
+    const nd = Math.min(max, d + step), px = x + cx * nd, py = y + cy * nd;
+    if (line < 0 && !grid.walkable(Math.floor(px), Math.floor(py))) line = d;
+    if (body < 0 && BD.nav.resolve(grid, px, py, r)[2]) body = d;
     d = nd;
   }
-  return d;
+  return { body: body < 0 ? max : body, line: line < 0 ? max : line };
 }
 
 function startCharge(w, e) {
@@ -37,10 +40,14 @@ function startCharge(w, e) {
   m.windup = true; e.state = 'windup'; e.squash = 1;
   // Elite / guardian telegraphs scale ×1.2 / ×1.4 (§6.3); the guardian's 7u is its own fixed
   // number (§6.3 table), so the length is set here and scaling is applied by hand.
-  // The warning stops at a wall / obstacle / void edge in the way: the run ends there (slam).
-  const k = e.tgScale, full = e.guardian ? T.guardianLen : T.len * k;
+  // The warning stops where the run will end: where the body (whose hitbox reaches half the
+  // warned width ahead of it) meets a wall, obstacle or void edge — head-on or with a shoulder
+  // (slam) — and never past the wall in front of the centre line.
+  const k = e.tgScale, full = e.guardian ? T.guardianLen : T.len * k, hb = (T.width * k) / 2;
+  const [sx, sy] = BD.nav.resolve(w.grid, e.x, e.y, e.r + 0.02);
+  const run = clearRun(w.grid, sx, sy, dir, full, e.r);
   A.telegraph(w, e, {
-    shape: 'line', x: e.x, y: e.y, dir, len: clearRun(w.grid, e.x, e.y, dir, full), width: T.width * k,
+    shape: 'line', x: e.x, y: e.y, dir, len: Math.min(full, run.body + hb, run.line), width: T.width * k,
     noScale: true, time: T.tgTime, dmg: 0, danger: true, attack: 'charge',
     onFire(w2, tg) {
       m.windup = false; m.cd = T.cd;

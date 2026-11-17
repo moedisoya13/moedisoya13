@@ -114,6 +114,25 @@ module.exports = {
     t.near(e.x, e.r, 0.05, 'stopped at the wall');
     t.assert(evs(w, 'vfx', n0).some((x) => x.kind === 'knight_slam'));
   },
+  'charge whose shoulder meets an obstacle: the warning ends where the body stops; slam, 2.8 s'(t) {
+    const { BD, H, w } = arena(t, { w: 20, h: 20, hx: 6.0, hy: 10.5 });
+    pacify(w);
+    w.grid.set(5, 8, BD.CELL.SOLID); w.field = null; w.fieldCell = -1; // one desk cell left of the lane
+    const e = BD.W.makeEnemy(w, 'dark_knight', 6.2, 5.0, { guardian: true });
+    e.face = Math.PI / 2; e.mem.cd = 0;
+    H.step(1);
+    const [tg] = tgOf(w, e);
+    t.assert(tg && tg.attack === 'charge', 'charge warning');
+    const hb = tg.width / 2;
+    t.assert(tg.len < 7 - 2, `warning cut short by the desk (len ${tg.len.toFixed(2)})`);
+    // the centre line itself is clear: only the 0.88u-wide body meets the desk
+    t.assert(BD.nav.rayLen(w.grid, tg.x, tg.y, tg.dir, 7) >= 7 - 1e-6, 'centre line clear');
+    H.input({ mx: 1, my: 0 }); H.step(24); H.input({ mx: 0, my: 0 }); // step out of the lane
+    until(H, () => e.stunT > 0, 120);
+    t.near(e.stunT, 2.8, 2 * TICK, 'slammed: 2.8 s opening');
+    const along = (e.x - tg.x) * Math.cos(tg.dir) + (e.y - tg.y) * Math.sin(tg.dir);
+    t.assert(along + hb <= tg.len + 0.1 && along + hb >= tg.len - 0.15, `stopped at the end of the warning (front ${(along + hb).toFixed(2)} vs len ${tg.len.toFixed(2)})`);
+  },
   'guardian (암흑기사 단장): 7u charge, then a radius-2.2 sweep (0.6 s, 20 × 1.3)'(t) {
     const { BD, H, w } = arena(t, { w: 20, h: 20, hx: 8, hy: 10 });
     pacify(w);
