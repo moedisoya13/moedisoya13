@@ -22,7 +22,8 @@ const evs = (w, name) => w.bus.recent(4000).filter((x) => x.event === name);
 
 module.exports = {
   // ---- generation (§5.1, §5.3, §5.8, §3.3) -------------------------------------------------------
-  'v2 floors: 48 × 48 plaza, start (40, 40), stairs on a back wall of zone (0, 0), §5.8 1–5, 1F beast, every type on 2F–5F, neighbours differ': (t) => {
+  // (each layout's own guarantees over 200 seeds: tests/floors/gen.test.js)
+  'v2 floors: 48 × 48 in the task’s layout, start (40, 40), stairs on a back wall of zone (0, 0), §5.8, 1F beast, every type on 2F–5F, neighbours differ': (t) => {
     const BD = t.load(), F = BD.C.V2.floor;
     const seen = new Set();
     for (let s = 1; s <= 200; s++) {
@@ -33,13 +34,13 @@ module.exports = {
       for (let n = 1; n <= 5; n++) {
         const f = r.floors[n], L = f.layout, tag = `seed ${s} ${n}F`;
         if (n > 1) t.assert(r.domOrder[n - 1] !== r.domOrder[n - 2], tag + ' neighbours differ');
-        t.eq([f.w, f.h, f.floorKind, f.task], [48, 48, 'plaza', 'purge'], tag);
+        t.eq([f.w, f.h, f.floorKind], [48, 48, BD.tasks.get(f.task).layout], tag);
         t.eq(L.start, F.start, tag);
         const st = L.stairs;
         t.assert(st.side === 'y0' ? st.y === 0 && st.x >= 4 && st.x <= 12 : st.x === 0 && st.y >= 4 && st.y <= 12, tag + ' stairs door');
         t.eq(BD.gen.checkV2(BD.Grid.fromString(f.w, f.h, f.cells), L), null, tag);
         t.eq(BD.enemies.get(f.guardian).type, f.domType, tag + ' guardian type');
-        t.assert(['open', 'pillars'].every((x) => BD.gen.fills.has(x)) && L.zones[8] === 'open' && L.zones[0] === 'open' && L.zones[4] === 'pillars', tag + ' zones');
+        t.assert(L.zones[8] === 'open' && L.zones[0] === 'open' && L.zones[4] === BD.gen.layouts.get(f.floorKind).centre, tag + ' zones');
         seen.add(f.guardian);
       }
       const roof = r.floors[6];
@@ -48,6 +49,7 @@ module.exports = {
     t.assert(seen.size >= 5, 'guardians of many kinds: ' + [...seen]);
     t.eq(JSON.stringify(BD.gen.run(7, 0)), JSON.stringify(BD.gen.run(7, 0)), 'pure');
     t.eq(BD.gen.run(7, 0, { task: 'purge' }).floors[1].task, 'purge');
+    t.eq(BD.gen.run(7, 0, { task: 'seals' }).floors[1].floorKind, 'office');
   },
 
   // ---- the simulation's view rules (§5.6) ----------------------------------------------------------
@@ -260,17 +262,17 @@ module.exports = {
     BD.siteRt.start(w);
     w.hero.hp = 30;
     H.step(75); // 1.2 s
-    t.eq(w.hero.hp, 70); t.eq(w.sites[0].state, 'used');
+    t.eq(w.hero.hp, 70); t.eq(w.sites[0].phase, 'used');
     t.eq(evs(w, 'site_start').map((x) => [x.kind, x.optional]), [['test_spring', true]]);
     w.hero.x -= 6; H.step(60 * 3);
     w.hero.x += 6; H.step(60);
     t.near(w.sites[1].progress, 3, 0.05, 'progress kept outside the ring');
     w.hero.x -= 6; H.step(60 * 2 + 2);
-    t.eq(w.sites[1].state, 'active');
+    t.eq(w.sites[1].phase, 'active');
     H.step(61);
-    t.eq(w.sites[1].state, 'used');
+    t.eq(w.sites[1].phase, 'used');
     t.eq(evs(w, 'site_clear').map((x) => x.kind), ['test_spring', 'test_seal']);
-    t.eq(H.state().sites.map((x) => x.state), ['used', 'used']);
+    t.eq(H.state().sites.map((x) => x.phase), ['used', 'used']);
   },
 
   // ---- starts, the dump, the bot -----------------------------------------------------------------------

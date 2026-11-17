@@ -22,6 +22,7 @@
 //   BD.siteRt.clear(w, site)      finished: phase 'used', site_clear
 //   BD.siteRt.release(w, site)    back to 'idle' (the altar's 나중에): it re-arms once he has left the ring
 //   BD.siteRt.at(w)               the idle site whose ring the hero stands in, or null
+//   BD.siteRt.look(w, site)       refresh site.state from def.look (done on every phase change and tick)
 //   BD.siteRt.ring(site)          its ring radius;  BD.siteRt.get(w, id) by id;  BD.siteRt.of(w, kind)
 
 const C = BD.C;
@@ -63,15 +64,20 @@ S.at = function (w) {
   return null;
 };
 
+// the look follows the phase at once (listeners of site_clear already see the new state)
+S.look = function (w, site) { const def = BD.sites.get(site.kind); if (def.look) site.state = def.look(w, site); };
+
 S.clear = function (w, site) {
   if (site.phase === 'used') return;
   site.phase = 'used';
+  S.look(w, site);
   W.emit(w, 'site_clear', { kind: site.kind, id: site.id, optional: site.optional });
 };
 
 S.release = function (w, site) {
   if (site.phase === 'used') return;
   site.phase = 'idle'; site.progress = 0; site.needExit = true;
+  S.look(w, site);
 };
 
 S.update = function (w, dt) {
@@ -93,6 +99,7 @@ S.update = function (w, dt) {
         if (s.progress + 1e-9 >= s.need) {
           s.progress = s.need;
           s.phase = 'active';
+          S.look(w, s);
           W.emit(w, 'site_start', { kind: s.kind, id: s.id, optional: s.optional });
           if (def.use(w, s)) S.clear(w, s);
         }
