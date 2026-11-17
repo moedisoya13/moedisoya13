@@ -53,8 +53,8 @@ BD.createApp = function (opts) {
     const w = BD.createWorld({ seed, tier });
     w.unlocked = app.save.unlocked.slice();
     let hand = o.hand;
-    if (typeof hand === 'string') hand = hand.split(',').map((s) => s.trim()).filter(Boolean);
-    if (hand && hand.length) {
+    if (typeof hand === 'string') hand = hand.trim() ? hand.split(',').map((s) => s.trim()).filter(Boolean) : null;
+    if (Array.isArray(hand)) { // explicit hand (may be empty), bypasses the §5.6 dealing rules
       if (hand.length > 3) BD.fail('hand: at most 3 cards');
       for (const id of hand) BD.cards.get(id); // throws on unknown ids
       if (new Set(hand).size !== hand.length) BD.fail('hand: duplicate card ids');

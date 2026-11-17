@@ -35,7 +35,7 @@ IN.attach = function (canvas, ui) {
 
   canvas.addEventListener('pointerdown', (ev) => {
     ui.unlockAudio();
-    canvas.setPointerCapture && canvas.setPointerCapture(ev.pointerId);
+    try { canvas.setPointerCapture(ev.pointerId); } catch (err) { /* synthetic pointer */ }
     const [x, y] = pos(ev);
     const b = ui.hitButton(x, y);
     if (b) { st.pressBtn = { b, id: ev.pointerId }; if (b.onPress) b.onPress(); ev.preventDefault(); return; }
