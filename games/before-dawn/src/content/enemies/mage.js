@@ -73,7 +73,7 @@ function castFire(w, e) {
 
 BD.enemies.register({
   id: 'mage', name: '마도사', type: 'magic', sprite: 'mage',
-  hp: 54, speed: 2.0, dmg: 12, radius: 0.35, cost: 2.5, // HP: docs/CONTROLS-REVIEW.md §3.1
+  hp: 30, speed: 2.0, dmg: 12, radius: 0.35, cost: 2.5, role: 'threat', shards: 4, // HP: GDD-V2 §3.2 (v1 tuned 54)
   attacks: { fire_circle: { name: '불 원', sfx: 'fire_circle' }, fire_zone: { name: '불 장판' } }, // the blink warning sounds by its style
   T,
   guardian: { name: '대마도사' }, // three circles and the 4 s teleport are read from e.guardian

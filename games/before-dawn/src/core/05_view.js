@@ -16,10 +16,12 @@
 //   BD.view.frame(grid) → {x0, x1, y0, y1 (map px, box + frame margins), fitX, fitY, cx, cy (room centre)}
 //   BD.view.fits(grid) → both axes fit (the camera never moves)
 //   BD.view.focus(grid, mx, my) → [fx, fy]  the focus for a wanted focus (clamped / centred)
-//   BD.view.rect(w, pad) → {x0, x1, y0, y1} map px every client is guaranteed to show this tick
-//   BD.view.inView(w, x, y, pad) → bool      the circle of radius pad (u) at (x, y) is inside rect
-//   BD.view.corners(w, pad) → [[x, y] × 4]   rect's screen corners in world units (TL, TR, BR, BL)
+//   BD.view.rect(w, pad) → {x0, x1, y0, y1} map px of the combat window C (GDD-V2 §5.6)
+//   BD.view.screen(w, pad) → the same for the screen rectangle S
+//   BD.view.inView(w, x, y, pad) / onScreen(w, x, y, pad) → bool   the point (pad u inside) is in C / S
+//   BD.view.corners(w, pad) / screenCorners(w, pad) → [[x, y] × 4]  C's / S's corners in world units
 // pad > 0 asks for a margin inside the edge, pad < 0 accepts points just outside it.
+// The camera centre is simulation state (w.cam, below): every client draws exactly that focus.
 
 const C = BD.C;
 const V = BD.view = {};
@@ -53,20 +55,60 @@ V.focus = function (grid, mx, my) {
   return [fx, fy];
 };
 
-// The hero-centred (clamped) view, inset by the camera slack on following axes.
-V.rect = function (w, pad) {
-  const g = w.grid, f = V.frame(g), h = w.hero;
-  const [hx, hy] = V.map(h.x, h.y);
-  const [fx, fy] = V.focus(g, hx, hy);
-  const sx = (f.fitX ? 0 : C.CAM.slack.x) + (pad || 0) * SX, sy = (f.fitY ? 0 : C.CAM.slack.y) + (pad || 0) * SY;
+// ---- the simulation's camera (GDD-V2 §5.6) ------------------------------------------------------
+// The camera centre is simulation state, w.cam = {x, y, lx, ly} (world u; lx/ly = the eased walking
+// direction), so "is it on screen" is a deterministic rule: the client draws exactly this focus
+// (plus screen shake) and never moves on its own. Updated once per tick after the hero moves.
+//   BD.view.snapCam(w)        jump to the target (floor entry, teleports); the lead is dropped
+//   BD.view.updateCam(w, dt)  ease toward hero + lead (C.V2.cam)
+//   BD.view.focusOf(w) → [fx, fy] map px drawn at logical (ROOM_CX, ROOM_CY): map(cam), clamped
+//                        by BD.view.focus (a fitting axis stays on the room centre, as in v1)
+const clampCam = (v, side) => { const e = Math.min(C.V2.cam.edge, side / 2); return v < e ? e : v > side - e ? side - e : v; };
+V.snapCam = function (w) {
+  const h = w.hero, g = w.grid;
+  w.cam = { x: clampCam(h.x, g.w), y: clampCam(h.y, g.h), lx: 0, ly: 0 };
+  return w.cam;
+};
+V.updateCam = function (w, dt) {
+  const h = w.hero, g = w.grid, K = C.V2.cam;
+  if (!w.cam) return V.snapCam(w);
+  const c = w.cam;
+  let mx = 0, my = 0;
+  if (!h.dead && h.dashT > 0) { mx = h.dashDX; my = h.dashDY; } else if (!h.dead && h.moving) { mx = h.moveX; my = h.moveY; }
+  const kl = 1 - Math.exp(-dt / K.leadTau);
+  c.lx += (mx - c.lx) * kl; c.ly += (my - c.ly) * kl;
+  const tx = h.x + c.lx * K.lead, ty = h.y + c.ly * K.lead;
+  const kf = 1 - Math.exp(-K.follow * dt);
+  c.x = clampCam(c.x + (tx - c.x) * kf, g.w); c.y = clampCam(c.y + (ty - c.y) * kf, g.h);
+  return c;
+};
+V.focusOf = function (w) {
+  const p = w.cam || w.hero;
+  const [mx, my] = V.map(p.x, p.y);
+  return V.focus(w.grid, mx, my);
+};
+
+// S, the screen rectangle (GDD-V2 §5.6): the whole 1280 × 720 view around the focus, in map px.
+V.screen = function (w, pad) {
+  const [fx, fy] = V.focusOf(w), sx = (pad || 0) * SX, sy = (pad || 0) * SY;
   return { x0: fx - C.ROOM_CX + sx, x1: fx + C.VIEW_W - C.ROOM_CX - sx, y0: fy - C.ROOM_CY + sy, y1: fy + C.VIEW_H - C.ROOM_CY - sy };
 };
-V.inView = function (w, x, y, pad) {
-  const r = V.rect(w, pad);
-  const mx = (x - y) * C.ISO_X, my = (x + y) * C.ISO_Y;
-  return mx >= r.x0 && mx <= r.x1 && my >= r.y0 && my <= r.y1;
+// C, the combat window: S without the HUD bands (C.V2.combat) on a following axis; on an axis where
+// the floor fits the view (every v1 room) it is the whole view, so v1 rooms are unchanged.
+V.rect = function (w, pad) {
+  const f = V.frame(w.grid), [fx, fy] = V.focusOf(w), K = C.V2.combat;
+  const sx = (pad || 0) * SX, sy = (pad || 0) * SY;
+  const lx0 = f.fitX ? 0 : K.x0, lx1 = f.fitX ? C.VIEW_W : K.x1, ly0 = f.fitY ? 0 : K.y0, ly1 = f.fitY ? C.VIEW_H : K.y1;
+  return { x0: fx - C.ROOM_CX + lx0 + sx, x1: fx - C.ROOM_CX + lx1 - sx, y0: fy - C.ROOM_CY + ly0 + sy, y1: fy - C.ROOM_CY + ly1 - sy };
 };
+const inside = (r, x, y) => { const mx = (x - y) * C.ISO_X, my = (x + y) * C.ISO_Y; return mx >= r.x0 && mx <= r.x1 && my >= r.y0 && my <= r.y1; };
+V.inView = (w, x, y, pad) => inside(V.rect(w, pad), x, y);
+V.onScreen = (w, x, y, pad) => inside(V.screen(w, pad), x, y);
 V.corners = function (w, pad) {
   const r = V.rect(w, pad);
+  return [V.unmap(r.x0, r.y0), V.unmap(r.x1, r.y0), V.unmap(r.x1, r.y1), V.unmap(r.x0, r.y1)];
+};
+V.screenCorners = function (w, pad) {
+  const r = V.screen(w, pad);
   return [V.unmap(r.x0, r.y0), V.unmap(r.x1, r.y0), V.unmap(r.x1, r.y1), V.unmap(r.x0, r.y1)];
 };

@@ -19,17 +19,20 @@ BD.dump = function (app) {
     t: r4(w.t), clock: BD.flow.clockStr(w), floor: w.floorN, domType: w.floor.domType, nextDomType: w.floor.nextDomType,
     wave: w.trial && w.trial.state === 'active' ? 'trial' : w.wave ? w.wave.n : null,
     grid: { w: w.grid.w, h: w.grid.h, cells: w.grid.toString() },
+    floorKind: w.floor.floorKind || null,
+    cam: w.cam ? { x: r4(w.cam.x), y: r4(w.cam.y) } : null,
     hero: {
       x: r4(h.x), y: r4(h.y), hp: h.hp, maxHp: h.maxHp, facing: r4(h.face), dashCd: r4(h.dashCd),
       invuln: r4(Math.max(h.invuln, h.dashInvuln)), radiance: h.radiance, targetId: h.targetId,
+      level: h.level, xp: h.xp, xpNeed: h.xpNeed, boons: Object.assign({}, h.boons), pickupR: r4(h.pickupR),
     },
     cards: w.cards.filter(Boolean).map((c) => ({
-      id: c.id, slot: c.slot, awakened: !!c.state.awakened, progress: c.state.progress, goal: c.state.goal,
+      id: c.id, slot: c.slot, level: c.level || 1, awakened: !!c.state.awakened, progress: c.state.progress, goal: c.state.goal,
       stack: c.state.stack, timer: c.state.timer === null || c.state.timer === undefined ? null : r4(c.state.timer),
     })),
     enemies: w.enemies.filter((e) => !e.dead).map((e) => ({
-      id: e.id, kind: e.kind, type: e.type, x: r4(e.x), y: r4(e.y), hp: e.hp, elite: e.elite, guardian: e.guardian,
-      state: e.down ? 'down' : e.state, statuses: Object.keys(e.statuses).sort(),
+      id: e.id, kind: e.kind, type: e.type, role: e.role, x: r4(e.x), y: r4(e.y), hp: e.hp, elite: e.elite, guardian: e.guardian,
+      state: e.down ? 'down' : e.state, statuses: Object.keys(e.statuses).sort(), inView: BD.view.inView(w, e.x, e.y),
     })),
     telegraphs: w.telegraphs.map(tgDump),
     projectiles: w.projectiles.length,
@@ -40,6 +43,13 @@ BD.dump = function (app) {
     trial: { state: w.trial ? w.trial.state : 'none' },
     counts: { kills: w.stats.kills, hurts: w.stats.hurts, dodges: w.stats.dodges, trials: w.stats.trials },
     rifts: w.rifts.length + w.queue.length,
+    // GDD-V2 §10.3
+    shards: w.shards.length,
+    task: w.task ? { kind: w.task.kind, value: w.task.value, goal: w.task.goal, done: w.task.done } : null,
+    sites: w.sites.map((x) => ({ id: x.id, kind: x.kind, x: r4(x.x), y: r4(x.y), state: x.state, known: x.known, optional: x.optional })),
+    director: w.director ? { want: r4(w.director.want), have: w.director.have, tokens: r4(w.director.tokens), surge: w.director.surge, state: w.director.state } : null,
+    choice: w.choiceOpen && w.choice ? { kind: w.choice.kind, options: w.choice.options.map((o) => o.pick) } : null,
+    unseenHits: w.stats.unseenHits,
   });
 };
 
@@ -57,7 +67,7 @@ BD.simRun = function (o) {
   if (o.unlocked) app.save.unlocked = o.unlocked.slice();
   app.botOn = o.bot !== false;
   app.botOpts = { trial: !!o.trial };
-  app.startRun({ seed: o.seed, tier: o.tier, hand: o.hand, floor: o.floor });
+  app.startRun({ seed: o.seed, tier: o.tier, hand: o.hand, floor: o.floor, task: o.task, level: o.level });
   const w = app.world;
   const maxTicks = Math.round((o.maxSec || 1500) / BD.C.TICK);
   const hashes = {};
@@ -124,6 +134,7 @@ BD.harness = function (app) {
     goto: (floor) => { const w = need(); BD.flow.enterFloor(w, floor); },
     stage: (o) => BD.stageFloor(need(), o),
     setHp: (n) => { need().hero.hp = Math.max(0, Math.min(need().hero.maxHp, n | 0)); },
+    calm: () => { need().scenario = true; },   // a staged scenario: no director, no choice overlay
     killAll: () => { const w = need(); for (const e of w.enemies.slice()) if (!e.dead) BD.combat.kill(w, e); w.rifts = []; w.queue = []; },
     events: (n) => need().bus.recent(n || 20).map((e) => JSON.parse(JSON.stringify(e, (k, v) => (k === 'shapes' ? undefined : v)))),
     cmd: (name, a, b) => app.cmd(name, a, b),

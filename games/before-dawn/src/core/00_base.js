@@ -27,7 +27,9 @@ BD.C = {
   OFFSCREEN: { indicators: 'auto', minimap: 'auto' },
   CAM: { fit: { x: 60, top: 100, bottom: 80 }, frame: { x: 140, top: 220, bottom: 230 }, slack: { x: 112, y: 64 }, follow: 0.14, lookahead: 1.6, lookTime: 0.4 },
   RUN_SEC: 900, CLOCK_START_MIN: 18 * 60,
-  CAP: { enemies: 80, projectiles: 60, particles: 300 },
+  // v2 (docs/GDD-V2.md §3.7): enemies alive 110 (the director stops there; rifts queue), on screen
+  // 80, shards on the floor 200 (the farthest merge into their nearest), hero shots 40, warnings 32
+  CAP: { enemies: 110, onScreen: 80, projectiles: 60, heroShots: 40, shards: 200, telegraphs: 32, particles: 300 },
   HERO: {
     maxHp: 100, speed: 4.2, radius: 0.35, hurtInvuln: 1.0, hurtKnock: 0.5,
     dmg: 10, interval: 0.6, reach: 1.9, halfArc: 50, switchMargin: 0.4,
@@ -47,14 +49,15 @@ BD.C = {
     initFreeze: 1.5, riftWarn: 1.2, guardianWarn: 2.0, noAttackAfterSpawn: 0.6,
   },
   INTERACT: { ring: 0.9, altar: 0.8, trial: 1.5, stairs: 1.0, stairsRingOffset: 1.2, blackout: 0.6, closeInvuln: 0.5, flaskTouch: 0.6 },
-  FLASK: 30, PRAY: 25, RADIANCE_MAX: 5,
+  FLASK: 30, PRAY: 25, RADIANCE_MAX: 9, // radiance max 9: GDD-V2 §4.6 (v1: 5)
   DAWN: { firstSec: 60, rate1: 1, rate2: 3 },
   ENEMY: { keepOut: 0.8, meleeCap: 3, rangedCap: 2, flowEvery: 0.2, minTelegraph: 0.45 },
   ELITE: { size: 1.3, hp: 2.5, dmg: 1.25, tg: 1.2, perFloor: [0, 0, 0, 1, 1, 2, 0] },
   // guardian HP per floor (GDD §6.3, set by docs/CONTROLS-REVIEW.md §3.1; earlier ×3 tuning: docs/requests/enemies.md)
-  GUARDIAN: { size: 1.6, dmg: 1.3, tg: 1.4, knock: 0.33, hp: [0, 385, 530, 675, 815, 960] },
+  // v2: HP 400 / 700 / 1000 / 1300 / 1600 (GDD-V2 §3.6; v1 tuned row was 385 / 530 / 675 / 815 / 960)
+  GUARDIAN: { size: 1.6, dmg: 1.3, tg: 1.4, knock: 0.33, hp: [0, 400, 700, 1000, 1300, 1600] },
   STATUS: {
-    burnTick: 0.5, burnDmg: 3, burnDur: 3, burnSpread: 0.6, burnImmune: 2,
+    burnTick: 0.5, burnDmg: 3, burnDur: 3, burnSpread: 0.6, burnImmune: 2, spreadPerTick: 2, // spreadPerTick: GDD-V2 §4.4
     wetDur: 4, steamDmg: 8, steamR: 1.2, steamCd: 1, slamDmg: 8, slamStun: 0.5, knockTime: 0.15,
   },
   ENDING: { win: 1.5, death: 0.8 },
@@ -73,6 +76,63 @@ BD.C = {
   GEN_SIZE: { min: 8, max: 128 },
   FLOORS: 6,
   GEN_RETRIES: 20,
+};
+
+// ---- v2 (docs/GDD-V2.md) -------------------------------------------------------------------------
+// The proof slice (§11.1) reads its numbers from here and from content defs (enemy hp/speed/dmg/
+// shards, card levels, boons). Every value is the GDD-V2 starting value unless a line says
+// "tuned"; tuned numbers are listed against the GDD in docs/requests/v2-tuning.md.
+
+// The horde director (§3.4). Row = floor (6 = rooftop). from → to: wanted enemies on screen from
+// floor entry to the end of the time budget; rate: spawn tokens per second (one per enemy, at most
+// tokenMax banked); threatEvery / threatCap: seconds between threats and how many may live;
+// eliteEvery: not used by the slice (elites are the enemies agent's, §3.6); hp / dmg: multipliers
+// for regular enemies (fodder and threats) made on that floor; melee / ranged: concurrent wind-up
+// caps (§3.5); pack: fodder per pack [min, max]. The rooftop's want is per boss phase.
+BD.C.DIRECTOR = {
+  every: 0.4, tokenMax: 12, tokensAtEntry: 6,
+  floors: [null,
+    { budget: 110, from: 12, to: 20, rate: 3.0, threatEvery: 8, threatCap: 3, eliteEvery: 0, hp: 1.0, dmg: 1.0, melee: 4, ranged: 2, pack: [4, 6] },
+    { budget: 130, from: 14, to: 26, rate: 3.5, threatEvery: 8, threatCap: 3, eliteEvery: 60, hp: 1.2, dmg: 1.0, melee: 4, ranged: 2, pack: [4, 8] },
+    { budget: 140, from: 18, to: 32, rate: 4.0, threatEvery: 7, threatCap: 4, eliteEvery: 50, hp: 1.4, dmg: 1.15, melee: 5, ranged: 3, pack: [4, 8] },
+    { budget: 150, from: 22, to: 38, rate: 4.8, threatEvery: 6, threatCap: 5, eliteEvery: 45, hp: 1.6, dmg: 1.15, melee: 5, ranged: 3, pack: [4, 8] },
+    { budget: 160, from: 26, to: 44, rate: 5.5, threatEvery: 5, threatCap: 6, eliteEvery: 40, hp: 1.8, dmg: 1.3, melee: 6, ranged: 3, pack: [4, 8] },
+    { budget: 150, phases: [8, 12, 16], rate: 2.0, threatEvery: 0, threatCap: 0, eliteEvery: 0, hp: 1.5, dmg: 1.15, melee: 3, ranged: 2, pack: [4, 6] },
+  ],
+  surge: { first: 25, every: 35, dur: 8, mult: 1.5 },     // 몰려온다
+  guardianMult: 0.5,   // want and token rate while the guardian is up
+  overtimeMult: 1.25,  // after the floor's budget (밤이 깊어진다)
+  spawnOut: [1.5, 4],  // u beyond the screen rectangle
+  ahead: 0.6, aheadHalf: 60, // share of packs within ±aheadHalf° of the hero's last second of walking
+  packR: 2,            // pack members within this many u of the pack point
+  near: 22,            // off-screen enemies within this many u count as coming (have)
+  recycle: { fodder: 24, threat: 30, after: 3 },
+  otherThreat: 0.25,   // a threat of another type (rng spawn)
+  entryPacks: 2, entryInset: 2, // packs standing 2u inside the screen edge at floor entry
+};
+
+BD.C.V2 = {
+  // the simulation's camera (§5.6): target = hero + walking direction (eased over leadTau s) × lead u;
+  // cam += (target − cam)(1 − e^(−follow·dt)); clamped to [edge, side − edge] on each axis
+  cam: { lead: 1.5, leadTau: 0.35, follow: 8, edge: 5 },
+  // the combat window C in logical px (S is the whole 1280 × 720 view); on an axis where the floor
+  // fits the view (a v1 room) both are the whole view, as before
+  combat: { x0: 48, x1: 1232, y0: 84, y1: 600 },
+  seenFor: 0.5,        // s an enemy must have been inside C before it may start an attack (§5.6-1)
+  fodderNear: 0.5, fodderNearR: 1.6, // fodder: also this long within this many u of the hero (§3.5)
+  shotOut: 2,          // hostile shots vanish this many u outside S (§5.6-3)
+  // light shards (§4.1)
+  shard: { pickR: 1.2, pop: 0.2, speed0: 6, speed1: 18, accel: 40, take: 0.3, mergeAbove: 200 },
+  // level curve (§4.2): need(1) = 12, need(2) = 24, need(L ≥ 3) = round(base + per × L)
+  xp: { first: [12, 24], base: 30, per: 7 },
+  // growth choice (§4.3)
+  choice: { cardSlots: 2, shoveR: 3, shoveDist: 1.5, invuln: 0.5, breathHp: 20 },
+  maxCardLevel: 5,
+  // floors (§5.1): 48 × 48 of 16 × 16 zones; start (40, 40); the guardian at the stairs zone centre
+  floor: { size: 48, zone: 16, start: [40, 40], guardianAt: [8, 8], guardianWarn: 2.0, guardianWake: 10 },
+  roof: { size: 28, pillars: [[8, 8], [20, 8], [8, 20], [20, 20]], boss: [14, 14], start: [24, 24], flasks: [[4, 22], [22, 4]], edge: 5 },
+  // the level `&floor=N` starts with (§10.3): 2F 6, 3F 10, 4F 15, 5F 19, rooftop 23
+  levelAtFloor: [0, 1, 6, 10, 15, 19, 23],
 };
 
 // Card slot i (0..2) on the HUD in logical px — the one place the slot geometry lives: the UI

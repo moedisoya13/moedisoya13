@@ -9,6 +9,7 @@ const CONDITIONAL = ['quest', 'combo'];
 R.ctx = function (w, card, swing) {
   const ctx = {
     w, card, def: card.def, state: card.state, hero: w.hero, swing: swing || null,
+    level: card.level || 1, lv: R.lv(card.def, card.level || 1),
     emit: (name, payload) => W.emit(w, name, payload),
     toast: (text) => W.toast(w, text),
     credit: (amount) => R.credit(w, card.id, amount),
@@ -26,6 +27,35 @@ R.ctx = function (w, card, swing) {
   };
   return ctx;
 };
+
+// ---- card levels (GDD-V2 §4.4, §4.7) ----------------------------------------------------------
+// def.levels = [null, L1, …, L5]; Ln = {text: the one line the choice shows, …numbers}. Levels are
+// cumulative: ctx.lv is L1 … L<level> merged (later keys win), so a hook reads ctx.lv.len and gets
+// the number of the card's current level. A card without levels is level 1 for ever (not offered).
+const lvCache = new WeakMap();
+R.maxLevel = (def) => (def.levels ? Math.min(BD.C.V2.maxCardLevel, def.levels.length - 1) : 1);
+R.lv = function (def, level) {
+  if (!def.levels) return {};
+  let per = lvCache.get(def);
+  if (!per) { per = []; lvCache.set(def, per); }
+  if (!per[level]) {
+    const o = {};
+    for (let i = 1; i <= level && i < def.levels.length; i++) for (const k of Object.keys(def.levels[i])) if (k !== 'text') o[k] = def.levels[i][k];
+    per[level] = Object.freeze(o);
+  }
+  return per[level];
+};
+R.levelText = (def, level) => (def.levels && def.levels[level] ? def.levels[level].text : def.desc);
+// Raise a card one level (growth choice, chest): emits card_level, then def.onLevel(ctx, from).
+R.levelUp = function (w, card) {
+  const from = card.level || 1;
+  if (from >= R.maxLevel(card.def)) BD.fail(`card '${card.id}' is already at its top level ${from}`);
+  card.level = from + 1; card.state.level = card.level;
+  W.emit(w, 'card_level', { cardId: card.id, level: card.level });
+  if (card.def.onLevel) card.def.onLevel(R.ctx(w, card, null), from);
+  return card.level;
+};
+R.maxStack = (card) => { const m = R.lv(card.def, card.level || 1).maxStack; return m !== undefined ? m : card.def.maxStack; };
 
 R.each = function (w, fn) {
   for (let i = 0; i < 3; i++) { const c = w.cards[i]; if (c) fn(c, R.ctx(w, c, null)); }
@@ -50,13 +80,15 @@ R.credit = function (w, id, amount) {
   s.contrib += amount;
 };
 
-R.equip = function (w, slot, id) {
+// level (v2): the level the card comes in at (a swap at the altar keeps the slot's level, §4.6)
+R.equip = function (w, slot, id, level) {
   const def = BD.cards.get(id);
   if (slot < 0 || slot > 2) BD.fail(`card slot must be 0..2, got ${slot}`);
   if (w.cards[slot]) R.unequip(w, slot, 'swap');
+  level = Math.max(1, Math.min(R.maxLevel(def), level || 1));
   const card = {
-    id, def, slot,
-    state: { stack: def.family === 'combo' ? 0 : null, timer: null, progress: def.family === 'quest' ? 0 : null, goal: def.goal || null, awakened: false },
+    id, def, slot, level,
+    state: { stack: def.family === 'combo' ? 0 : null, timer: null, progress: def.family === 'quest' ? 0 : null, goal: def.goal || null, awakened: false, level },
   };
   w.cards[slot] = card;
   if (!w.stats.cards[id]) w.stats.cards[id] = { contrib: 0, procs: 0 };
@@ -82,7 +114,7 @@ R.unequip = function (w, slot, reason) {
 
 // Combo stack change. reason ∈ gain | timeout | hurt | too_close | swap (GDD §5.2).
 R.setStack = function (w, card, to, reason) {
-  const max = card.def.maxStack;
+  const max = R.maxStack(card);
   to = Math.max(0, Math.min(max, to));
   const from = card.state.stack;
   if (to === from) return;
@@ -113,8 +145,11 @@ R.awaken = function (w, card) {
 // ---- pools, hands, offers ------------------------------------------------------------------
 
 // Cards a run may deal: registered cards that are base or listed in the save's unlocked ids.
+// v2: while any card defines levels, only cards with levels are dealt and offered (the proof slice
+// deals its six levelled cards, GDD-V2 §11.1-4); a card joins the pool by getting `levels`.
 R.pool = function (unlocked) {
-  return BD.cards.all().filter((d) => d.unlock === 'base' || (unlocked && unlocked.includes(d.id))).map((d) => d.id);
+  const all = BD.cards.all(), levelled = all.filter((d) => d.levels);
+  return (levelled.length ? levelled : all).filter((d) => d.unlock === 'base' || (unlocked && unlocked.includes(d.id))).map((d) => d.id);
 };
 
 // §5.6 start hand. rerolls = number of 다시 뽑기 used (each takes the next 3 by the same rule).

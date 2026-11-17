@@ -16,7 +16,12 @@ BD.cards = BD.makeRegistry('card', {
     if (d.element && !ELEMENTS.includes(d.element)) BD.fail(`card '${d.id}': element must be one of ${ELEMENTS.join('|')}`);
     if (d.family === 'combo' && typeof d.maxStack !== 'number') BD.fail(`card '${d.id}': combo cards need maxStack`);
     if (d.family === 'quest' && typeof d.goal !== 'number') BD.fail(`card '${d.id}': quest cards need goal`);
-    const fns = ['init', 'stats', 'shapes', 'flat', 'mult', 'onHit', 'afterSwing', 'hud', 'offerable', 'onEquip', 'onUnequip', 'tick'];
+    const fns = ['init', 'stats', 'shapes', 'flat', 'mult', 'onHit', 'afterSwing', 'hud', 'offerable', 'onEquip', 'onUnequip', 'tick', 'onLevel'];
+    // v2 levels (GDD-V2 §4.4): [null, L1, …, L5], each {text, …numbers} (src/core/23_cardrt.js)
+    if (d.levels !== undefined) {
+      if (!Array.isArray(d.levels) || d.levels[0] !== null || d.levels.length < 2) BD.fail(`card '${d.id}': levels must be [null, L1, …]`);
+      for (let i = 1; i < d.levels.length; i++) if (!d.levels[i] || typeof d.levels[i].text !== 'string') BD.fail(`card '${d.id}': levels[${i}].text required`);
+    }
     for (const f of fns) if (d[f] !== undefined && typeof d[f] !== 'function') BD.fail(`card '${d.id}': ${f} must be a function`);
     if (d.on) for (const ev of Object.keys(d.on)) {
       if (!BD.events.decl[ev]) BD.fail(`card '${d.id}': listens to undeclared event '${ev}'`);
@@ -31,6 +36,9 @@ BD.enemies = BD.makeRegistry('enemy', {
     if (!BD.C.TYPES.includes(d.type) && d.type !== 'boss') BD.fail(`enemy '${d.id}': type must be one of ${BD.C.TYPES.join('|')}|boss`);
     if (typeof d.update !== 'function') BD.fail(`enemy '${d.id}': update must be a function`);
     if (d.type !== 'boss' && typeof d.cost !== 'number') BD.fail(`enemy '${d.id}': cost required`);
+    // v2 (GDD-V2 §3.1, §4.1): role fodder | threat (what the director sends it as), shards dropped
+    if (d.type !== 'boss' && !['fodder', 'threat'].includes(d.role)) BD.fail(`enemy '${d.id}': role must be 'fodder' or 'threat'`);
+    if (d.shards !== undefined && !(d.shards >= 0)) BD.fail(`enemy '${d.id}': shards must be a number ≥ 0`);
     // attacks.<id> = {name, sfx?, sfxStart?}: sound ids (BD.ui.sfx) played when the blow lands
     // (telegraph_fire) and when its warning starts (telegraph); checked against the UI in the browser
     for (const [a, v] of Object.entries(d.attacks || {})) {
@@ -60,6 +68,31 @@ BD.gen.bundles = BD.makeRegistry('spawn bundle', {
     for (const k of ['dom', 'nondom']) if (!Array.isArray(d[k]) || d[k].length !== 6) BD.fail(`bundle '${d.id}': ${k} must be an array of 6 (index 0 unused, 1..5 = floors)`);
   },
 });
+
+// ---- v2 registries (docs/ARCHITECTURE.md §10) ------------------------------------------------------
+// Horde mixes per dominant type (GDD-V2 §3.3): what the director sends on a floor of that type.
+//   {id: type, fodder: {kind: weight}, threats: {kind: weight}, threatCost?: {kind: n}}
+BD.director = BD.director || {};
+BD.director.mixes = BD.makeRegistry('horde mix', {
+  required: ['fodder', 'threats'],
+  validate(d) { if (!BD.C.TYPES.includes(d.id) && d.id !== 'rooftop') BD.fail(`horde mix id must be a type id or 'rooftop', got '${d.id}'`); },
+});
+// Boons (단련, GDD-V2 §4.5): {id, name, max, text(rank) → line, stats(s, rank, w)} — stats runs every tick
+// with the hero's stats object, like a card's stats hook.
+BD.boons = BD.makeRegistry('boon', { required: ['name', 'max', 'text', 'stats'] });
+// Floor tasks (과업, GDD-V2 §5.4): {id, name, goal(n, w) → number, start?(w, task), update?(w, task, dt),
+// on?: {event(ev, w, task)}, label?(task) → HUD text}. src/core/31_tasks.js runs them.
+BD.tasks = BD.makeRegistry('task', { required: ['name', 'goal'] });
+// Sites (거점, GDD-V2 §5.5): {id, name, stay (s), total? (stay time adds up, seals), use(w, site),
+// optional (a 들를 곳), ring?} — src/core/32_sites.js runs the stay rings.
+BD.sites = BD.makeRegistry('site', { required: ['name', 'stay', 'use'] });
+// Touch pickups (GDD-V2 §6; not the shards): {id, touch (u), take(w, p) → bool (false: left lying)}.
+BD.pickups = BD.makeRegistry('pickup', { required: ['touch', 'take'] });
+// Zone fills and floor layouts (GDD-V2 §5.2, §5.3), used by BD.gen.floorV2:
+//   fills:   {id, apply(grid, zone, rng)}  zone = {zx, zy, x0, y0, size, cx, cy, keep: [cells kept clear]}
+//   layouts: {id, centre: fillId, fills: [fillId …], walls?: bool}
+BD.gen.fills = BD.makeRegistry('zone fill', { required: ['apply'] });
+BD.gen.layouts = BD.makeRegistry('floor layout', { required: ['centre', 'fills'] });
 
 // Presentation drawers. Stored here (DOM-free) so content files can ship their own drawing
 // next to their rules; they are only ever invoked by the browser renderer.
@@ -96,5 +129,10 @@ BD.onFinalize(function () {
   if (BD.gen.plans.ids().length > 1) BD.fail(`at most one floor plan may be registered, found ${BD.gen.plans.ids().join(', ')}`);
   if (!BD.gen.shapes.has('rect')) BD.fail("room shape 'rect' must be registered (fallback)");
   if (!BD.gen.patterns.has('open')) BD.fail("obstacle pattern 'open' must be registered (fallback)");
-  for (const r of [BD.cards, BD.enemies, BD.gen.shapes, BD.gen.patterns, BD.gen.bundles, BD.gen.plans]) r.freeze();
+  for (const m of BD.director.mixes.all()) for (const k of ['fodder', 'threats']) for (const kind of Object.keys(m[k])) {
+    const e = BD.enemies.get(kind);
+    if (e.role !== (k === 'fodder' ? 'fodder' : 'threat')) BD.fail(`horde mix '${m.id}': '${kind}' is a ${e.role}, listed under ${k}`);
+  }
+  for (const l of BD.gen.layouts.all()) for (const f of [l.centre].concat(l.fills)) BD.gen.fills.get(f);
+  for (const r of [BD.cards, BD.enemies, BD.gen.shapes, BD.gen.patterns, BD.gen.bundles, BD.gen.plans, BD.director.mixes, BD.boons, BD.tasks, BD.sites, BD.pickups, BD.gen.fills, BD.gen.layouts]) r.freeze();
 });

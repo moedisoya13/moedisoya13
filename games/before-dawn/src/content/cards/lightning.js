@@ -11,9 +11,11 @@
 // chain path (vfx 'chain_bolt'). Lightning is pale blue, never yellow (GDD §16 ③).
 const K = BD.cardKit;
 const M = BD.math;
-const T = { range: 3.0, jumps: 3, jumpsWet: 5, pct: 0.6, pctWet: 1.0 };
+// Levels (GDD-V2 §4.4): 2 jumps 4 (wet 6) · 3 chain damage 80 % · 4 jumps 6 (wet 8), reach 3.5u ·
+// 5 every fifth hitting swing a thunderbolt on the target: r 1.6u, swing damage × 1.5, 0.5 s stun.
+const T = { range: 3.0, jumps: 3, jumpsWet: 5, pct: 0.6, pctWet: 1.0 }; // level 1
 
-function chainPath(w, from, used) {
+function chainPath(w, from, used, T) {
   const path = [];
   let cur = from, wet = !!from.statuses.wet, max = wet ? T.jumpsWet : T.jumps;
   while (path.length < max) {
@@ -21,7 +23,7 @@ function chainPath(w, from, used) {
     for (const o of w.enemies) {
       if (o.dead || o.down || o.hp <= 0 || used.has(o.id)) continue;
       const d = M.dist(cur.x, cur.y, o.x, o.y) - o.r;
-      if (d > T.range + 1e-9) continue;
+      if (d > T.range + 1e-9) continue; // T: this level's numbers
       if (d < bd - 1e-9 || (Math.abs(d - bd) <= 1e-9 && o.id < best.id)) { bd = d; best = o; }
     }
     if (!best) break;
@@ -37,8 +39,28 @@ BD.cards.register({
   id: 'lightning', name: '뇌전', family: 'element', element: 'lightning', unlock: 'base', icon: 'lightning',
   desc: '표적(주 대상)에서 3.0u 안의 아직 안 맞은 적으로 최대 3번 연쇄. 연쇄 피해는 베기 피해의 60%. 연쇄 경로에 젖은 적이 있으면 100%, 최대 5번.',
   T,
+  levels: [null,
+    { text: '표적에서 3.0u 안으로 3번 연쇄, 베기 피해의 60%. 젖은 적이 끼면 100%·5번', range: 3.0, jumps: 3, jumpsWet: 5, pct: 0.6, pctWet: 1.0, bolt: 0 },
+    { text: '연쇄 4번(젖으면 6번)', jumps: 4, jumpsWet: 6 },
+    { text: '연쇄 피해 80%', pct: 0.8 },
+    { text: '연쇄 6번(젖으면 8번), 거리 3.5u', jumps: 6, jumpsWet: 8, range: 3.5 },
+    { text: '맞힌 베기 5번째마다 표적에 낙뢰: 반경 1.6u, 베기 피해 × 1.5, 0.5초 기절', bolt: 1.5 },
+  ],
+  init(ctx) { ctx.state.n = 0; },
+  on: { swing_end(ev, ctx) { if (ev.hitCount > 0) ctx.state.n++; } },
   onHit(ctx, e, hit) {
-    const sw = ctx.swing;
+    const sw = ctx.swing, lv = ctx.lv;
+    if (lv.bolt && sw.isSwing && e.id === sw.primaryId && ctx.state.n % 5 === 4 && !sw.data.bolt) {
+      sw.data.bolt = true;
+      let total = 0;
+      for (const o of ctx.w.enemies.slice()) {
+        if (o.dead || o.hp <= 0 || M.dist(e.x, e.y, o.x, o.y) - o.r > 1.6) continue;
+        total += ctx.damage(o, hit.dmg * lv.bolt, { source: 'chain', direct: false });
+        if (!o.dead) o.stunT = Math.max(o.stunT, 0.5);
+      }
+      ctx.credit(total);
+      K.vfx(ctx, 'thunder', { x: K.r3(e.x), y: K.r3(e.y), life: 0.35 });
+    }
     if (sw.data.chained) return;
     const p = sw.data.projectile;
     let used;
@@ -59,9 +81,9 @@ BD.cards.register({
     }
     sw.data.chained = true;
     used.add(e.id);
-    const { path, wet } = chainPath(ctx.w, e, used);
+    const { path, wet } = chainPath(ctx.w, e, used, lv);
     if (!path.length) return;
-    const amount = hit.dmg * (wet ? T.pctWet : T.pct);
+    const amount = hit.dmg * (wet ? lv.pctWet : lv.pct);
     let total = 0;
     for (const o of path) total += ctx.damage(o, amount, { source: 'chain', direct: false });
     ctx.credit(total);
@@ -95,5 +117,18 @@ BD.render.vfx.register({
     g.strokeStyle = 'rgba(255,255,255,' + a + ')'; g.lineWidth = 1.4; g.stroke();
     for (const [x, y] of ev.points.slice(1)) D.ellipse(g, v, x, y, 0.28 + 0.2 * (1 - k), D.rgba('#bfe9ff', 0.45 * a), null, 0, 0);
     g.lineCap = 'butt';
+  },
+});
+
+BD.render.vfx.register({
+  id: 'thunder',
+  draw(g, v, ev, k, w, t) {
+    const D = K.draw, a = 1 - k, top = v.proj(ev.x, ev.y, 260), bot = v.proj(ev.x, ev.y, 0);
+    const pts = [];
+    for (let i = 0; i <= 8; i++) { const u = i / 8; pts.push([top[0] + (D.hash(i, Math.floor(t * 30)) - 0.5) * 22 * (i % 8 ? 1 : 0), top[1] + (bot[1] - top[1]) * u]); }
+    D.path(g, pts);
+    g.strokeStyle = 'rgba(10,10,12,' + 0.8 * a + ')'; g.lineWidth = 8; g.stroke();
+    g.strokeStyle = D.rgba('#bfe9ff', a); g.lineWidth = 4; g.stroke();
+    D.ellipse(g, v, ev.x, ev.y, 1.6 * (0.6 + 0.4 * k), D.rgba('#bfe9ff', 0.35 * a), D.rgba('#ffffff', a), 2);
   },
 });

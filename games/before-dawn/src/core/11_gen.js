@@ -204,9 +204,15 @@ G.rooftop = function (seed) {
 };
 
 // Whole run: six floors (§7.1). Pure function of (seed, tier).
-// opts (optional): {sizes: {n: [W, H]}} overrides the floor plan per floor (tests, staging).
+// v2 (GDD-V2 §5): when horde mixes and tasks are registered every run is the v2 run — five 48 × 48
+// floors from G.floorV2 and the 28 × 28 rooftop. opts.v1 (or no v2 content) builds the v1 rooms
+// (GDD §7, still used by BD.stageFloor and the v1 generator tests).
+// opts (optional): {sizes: {n: [W, H]}} overrides the floor plan per floor (v1 rooms only);
+// {task: id} sets 1F's task (URL &task=).
+G.isV2 = () => BD.director.mixes.ids().length > 0 && BD.tasks.ids().length > 0;
 G.run = function (seed, tier, opts) {
   opts = opts || {};
+  if (!opts.v1 && G.isV2()) return G.runV2(seed, tier, opts);
   const od = G.domOrder(BD.sub(seed, 'gen', 'domOrder'));
   const plan = BD.gen.plans.all()[0] || null;
   const floors = [null];
@@ -220,6 +226,137 @@ G.run = function (seed, tier, opts) {
   }
   floors.push(G.rooftop(seed));
   return { seed, tier, domOrder: od.order, reduced: od.reduced, floors };
+};
+
+// ---- v2 floors (GDD-V2 §5) ------------------------------------------------------------------------
+// §3.3: 1F is beast; on 2F–5F every other type with a horde mix appears at least once; neighbours
+// differ. Uniform over the sequences that satisfy it.
+G.domOrderV2 = function (rng) {
+  const types = BD.director.mixes.ids().filter((t) => C.TYPES.includes(t));
+  const first = types.includes('beast') ? 'beast' : types[0];
+  const others = types.filter((t) => t !== first);
+  const seqs = [];
+  (function rec(n, acc) {
+    if (n > 5) { if (others.every((t) => acc.includes(t))) seqs.push(acc.slice()); return; }
+    for (const t of types) { if (t === acc[acc.length - 1]) continue; acc.push(t); rec(n + 1, acc); acc.pop(); }
+  })(2, [first]);
+  if (!seqs.length) return { order: [first, first, first, first, first], reduced: 'one type only' };
+  return { order: rng.pick(seqs), reduced: false };
+};
+// §5.4: 1F is purge (or opts.task); 2F–5F take the other registered tasks in a shuffled order,
+// one each while they last; floors left over (the proof slice registers only purge) are purge.
+G.taskOrder = function (rng, first) {
+  const all = BD.tasks.ids(), base = all.includes('purge') ? 'purge' : all[0];
+  const rest = rng.shuffle(all.filter((t) => t !== base));
+  const out = [first || base];
+  for (let n = 2; n <= 5; n++) out.push(rest.length ? rest.shift() : base);
+  return out;
+};
+
+G.runV2 = function (seed, tier, opts) {
+  opts = opts || {};
+  if (opts.task) BD.tasks.get(opts.task);
+  const od = G.domOrderV2(BD.sub(seed, 'gen', 'domOrderV2'));
+  const tasks = G.taskOrder(BD.sub(seed, 'gen', 'tasks'), opts.task);
+  const floors = [null];
+  for (let n = 1; n <= 5; n++) floors.push(G.floorV2(seed, tier, n, od.order[n - 1], n < 5 ? od.order[n] : 'rooftop', tasks[n - 1]));
+  floors.push(G.rooftopV2(seed));
+  return { seed, tier, v2: true, domOrder: od.order, tasks, reduced: od.reduced, floors };
+};
+
+// One zone (16 × 16 cells) for a fill: x0/y0 its corner cell, cx/cy its centre (u), keep(x, y) →
+// true for cells that must stay floor (the start's 5u, a site's 5 × 5 centre).
+function zoneOf(zx, zy, keep) {
+  const Z = C.V2.floor.zone;
+  return { zx, zy, x0: zx * Z, y0: zy * Z, size: Z, cx: zx * Z + Z / 2, cy: zy * Z + Z / 2, keep };
+}
+
+// §5.1–5.3, §5.8 for the slice: a 48 × 48 floor of 3 × 3 zones; the task names its layout (§5.3,
+// purge → plaza); start (2, 2) and stairs (0, 0) are 'open', the centre zone takes the layout's
+// centre fill, the others one of its fills. The stairs door is on a back wall of the stairs zone.
+// Checks: connected, start / ring / sites on floor, no 1-cell passage, solid ≤ 14 %, the start's 5u
+// clear. 20 retries on derived streams, then every zone 'open'.
+G.floorV2 = function (seed, tier, n, domType, nextDomType, task) {
+  const F = C.V2.floor, S = F.size, Z = F.zone;
+  const tdef = BD.tasks.get(task);
+  const layoutId = tdef.layout && BD.gen.layouts.has(tdef.layout) ? tdef.layout : BD.gen.layouts.has('plaza') ? 'plaza' : BD.gen.layouts.ids()[0];
+  const lay = BD.gen.layouts.get(layoutId);
+  const gk = G.guardianKinds(domType);
+  const guardian = gk.length ? BD.sub(seed, 'gen', 'guardian' + n).pick(gk) : null;
+  const start = F.start.slice();
+  let out = null;
+  for (let a = 0; a <= C.GEN_RETRIES && !out; a++) {
+    const rng = BD.sub(seed, 'gen', 'v2floor' + n + '/try' + a), fallback = a === C.GEN_RETRIES;
+    const grid = BD.Grid(S, S);
+    const keep = (x, y) => M.dist(x + 0.5, y + 0.5, start[0], start[1]) <= 5.5;
+    const zones = [];
+    for (let zy = 0; zy < 3; zy++) for (let zx = 0; zx < 3; zx++) {
+      const fill = fallback || (zx === 2 && zy === 2) || (zx === 0 && zy === 0) ? 'open' : zx === 1 && zy === 1 ? lay.centre : rng.pick(lay.fills);
+      BD.gen.fills.get(fill).apply(grid, zoneOf(zx, zy, keep), rng);
+      zones.push(fill);
+    }
+    // the stairs door: on the wy = 0 edge at wx 4..11 or the wx = 0 edge at wy 4..11 (§5.1)
+    const side = rng.chance(0.5) ? 'y0' : 'x0', k = rng.int(4, 11);
+    const ring = C.INTERACT.stairsRingOffset;
+    const stairs = side === 'y0' ? { side, x: k + 0.5, y: 0, ringX: k + 0.5, ringY: ring } : { side, x: 0, y: k + 0.5, ringX: ring, ringY: k + 0.5 };
+    const flaskZones = [[0, 2], [2, 0], [1, 0], [0, 1], [2, 1], [1, 2]];
+    const fz = rng.pick(flaskZones), flask = BD.nav.resolve(grid, fz[0] * Z + Z / 2 + rng.range(-3, 3), fz[1] * Z + Z / 2 + rng.range(-3, 3), 0.3);
+    const layout = { start, stairs, altar: null, trialRift: null, rifts: [], flasks: [[flask[0], flask[1]]], wave1: [], sites: [], zones };
+    const reason = G.checkV2(grid, layout);
+    if (reason) { if (fallback) BD.fail(`gen: v2 floor ${n} failed even with every zone open: ${reason}`); continue; }
+    out = {
+      n, v2: true, domType, nextDomType, w: S, h: S, cells: grid.toString(), shape: 'rect', pattern: layoutId, floorKind: layoutId,
+      task, guardian, attempts: a + 1, fallback, layout,
+      spawns: { w1: [], w2: [], w3: [], elites: [], guardian }, trial: null,
+      offscreen: { indicators: true, minimap: true },
+    };
+  }
+  return out;
+};
+
+// §5.8 1–5 for what the slice places.
+G.checkV2 = function (grid, layout) {
+  const pts = [layout.start, [layout.stairs.ringX, layout.stairs.ringY]].concat(layout.flasks, layout.sites.map((s) => [s.x, s.y]));
+  for (const p of pts) if (!grid.walkable(Math.floor(p[0]), Math.floor(p[1]))) return '§5.8-2 key point not on floor';
+  let floorN = 0;
+  for (let i = 0; i < grid.cells.length; i++) if (grid.cells[i] === BD.CELL.FLOOR) floorN++;
+  const field = BD.nav.bfs(grid, Math.floor(layout.start[0]), Math.floor(layout.start[1]));
+  let reach = 0;
+  for (let i = 0; i < field.length; i++) if (field[i] >= 0) reach++;
+  if (reach !== floorN) return '§5.8-1 floor not connected';
+  for (let y = 0; y < grid.h; y++) for (let x = 0; x < grid.w; x++) {
+    if (!grid.walkable(x, y)) continue;
+    let ok = false;
+    for (let oy = -1; oy <= 0 && !ok; oy++) for (let ox = -1; ox <= 0 && !ok; ox++) {
+      if (grid.walkable(x + ox, y + oy) && grid.walkable(x + ox + 1, y + oy) && grid.walkable(x + ox, y + oy + 1) && grid.walkable(x + ox + 1, y + oy + 1)) ok = true;
+    }
+    if (!ok) return '§5.8-3 one-cell passage at ' + x + ',' + y;
+  }
+  const solid = grid.count(BD.CELL.SOLID);
+  if (solid > 0.14 * floorN) return '§5.8-4 solid cells above 14 %';
+  for (let y = 0; y < grid.h; y++) for (let x = 0; x < grid.w; x++) {
+    if (grid.walkable(x, y)) continue;
+    if (M.dist(x + 0.5, y + 0.5, layout.start[0], layout.start[1]) < 5) return '§5.8-5 obstacle within 5u of the start';
+  }
+  return null;
+};
+
+// GDD-V2 §5.1: the rooftop is 28 × 28 open with four 2 × 2 pillars centred on (8, 8) (20, 8) (8, 20)
+// (20, 20); the boss in the centre, the hero at (24, 24), flasks at (4, 22) and (22, 4). Minions come
+// from the director (its rooftop mix); the boss's v1 summon list is empty.
+G.rooftopV2 = function (seed) {
+  const R = C.V2.roof, S = R.size;
+  const grid = BD.Grid(S, S);
+  for (const [px, py] of R.pillars) for (let oy = -1; oy <= 0; oy++) for (let ox = -1; ox <= 0; ox++) grid.set(px + ox, py + oy, BD.CELL.SOLID);
+  const boss = BD.enemies.all().filter((d) => d.type === 'boss')[0].id;
+  return {
+    n: 6, v2: true, domType: 'rooftop', nextDomType: null, w: S, h: S, cells: grid.toString(), shape: 'rect', pattern: 'rooftop', floorKind: 'rooftop',
+    task: null, guardian: null, attempts: 1, fallback: false,
+    layout: { start: R.start.slice(), stairs: null, altar: null, trialRift: null, rifts: [], flasks: R.flasks.map((p) => p.slice()), wave1: [], sites: [], bossPos: R.boss.slice() },
+    spawns: { w1: [], w2: [], w3: [], elites: [], guardian: null, boss },
+    summonType: null, summon: [], trial: null,
+    offscreen: { indicators: true, minimap: true },
+  };
 };
 
 // ---- helpers for room shape / obstacle pattern content -----------------------------------

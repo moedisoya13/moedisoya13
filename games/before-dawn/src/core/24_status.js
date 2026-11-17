@@ -24,6 +24,9 @@ S.remove = function (w, e, name) {
 };
 
 // opts: {direct: bool (ignition by a hit; ignores spread immunity), dur, n, source}
+// burn (v2, GDD-V2 §4.4 화염): opts.dmg (per tick, default STATUS.burnDmg) and opts.spread (u,
+// default STATUS.burnSpread) ride on the burn; a burn that spreads passes both on. One burning
+// enemy lights at most STATUS.spreadPerTick others per tick.
 S.apply = function (w, e, name, opts) {
   opts = opts || {};
   if (e.dead) return false;
@@ -32,7 +35,8 @@ S.apply = function (w, e, name, opts) {
     if (e.statuses.wet) { S.steam(w, e); return false; }
     if (!opts.direct && e.burnImmuneT > 0) return false;
     const cur = e.statuses.burn;
-    setOn(w, e, 'burn', { t: opts.dur || C.burnDur, acc: cur ? cur.acc : 0 });
+    const dmg = Math.max(opts.dmg || C.burnDmg, cur && !opts.direct ? cur.dmg : 0), spread = opts.spread || C.burnSpread;
+    setOn(w, e, 'burn', { t: Math.max(opts.dur || C.burnDur, cur ? cur.t : 0), acc: cur ? cur.acc : 0, dmg, spread: Math.max(spread, cur ? cur.spread : 0) });
     return true;
   }
   if (name === 'wet') {
@@ -85,24 +89,30 @@ S.update = function (w, dt) {
       b.acc += dt; b.t -= dt;
       while (b.acc >= C.burnTick - 1e-9 && !e.dead) {
         b.acc -= C.burnTick;
-        BD.combat.damage(w, e, C.burnDmg, { source: 'burn', direct: false });
+        BD.combat.damage(w, e, b.dmg || C.burnDmg, { source: 'burn', direct: false });
       }
       if (!e.dead && b.t <= 1e-9) { S.remove(w, e, 'burn'); e.burnImmuneT = C.burnImmune; }
     }
   }
   // spread (in list order; buckets only skip enemies too far apart to touch)
-  let burning = false, maxR = 0;
-  for (const e of list) { if (e.statuses.burn && !e.dead && !e.down) burning = true; if (e.r > maxR) maxR = e.r; }
-  if (!burning) return;
-  const B = BD.nav.buckets(list, 2 * maxR + C.burnSpread + 0.01), n0 = list.length;
+  let burning = false, maxR = 0, maxS = C.burnSpread;
   for (const e of list) {
-    if (e.dead || e.down || !e.statuses.burn) continue;
+    if (e.statuses.burn && !e.dead && !e.down) { burning = true; if (e.statuses.burn.spread > maxS) maxS = e.statuses.burn.spread; }
+    if (e.r > maxR) maxR = e.r;
+  }
+  if (!burning) return;
+  const B = BD.nav.buckets(list, 2 * maxR + maxS + 0.01), n0 = list.length;
+  for (const e of list) {
+    const b = e.statuses.burn;
+    if (e.dead || e.down || !b) continue;
     const near = B.near(e.x, e.y);
     for (let i = n0; i < list.length; i++) near.push(i); // anything that appeared during the spread
+    let lit = 0;
     for (const oi of near) {
+      if (lit >= C.spreadPerTick) break;
       const o = list[oi];
       if (o === e || o.dead || o.statuses.burn || o.burnImmuneT > 0) continue;
-      if (BD.math.dist(o.x, o.y, e.x, e.y) - o.r - e.r <= C.burnSpread) S.apply(w, o, 'burn', {});
+      if (BD.math.dist(o.x, o.y, e.x, e.y) - o.r - e.r <= (b.spread || C.burnSpread) && S.apply(w, o, 'burn', { dmg: b.dmg, spread: b.spread })) lit++;
     }
   }
 };

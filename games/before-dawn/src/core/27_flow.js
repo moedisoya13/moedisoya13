@@ -14,9 +14,11 @@ const F = BD.flow = {};
 
 F.enterFloor = function (w, n) {
   const f = w.run.floors[n];
+  if (f.v2) return F.enterFloorV2(w, n);
   w.floorN = n; w.floor = f;
   w.grid = BD.Grid.fromString(f.w, f.h, f.cells);
   w.enemies = []; w.projectiles = []; w.telegraphs = []; w.zones = []; w.hitboxes = []; w.pickups = []; w.rifts = []; w.queue = [];
+  w.shards = []; w.sites = []; w.task = null; w.director = null;
   w.field = null; w.fieldT = 0; w.fieldCell = -1; w.fieldCache = null;
   const h = w.hero, L = f.layout;
   h.x = L.start[0]; h.y = L.start[1]; h.targetId = null; h.dashT = 0; h.dashBuf = 0; h.face = Math.atan2(-1, -1);
@@ -28,6 +30,7 @@ F.enterFloor = function (w, n) {
   w.trial = L.trialRift ? { state: 'none', x: L.trialRift[0], y: L.trialRift[1], t0: 0 } : null;
   w.wave = { n: 1, t: 0, guardianId: null };
   w.freezeT = C.WAVES.initFreeze;
+  BD.view.snapCam(w);
   W.emit(w, 'floor_enter', { floor: n, domType: f.domType, nextDomType: f.nextDomType });
   W.banner(w, n === 6 ? '옥상 — 마왕' : n + 'F — ' + C.TYPE_NAMES[f.domType], 'floor');
   if (n === 6) {
@@ -38,6 +41,42 @@ F.enterFloor = function (w, n) {
     f.spawns.w1.forEach((k, i) => W.makeEnemy(w, k, L.wave1[i][0], L.wave1[i][1], { via: 'placed', wave: 1 }));
     W.emit(w, 'wave_start', { floor: n, wave: 1, count: f.spawns.w1.length });
   }
+};
+
+// v2 floors (GDD-V2 §5.5): no waves; the task, the director and the sites run the floor. The hero
+// stands at the start, enemies stay still for the entry freeze (1.5 s). w.wave survives only as
+// the test idiom `w.wave.n = 3` (BD.W.scenario: no director, no choice overlay).
+const TASK_NAMES = () => { const o = {}; for (const id of BD.tasks.ids()) o[id] = BD.tasks.get(id).name; return o; };
+F.enterFloorV2 = function (w, n) {
+  const f = w.run.floors[n];
+  if (w.task && w.task.owner) w.bus.offOwner(w.task.owner);
+  w.floorN = n; w.floor = f;
+  w.grid = BD.Grid.fromString(f.w, f.h, f.cells);
+  w.enemies = []; w.projectiles = []; w.telegraphs = []; w.zones = []; w.hitboxes = []; w.pickups = []; w.rifts = []; w.queue = [];
+  w.shards = []; w.field = null; w.fieldT = 0; w.fieldCell = -1; w.fieldCache = null;
+  const h = w.hero, L = f.layout;
+  h.x = L.start[0]; h.y = L.start[1]; h.targetId = null; h.dashT = 0; h.dashBuf = 0; h.face = Math.atan2(-1, -1);
+  w.stats.floorReached = Math.max(w.stats.floorReached, n);
+  w.interact = { target: null, progress: 0, need: 0, sealedToast: false };
+  for (const p of L.flasks) w.pickups.push({ id: W.id(w), kind: 'flask', x: p[0], y: p[1] });
+  w.stairs = L.stairs ? Object.assign({ open: false }, L.stairs) : null;
+  w.altar = null; w.trial = null;
+  w.wave = { n: 1, t: 0, guardianId: null };
+  w.freezeT = C.WAVES.initFreeze;
+  BD.view.snapCam(w);
+  W.updateField(w, 0);
+  W.emit(w, 'floor_enter', { floor: n, domType: f.domType, nextDomType: f.nextDomType });
+  if (n === 6) {
+    W.banner(w, '옥상 — 마왕', 'floor');
+    const b = W.makeEnemy(w, f.spawns.boss, L.bossPos[0], L.bossPos[1], { via: 'placed' });
+    w.wave.guardianId = b.id;
+    w.task = null;
+  } else {
+    W.banner(w, n + 'F — ' + C.TYPE_NAMES[f.domType] + ' · ' + (TASK_NAMES()[f.task] || f.task), 'floor');
+    BD.taskRt.start(w);
+  }
+  BD.siteRt.start(w);
+  BD.director.start(w);
 };
 
 function riftPos(w, i) {
@@ -55,7 +94,7 @@ F.survivors = function (w) {
 };
 
 F.updateWaves = function (w, dt) {
-  if (w.floorN === 6 || !w.wave) return;
+  if (w.floorN === 6 || !w.wave || w.floor.v2) return;
   const wv = w.wave, sp = w.floor.spawns;
   wv.t += dt;
   if (wv.n === 1 && (F.survivors(w) <= C.WAVES.wave2Survivors || wv.t >= C.WAVES.timeout)) {
@@ -77,6 +116,7 @@ F.guardianKilled = function (w, e) {
   w.hero.radiance = Math.min(C.RADIANCE_MAX, w.hero.radiance + 1);
   w.stairs.open = true;
   W.emit(w, 'guardian_kill', { floor: w.floorN, kind: e.kind });
+  if (w.floor.v2) BD.taskRt.floorClear(w); // GDD-V2 §5.5-4
   W.emit(w, 'stairs_open', { floor: w.floorN });
   W.banner(w, '계단이 열렸다', 'stairs');
   F.lightAltar(w);
@@ -150,18 +190,7 @@ F.useStairs = function (w) {
   w.blackoutTo = w.floorN + 1;
 };
 
-F.updatePickups = function (w) {
-  const h = w.hero;
-  for (const p of w.pickups) {
-    if (p.taken) continue;
-    if (p.kind === 'flask' && M.dist(h.x, h.y, p.x, p.y) <= C.INTERACT.flaskTouch + h.r && h.hp < h.maxHp) {
-      p.taken = true;
-      W.heal(w, w.mods.flask, 'flask');
-      W.emit(w, 'pickup', { kind: 'flask', x: p.x, y: p.y });
-    }
-  }
-  w.pickups = w.pickups.filter((p) => !p.taken);
-};
+F.updatePickups = function (w) { BD.pickupRt.update(w); }; // touch pickups (src/core/33_pickups.js)
 
 // ---- altar ---------------------------------------------------------------------------------
 
@@ -266,4 +295,5 @@ F.update = function (w, dt) {
   F.updateTrial(w);
   F.updatePickups(w);
   F.updateInteract(w, dt);
+  BD.siteRt.update(w, dt);
 };

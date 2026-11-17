@@ -1,14 +1,15 @@
 // One fixed 1/60 s simulation step of a world, in a fixed order:
 //  hero stats → hero move/dash → distance field → auto-attack → timers → enemies →
-//  hazards → statuses → rifts → waves/interactions/pickups → deaths → clock/dawn → cleanup → tick event
-// The world does not advance while the altar overlay is open (the app also checks overlays).
+//  hazards → statuses → rifts → waves/interactions/pickups/sites → task → director → shards/levels →
+//  deaths → clock/dawn → cleanup → tick event   (v2: the camera follows right after the hero moves)
+// The world does not advance while the altar or the growth choice is open (the app also checks overlays).
 
 const C = BD.C;
 const W = BD.W;
 
 BD.tick = function (w) {
   const dt = C.TICK;
-  if (w.over || w.altarOpen) return;
+  if (w.over || w.altarOpen || w.choiceOpen) return;
   if (w.ending) {
     w.ending.t -= dt;
     if (w.ending.t <= 1e-9) {
@@ -25,6 +26,7 @@ BD.tick = function (w) {
   w.t += dt;
   BD.hero.computeStats(w);
   const moved = BD.hero.update(w, dt);
+  BD.view.updateCam(w, dt); // GDD-V2 §5.6: the camera is simulation state
   W.updateField(w, dt);
   BD.hero.autoAttack(w, dt);
   W.runTimers(w);
@@ -34,6 +36,9 @@ BD.tick = function (w) {
   BD.status.update(w, dt);
   W.updateRifts(w, dt);
   BD.flow.update(w, dt);
+  BD.taskRt.update(w, dt);
+  BD.director.update(w, dt);
+  BD.growth.update(w, dt);
   BD.combat.resolveDeaths(w);
   BD.flow.updateDawn(w, dt);
   if (w.enemies.some((e) => e.dead)) w.enemies = w.enemies.filter((e) => !e.dead);

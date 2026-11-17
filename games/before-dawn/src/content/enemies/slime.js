@@ -4,7 +4,7 @@ const A = BD.ai;
 
 BD.enemies.register({
   id: 'slime', name: '슬라임', type: 'beast', sprite: 'slime',
-  hp: 60, speed: 1.6 / 1.1, dmg: 12, radius: 0.45, cost: 1.5, // tuned: GDD dmg 10 (HP: docs/CONTROLS-REVIEW.md §3.1)
+  hp: 30, speed: 1.6 / 1.1, dmg: 12, radius: 0.45, cost: 1.5, role: 'threat', shards: 3, // HP: GDD-V2 §3.2 (v1 tuned 60; dmg tuned: GDD 10)
   alwaysWet: true, // §6.1: always wet; steam does not dry it
   attacks: { pounce: { name: '덮치기' } },
   T: { hopDist: 1.6, hopEvery: 1.1, hopDur: 0.35, range: 3.0, tgR: 0.9, tgTime: 0.7, jump: 0.25, flat: 0.8, cd: 2.2 },
@@ -60,3 +60,17 @@ BD.enemies.register({
     } else e.state = 'idle';
   },
 });
+
+// Fodder slimes (GDD-V2 §3.2): the slime's behaviour with their own hop and pounce, always wet.
+// 새끼 슬라임 (beast, slime × 0.6) and 마력 슬라임 (magic, slime × 0.75 in violet).
+{
+  const S0 = BD.enemies.get('slime');
+  const variant = (o) => BD.enemies.register(Object.assign({
+    sprite: 'slime', variantOf: 'slime', cost: 1, role: 'fodder', shards: 1, alwaysWet: true,
+    attacks: { pounce: { name: '덮치기' } }, create: S0.create, update: S0.update,
+  }, o));
+  variant({ id: 'slimelet', name: '새끼 슬라임', type: 'beast', scale: 0.6, hp: 8, speed: 1.3 / 0.8, dmg: 4, radius: 0.28,
+    T: Object.assign({}, S0.T, { hopDist: 1.3, hopEvery: 0.8, hopDur: 0.3, range: 2.0, tgR: 0.6, tgTime: 0.6, flat: 0.5, cd: 2.0 }) });
+  variant({ id: 'mana_slime', name: '마력 슬라임', type: 'magic', scale: 0.75, tint: 'violet', hp: 12, speed: 1.4 / 0.9, dmg: 4, radius: 0.34,
+    T: Object.assign({}, S0.T, { hopDist: 1.4, hopEvery: 0.9, hopDur: 0.32, range: 2.2, tgR: 0.7, tgTime: 0.6, flat: 0.5, cd: 2.0 }) });
+}

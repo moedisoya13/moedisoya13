@@ -7,15 +7,18 @@ const M = BD.math;
 BD.createWorld = function (opts) {
   const seed = opts.seed >>> 0;
   const tier = opts.tier | 0;
-  const run = BD.gen.run(seed, tier);
+  const run = BD.gen.run(seed, tier, opts.task ? { task: opts.task } : undefined);
   const w = {
     seed, tier, mods: BD.tierMods(tier), run,
-    rng: { spawn: BD.stream(seed, 'spawn'), ai: BD.stream(seed, 'ai'), fx: BD.stream(seed, 'fx') },
+    rng: { spawn: BD.stream(seed, 'spawn'), ai: BD.stream(seed, 'ai'), fx: BD.stream(seed, 'fx'), choice: BD.stream(seed, 'choice') },
     bus: BD.Bus(),
     t: 0, ticks: 0, dt: C.TICK,
     floorN: 0, floor: null, grid: null,
     hero: null, enemies: [], projectiles: [], telegraphs: [], zones: [], hitboxes: [], pickups: [], rifts: [], queue: [],
     wave: null, stairs: null, altar: null, trial: null, interact: { target: null, progress: 0, need: 0 },
+    // v2 (docs/ARCHITECTURE.md §10): the simulation's camera, light shards on the floor, the horde
+    // director, the floor task, sites, the open growth choice
+    cam: null, shards: [], director: null, task: null, sites: [], choice: null, choiceOpen: false,
     cards: [null, null, null],
     freezeT: 0, blackoutT: 0, blackoutTo: 0, ending: null, altarOpen: false,
     dawnFired: false, drainAcc: 0,
@@ -26,6 +29,7 @@ BD.createWorld = function (opts) {
     stats: {
       kills: 0, hurts: 0, dodges: 0, trials: 0, trialSec: 0, mageKills: 0, questAwakened: 0, comboMaxed: 0,
       dmgTaken: {}, cards: {}, floorReached: 1, bestStack: {},
+      unseenHits: 0, shards: 0, levels: 0, recycled: 0, tasks: [],
     },
     particleCount: 0, // set by the browser effect layer; not part of the hash
   };
@@ -51,6 +55,14 @@ W.runTimers = function (w) {
   for (const x of due) x.fn(w);
 };
 
+// GDD-V2 §5.6: is (x, y) inside the screen rectangle S / the combat window C this tick.
+W.onScreen = (w, x, y, pad) => BD.view.onScreen(w, x, y, pad);
+W.inView = (w, x, y, pad) => BD.view.inView(w, x, y, pad);
+
+// A staged scenario (tests): no director, no growth-choice overlay. Set w.scenario = true, or the
+// v1 test idiom w.wave.n = 3 ("no more waves") that the existing tests use.
+W.scenario = (w) => !!(w.scenario || (w.wave && w.wave.n >= 3));
+
 W.edgeDist = (w, e) => M.dist(w.hero.x, w.hero.y, e.x, e.y) - e.r;
 W.alive = (e) => !e.dead && !e.down;
 W.livingEnemies = (w) => w.enemies.filter(W.alive);
@@ -58,7 +70,11 @@ W.enemyById = (w, id) => { for (const e of w.enemies) if (e.id === id) return e;
 
 // ---- enemies -------------------------------------------------------------------------
 
-// Create an enemy now (no warning). opts: elite, guardian, via, trial, wave.
+// Create an enemy now (no warning). opts: elite, guardian, via, trial, wave, noAttack, dormant.
+// v2: def.role ('fodder' | 'threat'; guardians, elites and the boss are their own roles), def.scale
+// (sprite size of a variant: e.size = scale × elite/guardian size, the body radius is def.radius ×
+// the elite/guardian size only), the floor's director row multiplies a regular enemy's HP and
+// damage (GDD-V2 §3.4). opts.dormant {r}: stands still until the hero comes within r u.
 W.makeEnemy = function (w, kind, x, y, opts) {
   opts = opts || {};
   const def = BD.enemies.get(kind);
@@ -71,9 +87,12 @@ W.makeEnemy = function (w, kind, x, y, opts) {
     knock = Math.min(knock, C.GUARDIAN.knock);
     hp = C.GUARDIAN.hp[w.floorN] || C.GUARDIAN.hp[5]; hpMul = w.mods.enemyHp;
   }
+  const row = BD.director && BD.director.row(w);
+  if (row && !opts.guardian && !opts.elite && !boss) { hpMul *= row.hp; dmgMul *= row.dmg; }
   if (boss) knock = 0;
+  const role = boss ? 'boss' : opts.guardian ? 'guardian' : opts.elite ? 'elite' : def.role || 'threat';
   const e = {
-    id: W.id(w), kind, def, type: def.type, x, y, r: def.radius * size, size,
+    id: W.id(w), kind, def, type: def.type, role, x, y, r: def.radius * size, size: size * (def.scale || 1),
     hp: Math.round(hp * hpMul), maxHp: Math.round(hp * hpMul),
     elite: !!opts.elite, guardian: !!opts.guardian, boss, trial: !!opts.trial, wave: opts.wave || 0,
     speed: def.speed * w.mods.enemySpeed, dmg: Math.round(def.dmg * dmgMul), dmgMul, tgScale: tg, knockScale: knock,
@@ -81,7 +100,12 @@ W.makeEnemy = function (w, kind, x, y, opts) {
     noAttackT: opts.noAttack || 0, stunT: 0, knock: null, lunging: false,
     statuses: {}, flags: {}, mem: {}, slot: null, down: null, revives: 0, dead: false,
     lastSource: null, squash: 0, bornT: w.t,
+    // §5.6-1: seconds inside the combat window (an enemy made inside it counts as having been there,
+    // so placed enemies and rifts keep their v1 timing; the director spawns outside S);
+    // §3.5: seconds near the hero (fodder); seconds far off screen (recycling)
+    viewT: 0, nearT: 0, farT: 0, dormant: opts.dormant || null,
   };
+  if (w.grid && W.inView(w, x, y)) e.viewT = C.V2.seenFor;
   if (def.create) def.create(e, w);
   if (e.guardian && def.guardian && def.guardian.create) def.guardian.create(e, w);
   if (def.alwaysWet) e.statuses.wet = { t: Infinity };
@@ -89,6 +113,17 @@ W.makeEnemy = function (w, kind, x, y, opts) {
   W.emit(w, 'spawn', { enemyId: e.id, kind, x, y, via: opts.via || 'placed' });
   if (e.guardian) W.banner(w, '수호자 — ' + ((def.guardian && def.guardian.name) || def.name), 'guardian'); // GDD §9.2
   return e;
+};
+
+// Remove an enemy without a kill: no kill event, no shards (recycling, floor clear). why: 'recycle'
+// emits nothing (GDD-V2 §3.4); 'clear' emits `dissolve` for the ink-scatter look (§5.5-4).
+W.removeEnemy = function (w, e, why) {
+  if (e.dead) return;
+  e.dead = true; e.state = 'dead';
+  BD.ai.release(w, e);
+  BD.hazards.cancelOwned(w, e.id);
+  if (why === 'recycle') w.stats.recycled++;
+  else W.emit(w, 'dissolve', { enemyId: e.id, kind: e.kind, x: M.round(e.x, 3), y: M.round(e.y, 3) });
 };
 
 // Spawn with a rift warning (GDD §3.2-5). Respects the enemy cap via a queue.

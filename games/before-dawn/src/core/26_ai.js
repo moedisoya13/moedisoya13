@@ -11,7 +11,10 @@ const M = BD.math;
 const W = BD.W;
 const A = BD.ai = {};
 
-A.canAttack = (w, e) => e.noAttackT <= 0 && w.freezeT <= 0 && !w.hero.dead;
+// GDD-V2 §5.6-1 / §3.5: an attack may only start after the enemy has been inside the combat
+// window for C.V2.seenFor s (e.viewT), and fodder also near the hero for C.V2.fodderNear s.
+A.canAttack = (w, e) => e.noAttackT <= 0 && w.freezeT <= 0 && !w.hero.dead && !e.dormant &&
+  e.viewT >= C.V2.seenFor - 1e-9 && (e.role !== 'fodder' || (e.nearT >= C.V2.fodderNear - 1e-9 && w.telegraphs.length < C.CAP.telegraphs));
 A.edgeDist = (w, e) => W.edgeDist(w, e);
 A.angleToHero = (w, e) => Math.atan2(w.hero.y - e.y, w.hero.x - e.x);
 A.rng = (w) => w.rng.ai;
@@ -24,7 +27,8 @@ A.seen = (w, e) => BD.view.inView(w, e.x, e.y, e.r);
 A.slot = function (w, e, cat) {
   if (e.guardian || e.boss) return true;
   if (e.slot) return true;
-  const cap = cat === 'ranged' ? C.ENEMY.rangedCap : C.ENEMY.meleeCap;
+  const row = BD.director.row(w); // v2: the floor's caps (GDD-V2 §3.5)
+  const cap = cat === 'ranged' ? (row ? row.ranged : C.ENEMY.rangedCap) : (row ? row.melee : C.ENEMY.meleeCap);
   let n = 0;
   for (const o of w.enemies) if (!o.dead && o.slot === cat) n++;
   if (n >= cap) return false;
@@ -169,8 +173,18 @@ A.randomCell = function (w, minDist, maxDist) {
 };
 
 // Summon kinds at the floor's rifts (each with the rift warning). Returns rift entries.
+// Without rifts (v2 floors have none) they come at walkable spots 3–6u from the summoner (or the hero).
 A.summon = function (w, kinds, opts) {
-  const rifts = (opts && opts.rifts) || w.floor.layout.rifts;
+  let rifts = (opts && opts.rifts) || w.floor.layout.rifts;
+  if (!rifts || !rifts.length) {
+    const o = (opts && opts.from) || w.hero, j = A.rng(w);
+    rifts = [];
+    for (let i = 0; i < 24 && rifts.length < 3; i++) {
+      const a = j.range(0, M.TAU), d = j.range(3, 6), x = o.x + Math.cos(a) * d, y = o.y + Math.sin(a) * d;
+      if (w.grid.walkable(Math.floor(x), Math.floor(y)) && W.inView(w, x, y)) rifts.push([x, y]);
+    }
+    if (!rifts.length) rifts = [[o.x, o.y]];
+  }
   const out = [];
   kinds.forEach((k, i) => {
     const r = rifts[i % rifts.length];
@@ -182,10 +196,14 @@ A.summon = function (w, kinds, opts) {
 
 // Per tick for every enemy.
 A.update = function (w, dt) {
-  const list = w.enemies.slice();
+  const list = w.enemies.slice(), h = w.hero, near = C.V2.fodderNearR;
   for (const e of list) {
     if (e.dead) continue;
     if (e.hitT > 0) e.hitT -= dt;
+    // GDD-V2 §5.6 / §3.5 bookkeeping: time inside the combat window, time near the hero
+    e.viewT = W.inView(w, e.x, e.y) ? e.viewT + dt : 0;
+    e.nearT = M.dist(e.x, e.y, h.x, h.y) - e.r <= near ? e.nearT + dt : 0;
+    if (e.dormant && M.dist(e.x, e.y, h.x, h.y) <= e.dormant.r) { e.dormant = null; W.emit(w, 'wake', { enemyId: e.id }); }
     if (e.down) {
       e.down.t -= dt;
       if (e.flags.noRevive) { BD.combat.kill(w, e); continue; }
@@ -200,6 +218,7 @@ A.update = function (w, dt) {
     if (e.stunT > 0) { e.stunT -= dt; e.state = 'stunned'; continue; }
     if (w.freezeT > 0) continue;
     if (e.noAttackT > 0) e.noAttackT -= dt;
+    if (e.dormant) { e.state = 'idle'; continue; }
     e.def.update(e, w, dt);
     if (e.guardian && e.def.guardian && e.def.guardian.update) e.def.guardian.update(e, w, dt);
   }

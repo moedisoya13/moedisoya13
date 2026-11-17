@@ -5,9 +5,11 @@ const M = BD.math;
 
 BD.enemies.register({
   id: 'goblin', name: '고블린', type: 'beast', sprite: 'goblin',
-  hp: 40, speed: 4.5, dmg: 7, radius: 0.35, cost: 1, // tuned: GDD dmg 6 (HP: docs/CONTROLS-REVIEW.md §3.1)
+  // GDD-V2 §3.2 fodder: HP 10, 3.2 u/s (slower than the hero), 4, r 0.32, stab warning 0.6 s
+  // (v1 tuned: HP 40, 4.5 u/s, 7, r 0.35, 0.45 s)
+  hp: 10, speed: 3.2, dmg: 4, radius: 0.32, cost: 1, role: 'fodder', shards: 1,
   attacks: { stab: { name: '찌르기' } },
-  T: { range: 1.0, half: 30, tgR: 1.3, tgTime: 0.45, backDist: 1.2, backTime: 0.3, cd: 1.6, ring: 0.95, chaseFar: 3.0 },
+  T: { range: 1.0, half: 30, tgR: 1.3, tgTime: 0.6, backDist: 1.2, backTime: 0.3, cd: 1.6, ring: 0.95, chaseFar: 3.0 },
   guardian: {
     name: '고블린 족장',
     create(e) { e.mem.summonT = 12; },
@@ -43,7 +45,7 @@ BD.enemies.register({
     // surround: push our bearing away from nearby goblins' bearings
     let b = Math.atan2(e.y - h.y, e.x - h.x);
     for (const o of w.enemies) {
-      if (o === e || o.dead || o.down || o.kind !== 'goblin' || A.edgeDist(w, o) > 4) continue;
+      if (o === e || o.dead || o.down || o.def.update !== e.def.update || A.edgeDist(w, o) > 4) continue; // goblins and squires
       const db = M.wrap(b - Math.atan2(o.y - h.y, o.x - h.x));
       if (Math.abs(db) < 0.9) b += (db === 0 ? (e.id < o.id ? 1 : -1) : Math.sign(db)) * (0.9 - Math.abs(db)) * 0.5;
     }
@@ -53,3 +55,14 @@ BD.enemies.register({
     if (ed < 1.5) e.face = A.angleToHero(w, e);
   },
 });
+
+// 고블린 병졸 (heavy fodder, GDD-V2 §3.2): the goblin's behaviour, goblin × 1.1 in steel, no front guard.
+{
+  const G0 = BD.enemies.get('goblin');
+  BD.enemies.register({
+    id: 'squire', name: '고블린 병졸', type: 'heavy', sprite: 'goblin', scale: 1.1, tint: 'steel', variantOf: 'goblin',
+    hp: 18, speed: 2.8, dmg: 5, radius: 0.36, cost: 1, role: 'fodder', shards: 1,
+    attacks: { stab: { name: '찌르기' } },
+    T: Object.assign({}, G0.T), create: G0.create, update: G0.update,
+  });
+}

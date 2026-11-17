@@ -186,6 +186,7 @@ K.kill = function (w, e) {
     burning: !!e.statuses.burn, wet: !!e.statuses.wet, source: e.lastSource || 'slash', x: M.round(e.x, 3), y: M.round(e.y, 3),
   });
   if (e.def.onDeath) e.def.onDeath(e, w);
+  BD.growth.onKill(w, e); // GDD-V2 §4.1: every kill drops light
   if (e.elite) BD.flow.dropFlask(w, e.x, e.y);
   if (e.guardian) BD.flow.guardianKilled(w, e);
   if (e.boss) BD.flow.bossKilled(w, e);

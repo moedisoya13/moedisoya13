@@ -10,6 +10,18 @@
 //  ⑤ trial option on → open the trial rift
 //  ⑥ go to the stairs
 // Uses only world state; no randomness.
+//
+// v2 floors (GDD-V2 §10.3; the slice has rules 1, 2, 4–8):
+//  ① as above
+//  ② HP ≤ 45: a flask within 20u → go to it; else an unused spring (a site of kind 'spring')
+//  ④ the goal, chosen every 2 s: the guardian → the nearest task site left → sites by opts.sites
+//     ('smart' default: chests always, the altar once, a rift at HP ≥ 70; 'all'; 'none') → open stairs
+//  ⑤ ≥ 6 enemies within 2.2u: step away from the centroid of those within 4u, keeping the nearest
+//     within reach
+//  ⑥ < 4 enemies within 3u and a shard within 6u: to the nearest shard
+//  ⑦ the goal is off screen (or the stairs are open): walk to it; a task site: stay in its ring
+//  ⑧ else ③ above (no enemy at all: toward the goal, or the floor centre)
+// BD.bot.choose(w, {policy}) answers any open choice overlay with an app.cmd argument list.
 
 const M = BD.math;
 const B = BD.bot = {};
@@ -72,6 +84,7 @@ function safeSpot(w, shapes) {
 B.think = function (w, opts) {
   const h = w.hero;
   const shapes = dangerShapes(w);
+  if (w.floor && w.floor.v2) return thinkV2(w, opts || {}, shapes);
   // ①
   let urgent = Infinity;
   for (const t of shapes) if (M.shapeHits(t, h.x, h.y, h.r + 0.05)) urgent = Math.min(urgent, t.remain);
@@ -139,4 +152,140 @@ B.altar = function (w) {
   }
   if (w.hero.hp < 60 || !a.offers.length) return ['pray'];
   return ['pick', 0];
+};
+
+// ---- v2 (GDD-V2 §10.3) ---------------------------------------------------------------------------
+function dodge(w, shapes) {
+  const h = w.hero;
+  let urgent = Infinity;
+  for (const t of shapes) if (M.shapeHits(t, h.x, h.y, h.r + 0.05)) urgent = Math.min(urgent, t.remain);
+  if (urgent >= 0.6) return null;
+  const s = safeSpot(w, shapes);
+  const dash = urgent < 0.2 && h.dashCd <= 0;
+  if (s) { const [mx, my] = M.norm(s.x - h.x, s.y - h.y); return { mx, my, dash }; }
+  return { mx: 0, my: 0, dash };
+}
+
+// The goal of rule ④, re-chosen every 2 s (kept on the world as w.botGoal; read-only for rules).
+function goal(w, opts) {
+  const h = w.hero, g = w.botGoal;
+  const guard = w.enemies.find((e) => !e.dead && e.guardian);
+  if (guard) return { x: guard.x, y: guard.y, kind: 'guardian' };
+  if (w.stairs && w.stairs.open) return { x: w.stairs.ringX, y: w.stairs.ringY, kind: 'stairs' };
+  if (g && w.t < g.until && (!g.site || g.site.state === 'idle')) return g;
+  let best = null;
+  const mode = opts.sites || 'smart';
+  for (const s of w.sites) {
+    if (s.state !== 'idle') continue;
+    let want = !s.optional;
+    if (s.optional && mode === 'all') want = true;
+    else if (s.optional && mode === 'smart') want = s.kind === 'chest' || (s.kind === 'altar' && !w.botAltarUsed) || (s.kind === 'rift' && h.hp >= 70);
+    if (!want) continue;
+    const d = M.dist(h.x, h.y, s.x, s.y) + (s.optional ? 1000 : 0); // task sites first
+    if (!best || d < best.d) best = { d, s };
+  }
+  w.botGoal = best ? { x: best.s.x, y: best.s.y, kind: 'site', site: best.s, until: w.t + 2 } : { x: null, y: null, kind: null, until: w.t + 2 };
+  return w.botGoal;
+}
+
+function fight(w, shapes, live, near, nd) {
+  const h = w.hero, s = h.stats;
+  const desired = s.acquire > s.reach ? 4.0 : s.reach - 0.5;
+  if (nd > desired + 1.5) return go(w, near.x, near.y);
+  let best = null;
+  const step = 0.5;
+  for (let i = -1; i < SAMPLE_DIRS; i++) {
+    const a = (i / SAMPLE_DIRS) * M.TAU;
+    const dx = i < 0 ? 0 : Math.cos(a) * step, dy = i < 0 ? 0 : Math.sin(a) * step;
+    const [x, y] = BD.nav.move(w.grid, h.x, h.y, dx, dy, h.r);
+    const ed = M.dist(x, y, near.x, near.y) - near.r;
+    let score = Math.abs(ed - desired);
+    if (insideDanger(w, x, y, h.r, shapes)) score += 5;
+    for (const e of live) { const d = M.dist(x, y, e.x, e.y) - e.r; if (d < 1.0) score += (1.0 - d) * 0.8; }
+    if (i >= 0 && M.dist(x, y, h.x, h.y) < step * 0.3) score += 0.5;
+    if (i < 0) score -= 0.05;
+    if (!best || score < best.score - 1e-9) best = { score, dx, dy };
+  }
+  const [mx, my] = M.norm(best.dx, best.dy);
+  return { mx, my, dash: false };
+}
+
+function thinkV2(w, opts, shapes) {
+  const h = w.hero;
+  // ①
+  const d1 = dodge(w, shapes);
+  if (d1) return d1;
+  // ②
+  if (h.hp <= 45) {
+    let p = null, pd = 20;
+    for (const q of w.pickups) { if (q.kind !== 'flask') continue; const d = M.dist(h.x, h.y, q.x, q.y); if (d <= pd) { pd = d; p = q; } }
+    if (p) return go(w, p.x, p.y);
+    const sp = w.sites.find((s) => s.kind === 'spring' && s.state === 'idle');
+    if (sp) return go(w, sp.x, sp.y);
+  }
+  // ④
+  const g = goal(w, opts);
+  const live = [];
+  let near = null, nd = Infinity, close22 = 0, close3 = 0;
+  for (const e of w.enemies) {
+    if (e.dead || e.down) continue;
+    live.push(e);
+    const d = BD.W.edgeDist(w, e);
+    if (d < nd || (d === nd && e.id < near.id)) { nd = d; near = e; }
+    if (d <= 2.2) close22++;
+    if (d <= 3) close3++;
+  }
+  // ⑤
+  if (close22 >= 6) {
+    let cx = 0, cy = 0, n = 0;
+    for (const e of live) if (M.dist(h.x, h.y, e.x, e.y) <= 4) { cx += e.x; cy += e.y; n++; }
+    cx /= n; cy /= n;
+    let best = null;
+    for (let i = 0; i < SAMPLE_DIRS; i++) {
+      const a = (i / SAMPLE_DIRS) * M.TAU, [x, y] = BD.nav.move(w.grid, h.x, h.y, Math.cos(a) * 0.6, Math.sin(a) * 0.6, h.r);
+      let score = -M.dist(x, y, cx, cy);
+      if (M.dist(x, y, near.x, near.y) - near.r > h.stats.reach) score += 1.5;
+      if (insideDanger(w, x, y, h.r, shapes)) score += 5;
+      if (M.dist(x, y, h.x, h.y) < 0.2) score += 3;
+      if (!best || score < best.score - 1e-9) best = { score, a };
+    }
+    return { mx: Math.cos(best.a), my: Math.sin(best.a), dash: false };
+  }
+  // ⑥
+  if (close3 < 4 && w.shards.length) {
+    let s = null, sd = 6;
+    for (const q of w.shards) { if (q.pull) continue; const d = M.dist(h.x, h.y, q.x, q.y); if (d <= sd) { sd = d; s = q; } }
+    if (s && !insideDanger(w, s.x, s.y, h.r, shapes)) return go(w, s.x, s.y);
+  }
+  // ⑦
+  if (g.kind === 'stairs') return go(w, g.x, g.y);
+  if (g.kind && !BD.W.onScreen(w, g.x, g.y)) return go(w, g.x, g.y);
+  if (g.kind === 'site' && !g.site.optional) {
+    const r = (BD.sites.get(g.site.kind).ring || BD.C.INTERACT.ring) * 0.7;
+    if (M.dist(h.x, h.y, g.x, g.y) > r) return go(w, g.x, g.y);
+  }
+  // ⑧
+  if (near) return fight(w, shapes, live, near, nd);
+  if (g.kind) return go(w, g.x, g.y);
+  return go(w, w.grid.w / 2, w.grid.h / 2);
+}
+
+// Answer the open choice overlay → arguments for app.cmd (GDD-V2 §10.3).
+// policy: 'mixed' (HP < 60: 여명의 숨 / 굳은 몸 first, else the lowest-level card), 'card' (always a
+// card when offered), 'pray' (boons first; the altar prays).
+B.choose = function (w, opts) {
+  opts = opts || {};
+  if (w.altarOpen) return ['altar'].concat(B.altar(w, opts));
+  const ch = w.choice, policy = opts.policy || 'mixed';
+  if (!w.choiceOpen || !ch) BD.fail('bot.choose: no choice is open');
+  const O = ch.options;
+  const lowestCard = () => { let bi = -1; for (let i = 0; i < O.length; i++) if (O[i].kind === 'card' && (bi < 0 || O[i].from < O[bi].from)) bi = i; return bi; };
+  const first = (pred) => O.findIndex(pred);
+  let i = -1;
+  if (policy === 'pray') i = first((o) => o.kind === 'boon');
+  else if (policy === 'mixed' && w.hero.hp < 60) i = first((o) => o.kind === 'breath' || (o.kind === 'boon' && o.id === 'body'));
+  if (i < 0 && policy !== 'pray') i = lowestCard();
+  if (i < 0) i = first((o) => o.kind === 'boon');
+  if (i < 0) i = 0;
+  return ['choice', 'pick', i];
 };

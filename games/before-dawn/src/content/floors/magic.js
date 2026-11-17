@@ -6,3 +6,6 @@ BD.gen.bundles.register({
   dom: [null, null, { mage: 6 }, { mage: 7 }, { mage: 8 }, { mage: 9 }],
   nondom: [null, { mage: 1 }, { mage: 2 }, { mage: 2 }, { mage: 2 }, { mage: 3 }],
 });
+
+// v2 horde mix (GDD-V2 §3.3): 마력 슬라임 85 %, 고블린 15 %; mages.
+BD.director.mixes.register({ id: 'magic', fodder: { mana_slime: 85, goblin: 15 }, threats: { mage: 1 } });

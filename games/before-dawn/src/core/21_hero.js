@@ -14,6 +14,8 @@ H.create = function (w) {
     atkTimer: 0, targetId: null, dashCd: 0, dashT: 0, dashDX: 0, dashDY: 0, dashInvuln: 0, dashBuf: 0, faceHold: 0,
     dashHit: new Set(), dodged: new Set(), invuln: 0, radiance: 0, dead: false,
     pose: 'idle', poseT: 0, swingT: 0, lastMoved: 0,
+    // v2 growth (GDD-V2 §4.2, §4.7): level, gauge, boons {id: rank}, shard pick-up radius
+    level: 1, xp: 0, xpNeed: C.V2.xp.first[0], boons: {}, pickupR: C.V2.shard.pickR,
     stats: H.baseStats(0),
   };
 };
@@ -23,14 +25,17 @@ H.baseStats = function (radiance) {
   return {
     reach: C.HERO.reach, interval: C.HERO.interval, halfArc: C.HERO.halfArc,
     acquireRange: 0, dmgBase: C.HERO.dmg + radiance, charged: false, mods: {},
+    pickupR: C.V2.shard.pickR, speedMul: 1,
   };
 };
 
 H.computeStats = function (w) {
   const s = H.baseStats(w.hero.radiance);
   BD.cardRt.each(w, (card, ctx) => { if (card.def.stats) card.def.stats(ctx, s); });
+  BD.growth.boonStats(w, s); // 단련 (GDD-V2 §4.5): the same place as the cards' stats hooks
   s.acquire = Math.max(s.reach, s.acquireRange || 0);
   w.hero.stats = s;
+  w.hero.pickupR = s.pickupR;
   return s;
 };
 
@@ -147,7 +152,8 @@ H.update = function (w, dt) {
       h.pose = 'idle';
     }
   } else if (h.moving) {
-    moved = moveHero(w, mx * C.HERO.speed * dt, my * C.HERO.speed * dt, false, dt);
+    const sp = C.HERO.speed * (h.stats.speedMul || 1);
+    moved = moveHero(w, mx * sp * dt, my * sp * dt, false, dt);
   } else {
     moveHero(w, 0, 0, false);
   }

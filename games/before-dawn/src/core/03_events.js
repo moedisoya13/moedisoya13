@@ -44,6 +44,18 @@ const GDD_EVENTS = {
   dawn: ['t'],
   death: ['cause', 'floor', 't'],
   win: ['t'],
+  // GDD-V2 §4.7
+  level_up: ['level'],
+  choice_open: ['kind', 'options'],          // options: the pick strings, e.g. ['card:pierce', 'boon:edge', 'breath']
+  choice_pick: ['kind', 'pick'],
+  card_level: ['cardId', 'level'],
+  boon: ['id', 'rank'],
+  task_progress: ['floor', 'task', 'value', 'goal'],
+  task_clear: ['floor', 'task'],
+  site_start: ['kind', 'id', 'optional'],
+  site_clear: ['kind', 'id', 'optional'],
+  surge: ['floor', 'n'],
+  floor_clear: ['floor'],
 };
 for (const k of Object.keys(GDD_EVENTS)) BD.events.declare(k, GDD_EVENTS[k]);
 
@@ -56,7 +68,10 @@ const EXTRA_EVENTS = {
   projectile: ['id', 'kind', 'hostile', 'x', 'y'],
   spawn: ['enemyId', 'kind', 'x', 'y', 'via'],                  // via: 'placed' | 'rift' | 'door' | 'summon'
   rift: ['x', 'y', 'time', 'guardian'],                          // a rift warning started
-  pickup: ['kind', 'x', 'y'],
+  pickup: ['kind', 'x', 'y', 'value'],                         // kind: shard | flask | … (GDD-V2 §4.7)
+  shard_drop: ['x', 'y', 'value'],                              // a shard popped out of a kill (v2)
+  dissolve: ['enemyId', 'kind', 'x', 'y'],                      // removed without a kill (floor clear, v2)
+  wake: ['enemyId'],                                            // a dormant enemy (the guardian) starts moving (v2)
   revive: ['enemyId'],
   stairs_open: ['floor'],
   guard: ['enemyId', 'x', 'y'],                                 // front guard reduced a direct hit

@@ -10,13 +10,13 @@ const M = BD.math;
 
 const T = {
   range: 2.2, half: 45, tgR: 2.0, tgTime: 0.6, leap: 1.5, leapTime: 0.2, cd: 2.0,
-  reviveDelay: 2.5, reviveHp: 40, corpseHp: 20, guardianRevive: 0.5, // revive HP: docs/CONTROLS-REVIEW.md §3.1
+  reviveDelay: 2.5, reviveHp: 20, corpseHp: 20, guardianRevive: 0.5, // revive HP: GDD-V2 §3.2 (+20; v1 tuned 40)
   riseCd: 0.8, // after rising: no lunge for this long (on top of the engine's 0.3 s no-attack)
 };
 
 BD.enemies.register({
   id: 'ghoul', name: '구울', type: 'undead', sprite: 'ghoul',
-  hp: 120, speed: 2.4, dmg: 14, radius: 0.45, cost: 3, // HP: docs/CONTROLS-REVIEW.md §3.1
+  hp: 45, speed: 2.4, dmg: 14, radius: 0.45, cost: 3, role: 'threat', shards: 4, // HP: GDD-V2 §3.2 (v1 tuned 120)
   attacks: { lunge: { name: '달려들기' } },
   T,
   guardian: { name: '구울 폭군' }, // the 50 % rise is read from e.guardian in revive()
@@ -29,7 +29,7 @@ BD.enemies.register({
   },
   create(e, w) { e.mem.cd = A.rng(w).range(0.3, 1.0); e.mem.rev = 0; },
   update(e, w, dt) {
-    const m = e.mem;
+    const m = e.mem, T = e.def.T; // variants (husk) bring their own T
     if (m.rev !== e.revives) { // just rose: the lunge in progress when it fell was cancelled
       m.rev = e.revives; m.windup = false; m.cd = T.riseCd; A.release(w, e);
     }
@@ -55,6 +55,19 @@ BD.enemies.register({
     e.state = A.chase(w, e, e.speed, dt) ? 'idle' : 'move';
   },
 });
+
+// 굶주린 망자 (undead fodder, GDD-V2 §3.2): the ghoul's behaviour with fodder numbers, ghoul × 0.8,
+// no revive. Registered here so it shares the ghoul's update.
+{
+  const G0 = BD.enemies.get('ghoul');
+  BD.enemies.register({
+    id: 'husk', name: '굶주린 망자', type: 'undead', sprite: 'ghoul', scale: 0.8, tint: 'pale', variantOf: 'ghoul',
+    hp: 14, speed: 2.6, dmg: 5, radius: 0.36, cost: 1, role: 'fodder', shards: 1,
+    attacks: { lunge: { name: '할퀴기' } },
+    T: Object.assign({}, T, { range: 1.4, half: 40, tgR: 1.4, tgTime: 0.6, leap: 0.6, leapTime: 0.15, cd: 2.0 }),
+    create: G0.create, update: G0.update,
+  });
+}
 
 // The fallen body: a grey ring around the corpse that closes clockwise until it rises, so the
 // player can see how long is left to finish it (§6.5 "자리를 지키고 시체를 마저 벰").
