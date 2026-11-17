@@ -15,7 +15,7 @@ const SAMPLE_DIRS = 16;
 
 function dangerShapes(w) {
   const out = [];
-  for (const t of w.telegraphs) if (t.dmg > 0) out.push(t);
+  for (const t of w.telegraphs) if (t.danger) out.push(t);
   return out;
 }
 function insideDanger(w, x, y, r, shapes, horizon) {

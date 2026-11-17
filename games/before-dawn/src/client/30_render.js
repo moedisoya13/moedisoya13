@@ -3,13 +3,14 @@
 //   floor decals (BD.client.render.bake) → floor marks (rifts, rings, telegraphs, zones,
 //   shadows, target chevron) → effects 'floor' → depth-sorted obstacles/actors/pickups →
 //   projectiles → slash trails → effects 'world' → blackout/ending fade.
-// Content can add drawers via BD.render.{trails, projectiles, zones, telegraphs, decor}.
+// Content can add drawers via BD.render.{trails, projectiles, zones, telegraphs, decor,
+// obstacles, vfx}. ui.camera {x, y} offsets the world (screen shake).
 
 const C = BD.C;
 const M = BD.math;
 const U = BD.ui;
 const AS = BD.client.assets;
-const R = BD.client.render = { trails: [], cache: null, bakeCanvas: null, floorKey: null };
+const R = BD.client.render = { trails: [], vfx: [], cache: null, bakeCanvas: null, floorKey: null };
 const K = C.HERO.spriteH / 256; // sprite pixels → logical px
 
 function shade(hex, f) {
@@ -29,7 +30,12 @@ R.floorColor = (w) => C.FLOOR_COLORS[w.floor.domType] || '#888888';
 // ---- events → trails ----------------------------------------------------------------------
 R.onWorld = function (w) {
   R.trails = [];
+  R.vfx = [];
   R.floorKey = null;
+  w.bus.on('vfx', (ev) => {
+    BD.render.vfx.get(ev.kind); // unknown kinds fail loudly
+    R.vfx.push({ ev, age: 0, life: ev.life || 0.3 });
+  });
   w.bus.on('strike', (ev) => {
     R.trails.push({ shapes: ev.shapes.map((s) => Object.assign({}, s)), age: 0, life: C.HERO.trail + 0.05, elements: ev.elements.slice(), source: ev.source });
   });
@@ -342,6 +348,10 @@ BD.render.trails.register({
   },
 });
 
+R.decor = function (target, g, v, obj, w, box, t) {
+  for (const d of BD.render.decor.all()) if (d.target === target) d.draw(g, v, obj, w, box, t);
+};
+
 // ---- sprites ---------------------------------------------------------------------------------
 const tintCache = {};
 function tinted(id, color) {
@@ -435,8 +445,9 @@ function drawEnemy(g, v, e, w, t) {
     g.strokeStyle = U.INK; g.lineWidth = 1.5;
     for (let i = 0; i < e.statuses.sunder.n; i++) { const yy = box.top + 12 + i * 7; g.beginPath(); g.moveTo(box.x - 8, yy); g.lineTo(box.x - 2, yy + 3); g.lineTo(box.x + 6, yy - 1); g.stroke(); }
   }
-  if (BD.render.decor.has(e.kind)) BD.render.decor.get(e.kind).draw(g, v, e, w, box, t);
-  typeIcon(g, e.type === 'boss' ? 'heavy' : e.type, box.x, box.top - 9);
+  R.decor(e.kind, g, v, e, w, box, t);
+  R.decor('enemy', g, v, e, w, box, t);
+  if (e.type !== 'boss') typeIcon(g, e.type, box.x, box.top - 9);
   if (e.guardian) crown(g, box.x, box.top - 18);
 }
 
@@ -444,6 +455,13 @@ function drawHero(g, v, w, t) {
   const h = w.hero;
   const pose = heroPose(w, v);
   const o = { flip: pose.flip };
+  const hp = v.proj(h.x, h.y), hh = R.spriteHeight(pose.id);
+  const box = { x: hp[0], y: hp[1], top: hp[1] - hh, w: 0, pose: pose.id, flip: pose.flip };
+  R.decor('hero_back', g, v, h, w, box, t);
+  drawHeroSprite(g, v, w, t, h, pose, o);
+  R.decor('hero_front', g, v, h, w, box, t);
+}
+function drawHeroSprite(g, v, w, t, h, pose, o) {
   if (h.swingT > 0 && !h.dead) {
     const k = h.swingT / C.HERO.trail;
     const [ax, ay] = v.worldDirToScreen(Math.cos(h.aim), Math.sin(h.aim));
@@ -518,6 +536,8 @@ R.drawWorld = function (g, ui, dt) {
   const w = ui.app.world, v = ui.view, t = ui.time;
   v.setRoom(w.grid.w, w.grid.h);
   R.drawSky(g, w);
+  g.save();
+  if (ui.camera) g.translate(ui.camera.x || 0, ui.camera.y || 0);
   ensureStatic(w, v);
   g.drawImage(R.cache, 0, 0, C.VIEW_W, C.VIEW_H);
   if (R.bakeCanvas) g.drawImage(R.bakeCanvas, 0, 0, C.VIEW_W, C.VIEW_H);
@@ -554,7 +574,8 @@ R.drawWorld = function (g, ui, dt) {
   ui.drawEffects(g, 'floor');
   // depth-sorted things
   const items = [];
-  for (let y = 0; y < w.grid.h; y++) for (let x = 0; x < w.grid.w; x++) if (w.grid.get(x, y) === BD.CELL.SOLID) items.push({ k: x + y + 1, f: () => R.prism(g, v, x + 0.04, y + 0.04, 0.92, 0.92, 34, '#6b6e7a', '#4a4c57', '#3a3c45') });
+  const obst = BD.render.obstacles.has(w.floor.pattern) ? BD.render.obstacles.get(w.floor.pattern) : null;
+  for (let y = 0; y < w.grid.h; y++) for (let x = 0; x < w.grid.w; x++) if (w.grid.get(x, y) === BD.CELL.SOLID) items.push({ k: x + y + 1, f: () => (obst ? obst.draw(g, v, x, y, w, t) : R.prism(g, v, x + 0.04, y + 0.04, 0.92, 0.92, 34, '#6b6e7a', '#4a4c57', '#3a3c45')) });
   for (const e of w.enemies) if (!e.dead) items.push({ k: e.x + e.y + (e.down ? -0.3 : 0), f: () => drawEnemy(g, v, e, w, t) });
   items.push({ k: w.hero.x + w.hero.y, f: () => drawHero(g, v, w, t) });
   for (const p of w.pickups) items.push({ k: p.x + p.y, f: () => drawFlask(g, v, p, t) });
@@ -572,7 +593,10 @@ R.drawWorld = function (g, ui, dt) {
     tr.age += dt;
   }
   R.trails = R.trails.filter((tr) => tr.age < tr.life);
+  for (const x of R.vfx) { BD.render.vfx.get(x.ev.kind).draw(g, v, x.ev, x.age / x.life, w, t); x.age += dt; }
+  R.vfx = R.vfx.filter((x) => x.age < x.life);
   ui.drawEffects(g, 'world');
+  g.restore();
   // blackout / endings
   if (w.blackoutT > 0) { g.fillStyle = 'rgba(0,0,0,' + M.clamp(1 - w.blackoutT / C.INTERACT.blackout + 0.4, 0, 1) + ')'; g.fillRect(0, 0, C.VIEW_W, C.VIEW_H); }
   if (w.ending) {
@@ -581,3 +605,16 @@ R.drawWorld = function (g, ui, dt) {
     g.fillRect(0, 0, C.VIEW_W, C.VIEW_H);
   }
 };
+
+// a simple default vfx: ev {kind:'line', points:[[x,y],…], color, width}
+BD.render.vfx.register({
+  id: 'line',
+  draw(g, v, ev, k) {
+    const pts = ev.points.map((p) => v.proj(p[0], p[1], 20));
+    g.globalAlpha = 1 - k;
+    g.beginPath(); g.moveTo(pts[0][0], pts[0][1]); for (const p of pts) g.lineTo(p[0], p[1]);
+    g.strokeStyle = BD.ui.INK; g.lineWidth = (ev.width || 3) + 3; g.stroke();
+    g.strokeStyle = ev.color || '#ffffff'; g.lineWidth = ev.width || 3; g.stroke();
+    g.globalAlpha = 1;
+  },
+});

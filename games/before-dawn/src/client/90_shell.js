@@ -27,7 +27,7 @@ SH.storage = function () {
 
 function makeUi(app, view) {
   const ui = {
-    app, view, g: view.g, time: 0, dt: 0, buttons: [], layer: 'hud', focus: 0, fx: BD.client.fx,
+    app, view, g: view.g, time: 0, dt: 0, buttons: [], layer: 'hud', focus: 0, fx: BD.client.fx, camera: { x: 0, y: 0 },
     assets: BD.client.assets, render: BD.client.render,
   };
   Object.defineProperty(ui, 'world', { get: () => app.world });

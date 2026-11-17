@@ -57,7 +57,13 @@ BD.render.trails = BD.makeRegistry('trail drawer', { required: ['draw'] });     
 BD.render.projectiles = BD.makeRegistry('projectile drawer', { required: ['draw'] }); // by projectile kind
 BD.render.zones = BD.makeRegistry('zone drawer', { required: ['draw'] });         // by zone kind
 BD.render.telegraphs = BD.makeRegistry('telegraph style', { required: ['draw'] }); // by telegraph style
-BD.render.decor = BD.makeRegistry('enemy decor', { required: ['draw'] });          // extra per-enemy drawing, by enemy kind
+// Decor: extra drawing attached to actors. target: an enemy kind | 'enemy' (every enemy) |
+// 'hero_back' (before the hero sprite) | 'hero_front' (after it). Any number per target.
+BD.render.decor = BD.makeRegistry('decor', {
+  required: ['target', 'draw'],
+});
+BD.render.obstacles = BD.makeRegistry('obstacle drawer', { required: ['draw'] });   // by obstacle pattern id
+BD.render.vfx = BD.makeRegistry('vfx drawer', { required: ['draw'] });             // by vfx event kind
 
 BD.onFinalize(function () {
   const meta = BD.assetMeta || {};

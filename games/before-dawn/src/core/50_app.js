@@ -20,6 +20,9 @@ BD.createApp = function (opts) {
     lastResult: null, lastRunOpts: null, listeners: [],
   };
 
+  // A fresh seed (time-based in the browser) — the prep screen picks it before dealing.
+  app.newSeed = () => (opts.nowSeed ? opts.nowSeed() : 1) >>> 0;
+
   app.overlay = function () {
     if (app.rotate) return 'rotate';
     if (app.uiOverlay) return app.uiOverlay;
@@ -47,7 +50,7 @@ BD.createApp = function (opts) {
   app.startRun = function (o) {
     o = Object.assign({}, o || {});
     let seed = o.seed;
-    if (seed === undefined || seed === null || seed === '') seed = opts.nowSeed ? opts.nowSeed() : 1;
+    if (seed === undefined || seed === null || seed === '') seed = app.newSeed();
     seed = Number(seed) >>> 0;
     const tier = Math.max(0, Math.min(C.TIERS.length - 1, Number(o.tier) || 0));
     const w = BD.createWorld({ seed, tier });

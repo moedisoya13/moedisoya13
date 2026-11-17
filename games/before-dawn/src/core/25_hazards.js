@@ -3,7 +3,8 @@
 //
 // Telegraph spec: {shape: circle|fan|line|ring, x, y, r, dir, half(deg), len, width, r0, r1,
 //   time, dmg, attack, owner (enemy), style ('hatch' default | 'blink' | content style),
-//   onFire(w, tg), persist (survive owner's death), noScale}
+//   onFire(w, tg), persist (survive owner's death), noScale,
+//   danger (warns of a hit that comes later, e.g. an arrow; implied when dmg > 0)}
 // When the fill completes, a hero inside the shape takes dmg (dash i-frames → dodge), then
 // onFire runs. Owner-linked shapes scale by owner.tgScale (elite ×1.2, guardian ×1.4).
 
@@ -23,6 +24,7 @@ Z.telegraph = function (w, spec) {
   for (const f of ['r', 'len', 'width', 'r0', 'r1']) if (tg[f] !== undefined) tg[f] *= k;
   if (tg.dmg > 0 && tg.time < C.ENEMY.minTelegraph) tg.time = C.ENEMY.minTelegraph;
   tg.total = tg.time; tg.remain = tg.time;
+  tg.danger = tg.danger || tg.dmg > 0;
   tg.shape = tg.shape || 'circle';
   w.telegraphs.push(tg);
   W.emit(w, 'telegraph', { id: tg.id, shape: tg.shape, ownerId: tg.ownerId, attack: tg.attack || null, time: tg.time });

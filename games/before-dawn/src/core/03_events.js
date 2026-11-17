@@ -63,6 +63,7 @@ const EXTRA_EVENTS = {
   banner: ['text', 'kind'],
   altar_close: ['floor', 'choice'],
   boss_phase: ['phase'],
+  vfx: ['kind'],                                               // free-form visual from content: drawn by BD.render.vfx[kind]
 };
 for (const k of Object.keys(EXTRA_EVENTS)) BD.events.declare(k, EXTRA_EVENTS[k], { extra: true });
 

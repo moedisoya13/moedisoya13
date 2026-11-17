@@ -154,6 +154,13 @@ W.hurtHero = function (w, dmg, info) {
   return true;
 };
 
+// Push the hero (boss roar shockwave …). Not damage; respects walls.
+W.pushHero = function (w, nx, ny, dist) {
+  const h = w.hero;
+  const [x, y] = BD.nav.move(w.grid, h.x, h.y, nx * dist, ny * dist, h.r);
+  h.x = x; h.y = y;
+};
+
 W.heal = function (w, amount, source) {
   const h = w.hero;
   if (h.dead) return 0;

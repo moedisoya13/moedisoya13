@@ -5,7 +5,7 @@ const M = BD.math;
 const r4 = (v) => (typeof v === 'number' ? Math.round(v * 10000) / 10000 : v);
 
 function tgDump(t) {
-  const o = { shape: t.shape, x: r4(t.x), y: r4(t.y), remain: r4(t.remain), attack: t.attack || null, dmg: t.dmg || 0 };
+  const o = { shape: t.shape, x: r4(t.x), y: r4(t.y), remain: r4(t.remain), attack: t.attack || null, dmg: t.dmg || 0, danger: !!t.danger };
   for (const k of ['r', 'dir', 'half', 'len', 'width', 'r0', 'r1']) if (t[k] !== undefined) o[k] = r4(t[k]);
   return o;
 }

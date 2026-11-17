@@ -76,10 +76,13 @@ async function main() {
     p.on('request', (r) => { if (r.url() !== p.url() && !r.url().startsWith(fileUrl)) requests.push(r.url().slice(0, 80)); });
     return { p, ctx, errors, requests };
   }
+  let maxParticles = 0;
   async function waitMode(p, mode, ms) {
     const t0 = Date.now();
     while (Date.now() - t0 < ms) {
-      const m = await p.evaluate(() => window.__BD && window.__BD.state().mode);
+      const s = await p.evaluate(() => window.__BD && (({ mode, particles }) => ({ mode, particles }))(window.__BD.state()));
+      const m = s && s.mode;
+      if (s && s.particles) maxParticles = Math.max(maxParticles, s.particles);
       if (m === mode) return true;
       await p.waitForTimeout(250);
     }
@@ -220,8 +223,8 @@ async function main() {
     for (let i = 0; i < 100; i++) BD.hazards.projectile(w, { x: 6, y: 6, dir: i, speed: 1, range: 50, dmg: 1, ownerKind: 'goblin', attack: 'stab' });
     let sE = 0, sP = 0;
     for (let i = 0; i < 120; i++) { H.step(1); sE = Math.max(sE, w.enemies.filter((e) => !e.dead).length); sP = Math.max(sP, w.projectiles.length); }
-    const ok = maxE <= 80 && maxP <= 60 && sE <= 80 && sP <= 60;
-    report(12, ok ? 'PASS' : 'FAIL', `bot runs max enemies ${maxE}, projectiles ${maxP}; stress (150 spawns, 100 shots) max ${sE} / ${sP}, queued ${w.queue.length}; particles are browser-side, capped at 300 by the pool`);
+    const ok = maxE <= 80 && maxP <= 60 && sE <= 80 && sP <= 60 && maxParticles <= 300;
+    report(12, ok ? 'PASS' : 'FAIL', `bot runs max enemies ${maxE}, projectiles ${maxP}; stress (150 spawns, 100 shots) max ${sE} / ${sP}, queued ${w.queue.length}; particles (browser, sampled during #2) max ${maxParticles}`);
   }
 
   // 8
