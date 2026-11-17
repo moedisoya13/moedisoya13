@@ -153,7 +153,7 @@ module.exports = {
   'ghoul guardian (구울 폭군): rises once with 50 % of its maximum HP'(t) {
     const { BD, H, w } = arena(t, { floor: 3 });
     const e = BD.W.makeEnemy(w, 'ghoul', w.hero.x + 1.6, w.hero.y, { guardian: true });
-    t.eq(e.maxHp, BD.enemyTune.guardianHp[3]);
+    t.eq(e.maxHp, BD.C.GUARDIAN.hp[3]);
     e.hp = 1; e.stunT = 1e9;
     H.step(2);
     t.assert(e.down);

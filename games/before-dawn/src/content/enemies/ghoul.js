@@ -20,7 +20,7 @@ BD.enemies.register({
   hp: 180, speed: 2.4, dmg: 14, radius: 0.45, cost: 3, // tuned: GDD HP 60
   attacks: { lunge: { name: '달려들기' } },
   T,
-  guardian: { name: '구울 폭군', create(e, w) { BD.enemyTune.guardian(e, w); } }, // the 50 % rise is read from e.guardian in revive()
+  guardian: { name: '구울 폭군' }, // the 50 % rise is read from e.guardian in revive()
   revive(e, w) {
     if (e.revives >= 1) return null;
     const k = e.maxHp / e.def.hp;

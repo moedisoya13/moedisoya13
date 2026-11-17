@@ -10,7 +10,7 @@ BD.enemies.register({
   T: { hopDist: 1.6, hopEvery: 1.1, hopDur: 0.35, range: 3.0, tgR: 0.9, tgTime: 0.7, jump: 0.25, flat: 0.8, cd: 2.2 },
   guardian: {
     name: '대왕 슬라임',
-    create(e, w) { BD.enemyTune.guardian(e, w); e.mem.summoned = 0; },
+    create(e) { e.mem.summoned = 0; },
   },
   create(e, w) {
     e.mem.hopT = A.rng(w).range(0, 1.1);

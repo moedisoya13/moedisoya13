@@ -61,7 +61,7 @@ const TUNED_BUNDLES = { // { 'type.dom.n': [gddRow, tunedRow] }
   'magic.dom.2': [{ mage: 8 }, { mage: 6 }], 'magic.dom.3': [{ mage: 10 }, { mage: 7 }],
   'magic.dom.4': [{ mage: 12 }, { mage: 8 }], 'magic.dom.5': [{ mage: 13 }, { mage: 9 }],
 };
-// Guardian HP per floor (GDD §6.3; the engine's BD.C.GUARDIAN.hp, rescaled by BD.enemyTune).
+// Guardian HP per floor (GDD §6.3; the engine's BD.C.GUARDIAN.hp holds the tuned row).
 const GUARDIAN_HP = { gdd: [0, 160, 220, 280, 340, 400], tuned: [0, 480, 660, 840, 1020, 1200] };
 
 function get(o, path) { return path.split('.').reduce((a, k) => (a === undefined ? a : a[k]), o); }
@@ -82,11 +82,18 @@ module.exports = {
     for (const key of Object.keys(TUNED)) if (!GDD[key.split('.')[0]].some(([p]) => key === key.split('.')[0] + '.' + p)) bad.push(`TUNED ${key} is not a GDD row`);
     t.assert(!bad.length, bad.join('\n'));
   },
-  'guardian HP per floor: the engine keeps the GDD row, content applies the tuned row'(t) {
+  'guardian HP per floor: the engine row holds the tuned values, applied by makeEnemy'(t) {
     const BD = t.load();
-    t.eq(BD.C.GUARDIAN.hp, GUARDIAN_HP.gdd, 'engine row is still the GDD value');
-    t.eq(BD.enemyTune.guardianHp, GUARDIAN_HP.tuned);
-    for (const k of ['slime', 'goblin', 'skel_archer', 'ghoul', 'mage', 'dark_knight']) t.eq(typeof BD.enemies.get(k).guardian.create, 'function', k + ' rescales its guardian HP');
+    t.eq(BD.C.GUARDIAN.hp, GUARDIAN_HP.tuned, 'engine row is the tuned row');
+    t.eq(BD.enemyTune, undefined, 'no content-side rescale left');
+    const H = BD.harness();
+    for (let n = 1; n <= 5; n++) {
+      H.start({ seed: 1, hand: [], floor: n, tier: 0 }); const w = H.world();
+      for (const k of ['slime', 'goblin', 'skel_archer', 'ghoul', 'mage', 'dark_knight']) {
+        const e = BD.W.makeEnemy(w, k, w.hero.x + 3, w.hero.y, { guardian: true });
+        t.eq([e.hp, e.maxHp], [Math.round(GUARDIAN_HP.tuned[n] * w.mods.enemyHp), Math.round(GUARDIAN_HP.tuned[n] * w.mods.enemyHp)], `${k} guardian on ${n}F`);
+      }
+    }
   },
   'attack names feed the death cause (고블린의 찌르기에 …)'(t) {
     const BD = t.load();

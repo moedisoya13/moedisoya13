@@ -85,7 +85,7 @@ BD.enemies.register({
   knockScale: 0.33,
   attacks: { charge: { name: '돌격' }, sweep: { name: '휩쓸기' } },
   T,
-  guardian: { name: '암흑기사 단장', create(e, w) { BD.enemyTune.guardian(e, w); } }, // 7u charge and the sweep are read from e.guardian
+  guardian: { name: '암흑기사 단장' }, // 7u charge and the sweep are read from e.guardian
   // Front guard (§6.2). info = {source, direct, fromX, fromY}
   defense(e, w, info) {
     if (!info.direct) return 1;

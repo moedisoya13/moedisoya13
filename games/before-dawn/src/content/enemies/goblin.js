@@ -10,7 +10,7 @@ BD.enemies.register({
   T: { range: 1.0, half: 30, tgR: 1.3, tgTime: 0.45, backDist: 1.2, backTime: 0.3, cd: 1.6, ring: 0.95, chaseFar: 3.0 },
   guardian: {
     name: '고블린 족장',
-    create(e, w) { BD.enemyTune.guardian(e, w); e.mem.summonT = 12; },
+    create(e) { e.mem.summonT = 12; },
     update(e, w, dt) {
       e.mem.summonT -= dt;
       if (e.mem.summonT <= 0) { e.mem.summonT = 12; A.summon(w, ['goblin', 'goblin', 'goblin']); }

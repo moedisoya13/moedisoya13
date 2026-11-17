@@ -76,7 +76,7 @@ BD.enemies.register({
   hp: 80, speed: 2.0, dmg: 12, radius: 0.35, cost: 2.5, // tuned: GDD HP 40
   attacks: { fire_circle: { name: '불 원' }, fire_zone: { name: '불 장판' } },
   T,
-  guardian: { name: '대마도사', create(e, w) { BD.enemyTune.guardian(e, w); } }, // three circles and the 4 s teleport are read from e.guardian
+  guardian: { name: '대마도사' }, // three circles and the 4 s teleport are read from e.guardian
   create(e, w) {
     const r = A.rng(w);
     e.mem.cd = r.range(0.6, 1.8); e.mem.blinkCdT = 0; e.mem.nearT = 0;
