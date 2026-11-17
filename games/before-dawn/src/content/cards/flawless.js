@@ -105,11 +105,12 @@ BD.render.decor.register({
     const c = BD.cardRt.get(w, 'flawless');
     if (!c || h.dead || !lvOfCard(c).block || c.state.stack < BD.cardRt.maxStack(c)) return;
     const a = 0.55 + 0.2 * Math.sin(t * 4);
-    const cx = box.x, cy = box.top + (box.y - box.top) * 0.5, rx = box.w * 0.62, ry = (box.y - box.top) * 0.62;
+    const hgt = box.y - box.top, cx = box.x, cy = box.top + hgt * 0.52, rx = hgt * 0.46, ry = hgt * 0.6; // the hero's box has no width
     g.save();
     g.beginPath(); g.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
-    g.lineWidth = 5; g.strokeStyle = 'rgba(10,10,12,' + 0.45 * a + ')'; g.stroke();
-    g.lineWidth = 2.5; g.strokeStyle = 'rgba(231,210,255,' + a + ')'; g.stroke();
+    g.fillStyle = 'rgba(231,210,255,' + 0.12 * a + ')'; g.fill();
+    g.lineWidth = 6; g.strokeStyle = 'rgba(10,10,12,' + 0.5 * a + ')'; g.stroke();
+    g.lineWidth = 3; g.strokeStyle = 'rgba(231,210,255,' + a + ')'; g.stroke();
     g.beginPath(); g.ellipse(cx - rx * 0.3, cy - ry * 0.45, rx * 0.35, ry * 0.18, -0.5, 0, Math.PI * 2);
     g.fillStyle = 'rgba(255,255,255,' + 0.35 * a + ')'; g.fill();
     g.restore();

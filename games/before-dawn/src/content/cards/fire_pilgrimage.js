@@ -126,13 +126,15 @@ BD.render.decor.register({
 BD.render.zones.register({
   id: 'pilgrim_trail',
   draw(g, v, z, w, t) {
+    // a scorched dark patch (reads on every floor colour, the red heavy floor too) with inked flame tongues
     const a = Math.min(1, z.life / 0.5), D = K.draw;
-    D.ellipse(g, v, z.x, z.y, z.r, D.rgba('#ff5a2a', 0.3 * a), 'rgba(10,10,12,' + 0.35 * a + ')', 1.5);
+    D.ellipse(g, v, z.x, z.y, z.r, 'rgba(10,10,12,' + 0.32 * a + ')', 'rgba(255,90,42,' + 0.8 * a + ')', 1.5);
     for (let i = 0; i < 3; i++) {
       const an = (i / 3) * M.TAU + z.id, c = v.proj(z.x + Math.cos(an) * z.r * 0.45, z.y + Math.sin(an) * z.r * 0.45, 4);
-      const L = (8 + 5 * Math.sin(t * 13 + i + z.id)) * a;
-      D.path(g, [[c[0] - 3.5, c[1]], [c[0], c[1] - L], [c[0] + 3.5, c[1]]], true);
+      const L = (13 + 6 * Math.sin(t * 13 + i + z.id)) * a;
+      D.path(g, [[c[0] - 4.5, c[1]], [c[0], c[1] - L], [c[0] + 4.5, c[1]]], true);
       g.fillStyle = D.rgba(i % 2 ? '#ffd24a' : '#ff5a2a', a); g.fill();
+      g.lineWidth = 1.2; g.strokeStyle = 'rgba(10,10,12,' + a + ')'; g.stroke();
     }
   },
 });

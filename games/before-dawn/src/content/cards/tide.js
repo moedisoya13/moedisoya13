@@ -104,9 +104,10 @@ BD.render.vfx.register({
   id: 'tide_bump',
   draw(g, v, ev, k) {
     const D = K.draw, a = 1 - k, c = v.proj(ev.x, ev.y, 24);
-    D.ellipse(g, v, ev.x, ev.y, 0.3 + 0.5 * k, null, D.rgba('#3aa0ff', a), 4);
+    D.ellipse(g, v, ev.x, ev.y, 0.4 + 0.9 * k, null, 'rgba(10,10,12,' + 0.7 * a + ')', 7);
+    D.ellipse(g, v, ev.x, ev.y, 0.4 + 0.9 * k, null, D.rgba('#3aa0ff', a), 4);
     g.save(); g.translate(c[0], c[1]); g.globalAlpha = a;
-    const s = 10 + 8 * k;
+    const s = 16 + 12 * k;
     D.path(g, [[0, -s], [s * 0.25, -s * 0.25], [s, 0], [s * 0.25, s * 0.25], [0, s], [-s * 0.25, s * 0.25], [-s, 0], [-s * 0.25, -s * 0.25]], true);
     g.fillStyle = '#e6f4ff'; g.fill(); g.lineWidth = 2; g.strokeStyle = K.INK; g.stroke();
     g.restore();
