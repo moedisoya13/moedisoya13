@@ -105,6 +105,14 @@ if (want('move')) {
       res.push({ dist: h.x - x0, blocked });
     }
     r.liveGoblins8 = { meanDistIn3s: +K.mean(res.map((x) => x.dist)).toFixed(2), free: 12.6, meanBlockedTicks: +K.mean(res.map((x) => x.blocked)).toFixed(1), worstDist: +Math.min(...res.map((x) => x.dist)).toFixed(2) };
+    // guardians and the boss must not be shoved: walk into a stunned guardian for 1.5 s
+    {
+      const { H, w } = K.arena({ BD, noAttack: true, hx: 4, hy: 8 });
+      const g0 = K.spawn(BD, w, 'ghoul', 6, 8.1, { guardian: true }); g0.stunT = 1e9;
+      const gx = g0.x, gy = g0.y;
+      H.input({ mx: 1, my: 0 }); H.step(90);
+      r.guardianShoved = +Math.hypot(g0.x - gx, g0.y - gy).toFixed(3);
+    }
     // walking straight into one stationary enemy head-on and slightly off-centre
     r.headOn = {};
     for (const off of [0, 0.05, 0.2, 0.4]) {
@@ -135,7 +143,7 @@ if (want('dash')) {
   }
   { // press during cooldown: is it remembered?
     r.buffer = {};
-    for (const early of [1, 3, 6, 12]) { // press `early` ticks before the cooldown ends, 1-tick press
+    for (const early of [1, 3, 6, 10, 18]) { // press `early` ticks before the cooldown ends, 1-tick press
       const { H, w } = K.arena({ BD, noAttack: true });
       const h = w.hero;
       H.input({ mx: 1, my: 0, dash: true }); H.step(1); H.input({ mx: 1, my: 0 });
@@ -155,11 +163,12 @@ if (want('dash')) {
     // standing still next to an enemy: the hero faces the target while swinging → dash goes INTO it
     const A2 = K.arena({ BD });
     const h2 = A2.w.hero;
+    A2.H.input({ mx: 0, my: 1 }); A2.H.step(10); A2.H.input({ mx: 0, my: 0 }); // last movement: +y
     const e = K.spawn(BD, A2.w, 'ghoul', h2.x + 1.6, h2.y); e.stunT = 1e9;
     A2.H.step(5);
-    const bx = h2.x;
+    const bx = h2.x, by = h2.y;
     A2.H.input({ mx: 0, my: 0, dash: true }); A2.H.step(1); A2.H.input({ mx: 0, my: 0 }); A2.H.step(20);
-    r.noInputNextToTarget = `enemy at +1.6u x; dash moved hero ${f(h2.x - bx)}u in x (positive = toward/through the enemy)`;
+    r.idleDashNextToTarget = { dx: +(h2.x - bx).toFixed(2), dy: +(h2.y - by).toFixed(2), note: 'last movement was +y, the target stands at +x; in the built game the client sends the last movement direction, the core alone uses the facing' };
   }
   console.log('== dash ==\n' + JSON.stringify(r, null, 1));
 }
@@ -312,7 +321,7 @@ if (want('target')) {
       const q = sx >= 0 ? 'R' : 'L';
       if (lastQ && q !== lastQ) flips++; lastQ = q;
       if (M.angDiff(h.face, lastFace) > Math.PI / 2) faceJumps++; lastFace = h.face;
-      if (h.aimT > 0) aimTicks++;
+      if (M.angDiff(h.face, Math.atan2(e.y - h.y, e.x - h.x)) < 0.25) aimTicks++;
     }
     return { seconds: 6, leftRightFlips: flips, facingJumpsOver90deg: faceJumps, shareFacingTarget: +(aimTicks / 360).toFixed(2) };
   })();

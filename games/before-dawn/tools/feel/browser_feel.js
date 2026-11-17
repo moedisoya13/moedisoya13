@@ -85,7 +85,7 @@ const show = (obj) => Object.keys(obj).map((k) => '  ' + k + ': ' + JSON.stringi
       const name = vp.width + 'x' + vp.height;
       const scale = await T.eval(() => window.__BD.ui.view.scale);
       const rows = [];
-      for (const d of [2, 4, 6, 7, 8, 10, 14, 18, 21, 25, 32, 40, 60]) {
+      for (const d of [2, 4, 6, 7, 9, 10, 14, 18, 21, 25, 30, 32, 40, 48, 60]) {
         await T.pointer('pointerdown', 200, 200, 9); await T.pointer('pointermove', 200 + d, 200, 9);
         const mag = await T.eval(() => { const i = window.BD.client.input.current(); return Math.hypot(i.mx, i.my); });
         await T.pointer('pointerup', 200 + d, 200, 9);
