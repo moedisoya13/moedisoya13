@@ -6,8 +6,9 @@
 // other enemy whose edge is within the radius and sets them alight; fire zones do not hurt the hero
 // (`stats.mods.zoneImmune`, read by the engine's hurtHero).
 // Levels (cumulative, ctx.lv):
-//   1 before every 4th swing; after: burst 12 in 1.5u   2 before every 3rd swing
-//   3 fire-zone immunity before awakening too; after: burst radius 2.0u   4 burst 18
+//   1 before every 4th swing; after: burst 6 in 1.0u   2 before every 3rd swing
+//   3 fire-zone immunity before awakening too; after: burst radius 1.3u   4 burst 10
+//   (GDD-V2: 12 in 1.5u, 2.0u, 18 — tuned down, the awakened burst ignited whole packs; v2-cards.md §5)
 //   5 after: the hero leaves a trail of fire where he walks (0.8u wide, 1.5 s, 5 every 0.5 s to
 //     enemies only)
 // Altar: offered while at least one floor remains above this one (GDD-V2 §4.4: no rule given;
@@ -30,13 +31,14 @@ function burnOpts(w) {
 BD.cards.register({
   id: 'fire_pilgrimage', name: '불의 순례', family: 'quest', goal: T.goal, icon: 'fire_pilgrimage',
   unlock: (save) => save.counters.questAwakened >= 1, unlockText: '퀘스트 카드를 1회 각성',
-  desc: '베기 4번째마다 맞은 적 점화(화염과 같은 화상). 퀘스트: 불탄 상태의 적 150 처치(불의 출처는 무엇이든). 각성: 모든 베기가 점화. 불탄 적이 죽으면 반경 1.5u 폭발 12 + 점화. 용사는 불 장판 피해를 받지 않는다.',
+  desc: '베기 4번째마다 맞은 적 점화(화염과 같은 화상). 퀘스트: 불탄 상태의 적 150 처치(불의 출처는 무엇이든). 각성: 모든 베기가 점화. 불탄 적이 죽으면 반경 1.0u 폭발 6 + 점화. 용사는 불 장판 피해를 받지 않는다.',
   T,
   levels: [null,
-    { text: '각성 전: 베기 4번째마다 점화. 퀘스트: 불탄 적 150 처치. 각성 후: 모든 베기 점화, 불탄 적이 죽으면 반경 1.5u 폭발 12 + 점화, 불 장판 면역', every: 4, r: 1.5, dmg: 12, immune: false, trail: 0 },
+    // tuned (docs/requests/v2-cards.md §5): burst 12 → 6 and 1.5u → 1.0u, 3단계 2.0u → 1.3u, 4단계 18 → 10
+    { text: '각성 전: 베기 4번째마다 점화. 퀘스트: 불탄 적 150 처치. 각성 후: 모든 베기 점화, 불탄 적이 죽으면 반경 1.0u 폭발 6 + 점화, 불 장판 면역', every: 4, r: 1.0, dmg: 6, immune: false, trail: 0 },
     { text: '각성 전 3번째마다', every: 3 },
-    { text: '각성 전에도 불 장판 면역. 각성 후 폭발 반경 2.0u', immune: true, r: 2.0 },
-    { text: '폭발 피해 18', dmg: 18 },
+    { text: '각성 전에도 불 장판 면역. 각성 후 폭발 반경 1.3u', immune: true, r: 1.3 },
+    { text: '폭발 피해 10', dmg: 10 },
     { text: '각성 후 용사가 지나간 자리에 불길(폭 0.8u, 1.5초, 0.5초마다 5, 적만)', trail: 5 },
   ],
   offerable: (info) => K.floorsLeft(info) >= 1,

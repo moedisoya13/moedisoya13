@@ -286,7 +286,7 @@ module.exports = {
     t.eq(evs(w, 'vfx', (x) => x.kind === 'royal_first').length, 1);
   },
   // ---- 불의 순례 ------------------------------------------------------------------------------
-  'fire_pilgrimage: 2 every 3rd swing · 3 zone-immune before awakening, burst 2.0u · 4 burst 18'(t) {
+  'fire_pilgrimage: 2 every 3rd swing · 3 zone-immune before awakening, burst 1.3u · 4 burst 10 (tuned; GDD 2.0u, 18)'(t) {
     const { BD, H, w } = world(t, { hand: ['fire_pilgrimage'] });
     up(BD, w, 'fire_pilgrimage', 2);
     const e = place(BD, w, 'goblin', 1.2, 0, { hp: 999 });
@@ -300,16 +300,16 @@ module.exports = {
     t.eq(BD.W.hurtHero(w, 3, { source: 'zone', attack: 'fire_zone', enemyId: null }), false, 'level 3: immune before awakening');
     e.x += 20;
     BD.cardRt.awaken(w, BD.cardRt.get(w, 'fire_pilgrimage'));
-    const near = place(BD, w, 'goblin', -3, 2.2, { hp: 999 }); near.burnImmuneT = 9;
+    const near = place(BD, w, 'goblin', -3, 1.5, { hp: 999 }); near.burnImmuneT = 9;
     const dying = place(BD, w, 'goblin', -3, 0, { hp: 1 });
     BD.status.apply(w, dying, 'burn', { direct: true });
     BD.combat.damage(w, dying, 5, { source: 'chain', direct: false });
-    t.eq(hitsOn(w, near, 'burst').map((x) => x.dmg), [12], 'edge 1.88 ≤ 2.0');
+    t.eq(hitsOn(w, near, 'burst').map((x) => x.dmg), [6], 'edge 1.18: beyond 1.0, inside 1.3');
     up(BD, w, 'fire_pilgrimage', 4);
     const d2 = place(BD, w, 'goblin', -3, 0, { hp: 1 });
     BD.status.apply(w, d2, 'burn', { direct: true });
     BD.combat.damage(w, d2, 5, { source: 'chain', direct: false });
-    t.eq(hitsOn(w, near, 'burst').map((x) => x.dmg), [12, 18]);
+    t.eq(hitsOn(w, near, 'burst').map((x) => x.dmg), [6, 10]);
   },
   'fire_pilgrimage 5: awakened, the hero leaves a burning trail (0.8u wide, 1.5 s, 5 per 0.5 s to enemies)'(t) {
     const { BD, H, w } = world(t, { hand: ['fire_pilgrimage'] });

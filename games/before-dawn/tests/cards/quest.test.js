@@ -121,18 +121,18 @@ module.exports = {
     t.eq(evs(w, 'quest_progress').map((x) => x.value), Array.from({ length: 150 }, (_, i) => i + 1));
     t.eq(evs(w, 'quest_awaken').map((x) => x.cardId), ['fire_pilgrimage']);
   },
-  'fire_pilgrimage awakened: every swing ignites; burning deaths burst 12 within 1.5u and ignite; no fire-zone damage'(t) {
+  'fire_pilgrimage awakened: every swing ignites; burning deaths burst 6 within 1.0u (tuned; GDD 12 in 1.5u) and ignite; no fire-zone damage'(t) {
     const { BD, H, w } = world(t, { hand: ['fire_pilgrimage'] });
     BD.cardRt.awaken(w, BD.cardRt.get(w, 'fire_pilgrimage'));
     const e = place(BD, w, 'goblin', 1.2, 0, { hp: 999 });
     swingOnce(BD, H, w);
     t.assert(e.statuses.burn, 'first swing ignites');
-    const near = place(BD, w, 'goblin', -3, 1.6, { hp: 999 }), far = place(BD, w, 'goblin', -3, 2.4, { hp: 999 });
+    const near = place(BD, w, 'goblin', -3, 1.2, { hp: 999 }), far = place(BD, w, 'goblin', -3, 1.5, { hp: 999 }); // edges 0.88 / 1.18
     const dying = place(BD, w, 'goblin', -3, 0, { hp: 1 });
     BD.status.apply(w, dying, 'burn', { direct: true });
     near.burnImmuneT = 5; // would not catch by spread: the burst itself must ignite
     BD.combat.damage(w, dying, 5, { source: 'chain', direct: false });
-    t.eq(hitsOn(w, near, 'burst').map((x) => x.dmg), [12]);
+    t.eq(hitsOn(w, near, 'burst').map((x) => x.dmg), [6]);
     t.assert(near.statuses.burn, 'burst ignites');
     t.eq(hitsOn(w, far).length, 0);
     BD.hero.computeStats(w);

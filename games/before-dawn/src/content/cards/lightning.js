@@ -11,7 +11,8 @@
 // chain path (vfx 'chain_bolt'). Lightning is pale blue, never yellow (GDD §16 ③).
 const K = BD.cardKit;
 const M = BD.math;
-// Levels (GDD-V2 §4.4): 2 jumps 4 (wet 6) · 3 chain damage 80 % · 4 jumps 6 (wet 8), reach 3.5u ·
+// Levels (GDD-V2 §4.4, tuned): 2 jumps 4 (wet 6) · 3 chain damage 70 % (GDD 80) · 4 jumps 5 (wet 7),
+// reach 3.2u (GDD 6 / 8, 3.5u) ·
 // 5 every fifth hitting swing a thunderbolt on the target: r 1.6u, swing damage × 1.5, 0.5 s stun.
 const T = { range: 3.0, jumps: 3, jumpsWet: 5, pct: 0.6, pctWet: 1.0 }; // level 1
 
@@ -42,8 +43,9 @@ BD.cards.register({
   levels: [null,
     { text: '표적에서 3.0u 안으로 3번 연쇄, 베기 피해의 60%. 젖은 적이 끼면 100%·5번', range: 3.0, jumps: 3, jumpsWet: 5, pct: 0.6, pctWet: 1.0, bolt: 0 },
     { text: '연쇄 4번(젖으면 6번)', jumps: 4, jumpsWet: 6 },
-    { text: '연쇄 피해 80%', pct: 0.8 },
-    { text: '연쇄 6번(젖으면 8번), 거리 3.5u', jumps: 6, jumpsWet: 8, range: 3.5 },
+    // tuned (docs/requests/v2-cards.md §5): 3단계 80 % → 70 %, 4단계 6 (wet 8) in 3.5u → 5 (wet 7) in 3.2u
+    { text: '연쇄 피해 70%', pct: 0.7 },
+    { text: '연쇄 5번(젖으면 7번), 거리 3.2u', jumps: 5, jumpsWet: 7, range: 3.2 },
     { text: '맞힌 베기 5번째마다 표적에 낙뢰: 반경 1.6u, 베기 피해 × 1.5, 0.5초 기절', bolt: 1.5 },
   ],
   init(ctx) { ctx.state.n = 0; },

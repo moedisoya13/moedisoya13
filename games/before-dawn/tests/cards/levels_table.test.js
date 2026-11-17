@@ -12,7 +12,8 @@ const GDD = {
   whirl: [{ factor: 0.7, plus: 0, ring: 0 }, { factor: 0.85 }, { plus: 0.4 }, { factor: 1.0 }, { ring: 0.6 }],
   sword_wave: [{ range: 6.5, width: 1.0, factor: 0.6, pierce: 2, spread: [0] }, { factor: 0.8 }, { spread: [0, -16, 16] }, { pierce: 4, width: 1.3 }, { spread: [0, -16, 16, -32, 32], range: 8 }],
   flame: [{ dmg: 3, dur: 3, spread: 0.6, scar: 0 }, { dmg: 4 }, { spread: 1.0 }, { dmg: 5, dur: 4 }, { scar: 5 }],
-  lightning: [{ range: 3.0, jumps: 3, jumpsWet: 5, pct: 0.6, pctWet: 1.0, bolt: 0 }, { jumps: 4, jumpsWet: 6 }, { pct: 0.8 }, { jumps: 6, jumpsWet: 8, range: 3.5 }, { bolt: 1.5 }],
+  // tuned: 3 pct 0.8 → 0.7, 4 jumps 6 / 8 in 3.5u → 5 / 7 in 3.2u
+  lightning: [{ range: 3.0, jumps: 3, jumpsWet: 5, pct: 0.6, pctWet: 1.0, bolt: 0 }, { jumps: 4, jumpsWet: 6 }, { pct: 0.7 }, { jumps: 5, jumpsWet: 7, range: 3.2 }, { bolt: 1.5 }],
   tide: [{ push: 1.2, wet: 4, slam: 8, bump: 0, wave: 0 }, { slam: 14 }, { push: 1.8, bump: 6 }, { wet: 6, slam: 20 }, { wave: 0.8 }],
   leech: [{ every: 80, heal: 4, big: 10, overflow: 0, ring: 0 }, { every: 70 }, { heal: 5, overflow: 5 }, { every: 60 }, { ring: 20 }],
   riposte: [{ r: 2.6, hurt: 2, dodge: 3, cd: 2.0, dashEnd: false }, { r: 3.2 }, { cd: 1.2 }, { hurt: 3, dodge: 4 }, { dashEnd: true }],
@@ -22,7 +23,8 @@ const GDD = {
   mana_backlash: [{ flat: 5, r: 1.8, dmg: 12, any: false }, { flat: 8 }, { r: 2.4 }, { dmg: 18 }, { any: true }],
   rest_of_dead: [{ goal: 150, before: 4, all: 3, undead: 10, r: 1.8, dmg: 20, every: 0 }, { before: 6, goal: 120 }, { r: 2.4 }, { all: 5, undead: 14 }, { every: 8 }],
   kings_hunt: [{ flat: 3, mult: 1.6, shard: 0, first: 0 }, { flat: 6 }, { shard: 25 }, { mult: 1.9 }, { first: 3 }],
-  fire_pilgrimage: [{ every: 4, r: 1.5, dmg: 12, immune: false, trail: 0 }, { every: 3 }, { immune: true, r: 2.0 }, { dmg: 18 }, { trail: 5 }],
+  // tuned: burst 12 in 1.5u → 6 in 1.0u, 3 radius 2.0u → 1.3u, 4 burst 18 → 10
+  fire_pilgrimage: [{ every: 4, r: 1.0, dmg: 6, immune: false, trail: 0 }, { every: 3 }, { immune: true, r: 1.3 }, { dmg: 10 }, { trail: 5 }],
   chain_slash: [{ per: 10, limit: 2.0, perStack: 1, haste: 0, burst: 0 }, { limit: 2.5 }, { haste: 0.12 }, { perStack: 1.5 }, { maxStack: 15, burst: 5 }],
   flawless: [{ per: 25, reach: 0.4, echo: 0.5, block: false }, { per: 20 }, { block: true }, { echo: 0.75, reach: 0.6 }, { maxStack: 8 }],
   one_flash: [{ tip: 0.7, perStack: 1, pierceAt: 4, flash: 0 }, { tip: 0.9 }, { perStack: 1.5 }, { pierceAt: 3 }, { flash: 1.5 }],
