@@ -15,11 +15,17 @@ NAV.sortie = function (ui) { // 출정
   if (NAV.urlRun(ui.app)) { ui.startRun(); NAV.focus0(ui); return; }
   NAV.prep(ui);
 };
-NAV.prep = function (ui, seed) {
+// The night the preparation screen deals: a fresh seed (or the given one), no reroll spent, the
+// saved depth. The tap-to-start state after the rotate prompt (65_rotate.js) deals the same way
+// and then ascends without showing the screen.
+NAV.deal = function (ui, seed) {
   const s = ui.app.save;
   PREP.seed = seed !== undefined ? seed : ui.app.newSeed();
   PREP.rerolls = 0;
   PREP.tier = Math.max(0, Math.min(s.tierUnlocked || 0, s.tierSelected || 0));
+};
+NAV.prep = function (ui, seed) {
+  NAV.deal(ui, seed);
   ui.app.setMode('prep');
   NAV.focus0(ui);
 };

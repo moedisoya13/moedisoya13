@@ -1,11 +1,11 @@
 // App: the DOM-free state machine around runs. mode ∈ title | prep | codex | play | result.
-// Overlays: rotate (set by the client), pause | help | settings (UI), altar (from the world).
+// Overlays: rotate (set by the client), pause | help | settings | tap (UI), altar (from the world).
 // The world only advances in mode 'play' with no overlay. The browser shell and the Node
 // harness drive the same app object.
 
 const C = BD.C;
 BD.MODES = ['title', 'prep', 'codex', 'play', 'result'];
-BD.UI_OVERLAYS = ['pause', 'help', 'settings'];
+BD.UI_OVERLAYS = ['pause', 'help', 'settings', 'tap'];
 
 // opts: {storage, nowSeed(): number, params: {seed, tier, hand, floor, bot, speed, mute, nosave}}
 BD.createApp = function (opts) {

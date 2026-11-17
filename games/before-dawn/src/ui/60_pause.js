@@ -72,15 +72,3 @@ BD.ui.screens.register({
     return false;
   },
 });
-
-// Turning the device back to landscape lands on the pause menu instead of dropping the player
-// straight into the fight (the same courtesy as losing focus, GDD §2.1).
-const ROT = { was: false };
-BD.ui.effects.register({
-  id: 'rotate_pause',
-  update(dt, ui) {
-    const app = ui.app, now = !!app.rotate;
-    if (ROT.was && !now && app.mode === 'play' && !app.overlay() && !app.botOn && app.world && !app.world.ending) app.pause();
-    ROT.was = now;
-  },
-});

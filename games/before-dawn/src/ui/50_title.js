@@ -11,16 +11,22 @@ function recordLine(s) {
 }
 BD.ui.recordLine = recordLine;
 
+// The title art without the menu: night city, the hero, the lettering and the crossguard rule.
+// Also painted by the tap-to-start state (65_rotate.js).
+BD.ui.titleArt = function (g, ui) {
+  BG.draw(g, ui, { variant: 'night' });
+  BG.hero(g, 'hero_slash', 1086, 668, 290);
+  // title lettering
+  K.letter(g, '여명 전야', 300, 200, { size: 112, fill: K.PAPER, fill2: '#e8c47a', shadow: 7, stroke: 16 });
+  K.letter(g, 'Before Dawn', 300, 252, { size: 32, fill: K.AMBER, fill2: '#d8954a', shadow: 3, stroke: 7 });
+  // crossguard rule
+  g.fillStyle = K.GOLD; K.poly(g, [[150, 278], [290, 274], [300, 266], [310, 274], [450, 278], [310, 282], [300, 290], [290, 282]]); g.fill(); K.ink(g, 2.5);
+};
+
 BD.ui.screens.register({
   id: 'title',
   draw(g, ui) {
-    BG.draw(g, ui, { variant: 'night' });
-    BG.hero(g, 'hero_slash', 1086, 668, 290);
-    // title lettering
-    K.letter(g, '여명 전야', 300, 200, { size: 112, fill: K.PAPER, fill2: '#e8c47a', shadow: 7, stroke: 16 });
-    K.letter(g, 'Before Dawn', 300, 252, { size: 32, fill: K.AMBER, fill2: '#d8954a', shadow: 3, stroke: 7 });
-    // crossguard rule
-    g.fillStyle = K.GOLD; K.poly(g, [[150, 278], [290, 274], [300, 266], [310, 274], [450, 278], [310, 282], [300, 290], [290, 282]]); g.fill(); K.ink(g, 2.5);
+    BD.ui.titleArt(g, ui);
     const s = ui.app.save;
     const items = [
       { id: 'sortie', label: '출정', kind: 'primary', size: 32, onTap: () => NAV.sortie(ui) },
