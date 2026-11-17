@@ -73,6 +73,8 @@ section.chap { padding-top: 40px; scroll-margin-top: 64px; }
 .panel .body { padding: 14px 16px 16px; display: grid; gap: 10px; }
 .panel h3 { font-size: 26px; line-height: 1.1; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
 .id { font-family: var(--f-mono); font-size: 12px; color: #5d5a66; background: var(--paper-2); padding: 1px 6px; border-radius: 2px; }
+.cardhead { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.cardhead .icon { flex: none; width: 56px; height: 56px; border-radius: 4px; box-shadow: 3px 3px 0 var(--ink); }
 .tags { display: flex; flex-wrap: wrap; gap: 6px; }
 .tag { font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 2px; border: 2px solid var(--ink); background: var(--paper); }
 .tag.fam { color: var(--paper); background: var(--ink); }
@@ -138,6 +140,7 @@ footer { margin-top: 48px; color: var(--mist); font-size: 13px; }
         <span class="note"><b>수치</b> 기획서 기준, 튜닝 전 값</span>
         <span class="note"><b>피드백</b> 고칠 항목에 바로 댓글을 남겨 주세요</span>
         <span class="note"><b>단위</b> 1u = 바닥 한 칸</span>
+        <span class="note"><b>아이콘</b> 게임 안 코등이 홈에 그려지는 그대로</span>
       </div>
     </div>
     <img class="heroimg" id="mastHero" alt="노용사 앞 대기 자세">
@@ -153,6 +156,7 @@ footer { margin-top: 48px; color: var(--mist); font-size: 13px; }
 <script>
 const DATA = /*__DATA__*/null;
 const SPR = /*__SPRITES__*/{};
+const ICON = /*__ICONS__*/{};
 const IMG = {};
 for (const [k, v] of Object.entries(SPR)) { const im = new Image(); im.src = v; IMG[k] = im; }
 const imgReady = Promise.all(Object.values(IMG).map(im => im.decode ? im.decode().catch(() => {}) : Promise.resolve()));
@@ -431,7 +435,7 @@ function cardPanel(cd) {
   }
   return $('article', { class: 'panel', id: 'card-' + cd.id, 'data-family': cd.family },
     $('div', { class: 'vis' }, diag(CARD_DRAW[cd.id], cd.name + ' 효과 그림')),
-    $('div', { class: 'body' }, $('h3', {}, cd.name, $('span', { class: 'id' }, cd.id)), tags, body));
+    $('div', { class: 'body' }, $('div', { class: 'cardhead' }, ICON[cd.id] ? $('img', { class: 'icon', src: ICON[cd.id], alt: cd.name + ' 홈 아이콘', width: '56', height: '56' }) : null, $('h3', {}, cd.name, $('span', { class: 'id' }, cd.id))), tags, body));
 }
 
 function itemPanel(it) {
