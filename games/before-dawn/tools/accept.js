@@ -419,9 +419,25 @@ async function main() {
     report(16, avg < 4 ? 'PASS' : 'FAIL', `80 enemies + 60 projectiles: ${avg.toFixed(3)} ms per logic tick (avg of ${n}; kinds ${kinds.join(',')})`);
   }
 
-  // 17, 18
+  // 17 (GDD §13.2 as replaced by docs/CONTROLS-REVIEW.md §3.1): the human-like pilot of
+  // tools/feel/human_bot.js over seeds 1–100 wins 8–28 and dies on 1F–2F at most 22 times; the
+  // perfect pilot wins at least 60. A tuning target: TARGET (not FAIL) when it misses.
   const missAll = missing(GDD_ENEMIES, BD.enemies).concat(missing(GDD_CARDS, BD.cards));
-  if (want(17)) report(17, 'PENDING', `tuning target; needs full content (${missAll.length} ids missing). ${runs20 ? 'Now: ' + runs20.filter((r) => r.result === 'win').length + '/20 wins, median floor ' + runs20.map((r) => r.floor).sort((a, b) => a - b)[10] : ''}`);
+  if (want(17)) {
+    if (missAll.length) report(17, 'PENDING', `tuning target; needs full content (${missAll.length} ids missing)`);
+    else {
+      const { execFileSync } = require('child_process');
+      const txt = execFileSync(process.execPath, [path.join(__dirname, 'feel', 'human_bot.js'), '--seeds', '1-100'], { encoding: 'utf8', maxBuffer: 64 << 20 });
+      const pilot = (name) => {
+        const b = txt.split('-- ' + name)[1] || '';
+        const w = /wins (\d+)/.exec(b), d = /deaths by floor: (\{.*\})/.exec(b), m = /median win ([\d.]+) min/.exec(b);
+        return { wins: w ? +w[1] : -1, by: d ? JSON.parse(d[1]) : {}, winMin: m ? +m[1] : null };
+      };
+      const h = pilot('human'), p = pilot('perfect'), early = (h.by['1F'] || 0) + (h.by['2F'] || 0);
+      const ok = h.wins >= 8 && h.wins <= 28 && early <= 22 && p.wins >= 60;
+      report(17, ok ? 'PASS' : 'TARGET', `human-like pilot ${h.wins}/100 wins (8–28), ${early} deaths on 1F–2F (≤ 22), median win ${h.winMin} min; perfect pilot ${p.wins}/100 wins (≥ 60)`);
+    }
+  }
   if (want(18)) report(18, 'PENDING', `tuning target; needs rest_of_dead, flawless and full content`);
 
   if (browser) await browser.close();
