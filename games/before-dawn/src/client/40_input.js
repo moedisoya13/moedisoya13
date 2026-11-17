@@ -39,6 +39,7 @@ IN.attach = function (canvas, ui) {
     const [x, y] = pos(ev);
     const b = ui.hitButton(x, y);
     if (b) { st.pressBtn = { b, id: ev.pointerId }; if (b.onPress) b.onPress(); ev.preventDefault(); return; }
+    if (ui.pointer({ type: 'down', x, y, id: ev.pointerId })) { st.custom = ev.pointerId; ev.preventDefault(); return; }
     if (ui.app.mode !== 'play' || ui.app.overlay()) return;
     if (st.stick) return;
     const t = now();
@@ -47,6 +48,7 @@ IN.attach = function (canvas, ui) {
     ev.preventDefault();
   });
   canvas.addEventListener('pointermove', (ev) => {
+    if (st.custom === ev.pointerId) { const [x, y] = pos(ev); ui.pointer({ type: 'move', x, y, id: ev.pointerId }); return; }
     const s = st.stick;
     if (!s || s.id !== ev.pointerId) return;
     const [x, y] = pos(ev);
@@ -56,6 +58,7 @@ IN.attach = function (canvas, ui) {
     ev.preventDefault();
   });
   const up = (ev) => {
+    if (st.custom === ev.pointerId) { st.custom = null; const [x, y] = pos(ev); ui.pointer({ type: 'up', x, y, id: ev.pointerId }); return; }
     if (st.pressBtn && st.pressBtn.id === ev.pointerId) {
       const [x, y] = pos(ev);
       const b = st.pressBtn.b;

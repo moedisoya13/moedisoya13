@@ -61,6 +61,12 @@ function makeUi(app, view) {
     return null;
   };
   ui.lastButtons = [];
+  // pointer events not taken by a button go to the overlay, else the mode's screen (if it has pointer())
+  ui.pointer = function (ev) {
+    const ov = app.overlay();
+    const reg = ov ? BD.ui.overlays : BD.ui.screens, id = ov || app.mode;
+    return !!(reg.has(id) && reg.get(id).pointer && reg.get(id).pointer(ev, ui));
+  };
   ui.key = function (ev) {
     const L = ui.activeLayer();
     const reg = L === 'overlay' ? BD.ui.overlays : BD.ui.screens;

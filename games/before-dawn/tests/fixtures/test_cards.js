@@ -17,3 +17,19 @@ BD.enemies.register({
   revive() { return { delay: 2.5, hp: 30, corpseHp: 20 }; },
   update() {},
 });
+BD.cards.register({
+  id: 'test_wave', name: '시험 검기', family: 'shape', unlock: () => false, desc: 'test',
+  stats(ctx, s) { s.acquireRange = 6.5; },
+  afterSwing(ctx) {
+    const sw = ctx.swing;
+    ctx.projectile({ dir: sw.aim, speed: 13, range: 6.5, width: 1, factor: 0.6, pierce: 1, skip: new Set(sw.hits.map((h) => h.e.id)) });
+  },
+});
+BD.cards.register({
+  id: 'test_echo', name: '시험 잔영', family: 'combo', maxStack: 6, unlock: () => false, desc: 'test',
+  afterSwing(ctx) {
+    const sw = ctx.swing;
+    ctx.after(0.2, () => ctx.strike({ shapes: sw.shapes.map((s) => Object.assign({}, s, { source: 'echo' })), factorScale: 0.5 }));
+    ctx.emit('vfx', { kind: 'line', points: [[sw.x, sw.y], [sw.x + 1, sw.y]] });
+  },
+});

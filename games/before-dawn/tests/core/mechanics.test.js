@@ -159,4 +159,24 @@ module.exports = {
     const ev = w.bus.recent(400).filter((x) => x.type === 'combo_change');
     t.eq(ev.map((x) => x.reason), ['gain', 'timeout']);
   },
+  'hero projectile (wave): ranged acquire with LOS, hits at 0.6 factor, skips blade hits'(t) {
+    const { BD, H, w } = world(t, { hand: ['test_wave'] });
+    w.hero.x = 2.5; w.hero.y = 2.5;
+    const e = BD.W.makeEnemy(w, 'slime', 7.5, 2.5, {}); e.hp = 500; e.stunT = 99;
+    H.step(40);
+    const hits = w.bus.recent(400).filter((x) => x.type === 'hit' && x.source === 'wave');
+    t.assert(hits.length >= 1, 'wave hit');
+    t.eq(hits[0].dmg, Math.round(10 * 0.6));
+  },
+  'echo strike via ctx.after + ctx.strike: source echo at half damage, no extra swing events'(t) {
+    const { BD, H, w } = world(t, { hand: ['test_echo'] });
+    const e = BD.W.makeEnemy(w, 'slime', w.hero.x + 1.2, w.hero.y, {}); e.hp = 500; e.stunT = 99;
+    H.step(1);
+    const swings = w.bus.counts().swing;
+    H.step(13);
+    const echo = w.bus.recent(400).filter((x) => x.type === 'hit' && x.source === 'echo');
+    t.eq(echo.length, 1); t.eq(echo[0].dmg, 5);
+    t.eq(w.bus.counts().swing, swings);
+    t.eq(w.bus.counts().vfx, swings);
+  },
 };
