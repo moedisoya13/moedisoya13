@@ -137,7 +137,7 @@ rotate|pause|help|settings|altar|null`. Browser and Node drive the same app.
 |---|---|
 | `w.t`, `w.floorN`, `w.floor` | play time (s), floor 1..6, generated floor (`domType`, `nextDomType`, `layout`, `spawns`, `pattern`, `summon`, `summonType`) |
 | `w.grid` | `w, h, get(cx,cy)` (0 floor, 1 solid, 2 void, −1 outside), `walkable`, `blocksShot` |
-| `w.hero` | `x, y, r, hp, maxHp, face, aim, targetId, dashT, dashCd, invuln, dashInvuln, radiance, dead, pose, swingT, stats` |
+| `w.hero` | `x, y, r, hp, maxHp, face, aim, targetId, dashT, dashCd, dashBuf, invuln, dashInvuln, radiance, dead, pose, swingT, moveX, moveY, stats` |
 | `w.hero.stats` | this tick's `{reach, interval, halfArc, acquireRange, acquire, dmgBase, charged, mods}` |
 | `w.enemies` | enemy objects (§4.2) |
 | `w.cards[0..2]` | `{id, def, slot, state:{stack, timer, progress, goal, awakened, …own}}` or null |
@@ -578,7 +578,11 @@ and banners arrive as `toast` / `banner` events (guardian and trial banners incl
   `?mute=1` mutes; same id within 50 ms is skipped.
 * The dash button is declared by the HUD: `ui.button({…, style: 'none', onPress: () => {
   BD.client.input.st.dashReq = true; }})`; card slots and the Ⅱ button call `app.pause()`.
-  Touch on any declared button never becomes the joystick.
+  Touch on any declared button never becomes the joystick. The stick's sizes are CSS px
+  (`BD.client.input.SIZES`: dead 8, full 48, follow 64, double tap within 60 px and 250 ms);
+  `BD.client.input.clearDash()` drops a pending dash and the double-tap timer (the shell calls it
+  while an overlay is open). `BD.ui.dashSize(ui)` / `BD.ui.dashCenter(ui)` give the dash button's
+  phone-aware size and centre (docs/CONTROLS-REVIEW.md §3.7).
 
 ---
 
@@ -595,8 +599,17 @@ and banners arrive as `toast` / `banner` events (guardian and trial banners incl
   `BD.sub(seed, 'gen', 'altar<floor>/<round>')`.
 * **Win slow motion (1.5 s)**: the sim freezes for 1.5 s (`w.ending`); the slow-motion look is
   the renderer's/UI's.
-* **Enemy contact pushing**: the hero collides with enemy circles (cannot pass, slides); enemies
-  never push the hero; hurt knock 0.5u pushes the hero.
+* **Enemy contact pushing** (GDD §2.2 as changed by `docs/CONTROLS-REVIEW.md` §3.5, LEAD §7): a
+  walking hero shoves every overlapping regular enemy sideways off his line (`C.HERO.shoveShare`
+  of the overlap, at most `shoveSpeed × speed` per second, through `nav.move`; an enemy that a
+  wall would slide toward him stays put), then is pushed out of what remains (circle collision,
+  slides). Guardians, the boss and lunging enemies are solid. Walking into an obstacle gets corner
+  assist (`C.CORNER`, probes along the blocking cell face). Enemies never push the hero; hurt
+  knock 0.5u pushes the hero. A dash passes through enemies.
+* **Dash input**: `w.input.dash` is a press, kept `C.DASH.buffer` (0.2 s) in `hero.dashBuf` and
+  fired on the first tick a dash is possible; dropped on floor entry, death and altar opening.
+  With no movement input the dash goes along `hero.moveX/moveY` (the last walk). The hero faces
+  his target every tick he has one (`hero.faceHold` keeps the face 0.25 s after it is gone).
 * **Dodge with projectiles**: a dash through an arrow emits one `dodge` and the arrow flies on.
 * **Telegraphs of dead owners are cancelled** unless `persist: true`.
 * **Particles** live in the browser pool; the state dump's `particles` mirrors its size and is

@@ -369,3 +369,90 @@
 - 사람의 승리 판 길이 9~13분은 가동률 가정(40~55%)에서 나온 추정이다. 10분보다 짧게 나오면 마왕 HP를 3300으로 올린다(완벽한 봇 승리 길이로 +20초).
 - 헤치기(§3.5)는 일섬 카드의 "품을 내줬다" 판정을 더 자주 건드릴 수 있다. 기준 11과 18의 일섬 관련 수치를 다시 본다.
 - 보는 방향(§3.6)을 바꾸면 발도·반격 카드의 그림 방향이 달라 보일 수 있다. 판정은 `aim`을 쓰므로 바뀌지 않는다(코드 확인).
+
+---
+
+## 구현 메모
+
+> 구현 담당 기록. 커밋 `87c9339`(튜닝) · `2cce5cd`(코어) · `a0661e3`(클라이언트) 이후의 문서·도구 커밋. §3을 그대로 만들었고, 스크립트로 확인하다 틀린 숫자와 규칙만 아래처럼 바꿨다. 수치는 전부 `tools/feel/` 스크립트로 다시 잰 값이다.
+
+### 명세와 다르게 만든 곳 (이유)
+
+| 항목 | 명세 | 구현 | 이유 |
+|---|---|---|---|
+| §3.5(b) 모서리 보정 탐색 거리 | 0.25u | **0.45u** (`BD.C.CORNER.reach`) | 한 틱 이동(0.07u)을 시험하면, 탐색 자리가 모서리 선을 약 0.2u 넘어가야 90%가 나온다(기둥 면에 붙은 용사, 모서리가 중심선에서 0.1u일 때 탐색 0.15 → 18%, 0.2 → 39%, 0.25 → 63%, 0.3 → 93%). 0.25로는 중심선에서 0.05u 안의 모서리만 살아나 M6(0.1u)이 FAIL이다. 0.45 = 0.25 + 0.2로 명세의 결과 문장("모서리까지 0.25u 안이면 돌아 나가고")이 그대로 성립한다: 어긋남 0.25·0.4는 돌아가고 0·0.1은 멈춘다 |
+| §3.5(b) 탐색 방향 | 이동 방향에 수직 | **막은 칸의 면을 따라** (격자가 밀어낸 방향을 큰 축으로 맞춘 것의 수직) | 이동에 수직으로 탐색하면 벽에 73~90°로 밀 때(벽 방향 이동이 30% 미만) 탐색 자리가 벽에서 떨어져 나가고, 그 자리의 한 틱 이동은 막힘 없이 나와 보정이 걸렸다. 75°의 벽 미끄러짐이 1.23 → 2.19u/s로 바뀌었다. 면을 따라 탐색하면 평평한 벽에서는 어느 자리도 90%가 안 나와 벽 미끄러짐이 그대로다(60·75·80·89°에서 보정 없을 때와 같음, `tests/core/mechanics.test.js`). 큰 축으로 맞추는 것은 `nav.resolve`가 벽 칸 두 개의 이음매에서 내는 비스듬한 밀어냄도 무시하게 한다 |
+| §3.5(a) 헤치기 | 옆으로 민다 | 옆으로 민다 + **벽에 눌린 졸개는 밀지 않는다** | `nav.move`의 벽 해소가 밀린 졸개를 벽을 따라 용사 쪽으로 미끄러뜨리는 경우가 있다(1F 벽가의 고블린, 시드 40). 졸개가 용사 쪽으로 오게 되는 밀기는 하지 않는다. `tests/enemies/rules.test.js`의 §6.1 거리 유지 감시가 찾았다. 그 테스트는 고치지 않았다 |
+| §3.3(d) 흔들기 3px | 3px | **3 CSS px** (논리 `3 / view.scale`) | 휴대폰(×0.52)에서 논리 3px은 1.5 CSS px라 보이지 않는다 |
+| §3.6(b) 칼 길이 고리 | 주황 0.18 점선, 호 0.45 / 0.8 | 같은 주황 + **아래에 옅은 먹 테두리**(점선 0.22, 호 0.35 × 밝기) | 주황 0.18은 마물 층(노랑 바닥)에서 보이지 않았다(주황 위 노랑). 다른 바닥 표시처럼 먹 테두리를 깔아 다섯 바닥 모두에서 읽힌다. 주황의 불투명도는 명세 그대로다. `docs/screens/feel-after/reach_ring_*.png` |
+| §3.7 일시정지 터치 사각형 | `max(현재, 44 / scale)` | 같은 크기, 오른쪽 끝이 그림 밖으로 나가지 않게 x를 당김 | 667×375에서 84.5 논리 px라 x 1202에서 시작하면 오른쪽이 6px 넘친다 |
+| 피격 무적의 깜빡임 | 확인만 | **베는 0.15초 동안에도 깜빡이게** 렌더를 고침 | 렌더가 `hero.invuln`을 보고 있었지만 베기 궤적 동안(0.6초마다 0.15초)은 깜빡임을 건너뛰어 "무적이 1.0초 내내 보인다"가 아니었다 |
+
+### 명세대로 만든 것 (요약)
+
+- §3.1: 수치 전부(`T1~T3`). GDD §2.2·§6.2·§6.3의 수치 줄을 이 값으로 고쳐, `numbers.test.js`는 이 값을 GDD 값으로 읽는다(남은 튜닝 표시는 고블린·슬라임 피해뿐).
+- §3.2: `40_input.js`가 끈 거리를 `논리 거리 × view.scale`로 재고 데드존 8 / 최고 48 / 추종 64 CSS px. 강제 가로(`view.rot`)에서도 거리는 그대로라 같은 값이다(`tests/ui/rotate.test.js` 새 항목). 고리는 반지름 `48 / scale`, 손잡이 `20 / scale`.
+- §3.3: 코어 `hero.dashBuf`(`BD.C.DASH.buffer` 0.2), 사망·층 진입·제단 열림 때 0. 입력 없는 돌진은 `moveX/moveY`, 한 번도 안 걸었으면 보는 방향. 클라이언트의 0.02 끼워 넣기는 지웠다. 두 번 두드리기는 250ms 안 + 뗀 자리(클라이언트 px)에서 60 CSS px 안. 오버레이가 열려 있는 동안 셸이 매 프레임 `input.clearDash()`, 창이 포커스를 잃을 때도. 메뉴 중 Space는 돌진 요청이 아니다(일시정지 중 Space 버그).
+- §3.4: `hatch` 양식만 바꿈(바탕 40% / 흰색 30%, 전체 빗금 0.6, 안쪽부터 불투명 빗금 + 55% / 45%, 처음 0.12초 6px 테두리). `blink`와 콘텐츠 양식은 그대로.
+- §3.6(a): 표적이 있으면 `autoAttack`이 표적을 고른 직후 매 틱 그쪽을 본다. 없어지면 `hero.faceHold` 0.25초 유지 뒤 이동 방향.
+- §3.7: 돌진 그림 `max(46, 34 / scale)`, 터치 `max(104, 72 / scale)`, 중심은 가장자리에서 반지름 + 16 이상. 667×375: 그림 68 / 터치 72 CSS px, 일시정지 44 CSS px. 1280×720은 예전과 같다.
+
+### 측정 결과
+
+- `node tools/feel/check.js --bots`: 29줄 전부 PASS (아래 "확인" 절의 출력).
+- 헤치기의 실제 감속은 명세의 "절반쯤"보다 가볍다: 정지한 구울 8마리 고리에서 2.5u 빠져나가는 데 0.72~0.77초(자유 0.60초), 5마리 0.62~0.72초, 서 있는 고블린 정면 통과(중심 1u 너머까지) 0.83초(자유 0.71초). 살아 있는 고블린 8: 3초에 12.1u(자유 12.6u), 막힌 틱 180 중 4(전 18). 실전에서 막힌 비율: 완벽한 봇 3.3~3.6%, 사람 같은 봇 4.5~4.7%(전 5.1 / 6.0%).
+- 두 봇 (`human_bot.js`):
+
+| | 승 | 1~2F 사망 | 사망 층 중앙값 | 승리 길이 중앙값 | 분당 피격 |
+|---|---|---|---|---|---|
+| 사람 같은 봇, 시드 1~100 | **26** | **8** | 6F | 7.2분 | 6.0 |
+| 사람 같은 봇, 시드 101~200 | 39 | 13 | 4F | 7.2분 | 5.7 |
+| 완벽한 봇, 시드 1~100 | **93** | 0 | 6F | 7.5분 | 3.8 |
+| 완벽한 봇, 시드 101~200 | 94 | 1 | 6F | 8.0분 | 3.8 |
+
+- **남는 위험**: H1(시드 1~100, 8~28승)은 26승으로 통과하지만 시드 1~200을 합치면 32.5%로 띠의 위쪽을 넘는다. §3.1의 실험(18%)에는 조작 변경이 없었고, 조작 변경이 사람 같은 봇에게 약 +10%p다(시드 1~200, 사람 같은 봇만: 헤치기·모서리 보정 둘 다 끔 22%, 헤치기만 끔 30%, 전부 켬 32.5%). §3.1의 지렛대로 재 본 값(전부 켬, 시드 1~200): 불 원 예고 1.0초 28%, 수호자 HP ×1.15 + 마왕 ×1.1 25%. T2·T3가 §3.1의 값을 고정하고 H1이 통과하므로 바꾸지 않았다. 사람 플레이 기록이 생기면 §6대로 다시 맞춘다.
+- `node tools/test.js` 178 통과(새 테스트 10개 포함), `node tools/accept.js` 17 PASS · 0 FAIL · 1 PENDING(#18, 전과 같음). #17은 이제 사람 같은 봇으로 잰다(위 표의 시드 1~100 줄). §6의 일섬 위험: #11(콤보 리셋 사유)은 통과, #18은 아직 재지 않는다.
+- 예고 대비(`browser_feel.js --only warn`, 0.1초 시점 RGB 거리): 마물 79 / 중갑 90 / 언데드 98 / 마법 85 / 옥상 82 (전 21 / 25 / 22 / 28 / 20).
+- 조이스틱(CSS px → 속도): 두 해상도 모두 7 → 0, 9 → 0.02~0.03, 30 → 0.55, 40 → 0.8, 48 → 1.
+
+### 화면 (`docs/screens/feel-after/`, `node tools/feel/browser_feel.js --only warn,shots --out docs/screens/feel-after` + `node tools/feel/after_shots.js`)
+
+`warn_*_0.1s.png`·`warn_*_0.45s.png`(바닥 다섯), `play_phone_667x375_stick.png`·`play_tablet_1024x768_stick.png`(§4.2 그대로), `play_laptop_1280x720.png`, `play_phone_667x375_hold.png`(엄지를 댄 조이스틱 + 대기 중 돌진 버튼), `play_turned_375x667_hold.png`(375×667 세로 창의 강제 가로), `reach_ring_wait.png`·`reach_ring_swing.png`, `shove_ring_0~3.png`(멈춘 고블린 8 고리를 헤치고 나감, 0.15초 간격)·`shove_ring_live.png`. 전의 화면은 `docs/screens/feel/`에 그대로 둔다.
+
+### 확인
+
+```
+$ node tools/feel/check.js --bots
+PASS  M1  movement stays instant: full speed and full stop within 1 tick  [1/1 ticks]
+PASS  M2  a frozen ring of 8 ghouls no longer traps the hero: best escape in 2 s ≥ 2.0u (free walk: 8.4u)  [8.17u]
+PASS  M3  ring of 5 and 6: escape ≥ 2.0u in 2 s  [8.31u / 8.28u]
+PASS  M4  walking dead-centre into one standing enemy gets past it within 1.5 s  [x=9.77]
+PASS  M5  guardians are not shoved by walking into them  [0u]
+PASS  M6  corner assist: 0.1u short of a pillar corner slides round (offset 0.4), a flat hit still stops (offset 0, 0.1)  [0.4:true 0:false 0.1:false]
+PASS  M7  wall slide unchanged: 45° into a wall keeps 2.9–3.1 u/s along it  [3.04]
+PASS  D1  dash pressed 0.10 s and 0.17 s before the cooldown ends fires when it ends  [dashes/dashes]
+PASS  D2  dash pressed 0.30 s before the cooldown ends is not remembered  [DROPPED]
+PASS  D3  idle dash goes in the last movement direction (core rule), not into the target  [[0,3.2]]
+PASS  D4  dash distance 3.2u, cooldown 2.5 s unchanged  [3.2u 2.5s]
+PASS  A1  kiting a ghoul for 6 s: the body flips left/right at most 2 times  [0 flips]
+PASS  A2  while a target exists the hero faces it ≥ 95 % of the time  [1]
+PASS  T1  enemy HP = {"goblin":40,"slime":60,"skel_archer":40,"ghoul":120,"mage":54,"dark_knight":240}  [{"goblin":40,"slime":60,"skel_archer":40,"ghoul":120,"mage":54,"dark_knight":240}]
+PASS  T2  boss HP 3000, post-hit invulnerability 1.0 s, fire circle warning 1.1 s  [3000 / 1 / 1.1]
+PASS  T3  guardian HP 1F–5F = 385 / 530 / 675 / 815 / 960  [[385,530,675,815,960]]
+PASS  H1  human-like pilot, seeds 1–100: 8–28 wins  [26 wins]
+PASS  H2  human-like pilot: at most 22 of 100 runs end on 1F–2F  [8 runs]
+PASS  H3  perfect pilot, seeds 1–100: at least 60 wins (the game is beatable by skill)  [93 wins]
+PASS  L1  input to motion: median ≤ 2 frames for key, touch and dash  [1/1/1]
+PASS  S1  stick at 667x375 is sized in CSS px: 7 px → 0, 9 px → moving, 30 px → 0.45–0.65, 48 px → full  [[0,0.02,0.55,0.8,1]]
+PASS  S1  stick at 1024x768 is sized in CSS px: 7 px → 0, 9 px → moving, 30 px → 0.45–0.65, 48 px → full  [[0,0.03,0.55,0.8,1]]
+PASS  S2  double tap in place: 120 ms and 230 ms dash, 280 ms does not  [{"60 ms":"dash","120 ms":"dash","180 ms":"dash","230 ms":"dash","280 ms":"no dash","350 ms":"no dash"}]
+PASS  S3  re-gripping 150 / 300 CSS px away within 200 ms does not dash  [["no dash","no dash","no dash"]]
+PASS  S4  dash button and second finger: dashes while the stick is held; lifting a second finger keeps the stick  [dashes]
+PASS  S5  dash request 0.1 s before ready (button/Space path) fires when ready  [{"0.2 s before ready":"DROPPED","0.1 s before ready":"dashes when ready","0.03 s before ready":"dashes when ready"}]
+PASS  U1  phone 667×375: dash hit area ≥ 72 CSS px, pause ≥ 44 CSS px  [dash 72×72, pause 44×44]
+PASS  U2  no floor cell is drawn under a HUD rectangle (3 viewports)  [0/0/0]
+PASS  W1  a warning 0.1 s old differs from the floor by mean RGB distance ≥ 60 on all five floors  [beast 79, heavy 90, undead 98, magic 85, rooftop 82]
+all checks passed
+```
+
+못 본 것: 실제 휴대폰·태블릿에서의 엄지 감각(조이스틱 7.5mm, 다시 잡기, 버튼 크기), iOS 사파리, 실제 사람의 승률. §4.2의 "직접 해 볼 것" ①~④는 스크립트와 화면으로만 확인했다.
