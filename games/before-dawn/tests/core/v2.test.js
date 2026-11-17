@@ -260,6 +260,7 @@ module.exports = {
     const { BD, H, w } = run(t, { calm: true, extraFiles: [t.fixture('test_site.js')] });
     w.floor.layout.sites = [{ kind: 'test_spring', x: w.hero.x, y: w.hero.y }, { kind: 'test_seal', x: w.hero.x - 6, y: w.hero.y }];
     BD.siteRt.start(w);
+    w.sitesLive = true; // a staged scenario leaves sites alone unless it tests them
     w.hero.hp = 30;
     H.step(75); // 1.2 s
     t.eq(w.hero.hp, 70); t.eq(w.sites[0].phase, 'used');

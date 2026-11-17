@@ -7,10 +7,11 @@
 //
 // Supply (§6): an elite always drops a flask (src/core/22_combat.js → BD.flow.dropFlask); a threat
 // that dies drops a flask 4 %, a halo 2 %, a holy stone 1.5 % (w.rng.spawn, in that order); a chest
-// gives a halo, a cleared rift a holy stone. At most 4 flasks, 2 halos, 2 holy stones lie on a floor
-// at once: a drop over the cap does not happen. The rooftop has its two flasks from the generator.
+// gives a halo, a cleared rift a holy stone. The chance drops stop while 4 flasks, 2 halos or 2 holy
+// stones lie on the floor ("층에 남는 수가 찼으면 떨구지 않는다" sits with the 확률 판정); the sure
+// ones (반드시 하나: elite, chest, rift) always come. The rooftop has its two flasks from the generator.
 //
-//   BD.pickupRt.drop(w, kind, x, y)     place one (respects the cap; returns it or null)
+//   BD.pickupRt.drop(w, kind, x, y, {always}) place one (a chance drop respects the cap; → it or null)
 //   BD.pickupRt.count(w, kind)          how many of a kind lie on the floor
 //   BD.pickupRt.start(w)                v2 floor entry: the threat-drop listener
 //   BD.pickupRt.update(w)               per tick: touches
@@ -33,9 +34,9 @@ BD.pickups.register({
 
 P.count = (w, kind) => { let n = 0; for (const p of w.pickups) if (p.kind === kind && !p.taken) n++; return n; };
 
-P.drop = function (w, kind, x, y) {
+P.drop = function (w, kind, x, y, o) {
   BD.pickups.get(kind);
-  if (P.CAP[kind] !== undefined && P.count(w, kind) >= P.CAP[kind]) return null;
+  if (!(o && o.always) && P.CAP[kind] !== undefined && P.count(w, kind) >= P.CAP[kind]) return null;
   const [px, py] = BD.nav.resolve(w.grid, x, y, 0.3);
   const p = { id: W.id(w), kind, x: px, y: py };
   w.pickups.push(p);

@@ -14,7 +14,7 @@ BD.sites.register({
   },
   use(w, site) {
     if (!w.hero.dead && !w.ending) BD.growth.open(w, 'chest');
-    BD.pickupRt.drop(w, 'halo', site.x + 1.2, site.y + 0.6);
+    BD.pickupRt.drop(w, 'halo', site.x + 1.2, site.y + 0.6, { always: true });
     BD.W.toast(w, '상자 — 키울 성인을 고른다');
     return true;
   },

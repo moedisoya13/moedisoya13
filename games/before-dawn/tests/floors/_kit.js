@@ -19,7 +19,7 @@ K.start = function (t, o) {
       if (e.role === 'object' || (o.keepGuards !== false && chestGuard) || e.flags.chief || huntPack) continue;
       BD.W.removeEnemy(w, e, 'recycle');
     }
-    w.enemies = w.enemies.filter((e) => !e.dead); w.shards = []; w.stats.recycled = 0; w.scenario = true; w.freezeT = 0;
+    w.enemies = w.enemies.filter((e) => !e.dead); w.shards = []; w.stats.recycled = 0; w.scenario = true; w.sitesLive = true; w.freezeT = 0;
   }
   H.input({ mx: 0, my: 0 });
   return { BD, H, w };

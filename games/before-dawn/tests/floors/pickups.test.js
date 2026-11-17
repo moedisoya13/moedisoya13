@@ -62,7 +62,7 @@ module.exports = {
     t.assert(!w.pickups.includes(f) && w.hero.hp === 50 + w.mods.flask);
   },
 
-  'threat drops: flask 4 %, halo 2 %, holy stone 1.5 % (w.rng.spawn); fodder none; caps 4 / 2 / 2 on a floor, elites included': (t) => {
+  'threat drops: flask 4 %, halo 2 %, holy stone 1.5 % (w.rng.spawn); fodder none; these stop at 4 / 2 / 2 on a floor; an elite’s flask always comes': (t) => {
     const { BD, H, w } = K.start(t, { task: 'purge', keepGuards: false });
     K.place(BD, w, 20, 30);
     const n = { flask: 0, halo: 0, holy_stone: 0 }, N = 4000;
@@ -80,7 +80,8 @@ module.exports = {
     const cnt = (k) => w.pickups.filter((p) => p.kind === k).length;
     t.eq([cnt('flask'), cnt('halo'), cnt('holy_stone')], [4, 2, 2], 'capped');
     BD.combat.kill(w, BD.W.makeEnemy(w, 'slime', 30, 30, { elite: true }));
-    t.eq(cnt('flask'), 4, 'an elite’s flask too');
-    t.eq(BD.pickupRt.drop(w, 'halo', 30, 30), null);
+    t.eq(cnt('flask'), 5, 'an elite’s flask is sure (반드시 하나)');
+    t.eq(BD.pickupRt.drop(w, 'halo', 30, 30), null, 'a chance drop over the cap');
+    t.assert(BD.pickupRt.drop(w, 'halo', 30, 30, { always: true }), 'a chest’s halo is sure');
   },
 };

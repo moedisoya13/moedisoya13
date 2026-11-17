@@ -27,7 +27,7 @@ BD.sites.register({
       h.radiance = Math.min(BD.C.RADIANCE_MAX, h.radiance + 1);
       BD.growth.drop(w, e.x + 0.5, e.y, 25);
       BD.growth.drop(w, e.x - 0.5, e.y, 25);
-      BD.pickupRt.drop(w, 'holy_stone', e.x, e.y + 0.8);
+      BD.pickupRt.drop(w, 'holy_stone', e.x, e.y + 0.8, { always: true });
       for (const o of w.enemies) if (!o.dead && o.flags.rift === site.id) delete o.flags.keep;
       BD.W.banner(w, '시련을 넘었다 — 광휘 +1', 'trial_clear');
       BD.siteRt.clear(w, site);

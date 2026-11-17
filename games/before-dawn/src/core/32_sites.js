@@ -80,8 +80,11 @@ S.release = function (w, site) {
   S.look(w, site);
 };
 
+// A staged scenario (BD.W.scenario: tests that stage a fight) leaves the floor's places alone —
+// a test standing its hero on a zone centre must not open a chest or call a garrison — unless it
+// sets w.sitesLive (the site tests themselves).
 S.update = function (w, dt) {
-  if (!w.sites.length) return;
+  if (!w.sites.length || (W.scenario(w) && !w.sitesLive)) return;
   const h = w.hero;
   for (const s of w.sites) {
     if (!s.known && M.dist(h.x, h.y, s.x, s.y) <= S.KNOW) s.known = true;
