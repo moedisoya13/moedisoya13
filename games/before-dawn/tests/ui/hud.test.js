@@ -1,5 +1,6 @@
 // HUD and card feedback (GDD §9.2–9.3), sounds (§10), feel (hit-stop, ink, sound words),
-// caps (§0). Cards of other branches are stand-ins from tests/ui/fixtures/standins.js.
+// caps (§0). Runs against the real 18 cards; enemies not yet merged are stand-ins from
+// tests/ui/fixtures/standins.js.
 'use strict';
 const H = require('./_harness');
 
@@ -45,7 +46,10 @@ module.exports = {
       t.assert(has(await toasts(T), '망자의 안식: 앞으로 2'), 'two to go');
       await T.eval(() => { const w = window.__BD.world(); window.BD.cardRt.addProgress(w, w.cards[0], 2); });
       await T.wait();
-      t.assert(has(await T.texts(), '12/12'));
+      // GDD §5.4: once awakened the slot turns gold for good; the card's own hud() shows 각성
+      t.assert(has(await T.texts(), '각성'), 'awakened slot text');
+      t.assert(!(await T.texts()).includes('12/12'), 'the count is replaced');
+      t.eq(await T.eval(() => { const w = window.__BD.world(); return window.BD.ui.cards.hud(w, w.cards[0]).awakened; }), true, 'gold frame state');
       t.assert(has(await toasts(T), '각성: 망자의 안식'), 'awaken toast');
       t.assert((await T.texts()).includes('각성: 망자의 안식'), 'awaken banner');
       t.assert(await T.eval(() => window.BD.ui.S.slots[0].burstAt > 0), 'gold burst on the slot');
