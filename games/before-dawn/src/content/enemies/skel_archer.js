@@ -80,10 +80,10 @@ function shoot(w, e) {
 
 BD.enemies.register({
   id: 'skel_archer', name: '해골 궁수', type: 'undead', sprite: 'skeleton_archer',
-  hp: 25, speed: 2.6, dmg: 9, radius: 0.35, cost: 1.5,
+  hp: 60, speed: 2.6, dmg: 9, radius: 0.35, cost: 1.5, // tuned: GDD HP 25
   attacks: { shot: { name: '사격' } },
   T,
-  guardian: { name: '해골 명궁' }, // the three-arrow fan is read from e.guardian in shoot()
+  guardian: { name: '해골 명궁', create(e, w) { BD.enemyTune.guardian(e, w); } }, // the three-arrow fan is read from e.guardian in shoot()
   create(e, w) {
     e.mem.cd = A.rng(w).range(0.8, 1.8);
     e.mem.repT = 0; e.mem.retreat = false; e.mem.stuckT = 0;

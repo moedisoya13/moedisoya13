@@ -48,8 +48,21 @@ const BUNDLES = {
 
 // Numbers changed by bot tuning: { 'kind.path': [gddValue, tunedValue] }. Kept in sync with
 // docs/requests/enemies.md → "tuning".
-const TUNED = {};
-const TUNED_BUNDLES = {}; // { 'type.dom.n': [gddRow, tunedRow] }
+const TUNED = {
+  'slime.hp': [30, 90], 'slime.dmg': [10, 12],
+  'goblin.hp': [20, 60], 'goblin.dmg': [6, 7],
+  'skel_archer.hp': [25, 60],
+  'ghoul.hp': [60, 180], 'ghoul.T.reviveHp': [30, 60],
+  'mage.hp': [40, 80],
+  'dark_knight.hp': [120, 360],
+  'demon_king.hp': [1500, 3600],
+};
+const TUNED_BUNDLES = { // { 'type.dom.n': [gddRow, tunedRow] }
+  'magic.dom.2': [{ mage: 8 }, { mage: 6 }], 'magic.dom.3': [{ mage: 10 }, { mage: 7 }],
+  'magic.dom.4': [{ mage: 12 }, { mage: 8 }], 'magic.dom.5': [{ mage: 13 }, { mage: 9 }],
+};
+// Guardian HP per floor (GDD §6.3; the engine's BD.C.GUARDIAN.hp, rescaled by BD.enemyTune).
+const GUARDIAN_HP = { gdd: [0, 160, 220, 280, 340, 400], tuned: [0, 480, 660, 840, 1020, 1200] };
 
 function get(o, path) { return path.split('.').reduce((a, k) => (a === undefined ? a : a[k]), o); }
 
@@ -68,6 +81,12 @@ module.exports = {
     }
     for (const key of Object.keys(TUNED)) if (!GDD[key.split('.')[0]].some(([p]) => key === key.split('.')[0] + '.' + p)) bad.push(`TUNED ${key} is not a GDD row`);
     t.assert(!bad.length, bad.join('\n'));
+  },
+  'guardian HP per floor: the engine keeps the GDD row, content applies the tuned row'(t) {
+    const BD = t.load();
+    t.eq(BD.C.GUARDIAN.hp, GUARDIAN_HP.gdd, 'engine row is still the GDD value');
+    t.eq(BD.enemyTune.guardianHp, GUARDIAN_HP.tuned);
+    for (const k of ['slime', 'goblin', 'skel_archer', 'ghoul', 'mage', 'dark_knight']) t.eq(typeof BD.enemies.get(k).guardian.create, 'function', k + ' rescales its guardian HP');
   },
   'attack names feed the death cause (고블린의 찌르기에 …)'(t) {
     const BD = t.load();

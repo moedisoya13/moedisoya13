@@ -24,13 +24,13 @@ module.exports = {
     BD.combat.kill(w, g);
     t.eq(w.pickups.length, p0 + 1, 'flask');
   },
-  'guardian: size ×1.6, damage ×1.3, telegraph ×1.4, HP 160/220/280/340/400 by floor, outside the attack caps'(t) {
+  'guardian: size ×1.6, damage ×1.3, telegraph ×1.4, HP by floor (GDD 160/220/280/340/400, tuned ×3), outside the attack caps'(t) {
     for (let n = 1; n <= 5; n++) {
       const { BD, w } = arena(t, { floor: n });
       for (const kind of ['slime', 'goblin', 'skel_archer', 'ghoul', 'mage', 'dark_knight']) {
         const d = BD.enemies.get(kind);
         const e = BD.W.makeEnemy(w, kind, 2, 2, { guardian: true });
-        t.eq(e.maxHp, [0, 160, 220, 280, 340, 400][n]); t.near(e.size, 1.6, 1e-9); t.eq(e.dmg, Math.round(d.dmg * 1.3)); t.near(e.tgScale, 1.4, 1e-9);
+        t.eq(e.maxHp, [0, 480, 660, 840, 1020, 1200][n]); t.eq(e.hp, e.maxHp); t.near(e.size, 1.6, 1e-9); t.eq(e.dmg, Math.round(d.dmg * 1.3)); t.near(e.tgScale, 1.4, 1e-9);
         t.assert(e.knockScale <= 0.33 + 1e-9, 'reduced knockback');
         t.eq(BD.ai.slot(w, e, 'melee'), true); t.eq(e.slot, null, 'takes no slot');
       }

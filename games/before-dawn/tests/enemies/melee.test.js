@@ -7,7 +7,7 @@ const TICK = 1 / 60;
 const tgOf = (w, e) => w.telegraphs.filter((t) => t.ownerId === e.id);
 
 module.exports = {
-  'slime: pounce circle r 0.9 at the hero spot, 0.7 s, lands there for 10, flat 0.8 s, next pounce ≥ 2.2 s later'(t) {
+  'slime: pounce circle r 0.9 at the hero spot, 0.7 s, lands there for its damage (GDD 10, tuned 12), flat 0.8 s, next pounce ≥ 2.2 s later'(t) {
     const { BD, H, w } = arena(t);
     pacify(w);
     const T = BD.enemies.get('slime').T;
@@ -15,13 +15,13 @@ module.exports = {
     H.step(1);
     const [tg] = tgOf(w, e);
     t.assert(tg, 'pounce telegraph');
-    t.eq(tg.shape, 'circle'); t.near(tg.r, T.tgR); t.near(tg.total, T.tgTime); t.eq(tg.dmg, 10); t.eq(tg.attack, 'pounce');
+    t.eq(tg.shape, 'circle'); t.near(tg.r, T.tgR); t.near(tg.total, T.tgTime); t.eq(tg.dmg, BD.enemies.get('slime').dmg); t.eq(tg.attack, 'pounce');
     t.near(tg.x, w.hero.x, 1e-9); t.near(tg.y, w.hero.y, 1e-9);
     const n0 = w.bus.count();
     const k = until(H, () => evs(w, 'hurt', n0).length > 0, 120);
     t.near(k * TICK, T.tgTime - TICK, 2 * TICK, 'hit when the fill completes');
     const hurt = evs(w, 'hurt', n0)[0];
-    t.eq(hurt.dmg, 10); t.eq(hurt.attack, 'pounce'); t.eq(hurt.source, 'slime');
+    t.eq(hurt.dmg, BD.enemies.get('slime').dmg); t.eq(hurt.attack, 'pounce'); t.eq(hurt.source, 'slime');
     t.assert(BD.math.dist(e.x, e.y, tg.x, tg.y) < 0.6, 'landed on the warned spot');
     H.step(2);
     t.eq(e.state, 'flat');
@@ -46,7 +46,7 @@ module.exports = {
     const x1 = e.x; H.step(Math.round(0.2 / TICK));
     t.near(e.x, x1, 1e-9, 'still between hops');
   },
-  'goblin: stab fan 60° r 1.3, 0.45 s, 6 dmg, backs off 1.2u in 0.3 s, waits 1.6 s'(t) {
+  'goblin: stab fan 60° r 1.3, 0.45 s, its damage (GDD 6, tuned 7), backs off 1.2u in 0.3 s, waits 1.6 s'(t) {
     const { BD, H, w } = arena(t);
     pacify(w);
     const T = BD.enemies.get('goblin').T;
@@ -54,10 +54,10 @@ module.exports = {
     e.mem.cd = 0;
     H.step(1);
     const [tg] = tgOf(w, e);
-    t.eq(tg.shape, 'fan'); t.near(tg.half, 30); t.near(tg.r, 1.3); t.near(tg.total, 0.45); t.eq(tg.dmg, 6); t.eq(tg.attack, 'stab');
+    t.eq(tg.shape, 'fan'); t.near(tg.half, 30); t.near(tg.r, 1.3); t.near(tg.total, 0.45); t.eq(tg.dmg, BD.enemies.get('goblin').dmg); t.eq(tg.attack, 'stab');
     const n0 = w.bus.count();
     until(H, () => evs(w, 'hurt', n0).length > 0, 60);
-    t.eq(evs(w, 'hurt', n0)[0].dmg, 6);
+    t.eq(evs(w, 'hurt', n0)[0].dmg, BD.enemies.get('goblin').dmg);
     const d0 = BD.math.dist(e.x, e.y, w.hero.x, w.hero.y);
     H.step(Math.round(T.backTime / TICK) + 1);
     t.near(BD.math.dist(e.x, e.y, w.hero.x, w.hero.y) - d0, 1.2, 0.15, 'backed off 1.2u');
@@ -96,7 +96,7 @@ module.exports = {
     until(H, () => tgOf(w, e).length > 0, 400);
     t.assert(w.t - fire >= T.cd - 2 * TICK, 'cooldown 2.0 s');
   },
-  'ghoul: falls (down), corpse HP 20, rises after 2.5 s with HP 30, the second death is final'(t) {
+  'ghoul: falls (down), corpse HP 20, rises after 2.5 s with T.reviveHp (GDD 30, tuned 60), the second death is final'(t) {
     const { BD, H, w } = arena(t);
     const e = BD.W.makeEnemy(w, 'ghoul', w.hero.x + 1.2, w.hero.y, {});
     e.hp = 1; e.stunT = 1e9;
@@ -108,7 +108,7 @@ module.exports = {
     pacify(w);
     const k = until(H, () => !e.down, 400);
     t.near(k * TICK, 2.5, 2 * TICK, 'rises 2.5 s after falling');
-    t.eq(e.hp, 30); t.eq(evs(w, 'revive', n0).length, 1);
+    t.eq(e.hp, BD.enemies.get('ghoul').T.reviveHp); t.eq(evs(w, 'revive', n0).length, 1);
     e.hp = 1; w.hero.atkTimer = 0;
     H.step(2);
     t.assert(e.dead, 'second death');
@@ -153,7 +153,7 @@ module.exports = {
   'ghoul guardian (구울 폭군): rises once with 50 % of its maximum HP'(t) {
     const { BD, H, w } = arena(t, { floor: 3 });
     const e = BD.W.makeEnemy(w, 'ghoul', w.hero.x + 1.6, w.hero.y, { guardian: true });
-    t.eq(e.maxHp, BD.C.GUARDIAN.hp[3]);
+    t.eq(e.maxHp, BD.enemyTune.guardianHp[3]);
     e.hp = 1; e.stunT = 1e9;
     H.step(2);
     t.assert(e.down);

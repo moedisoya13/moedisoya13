@@ -135,7 +135,7 @@ function roar(w, e) {
 
 BD.enemies.register({
   id: 'demon_king', name: '마왕', type: 'boss', sprite: 'demon_king',
-  hp: 1500, speed: 1.6, dmg: 22, radius: 0.9,
+  hp: 3600, speed: 1.6, dmg: 22, radius: 0.9, // tuned: GDD HP 1500
   phaseAt: T.phaseAt, // the UI draws the boss bar's two ticks from this (ARCHITECTURE §4.5)
   attacks: {
     cleave: { name: '휩쓸기' }, dark_bolts: { name: '암흑탄' }, thorns: { name: '가시' }, collapse: { name: '붕괴' },
