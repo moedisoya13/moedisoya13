@@ -22,6 +22,10 @@
 // Experiment knobs (script-side monkey patches, no game file changes):
 //   --hp K        multiply every enemy's HP (normal, elite, guardian, boss) by K
 //   --minwarn S   lengthen every damaging warning shorter than S seconds to S
+//   --guardhp K / --bosshp K   extra multiplier for guardians / the boss (on top of --hp)
+//   --dmg K       multiply every hit the hero takes by K
+//   --invuln S    post-hit invulnerability in seconds (shipped: 0.6)
+//   --firewarn S  warning time of the mage's fire circle (shipped: 0.9)
 //   --buffer      model a dash input buffer: a dash pressed during cooldown fires when it ends (≤ 0.2 s)
 'use strict';
 const K = require('./_kit');
@@ -29,13 +33,27 @@ const o = K.args();
 const BD = K.load();
 const M = BD.math, C = BD.C;
 
-const hpK = Number(o.hp || 1), minWarn = Number(o.minwarn || 0);
-if (hpK !== 1) {
+const hpK = Number(o.hp || 1), minWarn = Number(o.minwarn || 0), gK = Number(o.guardhp || 1), bK = Number(o.bosshp || 1);
+if (hpK !== 1 || gK !== 1 || bK !== 1) {
   const mk = BD.W.makeEnemy;
   BD.W.makeEnemy = function (w, kind, x, y, opts) {
     const e = mk(w, kind, x, y, opts);
-    e.hp = Math.max(1, Math.round(e.hp * hpK)); e.maxHp = Math.max(1, Math.round(e.maxHp * hpK));
+    const k = hpK * (e.guardian ? gK : 1) * (e.boss ? bK : 1);
+    e.hp = Math.max(1, Math.round(e.hp * k)); e.maxHp = Math.max(1, Math.round(e.maxHp * k));
     return e;
+  };
+}
+const dmgK = Number(o.dmg || 1);
+if (dmgK !== 1) {
+  const hh = BD.W.hurtHero;
+  BD.W.hurtHero = function (w, dmg, info) { return hh(w, dmg * dmgK, info); };
+}
+if (o.invuln) BD.C.HERO.hurtInvuln = Number(o.invuln);
+if (o.firewarn) {
+  const tg1 = BD.hazards.telegraph;
+  BD.hazards.telegraph = function (w, spec) {
+    if (spec.attack === 'fire_circle') spec = Object.assign({}, spec, { time: Number(o.firewarn) });
+    return tg1(w, spec);
   };
 }
 if (minWarn > 0) {
@@ -169,7 +187,7 @@ function summarize(name, rs) {
 const [a, b] = String(o.seeds || '1-40').split('-').map(Number);
 const pilots = String(o.pilots || 'perfect,human').split(',');
 const aware = !o.blind;
-console.log(`seeds ${a}-${b || a}, projectile-${aware ? 'aware' : 'blind'}, hp ×${hpK}, min warning ${minWarn || 'as shipped'}${o.buffer ? ', dash buffer 0.2 s' : ''}`);
+console.log(`seeds ${a}-${b || a}, projectile-${aware ? 'aware' : 'blind'}, hp ×${hpK} (guardian ×${gK}, boss ×${bK}), dmg taken ×${dmgK}, post-hit invuln ${BD.C.HERO.hurtInvuln}, min warning ${minWarn || 'as shipped'}${o.firewarn ? ', fire circle warning ' + o.firewarn : ''}${o.buffer ? ', dash buffer 0.2 s' : ''}`);
 const t0 = Date.now();
 for (const p of pilots) {
   const rs = [];

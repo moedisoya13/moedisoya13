@@ -253,7 +253,7 @@ if (want('ttk')) {
     row.handGDD_median = +K.median(hg).toFixed(1);
     row.handNow_median = +K.median(hn).toFixed(1);
     row.handNow_minmax = [+Math.min(...hn).toFixed(1), +Math.max(...hn).toFixed(1)];
-    row.swingsNowBase = Math.ceil(row.baseNow / C.HERO.interval);
+    row.swingsNowBase = Math.round(row.baseNow / C.HERO.interval) + 1; // first swing lands at t = 0
     r[kind] = row;
   }
   console.log('== ttk (s, single stunned dummy, hero standing in reach) ==');
@@ -265,7 +265,7 @@ if (want('ttk')) {
 // target readability over perfect-bot runs: switches, time without a target, swing uptime
 if (want('target')) {
   const seeds = Number(o.seeds || 12);
-  let ticksEnemies = 0, ticksTarget = 0, switches = 0, swings = 0, flips = 0, shortHolds = 0, holds = [], nearestNot = 0;
+  let forced = 0, ticksEnemies = 0, ticksTarget = 0, switches = 0, swings = 0, flips = 0, shortHolds = 0, holds = [], nearestNot = 0;
   let faceMoveOpp = 0, movingTicks = 0, quadFlips = 0;
   for (let seed = 1; seed <= seeds; seed++) {
     let last = null, holdStart = 0, lastQuad = null, lastQuadT = 0;
@@ -276,7 +276,10 @@ if (want('target')) {
         ticksEnemies++;
         if (h.targetId !== null) ticksTarget++;
         if (h.targetId !== last) {
-          if (last !== null && h.targetId !== null) {
+          const prev = last !== null ? BD.W.enemyById(w, last) : null;
+          const prevStillThere = prev && !prev.dead && !prev.down && BD.W.edgeDist(w, prev) <= h.stats.acquire;
+          if (last !== null && h.targetId !== null && !prevStillThere) forced++;
+          if (last !== null && h.targetId !== null && prevStillThere) {
             switches++;
             const held = (w.ticks - holdStart) / 60; holds.push(held); if (held < 0.6) shortHolds++;
           }
@@ -293,11 +296,31 @@ if (want('target')) {
       },
     }).app.world.bus.recent(1e6).forEach((e) => { if (e.type === 'swing') swings++; });
   }
+  // scripted, pilot-independent: back away from a slow chaser (ghoul) in a straight line for 6 s.
+  // The hero should look like he is doing one thing; count how often the drawn body flips.
+  const kite = (() => {
+    const { H, w } = K.arena({ BD, w: 40, h: 12, hx: 30, hy: 6 });
+    const h = w.hero;
+    const e = K.spawn(BD, w, 'ghoul', h.x + 1.5, h.y); e.hp = e.maxHp = 1e6;
+    let flips = 0, lastQ = null, faceJumps = 0, lastFace = h.face, aimTicks = 0;
+    for (let i = 0; i < 360; i++) {
+      h.invuln = 1;
+      // step away only when the chaser is close, like a player keeping the edge of reach
+      const near = BD.W.edgeDist(w, e) < 1.5;
+      H.input({ mx: near ? -1 : 0, my: 0 }); H.step(1);
+      const sx = (Math.cos(h.face) - Math.sin(h.face)) * 40, sy = (Math.cos(h.face) + Math.sin(h.face)) * 20;
+      const q = sx >= 0 ? 'R' : 'L';
+      if (lastQ && q !== lastQ) flips++; lastQ = q;
+      if (M.angDiff(h.face, lastFace) > Math.PI / 2) faceJumps++; lastFace = h.face;
+      if (h.aimT > 0) aimTicks++;
+    }
+    return { seconds: 6, leftRightFlips: flips, facingJumpsOver90deg: faceJumps, shareFacingTarget: +(aimTicks / 360).toFixed(2) };
+  })();
   const sec = ticksEnemies / 60;
   out.target = {
     seeds, secondsWithEnemies: +sec.toFixed(0), targetShare: +(ticksTarget / ticksEnemies).toFixed(2),
-    switchesPerMin: +(switches / sec * 60).toFixed(1), medianHoldSec: +K.median(holds).toFixed(2), holdsUnder0_6s_share: +(shortHolds / Math.max(1, switches)).toFixed(2),
-    backpedalShareOfMoving: +(faceMoveOpp / Math.max(1, movingTicks)).toFixed(2), spriteFlipsUnder0_3sPerMin: +(quadFlips / sec * 60).toFixed(1),
+    voluntarySwitchesPerMin: +(switches / sec * 60).toFixed(1), forcedSwitchesPerMin: +(forced / sec * 60).toFixed(1), medianHoldSec: +K.median(holds).toFixed(2), holdsUnder0_6s_share: +(shortHolds / Math.max(1, switches)).toFixed(2),
+    kiteGhoul: kite, backpedalShareOfMoving: +(faceMoveOpp / Math.max(1, movingTicks)).toFixed(2), spriteFlipsUnder0_3sPerMin: +(quadFlips / sec * 60).toFixed(1),
   };
   console.log('== target (perfect bot, first 240 s of each run) ==\n' + JSON.stringify(out.target, null, 1));
 }
