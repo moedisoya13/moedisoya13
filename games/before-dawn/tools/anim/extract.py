@@ -14,6 +14,7 @@ Options
   --period A:B      allowed cycle length in seconds for the search (default 0.45:1.4)
   --cycles K        the picked cycle spans K repetitions of the shortest match (default 1)
   --key auto|green|magenta
+  --strike I        attack clips: strip frame index where the hit lands (written to the manifest)
   --sheet PATH      also write a contact sheet PNG for review
   --dry             don't write assets, only the sheet
 """
@@ -110,6 +111,7 @@ def main():
     ap.add_argument('--loop', dest='loop', action='store_true', default=True); ap.add_argument('--once', dest='loop', action='store_false')
     ap.add_argument('--range', default=''); ap.add_argument('--period', default='0.45:1.4'); ap.add_argument('--cycles', type=int, default=1)
     ap.add_argument('--key', default='auto'); ap.add_argument('--sheet', default=''); ap.add_argument('--dry', action='store_true')
+    ap.add_argument('--strike', type=int, default=-1, help='frame index (in the strip) where the hit lands; attack clips')
     ap.add_argument('--stand', type=int, default=0, help='source frame index used to measure the standing height')
     o = ap.parse_args()
 
@@ -184,6 +186,8 @@ def main():
     m = json.load(open(mf)) if os.path.exists(mf) else {}
     m.setdefault(o.char, {})[o.clip] = {'file': rel, 'frames': len(sel), 'fw': fw, 'fh': fh, 'fps': fps_out,
                                         'loop': bool(o.loop), 'anchor': anchor, 'charH': o.char_h}
+    if o.strike >= 0:
+        m[o.char][o.clip]['strike'] = o.strike
     json.dump(m, open(mf, 'w'), indent=1)
     print('wrote', rel, os.path.getsize(os.path.join(ROOT, 'assets', 'anim', rel)) // 1024, 'KB')
 

@@ -1,15 +1,15 @@
 {
  "goblin": {
   "move": {
-   "file": "_placeholder/goblin_move.webp",
-   "frames": 12,
-   "fw": 160,
-   "fh": 144,
-   "fps": 12,
+   "file": "goblin/move.webp",
+   "frames": 16,
+   "fw": 171,
+   "fh": 138,
+   "fps": 20.21,
    "loop": true,
    "anchor": [
-    80,
-    144
+    90,
+    140
    ],
    "charH": 128
   }
@@ -27,6 +27,150 @@
     203
    ],
    "charH": 192
+  },
+  "move_down": {
+   "file": "hero/move_down.webp",
+   "frames": 16,
+   "fw": 232,
+   "fh": 199,
+   "fps": 17.45,
+   "loop": true,
+   "anchor": [
+    125,
+    198
+   ],
+   "charH": 192
+  },
+  "move_up": {
+   "file": "hero/move_up.webp",
+   "frames": 16,
+   "fw": 233,
+   "fh": 222,
+   "fps": 24.0,
+   "loop": true,
+   "anchor": [
+    90,
+    200
+   ],
+   "charH": 192
+  },
+  "attack_side": {
+   "file": "hero/attack_side.webp",
+   "frames": 14,
+   "fw": 539,
+   "fh": 304,
+   "fps": 12.0,
+   "loop": false,
+   "anchor": [
+    229,
+    272
+   ],
+   "charH": 192,
+   "strike": 4
+  }
+ },
+ "slime": {
+  "move": {
+   "file": "slime/move.webp",
+   "frames": 16,
+   "fw": 191,
+   "fh": 220,
+   "fps": 16.0,
+   "loop": true,
+   "anchor": [
+    98,
+    216
+   ],
+   "charH": 98
+  }
+ },
+ "skel_archer": {
+  "move": {
+   "file": "skel_archer/move.webp",
+   "frames": 16,
+   "fw": 155,
+   "fh": 168,
+   "fps": 12.0,
+   "loop": true,
+   "anchor": [
+    77,
+    166
+   ],
+   "charH": 158
+  }
+ },
+ "ghoul": {
+  "move": {
+   "file": "ghoul/move.webp",
+   "frames": 16,
+   "fw": 157,
+   "fh": 164,
+   "fps": 10.67,
+   "loop": true,
+   "anchor": [
+    83,
+    160
+   ],
+   "charH": 150
+  }
+ },
+ "mage": {
+  "move": {
+   "file": "mage/move.webp",
+   "frames": 16,
+   "fw": 139,
+   "fh": 191,
+   "fps": 13.71,
+   "loop": true,
+   "anchor": [
+    72,
+    187
+   ],
+   "charH": 165
+  }
+ },
+ "dark_knight": {
+  "move": {
+   "file": "dark_knight/move.webp",
+   "frames": 16,
+   "fw": 197,
+   "fh": 210,
+   "fps": 16.0,
+   "loop": true,
+   "anchor": [
+    102,
+    205
+   ],
+   "charH": 195
+  }
+ },
+ "demon_king": {
+  "move": {
+   "file": "demon_king/move.webp",
+   "frames": 16,
+   "fw": 359,
+   "fh": 336,
+   "fps": 10.67,
+   "loop": true,
+   "anchor": [
+    146,
+    310
+   ],
+   "charH": 300
+  },
+  "attack": {
+   "file": "demon_king/attack.webp",
+   "frames": 16,
+   "fw": 516,
+   "fh": 385,
+   "fps": 9.6,
+   "loop": false,
+   "anchor": [
+    211,
+    386
+   ],
+   "charH": 300,
+   "strike": 9
   }
  }
 }
