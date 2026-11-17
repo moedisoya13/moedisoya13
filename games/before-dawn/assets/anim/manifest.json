@@ -13,5 +13,20 @@
    ],
    "charH": 128
   }
+ },
+ "hero": {
+  "move_side": {
+   "file": "hero/move_side.webp",
+   "frames": 16,
+   "fw": 263,
+   "fh": 206,
+   "fps": 20.21,
+   "loop": true,
+   "anchor": [
+    148,
+    203
+   ],
+   "charH": 192
+  }
  }
 }
