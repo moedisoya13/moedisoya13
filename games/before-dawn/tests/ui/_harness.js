@@ -55,12 +55,16 @@ async function open(url, opts) {
     events: (n) => page.evaluate((n) => window.__BD.events(n), n || 200),
     eval: (fn, arg) => page.evaluate(fn, arg),
     key: async (code) => { await page.keyboard.press(code); await T.wait(); },
-    // find a declared button by id or label in the active layer (last frame)
+    // find a declared button by id or label in the active layer (last frame); a busy page may
+    // not have drawn the new screen yet, so look again for up to a second
     find: async (idOrLabel) => {
-      const bs = await T.buttons();
-      const L = await page.evaluate(() => window.__BD.ui.activeLayer());
-      const layerOk = (b) => b.layer === L || (L === 'hud' && b.layer === 'screen');
-      return bs.find((b) => layerOk(b) && (b.id === idOrLabel || b.label === idOrLabel)) || null;
+      for (let tries = 0; ; tries++) {
+        const [bs, L] = await page.evaluate(() => [window.__BD.ui.debug.buttons(), window.__BD.ui.activeLayer()]);
+        const layerOk = (b) => b.layer === L || (L === 'hud' && b.layer === 'screen');
+        const b = bs.find((x) => layerOk(x) && (x.id === idOrLabel || x.label === idOrLabel));
+        if (b || tries >= 10) return b || null;
+        await T.wait(100);
+      }
     },
     // logical point → client point
     client: (x, y) => page.evaluate(([x, y]) => { const v = window.__BD.ui.view; return [v.offX + x * v.scale, v.offY + y * v.scale]; }, [x, y]),
