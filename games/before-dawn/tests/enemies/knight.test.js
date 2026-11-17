@@ -7,10 +7,9 @@ const { arena, pacify, until, evs } = require('./util');
 const TICK = 1 / 60;
 const DEG = Math.PI / 180;
 const tgOf = (w, e) => w.telegraphs.filter((t) => t.ownerId === e.id);
-const FIX = 'tests/enemies/fixture_cards.js';
 
 function slashOn(t, opts) {
-  const { BD, H, w } = arena(t, { extraFiles: [FIX], hand: opts.hand || [] });
+  const { BD, H, w } = arena(t, { hand: opts.hand || [] });
   const e = BD.W.makeEnemy(w, 'dark_knight', w.hero.x + 1.4, w.hero.y, {});
   e.face = opts.face; e.stunT = 1e9;
   const n0 = w.bus.count();
@@ -32,7 +31,7 @@ module.exports = {
     t.eq(slashOn(t, { face: Math.PI - 61 * DEG }).hit.dmg, base);
   },
   'front guard: mods.ignoreGuard (armor_break) gets full damage from the front'(t) {
-    const f = slashOn(t, { face: Math.PI, hand: ['etest_ignore_guard'] });
+    const f = slashOn(t, { face: Math.PI, hand: ['armor_break'] });
     t.eq(f.hit.dmg, 11); t.eq(f.guards.length, 0);
   },
   'front guard: burn, chain, burst, steam, slam ignore it; dash is direct and guarded'(t) {
