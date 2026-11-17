@@ -224,11 +224,13 @@ async function main() {
             if (ev.to < ev.from && (!allowed[ev.cardId] || !allowed[ev.cardId].includes(ev.reason))) comboBad.push(`${ev.cardId} ${ev.reason}`);
             if (ev.to > ev.from && ev.reason !== 'gain') comboBad.push(`${ev.cardId} rose with ${ev.reason}`);
           });
-          let before = null;
+          // a tick is empty when no enemy was up at its start or its end (an enemy that goes down in
+          // the tick — an elite ghoul since v2 — was on screen when the card's timer ran)
+          let before = null, prevAlive = -1;
           w.bus.on('tick', (ev) => {
             const c = BD.cardRt.get(w, 'chain_slash');
-            if (c && ev.enemiesAlive === 0 && before !== null) { timerChecks++; if (c.state.timer < before - 1e-9) comboBad.push('chain_slash timer fell with no enemies'); }
-            before = c ? c.state.timer : null;
+            if (c && ev.enemiesAlive === 0 && prevAlive === 0 && before !== null) { timerChecks++; if (c.state.timer < before - 1e-9) comboBad.push('chain_slash timer fell with no enemies'); }
+            before = c ? c.state.timer : null; prevAlive = ev.enemiesAlive;
           });
         }
       },
