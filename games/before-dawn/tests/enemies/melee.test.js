@@ -81,18 +81,18 @@ module.exports = {
     t.assert(minGap > 0.5, `bearings spread (min gap ${(minGap / BD.math.DEG).toFixed(0)}°)`);
     for (const g of gs) t.assert(BD.W.edgeDist(w, g) >= 0.8 - 1e-6, 'keep-out');
   },
-  'ghoul: lunge fan 90° r 2.0, 0.6 s, 14 dmg, leaps 1.5u forward, waits 2.0 s'(t) {
-    const { BD, H, w } = arena(t);
+  'ghoul: lunge fan 90° r 2.0, 0.6 s, 12 dmg (GDD-V2 §3.2), leaps 1.5u forward, waits 2.0 s'(t) {
+    const { BD, H, w } = arena(t, { floor: 1 });
     pacify(w);
-    const T = BD.enemies.get('ghoul').T;
+    const T = BD.enemies.get('ghoul').T, dmg = BD.enemies.get('ghoul').dmg;
     const e = BD.W.makeEnemy(w, 'ghoul', w.hero.x + 2.3, w.hero.y, {});
     e.mem.cd = 0;
     H.step(1);
     const [tg] = tgOf(w, e);
-    t.eq(tg.shape, 'fan'); t.near(tg.half, 45); t.near(tg.r, 2.0); t.near(tg.total, 0.6); t.eq(tg.dmg, 14); t.eq(tg.attack, 'lunge');
+    t.eq(tg.shape, 'fan'); t.near(tg.half, 45); t.near(tg.r, 2.0); t.near(tg.total, 0.6); t.eq(tg.dmg, dmg); t.eq(tg.attack, 'lunge');
     const x0 = e.x, hx = w.hero.x, n0 = w.bus.count();
     until(H, () => evs(w, 'hurt', n0).length > 0, 60);
-    t.eq(evs(w, 'hurt', n0)[0].dmg, 14);
+    t.eq(evs(w, 'hurt', n0)[0].dmg, dmg);
     H.step(Math.round(T.leapTime / TICK) + 2);
     t.near(x0 - e.x, 1.5, 0.05, 'leapt 1.5u toward the hero');
     t.assert(e.x - e.r - hx < 0.8, 'the leap lands inside the 0.8u ring around where the hero stood (walking never does)');

@@ -57,10 +57,11 @@ module.exports = {
     t.assert(e.statuses.bind, 'bound by the hit');
     const bindLeft = e.statuses.bind.t;
     t.near(bindLeft, BD.cards.get('mana_backlash').T.bind, 3 * TICK, 'bind 2.5 s');
-    H.step(Math.floor((bindLeft - 0.05) / TICK));
+    // GDD-V2 §3.2: the mage's one teleport comes at half HP; bound, it waits
+    if (e.hp > e.maxHp / 2) BD.combat.damage(w, e, e.hp - Math.floor(e.maxHp / 2), { source: 'burn', direct: false });
+    H.step(Math.floor((e.statuses.bind.t - 0.05) / TICK));
     const blinks = () => w.bus.recent(4000).filter((x) => x.event === 'telegraph' && x.ownerId === e.id && x.attack === 'blink');
-    t.eq(blinks().length, 0, 'no teleport warning while bound (hero within 2u all along)');
-    t.assert(BD.W.edgeDist(w, e) <= T.near, 'still within 2u, cornered');
+    t.eq(blinks().length, 0, 'no teleport warning while bound (at half HP all along)');
     until(H, () => !e.statuses.bind, 30);
     const k = until(H, () => blinks().length > 0, 60);
     t.assert(k >= 0, 'teleport warning once the bind is gone');

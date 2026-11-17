@@ -74,7 +74,7 @@ F.slot = function (w, e, cat) {
   if (e.slot) return true;
   if (e.role === 'fodder' && waiting(w)[cat] && used(w, cat) >= F.cap(w, cat) - 1) return false;
   const ok = BD.ai.slot(w, e, cat);
-  if (!ok && e.role === 'threat') { e.wantT = w.t; e.wantCat = cat; }
+  if (!ok && e.role === 'threat') { e.wantT = w.t; e.wantCat = cat; w._foeWaitT = -1; }
   return ok;
 };
 

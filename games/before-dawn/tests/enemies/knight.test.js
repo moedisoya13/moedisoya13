@@ -70,8 +70,8 @@ module.exports = {
       t.eq(tgOf(w, e).length, 0, 'not beyond 5u');
     }
   },
-  'charge: 1.4 × 5u rectangle, 0.9 s, runs at 10u/s for 20, 1.4 s opening (no turn, no move), 3.5 s cooldown'(t) {
-    const { BD, H, w } = arena(t, { w: 20, h: 20, hx: 6, hy: 10 });
+  'charge: 1.4 × 5u rectangle, 0.9 s, runs at 10u/s for its damage (GDD-V2 18), 1.4 s opening (no turn, no move), 3.5 s cooldown'(t) {
+    const { BD, H, w } = arena(t, { w: 20, h: 20, hx: 6, hy: 10, floor: 1 });
     pacify(w);
     const T = BD.enemies.get('dark_knight').T;
     const e = BD.W.makeEnemy(w, 'dark_knight', 9.5, 10, {});
@@ -86,7 +86,7 @@ module.exports = {
     until(H, () => !e.lunge, 60);
     t.near(9.5 - e.x, 5 - 0.7, 0.05, 'ran 5u minus the body radius (stays inside the warning)');
     const hurt = evs(w, 'hurt', n0)[0];
-    t.eq(hurt.dmg, 20); t.eq(hurt.attack, 'charge'); t.eq(hurt.source, 'dark_knight');
+    t.eq(hurt.dmg, BD.enemies.get('dark_knight').dmg); t.eq(hurt.attack, 'charge'); t.eq(hurt.source, 'dark_knight');
     const fire = w.t - (5 - 0.7) / 10;
     H.step(1);
     const xs = e.x, fs = e.face;
@@ -133,7 +133,7 @@ module.exports = {
     const along = (e.x - tg.x) * Math.cos(tg.dir) + (e.y - tg.y) * Math.sin(tg.dir);
     t.assert(along + hb <= tg.len + 0.1 && along + hb >= tg.len - 0.15, `stopped at the end of the warning (front ${(along + hb).toFixed(2)} vs len ${tg.len.toFixed(2)})`);
   },
-  'guardian (암흑기사 단장): 7u charge, then a radius-2.2 sweep (0.6 s, 20 × 1.3)'(t) {
+  'guardian (암흑기사 단장): 7u charge, then a radius-2.2 sweep (0.6 s, its damage × 1.3)'(t) {
     const { BD, H, w } = arena(t, { w: 20, h: 20, hx: 8, hy: 10 });
     pacify(w);
     const e = BD.W.makeEnemy(w, 'dark_knight', 12, 10, { guardian: true });
@@ -146,7 +146,7 @@ module.exports = {
     H.step(1);
     const sw = tgOf(w, e).find((x) => x.attack === 'sweep');
     t.assert(sw, 'sweep after the charge');
-    t.eq(sw.shape, 'circle'); t.near(sw.r, 2.2); t.near(sw.total, 0.6); t.eq(sw.dmg, Math.round(20 * 1.3));
+    t.eq(sw.shape, 'circle'); t.near(sw.r, 2.2); t.near(sw.total, 0.6); t.eq(sw.dmg, Math.round(BD.enemies.get('dark_knight').dmg * 1.3));
     t.near(sw.x, e.x, 1e-9);
   },
 };

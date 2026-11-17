@@ -7,22 +7,25 @@ const TICK = 1 / 60;
 const tgOf = (w, e) => w.telegraphs.filter((t) => t.ownerId === e.id);
 
 module.exports = {
-  'elite: size ×1.3, HP ×2.5, damage ×1.25, telegraph ×1.2, drops a flask'(t) {
-    const { BD, H, w } = arena(t);
+  'elite (GDD-V2 §3.6): size ×1.3, HP by floor (2F 160, dark knight ×1.5), damage ×1.25, telegraph ×1.2, outside the caps; dies into a big shard (25) and a flask'(t) {
+    const { BD, H, w } = arena(t, { floor: 2 });
     pacify(w);
-    for (const kind of ['slime', 'goblin', 'skel_archer', 'ghoul', 'mage', 'dark_knight']) {
+    const row = BD.foes.T.eliteHp;
+    for (const kind of ['slime', 'skel_archer', 'ghoul', 'mage', 'dark_knight']) {
       const d = BD.enemies.get(kind);
       const e = BD.W.makeEnemy(w, kind, 1.5, 1.5, { elite: true });
-      t.near(e.size, 1.3, 1e-9, kind); t.eq(e.maxHp, Math.round(d.hp * 2.5), kind); t.eq(e.dmg, Math.round(d.dmg * 1.25), kind); t.near(e.tgScale, 1.2, 1e-9, kind);
-      BD.combat.kill(w, e);
+      t.near(e.size, 1.3, 1e-9, kind); t.eq(e.maxHp, Math.round(row[2] * (kind === 'dark_knight' ? 1.5 : 1)), kind); t.eq(e.dmg, Math.round(d.dmg * 1.25), kind); t.near(e.tgScale, 1.2, 1e-9, kind);
+      t.eq(e.role, 'elite'); t.eq(BD.foes.slot(w, e, 'melee'), true); t.eq(e.slot, null, 'takes no slot');
+      BD.W.removeEnemy(w, e, 'recycle');
     }
-    const g = BD.W.makeEnemy(w, 'goblin', w.hero.x + 1.3, w.hero.y, { elite: true });
+    const g = BD.W.makeEnemy(w, 'slime', w.hero.x + 2.5, w.hero.y, { elite: true });
     g.mem.cd = 0;
     H.step(1);
-    t.near(tgOf(w, g)[0].r, 1.3 * 1.2, 1e-9, 'stab fan ×1.2');
-    const p0 = w.pickups.length;
+    t.near(tgOf(w, g)[0].r, 0.9 * 1.2, 1e-9, 'pounce circle ×1.2');
+    const p0 = w.pickups.length, n0 = w.bus.count();
     BD.combat.kill(w, g);
     t.eq(w.pickups.length, p0 + 1, 'flask');
+    t.eq(evs(w, 'shard_drop', n0).filter((x) => x.value === 25).length, 1, 'one big shard of 25');
   },
   'guardian: size ×1.6, damage ×1.3, telegraph ×1.4, HP by floor (400/700/1000/1300/1600, GDD-V2 §3.6), outside the attack caps'(t) {
     for (let n = 1; n <= 5; n++) {

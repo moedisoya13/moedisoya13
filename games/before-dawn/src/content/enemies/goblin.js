@@ -62,7 +62,8 @@ BD.enemies.register({
       const db = M.wrap(b - Math.atan2(oy, ox));
       if (Math.abs(db) < 0.9) b += (db === 0 ? (e.id < o.id ? 1 : -1) : Math.sign(db)) * (0.9 - Math.abs(db)) * 0.5;
     }
-    const tx = h.x + Math.cos(b) * (T.ring + e.r), ty = h.y + Math.sin(b) * (T.ring + e.r);
+    // the ring point sits 0.08u inside the ring: goTo stops up to 0.1u short, and short must still be in range
+    const rr = T.ring + e.r - 0.08, tx = h.x + Math.cos(b) * rr, ty = h.y + Math.sin(b) * rr;
     if (A.goTo(w, e, tx, ty, e.speed, dt)) e.state = 'idle';
     else e.state = 'move';
     if (ed < 1.5) e.face = A.angleToHero(w, e);
