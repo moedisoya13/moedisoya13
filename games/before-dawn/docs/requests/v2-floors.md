@@ -157,7 +157,9 @@ sites themselves set `w.sitesLive = true`.
   a rift's elite → optional sites → stairs (a wanted optional site within 10u first); the guardian, a
   chief or a nest in view is held at reach; a goal off screen pulls (shard fetches only on the way).
 - `tools/fun/lib.js`, `tools/fun/measure.js` — `--task`, `--floors`, a task-by-task table.
-- `tools/accept.js` — #4 also checks sites, fallbacks, §5.8-7; new #19 is V10.
+- `tools/accept.js` — #4 also checks sites, fallbacks, §5.8-7; new #19 is V10; #11's "chain timer with
+  no enemies" counts a tick only when no enemy was up at its start and end (since elites appear, an
+  elite ghoul going down mid-tick was on screen when the card's timer ran — a false alarm).
 - Tests: `tests/core/v2.test.js` (the generation test expects each task's layout; the site hook test
   reads `phase`, sets `w.sitesLive`), `tests/core/mechanics.test.js` (keep-out ring: seed 2 and an
   invulnerable hero — a crowd or a hit can push an idle hero into the ring; base seeds 1 and 7 show it too),
@@ -219,6 +221,10 @@ median gap between choices 12.9 s (< 15: optional sites and chests count as choi
 wait 86 s (≤ 75; it falls in the guardian fights). The time after a task is mostly the guardian: its 6u
 leash (§3.6) is not in yet, so 2F–5F guardians follow the hero round the floor and the fight takes
 60–120 s with this pilot.
+
+`node tools/accept.js`: 17 pass, #17 TARGET (V12: human-like pilot 42/100 wins against 20–35, 0 deaths on
+1F, 1 on 1F–2F, median win 14.5 min; perfect pilot 59/100 against ≥ 70), #18 PENDING (as on the base).
+#19 (V10, the shipped bot on 1F): purge, seals, nests, hold, hunt 10/10 each.
 
 ## 9. What the pictures show (docs/screens/v2-floors/, `node tests/floors/shoot.js`)
 
