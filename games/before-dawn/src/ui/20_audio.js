@@ -79,7 +79,6 @@ function reg(id, fn) {
   SFX.register({
     id,
     play(ac, dest, opts) {
-      if (ac.state === 'suspended' && ac.resume) ac.resume();
       fn(ac, out(ac, dest), opts || {}, ac.currentTime + 0.004);
     },
   });
@@ -187,9 +186,4 @@ R('ui_move', (ac, d, o, t) => { tone(ac, d, { t, f0: 1250, dur: 0.025, gain: 0.0
 // Volume from the settings (0 = mute). Called when settings change.
 A.applyVolume = function (save) { AU.setVolume(save && save.settings ? Number(save.settings.sfx) || 0 : 0.8); };
 
-// iOS Safari only resumes audio from touchend/click; resume the context there as well.
-if (typeof window !== 'undefined') {
-  const resume = () => { if (AU.ac && AU.ac.state === 'suspended' && AU.ac.resume) AU.ac.resume(); };
-  window.addEventListener('touchend', resume, { passive: true });
-  window.addEventListener('click', resume);
-}
+// iOS Safari resumes audio only from touchend/click: the engine's AU.unlock handles it (50_audio.js).

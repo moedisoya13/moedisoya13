@@ -29,6 +29,9 @@ IN.attach = function (canvas, ui) {
     }
   });
   window.addEventListener('keyup', (ev) => { keys.delete(ev.code); });
+  // iOS Safari starts audio only from touchend/click (see 50_audio.js)
+  window.addEventListener('touchend', () => ui.unlockAudio(), { passive: true });
+  window.addEventListener('click', () => ui.unlockAudio());
   window.addEventListener('blur', () => keys.clear());
 
   const pos = (ev) => { const r = canvas.getBoundingClientRect(); return view.toLogical(ev.clientX - r.left, ev.clientY - r.top); };

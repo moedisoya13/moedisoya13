@@ -189,12 +189,8 @@ K.letter = function (g, text, x, y, o) {
 };
 
 // ---- buttons ---------------------------------------------------------------------------------
-// Which menu button of the active layer has keyboard focus (uses last frame's menu list, as
-// the shell's Enter handler does).
-K.menuIndex = function (ui, layer) {
-  const menu = ui.lastButtons.filter((b) => b.menu && b.layer === layer);
-  return menu.length ? ui.focus % menu.length : -1;
-};
+// Which menu button of the active layer has keyboard focus (last frame's menu list, as the
+// shell's Enter handler uses). Drawing asks the shell: ui.isFocused(b).
 K.focusedButton = function (ui) {
   const L = ui.activeLayer() === 'hud' ? 'screen' : ui.activeLayer();
   const menu = ui.lastButtons.filter((b) => b.menu && b.layer === L);
@@ -206,15 +202,13 @@ K.focusedButton = function (ui) {
 //        size, disabled, slant, icon(g, cx, cy), selected, hitPad}
 K.button = function (ui, spec) {
   const pad = spec.hitPad || 0;
-  const layer = ui.layer;
-  const idx = spec.menu ? ui.buttons.filter((b) => b.menu && b.layer === layer).length : -1;
   const b = ui.button({
     id: spec.id, label: spec.label, menu: !!spec.menu, style: 'none', disabled: !!spec.disabled,
     x: spec.x - pad, y: spec.y - pad, w: spec.w + 2 * pad, h: spec.h + 2 * pad,
     onTap: spec.disabled ? null : spec.onTap, onPress: spec.disabled ? null : spec.onPress,
   });
   const g = ui.g;
-  const focused = spec.menu && ui.activeLayer() === layer && idx === K.menuIndex(ui, layer);
+  const focused = ui.isFocused(b);
   b.focused = focused;
   if (spec.bare) return b; // hit area + focus only; the caller draws
   const kind = spec.kind || 'plain';

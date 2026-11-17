@@ -119,7 +119,7 @@ module.exports = {
       await T.wait(500);
       const t2 = (await T.state()).t;
       t.assert(t2 > t1, 'world runs again');
-      t.eq(await T.eval(() => window.__BD.params.speed), 1, 'speed restored');
+      t.eq(await T.eval(() => [window.__BD.params.speed, window.__BD.ui.hold]), [1, 0], 'hold released, speed untouched');
     } finally { await T.close(); }
   },
 

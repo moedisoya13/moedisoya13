@@ -1,6 +1,8 @@
 // Browser shell: URL parameters (GDD §13.1), storage, the app, the ui context, window.__BD,
 // the frame loop (fixed 1/60 ticks, ≤ 5 catch-up ticks per frame × speed), orientation and
 // focus handling, and the draw order of screens, HUD and overlays.
+// ui.hold (real seconds): hit-stop. While > 0 the loop steps no tick and counts it down; no tick is
+// skipped or added, so the simulation stays deterministic. __BD.step() ignores it.
 
 const C = BD.C;
 const SH = BD.client.shell = {};
@@ -27,7 +29,7 @@ SH.storage = function () {
 
 function makeUi(app, view) {
   const ui = {
-    app, view, g: view.g, time: 0, dt: 0, buttons: [], layer: 'hud', focus: 0, fx: BD.client.fx, camera: { x: 0, y: 0 },
+    app, view, g: view.g, time: 0, dt: 0, hold: 0, buttons: [], layer: 'hud', focus: 0, fx: BD.client.fx, camera: { x: 0, y: 0 },
     assets: BD.client.assets, render: BD.client.render,
   };
   Object.defineProperty(ui, 'world', { get: () => app.world });
@@ -36,12 +38,20 @@ function makeUi(app, view) {
   ui.unlockAudio = () => { BD.client.audio.unlock(); BD.client.audio.setVolume(app.save.settings.sfx); };
   // Buttons are declared while drawing; hits use the last frame's list.
   // spec: {x, y, w, h, label, onTap, onPress, menu (keyboard focusable), style: 'primary'|'plain'|'none', size}
+  // Focus: the button's index among this layer's menu buttons, modulo the last frame's complete
+  // menu count — the same list ui.key() moves and activates (this frame's list is still partial).
+  ui.menuCount = (layer) => ui.lastButtons.filter((x) => x.menu && x.layer === layer).length;
+  ui.isFocused = function (b) {
+    if (!b.menu || ui.activeLayer() !== b.layer) return false;
+    const n = ui.menuCount(b.layer), idx = ui.buttons.filter((x) => x.menu && x.layer === b.layer).indexOf(b);
+    return n > 0 && idx >= 0 && idx === ui.focus % n;
+  };
   ui.button = function (spec) {
     const b = Object.assign({ layer: ui.layer, style: 'plain' }, spec);
     ui.buttons.push(b);
     if (b.style === 'none') return b;
-    const g = ui.g, menu = ui.buttons.filter((x) => x.menu && x.layer === b.layer);
-    const focused = b.menu && ui.activeLayer() === b.layer && menu[ui.focus % Math.max(1, menu.length)] === b;
+    const g = ui.g;
+    const focused = ui.isFocused(b);
     g.fillStyle = b.style === 'primary' ? '#1d1a14' : '#0a0a0c';
     g.fillRect(b.x, b.y, b.w, b.h);
     g.lineWidth = focused ? 3 : 2;
@@ -139,7 +149,9 @@ SH.start = function () {
     last = ts;
     ui.time += dt; ui.dt = dt;
     app.setRotate(view.portrait);
-    if (ready && app.mode === 'play' && !app.overlay()) {
+    if (ready && app.mode === 'play' && !app.overlay() && ui.hold > 0) {
+      ui.hold = Math.max(0, ui.hold - dt); acc = 0; // hit-stop: the world holds, nothing is skipped
+    } else if (ready && app.mode === 'play' && !app.overlay()) {
       acc += dt * params.speed;
       let n = Math.floor(acc / C.TICK + 1e-6);
       const cap = C.MAX_CATCHUP * params.speed;

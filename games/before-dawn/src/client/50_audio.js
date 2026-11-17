@@ -1,11 +1,19 @@
 // WebAudio base. The AudioContext is created on the first user input (GDD §10). Sounds are
 // registered by the UI agent in BD.ui.sfx; BD.client.sfx(id, opts) plays one, skipping
 // repeats of the same id within 50 ms. Playing an unregistered id throws.
+// unlock() also resumes a suspended context: iOS Safari creates it suspended and only lets a
+// touchend/click start it, so the input layer calls unlock() on those too; every sound resumes
+// a context the system suspended meanwhile.
 
 const AU = BD.client.audio = { ac: null, master: null, last: {}, muted: false };
 
+AU.resume = function () {
+  if (AU.ac && AU.ac.state === 'suspended' && AU.ac.resume) { try { AU.ac.resume(); } catch (err) { /* ignore */ } }
+};
+
 AU.unlock = function () {
-  if (AU.ac || AU.muted) return;
+  if (AU.ac) { AU.resume(); return; }
+  if (AU.muted) return;
   const Ctx = window.AudioContext || window.webkitAudioContext;
   if (!Ctx) return;
   try {
@@ -23,5 +31,6 @@ BD.client.sfx = function (id, opts) {
   const t = AU.ac.currentTime;
   if (AU.last[id] !== undefined && t - AU.last[id] < 0.05) return;
   AU.last[id] = t;
+  AU.resume();
   def.play(AU.ac, AU.master, opts || {});
 };

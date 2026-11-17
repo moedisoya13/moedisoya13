@@ -19,26 +19,23 @@ const typeOf = (kind) => (BD.enemies.has(kind) ? BD.enemies.get(kind).type : nul
 const settings = (ui) => ui.app.save.settings;
 
 // ---- hit-stop ---------------------------------------------------------------------------------
-// The shell steps the world from `params.speed × real time`; holding speed at 0 for a few
-// frames is a true hit-stop (no ticks are skipped or added). Only at speed 1: test runs at
-// higher speeds are left alone. See docs/requests/ui.md for the engine hook this stands in for.
-const HS = { t: 0, saved: null, cool: 0 };
+// The shell holds the world while ui.hold > 0 (real seconds; no ticks are skipped or added).
+// Only at speed 1: test runs at higher speeds are left alone. A short cooldown after each hold
+// keeps chains of kills from freezing the game.
+const HS = { active: false, cool: 0 };
+const shellUi = () => (BD.client && BD.client.shell && BD.client.shell.ui) || null;
 FEEL.hitstop = function (sec, force) {
-  const p = typeof window !== 'undefined' && window.__BD && window.__BD.params;
-  if (!p) return;
-  if (HS.saved === null) {
-    if (p.speed !== 1 || (!force && HS.cool > 0)) return;
-    HS.saved = p.speed; p.speed = 0;
-  }
-  HS.t = Math.max(HS.t, sec);
+  const ui = shellUi(), p = typeof window !== 'undefined' && window.__BD && window.__BD.params;
+  if (!ui || !p) return;
+  if (!(ui.hold > 0) && (p.speed !== 1 || (!force && HS.cool > 0))) return;
+  ui.hold = Math.max(ui.hold, sec); HS.active = true;
 };
 function updateHitstop(dt) {
   if (HS.cool > 0) HS.cool -= dt;
-  if (HS.saved === null) return;
-  HS.t -= dt;
-  if (HS.t <= 0) { window.__BD.params.speed = HS.saved; HS.saved = null; HS.cool = 0.12; }
+  const ui = shellUi();
+  if (HS.active && !(ui && ui.hold > 0)) { HS.active = false; HS.cool = 0.12; }
 }
-FEEL.releaseHitstop = function () { if (HS.saved !== null) { window.__BD.params.speed = HS.saved; HS.saved = null; HS.t = 0; } };
+FEEL.releaseHitstop = function () { const ui = shellUi(); if (ui) ui.hold = 0; HS.active = false; };
 
 // ---- shake -------------------------------------------------------------------------------------
 const SHK = { t: 0, dur: 0, amp: 0 };
