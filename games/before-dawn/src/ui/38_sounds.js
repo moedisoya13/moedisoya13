@@ -13,6 +13,15 @@ function attackSfx(w, kindOrNull, attack, key) {
   return null;
 }
 
+// at most n plays of `id` per second of real time (GDD-V2 §7.3: kill 8, hit 10)
+const RATE = {};
+function rate(ui, id, n) {
+  const t = ui.time, last = RATE[id] || -9;
+  if (t - last < 1 / n) return false;
+  RATE[id] = t;
+  return true;
+}
+
 BD.ui.effects.register({
   id: 'sounds',
   on: {
@@ -28,10 +37,10 @@ BD.ui.effects.register({
     },
     hit(ev, ui) {
       if (ev.source === 'chain') ui.sfxSafe('chain');
-      else if (ev.direct) ui.sfxSafe('hit');
+      else if (ev.direct && rate(ui, 'hit', 10)) ui.sfxSafe('hit');
     },
     guard(ev, ui) { ui.sfxSafe('hit_guard'); },
-    kill(ev, ui) { ui.sfxSafe('kill'); },
+    kill(ev, ui) { if (rate(ui, 'kill', 8)) ui.sfxSafe('kill'); },
     status(ev, ui) {
       if (!ev.on) return;
       if (ev.status === 'burn') ui.sfxSafe('ignite');

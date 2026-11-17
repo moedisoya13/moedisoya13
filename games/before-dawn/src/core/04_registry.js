@@ -36,8 +36,9 @@ BD.enemies = BD.makeRegistry('enemy', {
     if (!BD.C.TYPES.includes(d.type) && d.type !== 'boss') BD.fail(`enemy '${d.id}': type must be one of ${BD.C.TYPES.join('|')}|boss`);
     if (typeof d.update !== 'function') BD.fail(`enemy '${d.id}': update must be a function`);
     if (d.type !== 'boss' && typeof d.cost !== 'number') BD.fail(`enemy '${d.id}': cost required`);
-    // v2 (GDD-V2 §3.1, §4.1): role fodder | threat (what the director sends it as), shards dropped
-    if (d.type !== 'boss' && !['fodder', 'threat'].includes(d.role)) BD.fail(`enemy '${d.id}': role must be 'fodder' or 'threat'`);
+    // v2 (GDD-V2 §3.1, §4.1): role fodder | threat (default threat; a horde mix lists a kind under its
+    // role), shards dropped on death (default fodder 1, threat 3)
+    if (d.role !== undefined && !['fodder', 'threat'].includes(d.role)) BD.fail(`enemy '${d.id}': role must be 'fodder' or 'threat'`);
     if (d.shards !== undefined && !(d.shards >= 0)) BD.fail(`enemy '${d.id}': shards must be a number ≥ 0`);
     // attacks.<id> = {name, sfx?, sfxStart?}: sound ids (BD.ui.sfx) played when the blow lands
     // (telegraph_fire) and when its warning starts (telegraph); checked against the UI in the browser
@@ -131,7 +132,7 @@ BD.onFinalize(function () {
   if (!BD.gen.patterns.has('open')) BD.fail("obstacle pattern 'open' must be registered (fallback)");
   for (const m of BD.director.mixes.all()) for (const k of ['fodder', 'threats']) for (const kind of Object.keys(m[k])) {
     const e = BD.enemies.get(kind);
-    if (e.role !== (k === 'fodder' ? 'fodder' : 'threat')) BD.fail(`horde mix '${m.id}': '${kind}' is a ${e.role}, listed under ${k}`);
+    if ((e.role || 'threat') !== (k === 'fodder' ? 'fodder' : 'threat')) BD.fail(`horde mix '${m.id}': '${kind}' is a ${e.role || 'threat'}, listed under ${k}`);
   }
   for (const l of BD.gen.layouts.all()) for (const f of [l.centre].concat(l.fills)) BD.gen.fills.get(f);
   for (const r of [BD.cards, BD.enemies, BD.gen.shapes, BD.gen.patterns, BD.gen.bundles, BD.gen.plans, BD.director.mixes, BD.boons, BD.tasks, BD.sites, BD.pickups, BD.gen.fills, BD.gen.layouts]) r.freeze();

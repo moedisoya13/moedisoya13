@@ -91,13 +91,15 @@ BD.C = {
 // caps (§3.5); pack: fodder per pack [min, max]. The rooftop's want is per boss phase.
 BD.C.DIRECTOR = {
   every: 0.4, tokenMax: 12, tokensAtEntry: 6,
+  // tuned (docs/requests/v2-tuning.md): rate ×1.3 and from/to raised, rooftop phases +2 — with the GDD
+  // values the hero killed packs as fast as they arrived and the screen held 11.7 enemies (gate ≥ 12)
   floors: [null,
-    { budget: 110, from: 12, to: 20, rate: 3.0, threatEvery: 8, threatCap: 3, eliteEvery: 0, hp: 1.0, dmg: 1.0, melee: 4, ranged: 2, pack: [4, 6] },
-    { budget: 130, from: 14, to: 26, rate: 3.5, threatEvery: 8, threatCap: 3, eliteEvery: 60, hp: 1.2, dmg: 1.0, melee: 4, ranged: 2, pack: [4, 8] },
-    { budget: 140, from: 18, to: 32, rate: 4.0, threatEvery: 7, threatCap: 4, eliteEvery: 50, hp: 1.4, dmg: 1.15, melee: 5, ranged: 3, pack: [4, 8] },
-    { budget: 150, from: 22, to: 38, rate: 4.8, threatEvery: 6, threatCap: 5, eliteEvery: 45, hp: 1.6, dmg: 1.15, melee: 5, ranged: 3, pack: [4, 8] },
-    { budget: 160, from: 26, to: 44, rate: 5.5, threatEvery: 5, threatCap: 6, eliteEvery: 40, hp: 1.8, dmg: 1.3, melee: 6, ranged: 3, pack: [4, 8] },
-    { budget: 150, phases: [8, 12, 16], rate: 2.0, threatEvery: 0, threatCap: 0, eliteEvery: 0, hp: 1.5, dmg: 1.15, melee: 3, ranged: 2, pack: [4, 6] },
+    { budget: 110, from: 14, to: 24, rate: 4.0, threatEvery: 8, threatCap: 3, eliteEvery: 0, hp: 1.0, dmg: 1.0, melee: 4, ranged: 2, pack: [4, 6] },
+    { budget: 130, from: 16, to: 30, rate: 4.5, threatEvery: 8, threatCap: 3, eliteEvery: 60, hp: 1.2, dmg: 1.0, melee: 4, ranged: 2, pack: [4, 8] },
+    { budget: 140, from: 20, to: 36, rate: 5.0, threatEvery: 7, threatCap: 4, eliteEvery: 50, hp: 1.4, dmg: 1.15, melee: 5, ranged: 3, pack: [4, 8] },
+    { budget: 150, from: 24, to: 42, rate: 6.0, threatEvery: 6, threatCap: 5, eliteEvery: 45, hp: 1.6, dmg: 1.15, melee: 5, ranged: 3, pack: [4, 8] },
+    { budget: 160, from: 28, to: 48, rate: 6.8, threatEvery: 5, threatCap: 6, eliteEvery: 40, hp: 1.8, dmg: 1.3, melee: 6, ranged: 3, pack: [4, 8] },
+    { budget: 150, phases: [10, 14, 18], rate: 2.6, threatEvery: 0, threatCap: 0, eliteEvery: 0, hp: 1.5, dmg: 1.15, melee: 3, ranged: 2, pack: [4, 6] },
   ],
   surge: { first: 25, every: 35, dur: 8, mult: 1.5 },     // 몰려온다
   guardianMult: 0.5,   // want and token rate while the guardian is up

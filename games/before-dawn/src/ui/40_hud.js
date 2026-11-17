@@ -65,6 +65,9 @@ function drawProgress(g, ui, w) {
     label = '시련 — 남은 적 ' + n; color = '#c9a0ff';
   } else if (w.stairs && w.stairs.open) {
     label = w.trial && w.trial.state === 'available' ? '계단이 열렸다 · 시련 가능' : '계단이 열렸다'; color = K.GOLD_HI;
+  } else if (w.task) { // GDD-V2 §5.7: the floor's task, e.g. 소탕 137/200
+    label = BD.ui.taskLabel(w); color = w.task.done ? K.GOLD_HI : K.PAPER;
+    if (w.task.done) label = '수호자가 계단을 지킨다';
   } else {
     const n = Math.min(3, (w.wave && w.wave.n) || 1);
     label = '무리 ' + n + '/3'; segs = 3; segOn = n;

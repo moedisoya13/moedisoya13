@@ -12,6 +12,7 @@ SH.params = function (search) {
   const num = (k) => (q.has(k) && q.get(k) !== '' ? Number(q.get(k)) : undefined);
   return {
     seed: num('seed'), tier: num('tier') || 0, hand: q.get('hand') || undefined, floor: num('floor'),
+    task: q.get('task') || undefined, level: num('level'), // GDD-V2 §10.3
     bot: q.get('bot') === '1', speed: Math.max(1, Math.min(64, num('speed') || 1)),
     mute: q.get('mute') === '1', nosave: q.get('nosave') === '1',
     anim: q.get('anim') || null, // clip viewer: ?anim=1 (all characters) or ?anim=<char>
@@ -109,7 +110,7 @@ function makeUi(app, view) {
   // first run uses the URL parameters; later runs use app.retry
   ui.startRun = function (o) {
     const p = app.params;
-    app.startRun(Object.assign({ seed: p.seed, tier: p.tier, hand: p.hand, floor: p.floor }, o || {}));
+    app.startRun(Object.assign({ seed: p.seed, tier: p.tier, hand: p.hand, floor: p.floor, task: p.task, level: p.level }, o || {}));
     ui.focus = 0;
   };
   return ui;
@@ -168,7 +169,7 @@ SH.start = function () {
       }
     } else {
       acc = 0;
-      if (app.mode === 'play' && app.botOn && app.world && app.world.altarOpen && !app.uiOverlay && !app.rotate) app.step();
+      if (app.mode === 'play' && app.botOn && app.world && (app.world.altarOpen || app.world.choiceOpen) && !app.uiOverlay && !app.rotate) app.step();
     }
     BD.client.fx.update(dt);
     for (const ef of BD.ui.effects.all()) if (ef.update) ef.update(dt, ui);

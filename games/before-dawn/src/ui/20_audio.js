@@ -167,6 +167,12 @@ R('death', (ac, d, o, t) => { tone(ac, d, { t, f0: 330, f1: 98, dur: 1.3, gain: 
 R('win', (ac, d, o, t) => { [523, 659, 784, 1046, 1318].forEach((f, i) => tone(ac, d, { t: t + i * 0.11, f0: f, dur: 1.7 - i * 0.1, gain: 0.09, type: 'triangle', attack: 0.02 })); });
 
 // ---- cards (GDD §9.3) ----------------------------------------------------------------------------
+// v2 (GDD-V2 §7.2): a shard picked up — opts.step 0..12 raises it a semitone per quick pick-up; a
+// level up (rising chord); the growth choice opening
+R('shard', (ac, d, o, t) => { tone(ac, d, { t, f0: 1320 * Math.pow(2, (o.step || 0) / 12), dur: 0.07, gain: 0.08, type: 'triangle' }); });
+R('level_up', (ac, d, o, t) => { [523, 659, 784, 1047].forEach((f, i) => tone(ac, d, { t: t + i * 0.06, f0: f, dur: 0.32, gain: 0.12, type: 'triangle' })); });
+R('choice_open', (ac, d, o, t) => { tone(ac, d, { t, f0: 392, f1: 784, dur: 0.25, gain: 0.1 }); bell(ac, d, t + 0.12, 1568, 0.4, 0.05); });
+R('multi_kill', (ac, d, o, t) => { hiss(ac, d, { t, dur: 0.3, gain: 0.45, filter: 'lowpass', f0: 900, f1: 160 }); tone(ac, d, { t, f0: 70, f1: 34, dur: 0.3, gain: 0.45 }); });
 R('card_set', (ac, d, o, t) => { tone(ac, d, { t, f0: 950, f1: 300, dur: 0.05, gain: 0.18, type: 'square' }); hiss(ac, d, { t, dur: 0.03, gain: 0.25, filter: 'bandpass', f0: 2200, q: 3 }); tone(ac, d, { t, f0: 130, f1: 80, dur: 0.1, gain: 0.3 }); });
 R('quest_tick', (ac, d, o, t) => { tone(ac, d, { t, f0: 1760, dur: 0.2, gain: 0.08 }); tone(ac, d, { t, f0: 3520, dur: 0.1, gain: 0.025 }); });
 R('awaken', (ac, d, o, t) => { [392, 494, 587, 784].forEach((f, i) => tone(ac, d, { t: t + i * 0.09, f0: f, dur: 0.5, gain: 0.1, type: 'triangle' })); bell(ac, d, t + 0.4, 1568, 1.1, 0.07); });

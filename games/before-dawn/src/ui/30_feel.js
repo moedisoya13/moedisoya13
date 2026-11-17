@@ -167,11 +167,29 @@ BD.ui.effects.register({
         FEEL.shake(4, 0.08);
       }
     },
+    swing() { FEEL.swingKills = 0; },
+    swing_end(ev, ui) {
+      // GDD-V2 §7.1: four or more killed by one swing → one 촤악! at their centre, 2 px shake, 30 ms
+      const n = FEEL.swingKills || 0;
+      if (n >= 4) {
+        FEEL.letter(ui, '촤악!', FEEL.swingX / n, FEEL.swingY / n, { size: 54, z: 90, always: true, life: 0.8 });
+        FEEL.shake(2, 0.08); FEEL.hitstop(0.03, true); ui.sfxSafe('multi_kill');
+      }
+      FEEL.swingKills = 0; FEEL.swingX = 0; FEEL.swingY = 0;
+    },
     kill(ev, ui) {
       const w = ui.world, h = w.hero;
       const e = BD.W.enemyById(w, ev.enemyId);
       const r = e ? e.r : 0.4;
       const heavy = ev.guardian || ev.boss || ev.elite;
+      FEEL.swingKills = (FEEL.swingKills || 0) + 1; FEEL.swingX = (FEEL.swingX || 0) + ev.x; FEEL.swingY = (FEEL.swingY || 0) + ev.y;
+      if (e && e.role === 'fodder') {
+        // GDD-V2 §7.1 fodder: white flash (the hit flash), ink scattering ≤ 3 motes in 0.15 s, a
+        // small floor mark; no word, no hit-stop (several die every second)
+        FEEL.splat(ui, ev.x, ev.y, 7 + r * 8, ev.x - h.x, ev.y - h.y, 0.55);
+        for (let i = 0; i < 3; i++) ui.fx.emit({ x: ev.x, y: ev.y, z: 22, vx: rng.range(-3, 3), vy: rng.range(-3, 3), vz: rng.range(60, 140), g: 520, life: 0.15, color: K.INK, size: rng.range(3, 4.5) });
+        return;
+      }
       FEEL.splat(ui, ev.x, ev.y, 14 + r * 14 + (heavy ? 14 : 0), ev.x - h.x, ev.y - h.y);
       for (let i = 0; i < (heavy ? 14 : 8); i++) ui.fx.emit({ x: ev.x, y: ev.y, z: 26, vx: rng.range(-3, 3), vy: rng.range(-3, 3), vz: rng.range(80, 200), g: 480, life: 0.5, color: K.INK, size: rng.range(3, 5.5) });
       if (heavy) {
@@ -213,6 +231,7 @@ BD.ui.effects.register({
     },
     vfx(ev) { if (/heal/.test(ev.kind)) HEALQ.length = 0; },
     pickup(ev, ui) {
+      if (ev.kind === 'shard') return; // the gauge and the shard sound carry it (63_growth.js)
       for (let i = 0; i < 10; i++) ui.fx.emit({ x: ev.x, y: ev.y, z: 14, vx: rng.range(-1.2, 1.2), vy: rng.range(-1.2, 1.2), vz: rng.range(60, 140), g: 200, life: 0.5, color: i % 2 ? '#8fd3ff' : '#ffffff', size: 3 });
     },
     dash(ev, ui) {
