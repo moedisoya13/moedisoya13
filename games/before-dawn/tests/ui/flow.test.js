@@ -172,6 +172,42 @@ module.exports = {
     } finally { await T.close(); }
   },
 
+  async 'keyboard: the title menu reaches 기록, 설정, 도움말 and comes back; M mutes in play'(t) {
+    const T = await H.open(H.variant(), { query: '?nosave=1' });
+    try {
+      await T.key('ArrowDown'); await T.key('Enter');
+      t.eq(await T.mode(), 'codex', '↓ Enter → 기록');
+      for (let i = 0; i < 3; i++) await T.key('ArrowRight');
+      t.assert((await T.texts()).includes('속성  ·  사용 0판 · 승리 0회'), 'arrow keys walk the card grid to 화염 and describe it');
+      await T.key('Escape');
+      t.eq(await T.mode(), 'title', 'Esc → title');
+      await T.key('Digit3');
+      t.eq(await T.overlay(), 'settings', '3 → 설정');
+      await T.key('ArrowLeft');
+      t.eq(await T.eval(() => window.__BD.app.save.settings.sfx), 0.7, '← on the focused 소리 lowers the volume');
+      await T.key('Escape');
+      t.eq(await T.overlay(), null);
+      await T.key('Digit4');
+      t.eq(await T.overlay(), 'help', '4 → 도움말');
+      await T.key('Enter');
+      t.eq(await T.overlay(), null, 'Enter on 닫기');
+      await T.key('Digit1'); await T.key('Escape');
+      t.eq(await T.mode(), 'title', 'Esc leaves the preparation screen');
+      await T.key('Enter'); await T.key('Enter');
+      t.eq(await T.mode(), 'play');
+      await T.key('KeyM');
+      t.eq(await T.eval(() => window.__BD.app.save.settings.sfx), 0, 'M mutes');
+      t.assert((await T.eval(() => window.BD.ui.S.toasts.map((x) => x.text))).includes('소리 꺼짐'));
+      await T.key('KeyM');
+      t.eq(await T.eval(() => window.__BD.app.save.settings.sfx), 0.7, 'M again restores the volume');
+      await T.key('KeyP');
+      t.eq(await T.overlay(), 'pause', 'P pauses');
+      await T.key('KeyP');
+      t.eq(await T.overlay(), null, 'P resumes');
+      t.eq(T.errors, []);
+    } finally { await T.close(); }
+  },
+
   async 'URL-defined runs skip the preparation screen (test hooks)'(t) {
     const T = await H.open(H.variant(), { query: '?seed=9&hand=pierce&mute=1&nosave=1' });
     try {
