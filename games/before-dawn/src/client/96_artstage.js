@@ -120,8 +120,10 @@ AS.stage = function (w, o) {
 
 // ---- the prop sheet ---------------------------------------------------------------------------------
 const CELL = { w: 300, h: 250 };
+const SAMPLE = { crate: [2, 2], crystal_mass: [3, 3], spike_mass: [2, 2], rubble: [2, 1], bench: [3, 1], sandbags: [3, 1], weapon_rack: [3, 1], bookshelf: [3, 1], wall: [4, 1], cabinet: [2, 1], crystal_block: [2, 2], fountain: [3, 3], ac_unit: [2, 1], partition: [3, 1], planter: [3, 1], desk_row: [4, 1], server_rack: [3, 1], reception: [4, 4], block: [1, 1] };
 function fitOf(d) {
-  if (d.layer === 'decor') return d.id === 'wall_desk' ? [2, 0.56] : [1, 0.56];
+  if (SAMPLE[d.id]) return SAMPLE[d.id];
+  if (d.layer === 'decor') return d.id === 'wall_desk' || d.id === 'wall_rack' ? [2, 0.56] : [1, 0.56];
   for (const s of [[1, 1], [2, 2], [3, 1], [5, 1], [4, 4], [3, 3], [2, 1], [6, 1]]) if (d.fit(s[0], s[1])) return s;
   return [1, 1];
 }

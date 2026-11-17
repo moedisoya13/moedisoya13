@@ -37,3 +37,28 @@ Found, against the reference:
 5. Floor types differ by colour and a few prop swaps only (bookshelves, weapon racks, dead
    shrubs). Not enough to tell beast from undead with the colour removed.
 6. The prop sheet shows several multi-cell props at 1 × 1 (crate, crystal_mass, rubble, wall…).
+
+Fixed for round 2: growth clusters 1.5–2× taller, tallest in the middle of a clump, corner masses
+of 8–10 shards, clumps every ~4–6 u along the walls and the slab edge, a few crystals grown into
+the facade, see-through when they cover the hero; the city painted into every glass pane
+(towers, lit windows, signs) with smashed panes on the beast/undead floors; office glass
+partitions lowered to 54 px; the moon moved clear of the HUD; floor types got their own wall
+items (claws / cobwebs / sigils / shields and banners), furniture along the walls (crates, shelves,
+weapon racks), litter against walls and props only (twigs, bones and candles, crystal shardlets,
+bolts and chains, gravel and drains) and floors (beast claw gouges, undead cracks, magic cracks
+that glow, heavy steel deck); the sheet shows multi-cell props at a representative size.
+
+## Round 2 (`round2/`)
+
+![round 2 1280](round2/sheet-1280x720.jpg)
+![round 2 667](round2/sheet-667x375.jpg)
+
+Side by side with the reference (`back-undead-1280x720.jpg`):
+1. The floor is still too clean. The reference has big dark grime patches, rubble chunks and ink
+   blots crowding the walls and the slab edge; ours had small faint patches spread evenly.
+2. Solid wall bays are a light flat grey; the reference's concrete is darker, panelled, cracked.
+3. The heavy floor's 2-u steel plates make a regular grid again, the thing the lead disliked.
+4. 2 × 2 columns read as pedestals (base, shaft, capital, plaque) rather than structure.
+5. Props' ink is thin at the game's zoom next to the reference's brush lines.
+6. Frame time: the stairs door drew a halftone shard every frame, which made the browser raster
+   the chunk blits synchronously (found by timing drawWorld's steps from inside).

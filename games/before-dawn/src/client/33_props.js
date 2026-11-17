@@ -110,14 +110,29 @@ const along = (inst) => (inst.w >= inst.h ? 'x' : 'y');
 // fallback for unknown ids
 PR.register({ id: 'block', name: '덩어리', height: () => 40, draw(g, P, it) { KIT.bevelBox(g, P, 0.04, 0.04, it.w - 0.08, it.h - 0.08, 0, 40, MAT.concreteDark, 0.08); } });
 
-// 1×1 column: plinth, shaft, capital; castle (rooftop) and ruin looks
+// Columns run up to the section cut of the diorama (the back walls' height) and end in the same
+// light cut face, so they read as the building's structure, not as pedestals. 1×1 and 2×2;
+// castle stone with a violet seam on the rooftop, broken off with rebar in the ruin.
+const CUT = '#a9abb5';
+function column(g, P, x, y, s, h, m, d, castle) {
+  KIT.bevelBox(g, P, x, y, s, s, 0, 12, d, 0.06 * s);
+  const i = 0.12 * s;
+  KIT.box(g, P, x + i, y + i, s - 2 * i, s - 2 * i, 12, h, m);
+  KIT.box(g, P, x + i - 0.02, y + i - 0.02, s - 2 * i + 0.04, s - 2 * i + 0.04, h - 10, h, castle ? d : { top: CUT, left: KIT.mul(m.left, 0.82), right: KIT.mul(m.right, 0.82) }, { dots: false });
+  // a seam on each face, a chipped corner
+  const sl = PR.face(P, x + i, y + i, s - 2 * i, s - 2 * i, 'l', 0.5, 0.5, 18, h - 16), sr = PR.face(P, x + i, y + i, s - 2 * i, s - 2 * i, 'r', 0.5, 0.5, 18, h - 16);
+  if (castle) { KIT.line(g, [sl[0], sl[3]], 4); KIT.line(g, [sl[0], sl[3]], 2, '#b98cff'); KIT.line(g, [sr[0], sr[3]], 4); KIT.line(g, [sr[0], sr[3]], 2, '#8a4fd0'); return; }
+  KIT.line(g, [sl[0], sl[3]], 1, 'rgba(10,10,12,0.45)'); KIT.line(g, [sr[0], sr[3]], 1, 'rgba(10,10,12,0.6)');
+  const c = P(x + s - i, y + s * 0.5, h * 0.45); KIT.line(g, [c, [c[0] + 3, c[1] + 9], [c[0] + 1, c[1] + 16], [c[0] + 4, c[1] + 24]], 1);
+}
+PR.column = column;
 PR.register({
-  id: 'pillar', name: '기둥', tall: true, fit: (w, h) => w === 1 && h === 1, height: () => 100,
+  id: 'pillar', name: '기둥', tall: true, fit: (w, h) => w === 1 && h === 1, height: () => 106,
   draw(g, P, it, ctx) {
     const castle = ctx.theme === 'rooftop' || it.state === 'castle', broken = it.state === 'broken' || ctx.layout === 'ruin';
     const m = castle ? MAT.stone : MAT.concrete;
-    KIT.bevelBox(g, P, 0.03, 0.03, 0.94, 0.94, 0, 12, castle ? MAT.stoneDark : MAT.concreteDark, 0.06);
     if (broken) {
+      KIT.bevelBox(g, P, 0.03, 0.03, 0.94, 0.94, 0, 12, MAT.concreteDark, 0.06);
       KIT.box(g, P, 0.15, 0.15, 0.7, 0.7, 12, 58, m);
       const t = [P(0.15, 0.85, 58), P(0.85, 0.85, 66), P(0.85, 0.15, 72), P(0.15, 0.15, 60)];
       const j = [P(0.15, 0.85, 58), P(0.4, 0.85, 70), P(0.6, 0.85, 62), P(0.85, 0.85, 66)];
@@ -127,26 +142,18 @@ PR.register({
       KIT.line(g, [r1, [r1[0] - 4, r1[1] - 18]], 2.2, '#6b5a4a'); KIT.line(g, [r2, [r2[0] + 5, r2[1] - 14]], 2.2, '#6b5a4a');
       return;
     }
-    KIT.box(g, P, 0.15, 0.15, 0.7, 0.7, 12, 84, m);
-    KIT.bevelBox(g, P, 0.05, 0.05, 0.9, 0.9, 84, 100, castle ? MAT.stoneDark : MAT.cap, 0.08);
-    const s0 = P(0.42, 0.85, 18), s1 = P(0.42, 0.85, 78);
-    if (castle) { KIT.line(g, [s0, s1], 4, '#0a0a0c'); KIT.line(g, [s0, s1], 2, '#b98cff'); }
-    else { KIT.line(g, [s0, s1], 1, 'rgba(255,255,255,0.35)'); const c = P(0.85, 0.5, 40); KIT.line(g, [c, [c[0] + 3, c[1] + 9], [c[0] + 1, c[1] + 16]], 1); }
+    column(g, P, 0.03, 0.03, 0.94, 104, m, castle ? MAT.stoneDark : MAT.concreteDark, castle);
   },
 });
-// 2×2 column with a band and a plaque
 PR.register({
-  id: 'pillar_big', name: '큰 기둥', tall: true, fit: (w, h) => w === 2 && h === 2, height: () => 124,
+  id: 'pillar_big', name: '큰 기둥', tall: true, fit: (w, h) => w === 2 && h === 2, height: () => 112,
   draw(g, P, it, ctx) {
-    const castle = ctx.theme === 'rooftop' || it.state === 'castle', m = castle ? MAT.stone : MAT.concrete, d = castle ? MAT.stoneDark : MAT.concreteDark;
-    KIT.bevelBox(g, P, 0.05, 0.05, 1.9, 1.9, 0, 16, d, 0.1);
-    KIT.box(g, P, 0.3, 0.3, 1.4, 1.4, 16, 104, m);
-    KIT.box(g, P, 0.26, 0.26, 1.48, 1.48, 58, 66, d, { dots: false });
-    KIT.bevelBox(g, P, 0.1, 0.1, 1.8, 1.8, 104, 124, castle ? d : MAT.cap, 0.14);
-    if (castle) { for (const a of [0.35, 0.65]) { const s0 = P(0.3 + 1.4 * a, 1.7, 22), s1 = P(0.3 + 1.4 * a, 1.7, 98); KIT.line(g, [s0, s1], 4); KIT.line(g, [s0, s1], 2, '#b98cff'); } return; }
-    quad(g, face(P, 0.3, 0.3, 1.4, 1.4, 'l', 0.3, 0.7, 76, 94), '#23262f', 1.4);
-    quad(g, face(P, 0.3, 0.3, 1.4, 1.4, 'l', 0.36, 0.64, 80, 90), '#e8e1cf');
-    const c = P(1.7, 1.2, 40); KIT.line(g, [c, [c[0] + 4, c[1] + 10], [c[0] + 2, c[1] + 22]], 1.1);
+    const castle = ctx.theme === 'rooftop' || it.state === 'castle';
+    column(g, P, 0.05, 0.05, 1.9, 110, castle ? MAT.stone : MAT.concrete, castle ? MAT.stoneDark : MAT.concreteDark, castle);
+    if (castle) return;
+    // a floor plate on the lit face
+    const q = PR.face(P, 0.28, 0.28, 1.44, 1.44, 'l', 0.36, 0.64, 60, 74); KIT.fill(g, q, '#23262f'); KIT.poly(g, q); KIT.ink(g, 1.2);
+    const n = PR.face(P, 0.28, 0.28, 1.44, 1.44, 'l', 0.42, 0.58, 63, 71); KIT.fill(g, n, '#e8e1cf');
   },
 });
 // 1×N planter (N ≥ 2): concrete trough, soil, faceted shrubs; undead dead twigs, magic crystal shoots
@@ -348,7 +355,7 @@ PR.register({
 });
 // interior wall run: office glass, castle stone in the hall, concrete otherwise
 PR.register({
-  id: 'wall', name: '벽', tall: true, fit: (w, h) => Math.min(w, h) === 1, height: (it) => (it.state === 'stone' ? 74 : 70),
+  id: 'wall', name: '벽', tall: true, fit: (w, h) => Math.min(w, h) === 1, height: (it) => (it.state === 'stone' ? 74 : 62),
   draw(g, P, it, ctx) {
     const ax = it.w >= it.h, n = Math.max(it.w, it.h), rng = ctx.rng;
     const kind = it.state || (ctx.layout === 'office' ? 'glass' : ctx.layout === 'hall' ? 'stone' : 'concrete');
@@ -357,11 +364,11 @@ PR.register({
       const gx = ax ? 0.04 : 0.4, gy = ax ? 0.4 : 0.04, gw = ax ? it.w - 0.08 : 0.2, gh = ax ? 0.2 : it.h - 0.08;
       // glass: translucent panes so the crowd behind still shows
       const sd = ax ? 'l' : 'r';
-      KIT.poly(g, face(P, gx, gy, gw, gh, sd, 0, 1, 12, 64)); g.fillStyle = MAT.glass; g.fill();
-      KIT.fill(g, [P(gx, gy + gh, 64), P(gx + gw, gy + gh, 64), P(gx + gw, gy, 64), P(gx, gy, 64)], 'rgba(170,205,240,0.18)');
-      for (let i = 0; i <= n * 2; i++) { const a = i / (n * 2), q = face(P, gx, gy, gw, gh, sd, a, a, 12, 64); KIT.line(g, [q[0], q[3]], i % 2 ? 1.2 : 2.4, '#2a2f3a'); }
-      for (let i = 0; i < n; i++) if (rng.chance(0.5)) { const a = (i + 0.2) / n, q = face(P, gx, gy, gw, gh, sd, a, a + 0.25 / n, 20, 56); KIT.line(g, [q[0], q[2]], 1.4, 'rgba(255,255,255,0.5)'); }
-      KIT.box(g, P, gx - 0.02, gy - 0.02, gw + 0.04, gh + 0.04, 64, 70, MAT.steelDark, { dots: false, lw: 1.6 });
+      KIT.poly(g, face(P, gx, gy, gw, gh, sd, 0, 1, 12, 54)); g.fillStyle = MAT.glass; g.fill();
+      KIT.fill(g, [P(gx, gy + gh, 54), P(gx + gw, gy + gh, 54), P(gx + gw, gy, 54), P(gx, gy, 54)], 'rgba(170,205,240,0.18)');
+      for (let i = 0; i <= n * 2; i++) { const a = i / (n * 2), q = face(P, gx, gy, gw, gh, sd, a, a, 12, 54); KIT.line(g, [q[0], q[3]], i % 2 ? 1.2 : 2.4, '#2a2f3a'); }
+      for (let i = 0; i < n; i++) if (rng.chance(0.5)) { const a = (i + 0.2) / n, q = face(P, gx, gy, gw, gh, sd, a, a + 0.25 / n, 20, 48); KIT.line(g, [q[0], q[2]], 1.4, 'rgba(255,255,255,0.5)'); }
+      KIT.box(g, P, gx - 0.02, gy - 0.02, gw + 0.04, gh + 0.04, 54, 60, MAT.steelDark, { dots: false, lw: 1.6 });
       return;
     }
     if (kind === 'stone') {
@@ -540,6 +547,9 @@ decor('wall_cabinet', '벽 서류함', 'cabinet');
 decor('potted_plant', '작은 화분', 'plant');
 decor('printer', '프린터', 'copier');
 decor('ac_unit_decor', '실외기(장식)', 'ac_unit');
+decor('wall_rack', '벽 무기 거치대', 'weapon_rack');
+decor('wall_crates', '벽 상자', 'crate');
+decor('wall_shelf', '벽 책장', 'bookshelf');
 decor('water_cooler', '정수기', null, (g, P) => {
   KIT.box(g, P, 0.22, 0.22, 0.56, 0.56, 0, 40, MAT.cream);
   KIT.prismN(g, P, 0.5, 0.5, 0.24, 8, 40, 64, { top: '#bfe3f0', left: '#8ec9de', right: '#3f7d96' }, { lw: 1.6 });

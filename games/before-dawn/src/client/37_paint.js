@@ -75,7 +75,7 @@ PT.facade = function (g, a, b, bottom, side, rng, inner) {
 };
 
 // ---- back walls --------------------------------------------------------------------------------------
-const WALL = { curb: 9, transom: 64, beam: 86, thick: 0.22, glass: 'rgba(14,20,40,0.56)', lit: '#6b6e7e', dark: '#444757', beamC: '#2b2d38', cut: '#a9abb5' };
+const WALL = { curb: 9, transom: 64, beam: 86, thick: 0.22, glass: 'rgba(14,20,40,0.56)', lit: '#5a5d6c', dark: '#3a3c49', beamC: '#24262f', cut: '#a9abb5' };
 PT.WALL = WALL;
 // segment of a back wall from world (x0, y0) to (x1, y1) along its side ('y0': the wall at y = 0,
 // lit inner face; 'x0': at x = 0, shadow face). kind: 'glass' | 'solid' | 'elevator' | 'parapet'
@@ -94,8 +94,28 @@ PT.wallSeg = function (g, P, x0, y0, x1, y1, side, kind, rng, first, last) {
   }
   // curb
   KIT.fill(g, face(0, WALL.curb), lit ? '#8a8d99' : '#585b67');
-  if (kind === 'glass') {
+  if (kind === 'glass' || kind === 'broken') {
     KIT.poly(g, face(WALL.curb, WALL.beam)); g.fillStyle = WALL.glass; g.fill();
+    // the city through the glass: towers on the pane, lit windows, now and then a sign
+    const at = (t, z) => P(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t, z);
+    for (let t = rng.range(-0.1, 0.05); t < 1;) {
+      const t0 = Math.max(0, t), t1 = Math.min(1, t + rng.range(0.16, 0.38)), top = rng.range(WALL.curb + 22, WALL.beam - 4);
+      KIT.fill(g, [at(t0, WALL.curb), at(t1, WALL.curb), at(t1, top), at(t0, top)], rng.next() < 0.5 ? '#0a0e1e' : '#0e1428');
+      for (let z = top - 5; z > WALL.curb + 5; z -= 7) for (let u = t0 + 0.025; u < t1 - 0.04; u += 0.065) {
+        if (rng.next() > 0.24) continue;
+        const r = rng.next(), c = r < 0.72 ? '#f2c25a' : r < 0.88 ? '#6fd0e6' : '#d978c8';
+        KIT.fill(g, [at(u, z), at(u + 0.032, z), at(u + 0.032, z - 3.2), at(u, z - 3.2)], c);
+      }
+      if (rng.next() < 0.12) { const u = (t0 + t1) / 2; KIT.fill(g, [at(u - 0.06, top - 4), at(u + 0.06, top - 4), at(u + 0.06, top - 12), at(u - 0.06, top - 12)], rng.next() < 0.5 ? '#d978c8' : '#6fd0e6'); }
+      t = t1 + rng.range(0.01, 0.06);
+    }
+    if (!lit) { KIT.poly(g, face(WALL.curb, WALL.beam)); KIT.halftone(g, 0.14); }
+    if (kind === 'broken') { // a smashed pane: a dark hole with jagged edges, cracks round it
+      const c = at(rng.range(0.3, 0.7), rng.range(34, 60)), hole = [];
+      for (let i = 0; i < 9; i++) { const a = (i / 9) * 6.2832, r = rng.range(6, 15); hole.push([c[0] + Math.cos(a) * r, c[1] + Math.sin(a) * r * 1.3]); }
+      KIT.fill(g, hole, '#05060a'); KIT.poly(g, hole); g.lineWidth = 2; g.strokeStyle = 'rgba(200,220,255,0.6)'; g.stroke();
+      for (let i = 0; i < 6; i++) { const a = rng.range(0, 6.283), L = rng.range(14, 30); KIT.line(g, [[c[0] + Math.cos(a) * 12, c[1] + Math.sin(a) * 14], [c[0] + Math.cos(a + 0.2) * L * 0.6, c[1] + Math.sin(a + 0.2) * L * 0.8], [c[0] + Math.cos(a) * L, c[1] + Math.sin(a) * L * 1.1]], 1, 'rgba(200,220,255,0.55)'); }
+    }
     // reflections: one long glint per pane, some panes only
     if (rng.next() < 0.55) { const t = rng.range(0.15, 0.6), p0 = P(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t, WALL.curb + 8), p1 = P(x0 + (x1 - x0) * (t + 0.28), y0 + (y1 - y0) * (t + 0.28), WALL.beam - 12); KIT.line(g, [p0, p1], 2, 'rgba(190,215,255,0.16)'); KIT.line(g, [[p0[0] + 7, p0[1]], [p1[0] + 7, p1[1]]], 1, 'rgba(190,215,255,0.12)'); }
     KIT.line(g, [A(WALL.transom), B(WALL.transom)], 2.2, '#3c4050'); KIT.line(g, [A(WALL.transom), B(WALL.transom)], 0.8);
@@ -104,7 +124,12 @@ PT.wallSeg = function (g, P, x0, y0, x1, y1, side, kind, rng, first, last) {
   } else {
     KIT.fill(g, face(WALL.curb, WALL.beam), lit ? WALL.lit : WALL.dark);
     if (!lit) { KIT.poly(g, face(WALL.curb, WALL.beam)); KIT.halftone(g, 0.16); }
-    if (rng.next() < 0.5) { const t = rng.range(0.2, 0.8); KIT.line(g, [P(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t, WALL.curb), P(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t, WALL.beam)], 0.8, 'rgba(10,10,12,0.4)'); }
+    // concrete panels: a seam per u, a lighter streak, now and then a crack
+    const mid = P((x0 + x1) / 2, (y0 + y1) / 2, WALL.curb), midT = P((x0 + x1) / 2, (y0 + y1) / 2, WALL.beam);
+    KIT.line(g, [mid, midT], 1, 'rgba(10,10,12,0.55)');
+    KIT.line(g, [A(WALL.transom - 18), B(WALL.transom - 18)], 0.9, 'rgba(10,10,12,0.35)');
+    if (rng.next() < 0.45) { const t = rng.range(0.15, 0.85), z = rng.range(30, 76), c = P(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t, z); KIT.line(g, [c, [c[0] + rng.range(-6, 6), c[1] + 9], [c[0] + rng.range(-4, 8), c[1] + 18], [c[0] + rng.range(-8, 4), c[1] + 26]], 1.1); }
+    if (rng.next() < 0.35) { const t = rng.range(0.1, 0.7); KIT.line(g, [P(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t, WALL.beam - 6), P(x0 + (x1 - x0) * (t + 0.2), y0 + (y1 - y0) * (t + 0.2), WALL.curb + 10)], 2, 'rgba(255,255,255,0.06)'); }
   }
   // ceiling beam and the cut top (the diorama's section)
   KIT.fill(g, face(WALL.beam, WH), WALL.beamC);
@@ -148,6 +173,29 @@ PT.wallItem = function (g, P, side, a, kind, v) {
     box(a, a + 0.6, 70, 80, '#9a9da8', 1.4); for (let i = 1; i < 4; i++) KIT.line(g, [at(a + 0.05, 70 + i * 2.5), at(a + 0.55, 70 + i * 2.5)], 0.9);
   } else if (kind === 'extinguisher') {
     box(a, a + 0.32, 12, 40, '#b8333a', 1.8); box(a + 0.05, a + 0.27, 16, 36, '#e3e0d8', 0.8); const c = at(a + 0.16, 26); KIT.fill(g, [[c[0] - 2, c[1] - 6], [c[0] + 2, c[1] - 6], [c[0] + 2, c[1] + 6], [c[0] - 2, c[1] + 6]], '#b8333a');
+  } else if (kind === 'shield') { // the armoury: a heater shield, steel rim, a dark field with a bar
+    const pts = [at(a, 72), at(a + 0.5, 72), at(a + 0.5, 54), at(a + 0.25, 40), at(a, 54)];
+    KIT.fill(g, pts, '#9aa6b5'); KIT.poly(g, pts); KIT.ink(g, 2);
+    const inner = [at(a + 0.06, 69), at(a + 0.44, 69), at(a + 0.44, 55), at(a + 0.25, 44), at(a + 0.06, 55)];
+    KIT.fill(g, inner, v % 2 ? '#2f4a7a' : '#3a3550'); KIT.poly(g, inner); KIT.ink(g, 1);
+    KIT.line(g, [at(a + 0.25, 68), at(a + 0.25, 46)], 3, '#e3d9a8'); KIT.line(g, [at(a + 0.1, 62), at(a + 0.4, 62)], 3, '#e3d9a8');
+  } else if (kind === 'banner') { // a hanging banner with the castle's sigil
+    const c = v % 2 ? '#4a2a6a' : '#2a2d3a', pts = [at(a, 84), at(a + 0.45, 84), at(a + 0.45, 34), at(a + 0.225, 42), at(a, 34)];
+    KIT.fill(g, pts, c); KIT.poly(g, pts); KIT.halftone(g, 0.12); KIT.poly(g, pts); KIT.ink(g, 1.8);
+    KIT.line(g, [at(a - 0.05, 85), at(a + 0.5, 85)], 3);
+    const s = at(a + 0.225, 64); KIT.fill(g, [[s[0], s[1] - 8], [s[0] + 6, s[1]], [s[0], s[1] + 8], [s[0] - 6, s[1]]], '#c9a0ff'); KIT.poly(g, [[s[0], s[1] - 8], [s[0] + 6, s[1]], [s[0], s[1] + 8], [s[0] - 6, s[1]]]); KIT.ink(g, 1);
+  } else if (kind === 'sigil') { // the magic floor: a rune circle burned into the wall, glowing
+    const ring = (r) => { const pts = []; for (let i = 0; i < 16; i++) { const t = (i / 16) * 6.2832; pts.push(at(a + 0.4 + Math.cos(t) * r, 58 + Math.sin(t) * r * 40)); } return pts; };
+    KIT.poly(g, ring(0.42)); g.fillStyle = 'rgba(155,89,208,0.22)'; g.fill(); g.lineWidth = 2.4; g.strokeStyle = '#c9a0ff'; g.stroke();
+    KIT.poly(g, ring(0.3)); g.lineWidth = 1.2; g.stroke();
+    KIT.poly(g, [at(a + 0.4, 70), at(a + 0.66, 50), at(a + 0.14, 50)]); g.lineWidth = 1.4; g.stroke();
+  } else if (kind === 'cobweb') { // the undead floor: webs in the corner of the bay, under the beam
+    const o = at(a, 86), web = 'rgba(232,232,236,0.7)';
+    for (let i = 0; i < 5; i++) { const t = (i / 4) * 1.4; KIT.line(g, [o, at(a + Math.cos(t) * 0.7, 86 - Math.sin(t) * 30)], 0.9, web); }
+    for (const r of [0.25, 0.45, 0.65]) { const pts = []; for (let i = 0; i <= 4; i++) { const t = (i / 4) * 1.4; pts.push(at(a + Math.cos(t) * r, 86 - Math.sin(t) * r * 43)); } KIT.line(g, pts, 0.8, web); }
+  } else if (kind === 'claws') { // the beast floor: three gouges torn through the wall
+    for (let i = 0; i < 3; i++) KIT.brush(g, at(a + i * 0.12, 72 - i * 2), at(a + 0.3 + i * 0.12, 34 - i * 2), 5, 0.15);
+    for (let i = 0; i < 3; i++) KIT.line(g, [at(a + i * 0.12 + 0.05, 64), at(a + 0.26 + i * 0.12, 40)], 1, 'rgba(255,255,255,0.3)');
   } else { // poster
     const r = BD.Rng(v + 3), c = r.pick(['#3d5a80', '#6b4e7a', '#4f6b4f', '#8a7a5a']);
     box(a, a + 0.5, 40, 66, '#e9e3d3', 1.8); box(a + 0.05, a + 0.45, 48, 63, c, 0.8);
@@ -214,6 +262,26 @@ function emblem(g, P, e, col) {
   const d = 0.5; KIT.fill(g, [P(e.x - d, e.y), P(e.x, e.y - d), P(e.x + d, e.y), P(e.x, e.y + d)], line);
 }
 
+// ---- small floor litter, the floor type's own (36_stage.js BITS) --------------------------------------
+PT.bit = function (g, P, b) {
+  const r = BD.Rng(b.seed), c = P(b.x, b.y);
+  if (b.kind === 'twigs') { for (let i = 0; i < 9; i++) { const a = (i / 9) * 6.2832 + r.range(-0.3, 0.3); KIT.line(g, [[c[0] + Math.cos(a) * 9, c[1] + Math.sin(a) * 4.5], [c[0] + Math.cos(a + 1.2) * 6, c[1] + Math.sin(a + 1.2) * 3 - 2]], 1.6, i % 2 ? '#3d2c1e' : '#5a4430'); } return; }
+  if (b.kind === 'tuft') { for (let i = 0; i < 3; i++) KIT.brush(g, [c[0] - 5 + i * 4, c[1]], [c[0] - 2 + i * 5, c[1] - 7], 2.2, 0.1); return; }
+  if (b.kind === 'bones') { for (const a of [r.range(-0.4, 0.4), r.range(1.2, 1.9)]) { const p0 = [c[0] - Math.cos(a) * 8, c[1] - Math.sin(a) * 4], p1 = [c[0] + Math.cos(a) * 8, c[1] + Math.sin(a) * 4]; KIT.line(g, [p0, p1], 5.2); KIT.line(g, [p0, p1], 2.8, '#e6dcc4'); } return; }
+  if (b.kind === 'candles') {
+    g.beginPath(); g.ellipse(c[0], c[1], 10, 5, 0, 0, 6.2832); g.fillStyle = '#d9cfb6'; g.fill();
+    for (const [ox, oy, h] of [[-5, 0, 10], [3, -2, 14], [6, 2, 7]]) { KIT.box(g, (x, y, z) => [c[0] + ox + (x - y) * 40, c[1] + oy + (x + y) * 20 - z], -0.05, -0.05, 0.1, 0.1, 0, h, KIT.pal('#efe6cf'), { lw: 1, dots: false }); KIT.fill(g, [[c[0] + ox - 1.5, c[1] + oy - h - 1], [c[0] + ox, c[1] + oy - h - 7], [c[0] + ox + 1.5, c[1] + oy - h - 1]], '#ffe08a'); }
+    return;
+  }
+  if (b.kind === 'shardlet') { KIT.shard(g, c[0] - 4, c[1], r.range(12, 18), 4, r.range(-5, 5)); KIT.shard(g, c[0] + 5, c[1] + 2, r.range(8, 12), 3.5, r.range(-5, 5)); return; }
+  if (b.kind === 'orb') { g.beginPath(); g.ellipse(c[0], c[1] + 1, 6, 3, 0, 0, 6.2832); g.fillStyle = 'rgba(10,10,12,0.35)'; g.fill(); g.beginPath(); g.arc(c[0], c[1] - 14, 5, 0, 6.2832); g.fillStyle = '#b98cff'; g.fill(); KIT.ink(g, 1.4); g.beginPath(); g.arc(c[0] - 1.5, c[1] - 15.5, 1.6, 0, 6.2832); g.fillStyle = '#efe4ff'; g.fill(); return; }
+  if (b.kind === 'bolts') { for (let i = 0; i < 3; i++) { const x = c[0] + r.range(-8, 8), y = c[1] + r.range(-3, 3), pts = []; for (let k = 0; k < 6; k++) { const a = (k / 6) * 6.2832; pts.push([x + Math.cos(a) * 2.6, y + Math.sin(a) * 1.6]); } KIT.fill(g, pts, '#8d97a4'); KIT.poly(g, pts); KIT.ink(g, 0.9); } return; }
+  if (b.kind === 'chain') { for (let i = 0; i < 5; i++) { g.beginPath(); g.ellipse(c[0] - 10 + i * 5, c[1] + (i % 2) * 1.5, 3.4, 2, i % 2 ? 0.6 : -0.3, 0, 6.2832); g.lineWidth = 2.6; g.strokeStyle = '#0a0a0c'; g.stroke(); g.lineWidth = 1.2; g.strokeStyle = '#8d97a4'; g.stroke(); } return; }
+  if (b.kind === 'grate') { const q = [P(b.x - 0.3, b.y - 0.2), P(b.x + 0.3, b.y - 0.2), P(b.x + 0.3, b.y + 0.2), P(b.x - 0.3, b.y + 0.2)]; KIT.fill(g, q, '#2a2d36'); KIT.poly(g, q); KIT.ink(g, 1.4); for (let i = 1; i < 5; i++) KIT.line(g, [P(b.x - 0.3 + i * 0.12, b.y - 0.2), P(b.x - 0.3 + i * 0.12, b.y + 0.2)], 1, '#6b6e7a'); return; }
+  if (b.kind === 'gravel') { g.fillStyle = 'rgba(10,10,12,0.4)'; for (let i = 0; i < 9; i++) g.fillRect(c[0] + r.range(-12, 12), c[1] + r.range(-5, 5), 2, 1.5); return; }
+  if (b.kind === 'paper') { for (let i = 0; i < 2; i++) { const x = b.x + r.range(-0.2, 0.2), y = b.y + r.range(-0.2, 0.2), q = [P(x, y), P(x + 0.22, y + 0.04), P(x + 0.18, y + 0.3), P(x - 0.04, y + 0.26)]; KIT.fill(g, q, '#efe9da'); KIT.poly(g, q); KIT.ink(g, 0.9); KIT.line(g, [P(x + 0.03, y + 0.1), P(x + 0.16, y + 0.12)], 0.7); } }
+};
+
 // ---- the region painter ---------------------------------------------------------------------------------
 PT.region = function (g, P, w, cells, rect, bottom) {
   const m = ST.of(w), grid = w.grid, W = m.W, col = R.floorColor(w), theme = m.theme;
@@ -229,7 +297,10 @@ PT.region = function (g, P, w, cells, rect, bottom) {
     if (fy) { const inner = shaft(x, y + 1); PT.facade(g, P(x, y + 1), P(x + 1, y + 1), inner ? P(x, y + 1)[1] + 260 : bottom, 'y', cellRng(m, 'fy', x, y), inner); }
     if (fx) { const inner = shaft(x + 1, y); PT.facade(g, P(x + 1, y), P(x + 1, y + 1), inner ? P(x + 1, y + 1)[1] + 260 : bottom, 'x', cellRng(m, 'fx', x, y), inner); }
   }
-  // the shaft walls reach below the far edge of the shaft: cover what lies under the near floor
+  for (const c of m.growth.facade) {
+    if (!touches(rect, c.x - 1, c.y - 1, c.x + 1, c.y + 1, 0, c.down + 60)) continue;
+    const p = P(c.x, c.y); ST.drawFacadeGrowth(g, p[0], p[1] + FAC.lip + c.down, c);
+  }
   // 3. the floor: one flat colour
   g.beginPath();
   for (const [x, y] of cells) {
@@ -248,10 +319,15 @@ PT.region = function (g, P, w, cells, rect, bottom) {
   for (const [x, y] of cells) {
     if (!solidOrFloor(x, y)) continue;
     const r = cellRng(m, 's', x, y);
-    if (x % 2 === 0 && x > 0 && r.next() > 0.22) { const a = P(x, y + r.range(0, 0.15)), b = P(x, y + 1 - r.range(0, 0.15)); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); }
-    if (y % 2 === 0 && y > 0 && r.next() > 0.22) { const a = P(x + r.range(0, 0.15), y), b = P(x + 1 - r.range(0, 0.15), y); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); }
+    const keep = theme === 'heavy' ? -1 : 0.22, step = theme === 'heavy' ? 4 : 2;
+    if (x % step === 0 && x > 0 && r.next() > keep) { const a = P(x, y + r.range(0, 0.15)), b = P(x, y + 1 - r.range(0, 0.15)); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); }
+    if (y % step === 0 && y > 0 && r.next() > keep) { const a = P(x + r.range(0, 0.15), y), b = P(x + 1 - r.range(0, 0.15), y); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); }
   }
-  g.lineWidth = 1; g.strokeStyle = KIT.mul(col, 0.86); g.stroke();
+  g.lineWidth = theme === 'heavy' ? 1.6 : 1; g.strokeStyle = KIT.mul(col, theme === 'heavy' ? 0.74 : 0.86); g.stroke();
+  if (theme === 'heavy') { // steel deck plates: a rivet at each plate corner
+    g.fillStyle = KIT.mul(col, 0.62);
+    for (const [x, y] of cells) if (solidOrFloor(x, y)) { if (x % 4 === 0) { const p = P(x + 0.14, y + 0.5); g.fillRect(p[0] - 1.5, p[1] - 1, 3, 2); } if (y % 4 === 0) { const p = P(x + 0.5, y + 0.14); g.fillRect(p[0] - 1.5, p[1] - 1, 3, 2); } }
+  }
   for (const j of mk.joints) {
     if (!touches(rect, Math.min(j[0], j[2]) - 0.2, Math.min(j[1], j[3]) - 0.2, Math.max(j[0], j[2]) + 0.2, Math.max(j[1], j[3]) + 0.2)) continue;
     const o = j[0] === j[2] ? [0.09, 0] : [0, 0.09];
@@ -261,7 +337,7 @@ PT.region = function (g, P, w, cells, rect, bottom) {
   for (const p of mk.patches) {
     const xs = p.pts.map((q) => q[0]), ys = p.pts.map((q) => q[1]);
     if (!touches(rect, Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys))) continue;
-    KIT.fill(g, p.pts.map((q) => P(q[0], q[1])), p.dark ? KIT.mul(col, 0.91) : KIT.mix(col, '#ffffff', 0.07));
+    KIT.fill(g, p.pts.map((q) => P(q[0], q[1])), p.dark ? KIT.mul(col, 0.87) : KIT.mix(col, '#ffffff', 0.07));
   }
   for (const s of mk.scuffs) { if (!touches(rect, s.x - 1, s.y - 1, s.x + 1, s.y + 1)) continue; KIT.line(g, [P(s.x, s.y), P(s.x + Math.cos(s.a) * s.l, s.y + Math.sin(s.a) * s.l)], 2.2, KIT.mix(col, '#ffffff', 0.12)); }
   for (const c of mk.cracks) {
@@ -272,6 +348,7 @@ PT.region = function (g, P, w, cells, rect, bottom) {
     }
     const p0 = c.pts[0];
     if (!touches(rect, p0[0] - 2, p0[1] - 2, p0[0] + 2, p0[1] + 2)) continue;
+    if (theme === 'magic') KIT.line(g, c.pts.map((q) => P(q[0], q[1])), 3, 'rgba(201,160,255,0.35)');
     KIT.line(g, c.pts.map((q) => P(q[0], q[1])), 1.1, 'rgba(10,10,12,0.7)');
     KIT.line(g, c.branch.map((q) => P(q[0], q[1])), 0.8, 'rgba(10,10,12,0.6)');
   }
@@ -296,6 +373,7 @@ PT.region = function (g, P, w, cells, rect, bottom) {
     KIT.fill(g, pts, 'rgba(10,10,12,0.7)');
     for (let i = 0; i < 3; i++) { g.beginPath(); g.arc(p[0] + r.range(-2, 2) * s.r, p[1] + r.range(-0.8, 0.8) * s.r, r.range(1, 2.4), 0, 6.2832); g.fill(); }
   }
+  for (const b of mk.bits) if (touches(rect, b.x - 0.6, b.y - 0.6, b.x + 0.6, b.y + 0.6, 30)) PT.bit(g, P, b);
   g.restore();
   // 7. the floor's outline, heavy ink on open edges
   g.beginPath();
@@ -342,7 +420,7 @@ PT.region = function (g, P, w, cells, rect, bottom) {
   // 10. furniture along the walls and the back growths, back to front
   const items = [];
   for (const d of WB.decor) if (touches(rect, d.x, d.y, d.x + d.w, d.y + d.h, 90)) items.push({ k: d.x + d.y + d.w + d.h, f: () => { const sp = R.props.whole(d, theme, m.layout); const p = P(d.x, d.y); KIT.blit(g, sp, p[0], p[1]); } });
-  for (const c of m.growth.back) if (touches(rect, c.x - 1, c.y - 1, c.x + 1, c.y + 1, 110)) items.push({ k: c.x + c.y + 0.5, f: () => { const p = P(c.x, c.y); ST.drawGrowth(g, p[0], p[1], c, theme); } });
+  for (const c of m.growth.back) if (touches(rect, c.x - 1.6, c.y - 1.6, c.x + 1.6, c.y + 1.6, 110 * c.size + 30)) items.push({ k: c.x + c.y + 0.5, f: () => { const p = P(c.x, c.y); ST.drawGrowth(g, p[0], p[1], c, theme); } });
   items.sort((a, b) => a.k - b.k);
   for (const it of items) it.f();
 };

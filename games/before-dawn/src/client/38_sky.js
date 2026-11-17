@@ -128,7 +128,7 @@ R.drawSky = function (g, w) {
     for (const s of SK.stars) { g.globalAlpha = s[3] * (1 - k); g.fillRect(s[0], s[1], s[2], s[2]); }
     g.globalAlpha = 1;
     // crescent moon, inked
-    const mx = 1090, my = 92, r = 24;
+    const mx = 250, my = 140, r = 24; // clear of the HUD's corners
     g.globalAlpha = 1 - k * 0.6;
     g.beginPath(); g.arc(mx, my, r, 0.35 * Math.PI, 1.65 * Math.PI, false); g.arc(mx + 11, my - 4, r * 0.88, 1.52 * Math.PI, 0.48 * Math.PI, true); g.closePath();
     g.fillStyle = '#efe6c4'; g.fill(); g.lineWidth = 2; g.strokeStyle = BD.ui.INK; g.stroke();

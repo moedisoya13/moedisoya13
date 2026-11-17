@@ -216,17 +216,15 @@ SI.spawnMarks = function (g, v, w) {
 };
 // the stairs door, set into its back wall: a steel frame; locked — a violet seal across it; open —
 // warm light and the first steps up
-SI.door = function (g, v, w, t) {
-  const s = w.stairs;
-  if (!s) return;
-  const at = (u, z, d) => (s.side === 'y0' ? v.proj(s.x + u, d || 0.02, z) : v.proj(d || 0.02, s.y + u, z));
+// The frame, leaves, seal and crystal lock are one cached sprite per side and state (a halftone
+// fill per frame would make the browser raster the chunk blits before it, synchronously); only the
+// chains' pulse and the open door's light are drawn each frame.
+function doorBody(g, at, open) {
   const q = (u0, u1, z0, z1, d) => [at(u0, z0, d), at(u1, z0, d), at(u1, z1, d), at(u0, z1, d)];
   KIT.fill(g, q(-1.0, 1.0, 0, 84), '#6c7280'); KIT.poly(g, q(-1.0, 1.0, 0, 84)); KIT.ink(g, 2.4);
-  KIT.fill(g, q(-0.75, 0.75, 4, 74), s.open ? '#3a2a14' : '#15161c');
-  if (s.open) {
+  KIT.fill(g, q(-0.75, 0.75, 4, 74), open ? '#3a2a14' : '#15161c');
+  if (open) {
     for (let i = 0; i < 5; i++) KIT.fill(g, q(-0.7, 0.7, 6 + i * 13, 12 + i * 13), KIT.rgba('#ffd98a', 0.35 + i * 0.12));
-    const c0 = at(0, 40);
-    glow(g, c0[0], c0[1], 40 + Math.sin(t * 4) * 3, '#ffe6a0', 0.6);
     KIT.poly(g, q(-0.75, 0.75, 4, 74)); KIT.ink(g, 1.6);
     const sign = q(-0.4, 0.4, 76, 83); KIT.fill(g, sign, '#2f9a5a'); KIT.poly(g, sign); KIT.ink(g, 1.2);
     return;
@@ -234,14 +232,28 @@ SI.door = function (g, v, w, t) {
   KIT.fill(g, q(-0.72, -0.02, 6, 72), '#2a2d36'); KIT.fill(g, q(0.02, 0.72, 6, 72), '#2a2d36');
   KIT.poly(g, q(-0.75, 0.75, 4, 74)); KIT.ink(g, 1.6);
   KIT.line(g, [at(0, 6), at(0, 72)], 2);
-  // the seal: violet chains crossed, a crystal lock
+  for (const [u0, z0, u1, z1] of [[-0.7, 12, 0.7, 66], [0.7, 12, -0.7, 66]]) KIT.line(g, [at(u0, z0), at(u1, z1)], 5.5);
+}
+SI.door = function (g, v, w, t) {
+  const s = w.stairs;
+  if (!s) return;
+  const y0 = s.side === 'y0', o = y0 ? v.proj(s.x, 0) : v.proj(0, s.y);
+  const local = (P) => (u, z, d) => (y0 ? P(u, d || 0.02, z) : P(d || 0.02, u, z));
+  const sp = KIT.sprite('D:' + s.side + '|' + !!s.open, -64, -112, 64, 44, (gg) => {
+    const at = local(KIT.proj(0, 0));
+    doorBody(gg, at, s.open);
+    if (!s.open) { const c = at(0, 39); KIT.shard(gg, c[0], c[1] + 10, 22, 8, 0); }
+  });
+  KIT.blit(g, sp, o[0], o[1]);
+  const at = (u, z, d) => (y0 ? v.proj(s.x + u, d || 0.02, z) : v.proj(d || 0.02, s.y + u, z));
+  if (s.open) { const c0 = at(0, 40); glow(g, c0[0], c0[1], 40 + Math.sin(t * 4) * 3, '#ffe6a0', 0.6); return; }
+  // the seal's violet chains pulse
   const pulse = 0.6 + 0.25 * Math.sin(t * 3);
-  for (const [u0, z0, u1, z1] of [[-0.7, 12, 0.7, 66], [0.7, 12, -0.7, 66]]) { KIT.line(g, [at(u0, z0), at(u1, z1)], 5.5); KIT.line(g, [at(u0, z0), at(u1, z1)], 3, KIT.rgba('#b98cff', pulse)); }
-  const c = at(0, 39); KIT.shard(g, c[0], c[1] + 10, 22, 8, 0);
+  for (const [u0, z0, u1, z1] of [[-0.7, 12, 0.7, 66], [0.7, 12, -0.7, 66]]) KIT.line(g, [at(u0, z0), at(u1, z1)], 3, KIT.rgba('#b98cff', pulse));
 };
 
 // ---- the depth-sorted stage pass ------------------------------------------------------------------
-const growthSprite = (c, theme) => KIT.sprite('G:' + c.seed + '|' + theme + '|' + c.size, -26 * c.size - 30, -70 * c.size - 20, 26 * c.size + 30, 18, (g) => ST.drawGrowth(g, 0, 0, c, theme));
+const growthSprite = (c, theme) => KIT.sprite('G:' + c.seed + '|' + theme + '|' + c.size, -32 * c.size - 30, -100 * c.size - 24, 32 * c.size + 30, 14 * c.size + 10, (g) => ST.drawGrowth(g, 0, 0, c, theme));
 ST.pushItems = function (items, g, v, w, t, actorOn) {
   const m = ST.of(w), W = m.W, grid = w.grid, theme = m.theme, layout = m.layout;
   if (!m.solids) { m.solids = []; for (let y = 0; y < m.H; y++) for (let x = 0; x < W; x++) if (grid.get(x, y) === BD.CELL.SOLID) m.solids.push([x, y]); }
@@ -262,7 +274,11 @@ ST.pushItems = function (items, g, v, w, t, actorOn) {
   }
   for (const c of m.growth.front) {
     if (!actorOn(v, c.x, c.y, 0.8)) continue;
-    items.push({ k: c.x + c.y, f: () => { const q = v.proj(c.x, c.y); KIT.blit(g, growthSprite(c, theme), q[0], q[1]); } });
+    items.push({ k: c.x + c.y, f: () => {
+      const q = v.proj(c.x, c.y), sp = growthSprite(c, theme);
+      const cover = c.x + c.y > hk && q[0] + sp.x0 < hx1 && q[0] + sp.x0 + sp.w > hx0 && q[1] + sp.y0 < hy1 - 6 && q[1] + sp.y0 + sp.h > hy0;
+      KIT.blit(g, sp, q[0], q[1], cover ? 0.42 : undefined);
+    } });
   }
   if (w.trial && (w.trial.state === 'available' || w.trial.state === 'active')) {
     const tr = w.trial;

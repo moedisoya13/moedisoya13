@@ -86,13 +86,14 @@ async function run(P) {
   const a = await measure(false);
   const b = await measure(true);
   const alive = await page.evaluate(() => window.__BD.world().enemies.filter((e) => !e.dead).length);
+  const chunks = await page.evaluate(() => (window.BD.client.render.big.stats ? window.BD.client.render.big.stats() : null));
   await browser.close();
   return {
     profile: P.id, art: ART, seconds: SECONDS, enemiesAlive: alive, frames: a.js.length,
     jsMs: { p50: q(a.js, 0.5), p95: q(a.js, 0.95), max: q(a.js, 1) },
     worldMs: { p50: q(a.world, 0.5), p95: q(a.world, 0.95) },
     fullMs: { p50: q(b.full, 0.5), p95: q(b.full, 0.95), max: q(b.full, 1), over16: +(b.full.filter((x) => x > 16.7).length / Math.max(1, b.full.length)).toFixed(3) },
-    errors,
+    chunks, errors,
   };
 }
 

@@ -182,9 +182,14 @@ function zoneFill(m, z) {
   if (ids.some((i) => i === 'planter' || i === 'partition' || i === 'sandbags' || i === 'bench')) return 'planters';
   return 'open';
 }
+const BITS = {
+  beast: { p: 0.05, kinds: ['twigs', 'twigs', 'tuft'] }, undead: { p: 0.05, kinds: ['bones', 'candles', 'bones'] },
+  magic: { p: 0.06, kinds: ['shardlet', 'shardlet', 'orb'] }, heavy: { p: 0.04, kinds: ['bolts', 'chain'] }, rooftop: { p: 0.05, kinds: ['grate', 'gravel', 'gravel'] },
+};
+ST.BITS = BITS;
 function marks(w, m) {
   const grid = w.grid, W = m.W, H = m.H, rng = KIT.rng(m.seed + ':marks');
-  const out = { carpets: [], emblems: [], patches: [], cracks: [], scuffs: [], stones: [], ink: [], joints: [] };
+  const out = { carpets: [], emblems: [], patches: [], cracks: [], scuffs: [], stones: [], ink: [], joints: [], bits: [] };
   for (const z of m.zones) {
     const fill = (z.fillSeen = zoneFill(m, z)), cx = z.x + z.w / 2, cy = z.y + z.h / 2;
     if ((fill === 'cubicles' || fill === 'aisle') && m.layout !== 'ruin' && m.theme !== 'rooftop') out.carpets.push({ x: z.x + 1, y: z.y + 1, w: z.w - 2, h: z.h - 2, kind: m.layout === 'hall' ? 'runner' : 'office' });
@@ -196,15 +201,16 @@ function marks(w, m) {
   for (const z of m.zones) { if (z.x > 0) out.joints.push([z.x, z.y, z.x, z.y + z.h]); if (z.y > 0) out.joints.push([z.x, z.y, z.x + z.w, z.y]); }
   if (m.theme === 'rooftop' && !out.emblems.some((e) => e.kind === 'helipad')) out.emblems.push({ x: W / 2, y: H / 2, r: Math.min(4, W / 6), kind: 'helipad' });
   // wear: denser near walls, props and edges; the ruin and the beast floor are rougher
-  const rough = (m.layout === 'ruin' ? 1.6 : 1) * (m.theme === 'beast' || m.theme === 'undead' ? 1.2 : 1);
+  const rough = (m.layout === 'ruin' ? 1.6 : 1) * (m.theme === 'undead' ? 1.45 : m.theme === 'beast' ? 1.2 : 1);
   const nearThing = (x, y) => x <= 1 || y <= 1 || !isFloor(grid, x + 2, y) || !isFloor(grid, x, y + 2) || grid.get(x + 1, y) === BD.CELL.SOLID || grid.get(x, y + 1) === BD.CELL.SOLID || grid.get(x - 1, y) === BD.CELL.SOLID || grid.get(x, y - 1) === BD.CELL.SOLID;
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
     if (grid.get(x, y) !== BD.CELL.FLOOR) continue;
     const near = nearThing(x, y), p = rng.next();
-    if (p < (near ? 0.07 : 0.022) * rough) {
-      const n = 6 + Math.floor(rng.next() * 3), r = rng.range(0.4, near ? 1.4 : 1.1), pts = [];
+    const edge = x <= 1 || y <= 1 || !isFloor(grid, x + 1, y) || !isFloor(grid, x, y + 1);
+    if (p < (edge ? 0.16 : near ? 0.08 : 0.014) * rough) {
+      const n = 6 + Math.floor(rng.next() * 3), r = rng.range(0.45, edge ? 1.9 : near ? 1.5 : 1.1), pts = [];
       for (let i = 0; i < n; i++) { const a = (i / n) * 6.2832 + rng.range(-0.25, 0.25), rr = r * rng.range(0.55, 1); pts.push([x + 0.5 + Math.cos(a) * rr, y + 0.5 + Math.sin(a) * rr]); }
-      out.patches.push({ pts, dark: rng.next() < 0.75 });
+      out.patches.push({ pts, dark: rng.next() < (edge ? 0.92 : 0.75) });
     }
     if (rng.next() < (near ? 0.03 : 0.008) * rough * rough) {
       const pts = [[x + rng.next(), y + rng.next()]], L = rng.int(3, 6);
@@ -215,13 +221,25 @@ function marks(w, m) {
     }
     if (rng.next() < 0.012) out.scuffs.push({ x: x + rng.next(), y: y + rng.next(), a: rng.range(-0.6, 0.6), l: rng.range(0.4, 0.9) });
     if (rng.next() < (near ? 0.05 : 0.006) * rough) out.stones.push({ x: x + rng.range(0.15, 0.85), y: y + rng.range(0.15, 0.85), r: rng.range(2.5, 5) });
+    // rubble heaps at the walls and the slab edge: a few chunks together (the reference's debris)
+    if (edge && rng.next() < 0.05 * rough) { const cx = x + rng.range(0.2, 0.8), cy = y + rng.range(0.2, 0.8), k = rng.int(3, 6); for (let i = 0; i < k; i++) out.stones.push({ x: cx + rng.range(-0.45, 0.45), y: cy + rng.range(-0.3, 0.3), r: rng.range(3.5, 8.5) }); }
+    if (edge && rng.next() < 0.012 * rough) out.ink.push({ x: x + rng.next(), y: y + rng.next(), r: rng.range(8, 15), seed: rng.int(1, 1e6) });
     if (rng.next() < 0.004 * rough) out.ink.push({ x: x + rng.next(), y: y + rng.next(), r: rng.range(4, 9), seed: rng.int(1, 1e6) });
-    if (m.theme === 'beast' && rng.next() < 0.006) out.cracks.push({ claw: true, x: x + 0.5, y: y + 0.5, a: rng.range(0, 3.14) });
+    if (m.theme === 'beast' && rng.next() < (near ? 0.03 : 0.008)) out.cracks.push({ claw: true, x: x + 0.5, y: y + 0.5, a: rng.range(0, 3.14) });
+    // the floor type's own litter, against walls and props only (the middle stays clear)
+    const bit = BITS[m.theme];
+    if (bit && near && rng.next() < bit.p) out.bits.push({ x: x + rng.range(0.2, 0.8), y: y + rng.range(0.2, 0.8), kind: bit.kinds[Math.floor(rng.next() * bit.kinds.length)], seed: rng.int(1, 1e6) });
+    if (m.layout === 'office' && near && m.theme !== 'rooftop' && rng.next() < 0.03) out.bits.push({ x: x + rng.next(), y: y + rng.next(), kind: 'paper', seed: rng.int(1, 1e6) });
   }
   return out;
 }
 
 // ---- back walls: bays of glass or concrete, wall items, furniture along them, the elevator ---------
+// what makes a floor type's walls its own: smashed panes, mounted items, furniture
+const BROKEN = { beast: 0.35, undead: 0.3, magic: 0.12, heavy: 0.1 };
+const WALL_ITEMS = { heavy: ['shield', 'shield', 'banner', 'banner'], magic: ['sigil', 'sigil', 'banner'], undead: ['cobweb', 'cobweb', 'clock'], beast: ['claws', 'claws', 'claws', 'poster'] };
+const WALL_DECOR = { heavy: ['wall_rack', 'wall_crates'], magic: ['wall_shelf', 'wall_shelf'], beast: ['wall_crates', 'wall_crates'], undead: ['wall_cabinet', 'wall_cabinet'] };
+ST.WALL_ITEMS = WALL_ITEMS; ST.WALL_DECOR = WALL_DECOR;
 function walls(w, m) {
   const grid = w.grid, W = m.W, H = m.H, rng = KIT.rng(m.seed + ':walls'), out = { bays: [], items: [], decor: [], elevator: null, parapet: m.theme === 'rooftop' };
   const st = w.stairs, B = 4;
@@ -230,7 +248,7 @@ function walls(w, m) {
     const n = side === 'y0' ? W : H;
     for (let a = 0; a < n; a += B) {
       const len = Math.min(B, n - a);
-      let kind = rng.next() < 0.62 ? 'glass' : 'solid';
+      let kind = rng.next() < 0.62 ? (rng.next() < (BROKEN[m.theme] || 0.08) ? 'broken' : 'glass') : 'solid';
       if (doorAt(side, a + len / 2) || doorAt(side, a) || doorAt(side, a + len)) kind = 'solid';
       out.bays.push({ side, a, len, kind });
     }
@@ -239,18 +257,22 @@ function walls(w, m) {
   const cands = out.bays.filter((b) => b.kind === 'solid' && b.len === B && !doorAt(b.side, b.a + B / 2) && !(st && st.side === b.side && Math.abs((b.side === 'y0' ? st.x : st.y) - (b.a + 2)) < 8) && b.a >= 4);
   if (cands.length && !out.parapet) { out.elevator = cands[Math.floor(rng.next() * cands.length)]; out.elevator.kind = 'elevator'; }
   // wall items on solid bays; furniture in front of glass and solid bays
-  const items = ['clock', 'exit', 'board', 'whiteboard', 'tv', 'vent', 'extinguisher', 'poster', 'poster'];
+  const base = ['clock', 'exit', 'board', 'whiteboard', 'tv', 'vent', 'extinguisher', 'poster', 'poster'], own = WALL_ITEMS[m.theme] || [];
+  const pickItem = () => (own.length && rng.next() < 0.55 ? own[Math.floor(rng.next() * own.length)] : base[Math.floor(rng.next() * base.length)]);
   for (const b of out.bays) {
     if (b.kind === 'elevator' || out.parapet) continue;
-    if (b.kind === 'solid' && !doorAt(b.side, b.a + b.len / 2)) out.items.push({ side: b.side, a: b.a + rng.range(0.6, b.len - 1.4), kind: items[Math.floor(rng.next() * items.length)], v: rng.int(0, 7) });
-    if (b.kind === 'solid' && rng.next() < 0.5 && b.len >= 3 && !doorAt(b.side, b.a + b.len / 2)) out.items.push({ side: b.side, a: b.a + b.len - 1.1, kind: items[Math.floor(rng.next() * items.length)], v: rng.int(0, 7) });
+    if (b.kind === 'solid' && !doorAt(b.side, b.a + b.len / 2)) out.items.push({ side: b.side, a: b.a + rng.range(0.6, b.len - 1.4), kind: pickItem(), v: rng.int(0, 7) });
+    if (b.kind === 'solid' && rng.next() < 0.5 && b.len >= 3 && !doorAt(b.side, b.a + b.len / 2)) out.items.push({ side: b.side, a: b.a + b.len - 1.1, kind: pickItem(), v: rng.int(0, 7) });
+    if (b.kind !== 'solid' && m.theme === 'undead' && rng.next() < 0.5) out.items.push({ side: b.side, a: b.a + 0.1, kind: 'cobweb', v: 0 });
     // furniture: a wall desk, cabinets, a cooler or a plant, never in front of the stairs door
     let a = b.a + 0.3;
     while (a < b.a + b.len - 0.8) {
       const c = rng.next(), wid = c < 0.4 ? 2 : 1;
       if (a + wid > b.a + b.len - 0.2) break;
       if (doorAt(b.side, a + wid / 2) || doorAt(b.side, a) || doorAt(b.side, a + wid)) { a += 1; continue; }
-      const id = c < 0.4 ? 'wall_desk' : c < 0.62 ? 'wall_cabinet' : c < 0.74 ? 'water_cooler' : c < 0.86 ? 'potted_plant' : c < 0.92 ? 'printer' : null;
+      let id = c < 0.4 ? 'wall_desk' : c < 0.62 ? 'wall_cabinet' : c < 0.74 ? 'water_cooler' : c < 0.86 ? 'potted_plant' : c < 0.92 ? 'printer' : null;
+      const sw = WALL_DECOR[m.theme]; // the floor type's own furniture takes some places
+      if (sw && id && rng.next() < 0.45) id = wid === 2 ? sw[0] : sw[1];
       if (id) {
         const cellX = b.side === 'y0' ? Math.floor(a) : 0, cellY = b.side === 'y0' ? 0 : Math.floor(a);
         if (grid.get(cellX, cellY) === BD.CELL.FLOOR) out.decor.push(b.side === 'y0' ? { id, x: a, y: 0.04, w: wid, h: 0.56, v: rng.int(0, 7), side: b.side } : { id, x: 0.04, y: a, w: 0.56, h: wid, v: rng.int(0, 7), side: b.side });
@@ -268,27 +290,30 @@ function walls(w, m) {
 const GROW = { beast: { spike: 1, crystal: 0.5, nest: 0.4 }, undead: { spike: 1.3, crystal: 0.45, bone: 0.5 }, magic: { spike: 0.45, crystal: 1.8 }, heavy: { spike: 1.25, crystal: 0.45 }, rooftop: { spike: 1.6, crystal: 1.6 } };
 ST.GROW = GROW;
 function growths(w, m) {
-  const grid = w.grid, W = m.W, H = m.H, rng = KIT.rng(m.seed + ':grow'), G = GROW[m.theme] || GROW.beast, out = { back: [], front: [] };
+  const grid = w.grid, W = m.W, H = m.H, rng = KIT.rng(m.seed + ':grow'), G = GROW[m.theme] || GROW.beast, out = { back: [], front: [], facade: [] };
   const kindAt = () => (rng.next() * (G.spike + G.crystal) < G.crystal ? 'crystal' : 'spike');
-  const st = w.stairs, nearDoor = (x, y) => st && Math.hypot(st.ringX - x, st.ringY - y) < 3.2;
-  // corners: big clusters
-  if (isFloor(grid, 0, 0)) out.back.push({ x: 0.15, y: 0.15, n: 6, size: 1.5, kind: 'mix' });
-  if (isFloor(grid, W - 1, 0)) out.back.push({ x: W - 0.3, y: 0.2, n: 5, size: 1.3, kind: kindAt() });
-  if (isFloor(grid, 0, H - 1)) out.back.push({ x: 0.2, y: H - 0.3, n: 5, size: 1.3, kind: kindAt() });
-  // along the back walls
-  const per = 7 / ((G.spike + G.crystal) * 0.5);
-  for (let a = 2 + rng.range(0, per); a < W - 2; a += per * rng.range(0.6, 1.4)) if (isFloor(grid, Math.floor(a), 0) && !nearDoor(a, 0.3)) out.back.push({ x: a, y: 0.15, n: rng.int(2, 4), size: rng.range(0.8, 1.2), kind: kindAt() });
-  for (let a = 2 + rng.range(0, per); a < H - 2; a += per * rng.range(0.6, 1.4)) if (isFloor(grid, 0, Math.floor(a)) && !nearDoor(0.3, a)) out.back.push({ x: 0.15, y: a, n: rng.int(2, 4), size: rng.range(0.8, 1.2), kind: kindAt() });
-  // the front edges (on the slab lip, outside the floor) and the front corner
+  const st = w.stairs, nearDoor = (x, y) => st && Math.hypot(st.ringX - x, st.ringY - y) < 3.4;
+  const dense = (G.spike + G.crystal) / 1.6;
+  // corners: masses taller than a man
+  if (isFloor(grid, 0, 0)) out.back.push({ x: 0.2, y: 0.2, n: 10, size: 2.0, kind: 'mix' });
+  if (isFloor(grid, W - 1, 0)) out.back.push({ x: W - 0.35, y: 0.25, n: 8, size: 1.75, kind: 'mix' });
+  if (isFloor(grid, 0, H - 1)) out.back.push({ x: 0.25, y: H - 0.35, n: 8, size: 1.75, kind: 'mix' });
+  // along the back walls, in clumps
+  const per = 5.5 / dense;
+  for (let a = 2.5 + rng.range(0, per); a < W - 2; a += per * rng.range(0.55, 1.45)) if (isFloor(grid, Math.floor(a), 0) && !nearDoor(a, 0.3)) out.back.push({ x: a, y: 0.18, n: rng.int(3, 6), size: rng.range(1.05, 1.6), kind: kindAt() });
+  for (let a = 2.5 + rng.range(0, per); a < H - 2; a += per * rng.range(0.55, 1.45)) if (isFloor(grid, 0, Math.floor(a)) && !nearDoor(0.3, a)) out.back.push({ x: 0.18, y: a, n: rng.int(3, 6), size: rng.range(1.05, 1.6), kind: kindAt() });
+  // the front edges (on the slab lip, outside the floor), the front corner, crystals in the facade
   for (let x = 0; x < W; x++) for (let y = 0; y < H; y++) {
     if (!isFloor(grid, x, y)) continue;
     const fy = grid.get(x, y + 1), fx = grid.get(x + 1, y);
     const edgeY = fy === -1 || (fy === BD.CELL.VOID && m.voidKind[(y + 1) * W + x] === 1), edgeX = fx === -1 || (fx === BD.CELL.VOID && m.voidKind[y * W + x + 1] === 1);
-    if (edgeY && edgeX) { out.front.push({ x: x + 1.05, y: y + 1.05, n: 6, size: 1.5, kind: 'mix' }); continue; }
-    if (edgeY && rng.next() < 0.06 * (G.spike + G.crystal)) out.front.push({ x: x + rng.range(0.2, 0.8), y: y + 1.12, n: rng.int(2, 4), size: rng.range(0.85, 1.25), kind: kindAt() });
-    if (edgeX && rng.next() < 0.06 * (G.spike + G.crystal)) out.front.push({ x: x + 1.12, y: y + rng.range(0.2, 0.8), n: rng.int(2, 4), size: rng.range(0.85, 1.25), kind: kindAt() });
+    if (edgeY && edgeX) { out.front.push({ x: x + 1.08, y: y + 1.08, n: 10, size: 2.0, kind: 'mix' }); continue; }
+    if (edgeY && rng.next() < 0.075 * dense * 1.6) out.front.push({ x: x + rng.range(0.2, 0.8), y: y + 1.14, n: rng.int(3, 5), size: rng.range(1.0, 1.55), kind: kindAt() });
+    if (edgeX && rng.next() < 0.075 * dense * 1.6) out.front.push({ x: x + 1.14, y: y + rng.range(0.2, 0.8), n: rng.int(3, 5), size: rng.range(1.0, 1.55), kind: kindAt() });
+    if (edgeY && rng.next() < 0.05 * dense) out.facade.push({ x: x + rng.range(0.2, 0.8), y: y + 1, side: 'y', down: rng.range(30, 160) });
+    if (edgeX && rng.next() < 0.05 * dense) out.facade.push({ x: x + 1, y: y + rng.range(0.2, 0.8), side: 'x', down: rng.range(30, 160) });
   }
-  for (const c of out.back.concat(out.front)) c.seed = rng.int(1, 1e9);
+  for (const c of out.back.concat(out.front, out.facade)) c.seed = rng.int(1, 1e9);
   return out;
 }
 // drop every cached stage canvas (floor type changed by a test, a staging page, a settings change)
@@ -302,15 +327,26 @@ R.invalidate = function () {
 ST.drawGrowth = function (g, sx, sy, c, theme) {
   const rng = BD.Rng(c.seed), items = [], n = c.n, sz = c.size;
   for (let i = 0; i < n; i++) {
-    const k = c.kind === 'mix' ? (i % 3 === 0 ? 'spike' : 'crystal') : c.kind;
-    items.push({ k, ox: rng.range(-16, 16) * sz, oy: rng.range(-6, 7) * sz, h: rng.range(24, 54) * sz * (k === 'spike' ? 1.2 : 1), w: rng.range(5, 9) * Math.sqrt(sz), lean: rng.range(-12, 12) * sz });
+    const k = c.kind === 'mix' ? (i % 3 === 1 ? 'spike' : 'crystal') : c.kind;
+    const ox = rng.range(-17, 17) * sz, centre = 1.3 - Math.min(1, Math.abs(ox) / (17 * sz)) * 0.65;
+    items.push({ k, ox, oy: rng.range(-6, 8) * sz, h: rng.range(30, 60) * sz * centre * (k === 'spike' ? 1.15 : 1), w: rng.range(6, 10) * Math.sqrt(sz), lean: (ox / (17 * sz)) * rng.range(6, 16) * sz + rng.range(-4, 4) });
   }
   items.sort((a, b) => a.oy - b.oy);
-  // a dark root mound under the cluster
-  KIT.poly(g, [[sx - 20 * sz, sy + 3], [sx - 8 * sz, sy - 5 * sz], [sx + 12 * sz, sy - 4 * sz], [sx + 22 * sz, sy + 3], [sx + 6 * sz, sy + 8 * sz], [sx - 12 * sz, sy + 7 * sz]]);
-  g.fillStyle = '#1b1822'; g.fill(); KIT.ink(g, 1.4);
+  // a dark root mound under the cluster, its rocks
+  const mound = [[sx - 24 * sz, sy + 3], [sx - 10 * sz, sy - 6 * sz], [sx + 12 * sz, sy - 5 * sz], [sx + 26 * sz, sy + 3], [sx + 8 * sz, sy + 10 * sz], [sx - 14 * sz, sy + 8 * sz]];
+  KIT.fill(g, mound, '#1b1822'); KIT.poly(g, mound); KIT.ink(g, 1.6);
+  const heavy = theme === 'heavy' ? { pal: { lit: '#4a4e5a', dark: '#14161b', glint: '#8a93a3' } } : undefined;
   for (const it of items) {
-    if (it.k === 'spike') KIT.spike(g, sx + it.ox, sy + it.oy, it.h, it.w * 0.8, it.lean * 1.3, theme === 'heavy' ? { pal: { lit: '#4a4e5a', dark: '#14161b', glint: '#8a93a3' } } : undefined);
+    if (it.k === 'spike') KIT.spike(g, sx + it.ox, sy + it.oy, it.h, it.w * 0.8, it.lean * 1.3, heavy);
     else KIT.shard(g, sx + it.ox, sy + it.oy, it.h, it.w, it.lean);
+  }
+  for (let i = 0; i < 3; i++) KIT.rock(g, sx + rng.range(-22, 22) * sz, sy + rng.range(4, 10) * sz, rng.range(3, 5) * Math.sqrt(sz), rng, KIT.pal('#3a3545'));
+};
+// crystals grown into the facade below the slab edge (screen point (sx, sy) on the face)
+ST.drawFacadeGrowth = function (g, sx, sy, c) {
+  const rng = BD.Rng(c.seed), dir = c.side === 'y' ? -1 : 1;
+  for (let i = 0; i < 3; i++) {
+    const x = sx + rng.range(-10, 10), y = sy + rng.range(-8, 8), h = rng.range(22, 40), w = rng.range(5, 8);
+    KIT.shard(g, x, y, h, w, dir * rng.range(10, 22));
   }
 };

@@ -97,7 +97,7 @@ KIT.halftone = function (g, alpha, size) {
 // Inked box over world rect (x, y, dw, dh) from z0 to z1 px; taper insets the top by that many u.
 KIT.box = function (g, P, x, y, dw, dh, z0, z1, pal, o) {
   o = o || {};
-  const t = o.taper || 0, lw = o.lw || 2;
+  const t = o.taper || 0, lw = o.lw || 2.2;
   const A0 = P(x, y + dh, z0), B0 = P(x + dw, y + dh, z0), C0 = P(x + dw, y, z0);
   const A1 = P(x + t, y + dh - t, z1), B1 = P(x + dw - t, y + dh - t, z1), C1 = P(x + dw - t, y + t, z1), D1 = P(x + t, y + t, z1);
   fill(g, [A0, B0, B1, A1], pal.left);
