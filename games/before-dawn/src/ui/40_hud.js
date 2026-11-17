@@ -198,16 +198,19 @@ function drawToasts(g, ui) {
     const age = ui.time - t.t, life = BD.ui.msg.TOAST_LIFE;
     const a = age > life - 0.4 ? (life - age) / 0.4 : 1;
     const slide = age < 0.15 ? (1 - age / 0.15) * -30 : 0;
-    const y = 400 + i * 44, size = 22;
-    const tag = t.kind === 'hint' ? '안내' : null;
-    const tw = K.measure(g, t.text, size, 700) + (tag ? 56 : 0);
+    // on a phone the lines are larger (K.big) and start a little higher, clear of the tray
+    const ph = K.phone(ui), size = K.big(ui, 22, 1.3), lh = ph ? 54 : 44, bh = ph ? 46 : 36;
+    const y = (ph ? 372 : 400) + i * lh;
+    const tag = t.kind === 'hint' ? '안내' : null, tagW = ph ? 64 : 50;
+    const maxW = ph ? 700 : 560;
+    const tw = Math.min(maxW - 34, K.measure(g, t.text, size, 700) + (tag ? tagW + 6 : 0));
     const x = 16 + slide;
-    K.panel(g, x, y, Math.min(560, tw + 34), 36, { slant: 6, shadow: 3, alpha: Math.max(0, a) });
+    K.panel(g, x, y, tw + 34, bh, { slant: 6, shadow: 3, alpha: Math.max(0, a) });
     g.globalAlpha = Math.max(0, a);
-    g.fillStyle = KIND_COLOR[t.kind] || KIND_COLOR.info; g.fillRect(x + 6, y + 6, 5, 24);
+    g.fillStyle = KIND_COLOR[t.kind] || KIND_COLOR.info; g.fillRect(x + 6, y + 6, 5, bh - 12);
     let tx = x + 20;
-    if (tag) { K.text(ui, tag, tx, y + 26, { size: 18, color: K.SKY, weight: 900 }); tx += 50; }
-    K.text(ui, t.text, tx, y + 26, { size, color: K.PAPER, weight: 700, maxW: 520 });
+    if (tag) { K.text(ui, tag, tx, y + bh - 10, { size: ph ? 23 : 18, color: K.SKY, weight: 900 }); tx += tagW; }
+    K.text(ui, t.text, tx, y + bh - 10, { size, color: K.PAPER, weight: 700, maxW: maxW - (tx - x) - 10 });
     g.globalAlpha = 1;
   });
 }
@@ -252,6 +255,9 @@ function drawLevelPips(g, ui, c, r, s) {
   const max = Math.max(1, BD.cardRt.maxLevel(c.def)), lv = Math.min(max, c.level || 1), ph = K.phone(ui);
   if (max < 2) return;
   const pr = ph ? 5.5 : 4.2, sp = Math.min(ph ? 15 : 14, (r.w - 8) / max), y = r.y + r.h + (ph ? 10 : 9);
+  // an ink strip behind the pips, so pale gold reads on the gold guard
+  const bw = (max - 1) * sp + 2 * pr + 8;
+  K.poly(g, K.slantPts(r.x + r.w / 2 - bw / 2, y - pr - 3, bw, 2 * pr + 6, 2)); g.fillStyle = K.INK; g.fill();
   for (let k = 0; k < max; k++) {
     const x = r.x + r.w / 2 + (k - (max - 1) / 2) * sp;
     let rr = pr;

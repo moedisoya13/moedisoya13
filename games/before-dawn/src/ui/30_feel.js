@@ -221,7 +221,7 @@ function closeGroups(ui) {
   let best = null;
   for (const k of Object.keys(GROUP.by)) { const gr = GROUP.by[k]; if (gr.n >= 4 && (!best || gr.n > best.n)) best = gr; }
   GROUP.by = {};
-  if (!best || ui.time - MK.last < 0.2) return;
+  if (!best || ui.time - MK.last < 0.45) return; // one word at a time
   MK.last = ui.time;
   FEEL.letter(ui, '촤악!', best.x / best.n, best.y / best.n, { size: 54 + Math.min(16, (best.n - 4) * 2), z: 90, always: true, life: 0.8 });
   FEEL.shake(2, 0.08); FEEL.hitstop(0.03, true); ui.sfxSafe('multi_kill');

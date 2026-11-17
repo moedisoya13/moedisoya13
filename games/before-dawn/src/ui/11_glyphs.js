@@ -30,7 +30,8 @@ const G = {
   'boon:step'(g) { P(g, [[-3, 10], [-3, -2], [3, -9], [9, -9], [9, -3], [3, 3], [3, 10]]); fi(g, WHITE); for (const y of [-4, 3]) line(g, [[-13, y], [-7, y]], SHARD, 2.4); },
   breath(g) { g.beginPath(); g.arc(0, 4, 10, Math.PI, 0); g.closePath(); fi(g, '#ffe2a8'); for (let i = 0; i < 5; i++) { const a = Math.PI + (i + 0.5) * Math.PI / 5; line(g, [[Math.cos(a) * 12, 4 + Math.sin(a) * 12], [Math.cos(a) * 15, 4 + Math.sin(a) * 15]], '#ffe2a8', 2); } },
   // ---- sites (§5.5) and task objects (§5.4)
-  'site:seal'(g) { P(g, [[-8, 12], [-10, -6], [-3, -12], [6, -10], [10, 0], [8, 12]]); fi(g, '#9aa3b8'); line(g, [[-3, -5], [3, 0], [-2, 6]], GOLD, 2.2); },
+  // a standing stone with a glowing rune ring
+  'site:seal'(g) { P(g, [[-8, 13], [-9, -6], [-5, -12], [5, -12], [9, -6], [8, 13]]); fi(g, '#a9b0c2'); P(g, [[1, -12], [5, -12], [9, -6], [8, 13], [2, 13]]); g.fillStyle = '#7d8598'; g.fill(); P(g, [[-8, 13], [-9, -6], [-5, -12], [5, -12], [9, -6], [8, 13]]); K.ink(g, 2.4); K.circle(g, 0, 1, 4.6); g.lineWidth = 2.6; g.strokeStyle = GOLD; g.stroke(); K.circle(g, 0, 1, 1.4); g.fillStyle = GOLD; g.fill(); },
   'site:nest'(g) { g.beginPath(); g.ellipse(0, 4, 12, 7, 0, 0, Math.PI * 2); fi(g, '#6b4a33'); for (const x of [-5, 1, 6]) { K.circle(g, x, 1, 3.4); fi(g, '#d9cbb0', 1.8); } },
   'site:brazier'(g) { P(g, [[-11, -1], [11, -1], [7, 7], [-7, 7]]); fi(g, '#8d877c'); line(g, [[-5, 7], [-7, 12]], '#8d877c', 2.2); line(g, [[5, 7], [7, 12]], '#8d877c', 2.2); flameShape(g, 0.9, -5); fi(g, '#ffb24a'); },
   'site:altar'(g) { P(g, [[-11, 3], [11, 3], [11, 11], [-11, 11]]); fi(g, '#b9b2a5'); P(g, [[-7, -1], [7, -1], [7, 3], [-7, 3]]); fi(g, '#d9d2c5'); line(g, [[0, -12], [0, -3]], GOLD, 2.4); line(g, [[-4, -8], [4, -8]], GOLD, 2.4); },

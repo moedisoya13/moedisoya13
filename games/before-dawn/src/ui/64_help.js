@@ -1,4 +1,4 @@
-// 도움말 (GDD §9.1 help): the four lines and a picture of the controls (keys and touch).
+// 도움말 (GDD §9.1 help, GDD-V2 §2): five lines and a picture of the controls (keys and touch).
 // From the title it closes back to the title; from the pause menu, back to the pause menu.
 // (The rotate prompt lives in 65_rotate.js.)
 
@@ -6,20 +6,18 @@ const K = BD.ui.K;
 const IC = BD.ui.icons;
 const NAV = BD.ui.nav;
 
+// GDD-V2 §2: the v2 loop in five lines (the target chevron has its own first-run hint)
 const LINES = [
   '움직이면 용사가 알아서 벱니다.',
-  '가장 가까운 적이 표적입니다. 주황 꺾쇠를 보세요.',
   '빨간 빗금은 곧 맞는 자리입니다. 비키거나 돌진하세요.',
-  '수호자를 베어야 계단이 열립니다. 06:00 전에 옥상으로.',
+  '빛 조각을 모아 게이지가 차면, 셋 중 하나로 성인을 키웁니다.',
+  '금색 표시를 따라 과업을 끝내면 수호자가 계단을 지킵니다.',
+  '미니맵의 ?는 들를 곳입니다. 06:00 전에 옥상으로.',
 ];
 
 function bulletArt(g, i, x, y) {
   if (i === 0) { IC.dash(g, x, y, 30, K.PAPER); return; }
-  if (i === 1) { // the target chevron as the game draws it (the hero's orange)
-    for (const s of [-1, 1]) { K.poly(g, [[x + s * 16, y - 6], [x + s * 6, y], [x + s * 16, y + 6], [x + s * 12, y]]); g.fillStyle = BD.ui.ORANGE; g.fill(); K.ink(g, 1.5); }
-    return;
-  }
-  if (i === 2) { // red hatch swatch
+  if (i === 1) { // red hatch swatch
     g.save(); K.poly(g, [[x - 16, y - 12], [x + 16, y - 12], [x + 16, y + 12], [x - 16, y + 12]]); g.clip();
     g.fillStyle = 'rgba(214,40,40,0.2)'; g.fillRect(x - 16, y - 12, 32, 24);
     g.strokeStyle = '#d62828'; g.lineWidth = 3;
@@ -27,7 +25,9 @@ function bulletArt(g, i, x, y) {
     g.restore(); K.poly(g, [[x - 16, y - 12], [x + 16, y - 12], [x + 16, y + 12], [x - 16, y + 12]]); K.ink(g, 3);
     return;
   }
-  IC.crown(g, x, y + 2, 30);
+  if (i === 2) { IC.glyph(g, 'shard', x, y, 30); return; }
+  if (i === 3) { IC.crown(g, x, y + 2, 30); return; }
+  IC.glyph(g, 'site:?', x, y, 30);
 }
 
 BD.ui.overlays.register({
@@ -36,9 +36,9 @@ BD.ui.overlays.register({
     K.dim(g, 0.9);
     K.letter(g, '도움말', 640, 74, { size: 52 });
     LINES.forEach((ln, i) => {
-      const y = 140 + i * 58;
+      const y = 136 + i * 48;
       bulletArt(g, i, 150, y - 9);
-      K.text(ui, ln, 190, y, { size: 27, weight: 800, color: K.PAPER, maxW: 1000 });
+      K.text(ui, ln, 190, y, { size: 26, weight: 800, color: K.PAPER, maxW: 1000 });
     });
     // keys
     K.panel(g, 90, 376, 520, 228, { edge: '#8d877c', facetK: 0.18 });

@@ -21,7 +21,7 @@ const C = BD.C;
 const K = BD.ui.K;
 const S = BD.ui.S;
 const M = BD.math;
-const MSG = BD.ui.msg;
+const msg = () => BD.ui.msg; // 32_messages.js loads after this file
 const FEEL = BD.ui.feel;
 const rng = K.rng;
 const FB = BD.ui.fb = { rings: [], surge: null, dots: 0 };
@@ -130,7 +130,7 @@ BD.ui.effects.register({
       const goal = Number(ev.goal) || 0, small = goal > 0 && goal <= 6;
       const q = (v) => Math.floor((4 * v) / Math.max(1, goal));
       if (small || q(ev.value) !== q(ev.value - 1)) S.taskPop = ui.time;
-      if (small && ev.value < goal) MSG.banner(BD.ui.taskLabel(ui.world) || ev.task + ' ' + ev.value + '/' + goal, 'task');
+      if (small && ev.value < goal) msg().banner(BD.ui.taskLabel(ui.world) || ev.task + ' ' + ev.value + '/' + goal, 'task');
     },
   },
   draw(g, ui, layer) {
