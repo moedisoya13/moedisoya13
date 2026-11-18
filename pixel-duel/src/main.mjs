@@ -2,6 +2,7 @@
    the shaking of the camera. */
 import { createRenderer, paletteArray, rgb } from './render/renderer.mjs';
 import { createFx, bladeOf } from './render/fx.mjs';
+import { unpack, fromBase64 } from './render/splats.mjs';
 import { fk, NAMES } from './rig/skeleton.mjs';
 import { BIND } from './rig/poses.mjs';
 import { boneMatrices } from './anim/pose.mjs';
@@ -35,8 +36,8 @@ const PLACE = { 1: [0, 0, 1, 0, 1, 0, 1, 0, 0], '-1': [0, 0, -1, 0, 1, 0, 1, 0, 
 
 async function load() {
   const manifest = await (await fetch('assets/manifest.json')).json();
-  const bin = async part => new Float32Array(await (await fetch('assets/' + part.file)).arrayBuffer());
-  const [fighter, arena] = await Promise.all([bin(manifest.fighter), bin(manifest.arena)]);
+  const splats = async part => unpack(fromBase64(await (await fetch('assets/' + part.file)).text()), part);
+  const [fighter, arena] = await Promise.all([splats(manifest.fighter), splats(manifest.arena)]);
   return { manifest, fighter, arena };
 }
 
@@ -117,7 +118,11 @@ function start({ manifest, fighter, arena }) {
       fx.dust([f[e.on].x, 0, 0.1], 5, [39, 38, 29], -f[e.on].face);
       shake.amp = heavy ? 6 : 3.5;
       if (heavy) white = 0.55;
-      if (navigator.vibrate && e.on === 0) navigator.vibrate(heavy ? 60 : 30);
+      try {
+        if (navigator.vibrate && e.on === 0) navigator.vibrate(heavy ? 60 : 30);
+      } catch {
+        // an embedded page may be refused the motor: the hit reads without it
+      }
       if (e.down) {
         overAt = time;
         phase = 'over';

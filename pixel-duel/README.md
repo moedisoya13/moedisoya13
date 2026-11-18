@@ -33,7 +33,7 @@ npm test           # 게임 규칙 + 손맛 규칙
    npx ink-studio sheet scenes/reel.js --from 0 --to 0.55 --n 12       # 베기를 프레임 단위로
    npx ink-studio render scenes/arena.js --w 960 --h 540               # 배경
    ```
-3. **베이크** — `npm run bake`. splat을 12 float 배열로 내보냅니다(`assets/`). 결과는 바이트 단위로 재현됩니다.
+3. **베이크** — `npm run bake`. splat을 22바이트로 양자화해 base64 텍스트로 내보냅니다(`assets/`, 형식은 `src/render/splats.mjs`). 결과는 바이트 단위로 재현됩니다.
 4. **플레이** — `index.html`. 런타임은 ink-studio를 싣지 않고 `assets/`와 `src/`만 씁니다.
 
 ## 구조

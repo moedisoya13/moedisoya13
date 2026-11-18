@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 /* Bakes what the game draws: the swordsman at rest and the courtyard, as flat arrays of splats the browser can hand straight to
    the graphics card. ink-studio is only needed here; the game itself ships none of it.
-     node tools/bake.mjs        -> assets/fighter.bin, assets/arena.bin, assets/manifest.json
-   A splat is twelve floats: x y z, the six numbers of its shape (c00 c01 c02 c11 c12 c22), palette index, bone, density. */
+     node tools/bake.mjs        -> assets/fighter.splats.txt, assets/arena.splats.txt, assets/manifest.json
+   A splat is twelve floats here (x y z, the six numbers of its shape c00 c01 c02 c11 c12 c22, palette index, bone, density)
+   and 22 bytes on disk, written as base64 text: see src/render/splats.mjs. */
 import { createRequire } from 'node:module';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -11,6 +12,7 @@ import { fk, NAMES } from '../src/rig/skeleton.mjs';
 import { PALETTE, sculptSwordsman } from '../src/rig/swordsman.mjs';
 import { BIND } from '../src/rig/poses.mjs';
 import { ARENA, sculptArena } from '../src/world/arena.mjs';
+import { pack as packSplats, BYTES } from '../src/render/splats.mjs';
 
 const require = createRequire(import.meta.url);
 const { makeBuilder, makeSculpt, KIT: K } = require('@shapeshift-labs/ink-studio').load();
@@ -82,15 +84,18 @@ let arena;
   arena.data = sorted;
 }
 
-writeFileSync(path.join(out, 'fighter.bin'), Buffer.from(fighter.data.buffer));
-writeFileSync(path.join(out, 'arena.bin'), Buffer.from(arena.data.buffer));
+function write(name, baked) {
+  const packed = packSplats(baked.data),
+    file = name + '.splats.txt';
+  writeFileSync(path.join(out, file), Buffer.from(packed.bytes).toString('base64') + '\n');
+  const round = v => +v.toFixed(5);
+  console.log(`${name.padEnd(8)}${baked.count} splats, ${((baked.count * BYTES) / 1024).toFixed(0)} KB packed, ${baked.offPalette} off palette`);
+  return { file, count: baked.count, min: packed.min.map(round), size: packed.size.map(round) };
+}
 const manifest = {
-  stride: 12,
   palette: PALETTE,
   bones: NAMES.length + 1, // bone 0 stays where it is; bone i + 1 is joint i
-  fighter: { file: 'fighter.bin', count: fighter.count },
-  arena: { file: 'arena.bin', count: arena.count, halfWidth: ARENA.halfWidth, camera: ARENA.camera }
+  fighter: write('fighter', fighter),
+  arena: Object.assign(write('arena', arena), { halfWidth: ARENA.halfWidth, camera: ARENA.camera })
 };
 writeFileSync(path.join(out, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
-console.log(`fighter ${fighter.count} splats (${(fighter.data.byteLength / 1024).toFixed(0)} KB), ${fighter.offPalette} off palette`);
-console.log(`arena   ${arena.count} splats (${(arena.data.byteLength / 1024).toFixed(0)} KB), ${arena.offPalette} off palette`);

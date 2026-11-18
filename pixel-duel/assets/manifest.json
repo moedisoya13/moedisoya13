@@ -1,5 +1,4 @@
 {
-  "stride": 12,
   "palette": [
     724244,
     4860464,
@@ -48,12 +47,32 @@
   ],
   "bones": 24,
   "fighter": {
-    "file": "fighter.bin",
-    "count": 9652
+    "file": "fighter.splats.txt",
+    "count": 9652,
+    "min": [
+      -0.44538,
+      0.00315,
+      -0.33143
+    ],
+    "size": [
+      0.88965,
+      1.87185,
+      1.45998
+    ]
   },
   "arena": {
-    "file": "arena.bin",
+    "file": "arena.splats.txt",
     "count": 43349,
+    "min": [
+      -6.6,
+      -0.6,
+      -4.12258
+    ],
+    "size": [
+      13.45523,
+      5.6171,
+      5.68258
+    ],
     "halfWidth": 4.6,
     "camera": {
       "target": [
