@@ -885,8 +885,14 @@ BD.growth.giveBoon(w, id) / levelCard(w, card)      // what a pick does (also us
 [{kind: 'card'|'boon'|'breath', id, name, from, to, text, pick}], lastCards}` with `w.choiceOpen`;
 answer with `app.cmd('choice', 'pick', i)` (or `BD.bot.choose(w, {policy})` → the arguments). A
 pick toasts, gives 0.5 s invulnerability and shoves fodder within 3u out by 1.5u; a second queued
-level opens the next choice on the next tick. **A chest** (§4.6) is `BD.growth.open(w, 'chest')` with
-its own options: extend `options` by `kind` (the overlay reads `w.choice` only). `&level=N` /
+level opens the next choice on the next tick. The first opens `C.V2.choice.delay` (0.25 s) after its
+`level_up` (§4.3: the ring and the slow motion are seen; the world runs meanwhile, `w.choiceWait`).
+**A chest** (§4.6) is `BD.growth.open(w, 'chest')`: `options(w, 'chest')` gives one option per slot
+in slot order (a top-level card's slot takes a boon, then 여명의 숨) and leaves `lastCards` alone;
+`BD.growth.kinds[kind] = (w) → options` lets another choice kind bring its own. **The altar** is a
+choice of kind `altar` in the same overlay (src/content/cards/_altar.js, `BD.cardAltar`): step
+`choose` (three offers) → step `slot` (the three slots); `app.cmd('choice', 'pick' | 'slot' | 'back'
+| 'pray' | 'later')`. `&level=N` /
 `startRun({level})` and `&floor=N` (level `C.V2.levelAtFloor[N]`) pre-pick with the bot's `mixed` policy.
 
 **A card's levels** (§4.4, §4.7): add `levels: [null, L1, …, L5]` to the card def, each `{text, …numbers}`
@@ -926,17 +932,20 @@ optional}]`. `w.sites = [{id (number), kind, x, y, zx, zy, phase: 'idle'|'active
 art draws: def.states[0] first, then def.look), known, optional, progress, need, needExit, mem}]`. Standing in
 the ring for `stay` s emits `site_start` and calls `use`; a site not done at once stays `active` until
 `BD.siteRt.clear(w, site)` (`site_clear`); `BD.siteRt.release` puts it back to idle (re-armed once the hero has
-left the ring). `total: true` keeps the stay time when he leaves (seals, the brazier). `passive` sites have no
+left the ring). The altar site calls `BD.cardAltar.use(w, site)` and owns its phase by `altar_close`
+(card / pray → used, later → idle). `total: true` keeps the stay time when he leaves (seals, the brazier). `passive` sites have no
 ring (the nests: their task runs them). A staged scenario (`BD.W.scenario`) leaves sites alone unless
-`w.sitesLive`. Kinds: altar, spring, chest, rift (optional, §4.6) and seal, nest, brazier (tasks). The altar's
-call into the cards side, the chest's choice (`BD.growth.kinds.chest`) and everything a site relies on:
-docs/requests/v2-floors.md.
+`w.sitesLive`. Kinds: altar, spring, chest, rift (optional, §4.6) and seal, nest, brazier (tasks). Everything a
+site relies on: docs/requests/v2-floors.md; how the requests between the branches were settled:
+docs/requests/RESOLVED.md (v2).
 
 **Tasks** (src/content/tasks/): purge (plaza), seals (office), nests (atrium), hold (hall), hunt (ruin). A
 task def adds `places?(n) → [{kind, zone: [zx, zy], at?: [dx, dy]}]` (its sites or targets; the generator keeps
 their 5 × 5 clear), `wantMult?(w, task)` (the director's want × it; hold: 1.4 in the brazier's ring) and
 `icon`. 1F is purge (or `&task=`); 2F–5F the other four once each in a seeded order (`BD.gen.taskOrder`).
-Dormant groups (a chest's guards, a chief's pack: `flags.wake`) wake together in view (`BD.places.wake`).
+Dormant groups (a chest's guards, a chief's pack: `flags.wake`) wake together in view (`BD.places.wake`);
+`opts.dormant = {view: true}` stands until the enemy is inside the combat window, `{r}` until the hero is
+within r u. The floor's elite kind is `BD.director.eliteKind(w)` (the horde mix's `elite`).
 
 **Floor generation** (§5.1–5.3, §5.8; the v2 part of src/core/11_gen.js, src/content/zones/): fills
 `BD.gen.fills.register({id, centre?, apply(grid, zone, rng)})` with `zone = {zx, zy, x0, y0, size, cx, cy, site,
@@ -988,11 +997,11 @@ New GDD-V2 §4.7 events: `level_up {level}`, `choice_open {kind, options}` (opti
   the same tick), `swing` … `swing_end` for multi-kills, `pickup` (`kind: 'shard'`, `value`),
   `level_up`, `choice_open`, `choice_pick`, `surge`, `floor_clear`, `dissolve`. Sounds added:
   `shard` (opts.step 0–12 semitones), `level_up`, `choice_open`, `multi_kill`; `kill` ≤ 8/s, `hit` ≤ 10/s.
-* **Minimap / edge markers:** the engine's §9.4 ones are on for v2 floors (`floor.offscreen`);
-  guardians are threats, open stairs an objective. Sites and task targets come from the `places` source
-  (src/content/sites/markers.js): task places gold on the edge and the minimap, optional sites on the
-  minimap only (`edge: false`; '?' until known, grey once used), the spring and flasks on the edge at
-  HP ≤ 50 (`mini: false`); a marker may carry `miniIcon(g, x, y)` for its minimap glyph.
+* **Minimap / edge markers:** the UI draws both (src/ui/42_map.js) from `w.sites` (used = `phase ===
+  'used'`), the enemies (guardian, elites, chiefs and other task targets) and `w.pickups`, clear of the HUD
+  boxes and under the minimap; it replaces `OS.draw`. The engine's §9.4 drawing and the floors' `places`
+  source (src/content/sites/markers.js) are the fallback when no UI is loaded; other registered marker
+  sources are still drawn by the UI.
 
 ### 10.7 Bot and measurement
 
