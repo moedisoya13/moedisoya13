@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-/* Numbers about how the clips hit, measured from the poses themselves at 60 frames a second. They are what FEEL.md's rules are
-   checked against:  node tools/feel.mjs  (add --json for the raw values; exits 1 when a rule is broken) */
+/* Numbers about how the clips hit, measured from the poses themselves at 60 frames a second. They are what the rules in
+   README.md are checked against:  node tools/feel.mjs  (add --json for the raw values; exits 1 when a rule is broken) */
 import { CLIPS, sample, stance, TORSO_GAIN } from '../src/anim/clips.mjs';
 import { fk, NAMES } from '../src/rig/skeleton.mjs';
 import { STANCES } from '../src/rig/poses.mjs';

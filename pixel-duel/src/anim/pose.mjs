@@ -1,5 +1,5 @@
 /* What is done to finished poses ({ root, rot: { Joint: 3x3 local }, stretch }): blending two of them, and the two edits that
-   turn smooth generated motion into something with weight (see FEEL.md). */
+   turn smooth generated motion into something with weight (the rules are in README.md). */
 import * as M from '../rig/m3.mjs';
 import * as Q from './quat.mjs';
 import { NAMES, PARENT, fk } from '../rig/skeleton.mjs';

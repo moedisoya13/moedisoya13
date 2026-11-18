@@ -13,7 +13,12 @@ const PALETTE = [
   0x4d3a1f, 0x86662f, 0xbf9648, 0xe9cd80, // 14-17 straw
   0x4c0f1c, 0x931c2a, 0xd23a38, 0xf5805c, // 18-21 scarlet scarf
   0x2e3848, 0x70829a, 0xbccbdb, 0xffffff, // 22-25 steel
-  0x171a22, 0x252a38, 0x394052, 0x525b70 // 26-29 ground
+  0x171a22, 0x252a38, 0x394052, 0x525b70, // 26-29 stone
+  0x2a1216, 0x5c1f1f, 0x97302a, 0xc9553a, // 30-33 vermilion timber
+  0x0f211d, 0x1a372a, 0x2c5637, 0x55854a, // 34-37 bamboo
+  0x727b96, 0xa3acc4, // 38-39 pale stone
+  0xffb85a, 0xffe9a8, // 40-41 lamplight
+  0xcfdcff, 0xf4f7ff // 42-43 moon
 ];
 const MAT = {
   skin: { r: [1, 2, 3, 4] },
@@ -25,7 +30,13 @@ const MAT = {
   grip: { r: [26, 27, 18, 19] },
   brass: { r: [14, 15, 16, 17] },
   hair: { r: [26, 26, 27, 28] },
-  ground: { r: [26, 27, 28, 29] }
+  ground: { r: [26, 27, 28, 29] },
+  stone: { r: [26, 27, 28, 29, 38] },
+  paleStone: { r: [27, 28, 29, 38, 39] },
+  timber: { r: [30, 31, 32, 33] },
+  bamboo: { r: [34, 35, 36, 37] },
+  lamp: { r: [40, 41, 41], em: true },
+  moon: { r: [42, 43, 43], em: true }
 };
 
 function sculptSwordsman(S, bind, o) {

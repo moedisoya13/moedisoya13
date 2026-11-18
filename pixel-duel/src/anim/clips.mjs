@@ -36,7 +36,7 @@ export const CLIPS = {
     ],
     marks: { hit: 0.15, free: 0.46 },
     swing: [0.15, 0.26], // the two drawings of the cut, 0.11 s
-    reach: 1.75,
+    reach: 1.95,
     damage: 1,
     lunge: 0.28
   },
@@ -50,9 +50,24 @@ export const CLIPS = {
     ],
     marks: { hit: 0.16, free: 0.6 },
     swing: [0.16, 0.27],
-    reach: 2.15,
+    reach: 2.35,
     damage: 3,
     lunge: 0.42
+  },
+  // the rival's cut: the same drawings behind a wind-up long enough to read and answer
+  heavy: {
+    dur: 0.9,
+    keys: [
+      { t: 0, pose: 'slashWind' },
+      { t: 0.45, pose: 'slashHit' },
+      { t: 0.505, pose: 'slashEnd' },
+      { t: 0.68, pose: 'guard', in: 0.2 }
+    ],
+    marks: { hit: 0.45, free: 0.8 },
+    swing: [0.45, 0.56],
+    reach: 1.95,
+    damage: 1,
+    lunge: 0.28
   },
   parry: {
     dur: 0.42,
