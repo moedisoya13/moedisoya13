@@ -1,6 +1,8 @@
 /* The match: two boxers on a square of canvas, stepped at a fixed rate from two sets of controls. Nothing here draws, and the
    same code runs in the page and under node --test.
      const bout = createBout(seed, { sheets: [mine, his] (profile.mjs: who they are; an honest club fighter if left out),
+                                     skills: [mine, his] (anim/skill.mjs: the grade each throws each move at, by name or
+                                     `all`; a pro's if left out),
                                      knockdowns: true (a boxer who runs out of health goes down and the match counts him;
                                      left out, he is knocked out and the bout is over) })
      step(bout, [mine, his], dt)
@@ -25,6 +27,7 @@ import { toWorld } from '../anim/pose.mjs';
 import { createChain, stepChain, effectiveMass } from '../phys/chain.mjs';
 import { RING } from '../world/ring.mjs';
 import { body, blank, fatigue, COST } from './profile.mjs';
+import { levelOf } from '../anim/skill.mjs';
 
 export const RULES = {
   hp: 100,
@@ -62,14 +65,14 @@ export const RULES = {
 };
 const DT = 1 / 60;
 
-function boxer(x, yaw, seed, sheet) {
+function boxer(x, yaw, seed, sheet, skills) {
   const k = body(sheet);
-  return { sheet: sheet || blank(), k, stamina: k.staminaMax, x, z: 0, vx: 0, vz: 0, kx: 0, kz: 0, gx: 0, gz: 0, yaw, turn: 0, hp: RULES.hp, action: null, cover: false, coverAge: 0, stun: 0, counter: 0, flash: 0, want: null, wantAge: 0, link: 0, sinceHit: 9, sinceLast: 9, serial: 0, down: 0, animator: createAnimator(seed), pose: null, place: null, points: null, before: null };
+  return { sheet: sheet || blank(), skills: skills || {}, k, stamina: k.staminaMax, x, z: 0, vx: 0, vz: 0, kx: 0, kz: 0, gx: 0, gz: 0, yaw, turn: 0, hp: RULES.hp, action: null, cover: false, coverAge: 0, stun: 0, counter: 0, flash: 0, want: null, wantAge: 0, link: 0, sinceHit: 9, sinceLast: 9, serial: 0, down: 0, animator: createAnimator(seed), pose: null, place: null, points: null, before: null };
 }
 export function createBout(seed, o) {
   o = o || {};
   const sheets = o.sheets || [],
-    bout = { t: 0, stop: 0, over: null, overAt: 0, seed: seed || 1, events: [], knockdowns: !!o.knockdowns, fighters: [boxer(-RULES.startGap / 2, Math.PI / 2, 0, sheets[0]), boxer(RULES.startGap / 2, -Math.PI / 2, 1, sheets[1])] };
+    bout = { t: 0, stop: 0, over: null, overAt: 0, seed: seed || 1, events: [], knockdowns: !!o.knockdowns, fighters: [boxer(-RULES.startGap / 2, Math.PI / 2, 0, sheets[0], (o.skills || [])[0]), boxer(RULES.startGap / 2, -Math.PI / 2, 1, sheets[1], (o.skills || [])[1])] };
   settle(bout);
   return bout;
 }
@@ -100,12 +103,13 @@ const open = (f, punch) => f.stun <= 0 && (!f.action || (punch && punching(f) &&
 function begin(f, name, more) {
   const move = MOVES[name],
     before = f.action,
-    // his muscles: as quick as his speed, and slower as he tires (never below three quarters of it)
-    chain = move.punch ? createChain(move, f.k.rate * (0.75 + 0.25 * fatigue(f))) : null;
+    level = levelOf(f.skills, name),
+    // his muscles: as quick as his speed, and slower as he tires (never below three quarters of it); his skill: how he uses them
+    chain = move.punch ? createChain(move, f.k.rate * (0.75 + 0.25 * fatigue(f)), level) : null;
   if (COST[name]) f.stamina = Math.max(0, f.stamina - COST[name]);
   // a punch thrown with the hand that has just punched starts from where that arm's joints still are (a double jab)
   if (chain && before && before.chain && MOVES[before.name].hand === move.hand) (chain.q = before.chain.q.slice()), (chain.v = before.chain.v.slice());
-  f.action = Object.assign({ name, t: 0, id: name + ++f.serial, struck: false, chain }, more);
+  f.action = Object.assign({ name, t: 0, id: name + ++f.serial, struck: false, chain, level }, more);
   f.cover = false;
 }
 
@@ -372,8 +376,16 @@ function strike(bout, f, other, who, dt) {
   other.want = null;
   other.counter = 0;
   other.stun = (RULES.stun[0] + worth * RULES.stun[1]) * other.k.stunTaken;
-  other.kx += ((dir[0] * worth) / RULES.mass) * RULES.shove;
-  other.kz += ((dir[1] * worth) / RULES.mass) * RULES.shove;
+  /* A dirty boxer does not let a man he has hit get away from the foul that follows it: he goes in after him, and a legend
+     of it has hold of him, so he hardly goes at all (skill.mjs: dirty). */
+  const dirty = (action.level && action.level.form.dirty) || 0,
+    held = dirty > 1 ? 0.5 : 1,
+    after = dirty ? 0.75 : 0,
+    push = ((worth / RULES.mass) * RULES.shove * held);
+  other.kx += dir[0] * push;
+  other.kz += dir[1] * push;
+  f.kx += dir[0] * push * after;
+  f.kz += dir[1] * push * after;
   other.flash = 0.07;
   other.sinceHit = 0;
   other.animator.strike({ J: Math.min(worth, 110), dir: felt.dir, stun: other.stun, hp: other.hp });

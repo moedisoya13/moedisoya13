@@ -41,6 +41,23 @@
   h2 { margin: 0; padding: 6px 0; background: var(--bg); font: 600 13px/1.2 var(--body); letter-spacing: .14em; color: var(--dim); border-bottom: 1.5px solid var(--line); }
   h2.part { margin-top: 18px; padding: 0; border: 0; font: 400 clamp(26px, 5vw, 36px)/1.1 var(--display); letter-spacing: .02em; color: var(--fg); }
   #catalog { display: flex; flex-direction: column; gap: 28px; }
+  .part-note { margin: -16px 0 0; max-width: 72ch; color: var(--dim); }
+  /* the skill ladder: seven grades of a punch side by side, each with its chain as it was thrown */
+  .grid.ladder { grid-template-columns: repeat(auto-fill, minmax(min(100%, 150px), 1fr)); gap: 10px; }
+  .card.rung .stage { aspect-ratio: 4 / 5; }
+  .card.rung .info { padding: 9px 10px 10px; gap: 6px; }
+  .card.rung h3 { font-size: 22px; }
+  .card.rung h3 .en { display: block; margin: 3px 0 0; white-space: normal; }
+  .chain { position: relative; display: flex; flex-direction: column; gap: 3px; font: 500 10px/1 var(--data); color: var(--dim); }
+  .chain .row { display: grid; grid-template-columns: 3.4em 1fr; align-items: center; gap: 4px; }
+  .chain .row.off { opacity: .35; }
+  .chain i { font-style: normal; font-family: var(--body); }
+  .chain .lane { position: relative; height: 7px; background: color-mix(in srgb, var(--line) 55%, transparent); }
+  .chain b { position: absolute; top: 0; bottom: 0; left: 0; width: 0; background: var(--lead); transition: left .25s, width .25s; }
+  .chain .hit-at { --at: 0; position: absolute; top: -2px; bottom: -2px; left: calc(3.4em + 4px + (100% - 3.4em - 4px) * var(--at)); width: 2px; background: var(--accent); opacity: 0; }
+  .chain .hit-at.on { opacity: 1; }
+  .card.rung .result { justify-content: space-between; }
+  .card.rung .result b { color: var(--fg); font-weight: 500; }
   /* what became of the punch: lit for a moment each time round */
   .result .tag { font: 600 12px/1 var(--body); letter-spacing: .08em; padding: 5px 8px; border: 1.5px solid var(--line); color: var(--dim); }
   .result .tag.on { animation: tag .9s steps(6) forwards; }

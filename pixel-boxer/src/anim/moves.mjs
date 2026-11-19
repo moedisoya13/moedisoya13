@@ -79,13 +79,23 @@ export function sampleMove(move, t, out) {
      chain: { coil: seconds of wind-up, rate: how fast each joint's muscle is (rad/s natural frequency), skip: joints held
               still, turn: degrees the hips and trunk turn through, locked: the arm is stiff from the start }
      reach: about how far away, centre to centre, it can land (the rival's judgment and the step in; the hit itself is
-            the glove meeting the head); close: the distance he steps in to */
+            the glove meeting the head); close: the distance he steps in to
+     dirty: [the foul a dirty boxer folds into it, and the second one a legend adds] (anim/skill.mjs), each in two parts:
+            set: what goes with the punch as it is thrown, only what does not move the punching glove (the elbow raised
+                 higher, flare; the other hand, the feet, the head: body channels), so the punch lands where it would have
+            follow: what comes after it has landed, while he is still in the other man's face: the punching hand on past
+                 the chain's line (hand, metres in his terms) and the body driven on after it (body) */
 const PUNCHES = {
   jab: {
     hand: 'L', arm: 'straight', kind: 'straight', reach: 1.15, close: 1.0,
     chain: { coil: 0, rate: [58, 52, 52, 46, 44], turn: [15, 8] },
     coil: {},
-    links: { drive: { hz: 0.06, lfz: 0.07 }, hips: { yaw: -15, rx: 0.02, ry: 0.03 }, trunk: { twist: -8, lean: 4, hp: 3 }, shoulder: {}, elbow: {} }
+    links: { drive: { hz: 0.06, lfz: 0.07 }, hips: { yaw: -15, rx: 0.02, ry: 0.03 }, trunk: { twist: -8, lean: 4, hp: 3 }, shoulder: {}, elbow: {} },
+    // the laces raked down his face after it lands; then the rear hand pinning his lead glove, and a foot on his
+    dirty: [
+      { set: { flare: 0.3 }, follow: { hand: [-0.06, -0.2, -0.02], body: { hp: 4, lean: 4 } } }, // the elbow up, the laces raked down his face
+      { set: { body: { rz: 0.17, ry: -0.05, rx: 0.08, lfz: 0.06 } } } // the rear hand pinning his lead glove down, a foot on his
+    ]
   },
   cross: {
     hand: 'R', arm: 'straight', kind: 'straight', reach: 1.15, close: 1.0,
@@ -97,7 +107,12 @@ const PUNCHES = {
       trunk: { twist: 18, lean: 7, side: 3, lx: -0.04, ly: 0.03, lz: -0.1 }, // the other hand stays at the chin
       shoulder: {},
       elbow: {}
-    }
+    },
+    // the forearm and shoulder driven on through his face after the fist; then the lead hand round his neck, holding him on it
+    dirty: [
+      { set: { flare: 0.65 }, follow: { hand: [0.13, -0.03, -0.2], body: { twist: 10, lean: 9, hz: 0.07 } } }, // the arm folded and the forearm driven into his face
+      { set: { body: { lz: 0.21, ly: 0.08, lx: -0.07, hp: -4 } } } // the lead hand round his neck, holding him on it
+    ]
   },
   hook: {
     hand: 'L', arm: 'swing', kind: 'hook', reach: 0.9, close: 0.82,
@@ -110,7 +125,12 @@ const PUNCHES = {
       trunk: { twist: -20, side: -4, rz: -0.02, ry: 0.03 },
       shoulder: {},
       elbow: {}
-    }
+    },
+    // the elbow raised and carried on through after the fist has landed; then the rear hand holding him, a foot on his
+    dirty: [
+      { set: { flare: 0.85 }, follow: { hand: [-0.06, 0.1, -0.24], body: { yaw: -10, hz: 0.05, lean: 5 } } }, // the arm folded back and the elbow on into his face
+      { set: { body: { rz: 0.19, ry: 0.03, rx: 0.07, lfz: 0.07 } } } // the rear hand holding him, a foot on his
+    ]
   },
   upper: {
     hand: 'R', arm: 'lift', kind: 'upper', reach: 0.9, close: 0.8,
@@ -122,11 +142,16 @@ const PUNCHES = {
       trunk: { twist: 12, lean: -5, side: 3, lz: -0.06 },
       shoulder: {},
       elbow: {}
-    }
+    },
+    // the head driven up and in with it, into his face; then the lead hand pulling his head down onto both
+    dirty: [
+      { set: { body: { hp: 9 } }, follow: { body: { hz: 0.11, lean: 13, hy: 0.05, hp: 8 } } }, // the crown of the head down and in, then driven up into him
+      { set: { body: { lz: 0.21, ly: -0.04, lx: -0.05 } } } // the lead hand pulling his head down onto both
+    ]
   }
 };
 for (const [name, punch] of Object.entries(PUNCHES)) {
-  for (const amounts of [punch.coil, ...Object.values(punch.links)]) for (const ch of Object.keys(amounts)) if (!CHANNELS.includes(ch)) throw new Error(`${name}: unknown channel ${ch}`);
+  for (const amounts of [punch.coil, ...Object.values(punch.links), ...(punch.dirty || []).flatMap(d => [(d.set || {}).body || {}, (d.follow || {}).body || {}])]) for (const ch of Object.keys(amounts)) if (!CHANNELS.includes(ch)) throw new Error(`${name}: unknown channel ${ch}`);
   Object.assign(punch, { name, punch: true });
 }
 

@@ -14,6 +14,7 @@ import { TPOSE } from '../rig/skeleton.mjs';
 import { solve, LEN } from '../rig/solve.mjs';
 import { LINKS } from '../phys/chain.mjs';
 import { CHANNELS, GUARD, MOVES, LEFT_BEND, sampleMove } from './moves.mjs';
+import { LEVEL } from './skill.mjs';
 
 const TAU = Math.PI * 2;
 /* The feet keep time. One beat is one foot coming down; a cycle is both. Standing, the boxer rocks between his feet on that
@@ -208,14 +209,55 @@ export function createAnimator(seed) {
         id = action ? action.id : null;
 
       // ---- what he is doing
+      // what the punching hand does past where the chain puts it, and how much higher its elbow is (a dirty punch's)
+      const extra = { L: null, R: null },
+        raise = { L: 0, R: 0 };
       if (action && MOVES[action.name].punch) {
-        // a punch: what its wind-up and each joint of its chain add, by how far each has turned
+        // a punch: what its wind-up and each joint of its chain add, by how far each has turned (as far as he turns it)
         const move = MOVES[action.name],
-          chain = action.chain;
-        for (const ch in move.coil) c[ch] += move.coil[ch] * chain.coil.q;
+          chain = action.chain,
+          amp = chain.amp || [1, 1, 1, 1, 1];
+        // (the better he is the less of the wind-up shows; what sets the arm for a hook or an uppercut is all there)
+        for (const ch in move.coil) c[ch] += move.coil[ch] * chain.coil.q * (ch === 'lc' || ch === 'le' || ch === 'rc' || ch === 're' ? 1 : chain.shown ?? 1);
         LINKS.forEach((link, i) => {
-          for (const ch in move.links[link]) c[ch] += move.links[link][ch] * chain.q[i];
+          for (const ch in move.links[link]) c[ch] += move.links[link][ch] * chain.q[i] * amp[i];
         });
+        /* How the rest of him is held while it goes, by how good he is (skill.mjs): all of it grows with the arm, so it is
+           there as the punch is and gone as it comes home. */
+        const form = (action.level || LEVEL[3]).form,
+          me = move.hand,
+          k = me === 'L' ? 'l' : 'r',
+          o = me === 'L' ? 'r' : 'l',
+          s = me === 'L' ? 1 : -1,
+          arm = clamp(Math.max(chain.q[3], move.arm === 'straight' ? chain.q[4] : 0), 0, 1),
+          out = smooth(arm),
+          // (only once it has got there: the foul is what follows the punch, not what throws it)
+          reach = chain.thrownAt >= 0 ? smooth(clamp((chain.t - chain.thrownAt) / 0.05, 0, 1)) * out : 0,
+          tell = form.tell * chain.coil.q;
+        // a beginner shows it coming: the hand drawn back, the elbow out, the shoulders turned away, the chin up to look
+        c[k + 'z'] -= 0.09 * tell;
+        c[k + 'y'] -= 0.035 * tell;
+        c[k + 'e'] += 0.45 * tell;
+        c.yaw -= s * 7 * tell;
+        c.hp -= 5 * tell;
+        // the other hand: dropped and out to the side, or kept tight to the chin
+        if (form.guard > 0) (c[o + 'y'] -= 0.17 * form.guard * out), (c[o + 'z'] -= 0.06 * form.guard * out), (c[o + 'x'] -= s * 0.05 * form.guard * out);
+        else if (form.guard < 0) (c[o + 'y'] += 0.02 * -form.guard * out), (c[o + 'z'] -= 0.025 * -form.guard * out), (c[o + 'x'] += s * 0.015 * -form.guard * out);
+        c.hp -= 11 * form.chin * out; // the chin up and out after it (tucked, the better he is)
+        c.lean += 9 * form.over * out; // and the weight thrown in after it, over the front foot
+        c.hz += 0.05 * form.over * out;
+        /* Dirty: the punch's foul (moves.mjs: dirty), set as it is thrown and followed through once it lands. A legend's is
+           the same foul made smaller, folded into the punch, and a second one with it. */
+        for (let tier = 0; tier < form.dirty && move.dirty && move.dirty[tier]; tier++) {
+          const d = move.dirty[tier],
+            small = tier === 0 && form.dirty > 1 ? 0.7 : 1,
+            set = d.set || {},
+            follow = d.follow || {};
+          for (const ch in set.body || {}) c[ch] += set.body[ch] * out * small;
+          if (set.flare) raise[me] += set.flare * out * small;
+          for (const ch in follow.body || {}) c[ch] += follow.body[ch] * reach * small;
+          if (follow.hand) extra[me] = M.add(extra[me] || [0, 0, 0], M.scale(follow.hand, reach * small));
+        }
       } else if (action) {
         sampleMove(MOVES[action.name], action.t, c);
         if (MOVES[action.name].sided) {
@@ -508,7 +550,7 @@ export function createAnimator(seed) {
       for (const side of ['L', 'R']) {
         const k = side === 'L' ? 'l' : 'r',
           s = side === 'L' ? 1 : -1,
-          flare = clamp(c[k + 'e'], 0, 1),
+          flare = clamp(c[k + 'e'], 0, 1) + raise[side],
           open = M.add(GUARD.hands[side], [c[k + 'x'], c[k + 'y'], c[k + 'z']]),
           // held to the face, or locked to the chest and swung with it, or part way between
           free = M.lerp(M.add(open, carried), M.add(chest.p, M.app(swung, M.sub(open, CHEST.p))), clamp(c[k + 'c'], 0, 1)),
@@ -539,6 +581,7 @@ export function createAnimator(seed) {
               far = Math.hypot(out[0], out[1], out[2]);
             if (far > BENT) thrown = M.add(shoulder, M.scale(out, BENT / far));
           }
+          if (extra[side]) thrown = M.add(thrown, extra[side]);
           steer[side] = M.sub(thrown, free);
         } else {
           // a hand whose punch has been cut short by the next one is let back to its guard, not dropped there

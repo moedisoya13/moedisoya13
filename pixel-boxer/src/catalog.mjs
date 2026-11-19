@@ -13,8 +13,14 @@ import { step } from './game/bout.mjs';
 
 import { ENTRIES, freshBout, drive } from './footwork.mjs';
 import { DEFENSE } from './defense.mjs';
+import { LADDER, AT } from './ladder.mjs';
+import { LEVEL } from './anim/skill.mjs';
+import { LINKS } from './phys/chain.mjs';
+import { MOVES } from './anim/moves.mjs';
 
-const ALL = [...ENTRIES, ...DEFENSE];
+const ALL = [...ENTRIES, ...DEFENSE, ...LADDER];
+const JOINT = { drive: '다리', hips: '엉덩이', trunk: '몸통', shoulder: '어깨', elbow: '팔꿈치' };
+const SPAN = 0.3; // seconds of a punch the chain timeline under a rung shows
 // what became of the punch, as the card says it
 const SAID = { whiff: '빗나감', graze: '스침', block: '막음', parry: '패리', hit: '명중' };
 
@@ -23,21 +29,45 @@ const DT = 1 / 60;
 {
   const parts = [
       ['풋워크', ['박자', '직선', '좌우', '주먹과 함께']],
-      ['수비와 피격', ['피하기', '막기', '맞기', '다운']]
+      ['수비와 피격', ['피하기', '막기', '맞기', '다운']],
+      ['숙련도', ['잽', '스트레이트', '훅', '어퍼컷']]
     ],
+    notes = {
+      숙련도: '모든 동작은 다섯 단계로 나뉘고, 4와 5에는 깔끔한 정도(명)와 더티 복싱(암) 두 갈래가 있습니다. 차이는 관절이 움직이는 순서와 협응, 리듬에서 나옵니다. 1은 팔이 몸보다 먼저 나가고, 2는 순서는 맞지만 이음새마다 끊기고, 3은 교과서, 4는 다음 관절이 앞 관절의 정점 전에 미리 출발해 힘이 겹치고, 5는 예비동작 없이 한 동작으로 이어집니다. 충격량은 곱해 준 값이 아니라 그렇게 던진 결과입니다. 막대는 관절마다 출발에서 정점까지, 세로선은 닿은 순간입니다.'
+    },
     main = document.getElementById('catalog');
   for (const [part, groups] of parts) {
     const head = document.createElement('h2');
     head.className = 'part';
     head.textContent = part;
     main.append(head);
+    if (notes[part]) {
+      const note = document.createElement('p');
+      note.className = 'part-note';
+      note.textContent = notes[part];
+      main.append(note);
+    }
     for (const group of groups) {
-      const section = document.createElement('section');
-      section.innerHTML = `<h2>${group}</h2><div class="grid"></div>`;
+      const section = document.createElement('section'),
+        rungs = ALL.some(e => e.group === group && e.level);
+      section.innerHTML = `<h2>${group}</h2><div class="grid${rungs ? ' ladder' : ''}"></div>`;
       for (const e of ALL.filter(e => e.group === group)) {
         const card = document.createElement('article');
-        card.className = e.group === '박자' ? 'card feature' : 'card';
+        card.className = e.group === '박자' ? 'card feature' : e.level ? 'card rung' : 'card';
         card.dataset.entry = e.id;
+        if (e.level) {
+          // a rung of the ladder: the grade, the chain as it was thrown, and what it did
+          const level = LEVEL[e.level],
+            skip = MOVES[e.punch].chain.skip || [];
+          card.innerHTML = `<div class="stage" role="img" aria-label="${e.name} 애니메이션"></div>
+            <div class="info">
+              <h3>${level.label} <span class="en">${level.name}</span></h3>
+              <div class="chain">${LINKS.map((l, i) => `<span class="row${skip.includes(l) ? ' off' : ''}"><i>${JOINT[l]}</i><span class="lane"><b data-bar="${i}"></b></span></span>`).join('')}<span class="hit-at" data-at></span></div>
+              <div class="feet result"><span><b data-blow>–</b> N·s</span><span class="pace"><b data-ms>–</b> ms</span></div>
+            </div>`;
+          section.lastElementChild.append(card);
+          continue;
+        }
         card.innerHTML = `<div class="stage" role="img" aria-label="${e.name} 애니메이션"></div>
           <div class="info">
             <h3>${e.name} <span class="en">${e.en}</span></h3>
@@ -113,6 +143,9 @@ function start({ manifest, boxer }) {
         pace: el.querySelector('[data-pace]'),
         tag: el.querySelector('[data-tag]'),
         blow: el.querySelector('[data-blow]'),
+        ms: el.querySelector('[data-ms]'),
+        bars: [...el.querySelectorAll('[data-bar]')],
+        at: el.querySelector('[data-at]'),
         exchange: entry.punch !== undefined,
         shake: 0,
         fx,
@@ -154,6 +187,20 @@ function start({ manifest, boxer }) {
     if (!entry.hurt) a.hp = 1000;
     for (const e of bout.events) {
       const by = e.type === 'parry' ? e.on : e.who;
+      // a rung: when the punch lands, how it was thrown
+      if (entry.level && e.who === 0 && ['hit', 'graze', 'whiff', 'block'].includes(e.type) && a.action && a.action.chain) {
+        const c = a.action.chain,
+          pct = x => `${Math.max(0, Math.min(100, (x / SPAN) * 100)).toFixed(1)}%`;
+        cell.blow.textContent = e.J === undefined ? '–' : String(Math.round(e.J));
+        cell.ms.textContent = String(Math.round((cell.t - AT) * 1000));
+        cell.bars.forEach((bar, i) => {
+          const on = c.fired[i] >= 0;
+          bar.style.left = on ? pct(c.fired[i]) : '0';
+          bar.style.width = on ? `max(3px, ${pct(Math.max(0, c.peakAt[i] - c.fired[i]))})` : '0';
+        });
+        cell.at.style.setProperty('--at', String(Math.max(0, Math.min(1, (cell.t - AT) / SPAN))));
+        cell.at.classList.add('on');
+      }
       if (cell.tag && by === 1 && SAID[e.type]) tell(cell, e.down ? '다운' : SAID[e.type], e.J);
       // the blow itself, as the game shows it: sparks and sweat sized by its impulse, and the picture shaken
       if (e.type === 'hit') {
@@ -221,7 +268,7 @@ function start({ manifest, boxer }) {
       cell.cam.target[0] += (a.x * mine + b.x * (1 - mine) - cell.cam.target[0]) * ease;
       cell.cam.target[2] += (a.z * mine + b.z * (1 - mine) - cell.cam.target[2]) * ease;
       // far enough back that both men are in the picture from the feet up, whatever shape the window is
-      const [near, wide] = cell.exchange ? [3.3, 2.5] : [5.2, 3.6];
+      const [near, wide] = cell.entry.level ? [2.7, 2.1] : cell.exchange ? [3.3, 2.5] : [5.2, 3.6];
       cell.cam.dist = Math.max(near, wide / (2 * Math.tan((19 * Math.PI) / 180) * (rect.w / rect.h)));
       const jolt = cell.shake > 0.3 ? [Math.sin(cell.t * 97) * cell.shake, Math.cos(cell.t * 83) * cell.shake * 0.6] : null;
       R.cell(rect, { camera: cell.cam, layers, shake: jolt });
