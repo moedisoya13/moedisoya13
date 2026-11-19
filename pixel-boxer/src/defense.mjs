@@ -72,6 +72,16 @@ const DRILLS = [
     loop: 2.4, punch: ['hook', 1.0], cover: t => t > 0.1 && t < 0.95, outcome: 'hit', before: 'block', view: { yaw: 0.6, pitch: 0.24 }
   },
   {
+    id: 'stagger', name: '휘청임', en: 'Rocked', group: '맞기', hurt: true,
+    note: '이미 많이 맞은 선수가 스트레이트와 훅을 연달아 맞습니다. 무릎이 풀렸다 돌아오고, 상체가 다리 위에서 흔들리고, 글러브가 처집니다.',
+    loop: 3, punch: ['hook', 1.0], outcome: 'hit', before: 'hit', setup: b => (b.fighters[0].hp = 34), keep: b => (b.fighters[0].hp = Math.max(b.fighters[0].hp, 20)), view: { yaw: 0.3, pitch: 0.24 }
+  },
+  {
+    id: 'worn', name: '지친 기색', en: 'Worn down', group: '맞기', hurt: true,
+    note: '체력과 숨이 바닥난 선수입니다. 발이 캔버스에서 거의 떨어지지 않고, 가드가 내려가고, 가슴이 빠르게 들썩입니다.',
+    loop: 3, punch: null, setup: b => (b.fighters[0].hp = 14), keep: b => ((b.fighters[0].hp = 14), (b.fighters[0].stamina = 0.05 * b.fighters[0].k.staminaMax)), view: { yaw: 0.3, pitch: 0.24 }
+  },
+  {
     id: 'hit-upper', name: '어퍼컷에 맞음', en: 'Taking an uppercut', group: '맞기', hurt: true,
     note: '밑에서 올라온 주먹은 턱을 들어 올립니다. 시선이 천장으로 갔다가 돌아옵니다.',
     loop: 2.8, punch: ['upper', 1.3], cover: t => t > 0.1 && t < 1.25, outcome: 'hit', before: 'block', view: { yaw: 0.3, pitch: 0.24 }
@@ -81,7 +91,7 @@ const DRILLS = [
 export const DEFENSE = DRILLS.map(e =>
   Object.assign({}, e, {
     me: () => HOME,
-    him: () => [HOME[0] + RANGE[e.punch[0]], HOME[1]],
-    against: THROW[e.punch[0]].map(([dt, button]) => [e.punch[1] + dt, button])
+    him: () => [HOME[0] + (e.punch ? RANGE[e.punch[0]] : 1.15), HOME[1]],
+    against: e.punch ? THROW[e.punch[0]].map(([dt, button]) => [e.punch[1] + dt, button]) : []
   })
 );

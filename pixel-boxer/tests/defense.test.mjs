@@ -24,15 +24,17 @@ function exchange(entry) {
   return out;
 }
 
-for (const entry of DEFENSE)
+for (const entry of DEFENSE.filter(e => e.punch))
   test(`defence catalogue: ${entry.id} (${entry.name}) ends in a ${entry.outcome}`, () => {
     const out = exchange(entry),
       last = out[out.length - 1];
     assert.ok(last, 'the other man threw something that arrived');
     assert.equal(last.name, entry.punch[0], 'the last thing to arrive is the punch the card is about');
     assert.equal(last.type, entry.outcome, JSON.stringify(out));
-    // the punches before it in his chain are met, not taken, unless that is what the card is about
-    for (const before of out.slice(0, -1)) assert.notEqual(before.type, 'hit', 'an earlier punch landed: ' + JSON.stringify(out));
+    // the punches before it in his chain are met, not taken, unless the card says they land too
+    for (const before of out.slice(0, -1))
+      if (entry.before === 'hit') assert.equal(before.type, 'hit', JSON.stringify(out));
+      else assert.notEqual(before.type, 'hit', 'an earlier punch landed: ' + JSON.stringify(out));
   });
 
 test('every way of getting out of the way works against something, from a moment after the punch starts', () => {

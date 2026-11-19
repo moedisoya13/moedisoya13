@@ -36,6 +36,8 @@ function play(seconds, controls, o) {
       events.push({ ...e, tick });
       if (e.type === 'hit' || e.type === 'block' || e.type === 'parry') blow = tick;
     }
+    // (the moment of a blow is held, and those frames are left out: the ones that count as struck come after the hold)
+    if (bout.stop > 0 && tick - blow < 30) blow = tick;
     const f = bout.fighters[o.who || 0];
     frames.push({ struck: tick - blow <= 2, held: bout.stop > 0, joints: Object.fromEntries(NAMES.map(n => [n, toWorld(f.place, f.pose.at[n], f.pose.stretch)])), glove: f.points });
   }

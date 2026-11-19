@@ -25,6 +25,8 @@ const HOP = 0.03; // metres an unweighted foot clears the canvas by, bouncing on
    the push back off it, and a float before the next. The squash and the float meet at the same speed, so it rebounds
    rather than bobs. Heights in metres at full liveliness. */
 const BOUNCE = { contact: 0.38, float: 0.016 };
+// rocked: seconds it takes to wear off (to a third), and how quickly it comes on
+const WOBBLE = { last: 0.95, onset: 0.1 };
 BOUNCE.squash = (4 * BOUNCE.float * BOUNCE.contact) / ((1 - BOUNCE.contact) * Math.PI); // the depth that meets the float at the same speed
 const ROCK = 0.034; // metres the weight swings forward and back between the feet, bouncing on the spot
 const STRIDE = 0.42; // metres: the furthest a foot is ever put from its place in the guard
@@ -122,6 +124,8 @@ export function createAnimator(seed) {
     cycle = CYCLE.rest, // how long that cycle is taking just now, seconds
     cover = 0,
     meet = 0, // how far out to meet a punch the gloves of a fresh guard are
+    hurt = 0, // what the fight has taken out of him, as his body shows it (followed slowly: see view.hurt, view.tired)
+    tired = 0,
     cheer = 0,
     doing = null;
   // how fast the canvas is going past under each foot, followed a little late so a shove or a stop does not snatch the feet
@@ -142,6 +146,8 @@ export function createAnimator(seed) {
   const give = { hp: { x: 0, v: 0 }, hw: { x: 0, v: 0 }, hr: { x: 0, v: 0 }, lean: { x: 0, v: 0 }, side: { x: 0, v: 0 }, yaw: { x: 0, v: 0 }, open: { x: 0, v: 0 }, sink: { x: 0, v: 0 } };
   // and of each glove on its own, metres (in his terms, as the hand channels are): a glove that has met a punch
   const knock = { L: [0, 1, 2].map(() => ({ x: 0, v: 0 })), R: [0, 1, 2].map(() => ({ x: 0, v: 0 })) };
+  // a man rocked by a blow: how badly (0..1) and how long ago; his legs are gone for a second or so
+  const wobble = { amount: 0, t: 9 };
 
   return {
     /* The blow's impulse is shared out by where it was going: back through the head nods it back, across turns and tilts
@@ -157,6 +163,13 @@ export function createAnimator(seed) {
       give.yaw.v += left * 300 * k;
       give.sink.v += Math.max(0, up) * 1.1 * k;
       give.open.v += 7 * k;
+      /* A blow that stops him long enough rocks him (the longer, the worse, and the more he has been hurt already, the
+         worse again); another before he has got over it adds to what is left. */
+      if (hit.stun !== undefined) {
+        const now = wobble.amount * Math.exp(-wobble.t / WOBBLE.last),
+          more = clamp((hit.stun - 0.38) / 0.36, 0, 1) + clamp((45 - (hit.hp ?? 100)) / 45, 0, 1) * 0.35;
+        if (more > 0.02) (wobble.amount = clamp(now + more, 0, 1)), (wobble.t = 0);
+      }
     },
     /* A parry: the glove that met the punch sweeps it off the line, across his body and down, and comes back; his
        shoulders turn a little with it. (The puncher's side of it is the reel.) */
@@ -221,6 +234,8 @@ export function createAnimator(seed) {
       }
       cover += (clamp(view.cover || 0, 0, 1) - cover) * (1 - Math.exp(-dt * 22));
       meet += (clamp(view.meet || 0, 0, 1) - meet) * (1 - Math.exp(-dt * 30));
+      hurt += (clamp(view.hurt || 0, 0, 1) - hurt) * (1 - Math.exp(-dt * 1.5));
+      tired += (clamp(view.tired || 0, 0, 1) - tired) * (1 - Math.exp(-dt * 1.5));
       cheer += ((view.cheer ? 1 : 0) - cheer) * (1 - Math.exp(-dt * 5));
       if (cover > 0.002) for (const [ch, v] of Object.entries(sampleMove(MOVES.cover, 1, {}))) c[ch] += v * cover;
       if (cheer > 0.002) for (const [ch, v] of Object.entries(sampleMove(MOVES.cheer, 1, {}))) c[ch] += v * smooth(cheer);
@@ -310,7 +325,8 @@ export function createAnimator(seed) {
       }
 
       // ---- the bounce: down into each landing and back up off it, the weight swinging between the feet like a pendulum
-      const lively = view.still ? 0 : action ? 0.35 : 1 + cheer * 1.6,
+      // (a tired man's feet barely leave the canvas, and a hurt man's legs are heavy)
+      const lively = (view.still ? 0 : action ? 0.35 : 1 + cheer * 1.6) * (1 - 0.5 * tired) * (1 - 0.3 * hurt),
         spot = (1 - going) * lively, // how much of this is bouncing on the spot
         /* he bounces most on the spot: travelling, the beat quickens and the bounce shrinks with the square of it, so it is as
            soft a rebound at a run as standing (and at full speed he glides) */
@@ -354,6 +370,40 @@ export function createAnimator(seed) {
         c[x] += spring(g[0], 0, dt, 4.2, 0.55);
         c[y] += spring(g[1], 0, dt, 4.2, 0.55);
         c[z] += spring(g[2], 0, dt, 4.2, 0.55);
+      }
+
+      // ---- what the fight has done to him: rocked by the last big blow, worn down by all of them, short of breath
+      if (!(action && (action.name === 'ko' || action.name === 'rise'))) {
+        wobble.t += dt;
+        const w = wobble.amount * Math.exp(-wobble.t / WOBBLE.last) * smooth(clamp(wobble.t / WOBBLE.onset, 0, 1)),
+          T = wobble.t,
+          // a hand that is punching is the punch's, not his condition's (it is physics: where it goes is what it hits)
+          free = { L: !(action && MOVES[action.name].punch && MOVES[action.name].hand === 'L'), R: !(action && MOVES[action.name].punch && MOVES[action.name].hand === 'R') },
+          guardUp = 1 - 0.6 * cover,
+          breath = Math.sin(TAU * (1 + 0.5 * tired) * clock);
+        if (w > 1e-3) {
+          /* the knees go and come back, the trunk swings from side to side over them, the head lolls, the gloves sag. (The
+             head itself goes only a little way: a rocked man is there to be hit, not harder to find.) */
+          c.hy -= 0.04 * w * (0.7 + 0.3 * Math.sin(TAU * 2.1 * T));
+          c.side += 5 * w * Math.sin(TAU * 1.3 * T);
+          c.lean += 5 * w;
+          c.hr += 12 * w * Math.sin(TAU * 1.05 * T + 0.8);
+          c.hp += 10 * w;
+          c.lfw -= 8 * w; // the knees knock in
+          c.rfw += 6 * w;
+          if (free.L) (c.ly -= 0.14 * w * guardUp), (c.lz -= 0.04 * w), (c.lx += 0.03 * w);
+          if (free.R) (c.ry -= 0.14 * w * guardUp), (c.rz -= 0.04 * w), (c.rx -= 0.03 * w);
+        }
+        // hurt: the guard lower and wider, the head and shoulders forward and down
+        c.lean += 8 * hurt;
+        c.hp += 10 * hurt;
+        c.hy -= 0.03 * hurt;
+        // tired: the gloves heavy, the chest heaving, quicker as he is more spent
+        c.st += 0.012 * tired * breath;
+        c.lean += 2.5 * tired * breath;
+        c.hp -= 3 * tired * breath; // (the chin comes up for air)
+        if (free.L) (c.ly -= (0.08 * hurt + 0.07 * tired - 0.018 * tired * breath) * guardUp), (c.lx += 0.03 * hurt), (c.lz -= 0.03 * tired);
+        if (free.R) (c.ry -= (0.07 * hurt + 0.07 * tired - 0.018 * tired * breath) * guardUp), (c.rx -= 0.03 * hurt), (c.rz -= 0.02 * tired);
       }
 
       // ---- one move handing over to another: what was showing is let go of, not dropped

@@ -232,6 +232,9 @@ function viewOf(bout, i) {
       cover: f.cover ? 1 : 0,
       // a guard still young enough to turn a punch aside: the gloves are out meeting it, not yet pulled in to the face
       meet: f.cover && f.coverAge < f.k.parry ? 1 - f.coverAge / f.k.parry : 0,
+      // what the fight has taken out of him, for his body to show: hurt from his health, tired from his breath
+      hurt: Math.max(0, Math.min(1, (45 - f.hp) / 45)),
+      tired: Math.max(0, Math.min(1, (0.6 - f.stamina / f.k.staminaMax) / 0.6)),
       cheer: bout.over === i && bout.t - bout.overAt > 0.9,
       still: !!f.down && f.action.t >= MOVES.ko.dur,
       action: f.action,
@@ -253,9 +256,10 @@ function viewOf(bout, i) {
       view.aim = move.arm === 'swing' ? [side + from * 0.05, low, front - 0.1] : move.arm === 'lift' ? [side, h[1] - 0.1, front - 0.07] : [side, h[1], front - 0.075];
       /* Once the joint that steers it has fired the punch is committed: it goes where the head was then, and a head that has
          moved since is missed. That is what a slip is. (Up to then he is still looking, and a punch follows a head that
-         drifts.) A straight punch is steered by the shoulder; a hook or an uppercut is an arm locked to a body that is
-         already turning, and its path is set when the hips go. */
-      if (f.action.chain.on[move.arm === 'straight' ? 3 : 1]) f.action.aim = view.aim;
+         drifts.) A straight punch and an uppercut are steered by the shoulder to the last; a hook is an arm locked to a
+         body that is already turning, and its path is set when the hips go. (So a hook is ducked; an uppercut finds a
+         ducking head.) */
+      if (f.action.chain.on[move.arm === 'swing' ? 1 : 3]) f.action.aim = view.aim;
     }
   }
   return view;
@@ -370,7 +374,7 @@ function strike(bout, f, other, who, dt) {
   other.kz += ((dir[1] * worth) / RULES.mass) * RULES.shove;
   other.flash = 0.07;
   other.sinceHit = 0;
-  other.animator.strike({ J: Math.min(worth, 110), dir: felt.dir });
+  other.animator.strike({ J: Math.min(worth, 110), dir: felt.dir, stun: other.stun, hp: other.hp });
   bout.stop = Math.min(RULES.stop[1], stop * (counter ? 1.5 : 1));
   const down = other.hp <= 0;
   bout.events.push(Object.assign({ type: 'hit', damage: +damage.toFixed(1), counter, down }, blow));
