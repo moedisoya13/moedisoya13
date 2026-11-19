@@ -4,10 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="claude:viewport-fit-sides" content="cover">
-<title>풋워크 카탈로그</title>
+<title>모션 카탈로그</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=IBM+Plex+Mono:wght@500&family=IBM+Plex+Sans+KR:wght@400;600&display=swap">
 <style>
-  /* a gym wall chart: one drill to a card, the drill itself moving in the window, the count of the feet under it */
+  /* a gym wall chart: one drill to a card, the drill itself moving in the window, the count of the feet (or what became of
+     the punch) under it */
   :root {
     --bg: #e9ebf2; --card: #f7f8fb; --fg: #151826; --dim: #5a6077; --line: #c6cada;
     --accent: #c42a30; --lead: #c98a12; --rear: #2a78c8;
@@ -38,6 +39,12 @@
   #prints { border: 1.5px solid var(--line); }
   section { display: flex; flex-direction: column; gap: 12px; }
   h2 { margin: 0; padding: 6px 0; background: var(--bg); font: 600 13px/1.2 var(--body); letter-spacing: .14em; color: var(--dim); border-bottom: 1.5px solid var(--line); }
+  h2.part { margin-top: 18px; padding: 0; border: 0; font: 400 clamp(26px, 5vw, 36px)/1.1 var(--display); letter-spacing: .02em; color: var(--fg); }
+  #catalog { display: flex; flex-direction: column; gap: 28px; }
+  /* what became of the punch: lit for a moment each time round */
+  .result .tag { font: 600 12px/1 var(--body); letter-spacing: .08em; padding: 5px 8px; border: 1.5px solid var(--line); color: var(--dim); }
+  .result .tag.on { animation: tag .9s steps(6) forwards; }
+  @keyframes tag { 0%, 55% { background: var(--accent); border-color: var(--accent); color: var(--bg); } 100% { background: transparent; } }
   .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: 16px; }
   .card { display: flex; flex-direction: column; min-width: 0; border: 1.5px solid var(--line); }
   .stage { aspect-ratio: 5 / 4; max-width: 100%; }
@@ -64,15 +71,15 @@
   .pace b { color: var(--fg); font-weight: 500; display: inline-block; min-width: 3ch; text-align: right; }
   footer { background: var(--bg); color: var(--dim); font-size: 13px; max-width: 70ch; }
   #loading { position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 2; background: var(--fg); color: var(--bg); font: 500 12px/1 var(--data); padding: 9px 12px; }
-  @media (prefers-reduced-motion: reduce) { .lamp.on { animation: none; } }
+  @media (prefers-reduced-motion: reduce) { .lamp.on, .result .tag.on { animation: none; } }
 </style>
 </head>
 <body>
 <canvas id="view" aria-hidden="true"></canvas>
 <div class="page">
   <header>
-    <h1>풋워크 <em>카탈로그</em></h1>
-    <p class="lede">복서의 발은 박자를 탑니다. 한 박자는 한 발이 닿는 순간이고, 제자리 바운스에서 스텝, 주먹까지 같은 박자가 이어집니다. 아래 동작은 녹화가 아니라 지금 계산되고 있는 실제 시합입니다.</p>
+    <h1>모션 <em>카탈로그</em></h1>
+    <p class="lede">복서의 발은 박자를 탑니다. 제자리 바운스에서 스텝, 주먹까지 같은 박자가 이어지고, 그 위에서 주먹을 피하고, 막고, 맞고, 쓰러집니다. 아래 동작은 녹화가 아니라 지금 계산되고 있는 실제 시합입니다. 피했는지 맞았는지는 글러브가 머리에 실제로 닿았는지로 정해집니다.</p>
     <div class="controls">
       <span>속도</span>
       <span class="seg"><button id="speed-1" data-speed="1" aria-pressed="true">1×</button><button id="speed-half" data-speed="0.5" aria-pressed="false">½×</button><button id="speed-quarter" data-speed="0.25" aria-pressed="false">¼×</button></span>
@@ -81,7 +88,8 @@
   </header>
   <main id="catalog"></main>
   <footer>
-    <p>등불은 발이 캔버스에 닿는 순간 켜집니다. 노란색이 앞발, 파란색이 뒷발이고 바닥의 발자국도 같은 색입니다. "분당 보"는 최근 몇 걸음의 간격으로 잰 값이라, 이동이 빨라지면 박자도 빨라지는 것을 볼 수 있습니다.</p>
+    <p>풋워크 카드의 등불은 발이 캔버스에 닿는 순간 켜집니다. 노란색이 앞발, 파란색이 뒷발이고 바닥의 발자국도 같은 색입니다. "분당 보"는 최근 몇 걸음의 간격으로 잰 값이라, 이동이 빨라지면 박자도 빨라지는 것을 볼 수 있습니다.</p>
+    <p>수비와 피격 카드는 매번 새 시합에서 같은 대본을 다시 칩니다. 아래 표시는 그 회에 주먹이 어떻게 됐는지와, 닿았다면 그 충격량(뉴턴초)입니다. 피하는 동작은 주먹이 출발한 뒤 정해진 구간 안에서만 통합니다. 너무 이르면 주먹이 머리를 따라오고, 너무 늦으면 머리가 아직 그 자리에 있습니다.</p>
   </footer>
 </div>
 <div id="loading">불러오는 중…</div>

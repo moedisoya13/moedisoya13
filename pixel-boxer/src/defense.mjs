@@ -80,7 +80,7 @@ const DRILLS = [
   {
     id: 'worn', name: '지친 기색', en: 'Worn down', group: '맞기', hurt: true,
     note: '체력과 숨이 바닥난 선수입니다. 발이 캔버스에서 거의 떨어지지 않고, 가드가 내려가고, 가슴이 빠르게 들썩입니다.',
-    loop: 3, punch: null, setup: b => (b.fighters[0].hp = 14), keep: b => ((b.fighters[0].hp = 14), (b.fighters[0].stamina = 0.05 * b.fighters[0].k.staminaMax)), view: { yaw: 0.3, pitch: 0.24 }
+    loop: 3, punch: null, status: '체력 14 · 숨 5%', setup: b => (b.fighters[0].hp = 14), keep: b => ((b.fighters[0].hp = 14), (b.fighters[0].stamina = 0.05 * b.fighters[0].k.staminaMax)), view: { yaw: 0.3, pitch: 0.24 }
   },
   {
     id: 'hit-upper', name: '어퍼컷에 맞음', en: 'Taking an uppercut', group: '맞기', hurt: true,
