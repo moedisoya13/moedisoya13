@@ -1,0 +1,185 @@
+/* Measuring the boxer as the bout moves him: the numbers the catalogue's cards show and the tests hold the grades to, taken
+   off a real bout sixty times a second. Nothing here draws; the page, tools/ladder.mjs and the tests all measure the same way.
+     run(entry, seconds)   a scripted bout (footwork.mjs's form) and a frame a step of the boxer: his joints, his head across
+                           the line to the other man, his hip and shoulder lines, his rhythm, what happened
+     guardOf(level)        his own guard, as his grade holds it with his head still: where the head and the lines are
+     rung(id)              a rung of the skill ladder: the blow, when it landed after the press, how far the head was off the
+                           line then, the most the hips turned and the shoulders were held back behind them, where the hips were
+     stance(level, s)      a grade's footwork standing: hips and head travel, feet a minute, the beat, the flourishes
+     across(f, other, p)   where a point is across the line from boxer f to the other man (+ to his left), metres
+     lineAngle(pose, a, b) the line through two joints as an angle about the vertical, in his own space */
+import { step } from './game/bout.mjs';
+import { freshBout, drive } from './footwork.mjs';
+import { LADDER, STANCES } from './ladder.mjs';
+import { LEVELS, LEVEL } from './anim/skill.mjs';
+import { MOVES } from './anim/moves.mjs';
+import { NAMES } from './rig/skeleton.mjs';
+import { toWorld } from './anim/pose.mjs';
+
+const DT = 1 / 60;
+const deg = r => (r * 180) / Math.PI;
+const wrap = a => Math.atan2(Math.sin(a), Math.cos(a));
+
+/* Where a point of him is across the line to the other man (+ to his left), and the line of a pair of joints (hips, shoulders)
+   as an angle about the vertical, in his own space. */
+export function across(f, other, p) {
+  const ax = other.x - f.x,
+    az = other.z - f.z,
+    l = Math.hypot(ax, az) || 1;
+  // his left, looking down the line: the line turned a quarter to the left (x across, z ahead on the canvas)
+  return ((p[0] - f.x) * az - (p[2] - f.z) * ax) / l;
+}
+export const lineAngle = (pose, a, b) => Math.atan2(pose.at[a][2] - pose.at[b][2], pose.at[a][0] - pose.at[b][0]);
+
+/* Run an entry for `seconds` (its own loop if left out) and keep a frame a step: the boxer's joints on the canvas, his head
+   across the line, his hip and shoulder lines, his rhythm, and what happened. */
+export function run(entry, seconds) {
+  const bout = freshBout(entry),
+    frames = [],
+    [a, b] = bout.fighters;
+  let blow = -9,
+    chain = null; // the last punch's kinetic chain
+  for (let tick = 0; tick < Math.round((seconds || entry.loop) / DT); tick++) {
+    // (a step taken inside the held moment of a blow moves nothing: that frame is the one before, held)
+    const held = bout.stop > 0;
+    step(bout, drive(entry, bout, tick * DT, DT), DT);
+    b.hp = 1000;
+    if (!entry.hurt) a.hp = Math.max(a.hp, 1000);
+    const events = bout.events.map(e => ({ ...e }));
+    for (const e of events) if (['hit', 'block', 'parry'].includes(e.type)) blow = tick;
+    if (bout.stop > 0 && tick - blow < 30) blow = tick;
+    const r = a.animator.rhythm;
+    if (a.action && a.action.chain) chain = a.action.chain;
+    frames.push({
+      tick,
+      events,
+      held,
+      struck: tick - blow <= 2,
+      joints: Object.fromEntries(NAMES.map(n => [n, toWorld(a.place, a.pose.at[n], a.pose.stretch)])),
+      head: across(a, b, a.points.head),
+      headY: a.points.head[1],
+      hipsY: a.pose.at.Hips[1] * a.pose.stretch,
+      hips: lineAngle(a.pose, 'LeftLeg', 'RightLeg'),
+      shoulders: lineAngle(a.pose, 'LeftArm', 'RightArm'),
+      halves: r.halves,
+      landed: r.landed,
+      flourish: r.flourish,
+      action: a.action ? a.action.name : null,
+      foot: { L: a.pose.at.LeftFoot.slice(), R: a.pose.at.RightFoot.slice() },
+      // and the other man: his lead foot on the canvas, whether it is stood on, what he is doing
+      foe: { foot: toWorld(b.place, b.pose.at.LeftFoot, b.pose.stretch), pinned: b.pinned > 0, action: b.action ? b.action.id : null }
+    });
+  }
+  return { frames, bout, chain };
+}
+
+// the landings in a run of frames: the tick each foot came down on, and which
+export const landings = frames => frames.filter((f, i) => i > 0 && f.halves !== frames[i - 1].halves).map(f => ({ tick: f.tick, foot: f.landed }));
+
+/* His own guard, as his grade holds it: where his head is across the line, and his hip and shoulder lines, standing in his
+   grade's posture with his head held still (no head movement, no flourishes), over six seconds of it. */
+const guards = {};
+export function guardOf(level) {
+  if (guards[level]) return guards[level];
+  const still = Object.assign({}, LEVEL[level], { stance: Object.assign({}, LEVEL[level].stance, { head: null, flourish: null, paw: 0 }) });
+  const base = STANCES.find(e => e.id === `stance@${level}`),
+    { frames } = run(Object.assign({}, base, { setup: b => (b.fighters[0].skills = { all: still }) }), 6),
+    mean = k => frames.reduce((s, f) => s + f[k], 0) / frames.length;
+  return (guards[level] = { head: mean('head'), hips: mean('hips'), shoulders: mean('shoulders'), hipsY: mean('hipsY') });
+}
+
+// one rung: the blow and how the body was used to throw it
+export function rung(id) {
+  const entry = LADDER.find(e => e.id === id),
+    move = MOVES[entry.punch],
+    { frames, chain } = run(entry),
+    guard = guardOf(entry.level),
+    press = frames.findIndex(f => f.events.some(e => e.type === 'punch' && e.who === 0 && e.name === entry.punch)),
+    hit = frames.findIndex(f => f.events.some(e => e.who === 0 && ['hit', 'graze', 'whiff', 'block'].includes(e.type))),
+    blow = hit >= 0 ? frames[hit].events.find(e => e.who === 0 && ['hit', 'graze', 'whiff', 'block'].includes(e.type)) : null,
+    turn = Math.sign(move.links.hips.yaw),
+    sg = Math.sign(move.links.trunk.twist),
+    side = move.hand === 'R' ? 1 : -1,
+    during = frames.slice(press, (hit >= 0 ? hit : frames.length - 1) + 1);
+  let hips = 0,
+    sep = 0;
+  // (the lines' angles are taken with his left as +x and ahead as +z, so a turn to his left is a fall in the angle)
+  for (const f of during) {
+    hips = Math.max(hips, deg(-turn * wrap(f.hips - guard.hips)));
+    sep = Math.max(sep, deg(sg * wrap(f.shoulders - f.hips - (guard.shoulders - guard.hips))));
+  }
+  return {
+    id,
+    punch: entry.punch,
+    level: entry.level,
+    type: blow ? blow.type : 'none',
+    J: blow && blow.J !== undefined ? blow.J : 0,
+    // (the press is read on the step before the one the punch starts on, as the bout reads every button)
+    ms: hit >= 0 && press >= 0 ? Math.round((hit - press) * DT * 1000) : null,
+    speed: blow ? blow.speed : 0,
+    mass: blow ? blow.mass : 0,
+    pressTick: press,
+    hitTick: hit,
+    off: hit >= 0 ? +((side * (frames[hit].head - guard.head)) * 100).toFixed(1) : null,
+    hipTurn: +hips.toFixed(1),
+    sep: +sep.toFixed(1),
+    rise: hit >= 0 && press >= 0 ? +((frames[hit].hipsY - frames[press].hipsY) * 100).toFixed(1) : null,
+    fired: chain ? chain.fired.slice() : null, // when each joint of it fired, seconds after the press
+    // (and from where he carries them, standing in his own guard)
+    sunk: hit >= 0 ? +((frames[hit].hipsY - guard.hipsY) * 100).toFixed(1) : null,
+    frames
+  };
+}
+
+/* The footwork of a grade, standing: `seconds` of it. */
+export function stance(level, seconds) {
+  const { frames } = run(STANCES.find(e => e.id === `stance@${level}`), seconds || 20),
+    settled = frames.slice(60),
+    span = k => Math.max(...settled.map(f => f[k])) - Math.min(...settled.map(f => f[k])),
+    land = landings(settled),
+    gaps = land.slice(1).map((l, i) => (l.tick - land[i].tick) * DT),
+    mean = gaps.reduce((s, g) => s + g, 0) / (gaps.length || 1),
+    sd = Math.sqrt(gaps.reduce((s, g) => s + (g - mean) ** 2, 0) / (gaps.length || 1)),
+    /* the squash at each landing, by which foot came down: how far the hips dip below a straight line drawn from where they
+       are as the foot lands to where they are as the squash ends (the bounce's contact, 0.38 of the half beat), so that
+       anything slower going on under it (the head's U, a change of level) is left out */
+    squash = { L: [], R: [] };
+  land.forEach((l, k) => {
+    const i = settled.findIndex(f => f.tick === l.tick),
+      next = land[k + 1] ? settled.findIndex(f => f.tick === land[k + 1].tick) : -1;
+    if (!l.foot || next < 0) return;
+    const j = i + Math.max(2, Math.round((next - i) * 0.38));
+    let deep = 0;
+    for (let n = i; n <= j && n < settled.length; n++) deep = Math.max(deep, settled[i].hipsY + ((settled[j].hipsY - settled[i].hipsY) * (n - i)) / (j - i) - settled[n].hipsY);
+    squash[l.foot].push(deep);
+  });
+  const avg = a => a.reduce((s, x) => s + x, 0) / (a.length || 1),
+    // swung: of each pair of half beats, the share the one that starts on the lead foot takes
+    pairs = [];
+  for (let i = 0; i + 1 < gaps.length; i++) if (land[i].foot === 'L' && land[i + 1].foot === 'R') pairs.push(gaps[i] / (gaps[i] + gaps[i + 1]));
+  // feet a minute, as the catalogue counts them: a foot off the canvas and back down on it
+  const up = { L: false, R: false };
+  let plants = 0,
+    lifted = 0;
+  for (const f of settled)
+    for (const side of ['L', 'R']) {
+      const y = f.joints[side === 'L' ? 'LeftFoot' : 'RightFoot'][1];
+      lifted = Math.max(lifted, y - 0.09);
+      if (y > 0.099) up[side] = true;
+      else if (up[side] && y < 0.094) (up[side] = false), plants++;
+    }
+  const seen = [...new Set(settled.map(f => f.flourish).filter(Boolean))];
+  return {
+    level,
+    hips: +(span('hipsY') * 100).toFixed(1),
+    head: +(span('head') * 100).toFixed(1),
+    headY: +(span('headY') * 100).toFixed(1),
+    lifted: +(lifted * 100).toFixed(1),
+    steps: Math.round((plants / (settled.length * DT)) * 60),
+    landings: Math.round((land.length / (settled.length * DT)) * 60),
+    beat: { cv: +(sd / mean).toFixed(3), strong: +(avg(squash.L) / (avg(squash.R) || 1)).toFixed(2), swing: +(avg(pairs) || 0.5).toFixed(3) },
+    flourishes: seen,
+    frames: settled
+  };
+}
+

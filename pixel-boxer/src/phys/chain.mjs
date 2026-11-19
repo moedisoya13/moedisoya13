@@ -7,7 +7,8 @@
      const chain = createChain(move, quick, skill)
                                               move.chain: { coil (seconds), rate: [5] natural frequencies in rad/s, skip }
                                               quick: his muscles' speed; skill: how well he throws it (anim/skill.mjs:
-                                              the order the joints go in, when each hands on, how far each turns)
+                                              the order the joints go in, when each hands on, how far each turns, how
+                                              each springs)
      stepChain(chain, move, dt)               -> the phase it is in: coil, throw, hold, recover, done
      chain.q[i], chain.v[i]                   each link's position 0..1 toward its end, and speed (1/s)
                                               (a punch thrown by the same hand as the one before starts from that one's: bout.mjs)
@@ -34,11 +35,13 @@ export function createChain(move, quick, skill) {
     early: each(k.early),
     lag: each(k.lag),
     thrownAt: -1, // when the throw ended (it arrived, or it landed)
-    damp: k.damp || DAMP,
-    amp: k.amp || [1, 1, 1, 1, 1],
+    damp: each(k.damp || DAMP), // (a joint each: the trunk's is how the body springs back off its turn)
+    // (a punch swung by the body, a hook, can use only so much of a better man's turn: past the target is past the target)
+    amp: (k.amp || [1, 1, 1, 1, 1]).map(a => (a > 1 ? 1 + (a - 1) * ((move.body && move.body.turn) ?? 1) : a)),
     back: k.back || 1,
     firm: k.firm || 1, // how solid the arm and wrist are at the instant it lands
-    hold: k.hold || HOLD, // how long it stays out once it has got there
+    // how long it stays out once it has got there (a dirty one stays for its foul, a thumb in his eye as long as it takes)
+    hold: skill && skill.form && skill.form.dirty && move.foul && move.foul.hold ? move.foul.hold[skill.form.dirty - 1] : k.hold || HOLD,
     shown: k.shown ?? 1, // how much of the wind-up's movement shows (its setting of the arm always does)
     backLag: k.backLag ?? 1,
     coilTime: coil,
@@ -92,7 +95,7 @@ export function stepChain(c, move, dt) {
   c.t += dt;
   c.since += dt;
   if (c.phase === 'coil') {
-    pull(c.coil, 0, 1, 4.2 / coil, 1, dt); // arrives in about the time it is given
+    pull(c.coil, 0, 1, 6 / coil, 1, dt); // all the way in, and all but still, in the time it is given (so it is let go of from rest)
     if (c.t >= coil) (c.phase = 'throw'), (c.since = 0);
     return c.phase;
   }
@@ -109,7 +112,7 @@ export function stepChain(c, move, dt) {
         if (c.q[i] || c.v[i]) pull(cell(c, i), 0, 0, RECOVER[i] * k, 1, dt);
         continue;
       }
-      const a = pull(cell(c, i), 0, 1, spec.rate[i] * k, c.damp, dt);
+      const a = pull(cell(c, i), 0, 1, spec.rate[i] * k, c.damp[i], dt);
       if (!c.push[i]) c.push[i] = Math.max(1e-6, a);
       c.a[i] = a;
       if (c.v[i] > c.peak[i]) (c.peak[i] = c.v[i]), (c.peakAt[i] = c.t);

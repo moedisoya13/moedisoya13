@@ -80,22 +80,24 @@ export function sampleMove(move, t, out) {
               still, turn: degrees the hips and trunk turn through, locked: the arm is stiff from the start }
      reach: about how far away, centre to centre, it can land (the rival's judgment and the step in; the hit itself is
             the glove meeting the head); close: the distance he steps in to
-     dirty: [the foul a dirty boxer folds into it, and the second one a legend adds] (anim/skill.mjs), each in two parts:
-            set: what goes with the punch as it is thrown, only what does not move the punching glove (the elbow raised
-                 higher, flare; the other hand, the feet, the head: body channels), so the punch lands where it would have
-            follow: what comes after it has landed, while he is still in the other man's face: the punching hand on past
-                 the chain's line (hand, metres in his terms) and the body driven on after it (body) */
+     body: how much of a grade's way of using the body (anim/skill.mjs: form) this punch takes, times: turn (of the extra
+            turn a better man gives the legs, hips and trunk), off (of the head off the line), bend, tuck
+     foul: the one foul a dirty boxer throws with it (anim/skill.mjs: form.dirty), which has to land as truly as a punch
+            does: a part of him (a foot, his head, a glove) meeting the other man (his instep, his head), judged the way a
+            punch is (game/bout.mjs: fouls), with an impulse the way a punch's is, from the mass of the part. Pairs of
+            amounts are [4암, 5암]: a great dirty fighter does it in the open, a legend does it small and passes it off as an
+            accident. The body it takes is the animator's (anim/animator.mjs: the foul); these are its amounts. */
 const PUNCHES = {
   jab: {
     hand: 'L', arm: 'straight', kind: 'straight', reach: 1.15, close: 1.0,
     chain: { coil: 0, rate: [58, 52, 52, 46, 44], turn: [15, 8] },
+    body: { off: 0.6, dip: 0.5 },
     coil: {},
     links: { drive: { hz: 0.06, lfz: 0.07 }, hips: { yaw: -15, rx: 0.02, ry: 0.03 }, trunk: { twist: -8, lean: 4, hp: 3 }, shoulder: {}, elbow: {} },
-    // the laces raked down his face after it lands; then the rear hand pinning his lead glove, and a foot on his
-    dirty: [
-      { set: { flare: 0.3 }, follow: { hand: [-0.06, -0.2, -0.02], body: { hp: 4, lean: 4 } } }, // the elbow up, the laces raked down his face
-      { set: { body: { rz: 0.17, ry: -0.05, rx: 0.08, lfz: 0.06 } } } // the rear hand pinning his lead glove down, a foot on his
-    ]
+    /* the thumb: the glove left on his face after it lands and pushed on into it, so he cannot see (blatant: his head snapped
+       back; a legend's a short push, the wrist turned to put the thumb in, and home as if nothing had happened). It counts
+       a few hundredths after the contact, if the glove is still on him; he covers the eye with his rear glove a while. */
+    foul: { name: 'thumb', hold: [0.2, 0.1], push: [0.06, 0.03], at: 0.04, blind: 0.4, snap: [10, 0] }
   },
   cross: {
     hand: 'R', arm: 'straight', kind: 'straight', reach: 1.15, close: 1.0,
@@ -108,15 +110,19 @@ const PUNCHES = {
       shoulder: {},
       elbow: {}
     },
-    // the forearm and shoulder driven on through his face after the fist; then the lead hand round his neck, holding him on it
-    dirty: [
-      { set: { flare: 0.65 }, follow: { hand: [0.13, -0.03, -0.2], body: { twist: 10, lean: 9, hz: 0.07 } } }, // the arm folded and the forearm driven into his face
-      { set: { body: { lz: 0.21, ly: 0.08, lx: -0.07, hp: -4 } } } // the lead hand round his neck, holding him on it
-    ]
+    /* the head: not taken off the line with the punch but along it, forward and down from the moment the shoulder goes
+       (metres [forward, down]), and on into him after the fist, so that the heads meet a moment after it lands, whether it
+       landed or was slipped. Blatant, he stays there and shoves with his forearm; a legend holds up his rear glove, open,
+       nods, and steps back (sorry). Heads are 9 kg. */
+    foul: { name: 'butt', head: [[0.15, 0.1], [0.12, 0.08]], on: [0.5, 0.5], within: 0.12, mass: 9, sorry: [false, true] }
   },
   hook: {
     hand: 'L', arm: 'swing', kind: 'hook', reach: 0.9, close: 0.82,
     chain: { coil: 0.085, rate: [55, 42, 44, 60, 0], skip: ['elbow'], turn: [59, 26], locked: true },
+    /* (the arm is locked to the chest, so the body's turn is the fist's path: a better man's turn is aimed at the head, not
+       more of it; his head stays where the arm can still reach from; and it is thrown off set feet, the bounce stopped under
+       it, because the jaw is above the fist and a body coming down as it lands takes the speed out of it) */
+    body: { turn: 0.2, off: 0, bend: 0, tuck: 0, sep: 0.3, dip: 1.5, lively: 0 },
     // the arm is set at a right angle and locked to the chest, the weight goes onto the lead leg
     coil: { yaw: 15, twist: 6, hx: 0.03, hy: -0.035, lean: 2, lx: 0.1, ly: -0.05, lz: 0.12, le: 0.9, lc: 1 },
     links: {
@@ -126,16 +132,20 @@ const PUNCHES = {
       shoulder: {},
       elbow: {}
     },
-    // the elbow raised and carried on through after the fist has landed; then the rear hand holding him, a foot on his
-    dirty: [
-      { set: { flare: 0.85 }, follow: { hand: [-0.06, 0.1, -0.24], body: { yaw: -10, hz: 0.05, lean: 5 } } }, // the arm folded back and the elbow on into his face
-      { set: { body: { rz: 0.19, ry: 0.03, rx: 0.07, lfz: 0.07 } } } // the rear hand holding him, a foot on his
-    ]
+    /* the stomp: the lead foot lifted over his lead foot in the wind-up (the eyes going down to it, blatant) and put down
+       on his instep as the legs drive, the weight coming onto it: the stomp is the hook's drive. If it comes down within
+       12 cm of his instep he is pinned there for 0.45 s. Blatant, the foot stays and grinds until the hand is home; a
+       legend's comes off 50 ms after the hook lands. A foot is reckoned with the leg behind it, 12 kg; it can reach 0.45 m. */
+    foul: { name: 'stomp', lift: [0.06, 0.02], look: [8, 0], sink: 0.04, near: 0.12, reach: 0.45, mass: 12, pin: 0.45, off: [null, 0.05] }
   },
   upper: {
     hand: 'R', arm: 'lift', kind: 'upper', reach: 0.9, close: 0.8,
     chain: { coil: 0.09, rate: [40, 44, 46, 52, 0], skip: ['elbow'], turn: [46, 12], locked: true },
-    coil: { hy: -0.1, lean: 9, yaw: -6, side: -7, rx: 0.02, ry: -0.2, rz: 0.02, hp: 4, st: -0.04 }, // down onto bent knees, the hand dropped
+    /* (a punch that comes up out of the knees goes down into them further, and is lifted enough by them to need little more
+       of a better man's turn, or of his head off the line, before the chin is over it; and with the bounce in it already,
+       half the bounce goes on under it) */
+    body: { dip: 1.2, turn: 0.3, off: 0.5, lively: 0.5 },
+    coil: { hy: -0.09, lean: 9, yaw: -6, side: -7, rx: 0.02, ry: -0.18, rz: 0.02, hp: 4, st: -0.03 }, // down onto bent knees, the hand dropped
     links: {
       drive: { hy: 0.035, st: 0.05, rfw: 32, rfp: 28 }, // the legs straighten under it
       hips: { yaw: 40, hz: 0.07 },
@@ -143,15 +153,13 @@ const PUNCHES = {
       shoulder: {},
       elbow: {}
     },
-    // the head driven up and in with it, into his face; then the lead hand pulling his head down onto both
-    dirty: [
-      { set: { body: { hp: 9 } }, follow: { body: { hz: 0.11, lean: 13, hy: 0.05, hp: 8 } } }, // the crown of the head down and in, then driven up into him
-      { set: { body: { lz: 0.21, ly: -0.04, lx: -0.05 } } } // the lead hand pulling his head down onto both
-    ]
+    /* the hold: in the wind-up the lead hand goes round the back of his neck and pulls his head down onto the uppercut
+       coming up (it counts when the glove reaches his head); a legend's elbow comes up the same way after the fist. */
+    foul: { name: 'hold', pull: 0.08, mass: 2, elbow: [0, 0.9] }
   }
 };
 for (const [name, punch] of Object.entries(PUNCHES)) {
-  for (const amounts of [punch.coil, ...Object.values(punch.links), ...(punch.dirty || []).flatMap(d => [(d.set || {}).body || {}, (d.follow || {}).body || {}])]) for (const ch of Object.keys(amounts)) if (!CHANNELS.includes(ch)) throw new Error(`${name}: unknown channel ${ch}`);
+  for (const amounts of [punch.coil, ...Object.values(punch.links)]) for (const ch of Object.keys(amounts)) if (!CHANNELS.includes(ch)) throw new Error(`${name}: unknown channel ${ch}`);
   Object.assign(punch, { name, punch: true });
 }
 

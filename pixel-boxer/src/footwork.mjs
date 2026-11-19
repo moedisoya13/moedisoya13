@@ -40,7 +40,8 @@ function pendulum(f) {
    controls themselves, for footwork that keeps his time. press: [[t, button, value]] (value true if left out), and
    against: the same for the other man. cover(t): guard held (hisCover(t) for the other man). view: { yaw, pitch }.
    setup(bout): anything about the men to set before the loop starts; keep(bout, t): anything to hold as it was, every step
-   (how hurt or tired he is, say, which the bout would otherwise change), or to do at a moment of the loop. */
+   (how hurt or tired he is, say, which the bout would otherwise change), or to do at a moment of the loop. cue(bout, t):
+   a button to press now, for a press that waits on something (his own beat, say) rather than a moment of the loop. */
 export const ENTRIES = [
   {
     id: 'bounce', name: '리듬 바운스', en: 'Rhythm bounce', group: '박자',
@@ -123,5 +124,9 @@ export function drive(entry, bout, at, dt) {
   if (entry.keep) entry.keep(bout, t);
   for (const [controls, presses] of [[mine, entry.press], [his, entry.against]])
     for (const [when, button, value] of presses || []) if (tick % loop === Math.round(when / dt)) controls[button] = value === undefined ? true : value;
+  if (entry.cue) {
+    const button = entry.cue(bout, t);
+    if (button) mine[button] = true;
+  }
   return [mine, his];
 }

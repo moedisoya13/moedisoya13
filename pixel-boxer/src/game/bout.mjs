@@ -11,7 +11,8 @@
                    slip: 1 | -1 (the head off the line, to his left or right), duck: true (straight down under a punch),
                    roll: 1 | -1 (bob and weave: down under it and up on his left or right), pull: true (the head swayed
                    back out of reach) }
-     bout.events            what happened this step, for the picture and the sound
+     bout.events            what happened this step, for the picture and the sound (a dirty boxer's fouls among them:
+                            { type: 'foul', name: stomp | butt | thumb | hold, who, on, J }; nobody penalises them)
      bout.fighters[i].pose  his solved pose this step (and .place: where on the canvas, .points: gloves and head in the world)
 
    A punch is physics from the feet to the glove. Pressing a button only starts a kinetic chain (phys/chain.mjs); the joints
@@ -25,6 +26,7 @@ import { MOVES } from '../anim/moves.mjs';
 import { createAnimator } from '../anim/animator.mjs';
 import { toWorld } from '../anim/pose.mjs';
 import { createChain, stepChain, effectiveMass } from '../phys/chain.mjs';
+import * as P from '../anim/pose.mjs';
 import { RING } from '../world/ring.mjs';
 import { body, blank, fatigue, COST } from './profile.mjs';
 import { levelOf } from '../anim/skill.mjs';
@@ -67,7 +69,7 @@ const DT = 1 / 60;
 
 function boxer(x, yaw, seed, sheet, skills) {
   const k = body(sheet);
-  return { sheet: sheet || blank(), skills: skills || {}, k, stamina: k.staminaMax, x, z: 0, vx: 0, vz: 0, kx: 0, kz: 0, gx: 0, gz: 0, yaw, turn: 0, hp: RULES.hp, action: null, cover: false, coverAge: 0, stun: 0, counter: 0, flash: 0, want: null, wantAge: 0, link: 0, sinceHit: 9, sinceLast: 9, serial: 0, down: 0, animator: createAnimator(seed), pose: null, place: null, points: null, before: null };
+  return { sheet: sheet || blank(), skills: skills || {}, k, stamina: k.staminaMax, x, z: 0, vx: 0, vz: 0, kx: 0, kz: 0, gx: 0, gz: 0, yaw, turn: 0, hp: RULES.hp, action: null, cover: false, coverAge: 0, stun: 0, counter: 0, flash: 0, want: null, wantAge: 0, link: 0, sinceHit: 9, sinceLast: 9, serial: 0, down: 0, pinned: 0, pulled: 0, animator: createAnimator(seed), pose: null, place: null, points: null, before: null };
 }
 export function createBout(seed, o) {
   o = o || {};
@@ -120,7 +122,9 @@ function decide(bout, f, input, dt, who) {
   if (f.want) {
     const [what, dir] = f.want,
       punch = what !== 'dash' && !EVADE.includes(what);
-    if (open(f, punch)) {
+    // (a man whose lead foot is stood on cannot dash or sway back off it; he can still slip and duck)
+    if (f.pinned > 0 && (what === 'dash' || what === 'pull')) f.want = null;
+    else if (open(f, punch)) {
       f.want = null;
       if (EVADE.includes(what)) {
         begin(f, what, { side: dir === true ? 1 : dir });
@@ -160,7 +164,7 @@ function travel(f, input, dt, other) {
     k = l > 1 ? 1 / l : 1,
     fresh = 0.78 + 0.22 * fatigue(f),
     walk = f.k.walk * fresh,
-    top = f.stun > 0 || (f.action && !punching(f)) ? 0 : f.action ? RULES.punchSpeed : f.cover ? walk * (RULES.coverSpeed / RULES.speed) : walk,
+    top = f.stun > 0 || f.pinned > 0 || (f.action && !punching(f)) ? 0 : f.action ? RULES.punchSpeed : f.cover ? walk * (RULES.coverSpeed / RULES.speed) : walk,
     wx = m[0] * k * top,
     wz = m[1] * k * top,
     dx = wx - f.vx,
@@ -243,7 +247,16 @@ function viewOf(bout, i) {
       cheer: bout.over === i && bout.t - bout.overAt > 0.9,
       still: !!f.down && f.action.t >= MOVES[f.action.name].dur,
       action: f.action,
-      aim: null
+      aim: null,
+      // how he stands and moves when he is doing nothing else (his grade of footwork), and whether a blow has stopped him
+      stance: levelOf(f.skills, 'stance'),
+      stun: f.stun > 0,
+      reach: null,
+      // the other man, in his own terms: where his head is and his lead foot's instep (what a dirty man goes for), and
+      // whether this man's own lead foot is stood on, or his head held down
+      foe: f.place && other.pose && other.points ? { head: mine(f, other.points.head), foot: mine(f, at(other, 'LeftFoot', [0, -0.02, 0.07])) } : null,
+      pinned: f.pinned > 0,
+      pulled: f.pulled
     };
   if (punching(f) && !other.down && other.points) {
     /* Where the punch is thrown: at the head as it is now, wherever that is. The wrist is sent so that the glove's centre
@@ -251,7 +264,10 @@ function viewOf(bout, i) {
        side of the head for a hook, up under the chin for an uppercut. */
     const move = MOVES[f.action.name],
       h = other.points.head,
-      [side, front] = local(f, h[0] - f.x, h[2] - f.z);
+      [side, front] = local(f, h[0] - f.x, h[2] - f.z),
+      glove = f.points && f.points[move.hand];
+    // (how far the glove still has to go to meet it: a boxer who times his punches to his feet times them by this)
+    if (glove) view.reach = Math.hypot(h[0] - glove[0], h[1] - glove[1], h[2] - glove[2]) - RULES.glove - RULES.head;
     if (f.action.aim) view.aim = f.action.aim;
     else if (Math.hypot(side, front) < 1.7 && front > 0.2) {
       const from = move.hand === 'L' ? 1 : -1,
@@ -269,6 +285,14 @@ function viewOf(bout, i) {
   }
   return view;
 }
+// a point on the canvas in boxer f's own space (as he was last drawn), and a point of his on the canvas (a joint, and so far on
+// from it in that joint's terms)
+const mine = (f, p) => {
+  const d = M.app(M.tr(f.place.R), M.sub(p, f.place.p)),
+    s = (f.pose && f.pose.stretch) || 1;
+  return [d[0] * Math.sqrt(s), d[1] / s, d[2] * Math.sqrt(s)];
+};
+const at = (f, joint, by) => P.toWorld(f.place, M.add(f.pose.at[joint], by || [0, 0, 0]), f.pose.stretch);
 // solve boxer i for this step, and find his gloves and head on the canvas
 function solvePose(bout, f, i, dt) {
   const pose = f.animator.update(viewOf(bout, i), dt),
@@ -381,7 +405,8 @@ function strike(bout, f, other, who, dt) {
   const dirty = (action.level && action.level.form.dirty) || 0,
     held = dirty > 1 ? 0.5 : 1,
     after = dirty ? 0.75 : 0,
-    push = ((worth / RULES.mass) * RULES.shove * held);
+    // (and a man whose foot is stood on can hardly be moved off it)
+    push = (worth / RULES.mass) * RULES.shove * held * (other.pinned > 0 ? 0.3 : 1);
   other.kx += dir[0] * push;
   other.kz += dir[1] * push;
   f.kx += dir[0] * push * after;
@@ -404,6 +429,68 @@ function strike(bout, f, other, who, dt) {
   }
 }
 
+/* A dirty boxer's foul (moves.mjs: foul), judged the way a punch is: the part of him it is done with has to meet the part of
+   the other man it is done to. Once a punch, at most. What it does to him is his body's (the animator's), and to his feet:
+   stood on, he is pinned where he is; held, his head is pulled down. Nobody penalises any of it: it is only seen. */
+const FOULS = { foot: 0.06 }; // radius of a foot, metres
+function fouls(bout, f, other, who, dt) {
+  const action = f.action,
+    move = action && MOVES[action.name],
+    level = action && action.level,
+    tier = level && level.form.dirty;
+  if (!move || !move.punch || !move.foul || !tier || action.fouled || other.down || !f.before || !other.before) return;
+  const foul = move.foul,
+    chain = action.chain,
+    k = tier - 1,
+    landed = chain.thrownAt >= 0 ? chain.t - chain.thrownAt : -1,
+    // closing speed of a part of him on a part of the other man, along the line between them, and the impulse it carries
+    blow = (a0, a1, b0, b1, mass) => {
+      const line = M.sub(b1, a1),
+        l = Math.hypot(line[0], line[1], line[2]) || 1,
+        v = M.scale(M.sub(M.sub(a1, a0), M.sub(b1, b0)), 1 / dt),
+        speed = Math.max(0, (v[0] * line[0] + v[1] * line[1] + v[2] * line[2]) / l);
+      return +(mass * speed * (1 + RULES.bounce)).toFixed(1);
+    },
+    hit = (name, J) => {
+      action.fouled = { name, at: chain.t };
+      bout.events.push({ type: 'foul', name, who, on: 1 - who, J, tier: level.id });
+      other.animator.foul && other.animator.foul({ name, J, tier: k });
+    };
+  if (foul.name === 'stomp') {
+    // his foot coming down on the instep as the legs drive: within so much of it, and down on the canvas
+    const foot = at(f, 'LeftFoot'),
+      was = f.footWas || foot,
+      on = at(other, 'LeftFoot', [0, -0.02, 0.07]);
+    f.footWas = foot;
+    if ((chain.phase === 'throw' || chain.phase === 'coil') && chain.q[0] > 0.3 && foot[1] < 0.1 && Math.hypot(foot[0] - on[0], foot[2] - on[2]) < foul.near) {
+      hit('stomp', blow(was, foot, on, on, foul.mass));
+      other.pinned = foul.pin;
+    }
+  } else if (foul.name === 'butt') {
+    // heads meeting a moment after the fist has got there (landed or not): it is what follows the punch in
+    if (landed >= 0 && landed <= foul.within && Math.hypot(...M.sub(f.points.head, other.points.head)) < 2 * RULES.head) {
+      const J = blow(f.before.head, f.points.head, other.before.head, other.points.head, foul.mass),
+        n = M.sub(other.points.head, f.points.head),
+        [side, front] = local(other, n[0], n[2]);
+      hit('butt', J);
+      other.animator.strike({ J: J * 0.6, dir: [side, n[1], front] });
+    }
+  } else if (foul.name === 'thumb') {
+    // the glove still on his face so long after it landed
+    if (action.struck && landed >= foul.at && Math.hypot(...M.sub(f.points[move.hand], other.points.head)) < RULES.glove + RULES.head + 0.03) hit('thumb', blow(f.before[move.hand], f.points[move.hand], other.before.head, other.points.head, effectiveMass(chain, move)));
+  } else if (foul.name === 'hold') {
+    // the lead glove round the back of his neck, in the wind-up or as it goes
+    const hand = move.hand === 'R' ? 'L' : 'R';
+    if ((chain.phase === 'coil' || chain.phase === 'throw') && Math.hypot(...M.sub(f.points[hand], other.points.head)) < RULES.glove + RULES.head + 0.04) hit('hold', blow(f.before[hand], f.points[hand], other.before.head, other.points.head, foul.mass));
+  }
+}
+// a man held round the neck is pulled down for as long as the punch it goes with is on its way
+function holding(f, other, dt) {
+  const action = f.action,
+    held = action && action.fouled && action.fouled.name === 'hold' && (action.chain.phase === 'coil' || action.chain.phase === 'throw' || action.chain.phase === 'hold');
+  other.pulled += ((held ? 1 : 0) - other.pulled) * (1 - Math.exp(-dt * (held ? 25 : 10)));
+}
+
 export function step(bout, inputs, dt) {
   dt = dt || DT;
   bout.events.length = 0;
@@ -420,7 +507,7 @@ export function step(bout, inputs, dt) {
     return bout;
   }
   bout.t += dt;
-  for (const f of bout.fighters) (f.px = f.x), (f.pz = f.z);
+  for (const f of bout.fighters) (f.px = f.x), (f.pz = f.z), (f.pinned = Math.max(0, f.pinned - dt));
   bout.fighters.forEach((f, i) => {
     const other = bout.fighters[1 - i],
       input = bout.over === null ? inputs[i] || {} : {};
@@ -459,5 +546,9 @@ export function step(bout, inputs, dt) {
   bout.fighters.forEach((f, i) => solvePose(bout, f, i, dt));
   strike(bout, a, b, 0, dt);
   if (bout.stop <= 0) strike(bout, b, a, 1, dt);
+  fouls(bout, a, b, 0, dt);
+  fouls(bout, b, a, 1, dt);
+  holding(a, b, dt);
+  holding(b, a, dt);
   return bout;
 }

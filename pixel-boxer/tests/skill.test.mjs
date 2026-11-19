@@ -1,36 +1,18 @@
-// The seven grades of a punch (anim/skill.mjs): what each is, as the bout fights it.
+// The seven grades of a punch (anim/skill.mjs): what each is, as the bout fights it (the catalogue's rungs, tools/ladder.mjs).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createBout, step, settle } from '../src/game/bout.mjs';
-import { freshBout, drive } from '../src/footwork.mjs';
-import { LADDER, AT } from '../src/ladder.mjs';
+import { rung, run } from '../src/measure.mjs';
+import { DIRTY } from '../src/ladder.mjs';
 import { LEVELS } from '../src/anim/skill.mjs';
-import { toWorld } from '../src/anim/pose.mjs';
 import { NAMES } from '../src/rig/skeleton.mjs';
 
 const DT = 1 / 60;
 const PUNCHES = ['jab', 'cross', 'hook', 'upper'];
-
-// one loop of a ladder script: the blow, the chain that threw it, and the boxer's joints in every frame
-function fight(id) {
-  const entry = LADDER.find(e => e.id === id),
-    bout = freshBout(entry),
-    frames = [];
-  let blow = null,
-    chain = null,
-    struck = -9;
-  for (let tick = 0; tick < Math.round(entry.loop / DT); tick++) {
-    step(bout, drive(entry, bout, tick * DT, DT), DT);
-    bout.fighters[1].hp = 1000;
-    const f = bout.fighters[0];
-    if (f.action && f.action.chain) chain = f.action.chain;
-    for (const e of bout.events) if (!blow && ['hit', 'block', 'parry', 'whiff', 'graze'].includes(e.type)) (blow = { ...e, t: (tick + 1) * DT - AT }), (struck = tick);
-    if (bout.stop > 0 && tick - struck < 30) struck = tick;
-    frames.push({ tick, held: bout.stop > 0, struck: tick - struck <= 2, hand: toWorld(f.place, f.pose.at[(blow || {}).hand === 'L' ? 'LeftHand' : 'RightHand'], f.pose.stretch), joints: Object.fromEntries(NAMES.map(n => [n, toWorld(f.place, f.pose.at[n], f.pose.stretch)])) });
-  }
-  return { blow, chain, frames };
-}
-const ladder = Object.fromEntries(LADDER.map(e => [e.id, fight(e.id)]));
+const CLEAN = ['1', '2', '3', '4m', '5m'];
+// every rung, fought once: the blow (and when it landed after the press), and the body that threw it
+const ladder = Object.fromEntries(PUNCHES.flatMap(p => LEVELS.map(lv => [`${p}@${lv}`, rung(`${p}@${lv}`)])));
+const r = (p, lv) => ladder[`${p}@${lv}`];
 
 test('skill: a pro is the textbook, exactly: grade 3 throws every punch the way it is written', () => {
   for (const name of PUNCHES) {
@@ -55,21 +37,19 @@ test('skill: a pro is the textbook, exactly: grade 3 throws every punch the way 
 
 test('skill: every punch is harder and gets there sooner, grade by grade, clean or dirty', () => {
   for (const name of PUNCHES) {
-    const r = lv => ladder[`${name}@${lv}`].blow;
-    for (const lv of LEVELS) assert.equal(r(lv).type, 'hit', `${name}@${lv} lands`);
+    for (const lv of LEVELS) assert.equal(r(name, lv).type, 'hit', `${name}@${lv} lands`);
     for (const [lo, hi] of [['1', '2'], ['2', '3'], ['3', '4m'], ['4m', '5m'], ['3', '4a'], ['4a', '5a']]) {
-      assert.ok(r(hi).J > r(lo).J, `${name}: ${lo} ${r(lo).J} < ${hi} ${r(hi).J}`);
-      assert.ok(r(hi).t <= r(lo).t + 1e-9, `${name}: ${hi} gets there no later than ${lo}`);
+      assert.ok(r(name, hi).J > r(name, lo).J, `${name}: ${lo} ${r(name, lo).J} < ${hi} ${r(name, hi).J}`);
+      assert.ok(r(name, hi).ms <= r(name, lo).ms, `${name}: ${hi} (${r(name, hi).ms} ms) gets there no later than ${lo} (${r(name, lo).ms} ms)`);
     }
     // a beginner's is a fraction of a pro's (the jab, an arm punch anyway, the least), a legend's well over it
-    assert.ok(r('1').J < 0.65 * r('3').J && r('5m').J > 1.1 * r('3').J, name);
+    assert.ok(r(name, '1').J < 0.65 * r(name, '3').J && r(name, '5m').J > 1.1 * r(name, '3').J, name);
   }
 });
 
 test('skill: a beginner throws the arm before the body has turned behind it; from an amateur up, the joints go legs first', () => {
   for (const name of PUNCHES) {
-    const fired = lv => ladder[`${name}@${lv}`].chain.fired;
-    // (at grade 1 the shoulder goes with the hips, before the trunk if the trunk goes at all; in the textbook, after it)
+    const fired = lv => r(name, lv).fired;
     const one = fired('1');
     assert.ok(one[3] <= one[1] && (one[2] < 0 || one[3] < one[2]), `${name}: at grade 1 the shoulder goes with the hips: ${one}`);
     for (const lv of ['2', '3', '4m', '5m']) {
@@ -79,6 +59,29 @@ test('skill: a beginner throws the arm before the body has turned behind it; fro
     // an amateur's is the right order with a seam in it: his hips go later after his legs than a pro's
     assert.ok(fired('2')[1] - fired('2')[0] > fired('3')[1] - fired('3')[0], name);
   }
+});
+
+test('skill: the better he is, the further his head is off the line when the punch lands, and the more his hips turn', () => {
+  for (const name of PUNCHES) {
+    for (let i = 2; i < CLEAN.length; i++) assert.ok(r(name, CLEAN[i]).off > r(name, CLEAN[i - 1]).off, `${name}: head off the line, ${CLEAN[i - 1]} ${r(name, CLEAN[i - 1]).off} < ${CLEAN[i]} ${r(name, CLEAN[i]).off} cm`);
+    for (let i = 1; i < CLEAN.length; i++) assert.ok(r(name, CLEAN[i]).hipTurn > r(name, CLEAN[i - 1]).hipTurn, `${name}: hips turned, ${CLEAN[i - 1]} ${r(name, CLEAN[i - 1]).hipTurn} < ${CLEAN[i]} ${r(name, CLEAN[i]).hipTurn} deg`);
+  }
+});
+
+test('skill: a beginner and an amateur turn all of a piece; from a pro up the shoulders are held back behind the hips, more the better he is', () => {
+  for (const name of PUNCHES) {
+    for (const lv of ['1', '2']) assert.ok(r(name, lv).sep < 1, `${name}@${lv}: ${r(name, lv).sep} deg`);
+    assert.ok(r(name, '3').sep < r(name, '4m').sep && r(name, '4m').sep < r(name, '5m').sep, `${name}: ${r(name, '3').sep} < ${r(name, '4m').sep} < ${r(name, '5m').sep} deg`);
+  }
+});
+
+/* A beginner stands up out of his knees into every punch. A pro sits down into a hook and a cross; so does a great one. (A
+   legend's cross lands off his beat, at the top of a bounce he never stops; an uppercut comes up out of the knees by what
+   it is; and a jab is over before the knees have done more than start: see README.) */
+test('skill: a beginner stands up into his punches; a pro and a great one land a hook and a cross down in their knees', () => {
+  for (const name of PUNCHES) assert.ok(r(name, '1').sunk > 0, `${name}@1: hips ${r(name, '1').sunk} cm from his guard`);
+  for (const lv of ['3', '4m']) for (const name of ['cross', 'hook']) assert.ok(r(name, lv).sunk < 0, `${name}@${lv}: hips ${r(name, lv).sunk} cm from his guard`);
+  assert.ok(r('hook', '5m').sunk < 0, `hook@5m: hips ${r('hook', '5m').sunk} cm from his guard`);
 });
 
 test('skill: no grade of any punch has a joint go one way and straight back the next frame by more than 3 cm', () => {
@@ -101,16 +104,48 @@ test('skill: no grade of any punch has a joint go one way and straight back the 
   }
 });
 
-test('skill: a dirty punch lands where the clean one does, and then its foul shows', () => {
+test('skill: a dirty punch lands within a frame of the clean one of its grade', () => {
   for (const name of PUNCHES)
-    for (const top of ['4', '5']) {
-      const clean = ladder[`${name}@${top}m`],
-        dirty = ladder[`${name}@${top}a`];
-      assert.ok(Math.abs(clean.blow.t - dirty.blow.t) <= DT + 1e-9, `${name}@${top}: lands within a frame of the clean one`);
-      // in the moment after it has landed, the punching hand is somewhere else
-      const after = clean.frames.filter(f => f.tick * DT - AT > clean.blow.t && f.tick * DT - AT < clean.blow.t + 0.3),
-        apart = Math.max(...after.map(f => Math.hypot(...f.hand.map((v, k) => v - dirty.frames[f.tick].hand[k])))),
-        body = Math.max(...after.map(f => Math.hypot(...f.joints.Head.map((v, k) => v - dirty.frames[f.tick].joints.Head[k]))));
-      assert.ok(Math.max(apart, body) > 0.06, `${name}@${top}: the foul moves the hand ${(apart * 100).toFixed(1)} cm, the head ${(body * 100).toFixed(1)} cm`);
-    }
+    for (const top of ['4', '5']) assert.ok(Math.abs(r(name, `${top}m`).ms - r(name, `${top}a`).ms) <= DT * 1000 + 1e-9, `${name}@${top}: ${r(name, `${top}m`).ms} / ${r(name, `${top}a`).ms} ms`);
+});
+
+/* A dirty fighter's fouls (moves.mjs: foul) really land, the way a punch does, and do what they do. Timed in the frames that
+   are drawn: the moment of a blow is held. */
+const technique = Object.fromEntries(DIRTY.map(e => [e.id, run(e)]));
+const events = id => technique[id].frames.flatMap((f, i) => f.events.filter(e => e.who === 0).map(e => ({ ...e, i, drawn: technique[id].frames.slice(0, i + 1).filter(g => !g.held).length })));
+const first = (id, type, name) => events(id).find(e => e.type === type && (!name || e.name === name));
+test('skill: a dirty hook stands on his instep before it lands, and his lead foot stays where it was stood on', () => {
+  for (const lv of ['4a', '5a']) {
+    const id = `stomp@${lv}`,
+      stomp = first(id, 'foul', 'stomp'),
+      hit = first(id, 'hit', 'hook');
+    assert.ok(stomp && hit && stomp.i < hit.i, `${id}: ${JSON.stringify(events(id).map(e => e.type + ' ' + (e.name || '')))}`);
+    const pinned = technique[id].frames.filter(f => f.foe.pinned),
+      moved = Math.max(...pinned.map(f => Math.hypot(f.foe.foot[0] - pinned[0].foe.foot[0], f.foe.foot[2] - pinned[0].foe.foot[2])));
+    assert.ok(pinned.length >= 20, `${id}: pinned for ${pinned.length} frames`);
+    assert.ok(moved <= 0.01, `${id}: his lead foot moved ${(moved * 100).toFixed(1)} cm while it was stood on`);
+  }
+});
+test('skill: a dirty cross is followed in by the head, which meets his within 120 ms of the fist; only a legend says sorry', () => {
+  for (const lv of ['4a', '5a']) {
+    const id = `butt@${lv}`,
+      hit = first(id, 'hit', 'cross'),
+      butt = first(id, 'foul', 'butt');
+    assert.ok(hit && butt && butt.i > hit.i, `${id}: ${JSON.stringify(events(id).map(e => e.type + ' ' + (e.name || '')))}`);
+    assert.ok(((butt.drawn - hit.drawn) * 1000) / 60 <= 120, `${id}: ${(((butt.drawn - hit.drawn) * 1000) / 60).toFixed(0)} ms after the fist`);
+    // (his rear glove held up over his shoulder, by it, once the punch has come home: from a quarter second after to 0.6 s)
+    const after = technique[id].frames.slice(butt.i + 15, butt.i + 36),
+      sorry = after.some(f => f.joints.RightHand[1] > f.joints.RightArm[1] + 0.12 && Math.hypot(f.joints.RightHand[0] - f.joints.RightArm[0], f.joints.RightHand[2] - f.joints.RightArm[2]) < 0.3);
+    assert.equal(sorry, lv === '5a', `${id}: the rear glove ${sorry ? 'goes' : 'does not go'} up over the shoulder`);
+  }
+});
+test('skill: a dirty jab leaves the glove in his eye, and a dirty uppercut holds his head down onto it', () => {
+  for (const lv of ['4a', '5a']) {
+    const jab = first(`thumb@${lv}`, 'hit', 'jab'),
+      thumb = first(`thumb@${lv}`, 'foul', 'thumb'),
+      upper = first(`hold@${lv}`, 'hit', 'upper'),
+      hold = first(`hold@${lv}`, 'foul', 'hold');
+    assert.ok(jab && thumb && thumb.i > jab.i, `thumb@${lv}`);
+    assert.ok(upper && hold && hold.i < upper.i, `hold@${lv}`);
+  }
 });

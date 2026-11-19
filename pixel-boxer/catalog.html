@@ -57,7 +57,8 @@
   .chain .hit-at { --at: 0; position: absolute; top: -2px; bottom: -2px; left: calc(3.4em + 4px + (100% - 3.4em - 4px) * var(--at)); width: 2px; background: var(--accent); opacity: 0; }
   .chain .hit-at.on { opacity: 1; }
   .card.rung .result { justify-content: space-between; }
-  .card.rung .result b { color: var(--fg); font-weight: 500; }
+  .card.rung .result b, .card.rung .stats b { color: var(--fg); font-weight: 500; }
+  .card.rung .stats { padding-top: 0; justify-content: space-between; }
   /* what became of the punch: lit for a moment each time round */
   .result .tag { font: 600 12px/1 var(--body); letter-spacing: .08em; padding: 5px 8px; border: 1.5px solid var(--line); color: var(--dim); }
   .result .tag.on { animation: tag .9s steps(6) forwards; }
@@ -82,6 +83,7 @@
   .lamp { width: 12px; height: 12px; border: 1.5px solid currentColor; }
   .lamp.lead { color: var(--lead); }
   .lamp.rear { color: var(--rear); margin-left: 8px; }
+  .lamp.beat { color: var(--accent); margin-left: 8px; }
   .lamp.on { animation: lamp .32s steps(4) forwards; }
   @keyframes lamp { 0% { background: currentColor; } 60% { background: currentColor; } 100% { background: transparent; } }
   .pace { margin-left: auto; }

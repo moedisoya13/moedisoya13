@@ -5,15 +5,16 @@
 
    The moments are measured, not guessed: each evasion works only if it starts in a window after the punch does (too early
    and the punch follows the head, too late and the head is still there), and the windows below are the middle of the ones
-   the bout gives, sixtieths of a second after the press that throws the punch. */
+   the bout gives, sixtieths of a second after the press that throws the punch (tools/windows.mjs measures them, in these
+   same drills: the boxer is a pro, whose head moves of its own accord, so the windows are his). */
 import { HOME } from './footwork.mjs';
 import { RISE } from './anim/moves.mjs';
 
 const F = 1 / 60;
 // where the other man stands for each punch, from the boxer: at the range it is thrown from
-const RANGE = { jab: 1.0, cross: 1.0, hook: 0.85, upper: 0.85 };
+export const RANGE = { jab: 1.0, cross: 1.0, hook: 0.85, upper: 0.85 };
 // his presses for each punch: a hook and an uppercut come only as the second and third of his power chain (bout.mjs)
-const THROW = { jab: [[0, 'jab']], cross: [[0, 'power']], hook: [[-0.32, 'power'], [0, 'power']], upper: [[-0.64, 'power'], [-0.32, 'power'], [0, 'power']] };
+export const THROW = { jab: [[0, 'jab']], cross: [[0, 'power']], hook: [[-0.32, 'power'], [0, 'power']], upper: [[-0.64, 'power'], [-0.32, 'power'], [0, 'power']] };
 
 /* loop, view as for the footwork. punch: [what the other man throws, when the last press of it is made]; press: the boxer's
    answer; outcome: what happens to that last punch ('whiff' | 'block' | 'parry' | 'hit'), and to any before it in the
@@ -33,7 +34,7 @@ const DRILLS = [
   {
     id: 'pull', name: '스웨이 백', en: 'Pull back', group: '피하기',
     note: '체중을 뒷발로 옮기며 상체를 세워 머리를 사거리 밖으로 뺍니다. 다 뻗은 주먹 끝이 턱 앞에서 멈춥니다.',
-    loop: 2, punch: ['jab', 0.8], press: [[0.8 + 4 * F, 'pull']], outcome: 'whiff', view: { yaw: 0, pitch: 0.24 }
+    loop: 2, punch: ['jab', 0.8], press: [[0.8 + 3 * F, 'pull']], outcome: 'whiff', view: { yaw: 0, pitch: 0.24 }
   },
   {
     id: 'duck', name: '더킹', en: 'Duck', group: '피하기',

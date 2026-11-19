@@ -13,12 +13,17 @@ import { step } from './game/bout.mjs';
 
 import { ENTRIES, freshBout, drive } from './footwork.mjs';
 import { DEFENSE } from './defense.mjs';
-import { LADDER, AT } from './ladder.mjs';
+import { LADDER, STANCES, DIRTY } from './ladder.mjs';
 import { LEVEL } from './anim/skill.mjs';
 import { LINKS } from './phys/chain.mjs';
 import { MOVES } from './anim/moves.mjs';
+import { across, lineAngle, guardOf } from './measure.mjs';
 
-const ALL = [...ENTRIES, ...DEFENSE, ...LADDER];
+const ALL = [...ENTRIES, ...DEFENSE, ...STANCES, ...LADDER, ...DIRTY];
+// the fouls, as a card names them
+const FOUL = { stomp: '발등 밟기', butt: '박치기', thumb: '눈 찌르기', hold: '목 잡기', shoulder: '어깨치기' };
+// a clean great one's and a clean legend's cards keep his beat: a lamp lit on the strong one (his lead foot coming down)
+const keepsBeat = e => e.level && LEVEL[e.level].side === 'm';
 const JOINT = { drive: '다리', hips: '엉덩이', trunk: '몸통', shoulder: '어깨', elbow: '팔꿈치' };
 const SPAN = 0.3; // seconds of a punch the chain timeline under a rung shows
 // what became of the punch, as the card says it
@@ -30,10 +35,10 @@ const DT = 1 / 60;
   const parts = [
       ['풋워크', ['박자', '직선', '좌우', '주먹과 함께']],
       ['수비와 피격', ['피하기', '막기', '맞기', '다운']],
-      ['숙련도', ['잽', '스트레이트', '훅', '어퍼컷']]
+      ['숙련도', ['기본 풋워크', '스텝 인 · 아웃', '잽', '스트레이트', '훅', '어퍼컷', '암의 기술']]
     ],
     notes = {
-      숙련도: '모든 동작은 다섯 단계로 나뉘고, 4와 5에는 깔끔한 정도(명)와 더티 복싱(암) 두 갈래가 있습니다. 차이는 관절이 움직이는 순서와 협응, 리듬에서 나옵니다. 1은 팔이 몸보다 먼저 나가고, 2는 순서는 맞지만 이음새마다 끊기고, 3은 교과서, 4는 다음 관절이 앞 관절의 정점 전에 미리 출발해 힘이 겹치고, 5는 예비동작 없이 한 동작으로 이어집니다. 충격량은 곱해 준 값이 아니라 그렇게 던진 결과입니다. 막대는 관절마다 출발에서 정점까지, 세로선은 닿은 순간입니다.'
+      숙련도: '모든 동작은 다섯 단계로 나뉘고, 4와 5에는 깔끔한 정도(명)와 더티 복싱(암) 두 갈래가 있습니다. 차이는 관절이 움직이는 순서와 협응, 리듬에서 나옵니다. 1은 팔이 몸보다 먼저 나가고, 2는 순서는 맞지만 이음새마다 끊기고, 3은 교과서, 4는 다음 관절이 앞 관절의 정점 전에 미리 출발해 힘이 겹치고, 5는 예비동작 없이 한 동작으로 이어집니다. 명은 박자를 타고(4명은 강약, 5명은 스윙과 브레이크), 암은 박자를 지우고 낮게 구릅니다. 기본 풋워크 카드 아래는 골반이 오르내린 폭, 머리가 좌우로 오간 폭, 분당 착지입니다. 주먹 카드의 충격량은 곱해 준 값이 아니라 그렇게 던진 결과이고, 막대는 관절마다 출발에서 정점까지, 세로선은 닿은 순간, 시간은 누른 뒤부터입니다. 머리는 닿는 순간 머리가 자기 가드 자리에서 선 밖으로 벗어난 거리, 골반은 가장 많이 돈 각입니다.'
     },
     main = document.getElementById('catalog');
   for (const [part, groups] of parts) {
@@ -55,6 +60,31 @@ const DT = 1 / 60;
         const card = document.createElement('article');
         card.className = e.group === '박자' ? 'card feature' : e.level ? 'card rung' : 'card';
         card.dataset.entry = e.id;
+        const beat = keepsBeat(e) ? `<span class="lamp beat" data-beat></span><span>강박</span>` : '';
+        if (e.foul) {
+          // a dirty technique: the foul, what the bout said of it, and the punch that went with it
+          const level = LEVEL[e.level];
+          card.innerHTML = `<div class="stage" role="img" aria-label="${e.name} 애니메이션"></div>
+            <div class="info">
+              <h3>${level.label} <span class="en">${e.name.replace(/ \S+$/, '')}</span></h3>
+              <div class="feet stats"><span>${FOUL[e.foul]} <b data-fj>–</b> N·s</span><span data-fat>–</span></div>
+              <div class="feet stats"><span>주먹 <b data-blow>–</b> N·s</span></div>
+            </div>`;
+          section.lastElementChild.append(card);
+          continue;
+        }
+        if (e.kind) {
+          // a grade's footwork: how far the hips go up and down, how far the head goes across, feet a minute
+          const level = LEVEL[e.level];
+          card.innerHTML = `<div class="stage" role="img" aria-label="${e.name} 애니메이션"></div>
+            <div class="info">
+              <h3>${level.label} <span class="en">${level.name}</span></h3>
+              <div class="feet stats"><span>골반 <b data-hips>–</b> cm</span><span>머리 <b data-head>–</b> cm</span></div>
+              <div class="feet"><span class="lamp lead" data-lamp="L"></span><span class="lamp rear" data-lamp="R"></span>${beat}<span class="pace">분당 <b data-pace>–</b>보</span></div>
+            </div>`;
+          section.lastElementChild.append(card);
+          continue;
+        }
         if (e.level) {
           // a rung of the ladder: the grade, the chain as it was thrown, and what it did
           const level = LEVEL[e.level],
@@ -64,6 +94,8 @@ const DT = 1 / 60;
               <h3>${level.label} <span class="en">${level.name}</span></h3>
               <div class="chain">${LINKS.map((l, i) => `<span class="row${skip.includes(l) ? ' off' : ''}"><i>${JOINT[l]}</i><span class="lane"><b data-bar="${i}"></b></span></span>`).join('')}<span class="hit-at" data-at></span></div>
               <div class="feet result"><span><b data-blow>–</b> N·s</span><span class="pace"><b data-ms>–</b> ms</span></div>
+              <div class="feet stats"><span>머리 <b data-off>–</b> cm</span><span>골반 <b data-turn>–</b>°</span></div>
+              ${beat ? `<div class="feet stats">${beat}<span>닿은 박자 <b data-on>–</b></span></div>` : ''}
             </div>`;
           section.lastElementChild.append(card);
           continue;
@@ -144,9 +176,21 @@ function start({ manifest, boxer }) {
         tag: el.querySelector('[data-tag]'),
         blow: el.querySelector('[data-blow]'),
         ms: el.querySelector('[data-ms]'),
+        hips: el.querySelector('[data-hips]'),
+        beat: el.querySelector('[data-beat]'),
+        on: el.querySelector('[data-on]'),
+        fj: el.querySelector('[data-fj]'),
+        fat: el.querySelector('[data-fat]'),
+        head: el.querySelector('[data-head]'),
+        off: el.querySelector('[data-off]'),
+        turn: el.querySelector('[data-turn]'),
+        track: [], // a grade's footwork: the hips' height and the head across, the last few seconds of them
+        press: null, // a rung: when the punch was pressed, and the most his hips have turned since
+        most: 0,
         bars: [...el.querySelectorAll('[data-bar]')],
         at: el.querySelector('[data-at]'),
         exchange: entry.punch !== undefined,
+        lastHalves: undefined,
         shake: 0,
         fx,
         mesh: R.mesh(fx.rows, 0, true),
@@ -165,6 +209,8 @@ function start({ manifest, boxer }) {
   function reset(cell) {
     cell.bout = freshBout(cell.entry);
     cell.t = 0;
+    cell.press = null;
+    cell.landedAt = undefined;
   }
   // what a card says about the exchange it is showing
   function tell(cell, text, blow) {
@@ -187,21 +233,38 @@ function start({ manifest, boxer }) {
     if (!entry.hurt) a.hp = 1000;
     for (const e of bout.events) {
       const by = e.type === 'parry' ? e.on : e.who;
+      if (entry.level && !entry.kind && !entry.foul && e.type === 'punch' && e.who === 0 && e.name === entry.punch) (cell.press = cell.t), (cell.most = 0);
       // a rung: when the punch lands, how it was thrown
-      if (entry.level && e.who === 0 && ['hit', 'graze', 'whiff', 'block'].includes(e.type) && a.action && a.action.chain) {
+      if (entry.level && !entry.foul && e.who === 0 && ['hit', 'graze', 'whiff', 'block'].includes(e.type) && a.action && a.action.chain) {
         const c = a.action.chain,
           pct = x => `${Math.max(0, Math.min(100, (x / SPAN) * 100)).toFixed(1)}%`;
         cell.blow.textContent = e.J === undefined ? '–' : String(Math.round(e.J));
-        cell.ms.textContent = String(Math.round((cell.t - AT) * 1000));
+        cell.ms.textContent = cell.press === null ? '–' : String(Math.round((cell.t - cell.press) * 1000));
+        // where his head was off the line of it as it landed (from his own guard), and the most his hips turned
+        const guard = guardOf(entry.level),
+          side = MOVES[entry.punch].hand === 'R' ? 1 : -1;
+        cell.off.textContent = ((side * (across(a, b, a.points.head) - guard.head)) * 100).toFixed(1);
+        cell.turn.textContent = Math.round(cell.most);
+        // on his beat or off it: how far from the nearest foot coming down it landed, in half beats
+        if (cell.on) {
+          const u = a.animator.rhythm.u,
+            from = Math.min(u, 1 - u);
+          cell.on.textContent = from <= 0.12 ? '정박' : from >= 0.3 ? '엇박' : '–';
+        }
         cell.bars.forEach((bar, i) => {
           const on = c.fired[i] >= 0;
           bar.style.left = on ? pct(c.fired[i]) : '0';
           bar.style.width = on ? `max(3px, ${pct(Math.max(0, c.peakAt[i] - c.fired[i]))})` : '0';
         });
-        cell.at.style.setProperty('--at', String(Math.max(0, Math.min(1, (cell.t - AT) / SPAN))));
+        cell.at.style.setProperty('--at', String(Math.max(0, Math.min(1, (cell.t - (cell.press ?? cell.t)) / SPAN))));
         cell.at.classList.add('on');
       }
       if (cell.tag && by === 1 && SAID[e.type]) tell(cell, e.down ? '다운' : SAID[e.type], e.J);
+      // a dirty technique: the foul, its impulse and when it came (before or after the fist)
+      if (entry.foul && e.who === 0) {
+        if (e.type === 'foul') (cell.fj.textContent = String(Math.round(e.J))), (cell.fat.textContent = cell.landedAt === undefined ? '주먹 전' : `주먹 뒤 ${Math.round((cell.t - cell.landedAt) * 1000)} ms`);
+        if (e.type === 'hit' && e.name === entry.punch) (cell.blow.textContent = String(Math.round(e.J))), (cell.landedAt = cell.t);
+      }
       // the blow itself, as the game shows it: sparks and sweat sized by its impulse, and the picture shaken
       if (e.type === 'hit') {
         const k = Math.min(1.6, e.J / 85);
@@ -212,8 +275,49 @@ function start({ manifest, boxer }) {
       else if (e.type === 'parry') (cell.fx.sparks(e.at, 14, [38, 38, 39, 40], 5), (cell.shake = 2));
     }
     cell.shake *= 0.82;
+    // (the strong beat: his lead foot coming down)
+    if (cell.beat) {
+      const r = a.animator.rhythm;
+      if (cell.lastHalves !== undefined && r.halves !== cell.lastHalves && r.landed === 'L') {
+        cell.beat.classList.remove('on');
+        void cell.beat.offsetWidth;
+        cell.beat.classList.add('on');
+      }
+      cell.lastHalves = r.halves;
+    }
+    /* a grade's footwork: a foot coming down is a landing of his beat, which a dirty man's dragged feet make without lifting
+       them; and his hips and head, kept for the numbers under the card */
+    if (entry.kind) {
+      const r = a.animator.rhythm;
+      if (cell.halves !== undefined && r.halves !== cell.halves && r.landed) {
+        const lamp = cell.lamps[r.landed];
+        lamp.classList.remove('on');
+        void lamp.offsetWidth;
+        lamp.classList.add('on');
+        cell.plants.push(cell.t);
+        if (cell.plants.length > 8) cell.plants.shift();
+        const joint = r.landed === 'L' ? 'LeftFoot' : 'RightFoot';
+        if (prints) cell.fx.print(toWorld(a.place, a.pose.at[joint], 1), a.yaw + (r.landed === 'L' ? -0.2 : -0.8), r.landed === 'L' ? [40, 40, 39, 25, 24] : [41, 41, 25, 25, 24], 1.5);
+      }
+      cell.halves = r.halves;
+      cell.track.push([a.pose.at.Hips[1] * a.pose.stretch, across(a, b, a.points.head)]);
+      if (cell.track.length > 240) cell.track.shift();
+      if (cell.track.length >= 120 && Math.round(cell.t / DT) % 30 === 0) {
+        const span = k => Math.max(...cell.track.map(x => x[k])) - Math.min(...cell.track.map(x => x[k]));
+        cell.hips.textContent = (span(0) * 100).toFixed(1);
+        cell.head.textContent = (span(1) * 100).toFixed(1);
+        if (cell.plants.length >= 4) cell.pace.textContent = String(Math.round(((cell.plants.length - 1) / (cell.plants[cell.plants.length - 1] - cell.plants[0])) * 60));
+      }
+    }
+    // a rung: how far his hips turn, from the press on
+    if (entry.level && !entry.kind && !entry.foul && cell.press !== null && a.action && a.action.chain) {
+      const guard = guardOf(entry.level),
+        turn = Math.sign(MOVES[a.action.name].links.hips.yaw),
+        d = Math.atan2(Math.sin(lineAngle(a.pose, 'LeftLeg', 'RightLeg') - guard.hips), Math.cos(lineAngle(a.pose, 'LeftLeg', 'RightLeg') - guard.hips));
+      cell.most = Math.max(cell.most, (-turn * d * 180) / Math.PI);
+    }
     // a foot coming down: light its lamp, leave its print, and keep the time for the pace
-    if (!cell.exchange) for (const [side, joint] of [['L', 'LeftFoot'], ['R', 'RightFoot']]) {
+    if (!cell.exchange && !entry.kind) for (const [side, joint] of [['L', 'LeftFoot'], ['R', 'RightFoot']]) {
       const y = a.pose.at[joint][1],
         wasUp = cell.up[side];
       if (y > 0.099) cell.up[side] = true;
@@ -273,7 +377,7 @@ function start({ manifest, boxer }) {
       const jolt = cell.shake > 0.3 ? [Math.sin(cell.t * 97) * cell.shake, Math.cos(cell.t * 83) * cell.shake * 0.6] : null;
       R.cell(rect, { camera: cell.cam, layers, shake: jolt });
       // the pace: feet a minute, from the last few to come down
-      if (!cell.exchange && cell.plants.length >= 4 && Math.round(cell.t * 2) !== Math.round((cell.t - DT) * 2)) {
+      if (!cell.exchange && !cell.entry.kind && cell.plants.length >= 4 && Math.round(cell.t * 2) !== Math.round((cell.t - DT) * 2)) {
         const span = cell.plants[cell.plants.length - 1] - cell.plants[0];
         cell.pace.textContent = cell.t - cell.plants[cell.plants.length - 1] > 1.5 ? '–' : String(Math.round(((cell.plants.length - 1) / span) * 60));
       }

@@ -15,7 +15,7 @@ import { fk, TPOSE } from '../src/rig/skeleton.mjs';
 import { step } from '../src/game/bout.mjs';
 import { ENTRIES, freshBout, drive } from '../src/footwork.mjs';
 import { DEFENSE } from '../src/defense.mjs';
-import { LADDER } from '../src/ladder.mjs';
+import { LADDER, DIRTY, STANCES } from '../src/ladder.mjs';
 import { MOVES } from '../src/anim/moves.mjs';
 
 const DT = 1 / 60,
@@ -207,7 +207,7 @@ function outsideSupport(at, point) {
 }
 
 // ---- fight every script, and keep what was measured
-const scripts = [...ENTRIES, ...DEFENSE, ...LADDER];
+const scripts = [...ENTRIES, ...DEFENSE, ...LADDER, ...DIRTY, ...STANCES];
 const only = opt('only') ? opt('only').split(',') : null;
 const found = {}; // check -> { n, frames, worst: { value, where } }
 const note = (check, value, where, bad) => {
