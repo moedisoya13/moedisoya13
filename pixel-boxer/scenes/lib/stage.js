@@ -4,15 +4,14 @@ const { fk, NAMES } = require('../../src/rig/skeleton.mjs');
 const { PALETTE, MAT, sculptBoxer } = require('../../src/rig/boxer.mjs');
 const { sculptRing, markCanvas } = require('../../src/world/ring.mjs');
 const { boneMatrices } = require('../../src/anim/pose.mjs');
-const { createAnimator, guardPose } = require('../../src/anim/animator.mjs');
-const M = require('../../src/rig/m3.mjs');
+const { guardPose } = require('../../src/anim/animator.mjs');
 
 const packed = hex => ((hex >> 16) & 255) + ((hex >> 8) & 255) * 256 + (hex & 255) * 65536;
 const CANVAS = MAT.canvas.r.map(i => packed(PALETTE[i]));
 const shade = (colour, steps) => CANVAS[Math.max(0, Math.min(CANVAS.length - 1, CANVAS.indexOf(Math.round(colour)) + steps))];
 
-/* o.view(t) -> what the boxer is doing at t (see animator.mjs), plus at: [x, z] and facing (radians) to put him somewhere.
-   The animator has a past, so a picture of time t is reached by playing every sixtieth of a second up to it. */
+/* o.frame(t) -> { pose, place } for the boxer at t, called once for every sixtieth of a second in order (the scenes play a
+   real bout and hand over one of its boxers); o.restart() starts it over, when an earlier time is asked for. */
 function buildStage({ makeBuilder, makeSculpt, KIT: K }, seed, o) {
   const B = makeBuilder(seed, PALETTE);
   const S = K.sculpt(makeSculpt(B));
@@ -31,19 +30,14 @@ function buildStage({ makeBuilder, makeSculpt, KIT: K }, seed, o) {
   markCanvas(W.data, W.count, 16, 7, shade, c => CANVAS.includes(Math.round(c)));
   const mats = new Float32Array(NAMES.length * 12),
     STEP = 1 / 60;
-  let animator, at;
-  const restart = () => {
-    animator = createAnimator();
-    at = -STEP;
-  };
-  restart();
+  let at = -STEP;
+  o.restart();
   rig.bind(W, t => {
-    if (t < at - 1e-9) restart();
+    if (t < at - 1e-9) (o.restart(), (at = -STEP));
     while (at + STEP <= t + 1e-9) {
       at += STEP;
-      const view = o.view(at, animator),
-        pose = animator.update(view, at < STEP / 2 ? 0 : STEP);
-      boneMatrices(pose, bind, { R: M.ry(((view.facing || 0) * 180) / Math.PI), p: [view.at ? view.at[0] : 0, 0, view.at ? view.at[1] : 0] }, mats, 0);
+      const f = o.frame(at);
+      boneMatrices(f.pose, bind, f.place, mats, 0);
     }
     for (let i = 0; i < NAMES.length; i++) {
       const k = i * 12;
