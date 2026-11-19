@@ -20,7 +20,13 @@ const TAU = Math.PI * 2;
    beat (the lead foot is lifted and set down, then the rear: a pendulum), and when he travels the same beat becomes his
    steps, quickening as he goes, so he never has to find the rhythm again: he was already in it. */
 const CYCLE = { rest: 0.64, travel: 0.3 }; // seconds for both feet to come down once: bouncing on the spot, and at full speed
-const HOP = 0.022; // metres an unweighted foot clears the canvas by, bouncing on the spot
+const HOP = 0.03; // metres an unweighted foot clears the canvas by, bouncing on the spot
+/* The bounce itself, once for each foot that comes down: a short squash as the weight lands (the legs take it like springs),
+   the push back off it, and a float before the next. The squash and the float meet at the same speed, so it rebounds
+   rather than bobs. Heights in metres at full liveliness. */
+const BOUNCE = { contact: 0.38, float: 0.016 };
+BOUNCE.squash = (4 * BOUNCE.float * BOUNCE.contact) / ((1 - BOUNCE.contact) * Math.PI); // the depth that meets the float at the same speed
+const ROCK = 0.034; // metres the weight swings forward and back between the feet, bouncing on the spot
 const STRIDE = 0.42; // metres: the furthest a foot is ever put from its place in the guard
 const SETTLE = 30; // how fast the difference between two moves is let go of (1/seconds): gone in about a sixth of a second
 const clamp = (x, a, b) => (x < a ? a : x > b ? b : x);
@@ -108,15 +114,28 @@ export function createAnimator(seed) {
     speed = {}, // and how fast each was changing
     carry = {}; // what is still owed to the move before: { x, v } a channel, sprung to nothing
   for (const ch of CHANNELS) (shown[ch] = 0), (speed[ch] = 0), (carry[ch] = { x: 0, v: 0 });
-  let clock = (seed || 0) * 0.37,
-    beat = 0, // where in the cycle of his feet he is, in turns: 0 the lead foot leaves the canvas, 0.5 the rear
+  let sunk = 0, // how far the hips are down for the spread of the feet
+    clock = (seed || 0) * 0.37,
+    beat = 0, // where in the cycle of his feet he is, in turns; a foot comes down at every half
+    half = -1, // which half of a cycle the beat was in last frame (so a new one is seen), and how many there have been
+    halves = 0,
     cycle = CYCLE.rest, // how long that cycle is taking just now, seconds
     cover = 0,
     cheer = 0,
     doing = null;
   // how fast the canvas is going past under each foot, followed a little late so a shove or a stop does not snatch the feet
   const under = { L: [0, 0], R: [0, 0] },
+    /* The feet are on the canvas, not on the body. A planted foot stays where it was put while the body travels and turns
+       over it (its place is kept in his own space and carried back as the canvas goes by); at every half beat one foot is
+       chosen to step, and is brought from where it was to where it should be, leaving and landing at rest on the canvas. */
+    planted = { L: GUARD.feet.L.at.slice(), R: GUARD.feet.R.at.slice() },
+    swing = { side: null, from: null, last: ['L', 'R'], to: null, still: false, back: false },
+    lag = { x: 0, v: 0 }, // the upper body following the bounce, a touch late: what makes the gloves and head ride it
     elbow = { L: null, R: null }, // which way each elbow was pointing from its shoulder, last frame
+    // where each hand was drawn last frame and how fast it was going, and what is still owed to the move before
+    hand = { L: null, R: null },
+    handSpeed = { L: [0, 0, 0], R: [0, 0, 0] },
+    handCarry = { L: { x: [0, 0, 0], v: [0, 0, 0] }, R: { x: [0, 0, 0], v: [0, 0, 0] } },
     steer = { L: [0, 0, 0], R: [0, 0, 0] }; // how far each hand is being carried off its punch's nominal line onto the target
   // the give of a struck body: head (nod, turn, tilt), trunk (lean, side, turn), and how far the guard is knocked open
   const give = { hp: { x: 0, v: 0 }, hw: { x: 0, v: 0 }, hr: { x: 0, v: 0 }, lean: { x: 0, v: 0 }, side: { x: 0, v: 0 }, yaw: { x: 0, v: 0 }, open: { x: 0, v: 0 }, sink: { x: 0, v: 0 } };
@@ -135,6 +154,10 @@ export function createAnimator(seed) {
       give.yaw.v += left * 300 * k;
       give.sink.v += Math.max(0, up) * 1.1 * k;
       give.open.v += 7 * k;
+    },
+    // where his feet are in their rhythm: the beat (turns), how long a cycle is taking, and how many half beats there have been
+    get rhythm() {
+      return { beat, cycle, halves, stepping: swing.side };
     },
     update(view, dt) {
       clock += dt;
@@ -183,24 +206,97 @@ export function createAnimator(seed) {
         }
       }
       const going = clamp(fastest / 1.5, 0, 1); // 0 bouncing on the spot .. 1 travelling
-      cycle += (CYCLE.rest + (CYCLE.travel - CYCLE.rest) * going - cycle) * (1 - Math.exp(-dt * 9));
+      cycle += (CYCLE.rest + (CYCLE.travel - CYCLE.rest) * going - cycle) * (1 - Math.exp(-dt * 10)); // (quick enough to keep up, slow enough not to snap the bounce)
+      /* Setting off: the foot on the side he is going should move first. If the other one was already up, hopping in place,
+         it is only set back down under him in its place (it takes no step of its own), and the right foot steps first. */
+      const speedNow = Math.hypot(vx, vz),
+        mid = [(GUARD.feet.L.at[0] + GUARD.feet.R.at[0]) / 2, (GUARD.feet.L.at[2] + GUARD.feet.R.at[2]) / 2],
+        leads = side => {
+          const g = GUARD.feet[side].at,
+            out = [g[0] - mid[0], g[2] - mid[1]];
+          return speedNow > 0.25 ? (vx * out[0] + vz * out[1]) / (speedNow * Math.hypot(out[0], out[1])) : 0;
+        };
+      if (swing.side && swing.still && leads(swing.side) < -0.3) swing.back = true;
       if (!view.still) beat = (beat + dt / cycle) % 1;
+      const now = Math.floor(beat * 2),
+        u = beat * 2 - now; // how far through this half beat: 0 a foot has just come down
+      // the canvas going past under any point of his own space, this frame
+      const drift = p => [-(vx + turn * p[2]) * dt, -(vz - turn * p[0]) * dt];
+      for (const side of ['L', 'R']) {
+        const d = drift(planted[side]);
+        planted[side][0] += d[0];
+        planted[side][2] += d[1];
+      }
+      // (and where the stepping foot left, and where it is to come down: both are spots on the canvas)
+      for (const spot of [swing.from, swing.to])
+        if (spot) {
+          const d = drift(spot);
+          spot[0] += d[0];
+          spot[2] += d[1];
+        }
+      // where a foot should come down: centred on its place, so that it is drawn back through it while it is planted
+      const landing = side => {
+        if (swing.back && swing.side === side) return GUARD.feet[side].at.slice();
+        const g = GUARD.feet[side].at,
+          f = feet[side],
+          ahead = cycle / 4,
+          l = Math.hypot(f.fx, f.fz) * ahead,
+          k = l > STRIDE ? STRIDE / l : 1;
+        return [g[0] + f.fx * ahead * k, g[1], g[2] + f.fz * ahead * k];
+      };
+      if (now !== half) {
+        // ---- a foot comes down, and the next is chosen to step
+        half = now;
+        halves++;
+        // (was the foot that has just come down only hopping in place, or did it go somewhere?)
+        const hopped = !swing.side || (swing.still && Math.hypot(swing.to[0] - swing.from[0], swing.to[2] - swing.from[2]) < 0.1);
+        if (swing.side) planted[swing.side] = swing.to.slice();
+        swing.side = swing.from = swing.to = null;
+        swing.back = false;
+        if (!view.still && !(action && action.name === 'ko')) {
+          /* The foot that steps is the one that most needs to be somewhere else; travelling, the foot on the side he is going
+             steps first (a boxer never crosses his feet or brings them together); otherwise they take turns. */
+          const score = side => {
+            const to = landing(side),
+              need = Math.hypot(to[0] - planted[side][0], to[2] - planted[side][2]);
+            return need + 0.07 * leads(side) + (swing.last[1] === side ? 0 : 0.03) - (swing.last[0] === side && swing.last[1] === side ? 1 : 0);
+          },
+            // setting off from a hop in place, the first step is always the foot on the side he is going
+            first = hopped && speedNow > 0.25 && !(swing.last[0] === swing.last[1] && leads(swing.last[1]) > 0),
+            side = first ? (leads('L') >= leads('R') ? 'L' : 'R') : score('L') >= score('R') ? 'L' : 'R';
+          swing.side = side;
+          swing.still = speedNow < 0.25; // (a hop in place, not a step anywhere)
+          swing.from = planted[side].slice();
+          swing.last = [swing.last[1], side];
+        }
+      }
 
-      // ---- the bounce that goes with it: down as each foot lands, the weight rocking onto the foot that is planted
+      // ---- the bounce: down into each landing and back up off it, the weight swinging between the feet like a pendulum
       const lively = view.still ? 0 : action ? 0.35 : 1 + cheer * 1.6,
-        land = 0.5 + 0.5 * Math.cos(2 * TAU * beat), // 1 as a foot comes down, 0 between
-        rock = -Math.sin(TAU * beat), // back while the lead foot is up, forward while the rear is
-        spot = (1 - going) * lively; // how much of this is bouncing on the spot
-      // (he bounces most on the spot: travelling quickly the beat is too fast to ride, and he glides)
-      const ride = lively * (1 - 0.65 * going);
-      c.hy -= 0.022 * land * ride;
-      c.lean += 1.5 * land * ride;
-      c.hz += 0.026 * rock * spot;
+        spot = (1 - going) * lively, // how much of this is bouncing on the spot
+        /* he bounces most on the spot: travelling, the beat quickens and the bounce shrinks with the square of it, so it is as
+           soft a rebound at a run as standing (and at full speed he glides) */
+        ride = lively * (cycle / CYCLE.rest) ** 2,
+        C = BOUNCE.contact,
+        sinking = u < C,
+        g = sinking ? Math.sin((Math.PI * u) / C) : 0, // 0..1..0 through the squash
+        s = sinking ? 0 : (u - C) / (1 - C), // 0..1 through the float
+        y = (sinking ? -BOUNCE.squash * g : BOUNCE.float * 4 * s * (1 - s)) * ride,
+        // forward while the rear foot is up, back while the lead is: through the middle at every landing
+        rock = swing.side ? (swing.side === 'L' ? -1 : 1) * Math.sin(Math.PI * u) : 0,
+        trail = spring(lag, y, dt, 4.2, 0.32) - y; // how far the upper body is behind the hips
+      c.hy += y;
+      // squashed into the landing and stretched off it, each starting and ending at rest (the head is a long way from the canvas)
+      c.st += (sinking ? -0.011 * g * g : 0.01 * Math.sin(Math.PI * s) ** 2 * (1 - s)) * ride;
+      c.lean += 1.3 * g * g * ride + 1.6 * rock * spot;
+      c.hz += ROCK * rock * spot;
       c.hx += 0.007 * Math.sin(TAU * beat + 1) * ride;
-      c.ly -= (0.012 * land + 0.006 * rock) * ride;
-      c.ry -= (0.01 * land - 0.006 * rock) * ride;
+      c.hp -= 220 * trail; // the head nods with the bounce a moment after it
+      c.ly += 0.9 * trail - 0.006 * rock * ride;
+      c.ry += 0.9 * trail + 0.006 * rock * ride;
       c.lz += 0.012 * rock * ride;
       c.st += 0.006 * Math.sin(TAU * 0.4 * clock) * (view.still ? 0 : 1);
+      const up = sinking ? 0 : 4 * s * (1 - s); // 0..1: how far off his heels the float has him
 
       // ---- the give of a body that has been hit
       c.hp += spring(give.hp, 0, dt, 3.4, 0.42);
@@ -217,7 +313,8 @@ export function createAnimator(seed) {
       c.ry -= 0.05 * Math.abs(open);
 
       // ---- one move handing over to another: what was showing is let go of, not dropped
-      if (id !== doing) {
+      const handover = id !== doing;
+      if (handover) {
         doing = id;
         for (const ch of CHANNELS) {
           if (ch === 'aim') continue;
@@ -241,34 +338,48 @@ export function createAnimator(seed) {
         shown[ch] = c[ch];
       }
 
-      // ---- the feet: each steps for itself, on the beat, by how fast the canvas is going past under it
+      // ---- the feet: the planted one where it was put, the stepping one on its way from there to where it should land
       let dip = 0;
       for (const side of ['L', 'R']) {
-        const f = feet[side],
-          s = (beat + (side === 'L' ? 0 : 0.5)) % 1,
-          speed = Math.hypot(f.fx, f.fz),
-          // times the foot's speed: how far ahead of and behind its place it lands and leaves (never further than a stride)
-          reach = Math.min(cycle / 4, STRIDE / (speed || 1)),
-          swinging = s < 0.5,
-          u = swinging ? s / 0.5 : (s - 0.5) / 0.5,
-          /* On the canvas a planted foot is drawn back under the body at exactly the body's speed. In the air it is brought
-             forward along a curve that leaves and lands at that same speed, so the foot is still on the canvas at both ends. */
-          d = swinging ? -1 + 2 * (u * (u * (6 - 4 * u) - 1)) : 1 - 2 * u,
-          far = speed * reach,
-          // travelling, a foot is lifted by its stride; on the spot it is only unweighted, a couple of centimetres
-          lift = swinging ? (Math.min(0.075, far * 0.7) + HOP * spot) * Math.sin(Math.PI * u) ** 2 : 0,
-          k = side === 'L' ? 'lf' : 'rf';
-        dip += d * d * far; // (squared: the hips sink smoothly into a long stride and rise smoothly out of it)
+        const g = GUARD.feet[side],
+          k = side === 'L' ? 'lf' : 'rf',
+          stepping = swing.side === side;
+        let at = planted[side],
+          lift = 0,
+          pitch = (side === 'R' ? 6 : 3) * up * lively; // a planted foot is on its ball, the heel riding up with the float
+        if (stepping) {
+          // where it will come down, as a spot on the canvas: carried back with the canvas for the time still to go
+          const land = landing(side),
+            left = ((1 - u) * cycle) / 2,
+            f = feet[side],
+            to = [land[0] + f.fx * left, land[1], land[2] + f.fz * left],
+            from = swing.from,
+            e = u * u * u * (10 + u * (6 * u - 15)), // leaves and lands at rest
+            length = Math.hypot(to[0] - from[0], to[2] - from[2]);
+          swing.to = to;
+          at = [from[0] + (to[0] - from[0]) * e, g.at[1], from[2] + (to[2] - from[2]) * e];
+          // travelling, a foot is lifted by its stride; on the spot it is only unweighted and snapped up off the canvas
+          lift = (Math.min(0.075, length * 0.35) + HOP * spot) * Math.pow(Math.sin(Math.PI * u), 1.3);
+          pitch = 14 * Math.sin(TAU * u) * clamp(length / 0.2, 0, 1) + 8 * spot * Math.sin(Math.PI * u);
+        } else {
+          // a foot left too far behind by a shove or a dash is dragged, not left to pull the leg straight
+          const o = [at[0] - g.at[0], at[2] - g.at[2]],
+            l = Math.hypot(o[0], o[1]),
+            most = STRIDE * 1.2;
+          if (l > most) (at[0] = g.at[0] + (o[0] * most) / l), (at[2] = g.at[2] + (o[1] * most) / l);
+        }
+        // the hips come down a little as the feet are spread (as much as a long stride asks, and no more)
+        dip += Math.min(0.04, (at[0] - g.at[0]) ** 2 + (at[2] - g.at[2]) ** 2) * 0.3;
         feet[side] = {
-          at: [f.g.at[0] + c[k + 'x'] + f.fx * reach * d, f.g.at[1] + c[k + 'y'] + lift, f.g.at[2] + c[k + 'z'] + f.fz * reach * d],
-          yaw: f.g.yaw + c[k + 'w'],
-          // a planted foot is on its ball, the heel riding up and down with the bounce
-          pitch: f.g.pitch + c[k + 'p'] + (swinging ? 14 * Math.sin(TAU * u) * clamp(far / 0.1, 0, 1) + 6 * spot * Math.sin(Math.PI * u) : (side === 'R' ? 6 : 3) * (1 - land) * lively)
+          at: [at[0] + c[k + 'x'], g.at[1] + c[k + 'y'] + lift, at[2] + c[k + 'z']],
+          yaw: g.yaw + c[k + 'w'],
+          pitch: g.pitch + c[k + 'p'] + pitch
         };
       }
 
       // ---- solve
-      const hips = [GUARD.hips[0] + c.hx, Math.max(0.15, GUARD.hips[1] + c.hy - 0.05 * dip), GUARD.hips[2] + c.hz],
+      sunk += (dip - sunk) * (1 - Math.exp(-dt * 24)); // (followed, so a foot snapping through its swing does not jerk the hips)
+      const hips = [GUARD.hips[0] + c.hx, Math.max(0.15, GUARD.hips[1] + c.hy - sunk), GUARD.hips[2] + c.hz],
         spine = trunk(c),
         head = headOf(hips, spine),
         carried = M.sub(head, REST), // the hands go where the head goes: a guard is held to the face, not to the room
@@ -329,7 +440,25 @@ export function createAnimator(seed) {
         const asked = M.app(chest.R, [s * (0.5 + 0.8 * flare), -1 + 1.3 * flare, -0.2 - 0.25 * flare]),
           l = Math.hypot(asked[0], asked[1], asked[2]) || 1,
           keep = elbow[side] ? Math.exp(-dt * 16) : 0;
-        hands[side] = { at: M.add(free, steer[side]), toward: M.lerp(M.scale(asked, 1 / l), elbow[side] || [0, 0, 0], keep) };
+        /* One punch handing over to the next (a double jab, a jab into a cross) starts the new chain from the guard while the
+           hand is still out: what the hand was doing is carried over and let go of, the way the channels are, so it goes on
+           from where it is instead of snapping home first. */
+        const raw = M.add(free, steer[side]),
+          carry = handCarry[side];
+        if (handover && hand[side]) {
+          carry.x = M.sub(hand[side], raw);
+          carry.v = handSpeed[side].slice();
+        }
+        const e = Math.exp(-SETTLE * dt);
+        for (let i = 0; i < 3; i++) {
+          const j = carry.v[i] + SETTLE * carry.x[i];
+          carry.x[i] = (carry.x[i] + j * dt) * e;
+          carry.v[i] = (carry.v[i] - SETTLE * j * dt) * e;
+        }
+        const at = M.add(raw, carry.x);
+        if (hand[side] && dt > 0) handSpeed[side] = M.scale(M.sub(at, hand[side]), 1 / dt);
+        hand[side] = at;
+        hands[side] = { at, toward: M.lerp(M.scale(asked, 1 / l), elbow[side] || [0, 0, 0], keep) };
       }
       const pose = solve({ hips, spine, feet, hands, stretch: 1 + c.st });
       for (const [side, Side] of [['L', 'Left'], ['R', 'Right']]) {

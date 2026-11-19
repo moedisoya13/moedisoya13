@@ -83,8 +83,12 @@ export const incoming = f => (punching(f) && !f.action.struck && (f.action.chain
 const open = (f, punch) => f.stun <= 0 && (!f.action || (punch && punching(f) && (f.action.chain.phase === 'hold' || f.action.chain.phase === 'recover')));
 
 function begin(f, name, more) {
-  const move = MOVES[name];
-  f.action = Object.assign({ name, t: 0, id: name + ++f.serial, struck: false, chain: move.punch ? createChain(move) : null }, more);
+  const move = MOVES[name],
+    before = f.action,
+    chain = move.punch ? createChain(move) : null;
+  // a punch thrown with the hand that has just punched starts from where that arm's joints still are (a double jab)
+  if (chain && before && before.chain && MOVES[before.name].hand === move.hand) (chain.q = before.chain.q.slice()), (chain.v = before.chain.v.slice());
+  f.action = Object.assign({ name, t: 0, id: name + ++f.serial, struck: false, chain }, more);
   f.cover = false;
 }
 

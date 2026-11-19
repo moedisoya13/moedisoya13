@@ -1,6 +1,8 @@
 /* The footwork in the catalogue, as scripts: where the boxer and the other man should be standing at each moment of a loop,
    and which buttons are pressed when. Nothing here draws; drive() turns a script into the controls a bout takes, so the same
    scripts run in the page and under node --test. */
+import { RULES } from './game/bout.mjs';
+
 export const HOME = [0, 0]; // where the boxer starts each loop, and the other man 1.25 m in front of him
 export const AWAY = [1.25, 0];
 const around = (centre, from, angle) => {
@@ -14,17 +16,42 @@ const wave = (t, period) => Math.sin((2 * Math.PI * t) / period);
 // a place to be that is held, then left: 0 until `from`, 1 until `to`, eased over `over` seconds at each end
 const hold = (t, from, to) => (t >= from && t < to ? 1 : 0);
 
-/* loop: seconds. me(t), him(t): where each should be standing at t (the script walks them there). press: [[t, button]].
-   cover(t): guard held. view: { yaw, pitch } of the camera. */
+/* The pendulum step, on his own beat (it reads the rhythm of his feet, so it is in time whatever the pace): six half beats
+   to a swing. The lead foot steps in and the rear follows it; he rocks back on the lead; the rear steps out and the lead
+   follows it; he rocks forward on the rear. The feet only ever take turns. */
+const PENDULUM = 0.26; // metres in and out
+function pendulum(f) {
+  const r = f.animator.rhythm,
+    own = (f.script = f.script || {});
+  // the half beat the lead foot first stepped on is the first of the six
+  if (own.from === undefined && r.stepping === 'L') own.from = r.halves;
+  if (own.from === undefined) return [0, 0];
+  const h = (((r.halves - own.from) % 6) + 6) % 6,
+    u = (r.beat * 2) % 1,
+    w = h < 2 ? (h + u) / 2 : h >= 3 && h < 5 ? (h - 3 + u) / 2 : 0,
+    ease = w * w * (3 - 2 * w),
+    // where he should be, and how fast he should be going there (a full in or out takes one cycle of his feet)
+    x = h < 2 ? PENDULUM * ease : h === 2 ? PENDULUM : h < 5 ? PENDULUM * (1 - ease) : 0,
+    v = (h < 2 ? 1 : h >= 3 && h < 5 ? -1 : 0) * ((PENDULUM * 6 * w * (1 - w)) / r.cycle);
+  return [(v + 5 * (HOME[0] + x - f.x)) / RULES.speed, (5 * (HOME[1] - f.z)) / RULES.speed];
+}
+
+/* loop: seconds. me(t), him(t): where each should be standing at t (the script walks them there); or stick(f): the
+   controls themselves, for footwork that keeps his time. press: [[t, button]]. cover(t): guard held. view: { yaw, pitch }. */
 export const ENTRIES = [
   {
-    id: 'bounce', name: '리듬 바운스', en: 'Pendulum bounce', group: '박자',
-    note: '앞발, 뒷발, 앞발. 체중이 두 발 사이를 오가며 박자를 만듭니다. 나머지는 전부 이 박자 위에 얹힙니다.',
+    id: 'bounce', name: '리듬 바운스', en: 'Rhythm bounce', group: '박자',
+    note: '발이 닿을 때마다 짧게 눌렸다가 튕겨 올라 잠깐 뜹니다. 머리와 글러브는 한 박자 늦게 따라오고, 체중은 두 발 사이를 시계추처럼 오갑니다. 나머지는 전부 이 박자 위에 얹힙니다.',
     loop: 4, me: () => HOME, view: { yaw: 0.25, pitch: 0.5 }
   },
   {
+    id: 'pendulum', name: '펜듈럼 스텝', en: 'Pendulum step', group: '박자',
+    note: '앞발이 들어가고 뒷발이 따라붙고, 앞발로 한 번 흔들고. 뒷발이 빠지고 앞발이 따라 나오고, 뒷발로 한 번 흔들고. 여섯 박자에 한 번 들어갔다 나옵니다.',
+    loop: 6, me: () => HOME, stick: pendulum, view: { yaw: 0, pitch: 0.5 }
+  },
+  {
     id: 'inout', name: '스텝 인 · 아웃', en: 'Push step', group: '직선',
-    note: '들어갈 때는 앞발이 먼저 나가고 뒷발이 따라옵니다. 빠질 때는 반대입니다. 두 발은 서로 지나치지 않습니다.',
+    note: '가는 쪽 발이 먼저 움직입니다. 들어갈 때는 앞발이 나가고 뒷발이 따라오고, 빠질 때는 뒷발이 빠지고 앞발이 따라옵니다. 두 발은 서로 지나치지 않습니다.',
     loop: 2.6, me: t => [0.3 * hold(t, 0.3, 1.5), 0], view: { yaw: 0, pitch: 0.55 }
   },
   {
@@ -78,7 +105,7 @@ export function drive(entry, bout, at, dt) {
     tick = Math.round(at / dt) + 1,
     loop = Math.round(entry.loop / dt),
     t = (tick % loop) * dt,
-    mine = { move: walkTo(a, entry.me(t)), cover: !!(entry.cover && entry.cover(t)) },
+    mine = { move: entry.stick ? entry.stick(a) : walkTo(a, entry.me(t)), cover: !!(entry.cover && entry.cover(t)) },
     his = { move: walkTo(b, entry.him ? entry.him(t) : AWAY) };
   for (const [when, button] of entry.press || []) if (tick % loop === Math.round(when / dt)) mine[button] = true;
   return [mine, his];

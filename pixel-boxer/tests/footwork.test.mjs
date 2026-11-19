@@ -11,6 +11,8 @@ function play(entry, loops) {
     up = { LeftFoot: false, RightFoot: false },
     plants = [],
     ends = [];
+  let far = 0,
+    near = 9;
   [a.x, a.z] = HOME;
   [b.x, b.z] = AWAY;
   settle(bout);
@@ -24,17 +26,22 @@ function play(entry, loops) {
       else if (up[joint] && y < 0.094) (up[joint] = false), plants.push({ t: i * DT, joint });
     }
     if ((i + 1) % Math.round(entry.loop / DT) === 0) ends.push([a.x, a.z]);
+    const off = Math.hypot(a.x - HOME[0], a.z - HOME[1]);
+    if (i > 60) (far = Math.max(far, off)), (near = Math.min(near, off));
   }
   const gaps = plants.slice(1).map((p, i) => p.t - plants[i].t);
-  return { plants, ends, pace: plants.length > 1 ? Math.round((60 * (plants.length - 1)) / (plants[plants.length - 1].t - plants[0].t)) : 0, alternate: plants.slice(1).filter((p, i) => p.joint !== plants[i].joint).length / Math.max(1, plants.length - 1), gaps, bout };
+  return { plants, ends, far, near, pace: plants.length > 1 ? Math.round((60 * (plants.length - 1)) / (plants[plants.length - 1].t - plants[0].t)) : 0, alternate: plants.slice(1).filter((p, i) => p.joint !== plants[i].joint).length / Math.max(1, plants.length - 1), gaps, bout };
 }
 
 for (const entry of ENTRIES)
-  test(`footwork: ${entry.en} keeps its feet coming down, in turn, and comes back to where it started`, () => {
+  test(`footwork: ${entry.en} keeps its feet coming down, mostly in turn, and comes back to where it started`, () => {
     const run = play(entry, 3);
     assert.ok(run.plants.length >= 6, `${run.plants.length} feet came down`);
-    assert.ok(run.alternate >= 0.85, 'lead and rear take turns: ' + run.alternate.toFixed(2));
-    for (const [x, z] of run.ends) assert.ok(Math.hypot(x - entry.me(0)[0], z - entry.me(0)[1]) < 0.2, `ends a loop at ${x.toFixed(2)}, ${z.toFixed(2)}`);
+    // (mostly: setting off, the foot on the side he is going may step twice: see gait.test.mjs)
+    assert.ok(run.alternate >= 0.7, 'lead and rear take turns: ' + run.alternate.toFixed(2));
+    // (footwork that keeps his own time, the pendulum, has no loop in seconds: it is only asked to stay in its lane)
+    if (entry.stick) assert.ok(run.far < 0.36 && run.near < 0.05, `in and out between ${run.near.toFixed(2)} and ${run.far.toFixed(2)} m`);
+    else for (const [x, z] of run.ends) assert.ok(Math.hypot(x - entry.me(0)[0], z - entry.me(0)[1]) < 0.2, `ends a loop at ${x.toFixed(2)}, ${z.toFixed(2)}`);
   });
 
 test('footwork: the beat is slowest bouncing on the spot and quickens when he travels', () => {

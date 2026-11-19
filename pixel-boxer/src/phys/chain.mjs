@@ -7,6 +7,7 @@
      const chain = createChain(move)          move.chain: { coil (seconds), rate: [5] natural frequencies in rad/s, skip }
      stepChain(chain, move, dt)               -> the phase it is in: coil, throw, hold, recover, done
      chain.q[i], chain.v[i]                   each link's position 0..1 toward its end, and speed (1/s)
+                                              (a punch thrown by the same hand as the one before starts from that one's: bout.mjs)
      chain.coil.q                             the wind-up before it: 0..1, let go as the chain fires */
 export const LINKS = ['drive', 'hips', 'trunk', 'shoulder', 'elbow'];
 const N = LINKS.length;
@@ -56,7 +57,11 @@ export function stepChain(c, move, dt) {
         if (c.on[i] && i + 1 < N && !c.on[i + 1]) (c.on[i + 1] = true), (c.fired[i + 1] = c.t);
         continue;
       }
-      if (!c.on[i]) continue;
+      if (!c.on[i]) {
+        // a joint still on its way back from the punch before goes on coming back until its turn comes
+        if (c.q[i] || c.v[i]) pull(cell(c, i), 0, 0, RECOVER[i], 1, dt);
+        continue;
+      }
       c.a[i] = pull(cell(c, i), 0, 1, spec.rate[i], DAMP, dt);
       if (c.v[i] > c.peak[i]) (c.peak[i] = c.v[i]), (c.peakAt[i] = c.t);
       // past its peak speed: the next joint up takes over

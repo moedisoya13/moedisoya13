@@ -99,7 +99,7 @@ function measure(frames) {
 
 const idle = {};
 const press = (tick, at, what) => (tick === at ? { [what]: true } : idle);
-const report = { scenes: {}, chain: {}, punches: {}, walk: {} };
+const report = { scenes: {}, chain: {}, punches: {}, walk: {}, bounce: {} };
 
 // ---- the scenes a bout is made of
 const SCENES = {
@@ -171,6 +171,27 @@ for (const name of ['jab', 'cross', 'hook', 'upper']) {
   report.punches.jab.outOfReach = !far;
 }
 
+// ---- the bounce standing in the guard: how far the hips travel, and whether the feet keep an even time
+{
+  const run = play(2, () => [idle, idle]),
+    hips = run.frames.map(f => f.joints.Hips[1]),
+    up = { LeftFoot: false, RightFoot: false },
+    downs = [];
+  run.frames.forEach((f, i) => {
+    for (const joint of ['LeftFoot', 'RightFoot']) {
+      const y = f.joints[joint][1];
+      if (y > 0.099) up[joint] = true;
+      else if (up[joint] && y < 0.094) (up[joint] = false), downs.push(i / 60);
+    }
+  });
+  const gaps = downs.slice(1).map((t, i) => t - downs[i]);
+  report.bounce = {
+    travel: +((Math.max(...hips) - Math.min(...hips)) * 100).toFixed(1),
+    beat: gaps.length ? +(gaps.reduce((a, b) => a + b, 0) / gaps.length).toFixed(3) : 0,
+    even: gaps.length >= 4 && Math.max(...gaps) - Math.min(...gaps) < 0.04
+  };
+}
+
 // ---- footwork: a foot that is down stays where it was put
 {
   const run = play(1.4, () => [{ move: [1, 0] }, idle], { gap: 4.6 });
@@ -194,6 +215,7 @@ const RULES = [
   ['the boxer is moving in every frame of every scene', () => scenes.every(s => s.moving === 100)],
   ['no joint ever goes one way and straight back the next frame by more than 3 cm (a pop)', () => scenes.every(s => s.pop <= 3)],
   ['walking, the head and trunk never change their step between frames by more than 1 cm', () => ['guard', 'walk in and stop', 'circle', 'into the ropes'].every(n => report.scenes[n].bodyJolt <= 1)],
+  ['standing, he bounces: the hips rise and fall at least 2.5 cm, a foot coming down at every half beat', () => report.bounce.travel >= 2.5 && report.bounce.even],
   ['a planted foot slides less than 5 mm while walking', () => report.walk.slide < 5],
   ['in every punch the joints fire and peak in order, from the legs up to the hand', () => chains.every(c => c.ordered)],
   ['every punch lands from its own range, by the glove meeting the head', () => punches.every(p => p.landed)],
@@ -214,6 +236,7 @@ else {
     console.log(`${name.padEnd(8)}${String(p.after + ' s').padEnd(13)}${String(p.speed + ' m/s').padEnd(13)}${String(p.mass + ' kg').padEnd(13)}${String(p.J + ' Ns').padEnd(10)}${p.fastest} m/s`);
   console.log(`a cross from 0.68 m: ${report.punches.cross.smothered} Ns`);
   console.log(`walk     ${report.walk.speed} m/s, planted foot slides ${report.walk.slide} mm`);
+  console.log(`bounce   the hips travel ${report.bounce.travel} cm, a foot down every ${report.bounce.beat} s`);
   for (const [rule, ok] of results) console.log((ok ? 'ok    ' : 'BROKEN') + ' ' + rule);
 }
 export { report, results };

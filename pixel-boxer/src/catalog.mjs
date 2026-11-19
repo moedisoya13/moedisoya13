@@ -22,7 +22,7 @@ const DT = 1 / 60;
     section.innerHTML = `<h2>${group}</h2><div class="grid"></div>`;
     for (const e of ENTRIES.filter(e => e.group === group)) {
       const card = document.createElement('article');
-      card.className = e.id === 'bounce' ? 'card feature' : 'card';
+      card.className = e.group === '박자' ? 'card feature' : 'card';
       card.dataset.entry = e.id;
       card.innerHTML = `<div class="stage" role="img" aria-label="${e.name} 애니메이션"></div>
         <div class="info">
