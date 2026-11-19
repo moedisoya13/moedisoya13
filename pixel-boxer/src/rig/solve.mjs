@@ -4,7 +4,7 @@
      { hips: [x, y, z],
        spine: { Hips, Spine1, Spine2, Chest, Neck1, Head: [x, y, z] degrees },
        feet:  { L | R: { at: [x, y, z] (the ankle: 0.09 high when flat), yaw, pitch, pole } },
-       hands: { L | R: { at: [x, y, z] (the wrist), pole: where the elbow points } },
+       hands: { L | R: { at: [x, y, z] (the wrist), pole: where the elbow points, as the chest sees it } },
        stretch }
    solve(stance) -> { root, rot: { Joint: 3x3 local }, stretch, at: { Joint: where it is, in his space } }. */
 import * as M from './m3.mjs';
@@ -27,9 +27,10 @@ function twoBone(a, target, l1, l2, pole) {
   const v = M.sub(target, a),
     d = len(v),
     full = l1 + l2,
-    soft = 0.035,
+    soft = 0.055,
     knee = full - soft,
-    want = Math.max(Math.abs(l1 - l2) + 1e-3, d <= knee ? d : knee + soft * (1 - Math.exp(-(d - knee) / soft)) - 1e-3),
+    // (nor is it ever folded right up: a wrist on top of its own shoulder leaves the elbow nowhere in particular to be)
+    want = Math.max(0.42 * full, d <= knee ? d : knee + soft * (1 - Math.exp(-(d - knee) / soft)) - 1e-3),
     dir = norm(v, [0, -1, 0]),
     along = (l1 * l1 - l2 * l2 + want * want) / (2 * want),
     out = Math.sqrt(Math.max(0, l1 * l1 - along * along)),
@@ -66,7 +67,8 @@ export function solve(stance) {
     const hand = stance.hands[side];
     place(Side + 'Arm', M.id());
     const shoulder = P[Side + 'Arm'],
-      pole = hand.pole || [s * 0.4, -1, -0.3],
+      // the elbow's direction turns with the chest, so it does not swing round when the shoulders do
+      pole = hand.toward || M.app(G.Chest, hand.pole || [s * 0.5, -1, -0.2]), // (toward: the same, already in his own space)
       arm = twoBone(shoulder, hand.at, LEN.upperArm, LEN.foreArm, pole),
       d1 = norm(M.sub(arm.mid, shoulder)),
       d2 = norm(M.sub(arm.end, arm.mid));

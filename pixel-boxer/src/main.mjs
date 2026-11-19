@@ -189,6 +189,7 @@ function start({ manifest, boxer, ring }) {
         shudder = held && f.sinceHit < 0.2 ? 0.022 * (bout.stop / stopped) * Math.sin(time * 2 * Math.PI * 27) : 0,
         place = { R: M.ry((view.facing * 180) / Math.PI), p: [view.at[0] + shudder * Math.cos(view.facing), 0, view.at[1] - shudder * Math.sin(view.facing)] };
       R.packBones(boneMatrices(pose, bind, place, mats, 0), bones[i]);
+      if (globalThis.__bout) globalThis.__bout.shown[i] = { view, hand: pose.at.LeftHand, live };
       layers.push({ mesh: meshes.boxer, bones: bones[i], palette: palettes[i], mask: 1, flash: f.flash > 0 ? 1 : 0 });
       // the streak of a fast glove, along the path it really took
       for (const [hand, joint, out] of [['L', 'LeftHand', 0.075], ['R', 'RightHand', -0.075]]) {
@@ -243,7 +244,7 @@ function start({ manifest, boxer, ring }) {
 
   reset();
   if (query.has('auto')) begin();
-  globalThis.__bout = { get bout() { return bout; }, get phase() { return phase; }, stats, renderer: R, cam, RULES };
+  globalThis.__bout = { shown: [], get bout() { return bout; }, get phase() { return phase; }, stats, renderer: R, cam, RULES };
   $('loading').remove();
   requestAnimationFrame(frame);
 }

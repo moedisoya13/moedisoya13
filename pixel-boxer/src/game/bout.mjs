@@ -18,7 +18,7 @@ export const RULES = {
   punchSpeed: 0.55,
   accel: 17,
   turnRate: 7.5, // radians a second
-  gap: 0.74, // the boxers' centres are never closer
+  gap: 0.62, // the boxers' centres are never closer
   half: RING.half,
   parry: 0.17, // a guard this fresh turns a punch aside
   counter: 0.95, // seconds the opening lasts
@@ -29,6 +29,7 @@ export const RULES = {
   chain: ['cross', 'hook', 'upper'],
   dash: { reach: 1.2, safeFrom: 0.02, safeTo: 0.21 },
   stun: { jab: 0.24, power: 0.42, counter: 0.62, parried: 0.6 },
+  stepIn: 2.6, // metres a second he closes at while throwing, down to the punch's own range
   startGap: 2.4
 };
 
@@ -93,7 +94,7 @@ function decide(bout, f, other, input, dt, who) {
   f.cover = covering;
 }
 
-function travel(f, input, dt) {
+function travel(f, input, dt, other) {
   const m = input.move || [0, 0],
     l = Math.hypot(m[0], m[1]),
     k = l > 1 ? 1 / l : 1,
@@ -113,17 +114,25 @@ function travel(f, input, dt) {
   let sx = 0,
     sz = 0;
   if (f.action && f.action.name === 'dash') {
-    // the dash covers its ground early and coasts: the speed that integrates to `reach` along 1 - (1 - u)^3
-    const dur = MOVES.dash.dur * 0.8,
+    // the dash gathers speed and sheds it again: the speed that integrates to `reach` along a curve at rest at both ends
+    const dur = MOVES.dash.dur * 0.85,
       u = Math.min(1, f.action.t / dur),
-      rate = (3 * (1 - u) * (1 - u) * RULES.dash.reach) / dur;
+      rate = (30 * u * u * (1 - u) * (1 - u) * RULES.dash.reach) / dur;
     sx = f.action.go[0] * rate;
     sz = f.action.go[1] * rate;
   }
-  f.x += (f.vx + f.kx + sx) * dt;
-  f.z += (f.vz + f.kz + sz) * dt;
-  f.gx = f.vx + f.kx + sx; // how fast the canvas is really going past, for the feet
-  f.gz = f.vz + f.kz + sz;
+  if (f.action && MOVES[f.action.name].punch && !f.action.struck && other && !other.down) {
+    // a punch is stepped into: he closes on a man who is just out of range, so a combination follows its target back
+    const dx = other.x - f.x,
+      dz = other.z - f.z,
+      far = Math.hypot(dx, dz) || 1,
+      close = Math.max(0, Math.min(RULES.stepIn, (far - MOVES[f.action.name].close) * 9));
+    if (far < MOVES[f.action.name].reach + 0.5) (sx += (dx / far) * close), (sz += (dz / far) * close);
+  }
+  // the ropes give: the last quarter of a metre is run out of speed, not into a wall
+  const ease = (p, v) => (v * p > 0 ? Math.sign(v) * Math.min(Math.abs(v), Math.max(0, RULES.half - Math.abs(p)) * 9) : v);
+  f.x += ease(f.x, f.vx + f.kx + sx) * dt;
+  f.z += ease(f.z, f.vz + f.kz + sz) * dt;
 }
 
 function face(f, other, dt) {
@@ -218,6 +227,7 @@ export function step(bout, inputs, dt) {
     return bout;
   }
   bout.t += dt;
+  for (const f of bout.fighters) (f.px = f.x), (f.pz = f.z);
   bout.fighters.forEach((f, i) => {
     const other = bout.fighters[1 - i],
       input = bout.over === null ? inputs[i] || {} : {};
@@ -225,7 +235,7 @@ export function step(bout, inputs, dt) {
     f.sinceLast = (f.sinceLast === undefined ? 9 : f.sinceLast) + dt;
     f.sinceHit += dt;
     if (!f.down) decide(bout, f, other, input, dt, i);
-    travel(f, f.down ? {} : input, dt);
+    travel(f, f.down ? {} : input, dt, other);
     face(f, other, dt);
   });
   advance(bout, a, b, dt, 0);
@@ -247,6 +257,9 @@ export function step(bout, inputs, dt) {
   for (const f of bout.fighters) {
     f.x = Math.max(-RULES.half, Math.min(RULES.half, f.x));
     f.z = Math.max(-RULES.half, Math.min(RULES.half, f.z));
+    // how fast the canvas really went past under him this step, ropes and the other man allowed for: what his feet walk to
+    f.gx = (f.x - f.px) / dt;
+    f.gz = (f.z - f.pz) / dt;
   }
   return bout;
 }
@@ -278,7 +291,7 @@ export function viewOf(bout, i, lead) {
       // the wrist is sent to where the glove meets the head: short of it by a glove, from the side for a hook, under for an uppercut
       const [side, front] = local(f, dx, dz),
         hook = move.kind === 'hook' ? (move.hand === 'L' ? 1 : -1) : 0;
-      view.aim = [side + hook * 0.1, move.kind === 'upper' ? 1.33 : 1.47, front - 0.3 + Math.abs(hook) * 0.1];
+      view.aim = [side + hook * 0.1, move.kind === 'upper' ? 1.33 : 1.47, front - 0.3 + Math.abs(hook) * 0.06];
     }
   }
   return view;

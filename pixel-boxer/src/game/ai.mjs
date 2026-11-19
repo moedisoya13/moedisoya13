@@ -8,7 +8,7 @@ export const LEVELS = {
   contender: { guard: 0.45, parry: 0.25, slip: 0.18, eager: 0.6, counter: 0.8, rest: [0.6, 1.3], bursts: [['jab'], ['jab', 'jab'], ['jab', 'power'], ['power', 'power'], ['jab', 'jab', 'power']] },
   champion: { guard: 0.6, parry: 0.45, slip: 0.22, eager: 0.75, counter: 1, rest: [0.35, 0.9], bursts: [['jab', 'jab'], ['jab', 'power'], ['power', 'power'], ['jab', 'power', 'power'], ['jab', 'jab', 'power', 'power']] }
 };
-const RANGE = 1.02;
+const RANGE = 0.96;
 
 export function createRival(level) {
   return { level: LEVELS[level] || LEVELS.contender, rest: 1, burst: [], next: 0, circle: 1, circleFor: 1.5, answer: null, seen: null, hold: 0 };
