@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="claude:viewport-fit-sides" content="cover">
+<title>풋워크 카탈로그</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=IBM+Plex+Mono:wght@500&family=IBM+Plex+Sans+KR:wght@400;600&display=swap">
+<style>
+  /* a gym wall chart: one drill to a card, the drill itself moving in the window, the count of the feet under it */
+  :root {
+    --bg: #e9ebf2; --card: #f7f8fb; --fg: #151826; --dim: #5a6077; --line: #c6cada;
+    --accent: #c42a30; --lead: #c98a12; --rear: #2a78c8;
+    --display: "Black Han Sans", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+    --body: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+    --data: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --bg: #0d0f19; --card: #151826; --fg: #f1f2f7; --dim: #9aa1b8; --line: #2a2f45; --accent: #f05a4a; --lead: #ffc24a; --rear: #8ecbff; color-scheme: dark; }
+  }
+  :root[data-theme="dark"] { --bg: #0d0f19; --card: #151826; --fg: #f1f2f7; --dim: #9aa1b8; --line: #2a2f45; --accent: #f05a4a; --lead: #ffc24a; --rear: #8ecbff; color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 400 15px/1.55 var(--body); }
+  /* one canvas behind everything: each card's stage is a window onto it */
+  #view { position: fixed; inset: 0; width: 100%; height: 100%; display: block; image-rendering: pixelated; z-index: 0; }
+  .page { position: relative; z-index: 1; max-width: 1180px; margin: 0 auto; padding-block: 28px 56px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: flex; flex-direction: column; gap: 28px; }
+  header { background: var(--bg); display: flex; flex-direction: column; gap: 12px; }
+  h1 { margin: 0; font: 400 clamp(34px, 8vw, 58px)/1.05 var(--display); letter-spacing: .02em; text-wrap: balance; }
+  h1 em { font-style: normal; color: var(--accent); }
+  .lede { margin: 0; max-width: 62ch; color: var(--dim); }
+  .controls { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; font: 500 12px/1 var(--data); color: var(--dim); }
+  .seg { display: inline-flex; border: 1.5px solid var(--line); }
+  .controls button { font: inherit; color: var(--fg); background: var(--card); border: 0; padding: 9px 13px; min-width: 44px; cursor: pointer; }
+  .seg button + button { border-left: 1.5px solid var(--line); }
+  .controls button[aria-pressed="true"] { background: var(--fg); color: var(--bg); }
+  .controls button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  #prints { border: 1.5px solid var(--line); }
+  section { display: flex; flex-direction: column; gap: 12px; }
+  h2 { margin: 0; padding: 6px 0; background: var(--bg); font: 600 13px/1.2 var(--body); letter-spacing: .14em; color: var(--dim); border-bottom: 1.5px solid var(--line); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: 16px; }
+  .card { display: flex; flex-direction: column; min-width: 0; border: 1.5px solid var(--line); }
+  .stage { aspect-ratio: 5 / 4; max-width: 100%; }
+  /* the beat itself gets the width of the page: everything under it is built on it */
+  @media (min-width: 760px) {
+    .card.feature { flex-direction: row; grid-column: 1 / -1; }
+    .card.feature .stage { flex: 0 0 56%; aspect-ratio: 16 / 9; }
+    .card.feature .info { border-top: 0; border-left: 1.5px solid var(--line); justify-content: center; padding: 22px 26px; }
+    .card.feature h3 { font-size: 30px; }
+    .card.feature .info p { font-size: 16px; max-width: 34ch; }
+    .card.feature .feet { margin-top: 10px; }
+  }
+  .info { flex: 1; background: var(--card); border-top: 1.5px solid var(--line); padding: 12px 14px 14px; display: flex; flex-direction: column; gap: 8px; }
+  h3 { margin: 0; font: 400 21px/1.2 var(--display); letter-spacing: .02em; }
+  h3 .en { font: 500 11px/1 var(--data); color: var(--dim); letter-spacing: .04em; margin-left: 6px; white-space: nowrap; }
+  .info p { margin: 0; color: var(--dim); font-size: 14px; }
+  .feet { margin-top: auto; padding-top: 6px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; font: 500 12px/1 var(--data); color: var(--dim); font-variant-numeric: tabular-nums; }
+  .lamp { width: 12px; height: 12px; border: 1.5px solid currentColor; }
+  .lamp.lead { color: var(--lead); }
+  .lamp.rear { color: var(--rear); margin-left: 8px; }
+  .lamp.on { animation: lamp .32s steps(4) forwards; }
+  @keyframes lamp { 0% { background: currentColor; } 60% { background: currentColor; } 100% { background: transparent; } }
+  .pace { margin-left: auto; }
+  .pace b { color: var(--fg); font-weight: 500; display: inline-block; min-width: 3ch; text-align: right; }
+  footer { background: var(--bg); color: var(--dim); font-size: 13px; max-width: 70ch; }
+  #loading { position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 2; background: var(--fg); color: var(--bg); font: 500 12px/1 var(--data); padding: 9px 12px; }
+  @media (prefers-reduced-motion: reduce) { .lamp.on { animation: none; } }
+</style>
+</head>
+<body>
+<canvas id="view" aria-hidden="true"></canvas>
+<div class="page">
+  <header>
+    <h1>풋워크 <em>카탈로그</em></h1>
+    <p class="lede">복서의 발은 박자를 탑니다. 한 박자는 한 발이 닿는 순간이고, 제자리 바운스에서 스텝, 주먹까지 같은 박자가 이어집니다. 아래 동작은 녹화가 아니라 지금 계산되고 있는 실제 시합입니다.</p>
+    <div class="controls">
+      <span>속도</span>
+      <span class="seg"><button id="speed-1" data-speed="1" aria-pressed="true">1×</button><button id="speed-half" data-speed="0.5" aria-pressed="false">½×</button><button id="speed-quarter" data-speed="0.25" aria-pressed="false">¼×</button></span>
+      <button id="prints" aria-pressed="true">발자국</button>
+    </div>
+  </header>
+  <main id="catalog"></main>
+  <footer>
+    <p>등불은 발이 캔버스에 닿는 순간 켜집니다. 노란색이 앞발, 파란색이 뒷발이고 바닥의 발자국도 같은 색입니다. "분당 보"는 최근 몇 걸음의 간격으로 잰 값이라, 이동이 빨라지면 박자도 빨라지는 것을 볼 수 있습니다.</p>
+  </footer>
+</div>
+<div id="loading">불러오는 중…</div>
+<script type="module" src="src/catalog.mjs"></script>
+</body>
+</html>
