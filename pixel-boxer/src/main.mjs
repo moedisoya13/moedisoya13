@@ -1,15 +1,15 @@
-/* The page: loads the baked splats, steps the bout sixty times a second, and draws it at whatever rate the screen runs,
-   asking each boxer's animator for a fresh pose every frame. */
+/* The page: loads the baked splats, steps the bout sixty times a second (the bout solves the boxers' bodies itself: they are
+   part of its physics), and draws it at whatever rate the screen runs, each boxer placed between his last two steps. */
 import { createRenderer, paletteArray, rgb } from './render/renderer.mjs';
 import { createFx } from './render/fx.mjs';
 import { unpack, fromBase64 } from './render/splats.mjs';
 import * as M from './rig/m3.mjs';
 import { fk, NAMES } from './rig/skeleton.mjs';
 import { RIVAL } from './rig/boxer.mjs';
-import { boneMatrices, toWorld } from './anim/pose.mjs';
-import { createAnimator, guardPose } from './anim/animator.mjs';
+import { boneMatrices } from './anim/pose.mjs';
+import { guardPose } from './anim/animator.mjs';
 import { MOVES } from './anim/moves.mjs';
-import { createBout, step, viewOf, local, RULES } from './game/bout.mjs';
+import { createBout, step, RULES } from './game/bout.mjs';
 import { createRival, think } from './game/ai.mjs';
 import { createInput } from './game/input.mjs';
 import { createAudio } from './game/audio.mjs';
@@ -48,13 +48,13 @@ function start({ manifest, boxer, ring }) {
   const hall = new Float32Array(HALL.flatMap(rgb)),
     ink = new Float32Array(rgb(manifest.palette[0]));
   const bones = [new Float32Array(R.maxBones * 12), new Float32Array(R.maxBones * 12)],
-    mats = new Float32Array(NAMES.length * 12);
+    mats = new Float32Array(NAMES.length * 12),
+    // each boxer's bone matrices at the last step and the one before: what is drawn lies between them
+    posed = [0, 1].map(() => ({ now: new Float32Array(NAMES.length * 12), was: new Float32Array(NAMES.length * 12) }));
 
   let stage = 0,
     bout,
     rival,
-    animators,
-    gloves, // where each glove was last frame, for its streak
     phase = 'title',
     acc = 0,
     last = 0,
@@ -70,8 +70,7 @@ function start({ manifest, boxer, ring }) {
   function reset() {
     bout = createBout(Number(query.get('seed')) || (Date.now() & 0xffff) || 1);
     rival = createRival(STAGES[stage].level);
-    animators = [createAnimator(0), createAnimator(1)];
-    gloves = [{}, {}];
+    pose(true);
     dim = 0;
     $('stage').textContent = STAGES[stage].name;
     hud();
@@ -99,6 +98,20 @@ function start({ manifest, boxer, ring }) {
   });
   addEventListener('keydown', e => (e.code === 'Enter' || e.code === 'Space' || e.code === 'KeyJ') && begin());
 
+  // after a step: each boxer's bones for the picture, and the streak of a glove that is travelling
+  function pose(fresh) {
+    bout.fighters.forEach((f, i) => {
+      posed[i].was.set(fresh ? boneMatrices(f.pose, bind, f.place, mats, 0) : posed[i].now);
+      posed[i].now.set(boneMatrices(f.pose, bind, f.place, mats, 0));
+      const hand = f.action && MOVES[f.action.name].punch ? MOVES[f.action.name].hand : null;
+      if (!fresh && hand && f.before) {
+        const a = f.before[hand],
+          b = f.points[hand],
+          far = Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
+        if (far * 60 > 5.5 && far < 0.6) fx[1 + i].trail(a, b, 0.105, TRAIL, 0.1);
+      }
+    });
+  }
   function react(e) {
     const f = bout.fighters;
     if (e.type === 'punch') audio.play('swing');
@@ -106,21 +119,25 @@ function start({ manifest, boxer, ring }) {
       audio.play('dodge');
       fx[0].dust([f[e.who].x, 0, f[e.who].z], 6, [25, 24, 23]);
     } else if (e.type === 'hit') {
-      const heavy = e.power >= 0.9 || e.down;
-      animators[e.on].strike({ kind: e.kind, dir: local(f[e.on], e.dir[0] * (e.kind === 'hook' ? 0 : 1) + (e.kind === 'hook' ? (e.hand === 'L' ? -e.dir[1] : e.dir[1]) : 0), e.dir[1] * (e.kind === 'hook' ? 0 : 1) + (e.kind === 'hook' ? (e.hand === 'L' ? e.dir[0] : -e.dir[0]) : 0)), power: Math.min(1.5, e.power) });
+      // everything about a blow is sized by its impulse: a clean cross is about 85 newton-seconds
+      const k = Math.min(1.6, (e.J * (e.counter ? RULES.counterGain : 1)) / 85),
+        heavy = k > 0.75 || e.down;
       audio.play(heavy ? 'heavy' : 'hit');
-      fx[0].sparks(e.at, heavy ? 16 : 8, [38, 39, 40, 41], heavy ? 5 : 3.5, e.dir);
-      fx[0].sparks(e.at, heavy ? 10 : 4, [41, 41, 25], heavy ? 4 : 3, e.dir); // sweat
-      shake.amp = e.down ? 7 : heavy ? 4.5 : 2;
+      fx[0].sparks(e.at, Math.round(5 + 12 * k), [38, 39, 40, 41], 2.5 + 3 * k, e.dir);
+      fx[0].sparks(e.at, Math.round(3 + 8 * k), [41, 41, 25], 2.5 + 2 * k, e.dir); // sweat
+      shake.amp = e.down ? 7 : 1.5 + 3.5 * k;
       if (e.counter || e.down) white = 0.5;
       try {
-        if (navigator.vibrate && e.on === 0) navigator.vibrate(heavy ? 50 : 20);
+        if (navigator.vibrate && e.on === 0) navigator.vibrate(Math.round(15 + 40 * k));
       } catch {
         // an embedded page may be refused the motor
       }
+      $('blow').textContent = `${Math.round(e.J)} N·s`;
+      $('blow').classList.remove('on');
+      void $('blow').offsetWidth;
+      $('blow').classList.add('on');
       if (e.down) phase = 'over';
     } else if (e.type === 'block') {
-      animators[e.on].strike({ kind: e.kind, dir: local(f[e.on], e.dir[0], e.dir[1]), power: 0.22 });
       audio.play('whiff');
       fx[0].sparks(e.at, 4, [38, 25, 24], 2.5, e.dir);
       shake.amp = 1.2;
@@ -165,6 +182,7 @@ function start({ manifest, boxer, ring }) {
         step(bout, [mine, spar ? {} : think(rival, bout, DT)], DT);
         if (spar) bout.fighters[1].hp = Math.max(bout.fighters[1].hp, 25); // a sparring partner does not go down
         for (const e of bout.events) react(e);
+        if (bout.stop <= 0 || bout.events.length) pose();
       }
       hud();
     } else input.read();
@@ -176,33 +194,23 @@ function start({ manifest, boxer, ring }) {
       show('result', true);
     }
 
-    // ---- each boxer: what he is doing, solved into a pose, into bone matrices
+    // ---- each boxer, between his last two steps (and held where he is through the moment of a blow)
     const held = bout.stop > 0,
-      live = held ? elapsed * 0.06 : elapsed;
+      between = held ? 1 : Math.min(1, acc / DT);
     stopped = held ? Math.max(stopped, bout.stop) : 0;
     const shadows = [],
       layers = [{ mesh: meshes.ring, palette: palettes[0], mask: 0.5 }];
     bout.fighters.forEach((f, i) => {
-      const view = viewOf(bout, i, acc),
-        pose = animators[i].update(view, live),
-        // a boxer who has just been hit shudders through the held moment
-        shudder = held && f.sinceHit < 0.2 ? 0.022 * (bout.stop / stopped) * Math.sin(time * 2 * Math.PI * 27) : 0,
-        place = { R: M.ry((view.facing * 180) / Math.PI), p: [view.at[0] + shudder * Math.cos(view.facing), 0, view.at[1] - shudder * Math.sin(view.facing)] };
-      R.packBones(boneMatrices(pose, bind, place, mats, 0), bones[i]);
-      if (globalThis.__bout) globalThis.__bout.shown[i] = { view, hand: pose.at.LeftHand, live };
-      layers.push({ mesh: meshes.boxer, bones: bones[i], palette: palettes[i], mask: 1, flash: f.flash > 0 ? 1 : 0 });
-      // the streak of a fast glove, along the path it really took
-      for (const [hand, joint, out] of [['L', 'LeftHand', 0.075], ['R', 'RightHand', -0.075]]) {
-        const tip = toWorld(place, M.add(pose.at[joint], M.app(fk(pose).R[joint], [out, 0, 0])), pose.stretch),
-          was = gloves[i][hand];
-        if (was && live > 0) {
-          const far = Math.hypot(tip[0] - was[0], tip[1] - was[1], tip[2] - was[2]);
-          if (far / live > 5.5 && far < 0.6 && f.action && MOVES[f.action.name].hand === hand) fx[1 + i].trail(was, tip, 0.105, TRAIL, 0.1);
-        }
-        gloves[i][hand] = tip;
+      const { was, now } = posed[i];
+      for (let k = 0; k < mats.length; k++) mats[k] = was[k] + (now[k] - was[k]) * between;
+      if (held && f.sinceHit < 0.2) {
+        // a boxer who has just been hit shudders through it
+        const shudder = 0.022 * (bout.stop / stopped) * Math.sin(time * 2 * Math.PI * 27);
+        for (let k = 0; k < NAMES.length; k++) (mats[k * 12 + 9] += shudder * Math.cos(f.yaw)), (mats[k * 12 + 11] -= shudder * Math.sin(f.yaw));
       }
-      const hips = toWorld(place, pose.at.Hips, 1);
-      shadows.push({ x: hips[0], z: hips[2], yaw: view.facing, long: f.down ? 0.5 : 0.3, wide: f.down ? 0.32 : 0.24 });
+      R.packBones(mats, bones[i]);
+      layers.push({ mesh: meshes.boxer, bones: bones[i], palette: palettes[i], mask: 1, flash: f.flash > 0 ? 1 : 0 });
+      shadows.push({ x: f.x + f.pose.at.Hips[2] * Math.sin(f.yaw), z: f.z + f.pose.at.Hips[2] * Math.cos(f.yaw), yaw: f.yaw, long: f.down ? 0.5 : 0.3, wide: f.down ? 0.32 : 0.24 });
     });
     meshes.fx[0].update(fx[0].rows, fx[0].update(held ? elapsed * 0.2 : elapsed, shadows, 22));
     for (const i of [1, 2]) meshes.fx[i].update(fx[i].rows, fx[i].update(held ? elapsed * 0.2 : elapsed));

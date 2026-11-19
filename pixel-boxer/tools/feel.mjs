@@ -2,9 +2,9 @@
 /* Numbers about how the boxer moves, taken from the real thing: the rules are stepped with scripted controls, each step is
    animated exactly as the page animates it, and the joints are measured on the canvas, sixty times a second.
      node tools/feel.mjs      (--json for the raw values; exits 1 when a rule is broken) */
-import { createBout, step, viewOf, RULES as BOUT } from '../src/game/bout.mjs';
-import { createAnimator } from '../src/anim/animator.mjs';
+import { createBout, step, settle, RULES as BOUT } from '../src/game/bout.mjs';
 import { MOVES } from '../src/anim/moves.mjs';
+import { createChain, stepChain, effectiveMass, LINKS } from '../src/phys/chain.mjs';
 import { NAMES } from '../src/rig/skeleton.mjs';
 import { toWorld } from '../src/anim/pose.mjs';
 import * as M from '../src/rig/m3.mjs';
@@ -18,33 +18,26 @@ const CORE = BODY.filter(n => !FEET.includes(n));
 const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
 
 /* Play `seconds` of a bout: controls(tick, bout) -> [mine, his]. Returns a frame a tick for boxer `who`:
-   { joints: world positions, view, stop } */
+   { joints: world positions, held (in a hit stop), struck (somebody has just been hit) } */
 function play(seconds, controls, o) {
   o = o || {};
   const bout = createBout(5),
-    animators = [createAnimator(0), createAnimator(1)],
     frames = [],
     events = [];
   let blow = -9; // the tick somebody was last hit: a blow is meant to jolt, so those frames are judged apart
   bout.fighters[0].x = -(o.gap || 1) / 2;
   bout.fighters[1].x = (o.gap || 1) / 2;
+  settle(bout);
+  for (let i = 0; i < 40; i++) step(bout, [{}, {}], DT); // into their guards, bouncing
   if (o.setup) o.setup(bout);
-  // let them settle into their guards first
-  for (let i = 0; i < 40; i++) for (const k of [0, 1]) animators[k].update(viewOf(bout, k), DT);
   for (let tick = 0; tick < Math.round(seconds / DT); tick++) {
     step(bout, controls(tick, bout), DT);
     for (const e of bout.events) {
       events.push({ ...e, tick });
-      if (e.type === 'hit') animators[e.on].strike({ kind: e.kind, dir: [0, -1], power: Math.min(1.5, e.power) });
       if (e.type === 'hit' || e.type === 'block' || e.type === 'parry') blow = tick;
     }
-    const held = bout.stop > 0;
-    for (const k of [0, 1]) {
-      const view = viewOf(bout, k),
-        pose = animators[k].update(view, held ? DT * 0.06 : DT),
-        place = { R: M.ry((view.facing * 180) / Math.PI), p: [view.at[0], 0, view.at[1]] };
-      if (k === (o.who || 0)) frames.push({ struck: tick - blow <= 2, joints: Object.fromEntries(NAMES.map(n => [n, toWorld(place, pose.at[n], pose.stretch)])), view, held, place });
-    }
+    const f = bout.fighters[o.who || 0];
+    frames.push({ struck: tick - blow <= 2, held: bout.stop > 0, joints: Object.fromEntries(NAMES.map(n => [n, toWorld(f.place, f.pose.at[n], f.pose.stretch)])), glove: f.points });
   }
   return { frames, events, bout };
 }
@@ -106,7 +99,7 @@ function measure(frames) {
 
 const idle = {};
 const press = (tick, at, what) => (tick === at ? { [what]: true } : idle);
-const report = { scenes: {}, punches: {}, walk: {} };
+const report = { scenes: {}, chain: {}, punches: {}, walk: {} };
 
 // ---- the scenes a bout is made of
 const SCENES = {
@@ -131,21 +124,51 @@ for (const [name, [seconds, controls, o]] of Object.entries(SCENES)) {
   report.scenes[name] = measure(run.frames);
 }
 
-// ---- each punch on its own: how fast the fist goes, and whether the glove is on the target on the tick the rules call the hit
+// ---- the chain of each punch on its own: when each joint fires and peaks, and how the weight behind the glove builds
 for (const name of ['jab', 'cross', 'hook', 'upper']) {
+  const move = MOVES[name],
+    chain = createChain(move),
+    used = LINKS.map((l, i) => i).filter(i => !(move.chain.skip || []).includes(LINKS[i]));
+  let mass = 0,
+    start = 0;
+  for (let i = 0; i < 480 && chain.phase !== 'done'; i++) {
+    stepChain(chain, move, 1 / 240);
+    if (chain.phase === 'throw' || chain.phase === 'hold') mass = Math.max(mass, effectiveMass(chain, move));
+    if (chain.phase === 'coil') start = chain.t;
+  }
+  report.chain[name] = {
+    links: used.map(i => LINKS[i]),
+    fired: used.map(i => Math.round(chain.fired[i] * 1000)),
+    peak: used.map(i => Math.round(chain.peakAt[i] * 1000)),
+    ordered: used.every((i, k) => k === 0 || (chain.fired[i] > chain.fired[used[k - 1]] && chain.peakAt[i] > chain.peakAt[used[k - 1]])),
+    mass: +mass.toFixed(1),
+    whole: +chain.t.toFixed(2)
+  };
+}
+
+// ---- each punch thrown in a bout, from its own range: what the glove was doing when it met the head
+function thrown(name, gap) {
   const link = BOUT.chain.indexOf(name),
     run = play(1, t => [press(t, 6, name === 'jab' ? 'jab' : 'power'), idle], {
-      gap: Math.min(1, MOVES[name].reach - 0.08),
+      gap,
       // (as if the punches before it in the chain had just been thrown)
       setup: bout => link > 0 && Object.assign(bout.fighters[0], { link: link - 1, lastPower: true, sinceLast: 0 })
     }),
-    hit = run.events.find(e => e.type === 'hit' && e.name === name),
-    joint = MOVES[name].hand === 'L' ? 'LeftHand' : 'RightHand';
-  let speed = 0;
-  for (let i = 1; i < run.frames.length; i++) if (!run.frames[i].held) speed = Math.max(speed, dist(run.frames[i].joints[joint], run.frames[i - 1].joints[joint]) * 60);
-  const f = hit && run.frames[hit.tick],
-    target = f && f.view.aim && toWorld(f.place, f.view.aim, 1);
-  report.punches[name] = { landed: !!hit, speed: +speed.toFixed(1), off: target ? +(dist(f.joints[joint], target) * 100).toFixed(1) : null };
+    hit = run.events.find(e => e.J !== undefined),
+    hand = MOVES[name].hand;
+  let fastest = 0;
+  for (let i = 1; i < run.frames.length; i++) if (!run.frames[i].held && !run.frames[i - 1].held) fastest = Math.max(fastest, dist(run.frames[i].glove[hand], run.frames[i - 1].glove[hand]) * 60);
+  return { hit, fastest };
+}
+for (const name of ['jab', 'cross', 'hook', 'upper']) {
+  const { hit, fastest } = thrown(name, MOVES[name].close);
+  report.punches[name] = { landed: !!hit && hit.type === 'hit', after: hit ? +((hit.tick - 6 + 1) / 60).toFixed(3) : null, speed: hit ? hit.speed : 0, mass: hit ? hit.mass : 0, J: hit ? hit.J : 0, fastest: +fastest.toFixed(1) };
+}
+{
+  const close = thrown('cross', 0.68).hit,
+    far = thrown('jab', 1.6).hit;
+  report.punches.cross.smothered = close ? close.J : 0;
+  report.punches.jab.outOfReach = !far;
 }
 
 // ---- footwork: a foot that is down stays where it was put
@@ -166,13 +189,17 @@ for (const name of ['jab', 'cross', 'hook', 'upper']) {
 
 const scenes = Object.values(report.scenes),
   punches = Object.values(report.punches);
+const chains = Object.values(report.chain);
 const RULES = [
   ['the boxer is moving in every frame of every scene', () => scenes.every(s => s.moving === 100)],
   ['no joint ever goes one way and straight back the next frame by more than 3 cm (a pop)', () => scenes.every(s => s.pop <= 3)],
   ['walking, the head and trunk never change their step between frames by more than 1 cm', () => ['guard', 'walk in and stop', 'circle', 'into the ropes'].every(n => report.scenes[n].bodyJolt <= 1)],
-  ['every punch lands, with the glove within 4 cm of where it was aimed', () => punches.every(p => p.landed && p.off !== null && p.off <= 4)],
-  ['fists travel between 6 and 16 m/s at their fastest', () => punches.every(p => p.speed >= 6 && p.speed <= 16)],
-  ['a planted foot slides less than 5 mm while walking', () => report.walk.slide < 5]
+  ['a planted foot slides less than 5 mm while walking', () => report.walk.slide < 5],
+  ['in every punch the joints fire and peak in order, from the legs up to the hand', () => chains.every(c => c.ordered)],
+  ['every punch lands from its own range, by the glove meeting the head', () => punches.every(p => p.landed)],
+  ['the glove meets the head at between 5 and 16 m/s', () => punches.every(p => p.speed >= 5 && p.speed <= 16)],
+  ['a jab delivers less than a cross, and a cross from too close less than half of one from range', () => report.punches.jab.J < report.punches.cross.J && report.punches.cross.smothered < report.punches.cross.J / 2],
+  ['a jab thrown from out of reach meets nothing', () => report.punches.jab.outOfReach]
 ];
 const results = RULES.map(([rule, check]) => [rule, check()]);
 if (process.argv.includes('--json')) console.log(JSON.stringify(report, null, 2));
@@ -180,7 +207,12 @@ else {
   console.log('scene                   moving  body m/s  hands m/s  jolt cm: body  feet  hands  pop cm');
   for (const [name, s] of Object.entries(report.scenes))
     console.log(`${name.padEnd(24)}${String(s.moving + '%').padEnd(8)}${String(s.body).padEnd(10)}${String(s.hands).padEnd(11)}${String(s.bodyJolt).padEnd(6)}${String(s.footJolt).padEnd(6)}${String(s.handJolt).padEnd(7)}${s.pop} ${s.pop > 3 ? s.worst : ''}`);
-  for (const [name, p] of Object.entries(report.punches)) console.log(`${name.padEnd(8)} fist ${p.speed} m/s, ${p.landed ? `glove ${p.off} cm from its target when it lands` : 'did not land'}`);
+  console.log('\nchain   joint: fires at / peaks at (ms after the button)                                    behind the glove');
+  for (const [name, c] of Object.entries(report.chain)) console.log(`${name.padEnd(8)}${c.links.map((l, i) => `${l} ${c.fired[i]}/${c.peak[i]}`).join('   ').padEnd(92)}${c.mass} kg`);
+  console.log('\npunch   lands after  glove speed  mass behind  impulse   fastest the glove went');
+  for (const [name, p] of Object.entries(report.punches))
+    console.log(`${name.padEnd(8)}${String(p.after + ' s').padEnd(13)}${String(p.speed + ' m/s').padEnd(13)}${String(p.mass + ' kg').padEnd(13)}${String(p.J + ' Ns').padEnd(10)}${p.fastest} m/s`);
+  console.log(`a cross from 0.68 m: ${report.punches.cross.smothered} Ns`);
   console.log(`walk     ${report.walk.speed} m/s, planted foot slides ${report.walk.slide} mm`);
   for (const [rule, ok] of results) console.log((ok ? 'ok    ' : 'BROKEN') + ' ' + rule);
 }

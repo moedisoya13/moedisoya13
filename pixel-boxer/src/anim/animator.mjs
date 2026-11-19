@@ -5,12 +5,14 @@
      const a = createAnimator()
      a.update(view, dt) -> { root, rot, stretch, at: { Joint: position in his own space } }
        view: { move: [left, ahead] metres a second in his own space, turn: radians a second,
-               action: { name, t, id, dir } | null, cover: 0..1, aim: [x, y, z] the target's head in his space | null,
+               action: { name, t, id, dir, chain (a punch's kinetic chain: see phys/chain.mjs) } | null, cover: 0..1,
+               aim: [x, y, z] where the punching wrist is to go, in his space | null,
                cheer: bool, still: bool (lying on the canvas) }
-     a.strike({ kind, dir: [left, ahead], power })   he has just been hit */
+     a.strike({ J, dir: [left, up, ahead] })         he has just been hit: the impulse in newton-seconds, and the way it went */
 import * as M from '../rig/m3.mjs';
-import { solve } from '../rig/solve.mjs';
 import { TPOSE } from '../rig/skeleton.mjs';
+import { solve, LEN } from '../rig/solve.mjs';
+import { LINKS } from '../phys/chain.mjs';
 import { CHANNELS, GUARD, MOVES, sampleMove } from './moves.mjs';
 
 const TAU = Math.PI * 2;
@@ -72,25 +74,19 @@ const ZERO = Object.fromEntries(CHANNELS.map(ch => [ch, 0]));
 const REST = headOf(GUARD.hips, trunk(ZERO));
 const CHEST = chestOf(GUARD.hips, trunk(ZERO));
 
-/* How much of the way to its landing a punch's hand has gone at time t, 0..1. A straight punch: its travel measured along the
-   line from the guard to where it lands. A swing is carried round by the body, so it says so itself, in its `aim`. After the
-   landing `aim` lets go of the target, for a punch that goes on through. */
-const OUT = {};
-function landing(name) {
-  const move = MOVES[name],
-    k = move.hand === 'L' ? 'l' : 'r',
-    at = sampleMove(move, move.contact, {});
-  return (OUT[name] = [at[k + 'x'] || 0, at[k + 'y'] || 0, at[k + 'z'] || 0]);
-}
-function thrown(name, t) {
-  const move = MOVES[name],
-    k = move.hand === 'L' ? 'l' : 'r',
-    d = sampleMove(move, t, {}),
-    aim = clamp(d.aim || 0, 0, 1);
-  if (move.swing) return aim;
-  const o = OUT[name] || landing(name),
-    along = ((d[k + 'x'] || 0) * o[0] + (d[k + 'y'] || 0) * o[1] + (d[k + 'z'] || 0) * o[2]) / (o[0] ** 2 + o[1] ** 2 + o[2] ** 2);
-  return clamp(along, 0, 1) * (t <= move.contact ? 1 : aim);
+const REACH = LEN.upperArm + LEN.foreArm - 0.03; // as far as a wrist gets from its shoulder
+const BENT = 0.4; // and as far as it gets with the elbow held at a right angle
+const unit = v => {
+  const l = Math.hypot(v[0], v[1], v[2]) || 1;
+  return [v[0] / l, v[1] / l, v[2] / l];
+};
+// a direction turned a share t of the way from a to b, the short way round
+function swingTo(a, b, t) {
+  const d = clamp(a[0] * b[0] + a[1] * b[1] + a[2] * b[2], -1, 1),
+    th = Math.acos(d);
+  if (th < 1e-4) return b;
+  const s = Math.sin(th);
+  return unit(M.add(M.scale(a, Math.sin((1 - t) * th) / s), M.scale(b, Math.sin(t * th) / s)));
 }
 
 // the guard itself, standing still: the pose the boxer is sculpted and lit in
@@ -122,25 +118,19 @@ export function createAnimator(seed) {
   const give = { hp: { x: 0, v: 0 }, hw: { x: 0, v: 0 }, hr: { x: 0, v: 0 }, lean: { x: 0, v: 0 }, side: { x: 0, v: 0 }, yaw: { x: 0, v: 0 }, open: { x: 0, v: 0 }, sink: { x: 0, v: 0 } };
 
   return {
+    /* The blow's impulse is shared out by where it was going: back through the head nods it back, across turns and tilts
+       it, upward lifts the chin; the trunk follows more slowly; the guard is knocked open. */
     strike(hit) {
-      const p = hit.power,
-        [left, ahead] = hit.dir; // which way the blow travels, in his space
-      if (hit.kind === 'hook') {
-        give.hw.v += -left * 900 * p;
-        give.hr.v += left * 420 * p;
-        give.side.v += left * 260 * p;
-        give.yaw.v += -left * 320 * p;
-      } else if (hit.kind === 'upper') {
-        give.hp.v += -1100 * p;
-        give.lean.v += -330 * p;
-        give.sink.v += 1.1 * p;
-      } else {
-        give.hp.v += -820 * p;
-        give.lean.v += -300 * p;
-        give.hw.v += -left * 240 * p;
-      }
-      give.lean.v += ahead * 60 * p;
-      give.open.v += 7 * p;
+      const k = hit.J / 55, // a clean cross is about 55 newton-seconds
+        [left, up, ahead] = hit.dir;
+      give.hp.v += (ahead * 800 - up * 1000) * k;
+      give.hw.v += left * 900 * k;
+      give.hr.v += -left * 400 * k;
+      give.lean.v += (ahead * 300 - up * 260) * k;
+      give.side.v += -left * 260 * k;
+      give.yaw.v += left * 300 * k;
+      give.sink.v += Math.max(0, up) * 1.1 * k;
+      give.open.v += 7 * k;
     },
     update(view, dt) {
       clock += dt;
@@ -149,7 +139,15 @@ export function createAnimator(seed) {
         id = action ? action.id : null;
 
       // ---- what he is doing
-      if (action) {
+      if (action && MOVES[action.name].punch) {
+        // a punch: what its wind-up and each joint of its chain add, by how far each has turned
+        const move = MOVES[action.name],
+          chain = action.chain;
+        for (const ch in move.coil) c[ch] += move.coil[ch] * chain.coil.q;
+        LINKS.forEach((link, i) => {
+          for (const ch in move.links[link]) c[ch] += move.links[link][ch] * chain.q[i];
+        });
+      } else if (action) {
         sampleMove(MOVES[action.name], action.t, c);
         if (action.name === 'dash' && action.dir) {
           const a = -c.hy / 0.075; // the dash's own rise and fall, as 0..1
@@ -280,16 +278,39 @@ export function createAnimator(seed) {
           open = M.add(GUARD.hands[side], [c[k + 'x'], c[k + 'y'], c[k + 'z']]),
           // held to the face, or locked to the chest and swung with it, or part way between
           free = M.lerp(M.add(open, carried), M.add(chest.p, M.app(swung, M.sub(open, CHEST.p))), clamp(c[k + 'c'], 0, 1)),
-          /* With a head to hit, the hand is carried off its written path onto the target, in step with how far the punch
-             has been thrown: it leaves the guard as written and arrives on the target at the moment it would have arrived
-             at nothing. Each hand follows its own correction a touch late, and lets go of one cut short by the next punch
-             more slowly still, so neither is ever snatched. */
-          mine = action && MOVES[action.name].punch && MOVES[action.name].hand === side && target,
-          // (a straight punch keeps its line: the whole line is moved so that its far end is the target. A swing has no line
-          // of its own, the body carries it, so it is simply drawn in onto the target as the body comes round.)
-          want = !mine ? [0, 0, 0] : M.scale(M.sub(target, MOVES[action.name].swing ? free : M.add(M.add(GUARD.hands[side], OUT[action.name] || landing(action.name)), carried)), thrown(action.name, action.t)),
-          follow = 1 - Math.exp(-dt * (mine ? 90 : 18));
-        for (let i = 0; i < 3; i++) steer[side][i] += (want[i] - steer[side][i]) * follow;
+          mine = action && MOVES[action.name].punch && MOVES[action.name].hand === side ? MOVES[action.name] : null;
+        if (mine) {
+          /* The punching arm is not sent anywhere: it is thrown. The shoulder and elbow are the last two joints of the
+             chain, and where the fist is follows from how far each has turned, on top of wherever the body has carried the
+             shoulder by then. */
+          const chain = action.chain,
+            shoulder = M.add(chest.p, M.app(chest.R, M.sub(TPOSE[(side === 'L' ? 'Left' : 'Right') + 'Arm'], TPOSE.Chest))),
+            swing = clamp(chain.q[3], 0, 1.06),
+            extend = clamp(chain.q[4], 0, 1.05);
+          let thrown;
+          if (mine.arm === 'straight') {
+            // the shoulder turns the arm onto the line of the target; the elbow straightens it along that line
+            const to = target || [s * 0.02, 1.46, shoulder[2] + 0.75],
+              from = M.sub(free, shoulder),
+              line = M.sub(to, shoulder),
+              folded = Math.hypot(from[0], from[1], from[2]),
+              out = Math.min(REACH, Math.hypot(line[0], line[1], line[2]));
+            thrown = M.add(shoulder, M.scale(swingTo(unit(from), unit(line), swing), folded + (out - folded) * extend));
+          } else {
+            // the arm stays bent and the body brings it: the shoulder only closes what is left between the fist and the target
+            const to = target || M.add(free, mine.arm === 'lift' ? [s * -0.1, 0.36, 0.38] : [s * -0.1, 0.02, 0.06]);
+            thrown = M.lerp(free, to, swing);
+            // (bent is bent: a hook thrown from too far away does not grow into a straight punch to get there)
+            const out = M.sub(thrown, shoulder),
+              far = Math.hypot(out[0], out[1], out[2]);
+            if (far > BENT) thrown = M.add(shoulder, M.scale(out, BENT / far));
+          }
+          steer[side] = M.sub(thrown, free);
+        } else {
+          // a hand whose punch has been cut short by the next one is let back to its guard, not dropped there
+          const k = Math.exp(-dt * 18);
+          steer[side] = M.scale(steer[side], k);
+        }
         /* Where the elbow points is asked for, not ordered: it leans toward where the move wants it from where it was, so an
            arm passing through a pose with no good answer (a wrist crossing its own shoulder) cannot flip over in a frame. */
         const asked = M.app(chest.R, [s * (0.5 + 0.8 * flare), -1 + 1.3 * flare, -0.2 - 0.25 * flare]),

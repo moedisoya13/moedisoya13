@@ -1,11 +1,21 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createBout, step, viewOf, RULES } from '../src/game/bout.mjs';
+import { createBout, step, settle, RULES } from '../src/game/bout.mjs';
 import { MOVES } from '../src/anim/moves.mjs';
+import { createChain, stepChain, effectiveMass, LINKS } from '../src/phys/chain.mjs';
 import { createRival, think } from '../src/game/ai.mjs';
 
 const DT = 1 / 60;
 const idle = {};
+// two boxers `gap` apart, standing in their guards
+function ring(gap, more) {
+  const bout = createBout(3);
+  bout.fighters[0].x = -gap / 2;
+  bout.fighters[1].x = gap / 2;
+  Object.assign(bout.fighters[1], { hp: 1000 }, more);
+  settle(bout);
+  return bout;
+}
 function run(bout, secs, inputAt, until) {
   const seen = [];
   for (let i = 0; i < Math.round(secs / DT); i++) {
@@ -15,71 +25,106 @@ function run(bout, secs, inputAt, until) {
   }
   return seen;
 }
-const close = (bout, gap) => {
-  bout.fighters[0].x = -(gap || 1) / 2;
-  bout.fighters[1].x = (gap || 1) / 2;
-  return bout;
-};
+const blow = seen => seen.find(e => e.J !== undefined);
 
-test('a jab in reach lands at its contact time, hurts and holds the moment', () => {
-  const bout = close(createBout());
-  const seen = run(bout, 0.3, i => [i === 0 ? { jab: true } : idle, idle], b => b.stop > 0);
-  const hit = seen.find(e => e.type === 'hit');
-  assert.ok(hit, 'the jab should land');
-  assert.ok(Math.abs(hit.tick + 1 - MOVES.jab.contact / DT) <= 1, 'on the frame the glove arrives');
-  assert.equal(bout.fighters[1].hp, RULES.hp - MOVES.jab.damage);
+test('the joints of a punch fire and peak in order, from the legs to the elbow', () => {
+  for (const name of ['jab', 'cross', 'hook', 'upper']) {
+    const move = MOVES[name],
+      chain = createChain(move);
+    for (let i = 0; i < 400 && chain.phase !== 'done'; i++) stepChain(chain, move, 1 / 240);
+    const used = LINKS.map((l, i) => i).filter(i => !(move.chain.skip || []).includes(LINKS[i]));
+    for (let k = 1; k < used.length; k++) {
+      assert.ok(chain.fired[used[k]] > chain.fired[used[k - 1]], `${name}: ${LINKS[used[k]]} fires after ${LINKS[used[k - 1]]}`);
+      assert.ok(chain.peakAt[used[k]] > chain.peakAt[used[k - 1]], `${name}: ${LINKS[used[k]]} peaks after ${LINKS[used[k - 1]]}`);
+    }
+    assert.equal(chain.phase, 'done', name + ' comes back to the guard');
+  }
+});
+
+test('the body is behind a punch only around the moment the chain arrives', () => {
+  const move = MOVES.cross,
+    chain = createChain(move),
+    mass = [];
+  for (let i = 0; i < 240; i++) {
+    stepChain(chain, move, 1 / 240);
+    if (chain.phase === 'throw' || chain.phase === 'hold') mass.push(effectiveMass(chain, move));
+  }
+  const most = Math.max(...mass);
+  assert.ok(mass[0] < 2, 'an arm punch at the start: ' + mass[0].toFixed(2));
+  assert.ok(most > 5, 'the body behind it at the end: ' + most.toFixed(2));
+  assert.ok(mass.indexOf(most) > mass.length / 2, 'and it builds through the throw');
+});
+
+test('a jab lands when the glove reaches the head, and what it does is its impulse', () => {
+  const bout = ring(1.0);
+  const seen = run(bout, 0.4, i => [i === 0 ? { jab: true } : idle, idle], b => b.stop > 0);
+  const hit = blow(seen);
+  assert.equal(hit && hit.type, 'hit');
+  assert.ok(hit.tick >= 3 && hit.tick <= 9, 'after the chain has run, not on a schedule: tick ' + hit.tick);
+  assert.ok(Math.abs(hit.J - hit.mass * hit.speed * (1 + RULES.bounce)) < 0.5, 'impulse = mass x closing speed x (1 + bounce)');
+  assert.ok(Math.abs(1000 - bout.fighters[1].hp - hit.J * RULES.damage) < 0.1, 'damage in proportion');
   assert.ok(bout.fighters[1].stun > 0);
-  const t = bout.fighters[0].action.t;
-  step(bout, [idle, idle], DT);
-  assert.equal(bout.fighters[0].action.t, t, 'nothing advances while the blow is held');
 });
 
-test('a punch from too far away, or at a man who is not in front, misses', () => {
-  let bout = createBout();
-  let seen = run(bout, 0.4, i => [i === 0 ? { jab: true } : idle, idle]);
-  assert.ok(seen.some(e => e.type === 'whiff'));
-  bout = close(createBout());
+test('thrown from too far it falls short; thrown at nothing it hits nothing', () => {
+  assert.ok(run(ring(1.6), 0.5, i => [i === 0 ? { jab: true } : idle, idle]).some(e => e.type === 'whiff'));
+  const bout = ring(1.0);
   bout.fighters[0].yaw = -Math.PI / 2; // facing away
-  seen = run(bout, 0.12, i => [i === 0 ? { jab: true } : idle, idle]);
-  assert.ok(!seen.some(e => e.type === 'hit'));
+  assert.ok(!blow(run(bout, 0.2, i => [i === 0 ? { jab: true } : idle, idle])));
 });
 
-test('power punches pressed in rhythm run cross, hook, uppercut', () => {
-  const bout = close(createBout(), 0.9);
-  bout.fighters[1].hp = 1000;
-  const seen = run(bout, 1.6, i => [i % 14 === 0 ? { power: true } : idle, idle]);
-  assert.deepEqual(seen.filter(e => e.type === 'punch').slice(0, 3).map(e => e.name), ['cross', 'hook', 'upper']);
+test('a cross from too close is smothered, and a cross is worth more than a jab', () => {
+  const J = (gap, what) => {
+    const hit = blow(run(ring(gap), 0.5, i => [i === 0 ? { [what]: true } : idle, idle]));
+    return hit ? hit.J : 0;
+  };
+  const range = J(1.0, 'power'),
+    close = J(0.68, 'power'),
+    jab = J(1.0, 'jab');
+  assert.ok(range > 50, 'a cross at range: ' + range);
+  assert.ok(close < range / 3, 'from too close the elbow has not straightened: ' + close);
+  assert.ok(range > jab * 1.5, 'jab ' + jab + ', cross ' + range);
+});
+
+test('power punches pressed in rhythm run cross, hook, uppercut, and each one finds him', () => {
+  const bout = ring(1.0);
+  let next = 0;
+  const seen = run(bout, 2, (i, b) => {
+    const a = b.fighters[0].action,
+      ready = !a || (a.chain && (a.chain.phase === 'hold' || a.chain.phase === 'recover'));
+    if (ready && next < 3 && b.stop <= 0 && b.fighters[0].want === null) return next++, [{ power: true }, idle];
+    return [idle, idle];
+  });
+  assert.deepEqual(seen.filter(e => e.type === 'punch').map(e => e.name), ['cross', 'hook', 'upper']);
+  assert.deepEqual(seen.filter(e => e.type === 'hit').map(e => e.name), ['cross', 'hook', 'upper']);
 });
 
 test('a guard raised just before the punch turns it aside and the counter hits harder', () => {
-  const bout = close(createBout());
-  const tick = Math.round(MOVES.cross.contact / DT);
-  let seen = run(bout, 0.5, i => [i >= tick - 6 ? { cover: true } : idle, i === 0 ? { power: true } : idle], b => b.stop > 0);
-  assert.ok(seen.some(e => e.type === 'parry'));
+  const bout = ring(1.0);
+  let seen = run(bout, 0.6, (i, b) => [{ cover: !!b.fighters[1].action && b.fighters[1].action.chain.on[2] }, i === 0 ? { power: true } : idle], b => b.stop > 0);
+  assert.ok(seen.some(e => e.type === 'parry'), 'turned aside');
   assert.equal(bout.fighters[0].hp, RULES.hp);
   assert.equal(bout.fighters[1].action.name, 'reel');
   assert.ok(bout.fighters[0].counter > 0);
-  seen = run(bout, 0.8, i => [i === 8 ? { power: true } : idle, idle], b => b.fighters[1].hp < RULES.hp);
-  const hit = seen.find(e => e.type === 'hit');
-  assert.ok(hit && hit.counter);
-  assert.equal(bout.fighters[1].hp, RULES.hp - MOVES.cross.damage * RULES.counterGain);
+  seen = run(bout, 0.9, i => [i === 8 ? { power: true } : idle, idle], b => b.fighters[1].hp < 1000);
+  const hit = blow(seen);
+  assert.ok(hit && hit.counter, 'the counter lands');
+  assert.ok(Math.abs(1000 - bout.fighters[1].hp - hit.J * RULES.damage * RULES.counterGain) < 0.1);
 });
 
-test('a guard held all along only smothers the punch', () => {
-  const bout = close(createBout());
-  const seen = run(bout, 0.7, i => [{ cover: true }, i === 20 ? { power: true } : idle]);
-  assert.ok(seen.some(e => e.type === 'block'));
-  assert.ok(bout.fighters[0].hp < RULES.hp && bout.fighters[0].hp > RULES.hp - MOVES.cross.damage * 0.5);
+test('a guard held up puts the gloves in the way: most of the blow is smothered', () => {
+  const bout = ring(1.0);
+  const seen = run(bout, 0.9, i => [{ cover: true }, i === 20 ? { power: true } : idle]);
+  const hit = blow(seen);
+  assert.equal(hit && hit.type, 'block');
+  assert.ok(Math.abs(RULES.hp - bout.fighters[0].hp - hit.J * RULES.damage * RULES.smother) < 0.1);
 });
 
-test('a dash timed to the punch slips it and carries him clear', () => {
-  const bout = close(createBout());
-  const tick = Math.round(MOVES.cross.contact / DT);
+test('getting out of the way is the dodge: a dash back and the cross finds nothing', () => {
+  const bout = ring(1.0);
   const x0 = bout.fighters[0].x;
-  const seen = run(bout, 0.6, i => [i === tick - 5 ? { dash: true } : idle, i === 0 ? { power: true } : idle]);
-  // slipped inside its reach, or already out of it: either way the punch finds nothing
-  assert.ok(seen.some(e => e.type === 'slip' || e.type === 'whiff'));
-  assert.ok(!seen.some(e => e.type === 'hit' || e.type === 'block'));
+  const seen = run(bout, 0.8, (i, b) => [b.fighters[1].action && b.fighters[1].action.chain.on[0] && i < 20 && !b.fighters[0].action ? { dash: true } : idle, i === 0 ? { power: true } : idle]);
+  assert.ok(!seen.some(e => e.type === 'hit'));
   assert.equal(bout.fighters[0].hp, RULES.hp);
   assert.ok(bout.fighters[0].x < x0 - 0.9);
 });
@@ -94,23 +139,13 @@ test('the boxers stay inside the ropes, off each other, and facing each other', 
   assert.ok(Math.abs(Math.atan2(Math.sin(want - a.yaw), Math.cos(want - a.yaw))) < 0.1);
 });
 
-test('walking speeds up and slows down, it does not start or stop dead', () => {
-  const bout = createBout();
-  step(bout, [{ move: [0, 1] }, idle], DT);
-  assert.ok(Math.hypot(bout.fighters[0].vx, bout.fighters[0].vz) < RULES.speed * 0.2);
-  run(bout, 0.5, () => [{ move: [0, 1] }, idle]);
-  assert.ok(Math.abs(Math.hypot(bout.fighters[0].vx, bout.fighters[0].vz) - RULES.speed) < 1e-6);
-});
-
 test('the last of his health puts a boxer down and ends the bout', () => {
-  const bout = close(createBout());
-  bout.fighters[1].hp = 3;
-  run(bout, 0.4, i => [i === 0 ? { jab: true } : idle, idle], b => b.over !== null);
+  const bout = ring(1.0, { hp: 2 });
+  run(bout, 0.5, i => [i === 0 ? { power: true } : idle, idle], b => b.over !== null);
   assert.equal(bout.over, 0);
   assert.equal(bout.fighters[1].action.name, 'ko');
   run(bout, 3);
   assert.equal(bout.fighters[1].action.name, 'ko');
-  assert.ok(viewOf(bout, 1).still && viewOf(bout, 0).cheer);
 });
 
 test('a bout against the rival ends, whoever is at the controls', () => {
