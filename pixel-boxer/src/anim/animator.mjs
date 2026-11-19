@@ -16,9 +16,12 @@ import { LINKS } from '../phys/chain.mjs';
 import { CHANNELS, GUARD, MOVES, sampleMove } from './moves.mjs';
 
 const TAU = Math.PI * 2;
-const STEP_TIME = 0.3; // seconds for both feet to step once
+/* The feet keep time. One beat is one foot coming down; a cycle is both. Standing, the boxer rocks between his feet on that
+   beat (the lead foot is lifted and set down, then the rear: a pendulum), and when he travels the same beat becomes his
+   steps, quickening as he goes, so he never has to find the rhythm again: he was already in it. */
+const CYCLE = { rest: 0.64, travel: 0.3 }; // seconds for both feet to come down once: bouncing on the spot, and at full speed
+const HOP = 0.022; // metres an unweighted foot clears the canvas by, bouncing on the spot
 const STRIDE = 0.42; // metres: the furthest a foot is ever put from its place in the guard
-const BOUNCE_HZ = 1.75;
 const SETTLE = 30; // how fast the difference between two moves is let go of (1/seconds): gone in about a sixth of a second
 const clamp = (x, a, b) => (x < a ? a : x > b ? b : x);
 const smooth = x => x * x * (3 - 2 * x);
@@ -106,7 +109,8 @@ export function createAnimator(seed) {
     carry = {}; // what is still owed to the move before: { x, v } a channel, sprung to nothing
   for (const ch of CHANNELS) (shown[ch] = 0), (speed[ch] = 0), (carry[ch] = { x: 0, v: 0 });
   let clock = (seed || 0) * 0.37,
-    stride = 0, // where in the step cycle the feet are, in turns
+    beat = 0, // where in the cycle of his feet he is, in turns: 0 the lead foot leaves the canvas, 0.5 the rear
+    cycle = CYCLE.rest, // how long that cycle is taking just now, seconds
     cover = 0,
     cheer = 0,
     doing = null;
@@ -161,19 +165,41 @@ export function createAnimator(seed) {
       if (cover > 0.002) for (const [ch, v] of Object.entries(sampleMove(MOVES.cover, 1, {}))) c[ch] += v * cover;
       if (cheer > 0.002) for (const [ch, v] of Object.entries(sampleMove(MOVES.cheer, 1, {}))) c[ch] += v * smooth(cheer);
 
-      // ---- the bounce of a boxer who is never flat-footed, less of it while something else is going on
+      // ---- the beat of his feet: how fast the canvas is passing under each, and so how quick the rhythm is
+      const [vx, vz] = view.move || [0, 0],
+        turn = view.turn || 0,
+        feet = {};
+      let fastest = 0;
+      {
+        const follow = 1 - Math.exp(-dt * 16);
+        for (const side of ['L', 'R']) {
+          const g = GUARD.feet[side],
+            u = under[side];
+          // the ground speed of this foot's place under the body, walking and turning together, followed a little late
+          u[0] += (vx + turn * g.at[2] - u[0]) * follow;
+          u[1] += (vz - turn * g.at[0] - u[1]) * follow;
+          fastest = Math.max(fastest, Math.hypot(u[0], u[1]));
+          feet[side] = { g, fx: u[0], fz: u[1] };
+        }
+      }
+      const going = clamp(fastest / 1.5, 0, 1); // 0 bouncing on the spot .. 1 travelling
+      cycle += (CYCLE.rest + (CYCLE.travel - CYCLE.rest) * going - cycle) * (1 - Math.exp(-dt * 9));
+      if (!view.still) beat = (beat + dt / cycle) % 1;
+
+      // ---- the bounce that goes with it: down as each foot lands, the weight rocking onto the foot that is planted
       const lively = view.still ? 0 : action ? 0.35 : 1 + cheer * 1.6,
-        b = 0.5 - 0.5 * Math.cos(TAU * BOUNCE_HZ * clock),
-        sway = Math.sin(TAU * BOUNCE_HZ * 0.5 * clock + 0.6);
-      c.hy -= 0.024 * b * lively;
-      c.lean += 1.6 * b * lively;
-      c.hz += 0.012 * sway * lively;
-      c.hx += 0.008 * Math.sin(TAU * 0.31 * clock) * lively;
-      c.ly -= (0.012 * b - 0.006 * sway) * lively;
-      c.ry -= (0.01 * b + 0.006 * sway) * lively;
-      c.lz += 0.012 * sway * lively;
-      c.rfp += 7 * (1 - b) * lively;
-      c.lfp += 4 * (1 - b) * lively;
+        land = 0.5 + 0.5 * Math.cos(2 * TAU * beat), // 1 as a foot comes down, 0 between
+        rock = -Math.sin(TAU * beat), // back while the lead foot is up, forward while the rear is
+        spot = (1 - going) * lively; // how much of this is bouncing on the spot
+      // (he bounces most on the spot: travelling quickly the beat is too fast to ride, and he glides)
+      const ride = lively * (1 - 0.65 * going);
+      c.hy -= 0.022 * land * ride;
+      c.lean += 1.5 * land * ride;
+      c.hz += 0.026 * rock * spot;
+      c.hx += 0.007 * Math.sin(TAU * beat + 1) * ride;
+      c.ly -= (0.012 * land + 0.006 * rock) * ride;
+      c.ry -= (0.01 * land - 0.006 * rock) * ride;
+      c.lz += 0.012 * rock * ride;
       c.st += 0.006 * Math.sin(TAU * 0.4 * clock) * (view.still ? 0 : 1);
 
       // ---- the give of a body that has been hit
@@ -215,42 +241,29 @@ export function createAnimator(seed) {
         shown[ch] = c[ch];
       }
 
-      // ---- the feet: each steps for itself, by how fast the canvas is going past under it
-      const [vx, vz] = view.move || [0, 0],
-        turn = view.turn || 0,
-        feet = {};
-      let fastest = 0;
-      const follow = 1 - Math.exp(-dt * 16);
-      for (const side of ['L', 'R']) {
-        const g = GUARD.feet[side],
-          u = under[side];
-        // the ground speed of this foot's place under the body, walking and turning together
-        u[0] += (vx + turn * g.at[2] - u[0]) * follow;
-        u[1] += (vz - turn * g.at[0] - u[1]) * follow;
-        fastest = Math.max(fastest, Math.hypot(u[0], u[1]));
-        feet[side] = { g, fx: u[0], fz: u[1] };
-      }
-      if (!view.still) stride = (stride + (dt / STEP_TIME) * clamp(fastest / 0.25, 0, 1)) % 1;
+      // ---- the feet: each steps for itself, on the beat, by how fast the canvas is going past under it
       let dip = 0;
       for (const side of ['L', 'R']) {
         const f = feet[side],
-          s = (stride + (side === 'L' ? 0 : 0.5)) % 1,
+          s = (beat + (side === 'L' ? 0 : 0.5)) % 1,
           speed = Math.hypot(f.fx, f.fz),
           // times the foot's speed: how far ahead of and behind its place it lands and leaves (never further than a stride)
-          reach = Math.min(STEP_TIME / 4, STRIDE / (speed || 1)),
+          reach = Math.min(cycle / 4, STRIDE / (speed || 1)),
           swinging = s < 0.5,
           u = swinging ? s / 0.5 : (s - 0.5) / 0.5,
           /* On the canvas a planted foot is drawn back under the body at exactly the body's speed. In the air it is brought
              forward along a curve that leaves and lands at that same speed, so the foot is still on the canvas at both ends. */
           d = swinging ? -1 + 2 * (u * (u * (6 - 4 * u) - 1)) : 1 - 2 * u,
           far = speed * reach,
-          lift = swinging ? Math.min(0.075, far * 0.7) * Math.sin(Math.PI * u) ** 2 : 0,
+          // travelling, a foot is lifted by its stride; on the spot it is only unweighted, a couple of centimetres
+          lift = swinging ? (Math.min(0.075, far * 0.7) + HOP * spot) * Math.sin(Math.PI * u) ** 2 : 0,
           k = side === 'L' ? 'lf' : 'rf';
-        dip += Math.abs(d) * far;
+        dip += d * d * far; // (squared: the hips sink smoothly into a long stride and rise smoothly out of it)
         feet[side] = {
           at: [f.g.at[0] + c[k + 'x'] + f.fx * reach * d, f.g.at[1] + c[k + 'y'] + lift, f.g.at[2] + c[k + 'z'] + f.fz * reach * d],
           yaw: f.g.yaw + c[k + 'w'],
-          pitch: f.g.pitch + c[k + 'p'] + (swinging ? 14 * Math.sin(TAU * u) * clamp(far / 0.1, 0, 1) : 0)
+          // a planted foot is on its ball, the heel riding up and down with the bounce
+          pitch: f.g.pitch + c[k + 'p'] + (swinging ? 14 * Math.sin(TAU * u) * clamp(far / 0.1, 0, 1) + 6 * spot * Math.sin(Math.PI * u) : (side === 'R' ? 6 : 3) * (1 - land) * lively)
         };
       }
 

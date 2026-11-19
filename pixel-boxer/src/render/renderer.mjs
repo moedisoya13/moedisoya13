@@ -197,10 +197,27 @@ export function createRenderer(canvas, o) {
     return target;
   }
 
-  /* frame: { camera: { target, yaw, pitch, dist }, shake: [x, y] art pixels, white, dim, hall: [4 colours], ink,
-              layers: [{ mesh, bones (vec4 rows, or none for things that stand still), palette (paletteArray), mask, flash }] } */
-  function draw(frame) {
-    const { w, h, scale } = target,
+  /* A picture is one or more cells: begin(), then cell(rect, frame) for each, then end(post).
+       rect:  { x, y, w, h } in art pixels from the bottom left of the grid, or none for the whole grid
+       frame: { camera: { target, yaw, pitch, dist }, shake: [x, y] art pixels,
+                layers: [{ mesh, bones (vec4 rows, or none for things that stand still), palette (paletteArray), mask, flash }] }
+       post:  { white, dim, hall: [4 colours], ink }
+     draw(frame) is the three together for a picture of one cell. */
+  function begin() {
+    gl.bindFramebuffer(gl.FRAMEBUFFER, target.fbo);
+    gl.viewport(0, 0, target.w, target.h);
+    gl.disable(gl.SCISSOR_TEST);
+    gl.clearColor(0, 0, 0, 0);
+    gl.clearDepth(1);
+    gl.enable(gl.DEPTH_TEST);
+    gl.depthFunc(gl.LESS);
+    gl.disable(gl.BLEND);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    gl.useProgram(splat.p);
+    gl.uniform2f(splat.u.u_depth, 0.3, 40);
+  }
+  function cell(rect, frame) {
+    const r = rect || { x: 0, y: 0, w: target.w, h: target.h },
       cam = frame.camera,
       cp = Math.cos(cam.pitch),
       sp = Math.sin(cam.pitch),
@@ -213,20 +230,13 @@ export function createRenderer(canvas, o) {
       e = [cam.target[0] + Z[0] * cam.dist, cam.target[1] + Z[1] * cam.dist, cam.target[2] + Z[2] * cam.dist],
       dot = a => -(a[0] * e[0] + a[1] * e[1] + a[2] * e[2]);
     view.set([X[0], Y[0], Z[0], 0, X[1], Y[1], Z[1], 0, X[2], Y[2], Z[2], 0, dot(X), dot(Y), dot(Z), 1]);
-    gl.bindFramebuffer(gl.FRAMEBUFFER, target.fbo);
-    gl.viewport(0, 0, w, h);
-    gl.clearColor(0, 0, 0, 0);
-    gl.clearDepth(1);
-    gl.enable(gl.DEPTH_TEST);
-    gl.depthFunc(gl.LESS);
-    gl.disable(gl.BLEND);
-    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-    gl.useProgram(splat.p);
+    gl.viewport(r.x, r.y, r.w, r.h);
+    gl.enable(gl.SCISSOR_TEST);
+    gl.scissor(r.x, r.y, r.w, r.h);
     gl.uniformMatrix4fv(splat.u.u_view, false, view);
-    gl.uniform2f(splat.u.u_art, w, h);
-    gl.uniform1f(splat.u.u_focal, h / 2 / Math.tan(FOV / 2));
+    gl.uniform2f(splat.u.u_art, r.w, r.h);
+    gl.uniform1f(splat.u.u_focal, r.h / 2 / Math.tan(FOV / 2));
     gl.uniform2f(splat.u.u_shake, Math.round(frame.shake ? frame.shake[0] : 0), Math.round(frame.shake ? frame.shake[1] : 0));
-    gl.uniform2f(splat.u.u_depth, 0.3, 40);
     let drawn = 0;
     for (const layer of frame.layers) {
       if (!layer.mesh.count) continue;
@@ -238,6 +248,11 @@ export function createRenderer(canvas, o) {
       gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, layer.mesh.count);
       drawn += layer.mesh.count;
     }
+    return drawn;
+  }
+  function end(frame) {
+    const { w, h, scale } = target;
+    gl.disable(gl.SCISSOR_TEST);
     gl.bindVertexArray(null);
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(0, 0, canvas.width, canvas.height);
@@ -255,6 +270,11 @@ export function createRenderer(canvas, o) {
     gl.uniform3fv(post.u.u_hall, frame.hall);
     gl.uniform3fv(post.u.u_ink, frame.ink);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
+  }
+  function draw(frame) {
+    begin();
+    const drawn = cell(null, frame);
+    end(frame);
     return drawn;
   }
 
@@ -277,5 +297,5 @@ export function createRenderer(canvas, o) {
   }
   const widthAt = dist => dist * 2 * Math.tan(FOV / 2) * (target.w / target.h);
   const distFor = width => width / (2 * Math.tan(FOV / 2) * (target.w / target.h));
-  return { gl, mesh, resize, draw, packBones, target, widthAt, distFor, maxBones: MAX_BONES };
+  return { gl, mesh, resize, draw, begin, cell, end, packBones, target, widthAt, distFor, maxBones: MAX_BONES };
 }

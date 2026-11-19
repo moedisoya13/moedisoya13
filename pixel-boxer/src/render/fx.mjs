@@ -57,6 +57,11 @@ export function createFx(random) {
         add({ a: p, b: p.slice(), v, g: -1.2, drag: 4, width: 0.05 + rnd() * 0.03, pal: colours, life: 0.22 + rnd() * 0.2, tail: 0, shrink: -0.8 });
       }
     },
+    // where a foot came down: a flat print on the canvas that fades
+    print(at, yaw, colours, life) {
+      const f = [Math.sin(yaw) * 0.085, 0, Math.cos(yaw) * 0.085];
+      add({ a: [at[0] - f[0], 0.014, at[2] - f[2]], b: [at[0] + f[0], 0.014, at[2] + f[2]], width: 0.075, pal: colours, life: life || 1.4, shrink: 0.15, flat: true });
+    },
     /* shadows: [{ x, z, yaw, long, wide }] drawn this frame only, flat on the canvas */
     update(dt, shadows, shade) {
       let n = 0;
@@ -82,7 +87,7 @@ export function createFx(random) {
       for (const it of items) {
         if (n >= CAP) break;
         const u = it.age / it.life;
-        write(n++, it.a, it.b, it.width * (1 - it.shrink * u), Array.isArray(it.pal) ? it.pal[Math.min(it.pal.length - 1, Math.floor(u * it.pal.length))] : it.pal);
+        write(n++, it.a, it.b, it.width * (1 - it.shrink * u), Array.isArray(it.pal) ? it.pal[Math.min(it.pal.length - 1, Math.floor(u * it.pal.length))] : it.pal, it.flat);
       }
       this.count = n;
       return n;
