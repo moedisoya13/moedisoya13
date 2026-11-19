@@ -157,7 +157,12 @@ export const MOVES = Object.assign(
     },
     // a slip: the head taken off the line of a punch, bent and dipped to one side and straight back (which side is the
     // action's: see the animator)
-    slip: { dur: 0.42, keys: [{ t: 0.1, e: 'out', side: 13, hx: 0.1, hy: -0.07, lean: 6, hw: 8, hr: 6, lx: 0.02, rx: 0.02 }, { t: 0.2, e: 'lin', side: 13, hx: 0.1, hy: -0.07, lean: 6, hw: 8, hr: 6, lx: 0.02, rx: 0.02 }] },
+    slip: {
+      dur: 0.42,
+      keys: [{ t: 0.1, e: 'out', side: 16, hx: 0.12, hy: -0.07, lean: 6, hw: 8, hr: 6, lx: 0.02, rx: 0.02 }, { t: 0.2, e: 'lin', side: 16, hx: 0.12, hy: -0.07, lean: 6, hw: 8, hr: 6, lx: 0.02, rx: 0.02 }],
+      // to his left the turned stance would carry the head forward, into the punch: he sits back to go straight across
+      left: { lean: -11, side: 6 }
+    },
     // up off the canvas: onto an elbow, a knee, and back into the guard, a little unsteady
     rise: {
       dur: 1.7,

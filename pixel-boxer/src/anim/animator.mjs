@@ -178,7 +178,13 @@ export function createAnimator(seed) {
         sampleMove(MOVES[action.name], action.t, c);
         if (action.name === 'slip') {
           // to his left (+1) or his right (-1)
-          for (const ch of ['side', 'hx', 'hw', 'hr', 'lx', 'rx']) c[ch] *= action.side || 1;
+          const s = action.side || 1,
+            move = MOVES.slip,
+            fix = s > 0 ? move.left : move.right,
+            a = c.hy / move.keys[0].hy; // how far out he is, 0..1
+          for (const ch of ['side', 'hx', 'hw', 'hr', 'lx', 'rx']) c[ch] *= s;
+          // his stance is turned, so the same bend does not take the head the same way to each side: each has its own
+          if (fix) for (const ch in fix) c[ch] += fix[ch] * a;
         }
         if (action.name === 'dash' && action.dir) {
           const a = -c.hy / 0.075; // the dash's own rise and fall, as 0..1
