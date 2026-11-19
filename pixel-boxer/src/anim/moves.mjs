@@ -155,6 +155,19 @@ export const MOVES = Object.assign(
         { t: 1.08, e: 'io', hy: -0.735, hz: -0.5, tip: -76, lean: -8, hp: 12, lx: 0.46, ly: -0.02, lz: -0.25, rx: -0.58, ry: -0.15, rz: 0, le: 0.9, re: 0.9, yaw: 26, twist: 6, lfp: 20, rfp: 10, rfz: 0.16, rfw: 20 }
       ]
     },
+    // a slip: the head taken off the line of a punch, bent and dipped to one side and straight back (which side is the
+    // action's: see the animator)
+    slip: { dur: 0.42, keys: [{ t: 0.1, e: 'out', side: 13, hx: 0.1, hy: -0.07, lean: 6, hw: 8, hr: 6, lx: 0.02, rx: 0.02 }, { t: 0.2, e: 'lin', side: 13, hx: 0.1, hy: -0.07, lean: 6, hw: 8, hr: 6, lx: 0.02, rx: 0.02 }] },
+    // up off the canvas: onto an elbow, a knee, and back into the guard, a little unsteady
+    rise: {
+      dur: 1.7,
+      keys: [
+        { t: 0.02, e: 'lin', hy: -0.735, hz: -0.5, tip: -76, lean: -8, hp: 12, lx: 0.46, ly: -0.02, lz: -0.25, rx: -0.58, ry: -0.15, rz: 0, le: 0.9, re: 0.9, yaw: 26, twist: 6, lfp: 20, rfp: 10, rfz: 0.16, rfw: 20 },
+        { t: 0.55, hy: -0.52, hz: -0.25, tip: -34, lean: 18, hp: 16, lx: 0.3, ly: -0.55, lz: 0.1, rx: -0.35, ry: -0.6, rz: 0.1, le: 0.5, re: 0.5, yaw: 12, lfp: 10, rfp: 30, rfz: 0.05 },
+        { t: 1.05, hy: -0.24, hz: -0.08, tip: -8, lean: 22, hp: 10, lx: 0.08, ly: -0.25, lz: -0.05, rx: -0.1, ry: -0.3, rz: 0, rfp: 18 },
+        { t: 1.4, hy: -0.06, lean: 8, hp: 4, side: 3, ly: -0.05, ry: -0.06 }
+      ]
+    },
     // arms up, mixed in for the winner
     cheer: { stay: true, dur: 1, keys: [{ t: 1, e: 'lin', lx: 0.2, ly: 0.52, lz: -0.2, rx: -0.2, ry: 0.55, rz: -0.02, le: 0.7, re: 0.7, lean: -15, yaw: 24, twist: 8, hp: -10, hy: 0.04 }] }
   }).map(([name, def]) => [name, compile(Object.assign({ name }, def))])

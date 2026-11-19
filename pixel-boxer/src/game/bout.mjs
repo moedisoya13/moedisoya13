@@ -1,9 +1,12 @@
 /* The match: two boxers on a square of canvas, stepped at a fixed rate from two sets of controls. Nothing here draws, and the
    same code runs in the page and under node --test.
-     const bout = createBout(seed)
+     const bout = createBout(seed, { sheets: [mine, his] (profile.mjs: who they are; an honest club fighter if left out),
+                                     knockdowns: true (a boxer who runs out of health goes down and the match counts him;
+                                     left out, he is knocked out and the bout is over) })
      step(bout, [mine, his], dt)
        controls: { move: [x, z] (a direction on the canvas, up to 1 long), jab, power (true on the tick pressed),
-                   cover (true while held), dash: [x, z] | true (on the tick flicked; true is straight back) }
+                   cover (true while held), dash: [x, z] | true (on the tick flicked; true is straight back),
+                   slip: 1 | -1 (the head off the line, to his left or right) }
      bout.events            what happened this step, for the picture and the sound
      bout.fighters[i].pose  his solved pose this step (and .place: where on the canvas, .points: gloves and head in the world)
 
@@ -19,6 +22,7 @@ import { createAnimator } from '../anim/animator.mjs';
 import { toWorld } from '../anim/pose.mjs';
 import { createChain, stepChain, effectiveMass } from '../phys/chain.mjs';
 import { RING } from '../world/ring.mjs';
+import { body, blank, fatigue, COST } from './profile.mjs';
 
 export const RULES = {
   hp: 100,
@@ -34,7 +38,7 @@ export const RULES = {
   head: 0.125,
   bounce: 0.3, // how much of the glove's speed comes back off the head
   graze: 6, // newton-seconds: less than this is a touch, not a punch
-  damage: 0.12, // health lost per newton-second
+  damage: 0.035, // health lost per newton-second
   mass: 75, // kilograms: what a blow has to push
   shove: 2.2, // how much more than physics a blow moves a man (it is a game)
   stun: [0.16, 1 / 260], // seconds: a floor, plus so much per newton-second
@@ -53,11 +57,14 @@ export const RULES = {
 };
 const DT = 1 / 60;
 
-function boxer(x, yaw, seed) {
-  return { x, z: 0, vx: 0, vz: 0, kx: 0, kz: 0, gx: 0, gz: 0, yaw, turn: 0, hp: RULES.hp, action: null, cover: false, coverAge: 0, stun: 0, counter: 0, flash: 0, want: null, wantAge: 0, link: 0, sinceHit: 9, sinceLast: 9, serial: 0, down: 0, animator: createAnimator(seed), pose: null, place: null, points: null, before: null };
+function boxer(x, yaw, seed, sheet) {
+  const k = body(sheet);
+  return { sheet: sheet || blank(), k, stamina: k.staminaMax, x, z: 0, vx: 0, vz: 0, kx: 0, kz: 0, gx: 0, gz: 0, yaw, turn: 0, hp: RULES.hp, action: null, cover: false, coverAge: 0, stun: 0, counter: 0, flash: 0, want: null, wantAge: 0, link: 0, sinceHit: 9, sinceLast: 9, serial: 0, down: 0, animator: createAnimator(seed), pose: null, place: null, points: null, before: null };
 }
-export function createBout(seed) {
-  const bout = { t: 0, stop: 0, over: null, overAt: 0, seed: seed || 1, events: [], fighters: [boxer(-RULES.startGap / 2, Math.PI / 2, 0), boxer(RULES.startGap / 2, -Math.PI / 2, 1)] };
+export function createBout(seed, o) {
+  o = o || {};
+  const sheets = o.sheets || [],
+    bout = { t: 0, stop: 0, over: null, overAt: 0, seed: seed || 1, events: [], knockdowns: !!o.knockdowns, fighters: [boxer(-RULES.startGap / 2, Math.PI / 2, 0, sheets[0]), boxer(RULES.startGap / 2, -Math.PI / 2, 1, sheets[1])] };
   settle(bout);
   return bout;
 }
@@ -85,7 +92,9 @@ const open = (f, punch) => f.stun <= 0 && (!f.action || (punch && punching(f) &&
 function begin(f, name, more) {
   const move = MOVES[name],
     before = f.action,
-    chain = move.punch ? createChain(move) : null;
+    // his muscles: as quick as his speed, and slower as he tires (never below three quarters of it)
+    chain = move.punch ? createChain(move, f.k.rate * (0.75 + 0.25 * fatigue(f))) : null;
+  if (COST[name]) f.stamina = Math.max(0, f.stamina - COST[name]);
   // a punch thrown with the hand that has just punched starts from where that arm's joints still are (a double jab)
   if (chain && before && before.chain && MOVES[before.name].hand === move.hand) (chain.q = before.chain.q.slice()), (chain.v = before.chain.v.slice());
   f.action = Object.assign({ name, t: 0, id: name + ++f.serial, struck: false, chain }, more);
@@ -93,15 +102,18 @@ function begin(f, name, more) {
 }
 
 function decide(bout, f, input, dt, who) {
-  const pressed = input.dash ? ['dash', input.dash] : input.jab ? ['jab'] : input.power ? ['power'] : null;
+  const pressed = input.dash ? ['dash', input.dash] : input.slip ? ['slip', input.slip] : input.jab ? ['jab'] : input.power ? ['power'] : null;
   if (pressed) (f.want = pressed), (f.wantAge = 0);
   else if (f.want && (f.wantAge += dt) > RULES.buffer) f.want = null;
   if (f.want) {
     const [what, dir] = f.want,
-      punch = what !== 'dash';
+      punch = what !== 'dash' && what !== 'slip';
     if (open(f, punch)) {
       f.want = null;
-      if (!punch) {
+      if (what === 'slip') {
+        begin(f, 'slip', { side: dir });
+        bout.events.push({ type: 'slip', who });
+      } else if (!punch) {
         const [fx, fz] = aheadOf(f);
         let d = dir === true ? [-fx, -fz] : dir;
         const l = Math.hypot(d[0], d[1]) || 1;
@@ -121,8 +133,11 @@ function decide(bout, f, input, dt, who) {
       }
     }
   }
-  const covering = !!input.cover && !f.action && f.stun <= 0;
-  f.coverAge = covering ? (f.cover ? f.coverAge + dt : 0) : 0;
+  /* A stunned boxer can still pull his hands up (it is what a hurt man does) but not in time to turn a punch aside: his guard
+     counts as an old one at once. A man thrown open by a parry, or in the middle of anything, cannot. */
+  const dazed = f.stun > 0,
+    covering = !!input.cover && !f.action;
+  f.coverAge = covering ? (f.cover ? f.coverAge + dt : dazed ? 9 : 0) : 0;
   if (covering && !f.cover) bout.events.push({ type: 'cover', who });
   f.cover = covering;
 }
@@ -131,13 +146,15 @@ function travel(f, input, dt, other) {
   const m = input.move || [0, 0],
     l = Math.hypot(m[0], m[1]),
     k = l > 1 ? 1 / l : 1,
-    top = f.stun > 0 || (f.action && !punching(f)) ? 0 : f.action ? RULES.punchSpeed : f.cover ? RULES.coverSpeed : RULES.speed,
+    fresh = 0.78 + 0.22 * fatigue(f),
+    walk = f.k.walk * fresh,
+    top = f.stun > 0 || (f.action && !punching(f)) ? 0 : f.action ? RULES.punchSpeed : f.cover ? walk * (RULES.coverSpeed / RULES.speed) : walk,
     wx = m[0] * k * top,
     wz = m[1] * k * top,
     dx = wx - f.vx,
     dz = wz - f.vz,
     d = Math.hypot(dx, dz),
-    most = RULES.accel * dt;
+    most = f.k.accel * fresh * dt;
   if (d <= most) (f.vx = wx), (f.vz = wz);
   else (f.vx += (dx / d) * most), (f.vz += (dz / d) * most);
   // being knocked back is a push that dies away, on top of his own walking
@@ -150,7 +167,7 @@ function travel(f, input, dt, other) {
     // the dash gathers speed and sheds it again: the speed that integrates to `reach` along a curve at rest at both ends
     const dur = MOVES.dash.dur * 0.85,
       u = Math.min(1, f.action.t / dur),
-      rate = (30 * u * u * (1 - u) * (1 - u) * RULES.dash.reach) / dur;
+      rate = (30 * u * u * (1 - u) * (1 - u) * f.k.dash * fresh) / dur;
     sx = f.action.go[0] * rate;
     sz = f.action.go[1] * rate;
   }
@@ -218,9 +235,13 @@ function viewOf(bout, i) {
     const move = MOVES[f.action.name],
       h = other.points.head,
       [side, front] = local(f, h[0] - f.x, h[2] - f.z);
-    if (Math.hypot(side, front) < 1.7 && front > 0.2) {
+    if (f.action.aim) view.aim = f.action.aim;
+    else if (Math.hypot(side, front) < 1.7 && front > 0.2) {
       const from = move.hand === 'L' ? 1 : -1;
       view.aim = move.arm === 'swing' ? [side + from * 0.05, h[1], front - 0.1] : move.arm === 'lift' ? [side, h[1] - 0.1, front - 0.07] : [side, h[1], front - 0.075];
+      /* Once his shoulder has fired the punch is committed: it goes where the head was then, and a head that has moved since
+         is missed. That is what a slip is. (Up to then he is still looking, and a punch follows a head that drifts.) */
+      if (f.action.chain.on[3]) f.action.aim = view.aim;
     }
   }
   return view;
@@ -287,7 +308,8 @@ function strike(bout, f, other, who, dt) {
     closing = M.scale(M.sub(M.sub(g1, g0), M.sub(other.points[first.key], other.before[first.key])), 1 / dt),
     speed = Math.max(0, closing[0] * n[0] + closing[1] * n[1] + closing[2] * n[2]),
     mass = effectiveMass(action.chain, move),
-    J = mass * speed * (1 + RULES.bounce),
+    // (his power is how much of his body he gets behind it; a tired man gets less)
+    J = mass * speed * (1 + RULES.bounce) * f.k.power * (0.85 + 0.15 * fatigue(f)),
     flat = Math.hypot(n[0], n[2]) || 1,
     dir = [n[0] / flat, n[2] / flat],
     blow = { who, on: 1 - who, name: move.name, kind: move.kind, hand, J: +J.toFixed(1), speed: +speed.toFixed(2), mass: +mass.toFixed(2), dir, at: M.add(at, M.scale(n, RULES.glove)) };
@@ -301,7 +323,7 @@ function strike(bout, f, other, who, dt) {
   const stop = Math.max(RULES.stop[0], Math.min(RULES.stop[1], J * RULES.stop[2]));
 
   if (first.what === 'guard') {
-    if (other.coverAge <= RULES.parry) {
+    if (other.coverAge <= other.k.parry * (0.7 + 0.3 * fatigue(other))) {
       // turned aside: the puncher is thrown open, the defender has his opening
       begin(f, 'reel');
       f.stun = 0.6;
@@ -311,7 +333,7 @@ function strike(bout, f, other, who, dt) {
       bout.stop = 0.1;
       return bout.events.push(Object.assign({ type: 'parry' }, blow, { who: 1 - who, on: who }));
     }
-    other.hp = Math.max(1, other.hp - J * RULES.damage * RULES.smother);
+    other.hp = Math.max(1, other.hp - J * RULES.damage * other.k.smother * other.k.chin);
     other.kx += ((dir[0] * J) / RULES.mass) * RULES.shove * 0.6;
     other.kz += ((dir[1] * J) / RULES.mass) * RULES.shove * 0.6;
     other.animator.strike({ J: J * 0.25, dir: felt.dir });
@@ -320,13 +342,13 @@ function strike(bout, f, other, who, dt) {
   }
   const counter = !!action.counter,
     worth = J * (counter ? RULES.counterGain : 1),
-    damage = worth * RULES.damage;
+    damage = worth * RULES.damage * other.k.chin;
   other.hp = Math.max(0, other.hp - damage);
   other.action = null;
   other.cover = false;
   other.want = null;
   other.counter = 0;
-  other.stun = RULES.stun[0] + worth * RULES.stun[1];
+  other.stun = (RULES.stun[0] + worth * RULES.stun[1]) * other.k.stunTaken;
   other.kx += ((dir[0] * worth) / RULES.mass) * RULES.shove;
   other.kz += ((dir[1] * worth) / RULES.mass) * RULES.shove;
   other.flash = 0.07;
@@ -339,8 +361,9 @@ function strike(bout, f, other, who, dt) {
     begin(other, 'ko');
     other.down = 1;
     other.stun = 0;
-    bout.over = who;
-    bout.overAt = bout.t;
+    other.downs = (other.downs || 0) + 1;
+    // in a match the referee counts him; in a bare bout he is out
+    if (!bout.knockdowns) (bout.over = who), (bout.overAt = bout.t);
   }
 }
 
@@ -365,6 +388,8 @@ export function step(bout, inputs, dt) {
     const other = bout.fighters[1 - i],
       input = bout.over === null ? inputs[i] || {} : {};
     f.counter = Math.max(0, f.counter - dt);
+    // breath comes back while he is not punching: less while he holds his guard up, none while he throws
+    if (!punching(f) && !(f.action && f.action.name === 'dash')) f.stamina = Math.min(f.k.staminaMax, f.stamina + f.k.regen * (f.cover ? 0.6 : 1) * dt);
     f.sinceLast += dt;
     f.sinceHit += dt;
     if (!f.down) decide(bout, f, input, dt, i);

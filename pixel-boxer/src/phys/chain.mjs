@@ -16,8 +16,9 @@ const RECOVER = [22, 23, 25, 30, 34]; // rad/s: coming back, the hand leads and 
 const RECOVER_LAG = [0.06, 0.045, 0.03, 0.01, 0]; // seconds each link waits before it starts back
 const HOLD = 0.03;
 
-export function createChain(move) {
-  return { phase: move.chain.coil > 0 ? 'coil' : 'throw', t: 0, since: 0, coil: { q: 0, v: 0 }, q: new Array(N).fill(0), v: new Array(N).fill(0), a: new Array(N).fill(0), on: new Array(N).fill(false), fired: new Array(N).fill(-1), peak: new Array(N).fill(0), peakAt: new Array(N).fill(-1), landed: false };
+export function createChain(move, quick) {
+  // quick: how much faster than written this boxer's muscles are (his speed, and how tired he is): every rate, times this
+  return { quick: quick || 1, phase: move.chain.coil > 0 ? 'coil' : 'throw', t: 0, since: 0, coil: { q: 0, v: 0 }, q: new Array(N).fill(0), v: new Array(N).fill(0), a: new Array(N).fill(0), on: new Array(N).fill(false), fired: new Array(N).fill(-1), peak: new Array(N).fill(0), peakAt: new Array(N).fill(-1), landed: false };
 }
 // one rotor, pulled toward `goal` at natural frequency w: semi-implicit, in steps short enough for the stiffest muscle
 function pull(s, key, goal, w, damp, dt) {
@@ -38,12 +39,14 @@ const cell = (c, i) => ({ get q() { return c.q[i]; }, set q(x) { c.q[i] = x; }, 
 
 export function stepChain(c, move, dt) {
   const spec = move.chain,
-    skip = spec.skip || [];
+    skip = spec.skip || [],
+    k = c.quick || 1,
+    coil = spec.coil / k;
   c.t += dt;
   c.since += dt;
   if (c.phase === 'coil') {
-    pull(c.coil, 0, 1, 4.2 / spec.coil, 1, dt); // arrives in about the time it is given
-    if (c.t >= spec.coil) (c.phase = 'throw'), (c.since = 0);
+    pull(c.coil, 0, 1, 4.2 / coil, 1, dt); // arrives in about the time it is given
+    if (c.t >= coil) (c.phase = 'throw'), (c.since = 0);
     return c.phase;
   }
   if (c.phase === 'throw') {
@@ -59,10 +62,10 @@ export function stepChain(c, move, dt) {
       }
       if (!c.on[i]) {
         // a joint still on its way back from the punch before goes on coming back until its turn comes
-        if (c.q[i] || c.v[i]) pull(cell(c, i), 0, 0, RECOVER[i], 1, dt);
+        if (c.q[i] || c.v[i]) pull(cell(c, i), 0, 0, RECOVER[i] * k, 1, dt);
         continue;
       }
-      c.a[i] = pull(cell(c, i), 0, 1, spec.rate[i], DAMP, dt);
+      c.a[i] = pull(cell(c, i), 0, 1, spec.rate[i] * k, DAMP, dt);
       if (c.v[i] > c.peak[i]) (c.peak[i] = c.v[i]), (c.peakAt[i] = c.t);
       // past its peak speed: the next joint up takes over
       if (c.a[i] <= 0 && i + 1 < N && !c.on[i + 1]) (c.on[i + 1] = true), (c.fired[i + 1] = c.t);
@@ -72,7 +75,7 @@ export function stepChain(c, move, dt) {
   }
   if (c.phase === 'hold') {
     // a punch that missed finishes its reach; one that landed has been stopped, and stays where it was stopped
-    for (let i = 0; i < N; i++) if (c.on[i] && !skip.includes(LINKS[i])) pull(cell(c, i), 0, c.landed ? c.q[i] : 1, spec.rate[i] * 0.6, 1, dt);
+    for (let i = 0; i < N; i++) if (c.on[i] && !skip.includes(LINKS[i])) pull(cell(c, i), 0, c.landed ? c.q[i] : 1, spec.rate[i] * 0.6 * k, 1, dt);
     pull(c.coil, 0, 0, 30, 1, dt);
     if (c.since >= HOLD) (c.phase = 'recover'), (c.since = 0);
     return c.phase;
@@ -81,7 +84,7 @@ export function stepChain(c, move, dt) {
     let rest = true;
     pull(c.coil, 0, 0, 30, 1, dt);
     for (let i = 0; i < N; i++) {
-      if (c.since >= RECOVER_LAG[i]) pull(cell(c, i), 0, 0, RECOVER[i], 1, dt);
+      if (c.since >= RECOVER_LAG[i] / k) pull(cell(c, i), 0, 0, RECOVER[i] * k, 1, dt);
       else pull(cell(c, i), 0, c.q[i], 40, 1, dt); // waiting its turn: it stops where it is
       if (Math.abs(c.q[i]) > 0.03 || Math.abs(c.v[i]) > 0.5) rest = false;
     }

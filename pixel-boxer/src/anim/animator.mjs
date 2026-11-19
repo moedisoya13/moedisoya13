@@ -176,6 +176,10 @@ export function createAnimator(seed) {
         });
       } else if (action) {
         sampleMove(MOVES[action.name], action.t, c);
+        if (action.name === 'slip') {
+          // to his left (+1) or his right (-1)
+          for (const ch of ['side', 'hx', 'hw', 'hr', 'lx', 'rx']) c[ch] *= action.side || 1;
+        }
         if (action.name === 'dash' && action.dir) {
           const a = -c.hy / 0.075; // the dash's own rise and fall, as 0..1
           c.side += a * 13 * action.dir[0];
@@ -253,7 +257,7 @@ export function createAnimator(seed) {
         if (swing.side) planted[swing.side] = swing.to.slice();
         swing.side = swing.from = swing.to = null;
         swing.back = false;
-        if (!view.still && !(action && action.name === 'ko')) {
+        if (!view.still && !(action && (action.name === 'ko' || action.name === 'rise'))) {
           /* The foot that steps is the one that most needs to be somewhere else; travelling, the foot on the side he is going
              steps first (a boxer never crosses his feet or brings them together); otherwise they take turns. */
           const score = side => {
