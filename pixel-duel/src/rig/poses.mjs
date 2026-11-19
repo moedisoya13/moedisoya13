@@ -19,12 +19,12 @@ const STANCES = {
     feet: FEET,
     hands: { R: { at: [-0.16, 1.02, 0.42], blade: [0, 0.45, 1] }, L: { at: [0.3, 0.98, -0.28], pole: [1, -0.3, -1] } }
   },
-  // breathing out: the same stance a little lower, the point dipped
+  // the bottom of the bounce: the same stance sunk a few centimetres, the point dipped
   guardLow: {
-    hips: [0, 0.82, 0.02],
-    spine: { Hips: [6, 38, 0], Spine2: [4, 8, 0], Chest: [3, 8, 0], ...look(54) },
+    hips: [0, 0.805, 0.035],
+    spine: { Hips: [7, 40, 0], Spine2: [4, 8, 0], Chest: [3, 8, 0], ...look(56) },
     feet: FEET,
-    hands: { R: { at: [-0.16, 0.99, 0.43], blade: [0, 0.38, 1] }, L: { at: [0.3, 0.95, -0.28], pole: [1, -0.3, -1] } }
+    hands: { R: { at: [-0.16, 0.975, 0.44], blade: [0, 0.36, 1] }, L: { at: [0.3, 0.93, -0.27], pole: [1, -0.3, -1] } }
   },
   // passing step of the walk: feet gathered, rear heel off the ground
   step: {

@@ -34,8 +34,9 @@ export function createFx(random) {
   return {
     rows,
     count: 0,
-    /* The blade was at `from` last frame and is at `to` now, far apart: fill the sweep between with blades, the newest
-       brightest, each lasting a few frames. What the eye reads as the swing itself. */
+    /* The blade was at `from` last frame and is at `to` now, far apart: fill the sweep between with blades. Each cools
+       through `colours` as it ages, and the ones nearest where the swing began go first, so the sweep is eaten from its
+       tail toward the blade. What the eye reads as the swing itself. */
     smear(from, to, colours) {
       const l = len(M.sub(from.tip, from.base)),
         d0 = M.scale(M.sub(from.tip, from.base), 1 / l),
@@ -49,8 +50,8 @@ export function createFx(random) {
           a: M.add(base, M.scale(dir, l * 0.32)),
           b: M.add(base, M.scale(dir, l * 1.02)),
           width: 0.05 + 0.04 * t,
-          pal: colours[Math.min(colours.length - 1, Math.floor(t * colours.length))],
-          life: 0.05 + 0.07 * t
+          pal: colours,
+          life: 0.07 + 0.13 * t
         });
       }
     },

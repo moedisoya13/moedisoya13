@@ -9,6 +9,7 @@
 import { STANCES } from '../rig/poses.mjs';
 import { solve } from '../rig/solve.mjs';
 import { blend, exaggerateTorso } from './pose.mjs';
+import { gaitStance, CYCLE } from './gait.mjs';
 
 export const TORSO_GAIN = 1.5;
 const solved = {};
@@ -23,15 +24,16 @@ export function stance(name) {
 }
 
 export const CLIPS = {
-  idle: { loop: 2.4, keys: [{ t: 0, pose: 'guard', in: 0.5 }, { t: 1.2, pose: 'guardLow', in: 1.1 }, { t: 2.4, pose: 'guard', in: 1.1 }] },
-  // a walk on twos: two drawings, each held
-  walk: { loop: 0.44, keys: [{ t: 0, pose: 'step', in: 0.06 }, { t: 0.22, pose: 'guard', in: 0.06 }, { t: 0.44, pose: 'step', in: 0.06 }] },
+  // the guard is never held: the fighter bounces in it, once a second and a bit
+  idle: { loop: 1.2, keys: [{ t: 0, pose: 'guard', in: 0.6 }, { t: 0.6, pose: 'guardLow', in: 0.6 }] },
+  // the one clip that is not drawings: footwork is worked out from the feet up (gait.mjs), every frame its own
+  walk: { loop: CYCLE, gait: true },
   slash: {
     dur: 0.56,
     keys: [
       { t: 0, pose: 'slashWind' },
-      { t: 0.15, pose: 'slashHit' },
-      { t: 0.205, pose: 'slashEnd' },
+      { t: 0.15, pose: 'slashHit', over: 0.05, drift: 0.02 },
+      { t: 0.205, pose: 'slashEnd', over: 0.07 },
       { t: 0.36, pose: 'guard', in: 0.18 }
     ],
     marks: { hit: 0.15, free: 0.46 },
@@ -44,8 +46,8 @@ export const CLIPS = {
     dur: 0.72,
     keys: [
       { t: 0, pose: 'thrustWind' },
-      { t: 0.16, pose: 'thrustHit' },
-      { t: 0.215, pose: 'thrustHold' },
+      { t: 0.16, pose: 'thrustHit', over: 0.05, drift: 0.02 },
+      { t: 0.215, pose: 'thrustHold', over: 0.07 },
       { t: 0.46, pose: 'guard', in: 0.24 }
     ],
     marks: { hit: 0.16, free: 0.6 },
@@ -59,8 +61,8 @@ export const CLIPS = {
     dur: 0.9,
     keys: [
       { t: 0, pose: 'slashWind' },
-      { t: 0.45, pose: 'slashHit' },
-      { t: 0.505, pose: 'slashEnd' },
+      { t: 0.45, pose: 'slashHit', over: 0.05, drift: 0.02 },
+      { t: 0.505, pose: 'slashEnd', over: 0.07 },
       { t: 0.68, pose: 'guard', in: 0.2 }
     ],
     marks: { hit: 0.45, free: 0.8 },
@@ -83,17 +85,32 @@ export const CLIPS = {
 };
 
 const smooth = x => x * x * (3 - 2 * x);
-/* The pose of a clip at t seconds. `from` is the pose the figure was in when the clip began, which the first key eases out of
-   when it has an `in` (a cut ignores it). */
-export function sample(clip, t, from) {
-  if (clip.loop) t = ((t % clip.loop) + clip.loop) % clip.loop;
-  const keys = clip.keys;
+const keyAt = (clip, t) => {
   let i = 0;
-  while (i + 1 < keys.length && keys[i + 1].t <= t) i++;
-  const key = keys[i],
+  while (i + 1 < clip.keys.length && clip.keys[i + 1].t <= t) i++;
+  return i;
+};
+const wrap = (clip, t) => (clip.loop ? ((t % clip.loop) + clip.loop) % clip.loop : t);
+/* The pose of a clip at t seconds. `from` is the pose the figure was in when the clip began, which the first key eases out of
+   when it has an `in` (a cut ignores it). `walk` is how the figure is walking, for the clip that needs it: { advance, speed }. */
+export function sample(clip, t, from, walk) {
+  if (clip.gait) return solve(gaitStance(t, walk ? walk.advance : 1, walk ? walk.speed : 2));
+  t = wrap(clip, t);
+  const keys = clip.keys,
+    i = keyAt(clip, t),
+    key = keys[i],
     to = stance(key.pose),
     lead = key.in || 0;
   if (lead <= 0 || t - key.t >= lead) return to;
-  const before = i > 0 ? stance(keys[i - 1].pose) : clip.loop ? stance(keys[keys.length - 2].pose) : from || to;
+  const before = i > 0 ? stance(keys[i - 1].pose) : clip.loop ? stance(keys[keys.length - 1].pose) : from || to;
   return blend(before, to, smooth((t - key.t) / lead));
+}
+/* Which drawing a clip is on at t, for the code that brings the figure to life between drawings (alive.mjs):
+   { token (changes when the drawing does), cut (reached with no in-betweens), over, drift (that key's own settings) }. */
+export function drawing(name, t) {
+  const clip = CLIPS[name];
+  if (clip.loop) return { token: name, cut: false };
+  const i = keyAt(clip, t),
+    key = clip.keys[i];
+  return { token: name + ':' + i, cut: !(key.in > 0), over: key.over, drift: key.drift };
 }

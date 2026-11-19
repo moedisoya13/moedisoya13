@@ -4,6 +4,8 @@ const { fk, NAMES } = require('../../src/rig/skeleton.mjs');
 const { PALETTE, MAT, sculptSwordsman } = require('../../src/rig/swordsman.mjs');
 const { BIND } = require('../../src/rig/poses.mjs');
 const { boneMatrices } = require('../../src/anim/pose.mjs');
+const { createAlive } = require('../../src/anim/alive.mjs');
+const { createDangle } = require('../../src/anim/dangle.mjs');
 
 function buildStage({ makeBuilder, makeSculpt, KIT: K }, seed, o) {
   o = o || {};
@@ -25,8 +27,29 @@ function buildStage({ makeBuilder, makeSculpt, KIT: K }, seed, o) {
     Object.assign({ cam: { target: [0, 0.9, 0.15], dist: 4.6, pitch: 0.06, yaw: 1.571 }, detail: 44, dither: 0.2, radius: 2 }, o.finish)
   );
   const mats = new Float32Array(NAMES.length * 12);
+  /* What is drawn has a past (the settle after a cut, the swing of the scarf), so a picture of time t is reached by playing
+     every sixtieth of a second up to it; asking for an earlier time starts over. o.drawing(t) says which drawing the figure
+     is on (see clips.mjs); without it the poses are shown bare. */
+  const STEP = 1 / 60;
+  let alive, dangle, at;
+  const restart = () => {
+    alive = createAlive();
+    dangle = createDangle(bind);
+    at = -STEP;
+  };
+  restart();
+  const advance = (t, dt) => {
+    let pose = o.pose(t);
+    if (o.drawing) {
+      const d = o.drawing(t);
+      pose = alive.update(pose, d.token, dt, d);
+    }
+    boneMatrices(pose, bind, o.place ? o.place(t) : null, mats, 0);
+    dangle.apply(mats, dt);
+  };
   rig.bind(W, t => {
-    boneMatrices(o.pose(t), bind, o.place ? o.place(t) : null, mats, 0);
+    if (t < at - 1e-9) restart();
+    while (at + STEP <= t + 1e-9) advance((at += STEP), at < STEP / 2 ? 0 : STEP);
     for (let i = 0; i < NAMES.length; i++) {
       const k = i * 12;
       // rig.set wants (turn, a point at rest, where that point is now): hand it the origin and the move

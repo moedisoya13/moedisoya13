@@ -26,7 +26,12 @@ const JOINTS = [
   ...side('ToeBase', '@Foot', [0.11, 0.03, 0.13]),
   /* not a SOMA joint: the sword rides the right hand. With the palm down in the T-pose the grip runs front to back and the
      blade leaves the thumb side, toward +Z. */
-  ['Sword', 'RightHand', [-0.75, 1.39, 0]]
+  ['Sword', 'RightHand', [-0.75, 1.39, 0]],
+  /* nor are these: the tied hair and the scarf's tail in two lengths. Left alone they ride their parents; drawn, their far
+     ends are sprung (anim/dangle.mjs). */
+  ['Tail', 'Head', [0, 1.63, -0.13]],
+  ['Scarf1', 'Chest', [0, 1.44, -0.085]],
+  ['Scarf2', 'Scarf1', [0, 1.24, -0.155]]
 ];
 
 const NAMES = JOINTS.map(j => j[0]);

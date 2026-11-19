@@ -4,7 +4,7 @@
    grid by a whole number, paints the sky where nothing was drawn and inks a one-pixel line round the fighters.
    WebGL 2 only: it is what every current phone browser has. */
 const FOV = (38 * Math.PI) / 180; // ink-studio's own, so a splat is the size on screen it was sculpted to be
-const MAX_BONES = 24;
+const MAX_BONES = 28;
 const MAX_PALETTE = 48;
 
 const SPLAT_VS = `#version 300 es
@@ -294,5 +294,5 @@ export function createRenderer(canvas, o) {
   const pixelSize = dist => (dist * 2 * Math.tan(FOV / 2)) / target.h;
   const widthAt = dist => dist * 2 * Math.tan(FOV / 2) * (target.w / target.h);
   const distFor = width => width / (2 * Math.tan(FOV / 2) * (target.w / target.h));
-  return { gl, mesh, resize, draw, packBones, target, pixelSize, widthAt, distFor };
+  return { gl, mesh, resize, draw, packBones, target, pixelSize, widthAt, distFor, maxBones: MAX_BONES };
 }

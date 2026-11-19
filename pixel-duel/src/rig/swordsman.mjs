@@ -61,14 +61,16 @@ function sculptSwordsman(S, bind, o) {
   // the head is a size too big on purpose: at fighting distance it is a dozen pixels, and has to carry the face
   ball('Head', [0, 0.115, 0.014], [0.14, 0.148, 0.142], MAT.skin);
   ball('Head', [0, 0.15, -0.04], [0.146, 0.135, 0.132], MAT.hair);
-  tube('Head', [0, 0.12, -0.13], [0, 0.0, -0.2], 0.045, 0.018, MAT.hair); // tied tail
+  tube('Tail', [0, 0.02, 0.02], [0, -0.12, -0.07], 0.046, 0.02, MAT.hair); // tied hair, on a bone of its own so it can swing
   // eyes: two dark dabs, enough to say which way the face looks
   for (const e of [-1, 1]) ball('Head', [e * 0.055, 0.115, 0.135], [0.022, 0.03, 0.02], MAT.hair);
   // the hat sits back on the crown so the brim's shadow falls behind the face
   S.lathe(at('Head', [0, 0.225, -0.03]), 0.14, [0.31, 0.19, 0.085, 0.02], MAT.straw, opt('Head'));
 
-  // scarf: a ring at the neck and a tail in two lengths that trail behind
+  // scarf: a ring at the neck and a tail down the back in two lengths, each on its own bone
   S.torus(at('Chest', [0, 0.165, 0.005]), 0.082, 0.045, MAT.scarf, opt('Chest'));
+  tube('Scarf1', [0, 0.02, 0.02], [0, -0.2, -0.07], 0.042, 0.05, MAT.scarf);
+  tube('Scarf2', [0, 0.01, 0.005], [0, -0.2, -0.03], 0.05, 0.03, MAT.scarf);
 
   for (const sideName of ['Left', 'Right']) {
     const s = sideName === 'Left' ? 1 : -1;

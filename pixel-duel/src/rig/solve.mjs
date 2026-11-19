@@ -109,8 +109,8 @@ function solve(stance) {
     aim(Side + 'Foot', M.mul(yaw, M.rx(foot.pitch || 0)));
     place(Side + 'ToeBase', M.rx(-(foot.pitch || 0) * 0.8)); // the toes stay on the ground when the heel lifts
   }
-  place('Sword', M.id());
-  for (const name of NAMES) if (!rot[name]) throw new Error('No rotation was solved for ' + name);
+  // whatever is left rides its parent: the sword in the hand, the hair and scarf until they are sprung
+  for (const name of NAMES) if (!rot[name]) place(name, M.id());
   return { root: M.sub(hips, TPOSE.Hips), rot, stretch: stance.stretch || 1 };
 }
 

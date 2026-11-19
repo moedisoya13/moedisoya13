@@ -7,7 +7,9 @@ import { fk, NAMES } from './rig/skeleton.mjs';
 import { BIND } from './rig/poses.mjs';
 import { boneMatrices } from './anim/pose.mjs';
 import { CLIPS } from './anim/clips.mjs';
-import { createDuel, step, poseOf, RULES } from './game/duel.mjs';
+import { createDuel, step, poseOf, drawingOf, RULES } from './game/duel.mjs';
+import { createAlive } from './anim/alive.mjs';
+import { createDangle } from './anim/dangle.mjs';
 import { createRival, think } from './game/ai.mjs';
 import { createInput } from './game/input.mjs';
 import { createAudio } from './game/audio.mjs';
@@ -25,6 +27,8 @@ const RIVAL_COLOURS = {
   14: 0x15131a, 15: 0x2a2630, 16: 0x45404e, 17: 0x6a6474, // hat: lacquer black
   18: 0x0e2a33, 19: 0x14505c, 20: 0x1f8a8a, 21: 0x5fd0c0 // scarf: teal
 };
+// a blade's sweep cools as it ages: white, lamplight, orange, ember
+const SMEAR = [25, 41, 41, 40, 33, 31];
 const SKY = [0x2a2d55, 0x1d2148, 0x151a3a, 0x10142d, 0x0c0f22, 0x090b18];
 const STAGES = [
   { level: 'calm', name: '첫째 밤' },
@@ -51,9 +55,13 @@ function start({ manifest, fighter, arena }) {
   const palettes = [paletteArray(manifest.palette), paletteArray(manifest.palette.map((hex, i) => RIVAL_COLOURS[i] ?? hex))];
   const sky = new Float32Array(SKY.flatMap(rgb)),
     ink = new Float32Array(rgb(manifest.palette[0]));
-  const bones = [new Float32Array(24 * 12), new Float32Array(24 * 12)],
+  const bones = [new Float32Array(R.maxBones * 12), new Float32Array(R.maxBones * 12)],
     mats = new Float32Array(NAMES.length * 12),
-    blades = [null, null];
+    blades = [null, null],
+    // what moves between and after the drawings: the settle and breath of each fighter, and his hair and scarf
+    alive = [createAlive(0), createAlive(1)],
+    dangles = [createDangle(bind), createDangle(bind)];
+  let stopped = 0; // how long the current hit stop was when it began
 
   let stage = 0,
     wins = 0,
@@ -74,6 +82,7 @@ function start({ manifest, fighter, arena }) {
     duel = createDuel(Number(query.get('seed')) || (Date.now() & 0xffff) || 1);
     rival = createRival(STAGES[stage].level);
     blades[0] = blades[1] = null;
+    alive.forEach(a => a.reset());
     overAt = 0;
     dim = 0;
     $('stage').textContent = STAGES[stage].name;
@@ -175,15 +184,25 @@ function start({ manifest, fighter, arena }) {
 
     // ---- poses to bones, and the blade's sweep when it jumped a drawing
     const layers = [{ mesh: meshes.arena, palette: palettes[0], mask: 0.5 }];
+    // a hit stop holds the drawings, but not dead: time creeps, and the struck fighter shudders under the blow
+    const held = duel.stop > 0,
+      live = held ? elapsed * 0.15 : elapsed;
+    stopped = held ? Math.max(stopped, duel.stop) : 0;
     duel.fighters.forEach((f, i) => {
-      const pose = poseOf(f),
-        place = { R: PLACE[f.face], p: [f.x, 0, 0] };
-      R.packBones(boneMatrices(pose, bind, place, mats, 0), bones[i]);
+      const d = drawingOf(f);
+      d.still = f.clip === 'down' && f.ct > 0.6;
+      const pose = alive[i].update(poseOf(f), d.token, live, d),
+        struck = held && f.ct === 0 && (f.clip === 'hurt' || f.clip === 'down' || f.clip === 'stagger'),
+        shudder = struck ? 0.028 * (duel.stop / stopped) * Math.sin(time * 2 * Math.PI * 26) : 0,
+        place = { R: PLACE[f.face], p: [f.x + shudder, 0, 0] };
+      boneMatrices(pose, bind, place, mats, 0);
+      dangles[i].apply(mats, live);
+      R.packBones(mats, bones[i]);
       const blade = bladeOf(pose, place),
         clip = CLIPS[f.clip],
         was = blades[i];
       if (was && clip.swing && f.ct >= clip.marks.hit - 1e-6 && Math.hypot(blade.tip[0] - was.tip[0], blade.tip[1] - was.tip[1]) > 0.4)
-        fx.smear(was, blade, [23, 24, 25, 25]);
+        fx.smear(was, blade, SMEAR);
       blades[i] = blade;
       layers.push({ mesh: meshes.fighter, bones: bones[i], palette: palettes[i], mask: 1, flash: f.flash > 0 ? 1 : 0 });
     });

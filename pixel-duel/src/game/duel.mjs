@@ -7,11 +7,11 @@
    A hit freezes both fighters for a few frames (the hit stop): the striker on the drawing that landed, the struck one already
    thrown back. A cut that meets an open parry is deflected: the striker staggers and the defender has a moment (`chance`) in
    which an attack becomes the thrust. */
-import { CLIPS, sample, stance } from '../anim/clips.mjs';
+import { CLIPS, sample, stance, drawing } from '../anim/clips.mjs';
 
 export const RULES = {
   hp: 6,
-  walk: 2.3,
+  walk: 2.0,
   gap: 1.2, // the fighters never stand closer than this
   halfWidth: 4.6,
   hitStop: { slash: 0.1, heavy: 0.12, thrust: 0.2, deflect: 0.15 },
@@ -42,7 +42,13 @@ export function random(duel) {
   return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
 }
 
-export const poseOf = f => sample(CLIPS[f.clip], f.ct, f.from);
+export const poseOf = f => sample(CLIPS[f.clip], f.ct, f.from, { advance: f.moving * f.face || f.walked || 1, speed: RULES.walk });
+// the drawing the fighter is on, for what animates between drawings
+export const drawingOf = f => {
+  const d = drawing(f.clip, f.ct);
+  d.token += '#' + (f.plays || 0); // the same clip played again is a new arrival
+  return d;
+};
 export const isFree = f => {
   const clip = CLIPS[f.clip];
   return !!clip.loop || (!clip.hold && f.ct >= (clip.marks && clip.marks.free !== undefined ? clip.marks.free : clip.dur));
@@ -51,6 +57,7 @@ function play(f, name) {
   f.from = poseOf(f);
   f.clip = name;
   f.ct = 0;
+  f.plays = (f.plays || 0) + 1;
   f.struck = false;
 }
 
@@ -98,6 +105,7 @@ function act(duel, f, other, input, dt, who) {
   if (input.move) {
     if (f.clip !== 'walk') play(f, 'walk');
     f.moving = Math.sign(input.move);
+    f.walked = f.moving * f.face; // which way the walk last went, so its pose can still be asked for after the step
     f.x += f.moving * RULES.walk * dt;
   } else if (f.clip !== 'idle') play(f, 'idle');
 }
