@@ -130,6 +130,12 @@ for (const [name, punch] of Object.entries(PUNCHES)) {
   Object.assign(punch, { name, punch: true });
 }
 
+/* His stance is turned to his right, so a bend to his left, as the trunk sees it, would carry the head forward into the
+   punch as well as across. In a sided move (a slip, a roll) every degree of bend to the left is made up of a little more
+   bend and a sit back, so that the head goes straight across either way. (Measured: both slips take the head 28-33 cm
+   across and less than 1 cm toward the other man.) */
+export const LEFT_BEND = { side: 0.375, lean: -0.69 };
+
 export const MOVES = Object.assign(
   {},
   PUNCHES,
@@ -138,6 +144,9 @@ export const MOVES = Object.assign(
     // ---- defence and being hit. These are shapes the body takes; how long it holds them is the rules' business.
     // the tight guard, mixed in by how much the boxer is covering up
     cover: { stay: true, dur: 1, keys: [{ t: 1, e: 'lin', lx: -0.07, ly: 0.115, lz: -0.03, rx: -0.02, ry: 0.135, rz: 0.1, lean: 6, hy: -0.035, hp: 7, hz: -0.01 }] },
+    /* the gloves of a guard put up to meet a punch, mixed in while it is young enough to turn one aside: open, out in front
+       of the face, the rear one across to catch a jab */
+    meet: { stay: true, dur: 1, keys: [{ t: 1, e: 'lin', lz: 0.05, ly: 0.01, lx: -0.02, rz: 0.08, rx: 0.05, ry: 0.02, re: 0.15, twist: -3 }] },
     // a quick step: the body sinks into it and comes up out of it (which way it leans is added from the step's direction)
     dash: { dur: 0.3, keys: [{ t: 0.07, e: 'out', hy: -0.075, st: -0.035, ly: -0.03, ry: -0.03 }] },
     // a punch turned aside: the puncher's arms are thrown open and he is carried back onto his heels
@@ -158,10 +167,29 @@ export const MOVES = Object.assign(
     // a slip: the head taken off the line of a punch, bent and dipped to one side and straight back (which side is the
     // action's: see the animator)
     slip: {
+      sided: true,
       dur: 0.42,
-      keys: [{ t: 0.1, e: 'out', side: 16, hx: 0.12, hy: -0.07, lean: 6, hw: 8, hr: 6, lx: 0.02, rx: 0.02 }, { t: 0.2, e: 'lin', side: 16, hx: 0.12, hy: -0.07, lean: 6, hw: 8, hr: 6, lx: 0.02, rx: 0.02 }],
-      // to his left the turned stance would carry the head forward, into the punch: he sits back to go straight across
-      left: { lean: -11, side: 6 }
+      keys: [{ t: 0.1, e: 'out', side: 16, hx: 0.12, hy: -0.07, lean: 6, hw: 8, hr: 6, lx: 0.02, rx: 0.02 }, { t: 0.2, e: 'lin', side: 16, hx: 0.12, hy: -0.07, lean: 6, hw: 8, hr: 6, lx: 0.02, rx: 0.02 }]
+    },
+    // a duck: the knees go and he folds at the hips, chin on his chest, gloves still at his face, straight down and up
+    duck: {
+      dur: 0.5,
+      keys: [{ t: 0.12, e: 'out', hy: -0.31, hz: -0.15, lean: 28, hp: 12, lfp: 8, rfp: 18 }, { t: 0.24, e: 'lin', hy: -0.31, hz: -0.15, lean: 28, hp: 12, lfp: 8, rfp: 18 }]
+    },
+    // bob and weave: down to one side, under, and up on the other, the head drawing a U (the side is the one he comes up on)
+    roll: {
+      sided: true,
+      dur: 0.52,
+      keys: [
+        { t: 0.1, e: 'out', hy: -0.15, hz: -0.05, side: -16, hx: -0.11, lean: 16, hw: -8, hr: -6, lfp: 6, rfp: 10 },
+        { t: 0.22, hy: -0.31, hz: -0.14, side: 0, hx: 0, lean: 28, hp: 12, hw: 0, hr: 0, lfp: 8, rfp: 18 },
+        { t: 0.36, hy: -0.12, hz: -0.04, side: 16, hx: 0.11, lean: 12, hp: 4, hw: 8, hr: 6, lfp: 4, rfp: 8 }
+      ]
+    },
+    // a sway: the weight rocked onto the back foot and the trunk drawn up and back, so the head is just out of reach
+    pull: {
+      dur: 0.5,
+      keys: [{ t: 0.12, e: 'out', hz: -0.15, hy: -0.03, lean: -17, hp: -9, lfp: 16, lfz: 0.01, ly: 0.02, ry: 0.02 }, { t: 0.26, e: 'lin', hz: -0.15, hy: -0.03, lean: -17, hp: -9, lfp: 16, lfz: 0.01, ly: 0.02, ry: 0.02 }]
     },
     // up off the canvas: onto an elbow, a knee, and back into the guard, a little unsteady
     rise: {

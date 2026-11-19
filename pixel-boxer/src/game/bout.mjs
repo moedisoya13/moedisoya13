@@ -6,7 +6,9 @@
      step(bout, [mine, his], dt)
        controls: { move: [x, z] (a direction on the canvas, up to 1 long), jab, power (true on the tick pressed),
                    cover (true while held), dash: [x, z] | true (on the tick flicked; true is straight back),
-                   slip: 1 | -1 (the head off the line, to his left or right) }
+                   slip: 1 | -1 (the head off the line, to his left or right), duck: true (straight down under a punch),
+                   roll: 1 | -1 (bob and weave: down under it and up on his left or right), pull: true (the head swayed
+                   back out of reach) }
      bout.events            what happened this step, for the picture and the sound
      bout.fighters[i].pose  his solved pose this step (and .place: where on the canvas, .points: gloves and head in the world)
 
@@ -53,6 +55,8 @@ export const RULES = {
   chain: ['cross', 'hook', 'upper'],
   dash: { reach: 1.2 },
   stepIn: 2.6, // metres a second he closes at while throwing, down to the punch's own range
+  hookDrop: 0.12, // how far below his own head a hook can be swung
+  jaw: 0.08, // how far below the middle of the head a hook is aimed
   startGap: 2.4
 };
 const DT = 1 / 60;
@@ -84,6 +88,9 @@ const aheadOf = f => [Math.sin(f.yaw), Math.cos(f.yaw)];
 // a direction on the canvas, in a boxer's own terms: [to his left, ahead of him]
 export const local = (f, x, z) => [x * Math.cos(f.yaw) - z * Math.sin(f.yaw), x * Math.sin(f.yaw) + z * Math.cos(f.yaw)];
 const punching = f => !!f.action && !!MOVES[f.action.name].punch;
+// the ways of getting the head out of the way, as controls name them (each a move of its own, with a side where it has one)
+const EVADE = ['slip', 'duck', 'roll', 'pull'];
+const pressOf = input => (input.dash ? ['dash', input.dash] : EVADE.find(n => input[n]) ? [EVADE.find(n => input[n]), input[EVADE.find(n => input[n])]] : input.jab ? ['jab'] : input.power ? ['power'] : null);
 // a punch still on its way out: wound up or being thrown, and not yet landed
 export const incoming = f => (punching(f) && !f.action.struck && (f.action.chain.phase === 'coil' || f.action.chain.phase === 'throw') ? f.action : null);
 // may he start something new? In the middle of a punch, only another punch, and only once this one has been thrown
@@ -102,17 +109,17 @@ function begin(f, name, more) {
 }
 
 function decide(bout, f, input, dt, who) {
-  const pressed = input.dash ? ['dash', input.dash] : input.slip ? ['slip', input.slip] : input.jab ? ['jab'] : input.power ? ['power'] : null;
+  const pressed = pressOf(input);
   if (pressed) (f.want = pressed), (f.wantAge = 0);
   else if (f.want && (f.wantAge += dt) > RULES.buffer) f.want = null;
   if (f.want) {
     const [what, dir] = f.want,
-      punch = what !== 'dash' && what !== 'slip';
+      punch = what !== 'dash' && !EVADE.includes(what);
     if (open(f, punch)) {
       f.want = null;
-      if (what === 'slip') {
-        begin(f, 'slip', { side: dir });
-        bout.events.push({ type: 'slip', who });
+      if (EVADE.includes(what)) {
+        begin(f, what, { side: dir === true ? 1 : dir });
+        bout.events.push({ type: what, who });
       } else if (!punch) {
         const [fx, fz] = aheadOf(f);
         let d = dir === true ? [-fx, -fz] : dir;
@@ -223,6 +230,8 @@ function viewOf(bout, i) {
       move: local(f, f.gx, f.gz),
       turn: f.turn,
       cover: f.cover ? 1 : 0,
+      // a guard still young enough to turn a punch aside: the gloves are out meeting it, not yet pulled in to the face
+      meet: f.cover && f.coverAge < f.k.parry ? 1 - f.coverAge / f.k.parry : 0,
       cheer: bout.over === i && bout.t - bout.overAt > 0.9,
       still: !!f.down && f.action.t >= MOVES.ko.dur,
       action: f.action,
@@ -237,11 +246,16 @@ function viewOf(bout, i) {
       [side, front] = local(f, h[0] - f.x, h[2] - f.z);
     if (f.action.aim) view.aim = f.action.aim;
     else if (Math.hypot(side, front) < 1.7 && front > 0.2) {
-      const from = move.hand === 'L' ? 1 : -1;
-      view.aim = move.arm === 'swing' ? [side + from * 0.05, h[1], front - 0.1] : move.arm === 'lift' ? [side, h[1] - 0.1, front - 0.07] : [side, h[1], front - 0.075];
-      /* Once his shoulder has fired the punch is committed: it goes where the head was then, and a head that has moved since
-         is missed. That is what a slip is. (Up to then he is still looking, and a punch follows a head that drifts.) */
-      if (f.action.chain.on[3]) f.action.aim = view.aim;
+      const from = move.hand === 'L' ? 1 : -1,
+        /* a hook is an arm locked at the shoulder and swung flat by the body, at the jaw: it can be thrown a little low, but
+           not at a head that has gone down under it (that is what the uppercut is for) */
+        low = move.arm === 'swing' ? Math.max(h[1] - RULES.jaw, f.points.head[1] - RULES.hookDrop) : h[1];
+      view.aim = move.arm === 'swing' ? [side + from * 0.05, low, front - 0.1] : move.arm === 'lift' ? [side, h[1] - 0.1, front - 0.07] : [side, h[1], front - 0.075];
+      /* Once the joint that steers it has fired the punch is committed: it goes where the head was then, and a head that has
+         moved since is missed. That is what a slip is. (Up to then he is still looking, and a punch follows a head that
+         drifts.) A straight punch is steered by the shoulder; a hook or an uppercut is an arm locked to a body that is
+         already turning, and its path is set when the hips go. */
+      if (f.action.chain.on[move.arm === 'straight' ? 3 : 1]) f.action.aim = view.aim;
     }
   }
   return view;
@@ -317,7 +331,8 @@ function strike(bout, f, other, who, dt) {
   action.chain.landed = true;
   action.chain.v[3] = action.chain.v[4] = 0; // the arm is stopped by what it hit
   f.sinceLast = 0;
-  if (J < RULES.graze) return bout.events.push(Object.assign({ type: 'graze' }, blow));
+  // (a touch on the head is nothing; on the gloves it is still met, however early and slow: turned aside or smothered)
+  if (J < RULES.graze && first.what === 'head') return bout.events.push(Object.assign({ type: 'graze' }, blow));
   const [side, front] = local(other, n[0], n[2]),
     felt = { J, dir: [side, n[1], front] }; // the way the blow went, as the man who took it would say
   const stop = Math.max(RULES.stop[0], Math.min(RULES.stop[1], J * RULES.stop[2]));
@@ -330,6 +345,7 @@ function strike(bout, f, other, who, dt) {
       f.kx = -dir[0] * 1.2;
       f.kz = -dir[1] * 1.2;
       other.counter = RULES.counter;
+      other.animator.deflect({ hand: first.key, J, dir: felt.dir });
       bout.stop = 0.1;
       return bout.events.push(Object.assign({ type: 'parry' }, blow, { who: 1 - who, on: who }));
     }
@@ -337,6 +353,7 @@ function strike(bout, f, other, who, dt) {
     other.kx += ((dir[0] * J) / RULES.mass) * RULES.shove * 0.6;
     other.kz += ((dir[1] * J) / RULES.mass) * RULES.shove * 0.6;
     other.animator.strike({ J: J * 0.25, dir: felt.dir });
+    other.animator.brace({ J, hand: first.key, dir: felt.dir });
     bout.stop = stop * 0.4;
     return bout.events.push(Object.assign({ type: 'block' }, blow));
   }
@@ -377,7 +394,7 @@ export function step(bout, inputs, dt) {
     bout.stop -= dt;
     bout.fighters.forEach((f, i) => {
       const input = inputs[i] || {},
-        pressed = input.dash ? ['dash', input.dash] : input.jab ? ['jab'] : input.power ? ['power'] : null;
+        pressed = pressOf(input);
       if (pressed && bout.over === null) (f.want = pressed), (f.wantAge = 0);
     });
     return bout;

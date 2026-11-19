@@ -13,7 +13,7 @@ import * as M from '../rig/m3.mjs';
 import { TPOSE } from '../rig/skeleton.mjs';
 import { solve, LEN } from '../rig/solve.mjs';
 import { LINKS } from '../phys/chain.mjs';
-import { CHANNELS, GUARD, MOVES, sampleMove } from './moves.mjs';
+import { CHANNELS, GUARD, MOVES, LEFT_BEND, sampleMove } from './moves.mjs';
 
 const TAU = Math.PI * 2;
 /* The feet keep time. One beat is one foot coming down; a cycle is both. Standing, the boxer rocks between his feet on that
@@ -121,6 +121,7 @@ export function createAnimator(seed) {
     halves = 0,
     cycle = CYCLE.rest, // how long that cycle is taking just now, seconds
     cover = 0,
+    meet = 0, // how far out to meet a punch the gloves of a fresh guard are
     cheer = 0,
     doing = null;
   // how fast the canvas is going past under each foot, followed a little late so a shove or a stop does not snatch the feet
@@ -139,6 +140,8 @@ export function createAnimator(seed) {
     steer = { L: [0, 0, 0], R: [0, 0, 0] }; // how far each hand is being carried off its punch's nominal line onto the target
   // the give of a struck body: head (nod, turn, tilt), trunk (lean, side, turn), and how far the guard is knocked open
   const give = { hp: { x: 0, v: 0 }, hw: { x: 0, v: 0 }, hr: { x: 0, v: 0 }, lean: { x: 0, v: 0 }, side: { x: 0, v: 0 }, yaw: { x: 0, v: 0 }, open: { x: 0, v: 0 }, sink: { x: 0, v: 0 } };
+  // and of each glove on its own, metres (in his terms, as the hand channels are): a glove that has met a punch
+  const knock = { L: [0, 1, 2].map(() => ({ x: 0, v: 0 })), R: [0, 1, 2].map(() => ({ x: 0, v: 0 })) };
 
   return {
     /* The blow's impulse is shared out by where it was going: back through the head nods it back, across turns and tilts
@@ -154,6 +157,32 @@ export function createAnimator(seed) {
       give.yaw.v += left * 300 * k;
       give.sink.v += Math.max(0, up) * 1.1 * k;
       give.open.v += 7 * k;
+    },
+    /* A parry: the glove that met the punch sweeps it off the line, across his body and down, and comes back; his
+       shoulders turn a little with it. (The puncher's side of it is the reel.) */
+    deflect(hit) {
+      const g = knock[hit.hand],
+        across = hit.hand === 'R' ? 1 : -1; // the right glove pushes a punch away to his left, the left glove to his right
+      g[0].v += across * 3.2;
+      g[1].v -= 1.4;
+      g[2].v += 0.9;
+      give.yaw.v += across * 140;
+      give.hw.v += across * 60;
+    },
+    /* A block: the punch drives the glove it hit back into his face, and the other one after it, and rocks his head and
+       his trunk back, and his knees take it. */
+    brace(hit) {
+      const k = Math.max(0.5, Math.min(hit.J, 120) / 40); // (even a punch smothered early shoves the guard)
+      for (const side of ['L', 'R']) {
+        const g = knock[side],
+          m = side === hit.hand ? 1 : 0.45;
+        g[2].v -= 1.6 * k * m;
+        g[1].v += 0.35 * k * m;
+        g[0].v += (side === 'L' ? -0.4 : 0.4) * k * m; // and in toward the middle
+      }
+      give.hp.v -= 260 * k;
+      give.lean.v -= 150 * k;
+      give.sink.v += 0.5 * k;
     },
     // where his feet are in their rhythm: the beat (turns), how long a cycle is taking, and how many half beats there have been
     get rhythm() {
@@ -176,15 +205,12 @@ export function createAnimator(seed) {
         });
       } else if (action) {
         sampleMove(MOVES[action.name], action.t, c);
-        if (action.name === 'slip') {
+        if (MOVES[action.name].sided) {
           // to his left (+1) or his right (-1)
-          const s = action.side || 1,
-            move = MOVES.slip,
-            fix = s > 0 ? move.left : move.right,
-            a = c.hy / move.keys[0].hy; // how far out he is, 0..1
+          const s = action.side || 1;
           for (const ch of ['side', 'hx', 'hw', 'hr', 'lx', 'rx']) c[ch] *= s;
-          // his stance is turned, so the same bend does not take the head the same way to each side: each has its own
-          if (fix) for (const ch in fix) c[ch] += fix[ch] * a;
+          // (the turned stance: see LEFT_BEND)
+          if (c.side > 0) (c.lean += LEFT_BEND.lean * c.side), (c.side += LEFT_BEND.side * c.side);
         }
         if (action.name === 'dash' && action.dir) {
           const a = -c.hy / 0.075; // the dash's own rise and fall, as 0..1
@@ -194,9 +220,11 @@ export function createAnimator(seed) {
         }
       }
       cover += (clamp(view.cover || 0, 0, 1) - cover) * (1 - Math.exp(-dt * 22));
+      meet += (clamp(view.meet || 0, 0, 1) - meet) * (1 - Math.exp(-dt * 30));
       cheer += ((view.cheer ? 1 : 0) - cheer) * (1 - Math.exp(-dt * 5));
       if (cover > 0.002) for (const [ch, v] of Object.entries(sampleMove(MOVES.cover, 1, {}))) c[ch] += v * cover;
       if (cheer > 0.002) for (const [ch, v] of Object.entries(sampleMove(MOVES.cheer, 1, {}))) c[ch] += v * smooth(cheer);
+      if (meet > 0.002) for (const [ch, v] of Object.entries(sampleMove(MOVES.meet, 1, {}))) c[ch] += v * meet;
 
       // ---- the beat of his feet: how fast the canvas is passing under each, and so how quick the rhythm is
       const [vx, vz] = view.move || [0, 0],
@@ -321,6 +349,12 @@ export function createAnimator(seed) {
       c.ly -= 0.05 * Math.abs(open);
       c.rx -= 0.09 * open;
       c.ry -= 0.05 * Math.abs(open);
+      for (const [side, x, y, z] of [['L', 'lx', 'ly', 'lz'], ['R', 'rx', 'ry', 'rz']]) {
+        const g = knock[side];
+        c[x] += spring(g[0], 0, dt, 4.2, 0.55);
+        c[y] += spring(g[1], 0, dt, 4.2, 0.55);
+        c[z] += spring(g[2], 0, dt, 4.2, 0.55);
+      }
 
       // ---- one move handing over to another: what was showing is let go of, not dropped
       const handover = id !== doing;
