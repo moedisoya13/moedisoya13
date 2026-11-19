@@ -12,7 +12,7 @@
 import { createBout, step, settle, random, RULES } from './bout.mjs';
 import { createBrain, think, PLANS } from './brain.mjs';
 import { fatigue } from './profile.mjs';
-import { MOVES } from '../anim/moves.mjs';
+import { MOVES, RISE } from '../anim/moves.mjs';
 
 export const MATCH = {
   rounds: 3,
@@ -118,12 +118,12 @@ export function stepMatch(match, dt, inputs) {
     if (c.up && n >= c.up && f.down) {
       // up, at the count he had in him
       f.down = 0;
-      f.action = null;
       f.hp = c.health;
-      bout.fighters[c.who].action = { name: 'rise', t: 0, id: 'rise' + ++f.serial, struck: false, chain: null };
+      const name = RISE[f.action.name] || 'rise';
+      f.action = { name, t: 0, id: name + ++f.serial, struck: false, chain: null };
       match.events.push({ type: 'up', who: c.who, n });
     }
-    if (!f.down && (!f.action || f.action.name !== 'rise')) {
+    if (!f.down && (!f.action || !MOVES[f.action.name].floor)) {
       match.phase = 'fight';
       match.count = null;
     } else if (f.down && n >= 10 && c.t >= 10 * MATCH.count) end(match, 1 - c.who, 'KO');

@@ -56,6 +56,7 @@ export const RULES = {
   dash: { reach: 1.2 },
   stepIn: 2.6, // metres a second he closes at while throwing, down to the punch's own range
   hookDrop: 0.12, // how far below his own head a hook can be swung
+  drop: 1, // health a finishing blow had to spare at most to put him down on a knee rather than flat
   jaw: 0.08, // how far below the middle of the head a hook is aimed
   startGap: 2.4
 };
@@ -236,7 +237,7 @@ function viewOf(bout, i) {
       hurt: Math.max(0, Math.min(1, (45 - f.hp) / 45)),
       tired: Math.max(0, Math.min(1, (0.6 - f.stamina / f.k.staminaMax) / 0.6)),
       cheer: bout.over === i && bout.t - bout.overAt > 0.9,
-      still: !!f.down && f.action.t >= MOVES.ko.dur,
+      still: !!f.down && f.action.t >= MOVES[f.action.name].dur,
       action: f.action,
       aim: null
     };
@@ -363,7 +364,8 @@ function strike(bout, f, other, who, dt) {
   }
   const counter = !!action.counter,
     worth = J * (counter ? RULES.counterGain : 1),
-    damage = worth * RULES.damage * other.k.chin;
+    damage = worth * RULES.damage * other.k.chin,
+    had = other.hp;
   other.hp = Math.max(0, other.hp - damage);
   other.action = null;
   other.cover = false;
@@ -379,7 +381,9 @@ function strike(bout, f, other, who, dt) {
   const down = other.hp <= 0;
   bout.events.push(Object.assign({ type: 'hit', damage: +damage.toFixed(1), counter, down }, blow));
   if (down) {
-    begin(other, 'ko');
+    /* How he goes: a blow that only just finished him puts him down on a knee; one with plenty to spare lays him out, on
+       his back from a straight punch or an uppercut, on his face from a hook that turns him. */
+    begin(other, damage - had < RULES.drop ? 'drop' : move.kind === 'hook' ? 'slump' : 'ko');
     other.down = 1;
     other.stun = 0;
     other.downs = (other.downs || 0) + 1;

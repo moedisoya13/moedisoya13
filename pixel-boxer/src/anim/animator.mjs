@@ -306,7 +306,7 @@ export function createAnimator(seed) {
         if (swing.side) planted[swing.side] = swing.to.slice();
         swing.side = swing.from = swing.to = null;
         swing.back = false;
-        if (!view.still && !(action && (action.name === 'ko' || action.name === 'rise'))) {
+        if (!view.still && !(action && MOVES[action.name].floor)) {
           /* The foot that steps is the one that most needs to be somewhere else; travelling, the foot on the side he is going
              steps first (a boxer never crosses his feet or brings them together); otherwise they take turns. */
           const score = side => {
@@ -372,8 +372,24 @@ export function createAnimator(seed) {
         c[z] += spring(g[2], 0, dt, 4.2, 0.55);
       }
 
+      /* ---- down and staying there: he still breathes, hard, and the head lifts and drops with it (a man on the canvas is
+         not a picture of one) */
+      if (action && MOVES[action.name].floor && MOVES[action.name].stay) {
+        // (it comes in as the fall settles, so that there is no moment when nothing moves)
+        const k = smooth(clamp(action.t / MOVES[action.name].dur, 0, 1)),
+          b = Math.sin(TAU * 1.3 * clock),
+          slow = Math.sin(TAU * 0.37 * clock + 0.6);
+        c.st += 0.012 * b * k;
+        c.hy += 0.012 * b * k;
+        c.lean += (3.5 * b + 1.5 * slow) * k;
+        c.hp += (5 * slow - 3 * b) * k;
+        c.hw += 4 * Math.sin(TAU * 0.23 * clock) * k;
+        c.ly += 0.02 * b * k;
+        c.ry += 0.02 * Math.sin(TAU * 1.3 * clock + 0.5) * k;
+      }
+
       // ---- what the fight has done to him: rocked by the last big blow, worn down by all of them, short of breath
-      if (!(action && (action.name === 'ko' || action.name === 'rise'))) {
+      if (!(action && MOVES[action.name].floor)) {
         wobble.t += dt;
         const w = wobble.amount * Math.exp(-wobble.t / WOBBLE.last) * smooth(clamp(wobble.t / WOBBLE.onset, 0, 1)),
           T = wobble.t,

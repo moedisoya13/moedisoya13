@@ -39,8 +39,8 @@ function pendulum(f) {
 /* loop: seconds. me(t), him(t): where each should be standing at t (the script walks them there); or stick(f): the
    controls themselves, for footwork that keeps his time. press: [[t, button, value]] (value true if left out), and
    against: the same for the other man. cover(t): guard held (hisCover(t) for the other man). view: { yaw, pitch }.
-   setup(bout): anything about the men to set before the loop starts; keep(bout): anything to hold as it was, every step
-   (how hurt or tired he is, say, which the bout would otherwise change). */
+   setup(bout): anything about the men to set before the loop starts; keep(bout, t): anything to hold as it was, every step
+   (how hurt or tired he is, say, which the bout would otherwise change), or to do at a moment of the loop. */
 export const ENTRIES = [
   {
     id: 'bounce', name: '리듬 바운스', en: 'Rhythm bounce', group: '박자',
@@ -120,7 +120,7 @@ export function drive(entry, bout, at, dt) {
     t = (tick % loop) * dt,
     mine = { move: entry.stick ? entry.stick(a) : walkTo(a, entry.me(t)), cover: !!(entry.cover && entry.cover(t)) },
     his = { move: walkTo(b, entry.him ? entry.him(t) : AWAY), cover: !!(entry.hisCover && entry.hisCover(t)) };
-  if (entry.keep) entry.keep(bout);
+  if (entry.keep) entry.keep(bout, t);
   for (const [controls, presses] of [[mine, entry.press], [his, entry.against]])
     for (const [when, button, value] of presses || []) if (tick % loop === Math.round(when / dt)) controls[button] = value === undefined ? true : value;
   return [mine, his];

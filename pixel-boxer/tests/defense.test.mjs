@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { step } from '../src/game/bout.mjs';
 import { freshBout, drive } from '../src/footwork.mjs';
 import { DEFENSE } from '../src/defense.mjs';
+import { RISE } from '../src/anim/moves.mjs';
 
 const DT = 1 / 60;
 const OUTCOMES = ['hit', 'block', 'parry', 'whiff', 'graze'];
@@ -35,6 +36,21 @@ for (const entry of DEFENSE.filter(e => e.punch))
     for (const before of out.slice(0, -1))
       if (entry.before === 'hit') assert.equal(before.type, 'hit', JSON.stringify(out));
       else assert.notEqual(before.type, 'hit', 'an earlier punch landed: ' + JSON.stringify(out));
+  });
+
+for (const entry of DEFENSE.filter(e => e.fall))
+  test(`defence catalogue: ${entry.id} goes down as ${entry.fall}, gets up the way that goes with it, and is back in his guard`, () => {
+    const bout = freshBout(entry),
+      done = [];
+    for (let tick = 0; tick < Math.round(entry.loop / DT); tick++) {
+      step(bout, drive(entry, bout, tick * DT, DT), DT);
+      const a = bout.fighters[0].action,
+        name = a ? a.name : 'guard';
+      if (done[done.length - 1] !== name) done.push(name);
+    }
+    assert.deepEqual(done.filter(n => n !== 'guard'), [entry.fall, RISE[entry.fall]]);
+    assert.equal(done[done.length - 1], 'guard');
+    assert.equal(bout.fighters[0].down, 0);
   });
 
 test('every way of getting out of the way works against something, from a moment after the punch starts', () => {

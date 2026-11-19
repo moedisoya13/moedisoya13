@@ -143,9 +143,10 @@ test('the last of his health puts a boxer down and ends the bout', () => {
   const bout = ring(1.0, { hp: 2 });
   run(bout, 0.5, i => [i === 0 ? { power: true } : idle, idle], b => b.over !== null);
   assert.equal(bout.over, 0);
-  assert.equal(bout.fighters[1].action.name, 'ko');
+  const fell = bout.fighters[1].action.name;
+  assert.ok(MOVES[fell].floor && MOVES[fell].stay, 'down: ' + fell);
   run(bout, 3);
-  assert.equal(bout.fighters[1].action.name, 'ko');
+  assert.equal(bout.fighters[1].action.name, fell, 'and stays down');
 });
 
 test('a bout against the rival ends, whoever is at the controls', () => {
