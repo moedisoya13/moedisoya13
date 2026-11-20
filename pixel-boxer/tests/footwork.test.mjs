@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ENTRIES, HOME, AWAY, drive } from '../src/footwork.mjs';
+import { ENTRIES, HOME, AWAY, drive, freshBout } from '../src/footwork.mjs';
+import { FOOTWORK } from '../src/ladder.mjs';
 import { createBout, step, settle } from '../src/game/bout.mjs';
 import { sole, UP, DOWN } from '../src/measure.mjs';
 
@@ -68,5 +69,21 @@ test('footwork: the step jab and the one-two land', () => {
     }
     assert.deepEqual(hits, id === 'stepjab' ? ['jab', 'jab'] : ['jab', 'cross', 'jab', 'cross'], id);
   }
+});
+/* Every grade of the step jab and the step one-two throws and lands in every loop, not only the first: the drills are not
+   started afresh each loop (catalogue, footwork.mjs: drive), and a grade that is cued off his own beat presses again. */
+test('footwork: every grade lands the step jab and the one-two in every loop', () => {
+  for (const id of ['stepjab', 'onetwo'])
+    for (const entry of FOOTWORK.filter(e => e.item === id)) {
+      const bout = freshBout(entry),
+        n = Math.round(entry.loop / DT),
+        loops = [];
+      for (let i = 0; i < n * 3; i++) {
+        step(bout, drive(entry, bout, i * DT, DT), DT);
+        bout.fighters[1].hp = 1000;
+        for (const e of bout.events) if (e.type === 'hit' && e.who === 0) (loops[Math.floor(i / n)] = loops[Math.floor(i / n)] || []).push(e.name);
+      }
+      for (let k = 0; k < 3; k++) assert.deepEqual(loops[k], id === 'stepjab' ? ['jab'] : ['jab', 'cross'], `${entry.id}, loop ${k + 1}: ${JSON.stringify(loops)}`);
+    }
 });
 export { play };

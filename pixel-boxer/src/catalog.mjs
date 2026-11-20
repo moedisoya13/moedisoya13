@@ -391,7 +391,7 @@ function start({ manifest, boxer }) {
         if (e.type === 'dash') m.dashAt = cell.t;
         break;
       case 'stepjab':
-        if (e.type === 'hit' && e.who === 0 && e.name === 'jab') m.jabAt = cell.t;
+        if (e.type === 'hit' && e.who === 0 && e.name === 'jab') (m.jabAt = cell.t), (m.done = false);
         break;
       case 'onetwo':
         if (e.type === 'hit' && e.who === 0 && e.name === 'jab') m.jabAt = cell.t;

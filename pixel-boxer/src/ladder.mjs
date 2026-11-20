@@ -29,7 +29,7 @@ export const PUNCHES = [
 export const AT = 0.5; // when in the loop he is told to throw it (and, if he keeps a beat, starts waiting for his moment)
 
 /* When to press, by how he keeps time. -> the button to press this step, or nothing. The moment it is pressed is kept on
-   him (f.script.pressed, or under `key`), for the card. from: the moment of the loop he is told to throw it. */
+   him (f.cues.pressed, or under `key`), for the card. from: the moment of the loop he is told to throw it. */
 export function cue(punch, level, from, key) {
   const move = MOVES[punch],
     button = punch === 'jab' ? 'jab' : 'power',
@@ -38,7 +38,7 @@ export function cue(punch, level, from, key) {
     k = key || 'pressed';
   return (bout, t) => {
     const f = bout.fighters[0],
-      own = (f.script = f.script || {}),
+      own = (f.cues = f.cues || {}),
       r = f.animator.rhythm;
     const start = typeof at === 'function' ? at(own) : at;
     if (own[k] !== undefined || start === null || t < start - 1e-9) return null;
@@ -79,7 +79,7 @@ export const LADDER = PUNCHES.flatMap(p =>
     },
     keep: b => {
       const f = b.fighters[0];
-      if ((p.id === 'hook' || p.id === 'upper') && !(f.script && f.script.pressed !== undefined)) f.sinceLast = 0;
+      if ((p.id === 'hook' || p.id === 'upper') && !(f.cues && f.cues.pressed !== undefined)) f.sinceLast = 0;
     },
     cue: cue(p.id, LEVEL[lv])
   }))
@@ -150,6 +150,23 @@ export const STANCES = LEVELS.flatMap(lv => [
    (foot, then fist); a pro, and a dirty man who keeps no beat, when the script says; a clean great one so that it lands on a
    foot coming down, a clean legend between two. */
 const STEP = { stepjab: [['jab', 0.55]], onetwo: [['jab', 0.55], ['cross', 0.78]] };
+/* He stays in until his punches are done. The script's own moment to step out is the pro's; a man who throws later than
+   that (a beginner who stops first, an amateur or a great one waiting for a foot to come down, which in a loop that is no
+   whole number of beats falls at a different moment each time round) would otherwise be walking out as his punch arrives,
+   and it would land as a touch, or not at all. So he holds the place he stepped in to while a punch of the drill is still
+   owed (a cue that has not pressed it yet, or a press still to come) or still on its way. */
+function stayIn(e, id, step) {
+  const pressAt = step && step.press ? Math.max(...step.press.map(p => p[0])) : -1,
+    owed = STEP[id].map((_, i) => (i === 0 ? 'first' : 'second')),
+    inside = e.me(STEP[id][0][1]);
+  return (t, f) => {
+    const out = e.me(t);
+    if (!f || out[0] === inside[0] || t < STEP[id][0][1]) return out;
+    const busy = f.action && MOVES[f.action.name].punch,
+      waiting = step && step.cue ? owed.some(k => !f.cues || f.cues[k] === undefined) : t < pressAt + 1e-9;
+    return busy || waiting ? inside : out;
+  };
+}
 function stepCue(id, lv) {
   const level = LEVEL[lv],
     [first, second] = STEP[id];
@@ -174,6 +191,7 @@ export const FOOTWORK = ENTRIES.filter(e => e.id !== 'bounce').flatMap(e =>
     const step = STEP[e.id] ? stepCue(e.id, lv) : null;
     if (step && step.press) g.press = step.press;
     if (step && step.cue) (g.press = []), (g.cue = step.cue);
+    if (STEP[e.id]) g.me = stayIn(e, e.id, step);
     return g;
   })
 );

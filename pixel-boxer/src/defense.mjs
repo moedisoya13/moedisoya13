@@ -98,7 +98,7 @@ function graded(item, lv) {
    it: from the moment his head is clear, from most of the way back, or once he is back). */
 export const counterCue = when => (bout, t) => {
   const f = bout.fighters[0],
-    own = (f.script = f.script || {});
+    own = (f.cues = f.cues || {});
   if (own.countered || t < when + F - 1e-9) return null;
   if (f.action && MOVES[f.action.name].punch) return void (own.countered = t);
   return 'power';

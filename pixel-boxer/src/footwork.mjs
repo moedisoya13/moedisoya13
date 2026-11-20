@@ -36,13 +36,15 @@ function pendulum(f) {
   return [(v + 5 * (HOME[0] + x - f.x)) / RULES.speed, (5 * (HOME[1] - f.z)) / RULES.speed];
 }
 
-/* loop: seconds. me(t), him(t): where each should be standing at t (the script walks them there); or stick(f): the
+/* loop: seconds. me(t, f), him(t): where each should be standing at t (the script walks them there; me is given the boxer
+   too, for a place that waits on what he is doing); or stick(f): the
    controls themselves, for footwork that keeps his time. press: [[t, button, value]] (value true if left out), and
    against: the same for the other man (him(t) null: he stays where he is). cover(t): guard held (hisCover(t) for the other
    man). view: { yaw, pitch }.
    setup(bout): anything about the men to set before the loop starts; keep(bout, t): anything to hold as it was, every step
    (how hurt or tired he is, say, which the bout would otherwise change), or to do at a moment of the loop. cue(bout, t):
-   a button to press now, for a press that waits on something (his own beat, say) rather than a moment of the loop. */
+   a button to press now, for a press that waits on something (his own beat, say) rather than a moment of the loop; what
+   a cue keeps of what it has done (f.cues) is the loop's, and is cleared as each loop starts. */
 export const ENTRIES = [
   {
     id: 'bounce', name: '리듬 바운스', en: 'Rhythm bounce', group: '박자',
@@ -120,7 +122,7 @@ export function drive(entry, bout, at, dt) {
     tick = Math.round(at / dt) + 1,
     loop = Math.round(entry.loop / dt),
     t = (tick % loop) * dt,
-    mine = { move: entry.stick ? entry.stick(a) : walkTo(a, entry.me(t)), cover: !!(entry.cover && entry.cover(t)) },
+    mine = { move: entry.stick ? entry.stick(a) : walkTo(a, entry.me(t, a)), cover: !!(entry.cover && entry.cover(t)) },
     // (a script may leave the other man where he is: him(t) null)
     there = entry.him ? entry.him(t) : AWAY,
     his = { move: there ? walkTo(b, there) : [0, 0], cover: !!(entry.hisCover && entry.hisCover(t)) };
@@ -128,6 +130,9 @@ export function drive(entry, bout, at, dt) {
   for (const [controls, presses] of [[mine, entry.press], [his, entry.against]])
     for (const [when, button, value] of presses || []) if (tick % loop === Math.round(when / dt)) controls[button] = value === undefined ? true : value;
   if (entry.cue) {
+    // (a drill that is not started afresh each loop goes on from where it was, but a cue that has pressed in one loop
+    // presses again in the next: what it keeps of having pressed is forgotten as each loop starts)
+    if (tick % loop === 1 % loop) a.cues = {};
     const button = entry.cue(bout, t);
     if (button) mine[button] = true;
   }
