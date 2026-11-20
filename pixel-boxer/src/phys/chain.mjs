@@ -12,7 +12,10 @@
      stepChain(chain, move, dt)               -> the phase it is in: coil, throw, hold, recover, done
      chain.q[i], chain.v[i]                   each link's position 0..1 toward its end, and speed (1/s)
                                               (a punch thrown by the same hand as the one before starts from that one's: bout.mjs)
-     chain.coil.q                             the wind-up before it: 0..1, let go as the chain fires */
+     chain.coil.q                             the wind-up before it: 0..1, let go as the chain fires
+     preload(chain, move, load, shoulder)     a punch thrown out of the end of an evasion (or a parry), whose wind-up and
+                                              leg drive that end has already done (load 0..1), and whose shoulder is
+                                              already part of the way out (a parrying hand going straight on) */
 export const LINKS = ['drive', 'hips', 'trunk', 'shoulder', 'elbow'];
 const N = LINKS.length;
 const DAMP = 0.62; // a little under critical: each joint runs a few percent past its end and comes back, which is the snap
@@ -61,6 +64,42 @@ export function createChain(move, quick, skill) {
     peakAt: new Array(N).fill(-1),
     landed: false
   };
+}
+/* Thrown out of the end of an evasion: the wind-up is already that far in (only the rest of its time is used), and the legs
+   are already that far into their push, coming up out of the knees the evasion bent (as far toward their peak speed as the
+   load says), so they hand on to the hips sooner. Nothing else: the hips, trunk and arm still have all of their work to do,
+   so the punch is no weaker for it. `shoulder`: how far the shoulder is already out, at rest (a parrying hand going on). */
+export function preload(c, move, load, shoulder) {
+  if (!(load > 0) && !(shoulder > 0)) return c;
+  const k = c.quick || 1;
+  c.load = load || 0;
+  if (load > 0) {
+    c.coil.q = Math.min(1, load);
+    c.coilTime *= 1 - Math.min(1, load);
+    if (c.coilTime < 1e-4) (c.coilTime = 0), (c.phase = 'throw');
+    // the legs on their own, from rest, to their peak speed: and the state `load` of the way there
+    const w = move.chain.rate[0] * k,
+      s = { q: 0, v: 0 },
+      h = 1 / 960;
+    let peak = 0,
+      at = 0;
+    for (let t = 0; t < 0.3; t += h) {
+      pull(s, 0, 1, w, c.damp[0], h);
+      if (s.v > peak) (peak = s.v), (at = t + h);
+      else break;
+    }
+    const r = { q: 0, v: 0 };
+    for (let t = 0; t < load * at - 1e-9; t += h) pull(r, 0, 1, w, c.damp[0], h);
+    c.q[0] = r.q;
+    c.v[0] = r.v;
+    c.on[0] = true;
+    c.fired[0] = 0;
+    c.push[0] = w * w; // (what its push was as it started)
+    c.peak[0] = r.v;
+    c.peakAt[0] = 0;
+  }
+  if (shoulder > 0) c.q[3] = shoulder;
+  return c;
 }
 // one rotor, pulled toward `goal` at natural frequency w: semi-implicit, in steps short enough for the stiffest muscle
 function pull(s, key, goal, w, damp, dt) {

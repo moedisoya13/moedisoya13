@@ -14,7 +14,11 @@
                    roll: 1 | -1 (bob and weave: down under it and up on his left or right), pull: true (the head swayed
                    back out of reach) }
      bout.events            what happened this step, for the picture and the sound (a dirty boxer's fouls among them:
-                            { type: 'foul', name: stomp | thumb, who, on, J }; nobody penalises them)
+                            { type: 'foul', name: stomp | thumb, who, on, J }; nobody penalises them). A punch that misses
+                            says by how much (whiff: margin, metres between the glove's and the head's surfaces at the
+                            closest), and a defence that was brilliant says so: { type: 'brilliant', who (the defender),
+                            on, of: 'whiff' | 'parry', margin, late, from (bout time the punch was pressed), counter (the
+                            id of the punch he answered with) }, and its whiff or parry event is marked brilliant: true
      bout.fighters[i].pose  his solved pose this step (and .place: where on the canvas, .points: gloves and head in the world)
 
    A punch is physics from the feet to the glove. Pressing a button only starts a kinetic chain (phys/chain.mjs); the joints
@@ -22,16 +26,27 @@
    What it does then is the impulse it delivers: the glove's speed into the head, times the mass the chain has put behind it
    at that instant. So a punch from too far falls short, one thrown too close arrives before the elbow has straightened and
    is weak, and getting the head out of the way is the dodge. A guard held up puts the gloves in the way; one raised just
-   before the punch turns it aside and opens a counter. */
+   before the punch turns it aside and opens a counter.
+
+   How a man gets out of the way is his grade's (anim/evade.mjs): how long it takes, how long he is tied up in it, and when
+   a punch may start out of it (a great one's from the moment his head is off the line, a pro's from most of the way back, the
+   rest once it is over). A punch started out of the end of an evasion has its wind-up and leg drive done already, as far as
+   the evasion's end is that punch's coil (the hand it leaves wound up: evade.mjs LOADED): it gets there sooner, not harder.
+   A parry leaves a punch wound up the same way, by the grade of his guard. A defence is brilliant when the punch missed by
+   three centimetres or less (or his head was clear of it by less than a frame), or the guard went up as late as it could and
+   still turned it aside, and a loaded punch went back within 0.4 s of the defence starting. */
+const BRILLIANT = { margin: 0.03, within: 0.4 };
 import * as M from '../rig/m3.mjs';
 import { MOVES, RISE } from '../anim/moves.mjs';
 import { createAnimator } from '../anim/animator.mjs';
 import { toWorld } from '../anim/pose.mjs';
-import { createChain, stepChain, effectiveMass } from '../phys/chain.mjs';
+import { createChain, stepChain, effectiveMass, preload } from '../phys/chain.mjs';
 import * as P from '../anim/pose.mjs';
 import { RING } from '../world/ring.mjs';
+import { LEN } from '../rig/solve.mjs';
 import { body, blank, fatigue, COST } from './profile.mjs';
 import { levelOf } from '../anim/skill.mjs';
+import { timeline, evadeTime, progress, LOADED } from '../anim/evade.mjs';
 
 export const RULES = {
   hp: 100,
@@ -54,6 +69,7 @@ export const RULES = {
   stop: [0.03, 0.13, 1 / 900], // the held moment: least, most, and seconds per newton-second
   // ---- defence
   parry: 0.17, // a guard this fresh turns a punch aside
+  guardUp: 0.63, // and a guard is in the way once the gloves have got this far into it (anim/skill.mjs: cover.arrive)
   counter: 0.95, // seconds the opening lasts
   counterGain: 1.8,
   smother: 0.15, // share of a blow that gets through a held guard
@@ -103,9 +119,31 @@ const pressOf = input => (input.dash ? ['dash', input.dash] : EVADE.find(n => in
 // a punch still on its way out: wound up or being thrown, and not yet landed
 export const incoming = f => (punching(f) && !f.action.struck && (f.action.chain.phase === 'coil' || f.action.chain.phase === 'throw') ? f.action : null);
 // may he start something new? In the middle of a punch, only another punch, and only once this one has been thrown
-const open = (f, punch) => f.stun <= 0 && (!f.action || (punch && punching(f) && (f.action.chain.phase === 'hold' || f.action.chain.phase === 'recover')));
+const open = (f, punch) =>
+  f.stun <= 0 &&
+  (!f.action ||
+    (punch && punching(f) && (f.action.chain.phase === 'hold' || f.action.chain.phase === 'recover')) ||
+    // (out of an evasion, from the moment his grade lets him: anim/skill.mjs, evade.cut)
+    (punch && isEvasion(f.action.name) && f.action.t >= timeline(f.action.name, f.action.level).cut - 1e-9));
 
-function begin(f, name, more) {
+const isEvasion = name => EVADE.includes(name);
+// the evasion a man is in (or came out of a moment ago), and how far into it: what a punch started now is thrown out of
+const GRACE = 0.1; // seconds after an evasion is over that its end is still the coil of the next punch
+function loadOf(f, bout, move) {
+  const e = f.action && isEvasion(f.action.name) ? f.action : f.lastEvade && f.lastEvade.endedAt !== null && bout.t - f.lastEvade.endedAt <= GRACE ? f.lastEvade.action : null;
+  if (e) {
+    const ev = e.level.evade;
+    return LOADED(e.name, e.side) === move.hand ? { load: ev.load, from: e.id } : null;
+  }
+  // a parry: the other hand, or the one that turned it aside, by the grade of his guard
+  const p = f.parried;
+  if (p && bout.t - p.at <= RULES.counter) {
+    const cv = p.level.cover;
+    if ((cv.hand === 'same') === (move.hand === p.hand)) return { load: cv.load, shoulder: cv.q, from: 'parry' };
+  }
+  return null;
+}
+function begin(f, name, more, bout) {
   const move = MOVES[name],
     before = f.action,
     level = levelOf(f.skills, name),
@@ -114,7 +152,12 @@ function begin(f, name, more) {
   if (COST[name]) f.stamina = Math.max(0, f.stamina - COST[name]);
   // a punch thrown with the hand that has just punched starts from where that arm's joints still are (a double jab)
   if (chain && before && before.chain && MOVES[before.name].hand === move.hand) (chain.q = before.chain.q.slice()), (chain.v = before.chain.v.slice());
-  f.action = Object.assign({ name, t: 0, id: name + ++f.serial, struck: false, chain, level }, more);
+  // out of the end of an evasion or a parry: wound up already
+  const loaded = chain && bout ? loadOf(f, bout, move) : null;
+  if (loaded) preload(chain, move, loaded.load, loaded.shoulder);
+  if (before && isEvasion(before.name) && f.lastEvade && f.lastEvade.action === before) f.lastEvade.endedAt = bout ? bout.t : 0;
+  f.action = Object.assign({ name, t: 0, id: name + ++f.serial, struck: false, chain, level, at: bout ? bout.t : 0, loaded: loaded && loaded.load > 0 ? loaded : null }, more);
+  if (isEvasion(name)) (f.lastEvade = { action: f.action, name, start: bout ? bout.t : 0, endedAt: null }), (f.action.head0 = f.points ? f.points.head.slice() : null);
   f.cover = false;
 }
 
@@ -130,22 +173,34 @@ function decide(bout, f, input, dt, who) {
     else if (open(f, punch)) {
       f.want = null;
       if (EVADE.includes(what)) {
-        begin(f, what, { side: dir === true ? 1 : dir });
+        begin(f, what, { side: dir === true ? 1 : dir }, bout);
+        // (what he is getting out of the way of: the other man's punch on its way, if there is one)
+        const other = bout.fighters[1 - who],
+          coming = incoming(other) || (punching(other) && other.action.chain.phase === 'hold' && !other.action.struck ? other.action : null);
+        f.defence = { kind: 'evade', start: bout.t, of: coming ? coming.id : null, from: coming ? coming.at : bout.t, margin: null, late: false, counterAt: null, event: null, said: false };
         bout.events.push({ type: what, who });
       } else if (!punch) {
         const [fx, fz] = aheadOf(f);
         let d = dir === true ? [-fx, -fz] : dir;
         const l = Math.hypot(d[0], d[1]) || 1;
         d = [d[0] / l, d[1] / l];
-        begin(f, 'dash', { dir: local(f, d[0], d[1]), go: d });
+        begin(f, 'dash', { dir: local(f, d[0], d[1]), go: d }, bout);
         bout.events.push({ type: 'dash', who });
       } else {
         let name = 'jab';
-        if (what === 'power') {
+        // (out of an evasion, a power punch is the one it has wound up: the rear hand's straight, the lead hook off a slip
+        // or a weave to the left, the uppercut out of a duck)
+        const out = f.action && isEvasion(f.action.name) ? f.action : f.lastEvade && f.lastEvade.endedAt !== null && bout.t - f.lastEvade.endedAt <= GRACE ? f.lastEvade.action : null;
+        if (what === 'power' && out && out.level.evade.load > 0) {
+          name = LOADED(out.name, out.side) === 'L' ? 'hook' : out.name === 'duck' ? 'upper' : 'cross';
+          f.link = Math.max(0, RULES.chain.indexOf(name));
+        } else if (what === 'power') {
           f.link = f.sinceLast < RULES.combo && f.lastPower ? (f.link + 1) % RULES.chain.length : 0;
           name = RULES.chain[f.link];
         }
-        begin(f, name, { counter: f.counter > 0 });
+        begin(f, name, { counter: f.counter > 0 }, bout);
+        // a loaded punch answering a defence: what makes the defence brilliant, if it was close enough
+        if (f.action.loaded && f.defence && f.defence.counterAt === null && bout.t - f.defence.start <= BRILLIANT.within + 1e-9) (f.defence.counterAt = bout.t), (f.defence.counter = f.action.id), judge(bout, f, who);
         f.lastPower = what === 'power';
         f.counter = 0;
         bout.events.push({ type: 'punch', who, name });
@@ -222,9 +277,22 @@ function travel(f, input, dt, other) {
 function face(f, other, dt) {
   // (a man on the canvas, or getting up off it, does not turn to face anyone)
   if (f.down || (f.action && MOVES[f.action.name].floor)) return void (f.turn = 0);
-  const want = Math.atan2(other.x - f.x, other.z - f.z),
-    // a boxer who has thrown his weight into a punch cannot swing round with it
-    rate = RULES.turnRate * (punching(f) ? 0.35 : f.stun > 0 ? 0.2 : 1);
+  let want = Math.atan2(other.x - f.x, other.z - f.z);
+  /* By the grade of his footwork (anim/skill.mjs: stance.travel): a beginner's chest follows the other man round late; an
+     amateur, and a dirty man, let him get so far round and then turn all at once. */
+  const tr = levelOf(f.skills, 'stance').stance.travel;
+  if (tr.face) {
+    f.faceTo = f.faceTo === undefined ? want : wrap(f.faceTo + wrap(want - f.faceTo) * (1 - Math.exp(-dt / tr.face)));
+    want = f.faceTo;
+  }
+  if (tr.pivot) {
+    const off = Math.abs(wrap(want - f.yaw)) * 57.3;
+    if (off > tr.pivot) f.pivoting = true;
+    else if (off < 1.5) f.pivoting = false;
+    if (!f.pivoting) want = f.yaw;
+  }
+  // a boxer who has thrown his weight into a punch cannot swing round with it
+  const rate = RULES.turnRate * (punching(f) ? 0.35 : f.stun > 0 ? 0.2 : 1);
   f.turn = Math.max(-rate, Math.min(rate, wrap(want - f.yaw) * 14));
   f.yaw = wrap(f.yaw + f.turn * dt);
 }
@@ -239,13 +307,57 @@ function advance(bout, f, dt, who) {
       now = stepChain(f.action.chain, move, dt);
     if (was === 'throw' && now !== 'throw') {
       f.sinceLast = 0;
-      if (!f.action.struck) bout.events.push({ type: 'whiff', who, name: move.name });
+      if (!f.action.struck) {
+        const near = f.action.near,
+          e = { type: 'whiff', who, name: move.name, margin: near ? +near.gap.toFixed(4) : null };
+        bout.events.push(e);
+        // (and what the man who got out of its way made of it)
+        const other = bout.fighters[1 - who],
+          d = other.defence;
+        if (d && d.kind === 'evade' && d.of === f.action.id && d.event === null) {
+          d.event = e;
+          d.margin = e.margin;
+          d.late = !!(near && near.late);
+          judge(bout, other, 1 - who);
+        }
+      }
     }
     if (now === 'done') f.action = null;
-  } else if (f.action.t >= move.dur) {
+  } else if (isEvasion(f.action.name)) {
+    /* An evasion lasts as long as its grade makes it (anim/evade.mjs). A legend waits out there for the other man's arm to
+       start home, and comes back with it (never later than his grade lets him wait). */
+    const level = f.action.level,
+      ev = level.evade,
+      T = timeline(f.action.name, level),
+      other = bout.fighters[1 - who];
+    if (ev.follow && f.action.t - dt >= T.hold - 1e-9 && f.action.t < ev.follow) {
+      // (until he has seen the arm go out and start home again; a punch that never comes, he gives up on at the most)
+      const out = punching(other) && ['coil', 'throw', 'hold'].includes(other.action.chain.phase);
+      if (out) f.action.seen = true;
+      if (!f.action.back && (out || !f.action.seen)) f.action.held = (f.action.held || 0) + dt;
+      else f.action.back = true;
+    }
+    if (ev.textbook ? f.action.t >= move.dur : evadeTime(f.action, T) >= T.end) {
+      if (f.lastEvade && f.lastEvade.action === f.action) f.lastEvade.endedAt = bout.t;
+      f.action = null;
+    }
+  } else if (f.action.t >= move.dur + (f.action.name === 'dash' && f.action.level ? f.action.level.dash.extra : 0)) {
+    // (a dash ties him up as long as his grade lands it: skill.mjs, dash.extra)
     if (move.stay) f.action.t = move.dur;
     else f.action = null;
   }
+}
+
+/* A defence judged: a miss by a whisker (or a head clear of it by less than a frame), or a parry as late as it could be, and
+   a loaded punch back within 0.4 s of the defence starting. Once a defence. */
+function judge(bout, f, who) {
+  const d = f.defence;
+  if (!d || d.said || d.counterAt === null || !d.event) return;
+  const close = d.kind === 'parry' ? d.late : (d.margin !== null && d.margin <= BRILLIANT.margin + 1e-9) || d.late;
+  if (!close || d.counterAt - d.start > BRILLIANT.within + 1e-9) return;
+  d.said = true;
+  d.event.brilliant = true;
+  bout.events.push({ type: 'brilliant', who, on: 1 - who, of: d.kind === 'parry' ? 'parry' : 'whiff', margin: d.margin, late: d.late, from: d.from, counter: d.counter, at: bout.t });
 }
 
 /* What boxer i is doing, in the words the animator takes. */
@@ -267,7 +379,10 @@ function viewOf(bout, i) {
       aim: null,
       // how he stands and moves when he is doing nothing else (his grade of footwork), and whether a blow has stopped him
       stance: levelOf(f.skills, 'stance'),
+      // and how he covers up (the guard, the block, the parry)
+      guard: levelOf(f.skills, 'cover'),
       stun: f.stun > 0,
+      shoved: Math.hypot(f.kx, f.kz),
       reach: null,
       // the other man, in his own terms: his lead foot's instep (what a dirty man stands on), and whether this man's own lead
       // foot is stood on
@@ -276,6 +391,20 @@ function viewOf(bout, i) {
       // knocked down: what of the other man he cannot fall through, in his own terms
       near: f.down && f.place && other.pose ? NEAR.map(([joint, r]) => [mine(f, at(other, joint)), r]) : null
     };
+  /* A punch coming at him: how soon it will get to his head at the speed it is closing, and which way it is going (his own
+     terms). A great one covering up rides it, or goes out to take it early, the instant before it lands. */
+  const coming = incoming(other);
+  if (coming && other.points && other.before && f.points) {
+    const hand = MOVES[coming.name].hand,
+      g = other.points[hand],
+      g0 = other.before[hand],
+      h = f.points.head,
+      gap = Math.hypot(h[0] - g[0], h[1] - g[1], h[2] - g[2]) - RULES.glove - RULES.head,
+      was = Math.hypot(h[0] - g0[0], h[1] - g0[1], h[2] - g0[2]) - RULES.glove - RULES.head,
+      v = (was - gap) / DT,
+      [left, ahead] = local(f, g[0] - g0[0], g[2] - g0[2]);
+    if (v > 0.5) view.threat = { eta: gap / v, dir: [left, ahead] };
+  }
   if (punching(f) && !other.down && other.points) {
     /* Where the punch is thrown: at the head as it is now, wherever that is. The wrist is sent so that the glove's centre
        would end at the middle of the head (it will meet it before then): straight through for a straight punch, onto the
@@ -354,6 +483,22 @@ function meets(g0, g1, c0, c1, r) {
   return s >= 0 && s <= 1 ? s : -1;
 }
 
+/* How close the glove, on its way from g0 to g1 this step, comes to the head on its way from c0 to c1: centre to centre. */
+function closest(g0, g1, c0, c1) {
+  const p = M.sub(g0, c0),
+    d = M.sub(M.sub(g1, c1), p),
+    dd = d[0] * d[0] + d[1] * d[1] + d[2] * d[2],
+    s = dd < 1e-12 ? 0 : Math.max(0, Math.min(1, -(p[0] * d[0] + p[1] * d[1] + p[2] * d[2]) / dd));
+  return Math.hypot(p[0] + d[0] * s, p[1] + d[1] * s, p[2] + d[2] * s);
+}
+// how far a point is from the segment a to b
+function segment(p, a, b) {
+  const ab = M.sub(b, a),
+    ap = M.sub(p, a),
+    l = ab[0] * ab[0] + ab[1] * ab[1] + ab[2] * ab[2],
+    s = l < 1e-12 ? 0 : Math.max(0, Math.min(1, (ap[0] * ab[0] + ap[1] * ab[1] + ap[2] * ab[2]) / l));
+  return Math.hypot(ap[0] - ab[0] * s, ap[1] - ab[1] * s, ap[2] - ab[2] * s);
+}
 function strike(bout, f, other, who, dt) {
   const action = incoming(f);
   if (!action || !f.before || !other.before || other.down) return;
@@ -361,6 +506,44 @@ function strike(bout, f, other, who, dt) {
     hand = move.hand,
     g0 = f.before[hand],
     g1 = f.points[hand];
+  // (how near it has come to his head so far: a punch that misses says by how much, and whether his head was only just clear)
+  {
+    const gap = closest(g0, g1, other.before.head, other.points.head) - RULES.glove - RULES.head;
+    if (!action.near || gap < action.near.gap) {
+      /* (and whether a defence started a frame later would have met it: his head getting away from the glove less than a
+         frame's worth faster than the gap it leaves, the last frame of his window) */
+      const h = other.points.head,
+        n = M.sub(h, g1),
+        l = Math.hypot(n[0], n[1], n[2]) || 1,
+        v = M.sub(h, other.before.head),
+        away = (v[0] * n[0] + v[1] * n[1] + v[2] * n[2]) / l;
+      action.near = { gap, late: gap >= 0 && gap < away };
+    }
+  }
+  /* A great one getting out of its way goes only as far as he has to: once the punch is committed (its aim set) and his head
+     is clear of where it is going by his grade's margin, his head goes no further (anim/evade.mjs: action.cap). */
+  const away = other.action && isEvasion(other.action.name) ? other.action : null;
+  if (away && away.level.evade.just && away.cap === undefined && away.name === 'slip' && action.aim && away.head0) {
+    /* (how far his head has gone, and so how far it will go at this rate, against how clear of the punch's path it is now:
+       if the rest of the way would take it further clear than his margin, it stops at the margin) */
+    // (where the glove will stop: a straight arm reaches only so far past the shoulder, the glove's middle past the wrist)
+    let to = M.add(f.place.p, M.app(f.place.R, action.aim));
+    if (move.arm === 'straight') {
+      const S = toWorld(f.place, f.pose.at[hand === 'L' ? 'LeftArm' : 'RightArm'], f.pose.stretch),
+        d = M.sub(to, S),
+        l = Math.hypot(d[0], d[1], d[2]) || 1;
+      to = M.add(S, M.scale(d, (Math.min(l, LEN.upperArm + LEN.foreArm - 0.03) + 0.075) / l));
+    }
+    const head = other.points.head,
+      clear = segment(head, g1, to) - RULES.glove - RULES.head,
+      p = progress(away),
+      moved = Math.hypot(head[0] - away.head0[0], head[1] - away.head0[1], head[2] - away.head0[2]);
+    if (p.k >= 0.3 || !p.going) {
+      const full = moved / Math.max(p.k, 0.3),
+        just = away.level.evade.just;
+      away.cap = clear + (full - moved) > just && full > 1e-3 ? Math.min(1, Math.max(p.k, p.k + (just - clear) / full)) : 1;
+    }
+  }
   // what is in the way: his head, and, if he is covering up, his gloves in front of it
   let first = null;
   const test = (what, key, r) => {
@@ -368,7 +551,8 @@ function strike(bout, f, other, who, dt) {
     if (s >= 0 && (!first || s < first.s)) first = { what, key, s };
   };
   test('head', 'head', RULES.glove + RULES.head);
-  if (other.cover) for (const key of ['L', 'R']) test('guard', key, RULES.glove * 2);
+  // (the gloves are in the way once they have got most of the way up: how quickly is his grade's)
+  if (other.cover && other.animator.covered >= RULES.guardUp) for (const key of ['L', 'R']) test('guard', key, RULES.glove * 2);
   if (!first) return;
 
   // ---- the blow: how fast the glove is closing on what it hit, and how much is behind it
@@ -403,15 +587,20 @@ function strike(bout, f, other, who, dt) {
       f.kx = -dir[0] * 1.2;
       f.kz = -dir[1] * 1.2;
       other.counter = RULES.counter;
-      other.animator.deflect({ hand: first.key, J, dir: felt.dir });
+      const cover = levelOf(other.skills, 'cover');
+      other.animator.deflect({ hand: first.key, J, dir: felt.dir, level: cover });
       bout.stop = 0.1;
-      return bout.events.push(Object.assign({ type: 'parry' }, blow, { who: 1 - who, on: who }));
+      // (what it leaves wound up, by the grade of his guard; and whether it went up as late as it could and still did it)
+      other.parried = { hand: first.key, at: bout.t, level: cover };
+      const e = Object.assign({ type: 'parry' }, blow, { who: 1 - who, on: who });
+      other.defence = { kind: 'parry', start: bout.t - other.coverAge, of: action.id, from: action.at, margin: null, late: other.coverAge <= cover.cover.arrive + 1 / 60 + 1e-9, counterAt: null, event: e, said: false };
+      return bout.events.push(e);
     }
     other.hp = Math.max(1, other.hp - J * RULES.damage * other.k.smother * other.k.chin);
     other.kx += ((dir[0] * J) / RULES.mass) * RULES.shove * 0.6;
     other.kz += ((dir[1] * J) / RULES.mass) * RULES.shove * 0.6;
     other.animator.strike({ J: J * 0.25, dir: felt.dir });
-    other.animator.brace({ J, hand: first.key, dir: felt.dir });
+    other.animator.brace({ J, hand: first.key, dir: felt.dir, level: levelOf(other.skills, 'cover') });
     bout.stop = stop * 0.4;
     return bout.events.push(Object.assign({ type: 'block' }, blow));
   }

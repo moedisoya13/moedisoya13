@@ -8,7 +8,7 @@
    clean great one early enough that the punch lands on a foot coming down, and a clean legend so that it lands halfway
    between two. The scripts read his rhythm to do it (animator.rhythm), and how long the punch will take from how it is
    thrown (animator.arrival); his own feet do the rest (the animator times his beat to the punch). */
-import { HOME } from './footwork.mjs';
+import { HOME, ENTRIES } from './footwork.mjs';
 import { LEVELS, LEVEL } from './anim/skill.mjs';
 import { MOVES } from './anim/moves.mjs';
 import { arrival } from './anim/animator.mjs';
@@ -29,18 +29,21 @@ export const PUNCHES = [
 export const AT = 0.5; // when in the loop he is told to throw it (and, if he keeps a beat, starts waiting for his moment)
 
 /* When to press, by how he keeps time. -> the button to press this step, or nothing. The moment it is pressed is kept on
-   him (f.script.pressed), for the card. */
-function cue(punch, level) {
+   him (f.script.pressed, or under `key`), for the card. from: the moment of the loop he is told to throw it. */
+export function cue(punch, level, from, key) {
   const move = MOVES[punch],
     button = punch === 'jab' ? 'jab' : 'power',
-    foot = move.hand;
+    foot = move.hand,
+    at = from ?? AT,
+    k = key || 'pressed';
   return (bout, t) => {
     const f = bout.fighters[0],
       own = (f.script = f.script || {}),
       r = f.animator.rhythm;
-    if (own.pressed !== undefined || t < AT - 1e-9) return null;
-    const seen = own.seen;
-    own.seen = r.halves;
+    const start = typeof at === 'function' ? at(own) : at;
+    if (own[k] !== undefined || start === null || t < start - 1e-9) return null;
+    const seen = own['seen' + k];
+    own['seen' + k] = r.halves;
     let go = false;
     if (level.form.beat) {
       // how long it will take, as he throws it now (his speed, how tired he is), against how long his feet will take
@@ -49,7 +52,7 @@ function cue(punch, level) {
       go = until <= lead;
     } else if (level.grade === 3) go = seen !== undefined && r.halves !== seen && r.landed === foot;
     else go = true;
-    if (go) own.pressed = t;
+    if (go) own[k] = t;
     return go ? button : null;
   };
 }
@@ -82,23 +85,25 @@ export const LADDER = PUNCHES.flatMap(p =>
   }))
 );
 
-/* The dirty fighter's techniques (moves.mjs: foul), each at 4암 and 5암 side by side: thrown from where the foul can reach
-   (a foot on his instep, from closer than the punch alone is thrown from), at a man who stands in his own guard, a pro's.
-   The card shows what the bout said of the foul. (Only these two are kept; the rest of the plan's dirty techniques were
-   set aside, to be planned again.) */
+/* The dirty fighter's techniques (moves.mjs: foul), at every grade side by side: thrown from where the foul can reach (a foot
+   on his instep, from closer than the punch alone is thrown from), at a man who stands in his own guard, a pro's. Only a
+   dirty grade (4암, 5암) has the foul in it; every other grade throws the same punch from the same spot, clean, so that the
+   foul is what the row compares. The card shows what the bout said of the foul. (Only these two are kept; the rest of the
+   plan's dirty techniques were set aside, to be planned again.) */
 export const TECHNIQUES = [
   { id: 'stomp', punch: 'hook', range: 0.8, name: '발등 밟고 훅', en: 'Stomp and hook' },
   { id: 'thumb', punch: 'jab', range: 0.985, name: '안면 잽', en: 'Face jab' }
 ];
 export const DIRTY = TECHNIQUES.flatMap(tq =>
-  ['4a', '5a'].map(lv => ({
+  LEVELS.map(lv => ({
     id: `${tq.id}@${lv}`,
     punch: tq.punch,
     level: lv,
     foul: tq.id,
     name: `${tq.name} ${LEVEL[lv].label}`,
     en: `${tq.en} · ${LEVEL[lv].name}`,
-    group: '암의 기술',
+    group: tq.name,
+    item: tq.id,
     loop: 2.2,
     view: { yaw: 0.25, pitch: 0.25 },
     me: () => HOME,
@@ -138,3 +143,37 @@ export const STANCES = LEVELS.flatMap(lv => [
     setup: b => (b.fighters[0].skills = { all: lv })
   }
 ]);
+
+/* The footwork drills (footwork.mjs), each at every grade: the same script and the same places to be, and the body that gets
+   him there is his grade's (anim/skill.mjs: stance, its travel; dash). A step jab and a step one-two are pressed the way the
+   grade throws (as the ladder's cue does): a beginner stops and then punches, late; an amateur on the lead foot coming down
+   (foot, then fist); a pro, and a dirty man who keeps no beat, when the script says; a clean great one so that it lands on a
+   foot coming down, a clean legend between two. */
+const STEP = { stepjab: [['jab', 0.55]], onetwo: [['jab', 0.55], ['cross', 0.78]] };
+function stepCue(id, lv) {
+  const level = LEVEL[lv],
+    [first, second] = STEP[id];
+  if (lv === '3' || level.side === 'a') return null; // (the script's own presses)
+  // a beginner: stood still a moment first; the second a long while after the first
+  if (level.grade === 1) return { press: [[first[1] + 0.3, first[0] === 'jab' ? 'jab' : 'power'], ...(second ? [[first[1] + 0.75, 'power']] : [])] };
+  const a = cue(first[0], level.grade === 2 ? { grade: 3, form: {} } : level, first[1], 'first'),
+    b = second ? cue(second[0], level.grade === 2 ? { grade: 3, form: {} } : level, own => (own.first === undefined ? null : own.first + 0.2), 'second') : null;
+  return { cue: (bout, t) => a(bout, t) || (b && b(bout, t)) };
+}
+export const FOOTWORK = ENTRIES.filter(e => e.id !== 'bounce').flatMap(e =>
+  LEVELS.map(lv => {
+    const g = Object.assign({}, e, {
+      id: `${e.id}@${lv}`,
+      item: e.id,
+      level: lv,
+      setup: b => {
+        b.fighters[0].skills = { all: lv };
+        if (e.setup) e.setup(b);
+      }
+    });
+    const step = STEP[e.id] ? stepCue(e.id, lv) : null;
+    if (step && step.press) g.press = step.press;
+    if (step && step.cue) (g.press = []), (g.cue = step.cue);
+    return g;
+  })
+);

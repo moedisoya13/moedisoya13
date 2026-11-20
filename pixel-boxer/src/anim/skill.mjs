@@ -82,26 +82,77 @@
      travel   { cycle: the travelling beat, times; lean: degrees he leans into it, the body ahead of the feet; lurch: metres
               he carries on past when he stops; halting: how nearly each step comes to a stop }
      flourish 'nervous' (shifting his feet), 'clean' (the five), 'dirty' (the two) | null
-     paw      metres the lead hand reaches out, now and then, to find the range (a heavy, dirty man's) */
+     paw      metres the lead hand reaches out, now and then, to find the range (a heavy, dirty man's)
+     travel also: order (the chance the wrong foot steps first), width (the share of his stance kept in the middle of a
+              step: under 1, the feet come together), face (seconds his chest is behind the other man going round him),
+              pivot (degrees he lets him get round before he turns, all at once)
+   evade: how he gets his head out of the way (anim/evade.mjs; each 0 or 1 in the textbook unless said)
+     flinch   seconds he flinches before anything of the evasion starts; wince: how much of a beginner's flinch shows (the
+              gloves up in front of his own eyes, the head jerked back and turned away)
+     out hold back   the going, the time out there and the way back, times what is written
+     move     how far the head is taken, times what is written (the hips, trunk and head; the hands and feet are their own)
+     delay    { head, trunk, hips, feet, hands }: seconds after the press each group of joints starts reading the curve
+     scale    the same groups: how much of what is written each does
+     pause    seconds held at each corner of a weave (a beginner's and an amateur's go in pieces)
+     cut      when a punch may start out of it: 'end' (once it is over), 'return' (four fifths of the way back), 'clear' (from
+              the moment the head is off the line)
+     load     how much of the next punch's wind-up the evasion's end has done already (the hand it leaves wound up:
+              evade.mjs LOADED), 0..1
+     look lively   as in form, while it goes
+     exit     how he comes out of it: 'stumble' (a foot put out to catch himself, the hands late), 'flat' (stands flat a
+              beat), null, 'angle' (stepped off to the side and turned back in)
+     beat     'on': the way back is over on a foot coming down (the animator times his beat to it)
+     follow   seconds after the press he waits out there at most for the other man's arm to start home (0: he does not)
+     cross    degrees the way back carries the head over to the other side, under a shallow U
+     in low   metres a dirty man goes in toward him as he goes off the line, and stays down
+     just     metres: a great one's head goes no further than this clear of where the committed punch is going (0: as far
+              as the move goes)
+   cover: how he covers up (the guard, the block, the parry)
+     arrive   seconds the gloves take to get most of the way into the guard (63%)
+     hands body   channels added to the written guard (moves.mjs: cover) when it is up
+     lively head look   the bounce, the head's own movement and the eyes, behind it
+     meet     { scale, add }: the gloves put out to meet a punch (a parry), times what is written, and what is added
+     block    { brace (how far a blocked punch drives the gloves in and the body back, times), open (metres the hands are
+              knocked apart), settle (how quickly the guard is back, times), go (degrees the trunk turns away with the punch,
+              and metres the head goes back, the instant before it lands: riding it), lean (degrees leant into it, braced),
+              meet (metres the glove goes out to take it early, and degrees the shoulder rolls it off) }
+     back     how quickly the parrying hand comes home, times; load, hand: the punch a parry leaves wound up, and which hand
+              ('other', 'same'), q: how far the shoulder of that punch is already out
+   dash: how he dashes (each 0 in the textbook unless said)
+     upright  he does not sink into it (nor lean into it): stood up, the hands thrown open; rise: metres more he comes up
+     prep     metres he stands up first, before he pushes
+     drag     how much of it is a slide along the canvas; low: metres he stays down after it
+     land     'stumble' | 'flat' | null | 'angle'; turn: degrees he lands turned; bend: metres the rear knee is bent on landing
+     extra    seconds after it before he can do anything else */
 export const LEVELS = ['1', '2', '3', '4m', '4a', '5m', '5a'];
 
 // the legs set the hips and the arm off together, and each goes its own way: the arm does not wait for the trunk, so it gets
 // there before the body has turned behind it
 const ARM_FIRST = [[0], { 0: [1, 3], 1: [2], 2: [], 3: [4], 4: [] }];
 
+const TEXTBOOK_TRAVEL = { cycle: 1, lean: 0, lurch: 0, halting: 0, order: 0, width: 1, face: 0, pivot: 0 };
 const TEXTBOOK_STANCE = {
   bounce: 1, hop: 1, rock: 1, lag: 1, accent: [1, 1], swing: 0.5, jitter: 0, tempo: null, drag: 0, flat: false,
   hips: 0, lean: 0, yaw: 0, gap: 0, shoulder: 0,
   guard: { y: 0, apart: 0, elbow: 0, chin: 0, lead: [0, 0, 0], loose: 0 },
   look: 0.9,
   head: { A: 0.022, D: 0, T: 4, beat: 'free' },
-  travel: { cycle: 1, lean: 0, lurch: 0, halting: 0 },
+  travel: TEXTBOOK_TRAVEL,
   flourish: null,
   paw: 0
 };
 const stance = more => Object.assign({}, TEXTBOOK_STANCE, more, { guard: Object.assign({}, TEXTBOOK_STANCE.guard, more.guard), travel: Object.assign({}, TEXTBOOK_STANCE.travel, more.travel) });
 const TEXTBOOK_FORM = { guard: 0, chin: 0, over: 0, tell: 0, dirty: 0, lively: 0.35, dip: -0.015, late: 0, drop: false, sep: 3, off: 0.03, with: 'trunk', tuck: 0, look: 0.9, bend: 0, exit: null, beat: null };
 const form = more => Object.assign({}, TEXTBOOK_FORM, more);
+// (the pro's evasion is the curve as written: textbook marks it so that nothing re-times it at all)
+const GROUPS0 = { head: 0, trunk: 0, hips: 0, feet: 0, hands: 0 },
+  GROUPS1 = { head: 1, trunk: 1, hips: 1, feet: 1, hands: 1 };
+const TEXTBOOK_EVADE = { textbook: true, flinch: 0, wince: 0, out: 1, hold: 1, back: 1, move: 1, delay: GROUPS0, scale: GROUPS1, pause: 0, cut: 'return', load: 0.3, look: 0.9, lively: 0.35, exit: null, beat: null, follow: 0, cross: 0, in: 0, low: 0, just: 0 };
+const evade = more => Object.assign({}, TEXTBOOK_EVADE, { textbook: false }, more, { delay: Object.assign({}, GROUPS0, more.delay), scale: Object.assign({}, GROUPS1, more.scale) });
+const TEXTBOOK_COVER = { textbook: true, arrive: 1 / 22, hands: {}, body: {}, lively: 1, head: 1, look: null, meet: { scale: 1, add: {} }, block: { brace: 1, open: 0, settle: 1, go: null, lean: 0, meet: null }, back: 1, load: 0.3, hand: 'other', q: 0 };
+const cover = more => Object.assign({}, TEXTBOOK_COVER, { textbook: false }, more, { meet: Object.assign({}, TEXTBOOK_COVER.meet, more.meet), block: Object.assign({}, TEXTBOOK_COVER.block, more.block) });
+const TEXTBOOK_DASH = { upright: false, rise: 0, prep: 0, drag: 0, low: 0, land: null, turn: 0, bend: 0, extra: 0 };
+const dash = more => Object.assign({}, TEXTBOOK_DASH, more);
 
 export const LEVEL = {
   1: {
@@ -110,49 +161,70 @@ export const LEVEL = {
     form: form({ guard: 1, chin: 1, over: 2.5, tell: 1, lively: 0, dip: 0.015, sep: 0, off: -0.02, with: 'trunk', look: 0.25, exit: 'stumble' }),
     // stiff and square on, flat on his feet, the hands low and the chin up, his weight shifting about off the beat
     // (his knees locked: his hips as high as his legs will go with his feet still on the canvas)
-    stance: stance({ bounce: 0, hop: 0, rock: 0.15, lag: 0, jitter: 0.12, flat: true, hips: 0.015, lean: -7, yaw: 10, gap: -0.04, guard: { y: -0.06, apart: 0.04, elbow: 0.25, chin: -6 }, look: 0.25, head: null, travel: { cycle: 1.35, lean: 6, lurch: 0.05 }, flourish: 'nervous' })
+    stance: stance({ bounce: 0, hop: 0, rock: 0.15, lag: 0, jitter: 0.12, flat: true, hips: 0.015, lean: -7, yaw: 10, gap: -0.04, guard: { y: -0.06, apart: 0.04, elbow: 0.25, chin: -6 }, look: 0.25, head: null, travel: { cycle: 1.35, lean: 6, lurch: 0.05, order: 0.5, width: 0.45, face: 0.3, pivot: 6 }, flourish: 'nervous' }),
+    evade: evade({ flinch: 0.07, wince: 1, out: 1.45, hold: 2, back: 1.6, move: 1.25, delay: { trunk: 0.05, hips: 0.05, feet: 0.05 }, pause: 0.12, cut: 'end', load: 0, look: 0.25, lively: 0, exit: 'stumble' }),
+    cover: cover({ arrive: 0.11, hands: { ly: 0.075, lz: 0.01, lx: 0.02, rx: -0.02, le: 0.4, re: 0.4 }, body: { lean: -6, hw: 20, yaw: 15 }, lively: 0, head: 0, look: 0.25, meet: { add: { lz: 0.13, rz: 0.1, lx: 0.06, rx: -0.06, le: 0.5, re: 0.35, lean: -8, hw: 15 } }, block: { brace: 1.5, open: 0.06, settle: 0.4 }, back: 0.45, load: 0 }),
+    dash: dash({ upright: true, land: 'stumble', extra: 0.35 })
   },
   2: {
     grade: 2, side: null, name: '아마추어', label: '2',
     chain: { lag: [0.01, 0, 0, 0, 0], damp: 0.66, amp: [0.8, 0.8, 0.8, 1, 1], coil: 1.3, least: 0.035, back: 0.8, backLag: 1.5, firm: 0.86 },
     form: form({ guard: 0.4, chin: 0.35, over: 0.35, tell: 0.4, lively: 0.15, dip: -0.005, late: 0.05, sep: 0, off: 0, look: 0.6, exit: 'flat' }),
     // a small, even bounce, all of a piece: the head and the gloves go up and down with the hips
-    stance: stance({ bounce: 0.45, hop: 0.4, rock: 0.4, lag: 0.3, hips: 0.01, lean: -3, yaw: 4, guard: { y: 0.01, elbow: 0.1 }, look: 0.6, head: null, travel: { cycle: 1.15, halting: 0.7 } })
+    stance: stance({ bounce: 0.45, hop: 0.4, rock: 0.4, lag: 0.3, hips: 0.01, lean: -3, yaw: 4, guard: { y: 0.01, elbow: 0.1 }, look: 0.6, head: null, travel: { cycle: 1.15, halting: 0.7, width: 0.75, face: 0.08, pivot: 9 } }),
+    evade: evade({ flinch: 0.03, out: 1.3, hold: 1.2, back: 0.9, move: 1.15, delay: { head: 0.06, hips: 0.05, feet: 0.05 }, pause: 0.04, cut: 'end', load: 0, look: 0.6, lively: 0, exit: 'flat' }),
+    cover: cover({ arrive: 0.07, hands: { ly: 0.025, lx: -0.012, rx: 0.012, le: 0.15, re: 0.15 }, body: { lean: -3 }, lively: 0.45, head: 0, look: 0.6, meet: { add: { ry: -0.08, rz: 0.04, re: 0.2 } }, block: { brace: 1.2, settle: 0.6 }, back: 0.65, load: 0 }),
+    dash: dash({ prep: 0.02, land: 'flat', extra: 0.32 })
   },
   3: {
     grade: 3, side: null, name: '프로', label: '3',
     chain: {},
     form: form({}),
     // the textbook's bounce, and the head starting to move: off the line and back, in its own time
-    stance: stance({})
+    stance: stance({}),
+    evade: TEXTBOOK_EVADE,
+    cover: TEXTBOOK_COVER,
+    dash: TEXTBOOK_DASH
   },
   '4m': {
     grade: 4, side: 'm', name: '일류 · 명', label: '4명',
     chain: { early: [0.25, 0.25, 0, 0, 0], damp: [0.6, 0.6, 0.56, 0.6, 0.6], amp: [1.1, 1.15, 1.1, 1, 1], coil: 0.55, shown: 0.65, back: 1.12, backLag: 1, firm: 1.08 },
     form: form({ guard: -0.3, chin: -0.5, lively: 0.5, dip: -0.03, drop: true, sep: 7, off: 0.07, with: 'hips', tuck: 4, look: 1, bend: 4, exit: 'roll', beat: 'on' }),
     // strong and weak, the lead foot's landing the heavy one; the head an end on every lead foot, under in between
-    stance: stance({ bounce: 1.15, lag: 1.1, accent: [1.3, 0.8], guard: { chin: 4 }, look: 1, head: { A: 0.045, D: 0.025, T: 4, beat: 'locked', level: { every: 8, depth: 0.07, lean: 5 } } })
+    stance: stance({ bounce: 1.15, lag: 1.1, accent: [1.3, 0.8], guard: { chin: 4 }, look: 1, head: { A: 0.045, D: 0.025, T: 4, beat: 'locked', level: { every: 8, depth: 0.07, lean: 5 } } }),
+    evade: evade({ out: 0.7, hold: 0.8, back: 0.6, move: 0.93, delay: { feet: 0.017, trunk: 0.017, head: 0.033 }, cut: 'clear', load: 0.7, look: 1, lively: 0.5, beat: 'on', cross: 5, just: 0.008 }),
+    cover: cover({ arrive: 0.04, hands: { lx: -0.012, rx: 0.012, le: -0.08, re: -0.08 }, body: { hp: 3 }, look: 1, meet: { scale: 0.7, add: { hx: 0.03, twist: -5 } }, block: { brace: 0.8, go: [6, 0.04] }, back: 1.5, load: 0.7, hand: 'other' }),
+    dash: dash({})
   },
   '4a': {
     grade: 4, side: 'a', name: '일류 · 암', label: '4암',
     chain: { early: [0.25, 0.25, 0, 0, 0], damp: [0.6, 0.6, 0.56, 0.6, 0.6], amp: [1.1, 1.15, 1.1, 1, 1], coil: 0.55, shown: 0.65, back: 1.05, backLag: 1, firm: 1.08, hold: 0.1 },
     form: form({ guard: -0.2, chin: -0.4, over: 0.15, dirty: 1, lively: 0.5, dip: -0.03, drop: true, sep: 7, off: 0.07, with: 'hips', tuck: 4, look: 1, bend: 4, exit: 'roll' }),
     // the beat rubbed out: low and heavy, the feet dragged and lurching, the head rolling low in its own time
-    stance: stance({ bounce: 0.45, hop: 0.6, rock: 0.8, jitter: 0.25, drag: 0.6, hips: -0.03, lean: 4, guard: { lead: [-0.01, 0, 0.03] }, look: 1, head: { A: 0.055, D: 0.04, T: 4, beat: 'roll', level: { every: 2.6, depth: 0.08, lean: 5 } }, paw: 0.06 })
+    stance: stance({ bounce: 0.45, hop: 0.6, rock: 0.8, jitter: 0.25, drag: 0.6, hips: -0.03, lean: 4, guard: { lead: [-0.01, 0, 0.03] }, travel: { width: 0.95, face: 0.1, pivot: 8 }, look: 1, head: { A: 0.055, D: 0.04, T: 4, beat: 'roll', level: { every: 2.6, depth: 0.08, lean: 5 } }, paw: 0.06 }),
+    evade: evade({ out: 0.75, hold: 0.8, back: 0.8, move: 0.95, delay: { feet: 0.017, trunk: 0.017, head: 0.033 }, cut: 'clear', load: 0.7, look: 1, lively: 0.3, in: 0.04, low: 0.02, just: 0.008 }),
+    cover: cover({ arrive: 0.045, hands: { lz: 0.02, lx: -0.04, ly: -0.01 }, body: { hy: -0.035, lean: 4 }, look: 1, meet: { scale: 0.7, add: { hx: 0.03, twist: -5 } }, block: { brace: 0.6, lean: 4, settle: 1.2 }, back: 1.5, load: 0.7, hand: 'other' }),
+    dash: dash({ drag: 1, low: 0.02, extra: 0.16 })
   },
   '5m': {
     grade: 5, side: 'm', name: '전설 · 명', label: '5명',
     chain: { early: [0.4, 0.4, 0, 0, 0], damp: [0.6, 0.6, 0.5, 0.6, 0.6], amp: [1.15, 1.25, 1.18, 1, 1], coil: 0.2, shown: 0.55, back: 1.15, backLag: 1, firm: 1.2 },
     form: form({ guard: -0.4, chin: -0.6, lively: 0.7, dip: -0.04, drop: true, sep: 11, off: 0.1, with: 'legs', tuck: 6, look: 1, bend: 6, exit: 'angle', beat: 'off' }),
     // the lightest feet: a swung beat, a phrase that quickens, stops dead and breaks out into something
-    stance: stance({ bounce: 1.1, hop: 1.3, rock: 1.1, lag: 1.25, swing: 0.58, tempo: 'phrase', guard: { y: -0.02, loose: 1 }, look: 1, head: { A: 0.045, D: 0.025, T: 4, beat: 'phrase', level: { depth: 0.07, lean: 5 } }, flourish: 'clean' })
+    stance: stance({ bounce: 1.1, hop: 1.3, rock: 1.1, lag: 1.25, swing: 0.58, tempo: 'phrase', guard: { y: -0.02, loose: 1 }, look: 1, head: { A: 0.045, D: 0.025, T: 4, beat: 'phrase', level: { depth: 0.07, lean: 5 } }, flourish: 'clean' }),
+    evade: evade({ out: 0.55, hold: 0, back: 0.6, move: 0.9, delay: { trunk: 0.017, head: 0.033 }, cut: 'clear', load: 1, look: 1, lively: 0.7, follow: 0.3, exit: 'angle', just: -0.008 }),
+    cover: cover({ arrive: 0.03, hands: { ly: -0.02, lx: 0.015, rx: -0.015 }, look: 1, meet: { scale: 0.45, add: { hx: 0.04, twist: -8 } }, block: { brace: 0.7, settle: 1.5, meet: [0.04, 12] }, back: 1.8, load: 1, hand: 'same', q: 0.3 }),
+    dash: dash({ land: 'angle', turn: 9, bend: 0.04 })
   },
   '5a': {
     grade: 5, side: 'a', name: '전설 · 암', label: '5암',
     chain: { early: [0.4, 0.4, 0, 0, 0], damp: [0.6, 0.6, 0.5, 0.6, 0.6], amp: [1.15, 1.25, 1.18, 1, 1], coil: 0.25, shown: 0.55, back: 1.12, backLag: 1, firm: 1.2, hold: 0.08 },
     form: form({ guard: -0.3, chin: -0.5, over: 0.1, dirty: 2, lively: 0.7, dip: -0.04, drop: true, sep: 11, off: 0.1, with: 'legs', tuck: 6, look: 1, bend: 6, exit: 'angle' }),
     // lower still and always rolling, the lead shoulder up and the lead hand in his eyes, the beat nowhere
-    stance: stance({ bounce: 0.35, hop: 0.5, rock: 0.8, lag: 1.1, jitter: 0.25, drag: 0.7, hips: -0.04, lean: 5, shoulder: 3, guard: { lead: [-0.03, 0.03, 0.07] }, look: 1, head: { A: 0.06, D: 0.05, T: 4, beat: 'roll', level: { every: 1.9, depth: 0.08, lean: 5 } }, flourish: 'dirty' })
+    stance: stance({ bounce: 0.35, hop: 0.5, rock: 0.8, lag: 1.1, jitter: 0.25, drag: 0.7, hips: -0.04, lean: 5, shoulder: 3, guard: { lead: [-0.03, 0.03, 0.07] }, travel: { width: 0.95, face: 0.1, pivot: 8 }, look: 1, head: { A: 0.06, D: 0.05, T: 4, beat: 'roll', level: { every: 1.9, depth: 0.08, lean: 5 } }, flourish: 'dirty' }),
+    evade: evade({ out: 0.62, hold: 0, back: 0.73, move: 0.92, delay: { trunk: 0.017, head: 0.033 }, cut: 'clear', load: 1, look: 1, lively: 0.3, follow: 0.3, in: 0.06, low: 0.02, just: 0.015 }),
+    cover: cover({ arrive: 0.035, hands: { lz: -0.02 }, body: { hy: -0.045, lean: 4, side: -3 }, look: 1, meet: { scale: 0.45, add: { hx: 0.04, twist: -8 } }, block: { brace: 0.6, lean: 4, settle: 1.2 }, back: 1.8, load: 1, hand: 'same', q: 0.3 }),
+    dash: dash({ drag: 1, low: 0.02 })
   }
 };
 for (const [id, level] of Object.entries(LEVEL)) level.id = id;

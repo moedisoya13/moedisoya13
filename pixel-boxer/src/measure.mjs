@@ -1,7 +1,8 @@
 /* Measuring the boxer as the bout moves him: the numbers the catalogue's cards show and the tests hold the grades to, taken
    off a real bout sixty times a second. Nothing here draws; the page, tools/ladder.mjs and the tests all measure the same way.
      run(entry, seconds)   a scripted bout (footwork.mjs's form) and a frame a step of the boxer: his joints, his head across
-                           the line to the other man, his hip and shoulder lines, his rhythm, what happened
+                           the line to the other man, his hip and shoulder lines, his rhythm, what happened, where the two
+                           stand and how far his facing is off the line between them, his gloves and head
      guardOf(level)        his own guard, as his grade holds it with his head still: where the head and the lines are
      rung(id)              a rung of the skill ladder: the blow, when it landed after the press, how far the head was off the
                            line then, the most the hips turned and the shoulders were held back behind them, where the hips were
@@ -71,6 +72,12 @@ export function run(entry, seconds) {
       landed: r.landed,
       flourish: r.flourish,
       action: a.action ? a.action.name : null,
+      // (where the two of them stand, and how far his facing is off the line to the other man, radians)
+      at: [a.x, a.z],
+      him: [b.x, b.z],
+      face: Math.atan2(Math.sin(Math.atan2(b.x - a.x, b.z - a.z) - a.yaw), Math.cos(Math.atan2(b.x - a.x, b.z - a.z) - a.yaw)),
+      cover: a.cover,
+      gloves: { L: a.points.L.slice(), R: a.points.R.slice(), head: a.points.head.slice() },
       foot: { L: a.pose.at.LeftToeBase.slice(), R: a.pose.at.RightToeBase.slice() },
       // and the other man: his lead foot on the canvas, whether it is stood on, what he is doing
       foe: { foot: toWorld(b.place, b.pose.at.LeftToeBase, b.pose.stretch), pinned: b.pinned > 0, action: b.action ? b.action.id : null }

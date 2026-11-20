@@ -9,54 +9,106 @@
    same drills: the boxer is a pro, whose head moves of its own accord, so the windows are his). */
 import { HOME } from './footwork.mjs';
 import { getUp } from './game/bout.mjs';
+import { LEVELS } from './anim/skill.mjs';
+import { MOVES } from './anim/moves.mjs';
+import { WINDOWS } from './windows.data.mjs';
 
-const F = 1 / 60;
 // where the other man stands for each punch, from the boxer: at the range it is thrown from
 export const RANGE = { jab: 1.0, cross: 1.0, hook: 0.85, upper: 0.85 };
 // his presses for each punch: a hook and an uppercut come only as the second and third of his power chain (bout.mjs)
 export const THROW = { jab: [[0, 'jab']], cross: [[0, 'power']], hook: [[-0.32, 'power'], [0, 'power']], upper: [[-0.64, 'power'], [-0.32, 'power'], [0, 'power']] };
 
+/* The defence by grade: every way of meeting a punch is a row of seven cards, one for each grade of the boxer defending (his
+   sheet is that grade at everything: anim/skill.mjs), against the same pro throwing the same punch at the same moment of the
+   loop, so that the other man is the same in every card to the frame. Each grade answers in the middle of its own window
+   (src/windows.data.mjs, measured by node tools/windows.mjs --write), and every card ends the way it says.
+   kind: 'evade' (press: [move, value]), 'parry' (the guard put up on the frame), 'block' (a guard held from early on),
+   'guard' (held all through, three punches into it), 'counter' (slipped, and a punch thrown out of the end of it at once). */
+const F = 1 / 60;
+export const ITEMS = [
+  {
+    id: 'slip', name: '슬립', en: 'Slip', group: '피하기', kind: 'evade', move: ['slip', -1], card: 'slip',
+    note: '잽의 어깨가 발사된 다음 머리를 바깥으로 뺍니다. 1은 주먹보다 먼저 찍어서 움찔하며 크게 빠지고, 2는 허리째 꺾이고, 3은 무릎과 몸통이 같이, 4는 골반이 먼저 실리고 어깨가 감기며, 5는 주먹이 귀를 스치게 필요한 만큼만 빠집니다. 카드 아래는 누를 수 있는 가장 늦은 프레임과 주먹이 빗나간 거리입니다.',
+    loop: 2, punch: ['jab', 0.8], outcome: 'whiff', view: { yaw: 0.75, pitch: 0.28 }
+  },
+  {
+    id: 'slip-cross', name: '슬립 · 스트레이트', en: 'Slip the cross', group: '피하기', kind: 'evade', move: ['slip', -1], card: 'slip-cross',
+    note: '뒷손 스트레이트는 더 늦게 오고 더 멀리 뻗습니다. 몸통이 돌기 시작한 걸 보고 한 박자 늦게 뺍니다. 바깥(왼쪽)으로 빼는 슬립은 물리 수정 뒤 프로의 스트레이트를 피하지 못해, 잽과 같은 오른쪽으로 뺍니다.',
+    loop: 2, punch: ['cross', 0.8], outcome: 'whiff', view: { yaw: 0.75, pitch: 0.28 }
+  },
+  {
+    id: 'pull', name: '스웨이 백', en: 'Pull back', group: '피하기', kind: 'evade', move: ['pull', true], card: 'pull',
+    note: '체중을 뒷발로 옮기며 상체를 세워 머리를 사거리 밖으로 뺍니다. 1은 무릎을 잠근 채 허리로 젖히고, 4는 뒷다리에 앉으며 턱을 당기고, 5는 사거리 바로 밖에서 멈춥니다. 암은 뒤로 빼지 않고 뒷다리에 주저앉으며 뒷발을 끌어 뺍니다. 카드 아래는 가장 늦은 프레임과 끝난 뒤 상대와의 거리 변화입니다.',
+    loop: 2, punch: ['jab', 0.8], outcome: 'whiff', view: { yaw: 0, pitch: 0.24 }
+  },
+  {
+    id: 'duck', name: '더킹', en: 'Duck', group: '피하기', kind: 'evade', move: ['duck', true], card: 'duck',
+    note: '스트레이트는 가드로 받고, 이어지는 훅 밑으로 내려갑니다. 훅은 자기 머리보다 9 cm 넘게 낮게 내려오지 못해 머리 위로 지나갑니다. 머리를 1.3 g보다 빨리 내릴 수 없어 대부분의 등급이 훅이 나오기 전에 내려가 있어야 합니다(음수 프레임은 찍은 것). 1은 고개를 숙여 바닥을 보고, 4·5는 눈을 치뜬 채 상대 골반을 봅니다. 카드 아래는 가장 늦은 프레임과 앞을 못 본 시간입니다.',
+    loop: 2.4, punch: ['hook', 1.1], outcome: 'whiff', before: 'block', view: { yaw: 0.5, pitch: 0.22 }
+  },
+  {
+    id: 'roll', name: '위빙', en: 'Bob and weave', group: '피하기', kind: 'evade', move: ['roll', 1], card: 'roll',
+    note: '훅이 오는 쪽으로 머리를 숙여 U자를 그리며 밑으로 빠지고, 반대편으로 올라옵니다. 1은 모서리가 있는 길로 바닥에서 멈췄다 일어나고, 2는 구간마다 끊기고, 3부터 매끄러운 U, 암은 더 낮고 좁게 갑니다. 카드 아래는 가장 늦은 프레임과 위빙 전체 시간입니다.',
+    loop: 2.4, punch: ['hook', 1.1], outcome: 'whiff', before: 'block', view: { yaw: 0.5, pitch: 0.22 }
+  },
+  {
+    id: 'parry', name: '패리', en: 'Parry', group: '막기', kind: 'parry', card: 'parry',
+    note: '주먹이 닿기 직전에 올린 가드는 주먹을 옆으로 쳐냅니다. 글러브가 가드 자리에 도착하는 빠르기가 등급이라 구간의 뒤끝이 갈립니다. 1은 팔 전체로 쫓아가 쳐내고, 5는 손목만 틀어 넘깁니다. 카드 아래는 패리가 되는 구간과 손이 가드에서 나간 거리입니다.',
+    loop: 2, punch: ['jab', 0.8], outcome: 'parry', view: { yaw: 0.4, pitch: 0.26 }
+  },
+  {
+    id: 'block', name: '블록', en: 'Block', group: '막기', kind: 'block',
+    note: '미리 굳혀 둔 가드는 막기만 합니다. 1은 글러브가 얼굴까지 밀려 들어오고 손이 벌어지고, 4명은 닿기 직전 몸통을 돌리며 머리를 빼 주먹과 같이 가고, 4·5암은 앞으로 기대어 버팁니다. 카드 아래는 충격량과 가드가 다시 선 시간입니다.',
+    loop: 2, punch: ['cross', 0.8], cover: t => t > 0.2 && t < 1.3, outcome: 'block', view: { yaw: 0.4, pitch: 0.26 }
+  },
+  {
+    id: 'guard', name: '가드', en: 'Covering up', group: '막기', kind: 'guard',
+    note: '잽, 잽, 스트레이트를 제자리에서 가드로 받습니다. 1은 두 글러브로 눈을 가리고 팔꿈치가 벌어지고, 2는 귀마개처럼 높게, 4암은 팔뚝을 포개고, 5명은 느슨하게 듭니다. 카드 아래는 밀린 거리와 두 글러브 사이 간격입니다.',
+    loop: 2.4, punch: ['cross', 1.6], throws: [[0.8, 'jab'], [1.2, 'jab'], [1.6, 'power']], cover: t => t > 0.2, outcome: 'block', before: 'block', view: { yaw: 0.4, pitch: 0.26 }
+  },
+  {
+    id: 'counter', name: '카운터', en: 'Slip and counter', group: '카운터', kind: 'counter', move: ['slip', -1], card: 'counter',
+    note: '슬립 카드와 같은 잽을 빼고, 빠진 자세에서 뒷손 스트레이트를 칩니다. 4·5는 머리가 선을 벗어난 순간부터 주먹을 시작할 수 있고, 슬립이 감아 둔 만큼 감기와 다리 구동을 건너뛰어 상대 팔이 아직 나와 있는 동안 닿습니다. 3은 복귀의 80%부터, 1·2는 슬립이 끝나야 나갑니다. 아슬아슬하게 피하고 0.4초 안에 장전 카운터가 나간 수비는 1/4 속도로 다시 보여 줍니다. 카드 아래는 잽이 지나간 뒤 내 주먹이 닿기까지와 그 충격량입니다.',
+    loop: 2.4, punch: ['jab', 0.8], outcome: 'whiff', view: { yaw: 0.6, pitch: 0.26 }
+  }
+];
+// the frame (after the press that throws the punch) a grade answers on: the middle of his window for that card
+const answer = (item, lv) => (WINDOWS[item.card] && WINDOWS[item.card][lv] ? WINDOWS[item.card][lv].at : 0);
+function graded(item, lv) {
+  const at = item.punch[1],
+    k = item.kind === 'evade' || item.kind === 'counter' || item.kind === 'parry' ? answer(item, lv) : null,
+    when = k === null ? null : at + k * F,
+    e = Object.assign({}, item, {
+      id: `${item.id}@${lv}`,
+      item: item.id,
+      level: lv,
+      answer: k,
+      setup: b => (b.fighters[0].skills = { all: lv })
+    });
+  if (item.kind === 'evade' || item.kind === 'counter') {
+    e.press = [[when, item.move[0], item.move[1]]];
+    // (a hook comes after a cross taken on the guard, put down when he goes)
+    if (item.punch[0] === 'hook') e.cover = t => t > 0.2 && t < Math.min(at - 0.05, when - 1e-9);
+  }
+  if (item.kind === 'parry') e.cover = t => t >= when - 1e-9 && t < at + 0.4;
+  if (item.kind === 'counter') e.cue = counterCue(when);
+  return e;
+}
+/* The counter: pressed from the step after he goes off the line until a punch starts (it starts as soon as his grade lets
+   it: from the moment his head is clear, from most of the way back, or once he is back). */
+export const counterCue = when => (bout, t) => {
+  const f = bout.fighters[0],
+    own = (f.script = f.script || {});
+  if (own.countered || t < when + F - 1e-9) return null;
+  if (f.action && MOVES[f.action.name].punch) return void (own.countered = t);
+  return 'power';
+};
+export const GRADED = ITEMS.flatMap(item => LEVELS.map(lv => graded(item, lv)));
+
 /* loop, view as for the footwork. punch: [what the other man throws, when the last press of it is made]; press: the boxer's
    answer; outcome: what happens to that last punch ('whiff' | 'block' | 'parry' | 'hit'), and to any before it in the
    chain (before: 'block' etc.). cover(t): his guard held. */
 const DRILLS = [
-  // ---- getting the head out of the way
-  {
-    id: 'slip', name: '슬립', en: 'Slip', group: '피하기',
-    note: '잽의 어깨가 발사된 다음 머리를 바깥으로 뺍니다. 주먹은 이미 머리가 있던 자리로 가고 있습니다.',
-    loop: 2, punch: ['jab', 0.8], press: [[0.8 + 4 * F, 'slip', -1]], outcome: 'whiff', view: { yaw: 0.75, pitch: 0.28 }
-  },
-  {
-    id: 'slip-cross', name: '슬립 · 스트레이트', en: 'Slip the cross', group: '피하기',
-    note: '뒷손 스트레이트는 더 늦게 오고 더 멀리 뻗습니다. 몸통이 돌기 시작한 걸 보고 한 박자 늦게 뺍니다.',
-    loop: 2, punch: ['cross', 0.8], press: [[0.8 + 7 * F, 'slip', -1]], outcome: 'whiff', view: { yaw: 0.75, pitch: 0.28 }
-  },
-  {
-    id: 'pull', name: '스웨이 백', en: 'Pull back', group: '피하기',
-    note: '체중을 뒷발로 옮기며 상체를 세워 머리를 사거리 밖으로 뺍니다. 다 뻗은 주먹 끝이 턱 앞에서 멈춥니다.',
-    loop: 2, punch: ['jab', 0.8], press: [[0.8 + 3 * F, 'pull']], outcome: 'whiff', view: { yaw: 0, pitch: 0.24 }
-  },
-  {
-    id: 'duck', name: '더킹', en: 'Duck', group: '피하기',
-    note: '스트레이트는 가드로 받고, 이어지는 훅이 출발하자마자 상체를 접고 무릎을 굽혀 내려갑니다. 팔을 어깨 높이에 굳혀 휘두르는 훅은 자기 머리보다 9 cm 넘게 낮게 내려오지 못해, 머리 위로 지나갑니다.',
-    loop: 2.4, punch: ['hook', 1.1], cover: t => t > 0.2 && t < 1.05, press: [[1.1 + 1 * F, 'duck']], outcome: 'whiff', before: 'block', view: { yaw: 0.5, pitch: 0.22 }
-  },
-  {
-    id: 'roll', name: '위빙', en: 'Bob and weave', group: '피하기',
-    note: '훅이 오는 쪽으로 머리를 숙여 U자를 그리며 밑으로 빠지고, 반대편으로 올라옵니다. 올라온 자리가 다음 주먹을 던질 자리입니다.',
-    loop: 2.4, punch: ['hook', 1.1], cover: t => t > 0.2 && t < 1.05, press: [[1.1 + 6 * F, 'roll', 1]], outcome: 'whiff', before: 'block', view: { yaw: 0.5, pitch: 0.22 }
-  },
-  // ---- meeting it with the gloves
-  {
-    id: 'parry', name: '패리', en: 'Parry', group: '막기',
-    note: '주먹이 닿기 직전에 올린 가드는 주먹을 옆으로 쳐냅니다. 던진 쪽은 팔이 벌어진 채 뒤로 밀리고, 받아친 쪽에 기회가 열립니다.',
-    loop: 2, punch: ['jab', 0.8], cover: t => t >= 0.8 + 5 * F && t < 1.2, outcome: 'parry', view: { yaw: 0.4, pitch: 0.26 }
-  },
-  {
-    id: 'block', name: '블록', en: 'Block', group: '막기',
-    note: '미리 굳혀 둔 가드는 막기만 합니다. 충격이 글러브를 얼굴 쪽으로 밀어 넣고 몸이 한 번 흔들립니다.',
-    loop: 2, punch: ['cross', 0.8], cover: t => t > 0.2 && t < 1.3, outcome: 'block', view: { yaw: 0.4, pitch: 0.26 }
-  },
   // ---- being hit
   {
     id: 'hit-jab', name: '잽에 맞음', en: 'Taking a jab', group: '맞기', hurt: true,
@@ -126,10 +178,12 @@ DRILLS.push(
   })
 );
 
-export const DEFENSE = DRILLS.map(e =>
+const placed = e =>
   Object.assign({}, e, {
     me: () => HOME,
-    him: () => [HOME[0] + (e.punch ? RANGE[e.punch[0]] : 1.15), HOME[1]],
-    against: e.punch ? THROW[e.punch[0]].map(([dt, button]) => [e.punch[1] + dt, button]) : []
-  })
-);
+    // (countered, he is left where the counter puts him: it is the end of the exchange)
+    him: t => (e.kind === 'counter' && t > e.punch[1] + 0.3 ? null : [HOME[0] + (e.punch ? RANGE[e.punch[0]] : 1.15), HOME[1]]),
+    against: e.throws || (e.punch ? THROW[e.punch[0]].map(([dt, button]) => [e.punch[1] + dt, button]) : [])
+  });
+// the blows and the knockdowns (one card each: being hit has no grade), and the graded rows
+export const DEFENSE = [...GRADED.map(placed), ...DRILLS.map(placed)];

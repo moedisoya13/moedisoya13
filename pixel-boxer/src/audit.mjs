@@ -1,5 +1,5 @@
-/* A physics audit of everything the boxers do: every scripted bout in the catalogue (footwork, defence and blows, the skill
-   ladder) is fought once, and in every frame both bodies are held against what a body can do and what the world allows:
+/* A physics audit of everything the boxers do: every scripted bout in the catalogue (footwork and the defence at every grade,
+   the blows, the skill ladder) is fought once, and in every frame both bodies are held against what a body can do and what the world allows:
      anatomy    joint ranges (rig/body.mjs: RANGE): elbow, shoulder, knee, hip, ankle, spine, neck; limbs changing length; a
                 joint flipping over between frames
      contact    anything under the canvas; a man's own glove inside his trunk or head; one man inside the other
@@ -21,14 +21,14 @@ import { RANGE as LIMIT, RADIUS, SEGMENTS, HEAD, GLOVE } from './rig/body.mjs';
 import { step } from './game/bout.mjs';
 import { ENTRIES, freshBout, drive } from './footwork.mjs';
 import { DEFENSE } from './defense.mjs';
-import { LADDER, DIRTY, STANCES } from './ladder.mjs';
+import { LADDER, DIRTY, STANCES, FOOTWORK } from './ladder.mjs';
 import { MOVES } from './anim/moves.mjs';
 
 const DT = 1 / 60,
   G = 9.81,
   DEG = 180 / Math.PI;
 export { LIMIT };
-export const SCRIPTS = [...ENTRIES, ...DEFENSE, ...LADDER, ...DIRTY, ...STANCES];
+export const SCRIPTS = [...ENTRIES, ...DEFENSE, ...LADDER, ...DIRTY, ...STANCES, ...FOOTWORK];
 
 const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2],
   len = a => Math.hypot(a[0], a[1], a[2]),

@@ -8,10 +8,13 @@
                action: { name, t, id, dir, chain (a punch's kinetic chain: see phys/chain.mjs), level } | null, cover: 0..1,
                aim: [x, y, z] where the punching wrist is to go, in his space | null,
                reach: metres between the punching glove and the head it is going for (their surfaces) | null,
-               stance: his grade of footwork (skill.mjs) | null, stun: bool (stopped by a blow),
+               stance: his grade of footwork (skill.mjs) | null, guard: his grade of covering up | null,
+               threat: { eta (seconds until the punch coming at him gets there), dir } | null, stun: bool (stopped by a blow),
+               shoved: metres a second he is being knocked back at,
                cheer: bool, still: bool (lying on the canvas) }
      a.strike({ J, dir: [left, up, ahead] })         he has just been hit: the impulse in newton-seconds, and the way it went
      a.rhythm                                         his beat: { beat, cycle, halves, stepping, landed, lead, flourish }
+     a.covered                                        how far his gloves are up into his guard, 0..1
      a.getUp()                                        knocked down and lying still: the way up that fits how he lies, and
                                                       how to turn and move his place so that he gets up where he lies:
                                                       { name, on, down, move: [x, z] (his space), turn (radians) } | null
@@ -27,6 +30,7 @@ import { LINKS, stepChain } from '../phys/chain.mjs';
 import { CHANNELS, GUARD, MOVES, LEFT_BEND, LIE, UP, sampleMove } from './moves.mjs';
 import { LEVEL } from './skill.mjs';
 import { H, headAt, headTo, phraseX, PHRASE, FLOURISH, CLEAN, DIRTY, dice } from './stance.mjs';
+import { sampleEvade, EVASIONS, timeline, evadeTime } from './evade.mjs';
 
 const TAU = Math.PI * 2;
 /* The feet keep time. One beat is one foot coming down; a cycle is both. Standing, the boxer rocks between his feet on that
@@ -233,6 +237,11 @@ export function createAnimator(seed) {
   const give = { hp: { x: 0, v: 0 }, hw: { x: 0, v: 0 }, hr: { x: 0, v: 0 }, lean: { x: 0, v: 0 }, side: { x: 0, v: 0 }, yaw: { x: 0, v: 0 }, open: { x: 0, v: 0 }, sink: { x: 0, v: 0 } };
   // and of each glove on its own, metres (in his terms, as the hand channels are): a glove that has met a punch
   const knock = { L: [0, 1, 2].map(() => ({ x: 0, v: 0 })), R: [0, 1, 2].map(() => ({ x: 0, v: 0 })) };
+  let leadOut = 1, // how far out a dirty man's lead hand is (put out in the other man's face, unless a punch is coming)
+    knockRate = 1, // how quickly a knocked glove comes back, times (his guard's grade: a block, or a parry)
+    lastEvade = null; // the evasion he was in last frame (what the way out of it starts from)
+  // a great one riding a punch on his guard (going with it, or out to take it early), 0..1
+  const riding = { x: 0 };
   // a man rocked by a blow: how badly (0..1) and how long ago; his legs are gone for a second or so
   const wobble = { amount: 0, t: 9 };
   // the head's offset off the line of the punch, as it was last frame (what the way out of the punch starts from)
@@ -298,17 +307,26 @@ export function createAnimator(seed) {
        shoulders turn a little with it. (The puncher's side of it is the reel.) */
     deflect(hit) {
       const g = knock[hit.hand],
-        across = hit.hand === 'R' ? 1 : -1; // the right glove pushes a punch away to his left, the left glove to his right
-      g[0].v += across * 3.2;
-      g[1].v -= 1.4;
-      g[2].v += 0.9;
+        across = hit.hand === 'R' ? 1 : -1, // the right glove pushes a punch away to his left, the left glove to his right
+        cv = (hit.level || LEVEL[3]).cover,
+        // (a beginner's whole arm goes after it and stays out; a legend's wrist only, and on into his own punch)
+        big = cv.meet.scale + (cv.meet.add.lz || 0) * 4;
+      knockRate = cv.back;
+      g[0].v += across * 3.2 * big;
+      g[1].v -= 1.4 * big;
+      g[2].v += 0.9 * big;
       give.yaw.v += across * 140;
       give.hw.v += across * 60;
     },
     /* A block: the punch drives the glove it hit back into his face, and the other one after it, and rocks his head and
        his trunk back, and his knees take it. */
     brace(hit) {
-      const k = Math.max(0.5, Math.min(hit.J, 120) / 40); // (even a punch smothered early shoves the guard)
+      const bk = (hit.level || LEVEL[3]).cover.block,
+        k = Math.max(0.5, Math.min(hit.J, 120) / 40) * bk.brace; // (even a punch smothered early shoves the guard)
+      knockRate = bk.settle;
+      // (a beginner's gloves are knocked apart; a legend rolls it off his shoulder)
+      if (bk.open) give.open.v += 150 * bk.open;
+      if (bk.meet) give.yaw.v += (hit.hand === 'R' ? -1 : 1) * bk.meet[1] * 9;
       for (const side of ['L', 'R']) {
         const g = knock[side],
           m = side === hit.hand ? 1 : 0.45;
@@ -335,6 +353,10 @@ export function createAnimator(seed) {
        the foot stepping now and the one that came down last, the half beats since a lead foot came down on the count his
        head keeps (fractional), how far into this half beat he is and how long it will take at the pace he is going, and
        the flourish he is in the middle of. */
+    // how far his gloves have got up into his guard, 0..1 (his grade's arrival: skill.mjs, cover.arrive)
+    get covered() {
+      return cover;
+    },
     get rhythm() {
       const lengthNow = (cycle / 2) * stretch;
       return { beat: ((((halves - 1) % 2) + 2) % 2 + u) / 2, cycle, halves, stepping: swing.side, landed: swing.came, lead: halves + u - ref, u, half: lengthNow, left: stop > 0 ? stop + lengthNow * (1 - u) : (lengthNow * (1 - u)) / Math.max(0.05, rate), flourish: flourish && flourish.k > 0.5 ? flourish.name : null, stopped: stop > 0 };
@@ -443,6 +465,9 @@ export function createAnimator(seed) {
         // the other hand: dropped and out to the side, or kept tight to the chin
         if (form.guard > 0) (c[o + 'y'] -= 0.17 * form.guard * out), (c[o + 'z'] -= 0.06 * form.guard * out), (c[o + 'x'] -= s * 0.05 * form.guard * out);
         else if (form.guard < 0) (c[o + 'y'] += 0.02 * -form.guard * out), (c[o + 'z'] -= 0.025 * -form.guard * out), (c[o + 'x'] += s * 0.015 * -form.guard * out);
+        /* (a punch thrown out of the end of an evasion: the other glove is still on his cheek where the evasion put it, out of
+           the way of the arm that has just gone past his head, and comes off it as the punch goes) */
+        if (action.loaded && action.loaded.from !== 'parry') (c[o + 'z'] -= 0.12 * (1 - smooth(action.t / 0.2))), (c[o + 'y'] -= 0.01 * (1 - smooth(action.t / 0.2)));
         c.hp -= 11 * form.chin * out; // the chin up and out after it (tucked, the better he is)
         c.lean += 9 * form.over * out; // and the weight thrown in after it, over the front foot
         c.hz += 0.05 * form.over * out;
@@ -518,32 +543,77 @@ export function createAnimator(seed) {
           }
         }
       } else if (action) {
-        sampleMove(MOVES[action.name], action.t, c);
-        if (MOVES[action.name].sided) {
-          // to his left (+1) or his right (-1)
-          const s = action.side || 1;
-          for (const ch of ['side', 'hx', 'hw', 'hr', 'lx', 'rx']) c[ch] *= s;
-          // (the turned stance: see LEFT_BEND)
-          if (c.side > 0) (c.lean += LEFT_BEND.lean * c.side), (c.side += LEFT_BEND.side * c.side);
+        // an evasion, by his grade (evade.mjs: the pro's is the curve as written)
+        if (EVASIONS.includes(action.name)) sampleEvade(action, action.level || LEVEL[3], c);
+        else {
+          sampleMove(MOVES[action.name], action.t, c);
+          if (MOVES[action.name].sided) {
+            // to his left (+1) or his right (-1)
+            const s = action.side || 1;
+            for (const ch of ['side', 'hx', 'hw', 'hr', 'lx', 'rx']) c[ch] *= s;
+            // (the turned stance: see LEFT_BEND)
+            if (c.side > 0) (c.lean += LEFT_BEND.lean * c.side), (c.side += LEFT_BEND.side * c.side);
+          }
         }
         if (action.name === 'dash' && action.dir) {
           const a = -c.hy / 0.075; // the dash's own rise and fall, as 0..1
           c.side += a * 13 * action.dir[0];
           c.lean += a * 8 * action.dir[1];
           c.hw += a * 8 * action.dir[0];
+          /* by his grade (skill.mjs: dash): a beginner jumps up out of it, both feet off together and the hands thrown open;
+             an amateur stands up first and then pushes; a dirty man slides it, low; a legend lands turned, the rear knee bent */
+          const dg = (action.level || LEVEL[3]).dash;
+          // (stood up into it, he does not lean into it either)
+          if (dg.upright) (c.hy += a * (0.075 + dg.rise)), (c.lean -= a * 8 * action.dir[1]), (c.lx += 0.03 * a), (c.rx -= 0.03 * a), (c.ly += 0.02 * a), (c.ry += 0.02 * a);
+          if (dg.prep) c.hy += dg.prep * bump(action.t / 0.1);
+          if (dg.low) c.hy -= dg.low * smooth(action.t / 0.1);
+          if (dg.bend) c.hy -= dg.bend * 0.5 * smooth((action.t - 0.15) / 0.15);
         }
       }
       // (any action but the punch he is coming out of puts an end to the way out of it)
       if (exit && action && action.id !== exit.id) exit = null;
-      cover += (clamp(view.cover || 0, 0, 1) - cover) * (1 - Math.exp(-dt * 22));
+      /* (out of an evasion, the way out of it is his grade's: a beginner stumbles, an amateur stands flat a beat, a legend is
+         stepped off to the side, turned back in) */
+      // (and out of a dash: a beginner stumbles out of it, an amateur lands flat, a legend lands turned)
+      if (lastEvade && !action && lastEvade.level) {
+        const kind = lastEvade.name === 'dash' ? lastEvade.level.dash.land : lastEvade.level.evade.exit;
+        if (kind) exit = { kind, id: lastEvade.id, from: halves + u, t: 0, x: 0, y: 0, side: lastEvade.name === 'dash' ? (lastEvade.dir && lastEvade.dir[0] < 0 ? -1 : 1) : lastEvade.side || 1, done: null };
+      }
+      lastEvade = action && (EVASIONS.includes(action.name) || action.name === 'dash') ? action : null;
+      const evading = action && EVASIONS.includes(action.name) ? (action.level || LEVEL[3]).evade : null,
+        cv = (view.guard || LEVEL[3]).cover;
+      // (how quickly the gloves get up into the guard is his grade's)
+      cover += (clamp(view.cover || 0, 0, 1) - cover) * (1 - Math.exp(-dt * (cv.textbook ? 22 : 1 / cv.arrive)));
       meet += (clamp(view.meet || 0, 0, 1) - meet) * (1 - Math.exp(-dt * 30));
       hurt += (clamp(view.hurt || 0, 0, 1) - hurt) * (1 - Math.exp(-dt * 1.5));
       tired += (clamp(view.tired || 0, 0, 1) - tired) * (1 - Math.exp(-dt * 1.5));
       cheer += ((view.cheer ? 1 : 0) - cheer) * (1 - Math.exp(-dt * 5));
-      gaze += ((form ? form.look : st.look) - gaze) * (1 - Math.exp(-dt * 20));
-      if (cover > 0.002) for (const [ch, v] of Object.entries(sampleMove(MOVES.cover, 1, {}))) c[ch] += v * cover;
+      gaze += ((form ? form.look : evading ? evading.look : cv.look !== null ? st.look + (cv.look - st.look) * cover : st.look) - gaze) * (1 - Math.exp(-dt * 20));
+      if (cover > 0.002) {
+        for (const [ch, v] of Object.entries(sampleMove(MOVES.cover, 1, {}))) c[ch] += v * cover;
+        // the guard as his grade holds it
+        if (!cv.textbook) {
+          for (const ch in cv.hands) c[ch] += cv.hands[ch] * cover;
+          for (const ch in cv.body) c[ch] += cv.body[ch] * cover;
+          if (cv.block.lean) c.lean += cv.block.lean * cover;
+        }
+      }
       if (cheer > 0.002) for (const [ch, v] of Object.entries(sampleMove(MOVES.cheer, 1, {}))) c[ch] += v * smooth(cheer);
-      if (meet > 0.002) for (const [ch, v] of Object.entries(sampleMove(MOVES.meet, 1, {}))) c[ch] += v * meet;
+      if (meet > 0.002) {
+        for (const [ch, v] of Object.entries(sampleMove(MOVES.meet, 1, {}))) c[ch] += v * meet * cv.meet.scale;
+        for (const ch in cv.meet.add) c[ch] += cv.meet.add[ch] * meet;
+      }
+      /* A great one on his guard, the instant before a punch lands on it: he goes back with it (the trunk turning away and the
+         head going back, so it closes on him the slower), or a legend's glove goes out to take it before it is all there. */
+      {
+        const near = cover > 0.5 && view.threat && view.threat.eta < 0.04 && (cv.block.go || cv.block.meet);
+        riding.x += ((near ? 1 : 0) - riding.x) * (1 - Math.exp(-dt * (near ? 60 : 9)));
+        if (riding.x > 1e-3) {
+          const from = view.threat ? Math.sign(view.threat.dir[0]) || 1 : 1;
+          if (cv.block.go) (c.yaw += cv.block.go[0] * from * riding.x), (c.hz -= cv.block.go[1] * riding.x), (c.lean -= 3 * riding.x);
+          if (cv.block.meet) (c.lz += cv.block.meet[0] * riding.x), (c.rz += cv.block.meet[0] * riding.x);
+        }
+      }
       const floored = !!(action && MOVES[action.name].floor),
         rocked = floored ? 0 : wobble.amount * Math.exp(-(wobble.t + dt) / WOBBLE.last) * smooth(clamp((wobble.t + dt) / WOBBLE.onset, 0, 1)),
         // what is left of his rhythm: a rocked man's and a spent man's grade comes apart
@@ -573,7 +643,8 @@ export function createAnimator(seed) {
         // where in his phrase he is (a legend's), in half beats from a lead foot
         P = ((((halves + u - ref) % PHRASE.length) + PHRASE.length) % PHRASE.length),
         quick = st.tempo === 'phrase' && P >= PHRASE.fast[0] && P < PHRASE.fast[1] ? CYCLE.fast / CYCLE.rest : 1;
-      cycle += (CYCLE.rest * quick + (CYCLE.travel * st.travel.cycle - CYCLE.rest * quick) * going - cycle) * (1 - Math.exp(-dt * 10)); // (quick enough to keep up, slow enough not to snap the bounce)
+      // (a beginner's and an amateur's travelling beat is slower, but not a dash's: that is one burst, whoever makes it)
+      cycle += (CYCLE.rest * quick + (CYCLE.travel * (action && action.name === 'dash' ? 1 : st.travel.cycle) - CYCLE.rest * quick) * going - cycle) * (1 - Math.exp(-dt * 10)); // (quick enough to keep up, slow enough not to snap the bounce)
       /* Setting off: the foot on the side he is going should move first. If the other one was already up, hopping in place,
          it is only set back down under him in its place (it takes no step of its own), and the right foot steps first. */
       const mid = [(BALL.L[0] + BALL.R[0]) / 2, (BALL.L[2] + BALL.R[2]) / 2],
@@ -602,7 +673,13 @@ export function createAnimator(seed) {
         } else if (action.chain.phase === 'coil' || v <= 0.4) eta = arrival(action.chain, punchMove) * 0.85;
         if (eta !== null && eta > 0.005 && eta < 0.5) want = timing(eta, form.beat);
       } else if (punchMove && form && form.beat === 'on' && action.chain.phase === 'recover') want = timing(homecoming(action.chain, punchMove), 'on');
-      else approach = null;
+      else if (evading && evading.beat === 'on') {
+        // (a great clean one's way back out of an evasion is over on a foot coming down)
+        approach = null;
+        const T = timeline(action.name, action.level),
+          te = evadeTime(action, T);
+        if (te >= T.backAt) want = timing(Math.max(0.01, T.end - te), 'on');
+      } else approach = null;
       function timing(eta, where) {
         // the beat points ahead (in seconds at the present pace), and the one that asks the least of the beat to arrive with it
         const len = (cycle / 2) * stretch,
@@ -674,8 +751,11 @@ export function createAnimator(seed) {
           },
             // setting off from a hop in place, the first step is always the foot on the side he is going
             first = hopped && speedNow > 0.25 && !(swing.last[0] === swing.last[1] && leads(swing.last[1]) > 0),
-            side = first ? (leads('L') >= leads('R') ? 'L' : 'R') : score('L') >= score('R') ? 'L' : 'R';
+            right = leads('L') >= leads('R') ? 'L' : 'R',
+            // (a beginner as often as not sets off with the wrong one)
+            side = first ? (st.travel.order && roll() < st.travel.order ? (right === 'L' ? 'R' : 'L') : right) : score('L') >= score('R') ? 'L' : 'R';
           swing.side = side;
+          swing.skid = 0;
           swing.still = speedNow < 0.25; // (a hop in place, not a step anywhere)
           swing.from = planted[side].slice();
           swing.last = [swing.last[1], side];
@@ -698,7 +778,7 @@ export function createAnimator(seed) {
       // ---- the bounce: down into each landing and back up off it, the weight swinging between the feet like a pendulum
       // (a tired man's feet barely leave the canvas, and a hurt man's legs are heavy; and the grade's own rhythm)
       const flat = exit && exit.kind === 'flat' ? 1 - smooth(exit.done === null ? 0 : (halves + u - exit.done - 2) / 0.5) : 0,
-        lively = (view.still ? 0 : action ? (form ? form.lively * ((punchMove.body && punchMove.body.lively) ?? 1) : 0.35) : 1 + cheer * 1.6) * (1 - 0.5 * tired) * (1 - 0.3 * hurt) * st.bounce * (1 - 0.7 * rocked) * (1 - flat),
+        lively = (view.still ? 0 : action ? (form ? form.lively * ((punchMove.body && punchMove.body.lively) ?? 1) : evading ? evading.lively : 0.35) : (1 + cheer * 1.6) * (cv.textbook ? 1 : 1 - cover * (1 - cv.lively))) * (1 - 0.5 * tired) * (1 - 0.3 * hurt) * st.bounce * (1 - 0.7 * rocked) * (1 - flat),
         spot = (1 - going) * lively, // how much of this is bouncing on the spot
         footSpot = (1 - going) * (feetLive += (lively - feetLive) * (1 - Math.exp(-dt * 20))),
         /* he bounces most on the spot: travelling, the beat quickens and the bounce shrinks with the square of it, so it is as
@@ -741,9 +821,11 @@ export function createAnimator(seed) {
       /* ---- how he stands: the grade's own posture, held under everything else. (A crouch is come up out of as a punch goes:
          most of it is unwound into the punch, and wound up again as the hand comes home.) */
       const unwind = punchMove ? 1 - 0.7 * smooth(clamp(Math.max(action.chain.q[3], punchMove.arm === 'straight' ? action.chain.q[4] : 0), 0, 1)) : 1;
-      c.hy += st.hips < 0 ? st.hips * unwind : st.hips;
-      c.lean += st.lean > 0 ? st.lean * unwind : st.lean;
-      c.yaw += st.yaw;
+      // (a stiff, upright man is not stiff and upright in the middle of a dash: his legs have to take it)
+      const stiff = action && action.name === 'dash' ? 0 : 1;
+      c.hy += st.hips < 0 ? st.hips * unwind : st.hips * stiff;
+      c.lean += st.lean > 0 ? st.lean * unwind : st.lean * stiff;
+      c.yaw += st.yaw * stiff;
       c.lfz += st.gap / 2;
       c.rfz -= st.gap / 2;
       if (st.shoulder) (c.side -= st.shoulder * unwind), (c.hr += st.shoulder * 0.6 * unwind); // (the hunched lead shoulder too)
@@ -757,7 +839,9 @@ export function createAnimator(seed) {
         c.le += gd.elbow;
         c.re += gd.elbow;
         c.hp += gd.chin;
-        if (free.L) (c.lx += gd.lead[0]), (c.ly += gd.lead[1]), (c.lz += gd.lead[2]);
+        // (a lead hand put out in his face comes home when a punch is coming, and while he covers up or gets out of the way)
+        leadOut += ((evading || view.threat ? 0 : 1 - cover) - leadOut) * (1 - Math.exp(-dt * 25));
+        if (free.L) (c.lx += gd.lead[0] * leadOut), (c.ly += gd.lead[1] * leadOut), (c.lz += gd.lead[2] * leadOut);
         // (loose hands drift with his breathing and the bounce, a legend's never quite still)
         if (gd.loose) (c.ly += 0.008 * gd.loose * Math.sin(TAU * 0.7 * clock)), (c.ry += 0.008 * gd.loose * Math.sin(TAU * 0.7 * clock + 2)), (c.lz += 0.006 * gd.loose * Math.sin(TAU * 0.45 * clock + 1));
       }
@@ -795,7 +879,7 @@ export function createAnimator(seed) {
          every lead foot and passes under in between; a legend's goes through his phrase; a dirty man's rolls low in no time
          at all. The shoulders roll the other way. */
       const comeback = exit ? (exit.kind === 'roll' || exit.kind === 'angle' ? smooth(halves + u - exit.from - 2) : 1) : 1,
-        hw = action ? 0 : (1 - 0.5 * going) * intact * comeback;
+        hw = action ? 0 : (1 - 0.5 * going) * intact * comeback * (cv.textbook ? 1 : 1 - cover * (1 - cv.head));
       if (st.head && hw > 0) {
         const head = st.head;
         let X = 0,
@@ -893,7 +977,7 @@ export function createAnimator(seed) {
 
       /* ---- travelling, by his grade: a beginner leans his body into it ahead of his feet and goes on past when he stops;
          an amateur's steps each nearly come to a stop before the next. */
-      if (st.travel.lean && speedNow > 0.05) {
+      if (st.travel.lean && speedNow > 0.05 && !(action && action.name === 'dash')) {
         const k = clamp(speedNow / 1.5, 0, 1) * st.travel.lean;
         c.lean += (k * vz) / speedNow;
         const across = (k * vx) / speedNow;
@@ -955,9 +1039,9 @@ export function createAnimator(seed) {
       c.ry -= 0.05 * Math.abs(open);
       for (const [side, x, yy, z] of [['L', 'lx', 'ly', 'lz'], ['R', 'rx', 'ry', 'rz']]) {
         const gk = knock[side];
-        c[x] += spring(gk[0], 0, dt, 4.2, 0.55);
-        c[yy] += spring(gk[1], 0, dt, 4.2, 0.55);
-        c[z] += spring(gk[2], 0, dt, 4.2, 0.55);
+        c[x] += spring(gk[0], 0, dt, 4.2 * knockRate, 0.55);
+        c[yy] += spring(gk[1], 0, dt, 4.2 * knockRate, 0.55);
+        c[z] += spring(gk[2], 0, dt, 4.2 * knockRate, 0.55);
       }
 
       /* ---- down and staying there: he still breathes, hard, and the head lifts and drops with it (a man on the canvas is
@@ -1069,11 +1153,22 @@ export function createAnimator(seed) {
             length = Math.hypot(to[0] - from[0], to[2] - from[2]);
           swing.to = to;
           at = [from[0] + (to[0] - from[0]) * e, gf.at[1], from[2] + (to[2] - from[2]) * e];
+          // (a beginner's feet come together in the middle of a step, an amateur's close and open again)
+          if (st.travel.width < 1 && !swing.still && length > 0.03 && !(action && action.name === 'dash')) {
+            const o = planted[side === 'L' ? 'R' : 'L'],
+              k = 1 - (1 - st.travel.width) * Math.sin(Math.PI * u);
+            at = [o[0] + (at[0] - o[0]) * k, at[1], o[2] + (at[2] - o[2]) * k];
+          }
           // travelling, a foot is lifted by its stride; on the spot it is only unweighted and snapped up off the canvas (a
           // dirty man slides his along instead)
           // (a foot only put right under a man who has stopped is skimmed back into place, not lifted: he stands on the other
           // one meanwhile, and could not for long with it high)
-          lift = (Math.min(0.075, length * 0.35) * (1 - st.drag) * (0.5 + 0.5 * going) + HOP * footSpot * st.hop) * Math.pow(Math.sin(Math.PI * u), 1.3) * dropped;
+          // (a man knocked back skids his feet along the canvas rather than stepping: a foot in the air under a shove would leave
+          // him on the other one, his weight past it)
+          // (the whole of a step that a shove came in: skidding)
+          swing.skid = Math.max(swing.skid || 0, view.shoved || 0);
+          const drag = Math.max(action && action.name === 'dash' ? Math.max(st.drag, (action.level || LEVEL[3]).dash.drag) : st.drag, smooth((swing.skid - 0.8) / 1.2));
+          lift = (Math.min(0.075, length * 0.35) * (1 - drag) * (0.5 + 0.5 * going) + HOP * footSpot * st.hop) * Math.pow(Math.sin(Math.PI * u), 1.3) * dropped;
           pitch = st.flat ? 0 : (14 * Math.sin(TAU * u) * clamp(length / 0.2, 0, 1) * (1 - 0.6 * st.drag) + 8 * footSpot * Math.min(1, st.hop) * Math.sin(Math.PI * u)) * dropped;
         } else {
           // a foot left too far behind by a shove or a dash is dragged, not left to pull the leg straight
