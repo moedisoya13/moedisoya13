@@ -80,7 +80,7 @@ const footRow = e => ({
 const PARTS = [
   {
     part: '풋워크',
-    note: '모든 기술은 다섯 단계이고, 4와 5에는 깔끔한 정도(명)와 더티 복싱(암) 두 갈래가 있어 일곱 장이 한 줄로 놓입니다. 일곱 장은 같은 대본을 한 시계로 돌리므로, 다른 것은 그리로 가는 몸뿐입니다. 발자국의 노란색은 앞발, 파란색은 뒷발이고, 명 카드의 빨간 등불은 강박(앞발 착지)에 켜집니다.',
+    note: '모든 기술은 다섯 단계이고, 4와 5에는 깔끔한 정도(명)와 더티 복싱(암) 두 갈래가 있어 일곱 장이 두 장씩 놓입니다. 일곱 장은 같은 대본을 한 시계로 돌리므로, 다른 것은 그리로 가는 몸뿐입니다. 발자국의 노란색은 앞발, 파란색은 뒷발이고, L 카드의 빨간 등불은 강박(앞발 착지)에 켜집니다.',
     groups: [
       ['박자', ['bounce', 'pendulum']],
       ['직선', ['inout', 'stalk', 'dash']],
@@ -148,6 +148,27 @@ for (const P of PARTS) {
       }
     main.append(section);
   }
+}
+shownAsLD(document.body);
+
+/* On the page the two branches of grades 4 and 5 read L (명, clean) and D (암, dirty); the data keeps 명 and 암.
+   A Korean particle after the letter follows how it is said: L ends in a consonant (엘), D in a vowel (디). */
+function asLD(s) {
+  const after = { L: { 는: '은', 와: '과', 가: '이', 를: '을' }, D: { 은: '는', 과: '와', 이: '가', 을: '를' } },
+    swap = (ld, j = '') => ld + (after[ld][j] || j);
+  return s
+    .replace(/([45])명(은|는|과|와|이|가|을|를)?/g, (_, n, j) => n + swap('L', j))
+    .replace(/([45·])암(은|는|과|와|이|가|을|를)?/g, (_, n, j) => n + swap('D', j))
+    .replace(/· 명/g, '· L')
+    .replace(/· 암/g, '· D')
+    .replace(/\((명|암)\)/g, (_, w) => (w === '명' ? '(L)' : '(D)'))
+    .replace(/(^|[\s,(])암(은|는|과|와|의|에)/g, (_, b, j) => b + swap('D', j));
+}
+function shownAsLD(root) {
+  const walk = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  for (let n = walk.nextNode(); n; n = walk.nextNode()) if (/[명암]/.test(n.nodeValue)) n.nodeValue = asLD(n.nodeValue);
+  for (const el of root.querySelectorAll('[aria-label], [title]'))
+    for (const k of ['aria-label', 'title']) if (el.hasAttribute(k)) el.setAttribute(k, asLD(el.getAttribute(k)));
 }
 
 // a card of a row: the grade, and the numbers its technique is told by
