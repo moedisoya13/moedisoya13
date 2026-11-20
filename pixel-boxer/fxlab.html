@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="claude:viewport-fit-sides" content="cover">
-<title>땀 분사 이펙트 시안</title>
+<title>타격 이펙트 시안</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=IBM+Plex+Mono:wght@500&family=IBM+Plex+Sans+KR:wght@400;600&display=swap">
 <style>
   /* the same wall chart as the motion catalogue: one canvas behind the page, each card's stage a window onto its own bout */
@@ -36,7 +36,7 @@
   section { display: flex; flex-direction: column; gap: 12px; }
   h2 { margin: 0; padding: 6px 0; background: var(--bg); font: 600 13px/1.2 var(--body); letter-spacing: .14em; color: var(--dim); border-bottom: 1.5px solid var(--line); }
   .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
-  @media (min-width: 900px) { .grid { grid-template-columns: repeat(5, 1fr); } }
+  @media (min-width: 760px) { .grid { grid-template-columns: repeat(4, 1fr); } }
   .card { display: flex; flex-direction: column; border: 1.5px solid var(--line); }
   /* (the stage is a hole in the page: the canvas shows through it) */
   .stage { aspect-ratio: 1; }
@@ -58,8 +58,8 @@
 <div id="loading">불러오는 중…</div>
 <div class="page">
   <header>
-    <h1>땀 분사 <em>이펙트</em> 시안</h1>
-    <p class="lede">참고 영상처럼, 주먹이 닿는 순간 머리 반대편의 땀이 주먹이 가던 선을 따라 부채꼴 안개로 터져 나옵니다. 떠나는 속도는 그 주먹이 머리에 닿던 속도 그대로이고, 고운 입자라 공기에 금방 잡혀 1 m 안에서 멈춘 뒤 그 자리에 떠서 흩어집니다. 지금의 색 입자를 대신하고, 색은 그대로 가져왔습니다.</p>
+    <h1>타격 <em>이펙트</em> 시안</h1>
+    <p class="lede">타격이 들어오는 방향을 빛으로 보면, 맞은 부위에서 그늘지는 면 전체가 땀을 뿌립니다. 입자 하나하나의 방향은 그 자리의 면이 향한 쪽과 타격 방향으로 계산되고, 뻗는 거리와 입자 수는 충격량에 비례합니다. 흰 번쩍임 대신, 맞은 자리에서 시작한 파문이 몸을 따라 퍼지며 사라집니다.</p>
     <div class="controls">
       <span>속도</span>
       <span class="seg"><button data-speed="1" aria-pressed="true">1×</button><button data-speed="0.5" aria-pressed="false">½×</button><button data-speed="0.25" aria-pressed="false">¼×</button></span>

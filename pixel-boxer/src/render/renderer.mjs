@@ -20,15 +20,26 @@ uniform vec2 u_art;    // the art grid, in pixels
 uniform float u_focal; // pixels
 uniform vec2 u_shake;  // pixels
 uniform vec2 u_depth;  // near, far
+uniform vec4 u_wave;   // a ripple through what was struck: where it began (world), and how far out its front is now
+uniform vec3 u_waveK;  // its width (metres), its strength (0..1: 0 is no ripple), and how far it lifts what it passes (metres)
 out vec2 v_d;
 out vec3 v_conic;
 flat out float v_pal;
 flat out float v_al;
+flat out float v_wave;
 void main() {
   int b = int(a_misc.y + 0.5) * 3;
   vec4 r0 = u_bones[b], r1 = u_bones[b + 1], r2 = u_bones[b + 2];
   mat3 R = mat3(r0.x, r1.x, r2.x, r0.y, r1.y, r2.y, r0.z, r1.z, r2.z);
   vec3 world = R * a_pos + vec3(r0.w, r1.w, r2.w);
+  // the ripple: a ring at its front, a fainter one following at a little over half the way, both lifting what they pass
+  v_wave = 0.0;
+  if (u_waveK.y > 0.0) {
+    vec3 from = world - u_wave.xyz;
+    float d = length(from), a = (d - u_wave.w) / u_waveK.x, b = (d - u_wave.w * 0.55) / u_waveK.x;
+    v_wave = max(exp(-a * a), 0.5 * exp(-b * b));
+    world += from / max(d, 1e-4) * u_waveK.z * u_waveK.y * v_wave;
+  }
   mat3 S = mat3(a_covA.x, a_covA.y, a_covA.z, a_covA.y, a_covB.x, a_covB.y, a_covA.z, a_covB.y, a_covB.z);
   mat3 M = mat3(u_view) * R;
   mat3 C = M * S * transpose(M);
@@ -57,6 +68,8 @@ in vec2 v_d;
 in vec3 v_conic;
 flat in float v_pal;
 flat in float v_al;
+flat in float v_wave;
+uniform vec3 u_waveK;
 uniform vec3 u_palette[${MAX_PALETTE}];
 uniform float u_mask;  // what kind of thing this is, kept in alpha for the second pass
 uniform float u_flash; // 0..1 toward white: a struck fighter
@@ -64,7 +77,10 @@ out vec4 o;
 void main() {
   float pw = -0.5 * (v_conic.x * v_d.x * v_d.x + v_conic.z * v_d.y * v_d.y) - v_conic.y * v_d.x * v_d.y;
   if (v_al * exp(pw) < 0.5) discard;
-  o = vec4(mix(u_palette[int(v_pal + 0.5)], vec3(1.0), u_flash), u_mask);
+  /* (the ripple is a hard ring of light, not a glow, drawn in the picture's own pixels: as it weakens the ring gets
+     thinner, and the fainter ring behind it is there only while it is strong) */
+  float lit = u_waveK.y > 0.0 && v_wave > 1.12 - u_waveK.y ? 0.8 : 0.0;
+  o = vec4(mix(u_palette[int(v_pal + 0.5)], vec3(1.0), max(u_flash, lit)), u_mask);
 }`;
 const POST_VS = `#version 300 es
 void main() { gl_Position = vec4(vec2(gl_VertexID == 1 ? 3.0 : -1.0, gl_VertexID == 2 ? 3.0 : -1.0), 0.0, 1.0); }`;
@@ -200,7 +216,8 @@ export function createRenderer(canvas, o) {
   /* A picture is one or more cells: begin(), then cell(rect, frame) for each, then end(post).
        rect:  { x, y, w, h } in art pixels from the bottom left of the grid, or none for the whole grid
        frame: { camera: { target, yaw, pitch, dist }, shake: [x, y] art pixels,
-                layers: [{ mesh, bones (vec4 rows, or none for things that stand still), palette (paletteArray), mask, flash }] }
+                layers: [{ mesh, bones (vec4 rows, or none for things that stand still), palette (paletteArray), mask, flash,
+                           wave: [x, y, z, front, width, strength, lift] (a ripple through it, from a point in the world) }] }
        post:  { white, dim, hall: [4 colours], ink }
      draw(frame) is the three together for a picture of one cell. */
   function begin() {
@@ -244,6 +261,9 @@ export function createRenderer(canvas, o) {
       gl.uniform3fv(splat.u.u_palette, layer.palette);
       gl.uniform1f(splat.u.u_mask, layer.mask === undefined ? 0.5 : layer.mask);
       gl.uniform1f(splat.u.u_flash, layer.flash || 0);
+      const wv = layer.wave;
+      gl.uniform4f(splat.u.u_wave, wv ? wv[0] : 0, wv ? wv[1] : 0, wv ? wv[2] : 0, wv ? wv[3] : 0);
+      gl.uniform3f(splat.u.u_waveK, wv ? wv[4] : 1, wv ? wv[5] : 0, wv ? wv[6] : 0);
       gl.bindVertexArray(layer.mesh.vao);
       gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, layer.mesh.count);
       drawn += layer.mesh.count;

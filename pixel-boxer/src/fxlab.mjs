@@ -1,6 +1,7 @@
-/* A study of one effect: the spray of sweat off the far side of a head when it is hit (render/fx.mjs: spray), in place of
-   the sparks the blow is drawn with now. Every card is a real bout from the defence catalogue (src/defense.mjs), looped; the
-   cards of a row are the same exchange, frame for frame, and differ only in what the blow throws off. */
+/* A study of how a blow is drawn: the spray of sweat off the shadowed side of what was struck (render/fx.mjs: spray) in
+   place of the blow's sparks, and a ripple through the struck man from where it landed (render/renderer.mjs: a layer's
+   wave) in place of his flash of white. Every card is a real bout from the catalogue (src/defense.mjs, src/ladder.mjs),
+   looped; the cards of a row are the same exchange, frame for frame, and differ only in how the blow is drawn. */
 import { createRenderer, paletteArray, rgb } from './render/renderer.mjs';
 import { createFx } from './render/fx.mjs';
 import { unpack, fromBase64 } from './render/splats.mjs';
@@ -11,21 +12,34 @@ import { guardPose } from './anim/animator.mjs';
 import { step } from './game/bout.mjs';
 import { freshBout, drive } from './footwork.mjs';
 import { DEFENSE } from './defense.mjs';
+import { LADDER } from './ladder.mjs';
 
 const DT = 1 / 60;
 /* What a mote goes through as it hangs, one run taken for each: the colours of the blow's sparks as they are now (white,
-   the pale yellow, the gold, the pale blue), going to the greys as the mist thins. Palette indices (assets/manifest.json). */
-const MIST = [[38, 38, 41, 25], [38, 39, 40, 25], [38, 41, 41, 24], [39, 40, 40, 25], [38, 39, 41, 24]];
-/* The versions. n: motes, for a blow of nothing and for one of 85 newton-seconds more (fewer under 6 m/s); o is fx.spray's. The fan leaves at
-   the speed the glove was closing on the head at (a cross: 11 m/s), so how far it gets is that over the air's drag. */
+   the pale yellow, the gold, the pale blue), staying light as the mist thins: a mote gone grey over his face would read as a speck of dirt on it. Palette indices (assets/manifest.json). */
+const MIST = [[38, 38, 41, 41], [38, 39, 40, 40], [38, 41, 41, 41], [39, 40, 40, 40], [38, 39, 41, 25]];
+/* The versions. spray is fx.spray's o (n motes and range metres for a blow of 85 N s, both in proportion to the impulse).
+   wave: the ripple: speed (m/s its front travels), last (seconds), width (metres of the ring), lift (metres it raises
+   what it passes: none here, since moving the splats of a body a few millimetres lets the dark ones under them show); how strong it starts is the blow's impulse over 60 N s, up to 1. */
 const VERSIONS = [
-  { id: 'now', name: '지금', note: '지금의 색 입자. 비교 기준입니다.' },
-  { id: 'mist', name: 'A · 안개', note: '색 입자를 없애고, 같은 색의 훨씬 고운 입자가 머리 반대편에서 부채꼴로 터집니다. 0.1초 안에 80 cm쯤 뻗고 그 자리에 떠서 흩어집니다.', n: [60, 90], o: { size: 0.008, cone: 0.28, reach: 1, drag: 12, life: 0.42 } },
-  { id: 'drops', name: 'B · 안개 + 방울', note: 'A에 굵은 방울을 열에 하나쯤 섞습니다. 방울은 안개를 뚫고 더 멀리 나가 포물선으로 떨어집니다.', n: [60, 90], o: { size: 0.008, cone: 0.28, reach: 1, drag: 12, life: 0.42, beads: 0.12 } },
-  { id: 'streak', name: 'C · 긴 줄기', note: '부채를 좁히고 더 멀리 보냅니다. 주먹이 가던 선이 1 m 넘는 줄기로 남습니다.', n: [70, 100], o: { size: 0.008, cone: 0.17, reach: 1.25, drag: 10, life: 0.48, lift: 0.08 } },
-  { id: 'cloud', name: 'D · 짙은 구름', note: '입자를 더 많이, 더 넓게 터뜨립니다. 짧게 뻗고 머리 뒤에 구름처럼 오래 남습니다.', n: [110, 150], o: { size: 0.01, cone: 0.42, reach: 0.9, drag: 15, life: 0.55 } }
+  { id: 'now', name: '지금', note: '지금의 색 입자와 흰 번쩍임. 비교 기준입니다.' },
+  { id: 'base', name: 'A · 기본', note: '타격 방향을 빛으로 보고, 맞은 부위의 그늘진 면 전체에서 입자가 나옵니다. 85 N·s에 80 cm까지 뻗습니다. 파문은 초속 3 m로 0.3초 동안 퍼집니다.', spray: { n: 130, range: 0.8, flare: 0.5 }, wave: { speed: 3, last: 0.3, width: 0.05, lift: 0 } },
+  { id: 'wide', name: 'B · 넓고 굵게', note: '입자가 더 많고 가장자리에서 더 벌어져, 짧고 넓은 구름이 됩니다. 파문은 느리고 굵습니다.', spray: { n: 180, range: 0.65, flare: 0.9, life: 0.5 }, wave: { speed: 2.4, last: 0.38, width: 0.08, lift: 0 } },
+  { id: 'long', name: 'C · 길고 가늘게', note: '입자가 덜 벌어지고 1 m 넘게 뻗어 타격의 선이 남습니다. 파문은 빠르고 가는 고리입니다.', spray: { n: 120, range: 1.05, flare: 0.28 }, wave: { speed: 4.2, last: 0.24, width: 0.035, lift: 0 } }
 ];
-const ROWS = ['hit-cross', 'hit-hook', 'hit-upper', 'down-back'].map(id => DEFENSE.find(e => e.id === id));
+/* The rows: a light blow, the two hard ones, an uppercut under the chin (the catalogue's own is thrown from too close to be
+   hard, so the rung of the skill ladder stands in: there it is the other man who is struck), and a knockdown. */
+const ROWS = [
+  ['hit-jab', '잽 · 가벼운 타격'],
+  ['hit-cross', '스트레이트'],
+  ['hit-hook', '훅', -1.05], // (seen from behind the man it lands on, so that the way it goes is across the picture)
+  ['upper@3', '어퍼컷 · 턱'],
+  ['down-back', '다운']
+].map(([id, name, yaw]) => {
+  const entry = [...DEFENSE, ...LADDER].find(e => e.id === id);
+  return Object.assign({}, entry, { name, view: { yaw: yaw ?? entry.view.yaw, pitch: entry.view.pitch } });
+});
+const HEAD = 0.115; // the head, as a ball, for the spray: metres
 
 // ---- the page, written from the rows and the versions
 {
@@ -38,7 +52,7 @@ const ROWS = ['hit-cross', 'hit-hook', 'hit-upper', 'down-back'].map(id => DEFEN
     for (const v of VERSIONS)
       section.lastChild.insertAdjacentHTML(
         'beforeend',
-        `<article class="card" data-entry="${entry.id}" data-version="${v.id}"><div class="stage"></div><div class="info"><h3>${v.name}</h3><div class="stats">충격량 <b data-blow>–</b> N·s · 입자 <b data-beads>–</b></div><div class="stats">주먹 <b data-head>–</b> m/s</div></div></article>`
+        `<article class="card" data-entry="${entry.id}" data-version="${v.id}"><div class="stage"></div><div class="info"><h3>${v.name}</h3><div class="stats">충격량 <b data-blow>–</b> N·s · 입자 <b data-beads>–</b></div><div class="stats">뻗는 거리 <b data-head>–</b> cm</div></div></article>`
       );
     lab.append(section);
   }
@@ -96,35 +110,40 @@ function start({ manifest, boxer }) {
       version = VERSIONS.find(v => v.id === el.dataset.version),
       seed = 7 + ROWS.indexOf(entry),
       fx = createFx(() => cell.rnd()),
-      cell = { entry, version, el, stage: el.querySelector('.stage'), blow: el.querySelector('[data-blow]'), beads: el.querySelector('[data-beads]'), head: el.querySelector('[data-head]'), fx, mesh: R.mesh(fx.rows, 0, true), bones: [new Float32Array(R.maxBones * 12), new Float32Array(R.maxBones * 12)], seed, rnd: dice(seed), bout: null, t: 0, acc: 0, shake: 0, was: null, top: 0, cam: { target: [-0.45, 1.3, 0], yaw: entry.view.yaw, pitch: 0.14, dist: 2.9 } };
+      cell = { entry, version, el, stage: el.querySelector('.stage'), blow: el.querySelector('[data-blow]'), beads: el.querySelector('[data-beads]'), head: el.querySelector('[data-head]'), fx, mesh: R.mesh(fx.rows, 0, true), bones: [new Float32Array(R.maxBones * 12), new Float32Array(R.maxBones * 12)], seed, rnd: dice(seed), bout: null, t: 0, acc: 0, shake: 0, waves: [null, null], struck: entry.id.includes('@') ? 1 : 0, cam: { target: [entry.id.includes('@') ? 1.2 : -0.45, 1.3, 0], yaw: entry.view.yaw, pitch: 0.14, dist: 2.9 } };
     cell.bout = freshBout(entry);
     return cell;
   });
 
   function tick(cell) {
     const { entry, version } = cell;
-    if (cell.t > 0 && Math.round(cell.t / DT) % Math.round(entry.loop / DT) === 0) (cell.bout = freshBout(entry)), (cell.t = 0), (cell.was = null), (cell.rnd = dice(cell.seed));
+    if (cell.t > 0 && Math.round(cell.t / DT) % Math.round(entry.loop / DT) === 0) (cell.bout = freshBout(entry)), (cell.t = 0), (cell.rnd = dice(cell.seed));
     const bout = cell.bout,
       [a, b] = bout.fighters;
     step(bout, drive(entry, bout, cell.t, DT), DT);
     cell.t += DT;
     b.hp = 1000;
+    if (!entry.hurt) a.hp = 1000;
     for (const e of bout.events) {
       if (e.type === 'hit') {
         const k = Math.min(1.6, e.J / 85),
-          struck = bout.fighters[e.on],
-          // (as many motes as the blow is hard, and fewer for a glove that was hardly moving: there is little to throw)
-          n = version.n ? Math.round((version.n[0] + version.n[1] * k) * Math.max(0.25, Math.min(1, e.speed / 6))) : 0;
-        if (n) cell.fx.spray(struck.points.head, e.at, e.speed, n, MIST, version.o);
-        else {
+          struck = bout.fighters[e.on];
+        let n;
+        if (version.spray) {
+          // the sweat off the shadowed side of his head, and a ripple through him from where the glove met it
+          n = cell.fx.spray({ at: struck.points.head, r: HEAD }, e.vec, e.J, MIST, version.spray);
+          cell.waves[e.on] = { off: [e.at[0] - struck.points.head[0], e.at[1] - struck.points.head[1], e.at[2] - struck.points.head[2]], age: 0, strength: Math.min(1, e.J / 60) };
+          cell.head.textContent = String(Math.round(version.spray.range * Math.min(1.7, e.J / 85) * 100));
+        } else {
           // the blow as the game draws it now
           cell.fx.sparks(e.at, Math.round(5 + 12 * k), [38, 39, 40, 41], 2.5 + 3 * k, e.dir);
           cell.fx.sparks(e.at, Math.round(3 + 8 * k), [41, 41, 25], 2.5 + 2 * k, e.dir);
+          n = Math.round(5 + 12 * k) + Math.round(3 + 8 * k);
+          cell.head.textContent = '–';
         }
         cell.shake = e.down ? 5 : 1 + 2.5 * k;
         cell.blow.textContent = String(Math.round(e.J));
-        cell.beads.textContent = String(n || Math.round(5 + 12 * k) + Math.round(3 + 8 * k));
-        cell.head.textContent = e.speed.toFixed(1);
+        cell.beads.textContent = String(n);
       } else if (e.type === 'block') (cell.fx.sparks(e.at, 4, [38, 25, 24], 2.5, e.dir), (cell.shake = 1));
     }
     cell.shake *= 0.82;
@@ -159,12 +178,27 @@ function start({ manifest, boxer }) {
         shadows.push({ x: f.x + f.pose.at.Hips[2] * Math.sin(f.yaw), z: f.z + f.pose.at.Hips[2] * Math.cos(f.yaw), yaw: f.yaw, long: 0.3, wide: 0.24 });
       });
       cell.mesh.update(cell.fx.rows, cell.fx.update(elapsed, shadows, 22));
-      layers.push({ mesh: cell.mesh, palette: palettes[0], mask: 0.6 }, { mesh: meshes.boxer, bones: cell.bones[0], palette: palettes[0], mask: 1 }, { mesh: meshes.boxer, bones: cell.bones[1], palette: palettes[1], mask: 1, flash: b.flash > 0 ? 1 : 0 });
+      // each man's ripple, if one is going through him: from where the glove met his head, wherever his head is now
+      const waves = [a, b].map((f, i) => {
+        const w = cell.waves[i],
+          set = cell.version.wave;
+        if (!w || !set) return null;
+        w.age += elapsed;
+        if (w.age >= set.last) return (cell.waves[i] = null);
+        const h = f.points.head;
+        return [h[0] + w.off[0], h[1] + w.off[1], h[2] + w.off[2], set.speed * w.age, set.width, w.strength * (1 - w.age / set.last) ** 1.2, set.lift];
+      });
+      layers.push(
+        { mesh: cell.mesh, palette: palettes[0], mask: 0.6 },
+        { mesh: meshes.boxer, bones: cell.bones[0], palette: palettes[0], mask: 1, wave: waves[0], flash: !cell.version.wave && a.flash > 0 ? 1 : 0 },
+        { mesh: meshes.boxer, bones: cell.bones[1], palette: palettes[1], mask: 1, wave: waves[1], flash: !cell.version.wave && b.flash > 0 ? 1 : 0 }
+      );
       const rect = { x: Math.round((box.left * dpr) / grid.scale), y: Math.round(((innerHeight - box.bottom) * dpr) / grid.scale), w: Math.round((box.width * dpr) / grid.scale), h: Math.round((box.height * dpr) / grid.scale) },
-        ease = 1 - Math.exp(-elapsed * 4);
+        ease = 1 - Math.exp(-elapsed * 4),
+        [hit, other] = cell.struck ? [b, a] : [a, b];
       // framed on the man who is hit, a little behind him: the room is on the far side of his head, for what the blow throws off it
-      cell.cam.target[0] += (a.x * 1.45 - b.x * 0.45 - cell.cam.target[0]) * ease;
-      cell.cam.target[2] += (a.z * 1.45 - b.z * 0.45 - cell.cam.target[2]) * ease;
+      cell.cam.target[0] += (hit.x * 1.45 - other.x * 0.45 - cell.cam.target[0]) * ease;
+      cell.cam.target[2] += (hit.z * 1.45 - other.z * 0.45 - cell.cam.target[2]) * ease;
       const jolt = cell.shake > 0.3 ? [Math.sin(cell.t * 97) * cell.shake, Math.cos(cell.t * 83) * cell.shake * 0.6] : null;
       R.cell(rect, { camera: cell.cam, layers, shake: jolt });
     }
@@ -181,8 +215,8 @@ function start({ manifest, boxer }) {
   globalThis.__lab = {
     cells,
     hold: false,
-    reset: () => cells.forEach(cell => ((cell.bout = freshBout(cell.entry)), (cell.t = 0), (cell.acc = 0), (cell.was = null), (cell.rnd = dice(cell.seed)))),
-    advance: sec => cells.forEach(cell => { for (let i = 0; i < Math.round(sec / DT); i++) (tick(cell), cell.fx.update(DT, [], 22)); })
+    reset: () => cells.forEach(cell => ((cell.bout = freshBout(cell.entry)), (cell.t = 0), (cell.acc = 0), (cell.waves = [null, null]), (cell.rnd = dice(cell.seed)))),
+    advance: sec => cells.forEach(cell => { for (let i = 0; i < Math.round(sec / DT); i++) (tick(cell), cell.fx.update(DT, [], 22), cell.waves.forEach(w => w && (w.age += DT))); })
   };
   theme();
   document.getElementById('loading').hidden = true;

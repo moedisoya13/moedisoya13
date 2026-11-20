@@ -50,47 +50,58 @@ export function createFx(random) {
         add({ a: at.slice(), b: at.slice(), v, g: -13, drag: 3, width: 0.024, pal: colours, life: 0.16 + rnd() * 0.22, tail: 0.03, shrink: 0.6 });
       }
     },
-    /* The spray off a blow: the sweat on the far side of his head, thrown off it along the line of the punch at the instant
-       it lands (the blow goes through the head, and what is sitting loose on the other side keeps the glove's speed). It
-       is a mist: motes far too small to fall, stopped by the air within a metre, so it is a fan that is out in a tenth of
-       a second, dense at the head and thin at its tip, and then hangs where it stopped and thins away.
-         head     the middle of his head, in the world
-         from     where the glove met it
-         speed    how fast the glove was closing on the head, metres a second
+    /* The spray off a blow: sweat thrown off the part of him that was struck, at the instant it lands. The way the glove
+       was going is taken as a light: every bit of the part's surface that light leaves in shadow (the side away from the
+       glove) throws motes, most where the shadow is deepest, straight behind the blow. Each mote's velocity is worked out
+       from where on the surface it sat: the way the blow was going, turned outward by the surface's own facing there, so
+       one from straight behind goes straight on and one from the edge of the shadow leaves at a slant. The fan's shape is
+       the part's, not a set angle: an uppercut under the chin throws them up off the top of the head, a hook throws them
+       off the far cheek the way the hook was going. How far they get, and how many there are, is the blow's impulse.
+       It is a mist: motes far too small to fall, stopped by the air within a metre, so it is out in a tenth of a second,
+       dense at the part and thin at its tip, and then hangs where it stopped and thins away.
+         part     what was struck: { at: its middle (world), r: its radius } (a head), or { at, to, r } for a part with
+                  length (a trunk: the motes come off all along it)
+         vec      the way the glove was going as it met him (unit, world)
+         J        the blow's impulse, newton-seconds
          colours  what a mote goes through as it hangs, or several of those, one taken for each mote
-         o        { size: metres across, cone: how wide the fan opens (the tangent of its half angle), reach: how much of
-                    the glove's speed the fastest motes leave with, drag: how soon the air stops them (1/s), life: seconds,
-                    lift: how much the fan is tipped up, g: how fast it settles (m/s2, a mist's: next to nothing),
-                    beads: how many of the n are drops heavy enough to carry on and fall (a share, 0..1) } */
-    spray(head, from, speed, n, colours, o) {
-      const far = M.sub(head, from),
-        fl = len(far) || 1,
-        f0 = M.scale(far, 1 / fl),
-        /* (the line from where the glove met it through the middle of the head is steeper than the way the glove was
-           going, a hook's most of all, aimed under the jaw as it is: the fan keeps less than half of that slope) */
-        f1 = [f0[0], f0[1] * 0.45 + (o.lift ?? 0.1), f0[2]],
-        f = M.scale(f1, 1 / len(f1)),
-        s = len([f[2], 0, -f[0]]) > 1e-3 ? M.scale([f[2], 0, -f[0]], 1 / len([f[2], 0, -f[0]])) : [1, 0, 0],
-        u = [f[1] * s[2] - f[2] * s[1], f[2] * s[0] - f[0] * s[2], f[0] * s[1] - f[1] * s[0]],
+         o        { n: motes for a blow of 85 N s, range: metres the fastest get for one (both in proportion to J),
+                    flare: how far a mote at the shadow's edge is turned outward (0 none, 1 half way to its own facing),
+                    size: metres across, drag: how soon the air stops them (1/s), life: seconds, g: how fast it settles
+                    (m/s2, a mist's: next to nothing), beads: the share that are drops heavy enough to carry on and fall }
+       -> how many motes it threw */
+    spray(part, vec, J, colours, o) {
+      const k = Math.min(1.7, J / 85),
+        n = Math.round((o.n ?? 120) * k),
+        drag = o.drag ?? 12,
+        top = (o.range ?? 0.8) * k * drag, // (a mote the air stops goes its speed over the drag, all told)
+        d = vec,
+        s = len([d[2], 0, -d[0]]) > 1e-3 ? M.scale([d[2], 0, -d[0]], 1 / len([d[2], 0, -d[0]])) : [1, 0, 0],
+        u = [d[1] * s[2] - d[2] * s[1], d[2] * s[0] - d[0] * s[2], d[0] * s[1] - d[1] * s[0]],
         pick = () => (Array.isArray(colours[0]) ? colours[Math.floor(rnd() * colours.length)] : colours);
       for (let i = 0; i < n; i++) {
-        // from somewhere on the far side of the head, out along the line of the blow, a little to one side of it
-        const bead = rnd() < (o.beads ?? 0),
+        /* where on the shadowed side: the surface's facing there, taken so that there are more of them the deeper the
+           shadow (as light falls off a surface turned from it, the other way round) */
+        const deep = Math.sqrt(rnd()), // (how squarely this bit of surface faces away from the glove: 1 straight behind)
+          edge = Math.sqrt(1 - deep * deep),
           round = rnd() * Math.PI * 2,
-          wide = Math.sqrt(rnd()),
-          on = M.add(M.scale(f, 0.085), M.add(M.scale(s, 0.09 * wide * Math.cos(round)), M.scale(u, 0.09 * wide * Math.sin(round)))),
-          // (most of them slow, a few fast: the fan is dense at the head and thin at its tip)
-          go = speed * (o.reach ?? 1) * (0.08 + 0.92 * rnd() ** 1.7),
-          out = (o.cone ?? 0.3) * Math.sqrt(rnd()),
-          way = rnd() * Math.PI * 2,
-          v = M.scale(M.add(f, M.add(M.scale(s, out * Math.cos(way)), M.scale(u, out * Math.sin(way)))), go),
-          at = M.add(head, on);
+          out = M.add(M.scale(s, Math.cos(round)), M.scale(u, Math.sin(round))),
+          facing = M.add(M.scale(d, deep), M.scale(out, edge)),
+          middle = part.to ? M.lerp(part.at, part.to, rnd()) : part.at,
+          at = M.add(middle, M.scale(facing, part.r)),
+          // the way it leaves: the blow's way, turned outward by as much as the surface there faces outward
+          way = M.add(d, M.scale(out, edge * (o.flare ?? 0.7))),
+          wl = len(way),
+          bead = rnd() < (o.beads ?? 0),
+          // (the deepest shadow is hit squarest and throws hardest; and of any bit, most motes are slow and a few fast)
+          go = top * (0.35 + 0.65 * deep) * (0.2 + 0.8 * rnd() ** 1.7), // (none so slow that it is left sitting on him)
+          v = M.scale(way, go / wl);
         add({
-          a: at, b: at.slice(), v, g: bead ? -9.8 : o.g ?? -1.2, drag: (o.drag ?? 12) * (bead ? 0.3 : 0.8 + 0.4 * rnd()),
-          width: o.size * (bead ? 1.7 : 0.7 + 0.6 * rnd()), pal: pick(), life: (o.life ?? 0.42) * (bead ? 1.3 : 0.55 + 0.75 * rnd()), tail: bead ? 0.012 : 0.007,
+          a: at, b: at.slice(), v, g: bead ? -9.8 : o.g ?? -1.2, drag: drag * (bead ? 0.3 : 0.8 + 0.4 * rnd()),
+          width: (o.size ?? 0.008) * (bead ? 1.7 : 0.7 + 0.6 * rnd()), pal: pick(), life: (o.life ?? 0.42) * (bead ? 1.3 : 0.55 + 0.75 * rnd()), tail: bead ? 0.012 : 0.007,
           shrink: 0.2, thin: !bead, splat: true
         });
       }
+      return n;
     },
     /* Sweat: beads that were sitting on the side of his head away from the glove. The blow drives the head into them, so
        at first they ride it; when the neck stops the head they keep going, each one letting go as the head slows under it

@@ -568,7 +568,10 @@ function strike(bout, f, other, who, dt) {
     J = mass * speed * (1 + RULES.bounce) * f.k.power * (0.85 + 0.15 * fatigue(f)),
     flat = Math.hypot(n[0], n[2]) || 1,
     dir = [n[0] / flat, n[2] / flat],
-    blow = { who, on: 1 - who, name: move.name, kind: move.kind, hand, J: +J.toFixed(1), speed: +speed.toFixed(2), mass: +mass.toFixed(2), dir, at: M.add(at, M.scale(n, RULES.glove)) };
+    // (vec: the way the glove was going as it met him, as he would see it coming: what a blow throws off him goes that way)
+    cl = Math.hypot(closing[0], closing[1], closing[2]),
+    vec = cl > 1e-6 ? M.scale(closing, 1 / cl) : n,
+    blow = { who, on: 1 - who, name: move.name, kind: move.kind, hand, J: +J.toFixed(1), speed: +speed.toFixed(2), mass: +mass.toFixed(2), dir, vec, at: M.add(at, M.scale(n, RULES.glove)) };
   action.struck = true;
   action.chain.landed = true;
   action.chain.v[3] = action.chain.v[4] = 0; // the arm is stopped by what it hit
