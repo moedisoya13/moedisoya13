@@ -3,7 +3,7 @@
    the live ones are written into one array of rows for the renderer. */
 import * as M from '../rig/m3.mjs';
 
-const CAP = 640;
+const CAP = 960;
 const len = a => Math.hypot(a[0], a[1], a[2]);
 
 export function createFx(random) {
@@ -13,7 +13,7 @@ export function createFx(random) {
   const add = item => {
     if (items.length < CAP - 16) items.push(Object.assign({ age: 0, v: null, g: 0, drag: 0, width: 0.03, grow: 0 }, item));
   };
-  function write(n, a, b, width, pal, flat) {
+  function write(n, a, b, width, pal, flat, dense) {
     const half = M.scale(M.sub(b, a), 0.5),
       l = len(half),
       sw = (width / 1.9) ** 2,
@@ -33,7 +33,7 @@ export function createFx(random) {
     rows[o + 8] = sw + k * d[2] * d[2];
     rows[o + 9] = pal;
     rows[o + 10] = 0;
-    rows[o + 11] = 3;
+    rows[o + 11] = dense ?? 3; // (how solid: under a half it is not drawn at all, so a mote thinning toward that winks out)
   }
   return {
     rows,
@@ -48,6 +48,48 @@ export function createFx(random) {
           s = speed * (0.35 + rnd() * 0.9),
           v = [Math.cos(a) * s * 0.8 + (dir ? dir[0] * speed * 0.7 : 0), Math.sin(a) * s * 0.7 + 1.4, (rnd() - 0.5) * s + (dir ? dir[1] * speed * 0.7 : 0)];
         add({ a: at.slice(), b: at.slice(), v, g: -13, drag: 3, width: 0.024, pal: colours, life: 0.16 + rnd() * 0.22, tail: 0.03, shrink: 0.6 });
+      }
+    },
+    /* The spray off a blow: the sweat on the far side of his head, thrown off it along the line of the punch at the instant
+       it lands (the blow goes through the head, and what is sitting loose on the other side keeps the glove's speed). It
+       is a mist: motes far too small to fall, stopped by the air within a metre, so it is a fan that is out in a tenth of
+       a second, dense at the head and thin at its tip, and then hangs where it stopped and thins away.
+         head     the middle of his head, in the world
+         from     where the glove met it
+         speed    how fast the glove was closing on the head, metres a second
+         colours  what a mote goes through as it hangs, or several of those, one taken for each mote
+         o        { size: metres across, cone: how wide the fan opens (the tangent of its half angle), reach: how much of
+                    the glove's speed the fastest motes leave with, drag: how soon the air stops them (1/s), life: seconds,
+                    lift: how much the fan is tipped up, g: how fast it settles (m/s2, a mist's: next to nothing),
+                    beads: how many of the n are drops heavy enough to carry on and fall (a share, 0..1) } */
+    spray(head, from, speed, n, colours, o) {
+      const far = M.sub(head, from),
+        fl = len(far) || 1,
+        f0 = M.scale(far, 1 / fl),
+        /* (the line from where the glove met it through the middle of the head is steeper than the way the glove was
+           going, a hook's most of all, aimed under the jaw as it is: the fan keeps less than half of that slope) */
+        f1 = [f0[0], f0[1] * 0.45 + (o.lift ?? 0.1), f0[2]],
+        f = M.scale(f1, 1 / len(f1)),
+        s = len([f[2], 0, -f[0]]) > 1e-3 ? M.scale([f[2], 0, -f[0]], 1 / len([f[2], 0, -f[0]])) : [1, 0, 0],
+        u = [f[1] * s[2] - f[2] * s[1], f[2] * s[0] - f[0] * s[2], f[0] * s[1] - f[1] * s[0]],
+        pick = () => (Array.isArray(colours[0]) ? colours[Math.floor(rnd() * colours.length)] : colours);
+      for (let i = 0; i < n; i++) {
+        // from somewhere on the far side of the head, out along the line of the blow, a little to one side of it
+        const bead = rnd() < (o.beads ?? 0),
+          round = rnd() * Math.PI * 2,
+          wide = Math.sqrt(rnd()),
+          on = M.add(M.scale(f, 0.085), M.add(M.scale(s, 0.09 * wide * Math.cos(round)), M.scale(u, 0.09 * wide * Math.sin(round)))),
+          // (most of them slow, a few fast: the fan is dense at the head and thin at its tip)
+          go = speed * (o.reach ?? 1) * (0.08 + 0.92 * rnd() ** 1.7),
+          out = (o.cone ?? 0.3) * Math.sqrt(rnd()),
+          way = rnd() * Math.PI * 2,
+          v = M.scale(M.add(f, M.add(M.scale(s, out * Math.cos(way)), M.scale(u, out * Math.sin(way)))), go),
+          at = M.add(head, on);
+        add({
+          a: at, b: at.slice(), v, g: bead ? -9.8 : o.g ?? -1.2, drag: (o.drag ?? 12) * (bead ? 0.3 : 0.8 + 0.4 * rnd()),
+          width: o.size * (bead ? 1.7 : 0.7 + 0.6 * rnd()), pal: pick(), life: (o.life ?? 0.42) * (bead ? 1.3 : 0.55 + 0.75 * rnd()), tail: bead ? 0.012 : 0.007,
+          shrink: 0.2, thin: !bead, splat: true
+        });
       }
     },
     /* Sweat: beads that were sitting on the side of his head away from the glove. The blow drives the head into them, so
@@ -151,7 +193,8 @@ export function createFx(random) {
         if (n >= CAP) break;
         if (it.stick && it.top <= 0.5) continue; // (a bead is not seen until the head moves under it)
         const u = it.age / it.life;
-        write(n++, it.a, it.b, it.width * (it.stick ? 0.6 : 1 - it.shrink * u), Array.isArray(it.pal) ? it.pal[Math.min(it.pal.length - 1, Math.floor(u * it.pal.length))] : it.pal, it.flat);
+        // (a mote of the mist is a single pixel while it flies, and thins away to nothing over the rest of its life)
+        write(n++, it.a, it.b, it.width * (it.stick ? 0.6 : 1 - it.shrink * u), Array.isArray(it.pal) ? it.pal[Math.min(it.pal.length - 1, Math.floor(u * it.pal.length))] : it.pal, it.flat, it.thin ? 1.5 - 1.1 * Math.max(0, (u - 0.4) / 0.6) ** 1.5 : 3);
       }
       this.count = n;
       return n;
