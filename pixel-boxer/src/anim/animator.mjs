@@ -27,7 +27,7 @@ import { createFall, stepFall, poseOf, lyingOf, moveFall } from '../phys/fall.mj
 import * as Q from './quat.mjs';
 import { FOOT, HEAD } from '../rig/body.mjs';
 import { LINKS, stepChain } from '../phys/chain.mjs';
-import { CHANNELS, GUARD, MOVES, LEFT_BEND, LIE, UP, sampleMove } from './moves.mjs';
+import { CHANNELS, GUARD, MOVES, LEFT_BEND, LIE, UP, sampleMove, mirrorKnees } from './moves.mjs';
 import { LEVEL } from './skill.mjs';
 import { H, headAt, headTo, phraseX, PHRASE, FLOURISH, CLEAN, DIRTY, dice } from './stance.mjs';
 import { sampleEvade, EVASIONS, timeline, evadeTime } from './evade.mjs';
@@ -40,12 +40,17 @@ const CYCLE = { rest: 0.64, travel: 0.3, fast: 0.52 }; // seconds for both feet 
 const HOP = 0.03; // metres an unweighted foot clears the canvas by, bouncing on the spot
 /* The bounce itself, once for each foot that comes down: a short squash as the weight lands (the legs take it like springs),
    the push back off it, and a float before the next. The squash and the float meet at the same speed, so it rebounds
-   rather than bobs. Heights in metres at full liveliness. */
-const BOUNCE = { contact: 0.38, float: 0.016 };
+   rather than bobs. Heights of the hips in metres at full liveliness, and made by the knees: bent into the landing and
+   straightened off it, about `knee` degrees either way in the textbook (skill.mjs: stance.knee, each grade's), at `slope`
+   metres of the hips a degree (both knees together, about the guard's 38 and 48). */
+const BOUNCE = { contact: 0.38, float: 0.016, knee: 5.4, slope: 0.0027 };
 // rocked: seconds it takes to wear off (to a third), and how quickly it comes on
 const WOBBLE = { last: 0.95, onset: 0.1 };
 BOUNCE.squash = (4 * BOUNCE.float * BOUNCE.contact) / ((1 - BOUNCE.contact) * Math.PI); // the depth that meets the float at the same speed
 const ROCK = 0.034; // metres the weight swings forward and back between the feet, bouncing on the spot
+/* A dash's knees, degrees and seconds: the leg he pushes off bent `push` in `load` (two frames), straightened back to `out` by
+   `drive`, and the leg he lands on bent `land` over `lands`. lead: which way the lead foot is from the middle of his feet. */
+const DASH = { push: 16, load: 0.034, out: 0, drive: 0.13, land: 12, lands: [0.1, 0.3], lead: [0.28, 0.44] };
 const STRIDE = 0.42; // metres: the furthest a foot is ever put from its place in the guard
 const SETTLE = 30; // how fast the difference between two moves is let go of (1/seconds): gone in about a sixth of a second
 /* Nothing pulls a man down but gravity: his centre of mass can fall no faster than that (and a little faster as he is drawn,
@@ -130,6 +135,59 @@ const ballOf = (at, yaw) => {
   return [at[0] + b[0], at[1], at[2] + b[2]];
 };
 const BALL = { L: ballOf(GUARD.feet.L.at, GUARD.feet.L.yaw), R: ballOf(GUARD.feet.R.at, GUARD.feet.R.yaw) };
+
+/* The knees (the channels lkf, rkf). A knee over a planted foot is not bent on its own: the hips come down over the foot until
+   the leg is bent that much further than it was. Each planted leg asks the hips down so far (straight down: the knee goes
+   out over the toes, the hips do not go back), and the hips follow the leg the weight is on, which is the one bent more:
+   bent as much as each other, both carry him, half each; bent `span` degrees apart or more, the more bent one carries all
+   of him, and the hips go over toward it by `shift` of the way from the middle of his feet to that foot, sideways (the
+   weight going onto it: forward and back the knees move nothing, which is the business of hz); the other leg follows,
+   straightening, or bending under the hips, as it must. A foot off the canvas (up more
+   than `air` metres, wholly by the second number more) carries nothing, and its knee bent further folds it up under him;
+   straightened, a leg in the air stays as it hangs. */
+const KNEE = { span: 24, shift: 0.5, air: [0.03, 0.06] };
+const LEGS = { L: M.sub(TPOSE.LeftLeg, TPOSE.Hips), R: M.sub(TPOSE.RightLeg, TPOSE.Hips) };
+// how far the hip is from the ankle with the knee bent so many degrees from straight, and back
+const legSpan = flex => Math.sqrt(LEN.thigh ** 2 + LEN.shin ** 2 - 2 * LEN.thigh * LEN.shin * Math.cos(Math.PI - (clamp(flex, 0.5, 150) * Math.PI) / 180));
+const legFlex = d => 180 - (Math.acos(clamp((LEN.thigh ** 2 + LEN.shin ** 2 - d * d) / (2 * LEN.thigh * LEN.shin), -1, 1)) * 180) / Math.PI;
+// how far the hip comes down over the ankle (negative: up) for a knee bent `more` degrees further, the ankle where it is
+function reach(H, A, more) {
+  const h2 = (H[0] - A[0]) ** 2 + (H[2] - A[2]) ** 2,
+    was = legFlex(Math.hypot(H[0] - A[0], H[1] - A[1], H[2] - A[2])),
+    up = d => Math.sqrt(Math.max(0, d * d - h2));
+  return up(legSpan(was + more)) - up(legSpan(was));
+}
+function bend(hips, spine, feet, kf, elev) {
+  const R = M.euler(spine.Hips),
+    hipAt = (p, side) => M.add(p, M.app(R, LEGS[side])),
+    ankle = { L: footPose(feet.L).ankle, R: footPose(feet.R).ankle },
+    planted = side => 1 - smooth((elev[side] - KNEE.air[0]) / KNEE.air[1]),
+    w = { L: planted('L'), R: planted('R') },
+    // the hips straight down (or up) as far as each planted leg asks
+    // (from the leg as it is to the leg bent so much further, both reckoned the same way: a leg stretched past its length,
+    // as a long stride leaves it for a moment, is taken as straight, and bent from there)
+    down = side => reach(hipAt(hips, side), ankle[side], kf[side]),
+    lean = clamp(0.5 + ((kf.L || 0) - (kf.R || 0)) / (2 * KNEE.span), 0, 1), // the share of the weight the bend puts on the lead leg
+    share = { L: w.L * lean, R: w.R * (1 - lean) },
+    all = share.L + share.R;
+  let out = hips;
+  if (all > 1e-6) {
+    const dy = (share.L * (share.L ? down('L') : 0) + share.R * (share.R ? down('R') : 0)) / all,
+      // (over toward the foot the weight goes onto, if both are down to take it)
+      q = (lean - 0.5) * 2 * Math.min(w.L, w.R) * KNEE.shift * 0.5,
+      across = M.sub(ankle.L, ankle.R);
+    out = [hips[0] + across[0] * q, hips[1] + dy, hips[2]];
+  }
+  // a foot in the air: folded up under him by however much further its knee is bent
+  for (const side of ['L', 'R']) {
+    const fold = (1 - w[side]) * Math.max(0, kf[side] || 0);
+    if (fold < 1e-6) continue;
+    const H = hipAt(out, side),
+      raise = Math.min(Math.max(0, -reach(H, ankle[side], fold)), Math.max(0, H[1] - 0.25 - ankle[side][1]));
+    feet[side] = Object.assign({}, feet[side], { at: [feet[side].at[0], feet[side].at[1] + raise, feet[side].at[2]] });
+  }
+  return out;
+}
 
 const REACH = LEN.upperArm + LEN.foreArm - 0.03; // as far as a wrist gets from its shoulder
 const BENT = 0.4; // and as far as it gets with the elbow held at a right angle
@@ -438,10 +496,11 @@ export function createAnimator(seed) {
            the shoulders' turn past the hips that the locked arm is swung out of. A man who turns all of a piece, with no
            stretch between his hips and his shoulders, winds up all of a piece too.) */
         // (and a beginner does not use his knees at all: what the wind-up and the chain do to his height is not done)
-        const knees = form.dip > 0 ? 0 : 1;
-        for (const ch in move.coil) c[ch === 'twist' && !form.sep ? 'yaw' : ch] += move.coil[ch] * chain.coil.q * (ch === 'lc' || ch === 'le' || ch === 'rc' || ch === 're' || (ch === 'twist' && move.chain.locked) ? 1 : chain.shown ?? 1) * (ch === 'hy' ? knees : 1);
+        const knees = form.dip > 0 ? 0 : 1,
+          height = ch => (ch === 'hy' || ch === 'lkf' || ch === 'rkf' ? knees : 1);
+        for (const ch in move.coil) c[ch === 'twist' && !form.sep ? 'yaw' : ch] += move.coil[ch] * chain.coil.q * (ch === 'lc' || ch === 'le' || ch === 'rc' || ch === 're' || (ch === 'twist' && move.chain.locked) ? 1 : chain.shown ?? 1) * height(ch);
         LINKS.forEach((link, i) => {
-          for (const ch in move.links[link]) c[ch] += move.links[link][ch] * chain.q[i] * amp[i] * (ch === 'hy' ? knees : 1);
+          for (const ch in move.links[link]) c[ch] += move.links[link][ch] * chain.q[i] * amp[i] * height(ch);
         });
         /* How the rest of him is held while it goes, by how good he is (skill.mjs): all of it grows with the arm, so it is
            there as the punch is and gone as it comes home. */
@@ -537,6 +596,8 @@ export function createAnimator(seed) {
                 off = foul.off[n] === null ? (chain.phase === 'recover' ? smooth(chain.since / 0.25) : 0) : chain.thrownAt >= 0 ? smooth((chain.t - chain.thrownAt - foul.off[n]) / 0.1) : 0;
               // (up through the wind-up, highest as it ends, and stamped down with the drive: it lands moving, and stops on his)
               stomp = { to: to.slice(), w: on * (1 - off), lift: foul.lift[n] * smooth(chain.coil.q) * (1 - clamp(chain.q[0], 0, 1)) };
+              // (lifted by the knee: folded up under him, the more the higher it goes)
+              c.lkf += foul.knee * (stomp.lift / foul.lift[0]);
               c.hp += foul.look[n] * chain.coil.q * (1 - chain.q[0]);
               c.hy -= foul.sink * smooth(clamp(chain.q[0], 0, 1)) * (1 - off);
             }
@@ -551,20 +612,31 @@ export function createAnimator(seed) {
             // to his left (+1) or his right (-1)
             const s = action.side || 1;
             for (const ch of ['side', 'hx', 'hw', 'hr', 'lx', 'rx']) c[ch] *= s;
+            if (s < 0) mirrorKnees(c);
             // (the turned stance: see LEFT_BEND)
             if (c.side > 0) (c.lean += LEFT_BEND.lean * c.side), (c.side += LEFT_BEND.side * c.side);
           }
         }
         if (action.name === 'dash' && action.dir) {
-          const a = -c.hy / 0.075; // the dash's own rise and fall, as 0..1
+          const a = -c.st / 0.035; // the dash's own sink and rise, as 0..1
           c.side += a * 13 * action.dir[0];
           c.lean += a * 8 * action.dir[1];
           c.hw += a * 8 * action.dir[0];
           /* by his grade (skill.mjs: dash): a beginner jumps up out of it, both feet off together and the hands thrown open;
              an amateur stands up first and then pushes; a dirty man slides it, low; a legend lands turned, the rear knee bent */
           const dg = (action.level || LEVEL[3]).dash;
+          /* The knees: the leg he pushes off (the one behind the way he goes) is bent at once, in two frames, and straightens
+             as it drives; the other takes him as it comes down, bent. (Stood up into it, he does neither.) */
+          if (!dg.upright) {
+            const lead = action.dir[0] * DASH.lead[0] + action.dir[1] * DASH.lead[1] < 0, // (going back, the lead leg pushes)
+              t = action.t,
+              push = t < DASH.load ? DASH.push * smooth(t / DASH.load) : t < DASH.drive ? DASH.push + (DASH.out - DASH.push) * smooth((t - DASH.load) / (DASH.drive - DASH.load)) : DASH.out * (1 - smooth((t - DASH.drive) / (0.3 - DASH.drive))),
+              land = DASH.land * bump((t - DASH.lands[0]) / (DASH.lands[1] - DASH.lands[0]));
+            c[lead ? 'lkf' : 'rkf'] += push;
+            c[lead ? 'rkf' : 'lkf'] += land;
+          }
           // (stood up into it, he does not lean into it either)
-          if (dg.upright) (c.hy += a * (0.075 + dg.rise)), (c.lean -= a * 8 * action.dir[1]), (c.lx += 0.03 * a), (c.rx -= 0.03 * a), (c.ly += 0.02 * a), (c.ry += 0.02 * a);
+          if (dg.upright) (c.hy += a * dg.rise), (c.lean -= a * 8 * action.dir[1]), (c.lx += 0.03 * a), (c.rx -= 0.03 * a), (c.ly += 0.02 * a), (c.ry += 0.02 * a);
           if (dg.prep) c.hy += dg.prep * bump(action.t / 0.1);
           if (dg.low) c.hy -= dg.low * smooth(action.t / 0.1);
           if (dg.bend) c.hy -= dg.bend * 0.5 * smooth((action.t - 0.15) / 0.15);
@@ -778,7 +850,8 @@ export function createAnimator(seed) {
       // ---- the bounce: down into each landing and back up off it, the weight swinging between the feet like a pendulum
       // (a tired man's feet barely leave the canvas, and a hurt man's legs are heavy; and the grade's own rhythm)
       const flat = exit && exit.kind === 'flat' ? 1 - smooth(exit.done === null ? 0 : (halves + u - exit.done - 2) / 0.5) : 0,
-        lively = (view.still ? 0 : action ? (form ? form.lively * ((punchMove.body && punchMove.body.lively) ?? 1) : evading ? evading.lively : 0.35) : (1 + cheer * 1.6) * (cv.textbook ? 1 : 1 - cover * (1 - cv.lively))) * (1 - 0.5 * tired) * (1 - 0.3 * hurt) * st.bounce * (1 - 0.7 * rocked) * (1 - flat),
+        pep = (view.still ? 0 : action ? (form ? form.lively * ((punchMove.body && punchMove.body.lively) ?? 1) : evading ? evading.lively : 0.35) : (1 + cheer * 1.6) * (cv.textbook ? 1 : 1 - cover * (1 - cv.lively))) * (1 - 0.5 * tired) * (1 - 0.3 * hurt) * (1 - 0.7 * rocked) * (1 - flat),
+        lively = pep * st.bounce,
         spot = (1 - going) * lively, // how much of this is bouncing on the spot
         footSpot = (1 - going) * (feetLive += (lively - feetLive) * (1 - Math.exp(-dt * 20))),
         /* he bounces most on the spot: travelling, the beat quickens and the bounce shrinks with the square of it, so it is as
@@ -792,11 +865,14 @@ export function createAnimator(seed) {
         // the higher for it, a spring let go)
         accent = swing.came === 'L' ? st.accent[0] : swing.came === 'R' ? st.accent[1] : 1,
         spring8 = st.head && st.head.beat === 'locked' && st.head.level && ((hh % st.head.level.every) + st.head.level.every) % st.head.level.every >= 6 && ((hh % st.head.level.every) + st.head.level.every) % st.head.level.every < 7 ? 1.6 : 1,
-        y = (sinking ? -BOUNCE.squash * g * accent : BOUNCE.float * 4 * s * (1 - s) * spring8) * ride,
+        // (how far the hips go is how far his knees bend through it: his grade's, stance.knee, the textbook's KNEE_BOUNCE)
+        y = (sinking ? -BOUNCE.squash * g * accent : BOUNCE.float * 4 * s * (1 - s) * spring8) * pep * (cycle / CYCLE.rest) ** 2 * (st.knee / BOUNCE.knee),
         // forward while the rear foot is up, back while the lead is: through the middle at every landing
         rock = (swing.side ? (swing.side === 'L' ? -1 : 1) * Math.sin(Math.PI * u) : 0) * st.rock,
         trail = (spring(lag, y, dt, 4.2, 0.32) - y) * st.lag; // how far the upper body is behind the hips
-      c.hy += y;
+      // (the knees bend into the landing and straighten off it, and the hips go with them; on the canvas, the hips alone)
+      if (action && MOVES[action.name].floor) c.hy += y;
+      else (c.lkf -= y / BOUNCE.slope), (c.rkf -= y / BOUNCE.slope);
       // squashed into the landing and stretched off it, each starting and ending at rest (the head is a long way from the canvas)
       c.st += (sinking ? -0.011 * g * g : 0.01 * Math.sin(Math.PI * s) ** 2 * (1 - s)) * ride;
       c.lean += 1.3 * g * g * ride + 1.6 * rock * spot;
@@ -1072,13 +1148,15 @@ export function createAnimator(seed) {
         if (w > 1e-3) {
           /* the knees go and come back, the trunk swings from side to side over them, the head lolls, the gloves sag. (The
              head itself goes only a little way: a rocked man is there to be hit, not harder to find.) */
-          c.hy -= 0.04 * w * (0.7 + 0.3 * Math.sin(TAU * 2.1 * T));
+          // (the knees give, one and then the other, a quarter of a second apart, turned in toward each other)
+          c.lkf += w * (6 + 12 * Math.sin(TAU * T) ** 2);
+          c.rkf += w * (6 + 12 * Math.cos(TAU * T) ** 2);
+          c.lkx -= 12 * w;
+          c.rkx -= 12 * w;
           c.side += 5 * w * Math.sin(TAU * 1.3 * T);
           c.lean += 5 * w;
           c.hr += 12 * w * Math.sin(TAU * 1.05 * T + 0.8);
           c.hp += 10 * w;
-          c.lfw -= 8 * w; // the knees knock in
-          c.rfw += 6 * w;
           if (free.L) (c.ly -= 0.14 * w * guardUp), (c.lz -= 0.04 * w), (c.lx += 0.03 * w);
           if (free.R) (c.ry -= 0.14 * w * guardUp), (c.rz -= 0.04 * w), (c.rx -= 0.03 * w);
         }
@@ -1135,6 +1213,7 @@ export function createAnimator(seed) {
       if (punchMove && form && form.drop && dropFor !== id) (dropFor = id), (dropAt = clock), (dropHalf = halves);
       const dropped = punchMove && form && form.drop && halves === dropHalf ? clamp(1 - (clock - dropAt) / (2 / 60), 0, 1) : 1;
       let dip = 0;
+      const elev = { L: 0, R: 0 };
       for (const side of ['L', 'R']) {
         const gf = GUARD.feet[side],
           k = side === 'L' ? 'lf' : 'rf',
@@ -1182,7 +1261,7 @@ export function createAnimator(seed) {
         // (and it comes down on top of his, not through it to the canvas: his instep is a few centimetres up)
         if (stomp && side === 'L') {
           at = [at[0] + (stomp.to[0] - at[0]) * stomp.w, at[1], at[2] + (stomp.to[2] - at[2]) * stomp.w];
-          lift = Math.max(lift, stomp.to[1] * stomp.w) + stomp.lift; // (the sole under his ball on the point aimed at, and lifted over it)
+          lift = Math.max(lift, stomp.to[1] * stomp.w); // (the sole under his ball on the point aimed at, and lifted over it by the knee)
         }
         // the hips come down a little as the feet are spread (as much as a long stride asks, and no more)
         dip += Math.min(0.04, (at[0] - BALL[side][0]) ** 2 + (at[2] - BALL[side][2]) ** 2) * 0.3;
@@ -1194,6 +1273,11 @@ export function createAnimator(seed) {
           yaw,
           pitch: gf.pitch + c[k + 'p'] + pitch
         };
+        // (how far it is up off the canvas: a foot in the air carries no weight, and its knee bent folds it up under him; a
+        // foot going up over his, from the start)
+        elev[side] = c[k + 'y'] + lift + (stomp && side === 'L' && stomp.lift > 1e-4 ? 1 : 0);
+        // (the knee turned in or out round its leg)
+        if (c[side === 'L' ? 'lkx' : 'rkx']) feet[side].out = c[side === 'L' ? 'lkx' : 'rkx'];
         // (a knee put down points at the canvas, ahead: the solver stops it on it)
         feet[side].round = { was: knees[side], most: 900 * dt };
         const kneeDown = c[side === 'L' ? 'lk' : 'rk'];
@@ -1202,8 +1286,10 @@ export function createAnimator(seed) {
 
       // ---- solve
       sunk += (dip - sunk) * (1 - Math.exp(-dt * 24)); // (followed, so a foot snapping through its swing does not jerk the hips)
-      const hips = [GUARD.hips[0] + c.hx, Math.max(0.15, GUARD.hips[1] + c.hy - sunk), GUARD.hips[2] + c.hz],
-        spine = trunk(c, gaze);
+      let hips = [GUARD.hips[0] + c.hx, Math.max(0.15, GUARD.hips[1] + c.hy - sunk), GUARD.hips[2] + c.hz];
+      const spine = trunk(c, gaze);
+      // (the knees: the hips brought down over the planted feet as far as they say, a foot in the air folded up)
+      if (c.lkf || c.rkf) hips = bend(hips, spine, feet, { L: c.lkf, R: c.rkf }, elev);
       const head = headOf(hips, spine),
         carried = M.sub(head, REST), // the hands go where the head goes: a guard is held to the face, not to the room
         hands = {};

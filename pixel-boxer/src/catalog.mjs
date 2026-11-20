@@ -41,22 +41,22 @@ const byId = Object.fromEntries([...ENTRIES, ...DEFENSE, ...STANCES, ...LADDER, 
 
 /* ---- what is in the catalogue: parts, and in each the techniques, each a row of seven grades (or, being hit, one card) */
 const FOOT_NOTE = {
-  bounce: '발이 닿을 때마다 짧게 눌렸다 튕겨 오르고, 머리와 글러브가 한 박자 늦게 따라오고, 체중이 두 발 사이를 시계추처럼 오갑니다. 1은 발이 캔버스를 떠나지 않고 박자와 무관하게 체중만 옮기며, 2는 상체가 통짜로 오르내리고, 3부터 머리가 움직이고, 4명은 강약 박에 머리가 착지마다 양 끝, 5명은 스윙과 구절과 변주, 암은 박자를 지우고 낮게 구릅니다. 카드 아래는 골반이 오르내린 폭, 머리가 좌우로 오간 폭, 분당 착지입니다.',
+  bounce: '발이 닿을 때마다 무릎이 짧게 굽었다 펴지며 튕겨 오르고, 머리와 글러브가 한 박자 늦게 따라오고, 체중이 두 발 사이를 시계추처럼 오갑니다. 무릎이 굽는 폭이 등급입니다(1은 0°, 3은 ±5°, 5명은 ±8°). 1은 무릎이 뻣뻣해 발이 캔버스를 떠나지 않고 박자와 무관하게 체중만 옮기며, 2는 상체가 통짜로 오르내리고, 3부터 머리가 움직이고, 4명은 강약 박에 머리가 착지마다 양 끝, 5명은 스윙과 구절과 변주, 암은 박자를 지우고 낮게 구릅니다. 카드 아래는 골반이 오르내린 폭, 머리가 좌우로 오간 폭, 분당 착지입니다.',
   pendulum: '앞발이 들어가고 뒷발이 따라붙고, 앞발로 한 번 흔들고, 뒷발이 빠지고 앞발이 따라 나오고, 뒷발로 한 번 흔듭니다. 자기 박자의 여섯 반박자에 한 번이라 1과 2는 느린 박자만큼 늦고, 암은 착지 간격이 들쭉날쭉합니다. 카드 아래는 한 번 왕복에 걸린 시간과 착지 간격의 변동입니다.',
   inout: '가는 쪽 발이 먼저 움직입니다. 1은 걸음 중에 발이 모이고 틀린 발이 먼저 나가기도 하며 몸이 먼저 쏠리고, 2는 걸음마다 멈추며 발을 붙였다 벌립니다. 카드 아래는 걸음 중 가장 좁아진 스탠스 폭(평소 대비)입니다.',
   side: '가는 쪽 발이 먼저 벌어지고 반대 발이 간격을 되찾습니다. 1은 발이 모이고, 2는 붙였다 벌리고, 3부터 폭을 지킵니다. 카드 아래는 가장 좁아진 폭과 두 발의 좌우가 뒤집힌 적이 있는지입니다.',
   circle: '상대를 가운데 두고 호를 그립니다. 1은 가슴이 0.3초 늦게 따라가고, 2와 암은 12°가 벌어지면 한 번에 돌아서고, 3부터 가슴이 계속 상대를 향합니다. 카드 아래는 가슴과 상대 사이 각의 최대값입니다.',
   turn: '상대가 옆으로 돌아 나가면 제자리에서 발을 옮겨 정면을 되찾습니다. 1은 늦게, 2와 암은 기다렸다 한 번에, 3부터 작은 피벗을 이어서 따라갑니다. 카드 아래는 정면 오차의 최대값입니다.',
   stalk: '가드를 올린 채 짧은 걸음으로 밀고 들어갑니다. 가드의 모양은 그 등급의 가드입니다(1은 눈을 가리고, 4암은 팔뚝을 포갬). 카드 아래는 걸음 중 가장 좁아진 폭입니다.',
-  dash: '한 박자에 크게 빠집니다. 1은 가라앉지 않고 선 채로 뛰어 손이 벌어지고 내려서 비틀거리며, 2는 먼저 일어섰다 밀고 납작하게 섭니다. 4암·5암은 미끄러지듯 낮게, 5명은 돌아선 채 내려섭니다. 거리는 등급이 바꾸지 않습니다. 카드 아래는 골반이 가장 높이 오르거나 내려간 양과 다시 움직일 수 있기까지의 시간입니다.',
+  dash: '한 박자에 크게 빠집니다. 미는 다리 무릎이 두 프레임에 굽었다 펴지며 밀고, 내려서는 다리 무릎이 굽어 받습니다. 1은 가라앉지 않고 선 채로 뛰어 손이 벌어지고 내려서 비틀거리며, 2는 먼저 일어섰다 밀고 납작하게 섭니다. 4암·5암은 미끄러지듯 낮게, 5명은 돌아선 채 내려섭니다. 거리는 등급이 바꾸지 않습니다. 카드 아래는 골반이 가장 높이 오르거나 내려간 양과 다시 움직일 수 있기까지의 시간입니다.',
   stepjab: '들어가며 잽을 칩니다. 1은 서고 나서 늦게, 2는 앞발이 닿은 다음에(발, 주먹), 3은 대본대로, 4명은 잽이 앞발 착지에 닿게, 5명은 두 착지 사이에 닿게 누릅니다. 카드 아래는 잽이 닿은 순간과 가장 가까운 앞발 착지의 차이입니다.',
   onetwo: '들어가며 잽, 뒷발이 따라붙는 박자에 스트레이트. 1은 두 주먹 사이에 한참 서 있고, 2는 발과 주먹을 번갈아 네 박자로, 4명은 두 주먹이 각각 착지에, 5명은 엇박에 닿습니다. 카드 아래는 두 주먹이 닿은 간격(반박자 0.32초 단위)입니다.'
 };
 const PUNCH_NOTE = {
-  jab: '앞손의 짧은 주먹. 1은 팔이 몸보다 먼저 나가고, 2는 순서는 맞지만 이음새가 끊기고, 3은 교과서, 4는 다음 관절이 앞 관절의 정점 전에 출발하고, 5는 예비동작 없이 한 동작입니다.',
-  cross: '뒷발에서 올라온 회전이 뒷손까지 이어지는 주먹. 4명은 닿는 순간이 앞발 착지, 5명은 두 착지 사이(엇박)입니다.',
-  hook: '팔을 굽혀 가슴에 고정하고 몸통이 휘두르는 주먹. 더 도는 몸은 주먹을 머리 너머로 보내므로 고수의 추가 회전은 조금만 받습니다.',
-  upper: '무릎에서 올라오는 주먹. 가라앉음이 깊고, 머리는 주먹과 함께 올라옵니다.'
+  jab: '앞손의 짧은 주먹. 앞발이 나가며 앞무릎이 굽었다가 닿을 때 펴집니다. 1은 팔이 몸보다 먼저 나가고, 2는 순서는 맞지만 이음새가 끊기고, 3은 교과서, 4는 다음 관절이 앞 관절의 정점 전에 출발하고, 5는 예비동작 없이 한 동작입니다.',
+  cross: '뒷발에서 올라온 회전이 뒷손까지 이어지는 주먹. 뒷무릎이 굽어 장전되고, 뒷발이 돌 때 무릎이 안으로 돌며 펴집니다. 4명은 닿는 순간이 앞발 착지, 5명은 두 착지 사이(엇박)입니다.',
+  hook: '팔을 굽혀 가슴에 고정하고 몸통이 휘두르는 주먹. 굽힌 앞무릎에 체중을 싣고, 앞발과 함께 앞무릎이 안으로 돌며 펴집니다. 더 도는 몸은 주먹을 머리 너머로 보내므로 고수의 추가 회전은 조금만 받습니다.',
+  upper: '무릎에서 올라오는 주먹. 두 무릎을 굽혀 가라앉았다가 펴며 올라오고, 머리는 주먹과 함께 올라옵니다.'
 };
 const TECH_NOTE = {
   stomp: '발등이 닿는 거리(0.8 m)에서 던지는 훅. 반칙은 4암과 5암에만 있습니다: 코일 동안 앞발을 들어 상대 앞발 위로 가져가 다리 구동과 함께 내려 밟고, 상대는 0.45초 묶입니다. 나머지 등급은 같은 자리에서 반칙 없이 훅만 던집니다.',
@@ -181,7 +181,7 @@ function gradeCard(e, item) {
     case 'pull': {
       const w = WINDOWS[item.id] && WINDOWS[item.id][e.level];
       const second = { slip: '여유 <b data-a>–</b>', 'slip-cross': '여유 <b data-a>–</b>', pull: '거리 <b data-a>–</b>', duck: '못 봄 <b data-a>–</b> ms', roll: '총 <b data-a>–</b> ms' }[item.id];
-      stats = `<div class="feet result"><span class="tag" data-tag>–</span></div>` + pair(`<b>${w ? signed(w.to) : '–'}</b> f까지`, second);
+      stats = `<div class="feet result"><span class="tag" data-tag>–</span></div>` + pair(`<b>${w ? signed(w.to) : '–'}</b> f까지`, second) + (item.id === 'duck' || item.id === 'roll' ? pair('무릎 몫 <b data-knee>–</b>%') : '');
       break;
     }
     case 'parry': {
@@ -284,7 +284,7 @@ function start({ manifest, boxer }) {
       replayTag: q(el, '.replay'),
       lamps: { L: q(el, '[data-lamp="L"]'), R: q(el, '[data-lamp="R"]') },
       beat: q(el, '[data-beat]'),
-      out: Object.fromEntries(['a', 'b', 'pace', 'blow', 'ms', 'hips', 'head', 'on', 'fj', 'fat', 'off', 'turn'].map(k => [k, q(el, `[data-${k}]`)])),
+      out: Object.fromEntries(['a', 'b', 'pace', 'blow', 'ms', 'hips', 'head', 'on', 'fj', 'fat', 'off', 'turn', 'knee'].map(k => [k, q(el, `[data-${k}]`)])),
       bars: [...el.querySelectorAll('[data-bar]')],
       at: q(el, '[data-at]'),
       exchange: entry.punch !== undefined,
@@ -437,6 +437,18 @@ function start({ manifest, boxer }) {
           Rt = a.pose.at.RightToeBase;
         return { w: Math.hypot(L[0] - Rt[0], L[2] - Rt[2]), x: L[0] - Rt[0] };
       };
+    /* (a duck's and a weave's knees: how far the hips went down over how far the head did, from where they were as it
+       started: the knees' share of it, tools/knees.mjs) */
+    if (item.stat === 'duck' || item.stat === 'roll') {
+      const hy = a.pose.at.Hips[1] * a.pose.stretch,
+        y = a.points.head[1];
+      if (a.action && a.action.name === item.stat) {
+        if (m.kneeFrom === undefined) m.kneeFrom = { hy: m.kneeWas ? m.kneeWas.hy : hy, y: m.kneeWas ? m.kneeWas.y : y, hips: 0, head: 0 };
+        m.kneeFrom.hips = Math.max(m.kneeFrom.hips, m.kneeFrom.hy - hy);
+        m.kneeFrom.head = Math.max(m.kneeFrom.head, m.kneeFrom.y - y);
+      } else if (m.kneeFrom && !m.kneeSaid) (m.kneeSaid = true), put(cell, 'knee', m.kneeFrom.head > 0.02 ? String(Math.round((100 * Math.max(0, m.kneeFrom.hips)) / m.kneeFrom.head)) : '–');
+      if (!a.action) m.kneeWas = { hy, y };
+    }
     switch (item.stat) {
       case 'stance': {
         m.track.push([a.pose.at.Hips[1] * a.pose.stretch, across(a, b, a.points.head)]);

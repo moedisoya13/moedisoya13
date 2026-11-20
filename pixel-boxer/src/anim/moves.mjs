@@ -15,12 +15,17 @@
                        planted on the canvas (the solver stops it there, on top)
      lfx lfy lfz lfw lfp   left foot: metres across, up, ahead; degrees turned out, heel raised
      rfx rfy rfz rfw rfp   right foot
+     lkf rkf           each knee bent this many degrees further than it is (the guard's 38 and 48, or wherever the rest of him
+                       has it), straightened if negative. A knee over a planted foot cannot bend without the hips coming down
+                       over it, so the hips are put where the bend says (straight down, and over toward the knee bent more,
+                       the weight going onto that leg: animator.mjs, bend); a foot off the canvas is folded up under him
+     lkx rkx           each knee turned round its leg from over the foot: in (negative), as a hook's pivot turns it, or out
      lk rk             how far each knee is pointed down at the canvas (1): a knee put down (the solver stops it there, on it)
      st                taller and thinner by this share
      aim               how much the punching hand is steered onto the target (0..1) */
 
 export const CHANNELS = ['hx', 'hy', 'hz', 'lean', 'tip', 'yaw', 'side', 'twist', 'hp', 'hw', 'hr', 'lx', 'ly', 'lz', 'le', 'lc', 'lg', 'rx', 'ry', 'rz', 're', 'rc', 'rg',
-  'lfx', 'lfy', 'lfz', 'lfw', 'lfp', 'lk', 'rfx', 'rfy', 'rfz', 'rfw', 'rfp', 'rk', 'st', 'aim'];
+  'lfx', 'lfy', 'lfz', 'lfw', 'lfp', 'lk', 'rfx', 'rfy', 'rfz', 'rfw', 'rfp', 'rk', 'lkf', 'rkf', 'lkx', 'rkx', 'st', 'aim'];
 
 // Orthodox guard: left foot and hand lead, chin down, weight on the balls of the feet.
 export const GUARD = {
@@ -97,7 +102,8 @@ const PUNCHES = {
     chain: { coil: 0, rate: [58, 50, 56, 46, 44], turn: [9, 14] },
     body: { off: 0.6, dip: 0.5 },
     coil: {},
-    links: { drive: { hz: 0.06, lfz: 0.07 }, hips: { yaw: -9, rx: 0.02, ry: 0.03 }, trunk: { twist: -14, lean: 4, hp: 3 }, shoulder: {}, elbow: {} },
+    // (the lead knee bends as the foot goes, and is straightened by the time the glove lands)
+    links: { drive: { hz: 0.06, lfz: 0.07, lkf: 6 }, hips: { yaw: -9, rx: 0.02, ry: 0.03 }, trunk: { twist: -14, lean: 4, hp: 3, lkf: -10 }, shoulder: {}, elbow: {} },
     /* the face jab (`thumb`): the glove left over his face after it lands and pushed on into it, so he cannot see (blatant:
        his head snapped back; a legend's a short push, the wrist turned in, and home as if nothing had happened). It counts
        a few hundredths after the contact, if the glove is still on him; he covers the eye with his rear glove a while. */
@@ -106,9 +112,9 @@ const PUNCHES = {
   cross: {
     hand: 'R', arm: 'straight', kind: 'straight', reach: 1.15, close: 1.0,
     chain: { coil: 0.05, rate: [58, 36, 50, 54, 54], turn: [41, 38] },
-    coil: { yaw: -7, hz: -0.025, hy: -0.015, rz: -0.04, ry: -0.02 },
+    coil: { yaw: -7, hz: -0.025, rkf: 10, rz: -0.04, ry: -0.02 }, // (the rear knee loaded)
     links: {
-      drive: { rfw: 40, rfp: 24, rfz: 0.05, hz: 0.11, hy: -0.03, st: 0.02 }, // the rear foot turns on its ball and pushes
+      drive: { rfw: 40, rfp: 24, rfz: 0.05, rkx: -22, hz: 0.11, hy: -0.03, st: 0.02 }, // the rear foot turns on its ball and pushes, the knee turned in over it
       hips: { yaw: 34, hx: 0.03 },
       trunk: { twist: 38, lean: 7, side: 3, lx: -0.04, ly: 0.03, lz: -0.1 }, // the other hand stays at the chin
       shoulder: {},
@@ -123,20 +129,21 @@ const PUNCHES = {
        it, because the jaw is above the fist and a body coming down as it lands takes the speed out of it) */
     body: { turn: 0.2, off: 0, bend: 0, tuck: 0, sep: 0.5, dip: 1.5, lively: 0 },
     // the arm is set at a right angle and locked to the chest, the weight goes onto the lead leg
-    coil: { yaw: 15, twist: 6, hx: 0.03, hy: -0.035, lean: 2, lx: 0.1, ly: 0, lz: 0.12, le: 0.9, lc: 1 },
+    coil: { yaw: 15, twist: 6, lkf: 12, lean: 2, lx: 0.1, ly: 0, lz: 0.12, le: 0.9, lc: 1 }, // (onto the bent lead knee)
     links: {
-      drive: { lfw: -38, lfp: 20, hz: 0.05, lx: 0.02, ly: 0.02, lz: 0.06, le: 1, lc: 1 }, // the lead foot turns in, the arm stays locked
+      drive: { lfw: -38, lfp: 20, lkx: -26, lkf: -6, hz: 0.05, lx: 0.02, ly: 0.02, lz: 0.06, le: 1, lc: 1 }, // the lead foot and knee turn in and the knee straightens, the arm stays locked
       hips: { yaw: -26, hx: -0.02, hy: -0.02 },
       trunk: { twist: -26, side: -4, rz: -0.02, ry: 0.03 },
       shoulder: {},
       elbow: {}
     },
     /* the stomp: the lead foot lifted over his lead foot in the wind-up (the eyes going down to it, blatant) and put down
-       on his instep as the legs drive, the weight coming onto it: the stomp is the hook's drive. If it comes down within
+       on his instep as the legs drive, the weight coming onto it: the stomp is the hook's drive (lifted by its knee, bent
+       `knee` degrees at the top of the blatant one's lift, as much less as the lift is less). If it comes down within
        12 cm of his instep he is pinned there for 0.45 s. Blatant, the foot stays and grinds until the hand is home; a
        legend's comes off 50 ms after the hook lands. A foot is reckoned with the leg behind it, 12 kg; its ball can reach
        0.32 m. */
-    foul: { name: 'stomp', lift: [0.06, 0.02], look: [8, 0], sink: 0.04, near: 0.12, reach: 0.32, mass: 12, pin: 0.45, off: [null, 0.05] }
+    foul: { name: 'stomp', lift: [0.06, 0.02], knee: 35, look: [8, 0], sink: 0.04, near: 0.12, reach: 0.32, mass: 12, pin: 0.45, off: [null, 0.05] }
   },
   upper: {
     hand: 'R', arm: 'lift', kind: 'upper', reach: 0.9, close: 0.8,
@@ -145,9 +152,9 @@ const PUNCHES = {
        of a better man's turn, or of his head off the line, before the chin is over it; and with the bounce in it already,
        half the bounce goes on under it) */
     body: { dip: 1.2, turn: 0.3, off: 0.5, lively: 0.5 },
-    coil: { hy: -0.05, lean: 9, yaw: -6, side: -7, rx: 0.02, ry: -0.18, rz: 0.02, hp: 4, st: -0.01 }, // down onto bent knees, the hand dropped (as far as the hips can be let down in the time)
+    coil: { lkf: 16, rkf: 16, lean: 9, yaw: -6, side: -7, rx: 0.02, ry: -0.18, rz: 0.02, hp: 4, st: -0.01 }, // down onto bent knees, the hand dropped (as far as the hips can be let down in the time)
     links: {
-      drive: { hy: 0.02, st: 0.02, rfw: 32, rfp: 28 }, // the legs straighten under it (as far as a body driven up can be stopped again by gravity)
+      drive: { lkf: -6, rkf: -6, st: 0.02, rfw: 32, rfp: 28 }, // the legs straighten under it (as far as a body driven up can be stopped again by gravity)
       hips: { yaw: 26, hz: 0.09 },
       trunk: { twist: 26, lean: -5, side: 3, lz: -0.06 },
       shoulder: {},
@@ -165,6 +172,14 @@ for (const [name, punch] of Object.entries(PUNCHES)) {
    bend and a sit back, so that the head goes straight across either way. (Measured: both slips take the head 28-33 cm
    across and less than 1 cm toward the other man.) */
 export const LEFT_BEND = { side: 0.375, lean: -0.69 };
+/* A sided move is written going to his left (+1); to his right, what it says of each knee is said of the other one. */
+export function mirrorKnees(c) {
+  for (const [a, b] of [['lkf', 'rkf'], ['lkx', 'rkx']]) {
+    const x = c[a] || 0;
+    c[a] = c[b] || 0;
+    c[b] = x;
+  }
+}
 
 /* How a man goes down, and the way up. Laid out, he is a body (phys/fall.mjs: ko from a straight punch or an uppercut,
    slump from a hook, the same body either way, the blow's direction is what differs), and the way up is chosen by how he
@@ -176,6 +191,11 @@ export const LIE = { back: 'rise', front: 'riseFront', side: 'riseSide' };
    and that line are where he lies (bout.mjs: getUp), and the rise is blended out of the pose he lay in over that first
    part (`blend`, seconds). */
 export const UP = { rise: { hips: [0, -0.22], heading: Math.PI }, riseFront: { hips: [0, -0.02], heading: 0 }, riseSide: { hips: [0, -0.02], heading: 0 } };
+
+// the far points of the evasions (the duck's knees come after its waist, so they are keyed apart)
+const SLIP = { side: 11, hx: 0.13, lean: 6, hw: 8, hr: 6, lx: 0.02, rx: 0.02, lkf: 14, rkf: -4 };
+const DUCK = { lean: 34, hp: 12, hz: -0.22, hx: 0.14, lfp: 6, rfp: 10 };
+const PULL = { hz: -0.17, lean: -17, hp: -9, lfp: 10, lfz: 0.01, ly: 0.02, ry: 0.02, lkf: -10, rkf: 16 };
 
 // the poses the ways up go through, as channels: kneeling on the rear knee with the rear glove down by the lead foot, on
 // hands and knees, sitting up with the hands behind
@@ -196,12 +216,14 @@ export const MOVES = Object.assign(
   Object.entries({
     // ---- defence and being hit. These are shapes the body takes; how long it holds them is the rules' business.
     // the tight guard, mixed in by how much the boxer is covering up
-    cover: { stay: true, dur: 1, keys: [{ t: 1, e: 'lin', lx: -0.07, ly: 0.115, lz: -0.03, rx: -0.02, ry: 0.135, rz: 0.1, lean: 6, hy: -0.035, hp: 7, hz: -0.01 }] },
+    // (the knees a little more bent under it: the hips 3.5 cm down)
+    cover: { stay: true, dur: 1, keys: [{ t: 1, e: 'lin', lx: -0.07, ly: 0.115, lz: -0.03, rx: -0.02, ry: 0.135, rz: 0.1, lean: 6, lkf: 11, rkf: 11, hp: 7, hz: -0.01 }] },
     /* the gloves of a guard put up to meet a punch, mixed in while it is young enough to turn one aside: open, out in front
        of the face, the rear one across to catch a jab */
     meet: { stay: true, dur: 1, keys: [{ t: 1, e: 'lin', lz: 0.05, ly: 0.01, lx: -0.02, rz: 0.08, rx: 0.05, ry: 0.02, re: 0.15, twist: -3 }] },
-    // a quick step: the body sinks into it and comes up out of it (which way it leans is added from the step's direction)
-    dash: { dur: 0.3, keys: [{ t: 0.07, e: 'out', hy: -0.075, st: -0.035, ly: -0.03, ry: -0.03 }] },
+    /* a quick step: the body sinks into it and comes up out of it (which way it leans is added from the step's direction,
+       and what the knees do, from which leg pushes and which lands: the animator) */
+    dash: { dur: 0.3, keys: [{ t: 0.07, e: 'out', st: -0.035, ly: -0.03, ry: -0.03 }] },
     // a punch turned aside: the puncher's arms are thrown open and he is carried back onto his heels
     reel: {
       dur: 0.62,
@@ -210,35 +232,53 @@ export const MOVES = Object.assign(
     // knocked down and out: a body (phys/fall.mjs); these only say so, and how long before he is lying still
     ko: { floor: true, stay: true, fall: true, dur: 1.2, keys: [] },
     slump: { floor: true, stay: true, fall: true, dur: 1.2, keys: [] },
-    // a slip: the head taken off the line of a punch, bent and dipped to one side and straight back (which side is the
-    // action's: see the animator)
+    /* a slip: the head taken off the line of a punch, bent and dipped to one side and straight back (which side is the
+       action's: see the animator): the knee on that side bends and takes the weight, the other straightens, and the bend
+       at the side is the less for it */
     slip: {
       sided: true,
       dur: 0.42,
-      keys: [{ t: 0.1, e: 'out', side: 16, hx: 0.12, hy: -0.07, lean: 6, hw: 8, hr: 6, lx: 0.02, rx: 0.02 }, { t: 0.2, e: 'lin', side: 16, hx: 0.12, hy: -0.07, lean: 6, hw: 8, hr: 6, lx: 0.02, rx: 0.02 }]
+      keys: [{ t: 0.1, e: 'out', ...SLIP }, { t: 0.2, e: 'lin', ...SLIP }]
     },
-    /* a duck: he folds at the hips, chin on his chest, gloves still at his face, the knees giving under it and the hips going
-       back to keep him over his feet: the head goes down by the fold more than by the knees (the hips can only be let down
-       so fast: animator.mjs, FALL), and straight back up */
+    /* a duck: down into the knees, not a bow. The waist goes first (it is quick, and the knees can let the hips down only
+       so fast: animator.mjs, FALL), the knees take it over and go on down under it, and the hips go down and back over
+       his heels and across to his left, so that the head, leant forward in a stance turned to his right, goes straight
+       down and not in toward the hook: the head goes down most of all by the knees. And not quite straight down and up:
+       a little of a weave in it, the head drawing a shallow U, a few centimetres down toward the side the hook comes from
+       (his right: the knee on that side bends first), through the bottom on both knees, and up a little on the other
+       side, the weight going over onto that knee and the shoulders rolling with it (the side is the one he comes up on:
+       true is his left). The chin on the chest, the gloves still at the face. */
     duck: {
-      dur: 0.5,
-      keys: [{ t: 0.12, e: 'out', hy: -0.2, hz: -0.36, hx: 0.17, lean: 58, hp: 8, lfp: 8, rfp: 14 }, { t: 0.24, e: 'lin', hy: -0.2, hz: -0.36, hx: 0.17, lean: 58, hp: 8, lfp: 8, rfp: 14 }]
+      sided: true,
+      dur: 0.64,
+      keys: [
+        { t: 0.09, e: 'out', ...DUCK },
+        { t: 0.12, side: -3, hr: -3, twist: -2 },
+        { t: 0.22, rkf: 63 },
+        { t: 0.24, lkf: 58 },
+        { t: 0.3, side: 0, hr: 0, twist: 0 },
+        { t: 0.4, e: 'lin', ...DUCK, lkf: 58, rkf: 63, side: 0, hr: 0, twist: 0 },
+        { t: 0.5, lkf: 42, rkf: 41, side: 3, hr: 3, twist: 2 }
+      ]
     },
     /* bob and weave: down to one side, under, and up on the other, the head drawing a U (the side is the one he comes up
-       on); like the duck, folded under it more than dropped */
+       on), and the knees draw it: the knee on the side he goes in on bends first, both are bent under it, and the knee on
+       the side he comes up on takes him up while the other straightens and pushes, the weight going over from one foot to
+       the other. The waist bends with it, less. */
     roll: {
       sided: true,
       dur: 0.52,
       keys: [
-        { t: 0.1, e: 'out', hy: -0.08, hz: -0.09, side: -16, hx: -0.11, lean: 24, hw: -8, hr: -6, lfp: 6, rfp: 10 },
-        { t: 0.22, hy: -0.16, hz: -0.19, side: 0, hx: 0, lean: 44, hp: 8, hw: 0, hr: 0, lfp: 8, rfp: 14 },
-        { t: 0.36, hy: -0.06, hz: -0.07, side: 16, hx: 0.11, lean: 18, hp: 3, hw: 8, hr: 6, lfp: 4, rfp: 8 }
+        { t: 0.1, e: 'out', hz: -0.06, side: -16, hx: -0.11, lean: 14, hw: -8, hr: -6, lfp: 6, rfp: 10, lkf: 4, rkf: 30 },
+        { t: 0.22, hz: -0.08, side: 0, hx: 0, lean: 24, hp: 8, hw: 0, hr: 0, lfp: 8, rfp: 14, lkf: 45, rkf: 45 },
+        { t: 0.36, hz: -0.04, side: 16, hx: 0.11, lean: 12, hp: 3, hw: 8, hr: 6, lfp: 4, rfp: 8, lkf: 30, rkf: -5 }
       ]
     },
-    // a sway: the weight rocked onto the back foot and the trunk drawn up and back, so the head is just out of reach
+    /* a sway: the weight rocked onto the back foot, sat down on the bent rear leg, the lead leg straightening, and the
+       trunk drawn up and back, so the head is just out of reach */
     pull: {
       dur: 0.5,
-      keys: [{ t: 0.12, e: 'out', hz: -0.15, hy: -0.03, lean: -17, hp: -9, lfp: 16, lfz: 0.01, ly: 0.02, ry: 0.02 }, { t: 0.26, e: 'lin', hz: -0.15, hy: -0.03, lean: -17, hp: -9, lfp: 16, lfz: 0.01, ly: 0.02, ry: 0.02 }]
+      keys: [{ t: 0.12, e: 'out', ...PULL }, { t: 0.26, e: 'lin', ...PULL }]
     },
     // up off his back: sitting up on his hands behind him, over onto the rear knee, and up, a little unsteady
     rise: {

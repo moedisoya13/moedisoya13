@@ -12,7 +12,7 @@
      sampleEvade(action, level, c)   the channels it adds this frame, into c (sided, and made up for the turned stance)
      LOADED                       which hand an evasion leaves wound up, by move and side ('L' lead, 'R' rear)
    The pro's (grade 3) is the curve exactly as written: the same numbers at the same moments. */
-import { MOVES, LEFT_BEND } from './moves.mjs';
+import { MOVES, LEFT_BEND, mirrorKnees } from './moves.mjs';
 
 const clamp = (x, a, b) => (x < a ? a : x > b ? b : x);
 const smooth = x => ((x = clamp(x, 0, 1)), x * x * (3 - 2 * x));
@@ -22,17 +22,18 @@ const bump = x => (x <= 0 || x >= 1 ? 0 : Math.sin(Math.PI * x) ** 2);
 const GROUP = {};
 for (const ch of ['hp', 'hw', 'hr']) GROUP[ch] = 'head';
 for (const ch of ['lean', 'side', 'twist', 'yaw', 'tip']) GROUP[ch] = 'trunk';
-for (const ch of ['hx', 'hy', 'hz', 'st']) GROUP[ch] = 'hips';
+for (const ch of ['hx', 'hy', 'hz', 'st', 'lkf', 'rkf', 'lkx', 'rkx']) GROUP[ch] = 'hips'; // (the hips and the knees under them)
 for (const ch of ['lfx', 'lfy', 'lfz', 'lfw', 'lfp', 'lk', 'rfx', 'rfy', 'rfz', 'rfw', 'rfp', 'rk']) GROUP[ch] = 'feet';
 for (const ch of ['lx', 'ly', 'lz', 'le', 'lc', 'lg', 'rx', 'ry', 'rz', 're', 'rc', 'rg', 'aim']) GROUP[ch] = 'hands';
 export const GROUPS = ['head', 'trunk', 'hips', 'feet', 'hands'];
 
 /* The written stretches of each evasion: out (the head going), hold (out there), back. `clear` is the written moment the head
-   is off the line (the end of its going; for a weave, the bottom of the U, under the punch). */
+   is off the line (the end of its going; for a weave, the bottom of the U, under the punch). knee: the knees' share of the
+   head going down in the evasion as written (measured: tools/knees.mjs), what a grade's share is reckoned from. */
 export const WRITTEN = {
   slip: { segs: [['out', 0, 0.1], ['hold', 0.1, 0.2], ['back', 0.2, 0.42]], clear: 0.1 },
-  duck: { segs: [['out', 0, 0.12], ['hold', 0.12, 0.24], ['back', 0.24, 0.5]], clear: 0.12 },
-  roll: { segs: [['out', 0, 0.1], ['out', 0.1, 0.22], ['out', 0.22, 0.36], ['back', 0.36, 0.52]], clear: 0.22 },
+  duck: { segs: [['out', 0, 0.24], ['hold', 0.24, 0.4], ['back', 0.4, 0.64]], clear: 0.24, knee: 0.65 },
+  roll: { segs: [['out', 0, 0.1], ['out', 0.1, 0.22], ['out', 0.22, 0.36], ['back', 0.36, 0.52]], clear: 0.22, knee: 0.68 },
   pull: { segs: [['out', 0, 0.12], ['hold', 0.12, 0.26], ['back', 0.26, 0.5]], clear: 0.12 }
 };
 export const EVASIONS = Object.keys(WRITTEN);
@@ -47,56 +48,63 @@ export function LOADED(name, side) {
 
 /* What each grade adds to the written shape at the far point of each evasion, sided as the move is (x to the side he goes),
    on top of what its groups' sizes make of the written curve. In his own channels: see moves.mjs. */
-const SHAPE = {
+export const SHAPE = {
   slip: {
-    // the neck tilts first and the waist bends back after it: the head goes out and back, not down (the knees stay locked,
-    // the hips go the wrong way), and the foot on that side is put out wide to catch him
-    1: { size: { hy: 0, hx: -0.25, side: 1.4 }, add: { hr: 18, lean: -16, hz: -0.04, hy: 0.01 }, far: 0.08 },
+    // the neck tilts first and the waist bends back after it: the head goes out and back, not down (the knees stay locked
+    // and straighten, the hips go the wrong way), and the foot on that side is put out wide to catch him
+    1: { size: { lkf: 0, rkf: 0, hx: -0.25, side: 2 }, add: { hr: 18, lean: -16, hz: -0.04, lkf: -3, rkf: -3 }, far: 0.08 },
     // a stiff bend at the waist, the knees half, the eyes tilted with it and the elbows up
-    2: { size: { hx: 0.4, hy: 0.4, side: 1.4 }, add: { hr: 8, le: 0.15, re: 0.15 } },
+    2: { size: { hx: 0.4, lkf: 0.4, rkf: 0.4, side: 2.2 }, add: { hr: 8, le: 0.15, re: 0.15 } },
     // the hips go first, less far, and the bend does more; the shoulder on the side he goes rolls back with them: wound up
     // (the glove on the side the punch goes by stays on his cheek, out of its way)
-    '4m': { size: { hx: 0.75, hy: 0.6, side: 1.1 }, add: { twist: 8, hp: 3 }, line: [-0.1, -0.01] },
-    '4a': { size: { hx: 0.75, hy: 0.6, side: 1.1 }, add: { twist: 8, hp: 3, lean: 3 }, line: [-0.1, -0.01] },
-    '5m': { size: { hx: 0.5, hy: 0.45, side: 1.25 }, add: { twist: 12, hp: 3 }, far: 0.02, line: [-0.12, -0.01] },
-    '5a': { size: { hx: 0.5, hy: 0.45, side: 1.25 }, add: { twist: 12, hp: 3, lean: 4 }, far: 0.02, line: [-0.12, -0.01] }
+    '4m': { size: { hx: 0.7, lkf: 0.6, rkf: 0.6, side: 1.5 }, add: { twist: 8, hp: 3 }, line: [-0.1, -0.01] },
+    '4a': { size: { hx: 0.75, lkf: 0.6, rkf: 0.6, side: 1.6 }, add: { twist: 8, hp: 3, lean: 3 }, line: [-0.1, -0.01] },
+    '5m': { size: { hx: 0.5, lkf: 0.45, rkf: 0.45, side: 1.8 }, add: { twist: 12, hp: 3 }, far: 0.02, line: [-0.12, -0.01] },
+    '5a': { size: { hx: 0.5, lkf: 0.45, rkf: 0.45, side: 1.8 }, add: { twist: 12, hp: 3, lean: 4 }, far: 0.02, line: [-0.12, -0.01] }
   },
+  /* (how far down a duck and a weave go, and how much of it is the knees, is the grade's: skill.mjs, evade.knee) */
   duck: {
-    // a bow from the waist, knees locked, the gloves on top of the head and the eyes on the canvas (the hips go back only
-    // so far, so the head goes out toward him)
-    1: { size: { hy: 0.8, hz: 0.8, hx: 0.5, lean: 0.95 }, delay: { trunk: 0, hips: 0 }, add: { hp: 17, ly: 0.1, ry: 0.1, lz: -0.04, rz: -0.04 } },
-    // the knees, then the waist: one, two
-    2: { size: { hy: 0.6, lean: 0.85, hz: 0.7, hx: 0.6 }, delay: { hips: 0, trunk: 0.1, hz: 0.1, hx: 0.1 }, add: { hp: 7 } },
+    /* a bow from the waist, straight down and up (no U), the knees all but locked, the gloves on top of the head and the
+       eyes on the canvas (and, his knees not taking him down, his hips go back to keep him over his feet, and over his
+       rear foot: the head goes down by the bow) */
+    1: { size: { hz: 1.27, hx: -0.43, side: 0, hr: 0, twist: 0 }, delay: { trunk: 0, hips: 0 }, add: { hp: 17, ly: 0.1, ry: 0.1, lz: -0.04, rz: -0.04 } },
+    /* the waist, and then the knees, late: one, two (and the hips back, to keep him over his feet while it is the
+       waist); a trace of the U */
+    2: { size: { hz: 1.4, hx: 0, side: 0.4, hr: 0.4, twist: 0.4 }, delay: { trunk: 0, hips: 0.1, hz: 0, hx: 0 }, add: { hp: 7 } },
     // the eyes kept up, on his hips (the head goes down as far as it has to, and no further)
-    '4m': { size: { lean: 1.2, hy: 0.9 }, add: { hp: -6 } },
-    '4a': { size: { lean: 1.17, hy: 0.88 }, add: { hp: -6 } },
-    '5m': { size: { lean: 1.24, hy: 0.9 }, add: { hp: -6 } },
-    '5a': { size: { lean: 1.2, hy: 0.88 }, add: { hp: -6, ly: -0.03, ry: -0.03 } }
+    '4m': { add: { hp: -6 } },
+    '4a': { add: { hp: -6 } },
+    // (a legend goes down in no time on knees that were bent already: the knees' way down keeps the pro's time)
+    '5m': { time: { out: 0.8 }, add: { hp: -6 } },
+    '5a': { time: { out: 0.8 }, add: { hp: -6, ly: -0.03, ry: -0.03 } }
   },
   roll: {
-    // no U: bowed, pushed across bowed, and stood up, the gloves over his head
-    1: { size: { hy: 0.6, hx: 0.3, hz: 1.1, lean: 1.0, side: 0.8 }, time: { out: 1.05, flinch: 0.04 }, add: { hp: 10, ly: -0.2, ry: -0.08, lx: 0.04 } },
-    2: { size: { hx: 0.5 }, delay: { hips: 0, trunk: 0.03 }, add: { ly: -0.04, ry: -0.03, lz: -0.1, lx: -0.03 } },
+    // no U: bowed, pushed across bowed, and stood up, the gloves over his head (and not deep: the plan's 60%)
+    1: { knee: { share: 0.2, depth: 0.6 }, size: { hx: 0.3, hz: 1.1, side: 0.8 }, time: { out: 1.05, flinch: 0.04 }, add: { hp: 10, ly: -0.2, ry: -0.08, lx: 0.04 } },
+    /* (the knees with the hips and the waist after them: an amateur's weave with the waist first and the knees after it
+       is over before a beginner's, since it is the knees that take it under the hook) */
+    2: { knee: { share: 0.55, depth: 0.8 }, size: { hx: 0.5 }, delay: { hips: 0, trunk: 0.03 }, add: { ly: -0.04, ry: -0.03, lz: -0.1, lx: -0.03 } },
     // (the lead glove in on his cheek while the hook goes over: out of its way)
     '4m': { add: { twist: 10, lz: -0.12, ly: -0.02 } },
-    // (a low man has to go lower still to get under a hook aimed at his jaw: the U is deeper and narrower)
-    '4a': { size: { hy: 1.5, lean: 1.7, hx: 0.8 }, add: { twist: 10, ly: -0.04, ry: -0.03, lz: -0.1, lx: -0.03 } },
+    // (a low man, under a hook aimed at his jaw: the U is narrower, and goes back further)
+    '4a': { size: { hx: 0.8, hz: 2 }, add: { twist: 10, ly: -0.04, ry: -0.03, lz: -0.1, lx: -0.03 } },
     '5m': { add: { twist: 10, lz: -0.12, ly: -0.02 } },
-    '5a': { size: { hy: 1.5, lean: 1.7, hx: 0.8 }, time: { out: 0.75 }, add: { twist: 10, ly: -0.07, ry: -0.03, lz: -0.15, lx: -0.04 } }
+    '5a': { size: { hx: 0.8, hz: 2 }, time: { out: 0.75 }, add: { twist: 10, ly: -0.07, ry: -0.03, lz: -0.15, lx: -0.04 } }
   },
   pull: {
     // back from the waist, knees locked, the chin up and the hands out in front for balance
-    1: { size: { hy: 0, hz: 0.9 }, add: { lean: -3, hp: -6, lz: 0.08, rz: 0.08, lx: 0.02, rx: -0.02 } },
+    1: { size: { lkf: 0, rkf: 0, hz: 0.9 }, add: { lean: -3, hp: -6, lz: 0.08, rz: 0.08, lx: 0.02, rx: -0.02 } },
     2: {},
-    // sat down on the rear leg, the chin in, the lead shoulder across it, the rear hand ready in front of the chin
-    '4m': { size: { hz: 1.05 }, add: { hy: -0.035, hp: 13, twist: -6, rz: 0.03 } },
+    // sat down further on the rear leg, the chin in, the lead shoulder across it, the rear hand ready in front of the chin
+    '4m': { size: { hz: 1.05 }, add: { rkf: 10, hp: 13, twist: -6, rz: 0.03 } },
     // (a dirty man does not go back: he sits down onto the rear leg, the rear foot dragged back, the chin behind the shoulder)
-    '4a': { size: { hz: 1.0 }, add: { hy: -0.05, rfz: -0.06, hp: 13, twist: -6 } },
-    '5m': { size: { hz: 1.07 }, add: { hy: -0.03, hp: 12, ly: -0.04 } },
-    '5a': { size: { hz: 1.0 }, add: { hy: -0.05, rfz: -0.06, hp: 12, ly: -0.04 } }
+    '4a': { size: { hz: 1.0 }, add: { rkf: 14, rfz: -0.06, hp: 13, twist: -6 } },
+    '5m': { size: { hz: 1.07 }, add: { rkf: 8, hp: 12, ly: -0.04 } },
+    '5a': { size: { hz: 1.0 }, add: { rkf: 14, rfz: -0.06, hp: 12, ly: -0.04 } }
   }
 };
 const SIDED = ['side', 'hx', 'hw', 'hr', 'lx', 'rx', 'twist'];
+const KNEES = ['lkf', 'rkf'];
 
 /* Where each written stretch falls in his time. A beginner's flinch comes first, with nothing of the curve in it; the going
    is quicker or slower by `out`, the time out there and the way back by `hold` and `back` (a roll's corners held by `pause`). */
@@ -181,7 +189,7 @@ export function sampleEvade(action, level, c) {
   const name = action.name,
     move = MOVES[name],
     ev = level.evade,
-    s = move.sided ? action.side || 1 : 1; // (a duck and a sway have no side)
+    s = move.sided ? action.side || 1 : 1; // (a sway has no side)
   const tmp = {};
   if (ev.textbook) {
     // the pro's: the curve as written, at the moment written
@@ -192,13 +200,20 @@ export function sampleEvade(action, level, c) {
     const shape = (SHAPE[name] || {})[level.id] || {},
       size = shape.size || {};
     const delay = Object.assign({}, ev.delay, shape.delay);
+    /* How far down a duck or a weave goes, and how much of the way the knees take him (skill.mjs: evade.knee): the knees
+       as written times the share and the depth, and the fold at the waist taking the rest of the depth (in place of
+       `move`, which is how far the rest of it goes, across and back). */
+    // (a move's shape at a grade may have its own way down)
+    const kn = WRITTEN[name].knee ? shape.knee || ev.knee : null,
+      own = kn ? WRITTEN[name].knee : 0,
+      deep = kn ? { knee: kn.share * kn.depth, fold: ((1 - Math.min(0.95, kn.share * own)) / (1 - own)) * kn.depth, rest: ev.move } : null;
     for (const ch in move.tracks) {
       const g = GROUP[ch] || 'trunk',
         k = ev.scale[g] ?? 1,
         by = size[ch] ?? 1;
       if (!k || !by) continue;
       // (a channel may keep its own time apart from its group's: an amateur's hips go back only as his waist bends)
-      tmp[ch] = sampleTrack(move.tracks[ch], written(T, t - (delay[ch] ?? delay[g] ?? 0))) * k * by * (GROUP[ch] === 'hands' || GROUP[ch] === 'feet' ? 1 : ev.move);
+      tmp[ch] = sampleTrack(move.tracks[ch], written(T, t - (delay[ch] ?? delay[g] ?? 0))) * k * by * (GROUP[ch] === 'hands' || GROUP[ch] === 'feet' ? 1 : deep ? (KNEES.includes(ch) ? deep.knee : ch === 'lean' ? deep.fold : deep.rest) : ev.move);
     }
     // what the grade adds to the shape, with the trunk's time (a foot put out wide: on the side he goes)
     const add = shape.add || {},
@@ -250,6 +265,8 @@ export function sampleEvade(action, level, c) {
   }
   for (const ch of SIDED) if (tmp[ch]) tmp[ch] *= s;
   for (const ch of ['lfx', 'rfx']) if (tmp[ch]) tmp[ch] *= s;
+  // (the knees as written are for going to his left: to his right, each knee does what the other was written to)
+  if (move.sided && s < 0 && (tmp.lkf || tmp.rkf || tmp.lkx || tmp.rkx)) mirrorKnees(tmp);
   // (the turned stance: see moves.mjs LEFT_BEND)
   if (move.sided && tmp.side > 0) (tmp.lean = (tmp.lean || 0) + LEFT_BEND.lean * tmp.side), (tmp.side += LEFT_BEND.side * tmp.side);
   for (const ch in tmp) c[ch] += tmp[ch];

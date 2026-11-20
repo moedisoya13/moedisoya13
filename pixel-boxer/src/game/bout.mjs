@@ -10,7 +10,8 @@
                             animator.mjs: getUp); -> the rise he starts
        controls: { move: [x, z] (a direction on the canvas, up to 1 long), jab, power (true on the tick pressed),
                    cover (true while held), dash: [x, z] | true (on the tick flicked; true is straight back),
-                   slip: 1 | -1 (the head off the line, to his left or right), duck: true (straight down under a punch),
+                   slip: 1 | -1 (the head off the line, to his left or right), duck: true | 1 | -1 (down under a punch in a
+                   shallow U, coming up on his left, or with -1 his right),
                    roll: 1 | -1 (bob and weave: down under it and up on his left or right), pull: true (the head swayed
                    back out of reach) }
      bout.events            what happened this step, for the picture and the sound (a dirty boxer's fouls among them:

@@ -6,13 +6,16 @@
        feet:  { L | R: { at: [x, y, z] (where the ankle would be with the foot flat: 0.09 high on the canvas), yaw, pitch
                          (the heel raised, degrees); or ankle: [x, y, z] and R: the foot's 3x3 turn, as they are (a foot
                          lying however a fall left it); pole (where the knee points, in his space) and poleW (how much: left
-                         out, it points over the foot, as the pelvis turns) } },
+                         out, it points over the foot, as the pelvis turns); out (degrees the knee is turned round the leg
+                         from there: in, negative, as a hook's pivot turns it; out, positive, as a squat does) } },
        hands: { L | R: { at: [x, y, z] (the wrist), pole: where the elbow points, as the chest sees it (or toward: the same,
                          in his own space), round: { was, most } (where the elbow was round the arm last frame, degrees, and
                          how far it may go round from there this frame) } },
        stretch }
    solve(stance) -> { root, rot: { Joint: 3x3 local }, stretch, at: { Joint: where it is, in his space }, head (the middle
-                      of the head), round: { L, R } }
+                      of the head), round: { L, R }, knees: { L, R } (each knee round its leg, as the flip limit reads it),
+                      knee: { L | R: { flex, out } } (each knee as it came out: degrees bent from straight, and degrees turned
+                      out from over the foot, in negative) }
    centre(pose) -> his centre of mass, in his space as he is drawn (stretched about the canvas).
 
    The body is held inside what it can do (body.mjs), whatever it is asked: a heel that lifts turns the foot on its ball, so
@@ -40,6 +43,12 @@ const dist = (a, b) => len(M.sub(a, b));
 const col = (R, i) => [R[i], R[3 + i], R[6 + i]];
 const clamp = (x, a, b) => (x < a ? a : x > b ? b : x);
 const wrap = d => ((((d + 180) % 360) + 360) % 360) - 180;
+// v turned by th radians about the unit axis k (Rodrigues)
+const turned = (v, k, th) => {
+  const c = Math.cos(th),
+    sn = Math.sin(th);
+  return M.add(M.add(M.scale(v, c), M.scale(cross(k, v), sn)), M.scale(k, dot(k, v) * (1 - c)));
+};
 
 /* What the solver holds him to: the body's ranges, a little inside them (the audit holds him to the ranges themselves), and
    how close a glove may come to his own head and trunk (a glove at the cheek or against the ribs is not in them). */
@@ -165,7 +174,8 @@ export function solve(stance) {
     P = {},
     rot = {},
     round = {},
-    knees = {};
+    knees = {},
+    knee = {};
   const place = (name, local) => {
     const parent = PARENT[name];
     rot[name] = local;
@@ -291,6 +301,8 @@ export function solve(stance) {
     for (let pass = 0; pass < 4; pass++) {
       F = foot.R ? M.mul(foot.R, M.mul(M.rx(pitch), M.rz(roll))) : footFrame(yaw, pitch, roll);
       const ankle = foot.R ? lifted(foot.ankle, F) : ankleFor(foot.at, yaw, F, pitch),
+        // (the knee turned in or out round the line from hip to ankle: out is away from the other leg)
+        pole = foot.out ? turned(kneeTo, norm(M.sub(ankle, hip)), -s * foot.out * RAD) : kneeTo,
         /* the knee on the canvas, the thigh within its ranges in the hip, then (each given up before the one ahead of it) no
            flip round the leg in a frame, as the elbow, and the thigh kept short of the ends of its turn */
         within = (a, [lo, hi]) => a >= lo && a <= hi,
@@ -306,7 +318,7 @@ export function solve(stance) {
         ],
         HARD = 3;
       const near = foot.round && foot.round.was !== null && foot.round.was !== undefined ? knee => Math.abs(wrap(azimuth(knee, ankle) - foot.round.was)) : null;
-      leg = limb(hip, ankle, LEN.thigh, LEN.shin, kneeTo, rules, FOLDED, 0.02, near);
+      leg = limb(hip, ankle, LEN.thigh, LEN.shin, pole, rules, FOLDED, 0.02, near);
       /* (and where no knee will do, the knee asked to bend the one way it cannot, as a man lying on his face cannot fold his
          knees into the canvas, the leg is let out straighter until one will: the foot does not get where it was sent) */
       // (as little straighter as will do, and if it can be, with the knee not flung round to the other side to get there)
@@ -318,7 +330,7 @@ export function solve(stance) {
           for (const k of [0.25, 0.5, 0.75, 1]) {
             const to = M.add(hip, M.scale(d, (l + (most - l) * k) / (l || 1)));
             to[1] = Math.max(to[1], ankle[1]); // (along the canvas, not into it)
-            const out = limb(hip, to, LEN.thigh, LEN.shin, kneeTo, rules, FOLDED, 0.02, near);
+            const out = limb(hip, to, LEN.thigh, LEN.shin, pole, rules, FOLDED, 0.02, near);
             if (out.kept >= need) {
               leg = out;
               break search;
@@ -345,10 +357,17 @@ export function solve(stance) {
     aim(Side + 'Shin', fromCols(hinge, y2, cross(hinge, y2)));
     aim(Side + 'Foot', F);
     knees[side] = len(reject(M.sub(leg.mid, hip), norm(M.sub(leg.end, hip)))) < 0.04 ? null : azimuth(leg.mid, leg.end);
+    // (how bent the knee came out, and how far round from over the foot: what the audit, the tests and the cards read)
+    {
+      const a = norm(M.sub(hip, leg.mid)),
+        b = norm(M.sub(leg.end, leg.mid)),
+        flex = 180 - Math.acos(clamp(dot(a, b), -1, 1)) * DEG;
+      knee[side] = { flex, out: knees[side] === null ? 0 : wrap(knees[side] - azimuth(M.add(hip, M.scale(kneeTo, 0.3)), leg.end)) };
+    }
     place(Side + 'ToeBase', M.rx(-Math.max(0, foot.R ? 0 : pitch) * 0.8)); // the toes stay on the canvas when the heel lifts
   }
   for (const name of NAMES) if (!rot[name]) place(name, M.id());
-  return { root: M.sub(stance.hips, TPOSE.Hips), rot, stretch: stance.stretch || 1, at: P, head, round, knees };
+  return { root: M.sub(stance.hips, TPOSE.Hips), rot, stretch: stance.stretch || 1, at: P, head, round, knees, knee };
 }
 
 // his centre of mass (Dempster's shares, body.mjs), as he is drawn: stretched taller and thinner about the canvas

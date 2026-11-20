@@ -8,7 +8,7 @@ import { WINDOWS } from '../src/windows.data.mjs';
 import { outcome, drill as windowDrill, CARDS } from '../tools/windows.mjs';
 import { defence, drill } from '../tools/grades.mjs';
 import { sampleEvade } from '../src/anim/evade.mjs';
-import { MOVES, LEFT_BEND, sampleMove } from '../src/anim/moves.mjs';
+import { MOVES, LEFT_BEND, sampleMove, mirrorKnees } from '../src/anim/moves.mjs';
 import { DEFENSE } from '../src/defense.mjs';
 import { step } from '../src/game/bout.mjs';
 import { freshBout, drive } from '../src/footwork.mjs';
@@ -99,13 +99,15 @@ test('grades: a pro\'s evasions are the curves as written', () => {
       for (let t = 0; t <= MOVES[name].dur; t += 1 / 60) {
         const mine = {},
           written = sampleMove(MOVES[name], t, {});
-        const zero = Object.fromEntries(Object.keys(written).concat(['side', 'lean', 'hx', 'hw', 'hr', 'lx', 'rx']).map(k => [k, 0]));
+        const zero = Object.fromEntries(Object.keys(written).concat(['side', 'lean', 'hx', 'hw', 'hr', 'lx', 'rx', 'twist', 'lkf', 'rkf', 'lkx', 'rkx']).map(k => [k, 0]));
         Object.assign(mine, zero);
         sampleEvade({ name, t, side, level: LEVEL[3] }, LEVEL[3], mine);
         const want = Object.assign({}, zero, written);
         if (MOVES[name].sided) {
-          for (const ch of ['side', 'hx', 'hw', 'hr', 'lx', 'rx']) want[ch] *= side;
+          for (const ch of ['side', 'hx', 'hw', 'hr', 'lx', 'rx', 'twist']) want[ch] *= side;
           if (want.side > 0) (want.lean += LEFT_BEND.lean * want.side), (want.side += LEFT_BEND.side * want.side);
+          // (the knees as written are for his left: to his right, each does what the other was written to)
+          if (side < 0) mirrorKnees(want);
         }
         for (const ch in want) assert.ok(mine[ch] === want[ch], `${name} ${side} ${ch} at ${t}: ${mine[ch]} / ${want[ch]}`);
       }
