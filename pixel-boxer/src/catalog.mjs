@@ -293,7 +293,7 @@ function start({ manifest, boxer }) {
       bones: [new Float32Array(R.maxBones * 12), new Float32Array(R.maxBones * 12)],
       replay: createReplay(),
       shown: null, // the step being drawn, while a replay plays
-      cam: { target: [0.45, entry.punch !== undefined ? 0.85 : 0.52, 0], yaw: entry.view.yaw, pitch: entry.view.pitch, dist: 5.4 },
+      cam: { target: [0.45, entry.level ? 0.95 : entry.punch !== undefined ? 0.85 : 0.52, 0], yaw: entry.view.yaw, pitch: entry.view.pitch, dist: 5.4 },
       shake: 0,
       t: 0
     };
@@ -633,7 +633,7 @@ function start({ manifest, boxer }) {
     cell.cam.target[0] += (a.x * mine + b.x * (1 - mine) - cell.cam.target[0]) * ease;
     cell.cam.target[2] += (a.z * mine + b.z * (1 - mine) - cell.cam.target[2]) * ease;
     // far enough back that both men are in the picture from the feet up, whatever shape the window is
-    const [near, wide] = cell.entry.level ? [2.7, 2.1] : cell.exchange ? [3.3, 2.5] : [5.2, 3.6];
+    const [near, wide] = cell.entry.level ? [3.4, 2.1] : cell.exchange ? [3.3, 2.5] : [5.2, 3.6];
     cell.cam.dist = Math.max(near, wide / (2 * Math.tan((19 * Math.PI) / 180) * (rect.w / rect.h)));
     const jolt = !cell.shown && cell.shake > 0.3 ? [Math.sin(cell.t * 97) * cell.shake, Math.cos(cell.t * 83) * cell.shake * 0.6] : null;
     R.cell(rect, { camera: cell.cam, layers, shake: jolt });

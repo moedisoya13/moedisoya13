@@ -43,7 +43,7 @@
   #catalog { display: flex; flex-direction: column; gap: 28px; }
   .part-note { margin: -16px 0 0; max-width: 72ch; color: var(--dim); }
   /* a grade's card: the grade, and under it the numbers its technique is told by (a punch's chain as it was thrown) */
-  .card.rung .stage { aspect-ratio: 4 / 5; }
+  .card.rung .stage { aspect-ratio: 5 / 4; }
   .card.rung .info { padding: 9px 10px 10px; gap: 6px; }
   .card.rung h3 { font-size: 22px; }
   .card.rung h3 .en { display: block; margin: 3px 0 0; white-space: normal; }
@@ -62,7 +62,8 @@
   .result .tag { font: 600 12px/1 var(--body); letter-spacing: .08em; padding: 5px 8px; border: 1.5px solid var(--line); color: var(--dim); }
   .result .tag.on { animation: tag .9s steps(6) forwards; }
   @keyframes tag { 0%, 55% { background: var(--accent); border-color: var(--accent); color: var(--bg); } 100% { background: transparent; } }
-  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: 16px; }
+  /* two motions to a row at every width: nothing scrolls sideways */
+  .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
   .card { display: flex; flex-direction: column; min-width: 0; border: 1.5px solid var(--line); }
   .stage { aspect-ratio: 5 / 4; max-width: 100%; }
   /* the beat itself gets the width of the page: everything under it is built on it */
@@ -87,14 +88,13 @@
   @keyframes lamp { 0% { background: currentColor; } 60% { background: currentColor; } 100% { background: transparent; } }
   .pace { margin-left: auto; }
   .pace b { color: var(--fg); font-weight: 500; display: inline-block; min-width: 3ch; text-align: right; }
-  /* a technique: what it is, and its seven grades in a row under it (a row too wide for the screen scrolls on its own) */
+  /* a technique: what it is, and its seven grades under it, two to a row */
   .item { display: flex; flex-direction: column; gap: 8px; }
   .item + .item { margin-top: 14px; }
   .item-head { background: var(--bg); display: flex; flex-direction: column; gap: 4px; }
   .item-head h3 { font-size: 24px; }
   .item-head p { margin: 0; max-width: 92ch; color: var(--dim); font-size: 14px; }
-  .row7 { display: grid; grid-template-columns: repeat(7, minmax(132px, 1fr)); gap: 8px; overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x proximity; padding-bottom: 2px; }
-  .row7 > .card { scroll-snap-align: start; }
+  .row7 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
   .card.rung .stage { position: relative; }
   .replay { position: absolute; left: 6px; top: 6px; font: 600 11px/1 var(--body); letter-spacing: .06em; padding: 4px 6px; background: var(--accent); color: var(--bg); }
   .replay[hidden] { display: none; }
