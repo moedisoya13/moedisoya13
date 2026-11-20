@@ -83,13 +83,17 @@ export function sampleMove(move, t, out) {
    it goes from 0 to 1. The shoulder and elbow need no amounts: they are the arm itself, worked out by how it is thrown.
      arm: 'straight'  the shoulder swings the upper arm onto the line of the target and the elbow straightens along it
           'swing'     the arm is held bent and locked to the chest, the body carries it round, the shoulder closes the last of it
+                      (land: the share of the trunk's turn at which the turn brings the locked fist onto the head; most: the
+                      furthest round it is held, degrees, and ahead: no further round than this off the front of the chest;
+                      tight: the fist is kept in at the chest through the wind-up and raised to the target only with the drive)
           'lift'      the arm is held bent, the legs and trunk drive it up, the shoulder closes the last of it
      chain: { coil: seconds of wind-up, rate: how fast each joint's muscle is (rad/s natural frequency), skip: joints held
               still, turn: degrees the hips and trunk turn through, locked: the arm is stiff from the start }
      reach: about how far away, centre to centre, it can land (the rival's judgment and the step in; the hit itself is
             the glove meeting the head); close: the distance he steps in to
      body: how much of a grade's way of using the body (anim/skill.mjs: form) this punch takes, times: turn (of the extra
-            turn a better man gives the legs, hips and trunk), off (of the head off the line), bend, tuck
+            turn a better man gives the legs, hips and trunk), off (of the head off the line), bend, tuck, over (of the
+            weight thrown in after it)
      foul: the foul a dirty boxer throws with it (anim/skill.mjs: form.dirty), where there is one (the jab and the hook; the
             cross and the uppercut are thrown with a dirty grade's body and nothing else), which has to land as truly as a
             punch does: a part of him (a foot, a glove) meeting the other man (his instep, his face), judged the way a punch
@@ -122,12 +126,15 @@ const PUNCHES = {
     }
   },
   hook: {
-    hand: 'L', arm: 'swing', kind: 'hook', reach: 0.9, close: 0.82,
+    hand: 'L', arm: 'swing', kind: 'hook', reach: 0.9, close: 0.82, land: 0.7,
     chain: { coil: 0.085, rate: [58, 42, 52, 60, 0], skip: ['elbow'], turn: [41, 32], locked: true },
-    /* (the arm is locked to the chest, so the body's turn is the fist's path: a better man's turn is aimed at the head, not
-       more of it; his head stays where the arm can still reach from; and it is thrown off set feet, the bounce stopped under
-       it, because the jaw is above the fist and a body coming down as it lands takes the speed out of it) */
-    body: { turn: 0.2, off: 0, bend: 0, tuck: 0, sep: 0.5, dip: 1.5, lively: 0 },
+    /* (the arm is locked to the chest, so the body's turn is the fist's path, and the animator puts that path through the
+       head: the fist is raised to the jaw, and sent out as far as the head and held round to the lead side as the legs drive,
+       as far round as the turn still to come will carry it by the time the trunk is `land` of the way round, so that the
+       turn brings it onto the head and it lands on its sweep, going the way a hook goes, with the trunk behind it
+       (anim/animator.mjs: sweep). A better man's turn is all of it; his head stays where the arm can still reach from; and
+       it is thrown off set feet, the bounce stopped under it) */
+    body: { turn: 1, off: 0, bend: 0, tuck: 0, sep: 0.5, dip: 1.5, lively: 0 },
     // the arm is set at a right angle and locked to the chest, the weight goes onto the lead leg
     coil: { yaw: 15, twist: 6, lkf: 12, lean: 2, lx: 0.1, ly: 0, lz: 0.12, le: 0.9, lc: 1 }, // (onto the bent lead knee)
     links: {
@@ -157,6 +164,50 @@ const PUNCHES = {
       drive: { lkf: -6, rkf: -6, st: 0.02, rfw: 32, rfp: 28 }, // the legs straighten under it (as far as a body driven up can be stopped again by gravity)
       hips: { yaw: 26, hz: 0.09 },
       trunk: { twist: 26, lean: -5, side: 3, lz: -0.06 },
+      shoulder: {},
+      elbow: {}
+    }
+  },
+  /* ---- right up close (game/bout.mjs: RULES.inside, centre to centre; the power chain there is the inside hook and the inside
+     uppercut, in turn). Each is its long-range punch thrown with more of the body and less of the arm. */
+  /* The inside hook (docs/moves-plan-4.md §1): thrown at 0.64 m, the arm folded tighter to the chest, wound up further (the
+     hips and the chest turned to his left, the weight onto the bent lead knee), and the hips and the chest turned further
+     through it, both feet turning: the lead foot in on its ball, its heel up, the lead knee turned in over it and
+     straightening as the weight goes back onto the rear foot, the rear foot turning out. The head stays on the axis of the
+     turn and ends a few centimetres toward the rear foot. It lands on its sweep the way the hook does (animator: sweep). */
+  hookIn: {
+    hand: 'L', arm: 'swing', kind: 'hook', reach: 0.74, close: 0.64, land: 0.7, tight: true, most: 30, ahead: 35,
+    // (set: the share of the wind-up that is the arm being set, which no grade leaves out: a hook's is most of it, this one's,
+    // its arm half folded at the chest already, a little over half)
+    chain: { coil: 0.085, rate: [48, 28, 36, 60, 0], skip: ['elbow'], turn: [40, 36], locked: true, set: 0.6 },
+    body: { turn: 1, off: 0, bend: 0, tuck: 0, sep: 0.5, dip: 1.5, lively: 0, over: 0.2 },
+    // (the fist kept low at the chest and the elbow only half out through the wind-up: right up close, a glove raised out of
+    // the guard is in his face; it is raised and sent out with the drive: tight)
+    coil: { yaw: 22, twist: 10, lkf: 16, lean: 2, hz: 0.02, lx: 0.05, ly: -0.03, lz: 0, le: 0.6, lc: 1 },
+    links: {
+      drive: { lfw: -50, lfp: 28, lkx: -32, lkf: -24, rkf: 8, rfw: 14, hz: 0.02, le: 1, lc: 1 },
+      hips: { yaw: -40, hx: -0.03, hy: -0.02 },
+      trunk: { twist: -36, side: -4, hx: -0.02, hz: -0.03, rz: -0.02, ry: 0.03 },
+      shoulder: {},
+      elbow: {}
+    }
+  },
+  /* The inside uppercut (§2): the knees are the spring. Down onto both knees (the rear one more), the waist hardly bent, the
+     rear hand dropped to his belt with the elbow at his side and the palm up; then the knees straighten all the way and the
+     hips come up under it, the heels off the canvas, the body stretched a little, the waist laid back as it comes, and the
+     fist comes straight up between the other man's gloves to the chin (under: the hand is taken under the target as the
+     legs drive, `under` metres short of it so that it comes up in front of his chest, and the last of its way is upright;
+     the bent arm reaches `bent` from the shoulder). How it goes down and comes up is the grade's (skill.mjs: chain.spring). */
+  upperIn: {
+    hand: 'R', arm: 'lift', kind: 'upper', reach: 0.74, close: 0.64, under: 0.18, bent: 0.5,
+    chain: { coil: 0.18, rate: [40, 36, 52, 52, 0], skip: ['elbow'], turn: [20, 22], locked: true, set: 0, spring: true },
+    body: { dip: 0.5, turn: 0.3, off: 0.5, lively: 0, over: 0.2 },
+    coil: { lkf: 30, rkf: 34, lean: 9, yaw: -6, side: -4, rx: 0.06, ry: -0.3, rz: 0.1, re: -0.2, hp: 4, st: -0.01 },
+    links: {
+      // (the hand kept down at his belt as the legs drive, as low as the bent arm lets it: the shoulder brings it up, all of it)
+      drive: { lkf: -38, rkf: -42, st: 0.02, rfw: 30, rfp: 30, lfp: 14, ry: -0.6 },
+      hips: { yaw: 20, hz: 0.08 },
+      trunk: { twist: 22, lean: -8, side: 3, lz: -0.06 },
       shoulder: {},
       elbow: {}
     }
@@ -313,6 +364,30 @@ export const MOVES = Object.assign(
       floor: true, dur: 2.4, blend: 1.1,
       keys: [{ t: 0.02, e: 'lin', ...FOURS }, { t: 0.9, ...FOURS }, { t: 1.15, ...STEP }, { t: 1.45, ...KNEEL_UP }, { t: 1.8, ...UP_HALF }, { t: 2.05, ...UP_NEAR }, { t: 2.2, ...UP_DONE }]
     },
+    /* ---- in and out (docs/moves-plan-4.md §3, §4). How far he goes, and where to, is the bout's (game/bout.mjs: travel);
+       these are the body that goes there, and each grade's way of doing it (anim/skill.mjs: entry, away; the animator). */
+    /* The duck in: down into both knees (the rear one more) and a little at the waist at once, the hips back over his heels
+       so the head goes down and not forward into the other man's lead arm, the head off to his right, outside the other
+       man's jab, the gloves pulled in tight on the face; the rear leg straightens and pushes him in, low (and in a little to
+       his right of the line to him, outside the other man's lead arm: game/bout.mjs, plan); the lead foot lands and the knees take it, and he comes up, but the knees stay bent a moment: that bend is
+       the wind-up of an inside hook or an inside uppercut thrown out of it (game/bout.mjs: a punch out of the end of it is
+       loaded, by his grade). */
+    duckIn: {
+      dur: 0.62,
+      keys: [
+        { t: 0.1, e: 'out', lean: 16, hp: 10, hx: -0.07, side: -4, lkf: 50, rkf: 56, hz: -0.06, lx: -0.04, ly: 0.06, lz: -0.12, rx: 0.02, ry: 0.06, rz: -0.06 },
+        { t: 0.18, e: 'lin', lean: 16, hp: 10, hx: -0.07, side: -4, lkf: 50, rkf: 30, hz: -0.06, lx: -0.04, ly: 0.06, lz: -0.12, rx: 0.02, ry: 0.06, rz: -0.06 },
+        { t: 0.26, lean: 12, hp: 8, hx: -0.06, side: -3, lkf: 34, rkf: 6, hz: -0.06, lx: -0.04, ly: 0.06, lz: -0.12, rx: 0.02, ry: 0.06, rz: -0.06 },
+        { t: 0.4, lean: 8, hp: 3, hx: -0.03, side: -1, lkf: 22, rkf: 22, lx: -0.02, ly: 0.03, rx: 0.01, ry: 0.03 },
+        { t: 0.55, e: 'lin', lean: 5, hp: 2, lkf: 20, rkf: 20 }
+      ]
+    },
+    /* Moving away with the guard let go of (§4): the hands dropped to below the chest, loose, the trunk upright and the chin
+       up a little, bouncing off the ankles with the heels off the canvas, away out of range: pivoted off the line on the
+       ball of the lead foot and then hopped back (hopPivot), or hopped round him, still facing him (hopCircle). The hands
+       come back up over the last hop. The rest of it, the bounce and the hands' swing, is the animator's. */
+    hopPivot: { dur: 0.92, keys: [] },
+    hopCircle: { dur: 0.86, keys: [] },
     // arms up, mixed in for the winner
     cheer: { stay: true, dur: 1, keys: [{ t: 1, e: 'lin', lx: 0.2, ly: 0.52, lz: -0.2, rx: -0.2, ry: 0.55, rz: -0.02, le: 0.7, re: 0.7, lean: -15, yaw: 24, twist: 8, hp: -10, hy: 0.04 }] }
   }).map(([name, def]) => [name, compile(Object.assign({ name }, def))])

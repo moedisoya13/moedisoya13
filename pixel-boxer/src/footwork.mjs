@@ -101,7 +101,7 @@ export const ENTRIES = [
 // a bout set up for a script: the boxer at HOME, the other man at AWAY (or where the entry puts them), both in their guards
 export function freshBout(entry) {
   const bout = createBout(7);
-  [bout.fighters[0].x, bout.fighters[0].z] = entry && entry.me ? entry.me(0) : HOME;
+  [bout.fighters[0].x, bout.fighters[0].z] = (entry && entry.me && entry.me(0)) || HOME;
   [bout.fighters[1].x, bout.fighters[1].z] = entry && entry.him ? entry.him(0) : AWAY;
   if (entry && entry.setup) entry.setup(bout);
   settle(bout);
@@ -122,7 +122,9 @@ export function drive(entry, bout, at, dt) {
     tick = Math.round(at / dt) + 1,
     loop = Math.round(entry.loop / dt),
     t = (tick % loop) * dt,
-    mine = { move: entry.stick ? entry.stick(a) : walkTo(a, entry.me(t, a)), cover: !!(entry.cover && entry.cover(t)) },
+    // (a script may leave him where his own move takes him: me(t) null)
+    place = entry.stick ? null : entry.me(t, a),
+    mine = { move: entry.stick ? entry.stick(a) : place ? walkTo(a, place) : [0, 0], cover: !!(entry.cover && entry.cover(t)) },
     // (a script may leave the other man where he is: him(t) null)
     there = entry.him ? entry.him(t) : AWAY,
     his = { move: there ? walkTo(b, there) : [0, 0], cover: !!(entry.hisCover && entry.hisCover(t)) };

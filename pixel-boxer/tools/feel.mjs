@@ -168,7 +168,13 @@ for (const name of ['jab', 'cross', 'hook', 'upper']) {
   report.punches[name] = { landed: !!hit && hit.type === 'hit', after: hit ? +((hit.tick - 6 + 1) / 60).toFixed(3) : null, speed: hit ? hit.speed : 0, mass: hit ? hit.mass : 0, J: hit ? hit.J : 0, fastest: +fastest.toFixed(1) };
 }
 {
-  const close = thrown('cross', 0.68).hit,
+  // (a cross from right up close: the power button there throws the inside hook, bout.mjs RULES.inside, so the chain is held
+  // to the long-range one for this, to see what a cross is worth from there)
+  const inside = BOUT.inside;
+  BOUT.inside = 0;
+  const close = thrown('cross', 0.68).hit;
+  BOUT.inside = inside;
+  const
     far = thrown('jab', 1.6).hit;
   report.punches.cross.smothered = close ? close.J : 0;
   report.punches.jab.outOfReach = !far;

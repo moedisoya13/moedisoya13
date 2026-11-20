@@ -78,9 +78,14 @@ test('a cross from too close is smothered, and a cross is worth more than a jab'
     const hit = blow(run(ring(gap), 0.5, i => [i === 0 ? { [what]: true } : idle, idle]));
     return hit ? hit.J : 0;
   };
+  // (from 0.68 m the power button throws the inside hook, RULES.inside: the long-range chain is held for this, to see a cross
+  // thrown from there)
+  const inside = RULES.inside;
+  RULES.inside = 0;
   const range = J(1.0, 'power'),
     close = J(0.68, 'power'),
     jab = J(1.0, 'jab');
+  RULES.inside = inside;
   assert.ok(range > 50, 'a cross at range: ' + range);
   assert.ok(close < range / 3, 'from too close the elbow has not straightened: ' + close);
   assert.ok(range > jab * 1.5, 'jab ' + jab + ', cross ' + range);

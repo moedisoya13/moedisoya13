@@ -31,12 +31,16 @@ function knockdown(entry) {
     was = null,
     v = null,
     rest = null,
-    lies = null;
+    lies = null,
+    follow = null;
   for (let tick = 0; tick < Math.round(entry.loop / DT); tick++) {
     step(bout, drive(entry, bout, tick * DT, DT), DT);
     bout.fighters[1].hp = 1000;
     const e = bout.events.find(e => e.type === 'hit' && e.on === 0 && e.down);
     if (e && !hit) hit = { e, from: was, v, yaw: f.yaw };
+    // (where the glove went on to, through him, over the 80 ms after it met him)
+    const fo = bout.events.find(e => e.type === 'follow' && e.on === 0);
+    if (fo) follow = fo.follow;
     if (bout.stop > 0) continue;
     const com = measure(f).com;
     if (was) v = [(com[0] - was[0]) / DT, (com[2] - was[2]) / DT];
@@ -45,7 +49,7 @@ function knockdown(entry) {
     if (f.action && f.action.name.startsWith('rise')) lies = f.action.from;
   }
   const mine = w => local({ yaw: hit.yaw }, w[0], w[1]);
-  return { J: hit.e.J, vec: mine([hit.e.vec[0], hit.e.vec[2]]), own: mine(hit.v), moved: mine([rest[0] - hit.from[0], rest[2] - hit.from[2]]), lies };
+  return { J: hit.e.J, vec: mine([hit.e.vec[0], hit.e.vec[2]]), own: mine(hit.v), moved: mine([rest[0] - hit.from[0], rest[2] - hit.from[2]]), follow: follow && mine([follow[0], follow[2]]), lies };
 }
 const angle = (a, b) => Math.abs(((((Math.atan2(a[0], a[1]) - Math.atan2(b[0], b[1])) * DEG + 540) % 360) - 180));
 
@@ -59,11 +63,14 @@ for (const entry of LAID)
     }
   });
 
-test('knockdown: the hook goes down sideways, the way its glove was going; caught coming in, he goes down forward', () => {
+test('knockdown: the hook goes down the way its glove goes on through him, to his left; caught coming in, he goes down forward', () => {
   const side = knockdown(DEFENSE.find(e => e.id === 'down-side')),
     front = knockdown(DEFENSE.find(e => e.id === 'down-front'));
-  // (the hook's glove was going to his right as it met him: see defense.mjs)
-  assert.ok(side.vec[0] < 0 && side.moved[0] < 0 && Math.abs(side.moved[0]) > Math.abs(side.moved[1]), `hook: moved [${side.moved.map(x => x.toFixed(2))}]`);
+  /* (a lead hook lands on its sweep, coming from his right, and goes on through him to his left: he goes where it goes, his
+     centre of mass from the blow to where he lies within 25 degrees of the glove's way along the canvas over the 80 ms after
+     it met him, and to his left. There is no rear-hand hook in the game to hold to the mirror of it.) */
+  assert.ok(side.follow && side.follow[0] > 0 && side.moved[0] > 0 && Math.abs(side.moved[0]) > Math.abs(side.moved[1]), `hook: follow [${side.follow && side.follow.map(x => x.toFixed(2))}], moved [${side.moved.map(x => x.toFixed(2))}]`);
+  assert.ok(angle(side.moved, side.follow) <= 25, `hook: moved [${side.moved.map(x => x.toFixed(2))}] against the follow-through [${side.follow.map(x => x.toFixed(2))}]: ${angle(side.moved, side.follow).toFixed(0)} degrees`);
   assert.ok(front.own[1] > 2 && front.moved[1] > 0.3 && front.lies === 'front', `coming in at ${front.own[1].toFixed(1)} m/s: moved [${front.moved.map(x => x.toFixed(2))}], lies on his ${front.lies}`);
 });
 

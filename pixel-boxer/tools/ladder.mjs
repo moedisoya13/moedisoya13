@@ -15,7 +15,7 @@ import { rung, stance } from '../src/measure.mjs';
 export * from '../src/measure.mjs';
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  const punches = ['jab', 'cross', 'hook', 'upper'].map(p => LEVELS.map(lv => rung(`${p}@${lv}`))),
+  const punches = ['jab', 'cross', 'hook', 'upper', 'hookIn', 'upperIn'].map(p => LEVELS.map(lv => rung(`${p}@${lv}`))),
     stances = LEVELS.map(lv => stance(lv, 20));
   if (process.argv.includes('--json')) console.log(JSON.stringify({ punches: punches.map(r => r.map(({ frames, ...x }) => x)), stances: stances.map(({ frames, ...x }) => x) }, null, 2));
   else {

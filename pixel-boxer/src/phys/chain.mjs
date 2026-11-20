@@ -12,7 +12,8 @@
      stepChain(chain, move, dt)               -> the phase it is in: coil, throw, hold, recover, done
      chain.q[i], chain.v[i]                   each link's position 0..1 toward its end, and speed (1/s)
                                               (a punch thrown by the same hand as the one before starts from that one's: bout.mjs)
-     chain.coil.q                             the wind-up before it: 0..1, let go as the chain fires
+     chain.coil.q                             the wind-up before it: 0..1, let go as the chain fires (after chain.wait seconds
+                                              of waiting for a foot to come down, and held chain.pause seconds at the bottom)
      preload(chain, move, load, shoulder)     a punch thrown out of the end of an evasion (or a parry), whose wind-up and
                                               leg drive that end has already done (load 0..1), and whose shoulder is
                                               already part of the way out (a parrying hand going straight on) */
@@ -29,8 +30,11 @@ const each = x => (Array.isArray(x) ? x : new Array(N).fill(x || 0)); // a numbe
 export function createChain(move, quick, skill) {
   // quick: how much faster than written this boxer's muscles are (his speed, and how tired he is): every rate, times this
   const k = (skill && skill.chain) || {},
-    // (a wind-up that sets the arm, as a hook's and an uppercut's does, is mechanics: only so much of it can go)
-    coil = Math.max(move.chain.coil * (move.chain.locked ? Math.max(0.9, k.coil ?? 1) : k.coil ?? 1), k.least || 0);
+    /* (a wind-up that sets the arm, as a hook's and an uppercut's does, is mechanics: only so much of it can go, `set` of it,
+       0.9 if the move does not say; and a punch that comes up out of the knees goes down into them as the grade's spring
+       says: chain.spring) */
+    spring = move.chain.spring ? Object.assign({ down: 1, pause: 0, wait: false }, k.spring) : null,
+    coil = Math.max(move.chain.coil * (spring ? spring.down : move.chain.locked ? Math.max(move.chain.set ?? 0.9, k.coil ?? 1) : k.coil ?? 1), k.least || 0);
   return {
     quick: quick || 1,
     // how he throws it (the textbook if nothing is said)
@@ -48,6 +52,11 @@ export function createChain(move, quick, skill) {
     shown: k.shown ?? 1, // how much of the wind-up's movement shows (its setting of the arm always does)
     backLag: k.backLag ?? 1,
     coilTime: coil,
+    // (a spring: seconds the knees are held at the bottom before they let go, and whether he waits for a foot to come down
+    // before he goes down into them; the bout says how long that is: wait)
+    pause: spring ? spring.pause : 0,
+    springWait: spring ? !!spring.wait : false,
+    wait: 0,
     phase: coil > 0 ? 'coil' : 'throw',
     t: 0,
     since: 0,
@@ -76,6 +85,7 @@ export function preload(c, move, load, shoulder) {
   if (load > 0) {
     c.coil.q = Math.min(1, load);
     c.coilTime *= 1 - Math.min(1, load);
+    c.pause *= 1 - Math.min(1, load);
     if (c.coilTime < 1e-4) (c.coilTime = 0), (c.phase = 'throw');
     // the legs on their own, from rest, to their peak speed: and the state `load` of the way there
     const w = move.chain.rate[0] * k,
@@ -134,8 +144,10 @@ export function stepChain(c, move, dt) {
   c.t += dt;
   c.since += dt;
   if (c.phase === 'coil') {
-    pull(c.coil, 0, 1, 6 / coil, 1, dt); // all the way in, and all but still, in the time it is given (so it is let go of from rest)
-    if (c.t >= coil) (c.phase = 'throw'), (c.since = 0);
+    // (waiting for a foot to come down, he has not started yet; at the bottom, a pause holds him there)
+    if (c.t <= (c.wait || 0) + 1e-9) return c.phase;
+    if (!(c.pause && c.t - (c.wait || 0) >= coil)) pull(c.coil, 0, 1, 6 / coil, 1, dt); // all the way in, and all but still, in the time it is given (so it is let go of from rest)
+    if (c.t - (c.wait || 0) >= coil + (c.pause || 0) - 1e-9) (c.phase = 'throw'), (c.since = 0);
     return c.phase;
   }
   if (c.phase === 'throw') {

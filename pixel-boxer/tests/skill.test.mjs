@@ -112,14 +112,16 @@ test('skill: a dirty punch lands within a frame of the clean one of its grade', 
 /* A dirty fighter's fouls (moves.mjs: foul) really land, the way a punch does, and do what they do. Timed in the frames that
    are drawn: the moment of a blow is held. */
 const technique = Object.fromEntries(DIRTY.map(e => [e.id, run(e)]));
-const events = id => technique[id].frames.flatMap((f, i) => f.events.filter(e => e.who === 0).map(e => ({ ...e, i, drawn: technique[id].frames.slice(0, i + 1).filter(g => !g.held).length })));
+const events = id => technique[id].frames.flatMap((f, i) => f.events.filter(e => e.who === 0).map(e => ({ ...e, i, drawn: technique[id].frames.slice(0, i + 1).filter(g => !g.held).length }))).map((e, n) => ({ ...e, n }));
 const first = (id, type, name) => events(id).find(e => e.type === type && (!name || e.name === name));
 test('skill: a dirty hook stands on his instep before it lands, and his lead foot stays where it was stood on', () => {
   for (const lv of ['4a', '5a']) {
     const id = `stomp@${lv}`,
       stomp = first(id, 'foul', 'stomp'),
       hit = first(id, 'hit', 'hook');
-    assert.ok(stomp && hit && stomp.i < hit.i, `${id}: ${JSON.stringify(events(id).map(e => e.type + ' ' + (e.name || '')))}`);
+    // (the foot comes down with the legs' drive, and the hook lands on its sweep a moment later: in the same frame, at the
+    // closest, where the foot is judged first)
+    assert.ok(stomp && hit && stomp.n < hit.n, `${id}: ${JSON.stringify(events(id).map(e => e.type + ' ' + (e.name || '')))}`);
     const pinned = technique[id].frames.filter(f => f.foe.pinned),
       moved = Math.max(...pinned.map(f => Math.hypot(f.foe.foot[0] - pinned[0].foe.foot[0], f.foe.foot[2] - pinned[0].foe.foot[2])));
     assert.ok(pinned.length >= 20, `${id}: pinned for ${pinned.length} frames`);

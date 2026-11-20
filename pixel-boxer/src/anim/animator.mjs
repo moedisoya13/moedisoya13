@@ -26,7 +26,7 @@ import { TPOSE, fk } from '../rig/skeleton.mjs';
 import { solve, centre, footPose, LEN } from '../rig/solve.mjs';
 import { createFall, stepFall, poseOf, lyingOf, moveFall } from '../phys/fall.mjs';
 import * as Q from './quat.mjs';
-import { FOOT, HEAD, shoulderOf } from '../rig/body.mjs';
+import { FOOT, HEAD, RADIUS, shoulderOf } from '../rig/body.mjs';
 import { LINKS, stepChain } from '../phys/chain.mjs';
 import { CHANNELS, GUARD, MOVES, LEFT_BEND, LIE, UP, sampleMove, mirrorKnees } from './moves.mjs';
 import { LEVEL } from './skill.mjs';
@@ -83,6 +83,8 @@ const FALL = { down: 1.3 * 9.81, up: 3 * 9.81, brake: 2.4 * 9.81, back: 15 }; //
    and puts an elbow it has unfolded back on top of the canvas), and the difference is let go of over this rather than in a
    frame. */
 const UNLIE = 0.25;
+// (what of him rests on the canvas, and how thick it is there)
+const ON_CANVAS = ['Left', 'Right'].flatMap(S => [[S + 'Foot', RADIUS.Foot], [S + 'ToeBase', RADIUS.ToeBase]]);
 // (and how much nearer its shoulder each hand is brought on its way there, the elbow bent, metres at the middle of it)
 const FREE = 0.12;
 const clamp = (x, a, b) => (x < a ? a : x > b ? b : x);
@@ -212,6 +214,7 @@ function bend(hips, spine, feet, kf, elev) {
 }
 
 const REACH = LEN.upperArm + LEN.foreArm - 0.03; // as far as a wrist gets from its shoulder
+const HOLD_ROUND = 750; // degrees a second: the fastest a hook's fist is taken round to its side as the legs drive (sweep)
 const BENT = 0.4; // and as far as it gets with the elbow held at a right angle
 const unit = v => {
   const l = Math.hypot(v[0], v[1], v[2]) || 1;
@@ -224,6 +227,20 @@ function swingTo(a, b, t) {
   if (th < 1e-4) return b;
   const s = Math.sin(th);
   return unit(M.add(M.scale(a, Math.sin((1 - t) * th) / s), M.scale(b, Math.sin(t * th) / s)));
+}
+
+/* A point carried round by the turning body (about the vertical through `axis`), put onto the circle through `to`: `out` of
+   the way to as far from the axis as `to` is, `up` of the way to its height, and turned `back` degrees round that circle
+   (+ to his left). */
+function sweep(p, to, axis, out, up, back) {
+  const a = ((back || 0) * Math.PI) / 180,
+    c = Math.cos(a),
+    sn = Math.sin(a),
+    rx = c * (p[0] - axis[0]) + sn * (p[2] - axis[2]),
+    rz = -sn * (p[0] - axis[0]) + c * (p[2] - axis[2]),
+    r = Math.hypot(rx, rz) || 1e-6,
+    k = (r + (Math.hypot(to[0] - axis[0], to[2] - axis[2]) - r) * out) / r;
+  return [axis[0] + rx * k, p[1] + (to[1] - p[1]) * up, axis[2] + rz * k];
 }
 
 // the guard itself, standing still: the pose the boxer is sculpted and lit in
@@ -250,6 +267,65 @@ function homecoming(chain, move) {
   return c.t - chain.t;
 }
 
+/* The duck in, by his grade (skill.mjs: entry): the written curve, with a beginner's bow (the waist doing what the knees
+   would, the eyes on the canvas, the foot lifted high, up again early), an amateur's seam (down, a stop, and then in), and
+   a great one's eyes kept on the other man. Where he goes is the bout's. */
+function duckIn(action, c) {
+  const e = (action.level || LEVEL[3]).entry,
+    t = action.t,
+    // (a seam: the way in after the way down waits so long)
+    s = t < 0.1 ? t : Math.max(0.1, t - e.seam),
+    tmp = sampleMove(MOVES.duckIn, e.rise !== null && s > e.rise ? e.rise + (s - e.rise) * 1.8 : s, {});
+  for (const ch in tmp) {
+    let v = tmp[ch];
+    if (ch === 'lkf' || ch === 'rkf') v *= 1 - e.waist * 0.8;
+    if (ch === 'lean') v *= 1 + e.waist * 0.9;
+    c[ch] += v;
+  }
+  const down = smooth(t / 0.1) * (1 - smooth((t - 0.35) / 0.2));
+  c.hp += e.look * down;
+  // (the lead foot lifted as it goes: a beginner's high off the canvas)
+  c.lfy += Math.max(0, e.step - 0.02) * bump((t - 0.06 - e.seam) / 0.22);
+  if (e.angle || e.pivot[0]) c.hp -= 4 * down; // (the eyes up on him)
+}
+/* Moving away with the guard let go of, by his grade (skill.mjs: away): the hands dropped below the chest and swinging loose a
+   moment behind the bounce, the trunk upright and the chin up, the heels up, the knees bouncing off the ankles, and the hands
+   back up over the last hop (`clock` for the bounce). A beginner cannot let go: his hands slide down, he stands up straight,
+   flat on his heels, and his feet come together; a legend's feet change over in the air in the middle hop. */
+function away(action, clock, c) {
+  const aw = (action.level || LEVEL[3]).away,
+    t = action.t,
+    D = MOVES[action.name].dur,
+    back = smooth((t - (D - 0.2)) / 0.2), // (the last hop: the hands come back)
+    on = smooth(t / 0.12) * (1 - back),
+    drop = aw.drop * (aw.slide ? smooth(t / 0.6) * (1 - back) : on),
+    swing = Math.sin(TAU * (t - 0.06) / (2 * 0.16));
+  c.ly -= 0.3 * drop + 0.03 * swing * drop;
+  c.ry -= 0.26 * drop + 0.03 * swing * drop;
+  c.lz -= 0.06 * drop;
+  c.rz -= 0.02 * drop;
+  c.lx += 0.03 * drop;
+  c.rx -= 0.03 * drop;
+  c.le -= 0.2 * drop;
+  c.re -= 0.2 * drop;
+  c.lean -= (8 + aw.upright) * on;
+  c.hp -= 4 * on;
+  if (aw.hop) {
+    const hop = Math.sin(TAU * t / (2 * 0.16));
+    c.lfp += 16 * on;
+    c.rfp += 16 * on;
+    c.lkf += 8 * aw.hop * hop * on;
+    c.rkf += 8 * aw.hop * hop * on;
+  } else (c.lfp -= 3 * on), (c.rfp -= 6 * on);
+  if (aw.together) (c.lfx -= 0.05 * aw.together * on), (c.rfx += 0.05 * aw.together * on);
+  // (the middle hop: lead foot back and rear foot forward, in the air, and back again)
+  if (aw.shuffle) {
+    const mid = bump((t - 0.34) / 0.22);
+    c.lfz -= 0.4 * mid;
+    c.rfz += 0.4 * mid;
+  }
+}
+
 export function createAnimator(seed) {
   const c = {}, // this frame's channels
     shown = {}, // last frame's, as drawn
@@ -261,6 +337,7 @@ export function createAnimator(seed) {
     feetLive = 1, // how lively his feet are, followed: a foot in the air is not snapped down by a move starting
     height = null, // his centre of mass's height as drawn, and how fast it is changing: { y, v, want } (FALL)
     fall = null, // his body while he is knocked down (phys/fall.mjs)
+    propped = 0, // metres the canvas is holding him up by, getting up (see below)
     rising = null, // the pose he lay in, as the solver takes one and as it was, for the rise to be blended out of: { rest, pose, blend, id }
     poses = [null, null], // his last two poses (what a fall starts from)
     clock = (seed || 0) * 0.37,
@@ -314,7 +391,8 @@ export function createAnimator(seed) {
     hand = { L: null, R: null },
     handSpeed = { L: [0, 0, 0], R: [0, 0, 0] },
     handCarry = { L: { x: [0, 0, 0], v: [0, 0, 0] }, R: { x: [0, 0, 0], v: [0, 0, 0] } },
-    steer = { L: [0, 0, 0], R: [0, 0, 0] }; // how far each hand is being carried off its punch's nominal line onto the target
+    steer = { L: [0, 0, 0], R: [0, 0, 0] }, // how far each hand is being carried off its punch's nominal line onto the target
+    held = { L: null, R: null }; // how far round to its side a hook's fist is held, degrees (see sweep)
   // the give of a struck body: head (nod, turn, tilt), trunk (lean, side, turn), and how far the guard is knocked open
   // (and the rest of him: the hips back and across, the lead toes up, a foot rolled onto an edge, the knees taking him)
   const give = { hp: { x: 0, v: 0 }, hw: { x: 0, v: 0 }, hr: { x: 0, v: 0 }, lean: { x: 0, v: 0 }, side: { x: 0, v: 0 }, yaw: { x: 0, v: 0 }, open: { x: 0, v: 0 }, sink: { x: 0, v: 0 }, hz: { x: 0, v: 0 }, hx: { x: 0, v: 0 }, toes: { x: 0, v: 0 }, edge: { x: 0, v: 0 }, settle: { x: 0, v: 0 } };
@@ -457,6 +535,11 @@ export function createAnimator(seed) {
         if (more > 0.02) (wobble.amount = clamp(now + more, 0, 1)), (wobble.t = 0);
       }
     },
+    /* Knocked down, shoved on by the glove going on through him (game/bout.mjs: follow): all of his falling body given this
+       velocity, his own terms (none before the fall has started: the bout gives it from the step after the blow) */
+    shove(v) {
+      if (fall) for (const b of fall.bodies) b.v = M.add(b.v, v);
+    },
     /* A parry: the glove that met the punch sweeps it off the line, across his body and down, and comes back; his
        shoulders turn a little with it. (The puncher's side of it is the reel.) */
     deflect(hit) {
@@ -576,7 +659,10 @@ export function createAnimator(seed) {
         punchMove = action && MOVES[action.name].punch ? MOVES[action.name] : null,
         grade = view.stance || LEVEL[3],
         st = grade.stance,
-        stun = !!view.stun;
+        stun = !!view.stun,
+        // (a dash, or the duck in: one burst, whoever makes it)
+        dashing = !!action && (action.name === 'dash' || action.name === 'duckIn'),
+        hopping = !!action && (action.name === 'hopPivot' || action.name === 'hopCircle');
 
       // ---- what he is doing
       // what the punching hand does past where the chain puts it (a dirty jab's glove pushed on into his face)
@@ -592,7 +678,7 @@ export function createAnimator(seed) {
         form = (action.level || LEVEL[3]).form;
         foul = form.dirty && move.foul ? move.foul : null;
         const sg = Math.sign(move.links.trunk.twist), // which way this punch turns the body
-          share = Object.assign({ off: 1, bend: 1, tuck: 1, sep: 1, dip: 1 }, move.body), // how much of each this punch takes
+          share = Object.assign({ off: 1, bend: 1, tuck: 1, sep: 1, dip: 1, over: 1 }, move.body), // how much of each this punch takes
           [d, hp, t] = [0, 1, 2].map(i => clamp(chain.q[i], 0, 1.2));
         /* (the better he is the less of the wind-up shows; what sets the arm for a hook or an uppercut is all there, and so is
            the shoulders' turn past the hips that the locked arm is swung out of. A man who turns all of a piece, with no
@@ -600,7 +686,7 @@ export function createAnimator(seed) {
         // (and a beginner does not use his knees at all: what the wind-up and the chain do to his height is not done)
         const knees = form.dip > 0 ? 0 : 1,
           height = ch => (ch === 'hy' || ch === 'lkf' || ch === 'rkf' ? knees : 1);
-        for (const ch in move.coil) c[ch === 'twist' && !form.sep ? 'yaw' : ch] += move.coil[ch] * chain.coil.q * (ch === 'lc' || ch === 'le' || ch === 'rc' || ch === 're' || (ch === 'twist' && move.chain.locked) ? 1 : chain.shown ?? 1) * height(ch);
+        for (const ch in move.coil) c[ch === 'twist' && !form.sep ? 'yaw' : ch] += move.coil[ch] * chain.coil.q * (ch === 'lc' || ch === 'le' || ch === 'rc' || ch === 're' || (ch === 'twist' && move.chain.locked) || (ch === 'yaw' && move.arm === 'swing') ? 1 : chain.shown ?? 1) * height(ch);
         LINKS.forEach((link, i) => {
           for (const ch in move.links[link]) c[ch] += move.links[link][ch] * chain.q[i] * amp[i] * height(ch);
         });
@@ -614,7 +700,8 @@ export function createAnimator(seed) {
           out = smooth(arm),
           // (only once it has got there: the foul is what follows the punch, not what throws it)
           reach = chain.thrownAt >= 0 ? smooth(clamp((chain.t - chain.thrownAt) / 0.05, 0, 1)) * out : 0,
-          tell = form.tell * chain.coil.q;
+          // (right up close there is no room to draw the hand back and show it coming)
+          tell = form.tell * chain.coil.q * (move.tight ? 0 : 1);
         /* a beginner shows it coming: the hand drawn back (and a little out, or in his upright stance it is drawn back onto
            its own shoulder, where an arm has nowhere left to fold), the elbow out, the shoulders turned away, the chin up */
         c[k + 'z'] -= 0.075 * tell;
@@ -630,8 +717,8 @@ export function createAnimator(seed) {
            the way of the arm that has just gone past his head, and comes off it as the punch goes) */
         if (action.loaded && action.loaded.from !== 'parry') (c[o + 'z'] -= 0.12 * (1 - smooth(action.t / 0.2))), (c[o + 'y'] -= 0.01 * (1 - smooth(action.t / 0.2)));
         c.hp -= 11 * form.chin * out; // the chin up and out after it (tucked, the better he is)
-        c.lean += 9 * form.over * out; // and the weight thrown in after it, over the front foot
-        c.hz += 0.05 * form.over * out;
+        c.lean += 9 * form.over * share.over * out; // and the weight thrown in after it, over the front foot (right up close there is no room)
+        c.hz += 0.05 * form.over * share.over * out;
         /* The stretch across the trunk: as the hips go the shoulders are held back behind them, most of all halfway through
            the hips' turn, and let go as the hips finish it (the more of it a man can hold, the more the trunk has to give
            back). It is the hips' turn that pulls it, so a man whose trunk goes early holds it as long as one whose trunk
@@ -657,7 +744,7 @@ export function createAnimator(seed) {
         else {
           /* (no quicker than his hips can be let down: a dip so deep takes so long, and where that is longer than the time
              to the hips' firing, its bottom comes later, toward the contact) */
-          const at = chain.coilTime / (chain.quick || 1) + 0.03 + form.late,
+          const at = (chain.wait || 0) + chain.coilTime / (chain.quick || 1) + (chain.pause || 0) + 0.03 + form.late,
             half = Math.max(0.05, at, Math.sqrt((-depth * Math.PI ** 2) / (2 * FALL.down))),
             from = Math.abs(action.t - Math.max(at, half));
           if (from < half) c.hy += (depth * (1 + Math.cos((Math.PI * from) / half))) / 2;
@@ -708,6 +795,8 @@ export function createAnimator(seed) {
       } else if (action) {
         // an evasion, by his grade (evade.mjs: the pro's is the curve as written)
         if (EVASIONS.includes(action.name)) sampleEvade(action, action.level || LEVEL[3], c);
+        else if (action.name === 'duckIn') duckIn(action, c);
+        else if (action.name === 'hopPivot' || action.name === 'hopCircle') away(action, clock, c);
         else {
           sampleMove(MOVES[action.name], action.t, c);
           if (MOVES[action.name].sided) {
@@ -818,7 +907,7 @@ export function createAnimator(seed) {
         P = ((((halves + u - ref) % PHRASE.length) + PHRASE.length) % PHRASE.length),
         quick = st.tempo === 'phrase' && P >= PHRASE.fast[0] && P < PHRASE.fast[1] ? CYCLE.fast / CYCLE.rest : 1;
       // (a beginner's and an amateur's travelling beat is slower, but not a dash's: that is one burst, whoever makes it)
-      cycle += (CYCLE.rest * quick + (CYCLE.travel * (action && action.name === 'dash' ? 1 : st.travel.cycle) - CYCLE.rest * quick) * going - cycle) * (1 - Math.exp(-dt * 10)); // (quick enough to keep up, slow enough not to snap the bounce)
+      cycle += (CYCLE.rest * quick + (CYCLE.travel * (dashing ? 1 : st.travel.cycle) - CYCLE.rest * quick) * going - cycle) * (1 - Math.exp(-dt * 10)); // (quick enough to keep up, slow enough not to snap the bounce)
       /* Setting off: the foot on the side he is going should move first. If the other one was already up, hopping in place,
          it is only set back down under him in its place (it takes no step of its own), and the right foot steps first. */
       const mid = [(BALL.L[0] + BALL.R[0]) / 2, (BALL.L[2] + BALL.R[2]) / 2],
@@ -952,7 +1041,7 @@ export function createAnimator(seed) {
       // ---- the bounce: down into each landing and back up off it, the weight swinging between the feet like a pendulum
       // (a tired man's feet barely leave the canvas, and a hurt man's legs are heavy; and the grade's own rhythm)
       const flat = exit && exit.kind === 'flat' ? 1 - smooth(exit.done === null ? 0 : (halves + u - exit.done - 2) / 0.5) : 0,
-        pep = (view.still ? 0 : action ? (form ? form.lively * ((punchMove.body && punchMove.body.lively) ?? 1) : evading ? evading.lively : 0.35) : (1 + cheer * 1.6) * (cv.textbook ? 1 : 1 - cover * (1 - cv.lively))) * (1 - 0.5 * tired) * (1 - 0.3 * hurt) * (1 - 0.7 * rocked) * (1 - flat),
+        pep = (view.still ? 0 : action ? (form ? form.lively * ((punchMove.body && punchMove.body.lively) ?? 1) : evading ? evading.lively : hopping ? 1.4 * (action.level || LEVEL[3]).away.hop : 0.35) : (1 + cheer * 1.6) * (cv.textbook ? 1 : 1 - cover * (1 - cv.lively))) * (1 - 0.5 * tired) * (1 - 0.3 * hurt) * (1 - 0.7 * rocked) * (1 - flat),
         lively = pep * st.bounce,
         spot = (1 - going) * lively, // how much of this is bouncing on the spot
         footSpot = (1 - going) * (feetLive += (lively - feetLive) * (1 - Math.exp(-dt * 20))),
@@ -997,10 +1086,11 @@ export function createAnimator(seed) {
       }
 
       /* ---- how he stands: the grade's own posture, held under everything else. (A crouch is come up out of as a punch goes:
-         most of it is unwound into the punch, and wound up again as the hand comes home.) */
-      const unwind = punchMove ? 1 - 0.7 * smooth(clamp(Math.max(action.chain.q[3], punchMove.arm === 'straight' ? action.chain.q[4] : 0), 0, 1)) : 1;
+         most of it is unwound into the punch, and wound up again as the hand comes home; a hook, which lands as the body
+         turns, comes up out of it with the legs' drive.) */
+      const unwind = punchMove ? 1 - 0.7 * smooth(clamp(Math.max(action.chain.q[3], punchMove.arm === 'straight' ? action.chain.q[4] : punchMove.arm === 'swing' ? action.chain.q[0] : 0), 0, 1)) : 1;
       // (a stiff, upright man is not stiff and upright in the middle of a dash: his legs have to take it)
-      const stiff = action && action.name === 'dash' ? 0 : 1;
+      const stiff = dashing ? 0 : 1;
       c.hy += st.hips < 0 ? st.hips * unwind : st.hips * stiff;
       c.lean += st.lean > 0 ? st.lean * unwind : st.lean * stiff;
       c.yaw += st.yaw * stiff;
@@ -1155,7 +1245,7 @@ export function createAnimator(seed) {
 
       /* ---- travelling, by his grade: a beginner leans his body into it ahead of his feet and goes on past when he stops;
          an amateur's steps each nearly come to a stop before the next. */
-      if (st.travel.lean && speedNow > 0.05 && !(action && action.name === 'dash')) {
+      if (st.travel.lean && speedNow > 0.05 && !dashing) {
         const k = clamp(speedNow / 1.5, 0, 1) * st.travel.lean;
         c.lean += (k * vz) / speedNow;
         const across = (k * vx) / speedNow;
@@ -1367,7 +1457,7 @@ export function createAnimator(seed) {
           swing.to = to;
           at = [from[0] + (to[0] - from[0]) * e, gf.at[1], from[2] + (to[2] - from[2]) * e];
           // (a beginner's feet come together in the middle of a step, an amateur's close and open again)
-          if (st.travel.width < 1 && !swing.still && length > 0.03 && !(action && action.name === 'dash')) {
+          if (st.travel.width < 1 && !swing.still && length > 0.03 && !dashing) {
             const o = planted[side === 'L' ? 'R' : 'L'],
               k = 1 - (1 - st.travel.width) * Math.sin(Math.PI * u);
             at = [o[0] + (at[0] - o[0]) * k, at[1], o[2] + (at[2] - o[2]) * k];
@@ -1380,7 +1470,7 @@ export function createAnimator(seed) {
           // him on the other one, his weight past it)
           // (the whole of a step that a shove came in: skidding)
           swing.skid = Math.max(swing.skid || 0, view.shoved || 0);
-          const drag = Math.max(action && action.name === 'dash' ? Math.max(st.drag, (action.level || LEVEL[3]).dash.drag) : st.drag, smooth((swing.skid - 0.8) / 1.2));
+          const drag = Math.max(action && action.name === 'dash' ? Math.max(st.drag, (action.level || LEVEL[3]).dash.drag) : action && action.name === 'duckIn' ? 0 : st.drag, smooth((swing.skid - 0.8) / 1.2));
           lift = (Math.min(0.075, length * 0.35) * (1 - drag) * (0.5 + 0.5 * going) + HOP * footSpot * st.hop) * Math.pow(Math.sin(Math.PI * u), 1.3) * dropped;
           pitch = st.flat ? 0 : (14 * Math.sin(TAU * u) * clamp(length / 0.2, 0, 1) * (1 - 0.6 * st.drag) + 8 * footSpot * Math.min(1, st.hop) * Math.sin(Math.PI * u)) * dropped;
         } else {
@@ -1472,11 +1562,57 @@ export function createAnimator(seed) {
           } else {
             // the arm stays bent and the body brings it: the shoulder only closes what is left between the fist and the target
             const to = target || M.add(free, mine.arm === 'lift' ? [s * -0.1, 0.36, 0.38] : [s * -0.1, 0.02, 0.06]);
-            thrown = M.lerp(free, to, swingQ);
+            /* A hook's locked arm is raised to the target's height as he winds up, and as the legs drive it is sent out as far
+               from the turning body as the middle of the head is and held round to the side it comes from as far as the turn
+               still to come will carry it by the time the trunk is `land` of the way round (the legs, the rest of the hips',
+               and that much of the trunk's, less the wind-up the body has still to unwind): so the turn itself brings the
+               fist onto the head, with the trunk's turn behind it, and it lands on its sweep, going the way the hook goes.
+               The shoulder closes nothing: a hook that finds no head goes on round with the body and stops with it, and does
+               not come back for a head that has gone under it. Neither the reach nor the angle comes in the wind-up: from
+               the guard the reach would take it out through his face, and the angle, on a wound-up arm, would turn the upper
+               arm past its range. (Anything else bent and locked, an uppercut, is lifted by the body and its shoulder closes
+               the last of it onto the target.) */
+            if (target && mine.arm === 'swing') {
+              const drove = smooth(clamp(chain.q[0], 0, 1)),
+                // (an inside hook's is raised only as the legs drive, late in it: right up close, a glove raised from the guard is in
+                // his face, and one raised high before the body turns under it takes the upper arm up past where it can go)
+                set = mine.tight ? drove * drove : smooth(clamp(Math.max(chain.coil.q, chain.q[0]), 0, 1)),
+                ring = [to[0] - s * 0.05, to[1] + 0.03, to[2] + 0.1],
+                amp = chain.amp || [1, 1, 1, 1, 1],
+                wound = ((mine.coil.yaw || 0) + (mine.coil.twist || 0)) * chain.coil.q,
+                still = mine.links.hips.yaw * amp[1] * (1 - chain.q[1]) + mine.links.trunk.twist * amp[2] * ((mine.land ?? 1) - chain.q[2]) - wound,
+                round = p => (Math.atan2(p[0] - chest.p[0], p[2] - chest.p[2]) * 180) / Math.PI,
+                wrap = a => ((((a + 180) % 360) + 360) % 360) - 180,
+                // (and never further round than a shoulder can hold it: `most` degrees, and, close in, `ahead` degrees off the
+                // front of the chest)
+                facing = round(M.add(chest.p, M.app(chest.R, [0, 0, 1]))),
+                most = Math.min(mine.most || 70, mine.ahead ? s * wrap(facing + s * mine.ahead - round(free)) : Infinity),
+                back = clamp(s * wrap(round(ring) - still - round(free)), -10, Math.max(-10, most)) * s;
+              /* (and taken round no faster than so many degrees a second: a quick man's legs drive in a frame or two, and a fist
+                 flung out to the side that fast and straight back in would snap) */
+              const want = back * drove,
+                fastest = HOLD_ROUND * dt,
+                was = held[side] === null || chain.t <= dt + 1e-9 ? 0 : held[side];
+              held[side] = s * (want - was) > fastest ? was + s * fastest : want;
+              thrown = sweep(free, ring, chest.p, drove, set, held[side]);
+            } else {
+              // (an inside uppercut's hand is taken in under the target as the legs drive, so the last of its way is straight up)
+              const under = target && mine.under ? smooth(clamp(chain.q[0], 0, 1)) : 0;
+              // (under it and a little short of it, in front of his chest: it comes up in front of him, not through him)
+              const uz = to[2] - (mine.under || 0);
+              thrown = M.lerp([free[0] + (to[0] - free[0]) * under, free[1], free[2] + (uz - free[2]) * under], to, swingQ);
+            }
             // (bent is bent: a hook thrown from too far away does not grow into a straight punch to get there)
             const out = M.sub(thrown, shoulder),
               far = Math.hypot(out[0], out[1], out[2]);
-            if (far > BENT) thrown = M.add(shoulder, M.scale(out, BENT / far));
+            const most = mine.bent || BENT;
+            if (far > most) {
+              /* (an inside uppercut's hand kept under the target is let up, not drawn back, as far as the bent arm needs: so
+                 that it still comes straight up) */
+              const flat = Math.hypot(out[0], out[2]);
+              if (mine.under && target && flat < most * 0.98 && out[1] < 0) thrown = [thrown[0], shoulder[1] - Math.sqrt(most * most - flat * flat), thrown[2]];
+              else thrown = M.add(shoulder, M.scale(out, most / far));
+            }
           }
           if (extra[side]) thrown = M.add(thrown, extra[side]);
           steer[side] = M.sub(thrown, free);
@@ -1513,7 +1649,7 @@ export function createAnimator(seed) {
         hand[side] = at;
         // (and it goes round the arm no faster than an elbow can, 1200 degrees a second, and the shoulder swings it no faster
         // than 900)
-        hands[side] = { at, toward: M.lerp(M.scale(asked, 1 / l), elbow[side] || [0, 0, 0], keep), round: { was: round[side], most: 1200 * dt }, shoulder: { was: arm[side], most: 900 * dt }, last: wrist[side], punch: !!mine && (action.chain.phase === 'coil' || action.chain.phase === 'throw') };
+        hands[side] = { at, toward: M.lerp(M.scale(asked, 1 / l), elbow[side] || [0, 0, 0], keep), round: { was: round[side], most: 1200 * dt }, shoulder: { was: arm[side], most: 900 * dt }, last: wrist[side], punch: !!mine && (action.chain.phase === 'coil' || action.chain.phase === 'throw'), locked: !!mine && mine.arm === 'swing' };
       }
       let stance = { hips, spine, feet, hands, stretch: 1 + c.st };
       if (rising && action && rising.id === id) {
@@ -1562,6 +1698,19 @@ export function createAnimator(seed) {
         }
       }
       if (rising && action && rising.id === id && action.t < UNLIE) pose = between(rising.pose, pose, smooth(action.t / UNLIE));
+      /* (the bones turned part of the way from how he lay can put a foot or a hand through the canvas: the canvas holds him up,
+         the whole of him lifted by as much as goes through, and let down again gently once nothing does) */
+      if (action && MOVES[action.name].floor) {
+        const k = pose.stretch || 1,
+          through = Math.max(0, ...ON_CANVAS.map(([j, r]) => r - pose.at[j][1] * k));
+        propped = Math.max(through, propped - 0.15 * dt);
+        if (propped > 1e-4) {
+          const up = propped / k;
+          pose.root = M.add(pose.root, [0, up, 0]);
+          for (const j in pose.at) pose.at[j] = M.add(pose.at[j], [0, up, 0]);
+          if (pose.head) pose.head = M.add(pose.head, [0, up, 0]);
+        }
+      } else propped = 0;
       for (const [side, Side] of [['L', 'Left'], ['R', 'Right']]) {
         const d = M.sub(pose.at[Side + 'ForeArm'], pose.at[Side + 'Arm']),
           l = Math.hypot(d[0], d[1], d[2]) || 1;

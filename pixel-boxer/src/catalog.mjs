@@ -18,7 +18,7 @@ import { step } from './game/bout.mjs';
 
 import { ENTRIES, freshBout, drive } from './footwork.mjs';
 import { DEFENSE, ITEMS as GUARDS } from './defense.mjs';
-import { LADDER, STANCES, DIRTY, FOOTWORK, PUNCHES, TECHNIQUES } from './ladder.mjs';
+import { LADDER, STANCES, DIRTY, FOOTWORK, PUNCHES, TECHNIQUES, ENTRY, MOVING } from './ladder.mjs';
 import { LEVELS, LEVEL } from './anim/skill.mjs';
 import { LINKS } from './phys/chain.mjs';
 import { MOVES } from './anim/moves.mjs';
@@ -37,7 +37,7 @@ const SAID = { whiff: '빗나감', graze: '스침', block: '막음', parry: '패
 // a frame count as a card writes it: +4, −3 (a frame before the press: a guess)
 const signed = (n, bare) => (n < 0 ? `−${-n}` : bare ? `${n}` : `+${n}`);
 const FOOTWORK_STATS = ['pendulum', 'inout', 'stalk', 'side', 'circle', 'turn', 'dash', 'stepjab', 'onetwo'];
-const byId = Object.fromEntries([...ENTRIES, ...DEFENSE, ...STANCES, ...LADDER, ...DIRTY, ...FOOTWORK].map(e => [e.id, e]));
+const byId = Object.fromEntries([...ENTRIES, ...DEFENSE, ...STANCES, ...LADDER, ...DIRTY, ...FOOTWORK, ...ENTRY].map(e => [e.id, e]));
 
 /* ---- what is in the catalogue: parts, and in each the techniques, each a row of seven grades (or, being hit, one card) */
 const FOOT_NOTE = {
@@ -56,7 +56,14 @@ const PUNCH_NOTE = {
   jab: '앞손의 짧은 주먹. 앞발이 나가며 앞무릎이 굽었다가 닿을 때 펴집니다. 1은 팔이 몸보다 먼저 나가고, 2는 순서는 맞지만 이음새가 끊기고, 3은 교과서, 4는 다음 관절이 앞 관절의 정점 전에 출발하고, 5는 예비동작 없이 한 동작입니다.',
   cross: '뒷발에서 올라온 회전이 뒷손까지 이어지는 주먹. 뒷무릎이 굽어 장전되고, 뒷발이 돌 때 무릎이 안으로 돌며 펴집니다. 4명은 닿는 순간이 앞발 착지, 5명은 두 착지 사이(엇박)입니다.',
   hook: '팔을 굽혀 가슴에 고정하고 몸통이 휘두르는 주먹. 굽힌 앞무릎에 체중을 싣고, 앞발과 함께 앞무릎이 안으로 돌며 펴집니다. 더 도는 몸은 주먹을 머리 너머로 보내므로 고수의 추가 회전은 조금만 받습니다.',
-  upper: '무릎에서 올라오는 주먹. 두 무릎을 굽혀 가라앉았다가 펴며 올라오고, 머리는 주먹과 함께 올라옵니다.'
+  upper: '무릎에서 올라오는 주먹. 두 무릎을 굽혀 가라앉았다가 펴며 올라오고, 머리는 주먹과 함께 올라옵니다.',
+  hookIn: '중심 간 0.72 m 안(초근거리)에서 파워 버튼은 숏 훅과 숏 어퍼를 번갈아 냅니다. 숏 훅은 팔을 가슴에 붙인 채 골반·가슴을 더 감았다(+22°·+10°) 더 돌리고(−40°·−36°) 두 발이 다 돕니다: 앞발이 안으로 돌며 뒤꿈치가 들리고, 앞무릎이 안으로 돌며 펴져 체중이 뒷발로 넘어갑니다. 훅처럼 휘두르는 길에서 머리에 닿습니다. 0.64 m에서 던집니다. 1은 팔부터 나가고, 2는 이음새가 끊기고, 4·5는 분리가 크고 감기가 짧습니다. 카드 아래는 충격량, 닿기까지, 골반이 돈 각입니다.',
+  upperIn: '무릎을 스프링으로 쓰는 어퍼. 두 무릎(뒷무릎이 더)으로 골반이 10 cm 내려가며 손을 허리띠까지 내렸다가, 무릎이 다 펴지며 골반과 함께 손이 턱 밑으로 곧게 올라옵니다(마지막 길이 수직에서 25° 안). 1은 무릎을 쓰지 않고 팔로 퍼 올리고, 2는 바닥에서 0.05초 멈췄다 올라오고, 4는 다음 발 착지에 맞춰 내려가며, 5는 내려가는 구간이 거의 없습니다. 카드 아래는 충격량, 닿기까지, 무릎이 가장 많이 굽은 각입니다.'
+};
+const MOVE_NOTE = {
+  duckIn: '더킹 + 앞 대시. 두 무릎(뒷무릎이 더)으로 내려가며 골반을 뒤꿈치 위로 빼 머리를 곧게 낮추고 오른쪽(상대 잽의 바깥)으로 빼며, 뒷다리가 펴져 1.0 m에서 초근거리(0.67 m 남짓)까지 밀고 들어갑니다. 착지 뒤 0.15초 동안 굽은 무릎이 남아, 그 안에 누른 숏 훅·숏 어퍼는 감긴 채로 나갑니다(4·5는 전부, 3은 절반). 1은 허리로 숙여 바닥을 보고 발이 높이 뜨며 0.8 m에서 멈추고, 2는 숙이고 나서 들어가며, 4는 바깥으로 각을 잡고, 5는 앞발을 축으로 상대 옆구리 쪽으로 돌아 섭니다. 카드 아래는 끝난 거리와 머리가 가장 낮았던 높이입니다.',
+  hopPivot: '가드를 풀고(앞손 28 cm, 뒷손 24 cm 내림) 상체를 세운 채 발목으로 튀며, 앞발 볼을 축으로 75° 돌아 상대 정면에서 비켜난 뒤 뒤로 세 번 뜁니다. 마지막 뜀에 손이 가드로 돌아옵니다. 1은 꼿꼿이 서서 뒷걸음질하고 손이 흘러내리며, 2는 작게 뛰고 손이 얼굴에 붙어 있고 45°만 돕니다. 카드 아래는 끝난 거리와 상대가 본 각도입니다.',
+  hopCircle: '가드를 풀고 상대를 보면서 옆으로 네 번 뛰어 돕니다(한 번에 원둘레로 16 cm, 바깥으로 12 cm). 5명은 가운데 뜀에서 앞뒤 발이 공중에서 바뀌었다 돌아옵니다. 카드 아래는 끝난 거리와 상대가 본 각도입니다.'
 };
 const TECH_NOTE = {
   stomp: '발등이 닿는 거리(0.8 m)에서 던지는 훅. 반칙은 4암과 5암에만 있습니다: 코일 동안 앞발을 들어 상대 앞발 위로 가져가 다리 구동과 함께 내려 밟고, 상대는 0.45초 묶입니다. 나머지 등급은 같은 자리에서 반칙 없이 훅만 던집니다.',
@@ -90,9 +97,15 @@ const PARTS = [
     part: '주먹',
     note: '차이는 데미지 배율이 아니라 관절이 움직이는 순서와 협응, 리듬에서 나옵니다. 충격량은 곱해 준 값이 아니라 그렇게 던진 결과이고, 막대는 관절마다 출발에서 정점까지, 세로선은 닿은 순간, 시간은 누른 뒤부터입니다. 머리는 닿는 순간 머리가 자기 가드 자리에서 선 밖으로 벗어난 거리, 골반은 가장 많이 돈 각입니다.',
     groups: [
-      ['주먹', PUNCHES.map(p => ({ id: p.id, name: p.name, en: p.en, note: PUNCH_NOTE[p.id], stat: 'rung', cards: LEVELS.map(lv => `${p.id}@${lv}`) }))],
+      ['주먹', PUNCHES.filter(p => !p.inside).map(p => ({ id: p.id, name: p.name, en: p.en, note: PUNCH_NOTE[p.id], stat: 'rung', cards: LEVELS.map(lv => `${p.id}@${lv}`) }))],
+      ['초근거리', PUNCHES.filter(p => p.inside).map(p => ({ id: p.id, name: p.name, en: p.en, note: PUNCH_NOTE[p.id], stat: 'rung', knee: p.id === 'upperIn', cards: LEVELS.map(lv => `${p.id}@${lv}`) }))],
       ['암의 기술', TECHNIQUES.map(t => ({ id: t.id, name: t.name, en: t.en, note: TECH_NOTE[t.id], stat: 'foul', cards: LEVELS.map(lv => `${t.id}@${lv}`) }))]
     ]
+  },
+  {
+    part: '진입 · 이탈',
+    note: '들어갈 때는 머리를 주먹 선 밑으로 낮춰 파고들고, 나올 때는 가드를 풀고 발목으로 튀어 사거리 밖으로 나갑니다. 어디까지 가는지는 시합이 정하고, 카드는 루프마다 새 시합에서 다시 칩니다. 상대는 프로이고 서 있기만 합니다.',
+    groups: [['진입 · 이탈', MOVING.map(m => ({ id: m.id, name: m.name, en: m.en, note: MOVE_NOTE[m.id], stat: 'moving', cards: LEVELS.map(lv => `${m.id}@${lv}`) }))]]
   },
   {
     part: '맞기와 다운',
@@ -181,7 +194,7 @@ function gradeCard(e, item) {
     case 'pull': {
       const w = WINDOWS[item.id] && WINDOWS[item.id][e.level];
       const second = { slip: '여유 <b data-a>–</b>', 'slip-cross': '여유 <b data-a>–</b>', pull: '거리 <b data-a>–</b>', duck: '못 봄 <b data-a>–</b> ms', roll: '총 <b data-a>–</b> ms' }[item.id];
-      stats = `<div class="feet result"><span class="tag" data-tag>–</span></div>` + pair(`<b>${w ? signed(w.to) : '–'}</b> f까지`, second) + (item.id === 'duck' || item.id === 'roll' ? pair('무릎 몫 <b data-knee>–</b>%') : '');
+      stats = `<div class="feet result"><span class="tag" data-tag>–</span></div>` + pair(`<b>${w && w.to !== null ? signed(w.to) : '–'}</b> f까지`, second) + (item.id === 'duck' || item.id === 'roll' ? pair('무릎 몫 <b data-knee>–</b>%') : '');
       break;
     }
     case 'parry': {
@@ -198,10 +211,13 @@ function gradeCard(e, item) {
     case 'counter':
       stats = `<div class="feet result"><span class="tag" data-tag>–</span></div>` + pair('<b data-a>–</b> ms', '<b data-b>–</b> N·s');
       break;
+    case 'moving':
+      stats = pair('끝 거리 <b data-a>–</b> m', e.move === 'duckIn' ? '머리 <b data-b>–</b> cm' : '각도 <b data-b>–</b>°');
+      break;
     case 'rung': {
       const skip = MOVES[e.punch].chain.skip || [];
       stats = `<div class="chain">${LINKS.map((l, i) => `<span class="row${skip.includes(l) ? ' off' : ''}"><i>${JOINT[l]}</i><span class="lane"><b data-bar="${i}"></b></span></span>`).join('')}<span class="hit-at" data-at></span></div>
-        <div class="feet result"><span><b data-blow>–</b> N·s</span><span class="pace"><b data-ms>–</b> ms</span></div>` + pair('머리 <b data-off>–</b> cm', '골반 <b data-turn>–</b>°') + (beat ? `<div class="feet stats">${beat}<span>닿은 박자 <b data-on>–</b></span></div>` : '');
+        <div class="feet result"><span><b data-blow>–</b> N·s</span><span class="pace"><b data-ms>–</b> ms</span></div>` + (item.knee ? pair('무릎 <b data-knee>–</b>°', '골반 <b data-turn>–</b>°') : pair('머리 <b data-off>–</b> cm', '골반 <b data-turn>–</b>°')) + (beat ? `<div class="feet stats">${beat}<span>닿은 박자 <b data-on>–</b></span></div>` : '');
       break;
     }
     case 'foul':
@@ -287,7 +303,7 @@ function start({ manifest, boxer }) {
       out: Object.fromEntries(['a', 'b', 'pace', 'blow', 'ms', 'hips', 'head', 'on', 'fj', 'fat', 'off', 'turn', 'knee'].map(k => [k, q(el, `[data-${k}]`)])),
       bars: [...el.querySelectorAll('[data-bar]')],
       at: q(el, '[data-at]'),
-      exchange: entry.punch !== undefined,
+      exchange: entry.punch !== undefined || !!entry.fresh,
       fx,
       mesh: R.mesh(fx.rows, 0, true),
       bones: [new Float32Array(R.maxBones * 12), new Float32Array(R.maxBones * 12)],
@@ -398,7 +414,8 @@ function start({ manifest, boxer }) {
         if (e.type === 'hit' && e.who === 0 && e.name === 'cross' && m.jabAt !== undefined) put(cell, 'a', ((cell.t - m.jabAt) / H).toFixed(2));
         break;
       case 'rung':
-        if (e.type === 'punch' && e.who === 0 && e.name === entry.punch) (m.press = cell.t), (m.most = 0);
+        if (e.type === 'punch' && e.who === 0 && e.name === entry.punch) (m.press = cell.t), (m.most = 0), (m.lo = m.hi = undefined), (m.landed = false);
+        if (e.who === 0 && e.type === 'hit') m.landed = true;
         if (e.who === 0 && ['hit', 'graze', 'whiff', 'block'].includes(e.type) && a.action && a.action.chain) {
           const c = a.action.chain,
             pct = x => `${Math.max(0, Math.min(100, (x / SPAN) * 100)).toFixed(1)}%`;
@@ -559,12 +576,32 @@ function start({ manifest, boxer }) {
           if (m.x0) put(cell, 'a', (Math.hypot(a.x - m.x0[0], a.z - m.x0[1]) * 100).toFixed(1));
         }
         break;
+      case 'moving': {
+        // where he ends (centre to centre), and on the way in how low his head went; or the angle he ends at, seen from the
+        // other man, off where he started
+        if (a.action && a.action.name === entry.move) {
+          m.going = true;
+          m.low = Math.min(m.low ?? 9, a.points.head[1]);
+          if (m.a0 === undefined) m.a0 = Math.atan2(a.z - b.z, a.x - b.x);
+        } else if (m.going && !m.said) {
+          m.said = true;
+          put(cell, 'a', Math.hypot(a.x - b.x, a.z - b.z).toFixed(2));
+          put(cell, 'b', entry.move === 'duckIn' ? (m.low * 100).toFixed(0) : String(Math.round(Math.abs(wrap(Math.atan2(a.z - b.z, a.x - b.x) - m.a0)) * (180 / Math.PI))));
+        }
+        break;
+      }
       case 'rung':
+        // (the most the knees bend, either of them: the inside uppercut's spring)
+        if (item.knee && a.action && a.action.chain && a.pose.knee) m.knee = Math.max(m.knee || 0, ...['L', 'R'].map(k => (a.pose.knee[k] ? a.pose.knee[k].flex : 0)));
+        if (item.knee && a.action && a.action.chain && m.knee) put(cell, 'knee', String(Math.round(m.knee)));
         if (m.press !== null && a.action && a.action.chain) {
           const guard = guardOf(entry.level),
             turn = Math.sign(MOVES[a.action.name].links.hips.yaw),
             d = wrap(lineAngle(a.pose, 'LeftLeg', 'RightLeg') - guard.hips);
           m.most = Math.max(m.most, (-turn * d * 180) / Math.PI);
+          /* (right up close the hook lands before the hips are round past where they are in his guard: what its card says is
+             how far they swung, from the wind-up to the contact) */
+          if (item.id === 'hookIn' && !m.landed) (m.lo = Math.min(m.lo ?? d, d)), (m.hi = Math.max(m.hi ?? d, d)), (m.most = ((m.hi - m.lo) * 180) / Math.PI);
         }
         break;
     }

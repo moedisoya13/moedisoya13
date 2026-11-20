@@ -15,25 +15,40 @@ import { freshBout, drive } from '../src/footwork.mjs';
 
 const W = (card, lv) => WINDOWS[card][lv];
 const back = (card, lv) => W(card, lv).to;
+/* (a hook that lands on its sweep goes through where the head was at the height of the jaw, and a head has to be 23 cm under
+   that line to let the glove over it: a beginner's and an amateur's weave, a bow of 14 and 21 cm that gets there late, never
+   is, at any frame tried, and a pro's and a great one's only from a weave started before the hook (README: the hook fix).
+   Those two cards say so: no window, and the card is a hit) */
+const NONE = { roll: ['1', '2'] };
+const none = (card, lv) => (NONE[card] || []).includes(lv);
 
 test('grades: every grade gets out of the way of every card\'s punch, and the window written down is the bout\'s', () => {
   for (const card of CARDS) {
     for (const lv of LEVELS) {
       const w = W(card.id, lv);
+      if (none(card.id, lv)) {
+        // (none at all: the frame the pro answers on does not work for him either)
+        assert.ok(w && w.from === null, `${card.id}@${lv}: ${JSON.stringify(w)}`);
+        const pro = outcome(windowDrill(card.punch, card.move, card.value, W(card.id, '3').at, { all: lv }, card.guard));
+        assert.notEqual(pro && pro.type, 'whiff', `${card.id}@${lv}: the pro's frame works`);
+        continue;
+      }
       assert.ok(w && w.from !== null && w.to >= w.from && w.at >= w.from && w.at <= w.to, `${card.id}@${lv}: ${JSON.stringify(w)}`);
       // (a frame past the back end of it is too late: the window is measured, not written)
       const late = outcome(windowDrill(card.punch, card.move, card.value, w.to + 1, { all: lv }, card.guard));
       assert.notEqual(late && late.type, card.guard ? 'parry' : 'whiff', `${card.id}@${lv}: frame ${w.to + 1} still works`);
     }
     // from an amateur up, two frames or more where a pro has two (the slip at the cross is a frame for the dirty great ones)
-    for (const lv of ['2', '3', '4m', '5m']) if (card.id !== 'slip-cross' || lv !== '4a') assert.ok(W(card.id, lv).to - W(card.id, lv).from >= 1, `${card.id}@${lv}: ${W(card.id, lv).from}–${W(card.id, lv).to}`);
+    // (the weave under a hook that lands on its sweep: a frame for a great one and a legend, none below a pro)
+    for (const lv of ['2', '3', '4m', '5m']) if ((card.id !== 'slip-cross' || lv !== '4a') && card.id !== 'roll') assert.ok(W(card.id, lv).to - W(card.id, lv).from >= 1, `${card.id}@${lv}: ${W(card.id, lv).from}–${W(card.id, lv).to}`);
   }
 });
 
 test('grades: the better he is, the later he can leave it (the back end of the window)', () => {
   const order = (card, chain) => chain.every(([lo, hi, strict]) => (strict ? back(card, lo) < back(card, hi) : back(card, lo) <= back(card, hi)));
   assert.ok(order('slip', [['1', '2', true], ['2', '3'], ['3', '4m', true], ['4m', '5m']]), JSON.stringify(LEVELS.map(lv => back('slip', lv))));
-  for (const card of ['slip-cross', 'pull', 'roll']) assert.ok(order(card, [['1', '2', true], ['2', '3'], ['3', '4m'], ['4m', '5m']]), `${card}: ${LEVELS.map(lv => back(card, lv))}`);
+  for (const card of ['slip-cross', 'pull']) assert.ok(order(card, [['1', '2', true], ['2', '3'], ['3', '4m'], ['4m', '5m']]), `${card}: ${LEVELS.map(lv => back(card, lv))}`);
+  assert.ok(order('roll', [['3', '4m'], ['4m', '5m']]), `roll: ${LEVELS.map(lv => back('roll', lv))}`);
   /* (the duck: a beginner and an amateur both bow from the waist, and since the body takes the blow it blocks before the hook
      by its vector, an amateur's window ends on frames that clear the hook by under a millimetre: which of the two leaves it a
      frame or two later is not his grade. The textbook leaves it later than either.) */

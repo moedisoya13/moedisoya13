@@ -19,13 +19,19 @@ import { fatigue } from './game/profile.mjs';
    stance than a pro's is on average, so he stands that much closer than the ranges the punches are written for (1.0 m for the
    straight punches, 0.92 for the hook, 0.85 for the uppercut): his head is where a pro's would be. (A hook from any closer
    meets the head early in its swing, before the body is behind it: see README, known limits.) */
-const RANGE = { jab: 0.985, cross: 0.985, hook: 0.905, upper: 0.835 };
+/* (the inside hook and the inside uppercut are thrown from right up close, 0.64 m, where the power chain is those two: bout.mjs,
+   RULES.inside) */
+export const RANGE = { jab: 0.985, cross: 0.985, hook: 0.905, upper: 0.835, hookIn: 0.64, upperIn: 0.64 };
 export const PUNCHES = [
   { id: 'jab', name: '잽', en: 'Jab' },
   { id: 'cross', name: '스트레이트', en: 'Cross' },
   { id: 'hook', name: '훅', en: 'Hook' },
-  { id: 'upper', name: '어퍼컷', en: 'Uppercut' }
+  { id: 'upper', name: '어퍼컷', en: 'Uppercut' },
+  { id: 'hookIn', name: '숏 훅', en: 'Inside hook', inside: true },
+  { id: 'upperIn', name: '숏 어퍼', en: 'Inside uppercut', inside: true }
 ];
+// (the second of a chain: what is pressed for it follows a power punch just thrown)
+const SECOND = { hook: 0, upper: 1, upperIn: 0 };
 export const AT = 0.5; // when in the loop he is told to throw it (and, if he keeps a beat, starts waiting for his moment)
 
 /* When to press, by how he keeps time. -> the button to press this step, or nothing. The moment it is pressed is kept on
@@ -67,7 +73,9 @@ export const LADDER = PUNCHES.flatMap(p =>
     group: p.name,
     loop: 2,
     view: { yaw: 0.12, pitch: 0.2 },
-    me: () => HOME,
+    // (right up close, he steps back out once the punch is home: two men standing in their guards at 0.64 m have their arms
+    // in each other's)
+    me: p.inside ? t => (t < AT + 0.7 ? HOME : [HOME[0] - 0.3, HOME[1]]) : () => HOME,
     him: () => [HOME[0] + RANGE[p.id], HOME[1]],
     // a hook and an uppercut are the second and third of the power chain: he is set up as if he had just thrown what comes
     // before (bout.mjs), so that the one punch is the whole of the card, and kept so until he throws it
@@ -75,11 +83,11 @@ export const LADDER = PUNCHES.flatMap(p =>
       b.fighters[0].skills = { all: lv };
       // (the man in front of him keeps his head where it is, an amateur's stance, so that every grade hits the same target)
       b.fighters[1].skills = { stance: '2' };
-      if (p.id === 'hook' || p.id === 'upper') Object.assign(b.fighters[0], { lastPower: true, sinceLast: 0, link: p.id === 'hook' ? 0 : 1 });
+      if (p.id in SECOND) Object.assign(b.fighters[0], { lastPower: true, sinceLast: 0, link: SECOND[p.id] });
     },
     keep: b => {
       const f = b.fighters[0];
-      if ((p.id === 'hook' || p.id === 'upper') && !(f.cues && f.cues.pressed !== undefined)) f.sinceLast = 0;
+      if (p.id in SECOND && !(f.cues && f.cues.pressed !== undefined)) f.sinceLast = 0;
     },
     cue: cue(p.id, LEVEL[lv])
   }))
@@ -107,7 +115,9 @@ export const DIRTY = TECHNIQUES.flatMap(tq =>
     loop: 2.2,
     view: { yaw: 0.25, pitch: 0.25 },
     me: () => HOME,
-    him: () => [HOME[0] + tq.range, HOME[1]],
+    // (once it is thrown he is left where it puts him: walking back in off a hard hook, the gait lifts a foot with his weight
+    // still out past the other one)
+    him: t => (t < AT + 0.25 ? [HOME[0] + tq.range, HOME[1]] : null),
     setup: b => {
       b.fighters[0].skills = { all: lv };
       if (tq.punch === 'hook' || tq.punch === 'upper') Object.assign(b.fighters[0], { lastPower: true, sinceLast: 0, link: tq.punch === 'hook' ? 0 : 1 });
@@ -194,4 +204,38 @@ export const FOOTWORK = ENTRIES.filter(e => e.id !== 'bounce').flatMap(e =>
     if (STEP[e.id]) g.me = stayIn(e, e.id, step);
     return g;
   })
+);
+
+/* In and out (docs/moves-plan-4.md §3, §4), each at every grade: the duck in from 1.0 m to right up close, under a jab the
+   other man throws as he goes, and the two ways away with the guard let go of, from right up close out of range. Each loop
+   is a fresh bout (fresh), so the place he gets to is the card's number: how far apart they end, and the head's lowest
+   height on the way in, or the angle he ends at off the other man's line. */
+export const MOVING = [
+  { id: 'duckIn', name: '더킹 대시', en: 'Duck in', from: 1.0, press: t => [[t, 'duck', true], [t, 'dash', [1, 0]]], against: [] },
+  { id: 'hopPivot', name: '피봇 아웃', en: 'Pivot out', from: 1.0, press: t => [[t, 'away', 'pivot'], [t, 'side', 1]] },
+  { id: 'hopCircle', name: '서클 아웃', en: 'Circle out', from: 1.0, press: t => [[t, 'away', 'circle'], [t, 'side', 1]] }
+];
+export const ENTRY = MOVING.flatMap(m =>
+  LEVELS.map(lv => ({
+    id: `${m.id}@${lv}`,
+    move: m.id,
+    level: lv,
+    item: m.id,
+    name: `${m.name} ${LEVEL[lv].label}`,
+    en: `${m.en} · ${LEVEL[lv].name}`,
+    group: '진입 · 이탈',
+    fresh: true,
+    loop: 2,
+    view: { yaw: 0.9, pitch: 0.35 },
+    // (he stays wherever the move takes him: the script does not walk him back)
+    me: () => null,
+    him: () => [HOME[0] + m.from, HOME[1]],
+    setup: b => {
+      b.fighters[0].skills = { all: lv };
+      // (the man in front of him is a pro, his feet kept still where he stands)
+      b.fighters[1].skills = { stance: '2' };
+    },
+    press: m.press(AT),
+    against: m.against
+  }))
 );

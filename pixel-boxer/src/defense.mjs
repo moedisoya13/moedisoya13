@@ -72,8 +72,14 @@ export const ITEMS = [
     loop: 2.4, punch: ['jab', 0.8], outcome: 'whiff', view: { yaw: 0.6, pitch: 0.26 }
   }
 ];
-// the frame (after the press that throws the punch) a grade answers on: the middle of his window for that card
-const answer = (item, lv) => (WINDOWS[item.card] && WINDOWS[item.card][lv] ? WINDOWS[item.card][lv].at : 0);
+// the frame (after the press that throws the punch) a grade answers on: the middle of his window for that card (a grade with
+// no window at all answers where a pro does, and is hit: a beginner's and an amateur's weave under a hook that lands on its
+// sweep, README)
+const answer = (item, lv) => {
+  const w = WINDOWS[item.card];
+  return w && w[lv] && w[lv].at !== null ? w[lv].at : w && w['3'] && w['3'].at !== null ? w['3'].at : 0;
+};
+export const unanswered = (item, lv) => !!(WINDOWS[item.card] && WINDOWS[item.card][lv] && WINDOWS[item.card][lv].at === null);
 function graded(item, lv) {
   const at = item.punch[1],
     k = item.kind === 'evade' || item.kind === 'counter' || item.kind === 'parry' ? answer(item, lv) : null,
@@ -85,6 +91,7 @@ function graded(item, lv) {
       answer: k,
       setup: b => (b.fighters[0].skills = { all: lv })
     });
+  if (unanswered(item, lv)) e.outcome = 'hit';
   if (item.kind === 'evade' || item.kind === 'counter') {
     e.press = [[when, item.move[0], item.move[1]]];
     // (a hook comes after a cross taken on the guard, put down when he goes)
@@ -128,7 +135,7 @@ const DRILLS = [
   {
     id: 'stagger', name: '휘청임', en: 'Rocked', group: '맞기', hurt: true,
     note: '이미 많이 맞은 선수가 스트레이트와 훅을 연달아 맞습니다. 무릎이 실제로 풀립니다: 두 무릎이 0.25초 간격으로 번갈아 꺾이며 안으로 모이고, 상체가 다리 위에서 흔들리고, 글러브가 처집니다.',
-    loop: 3, punch: ['hook', 1.0], outcome: 'hit', before: 'hit', setup: b => (b.fighters[0].hp = 34), keep: b => (b.fighters[0].hp = Math.max(b.fighters[0].hp, 20)), view: { yaw: 0.3, pitch: 0.24 }
+    loop: 3, punch: ['hook', 1.0], outcome: 'hit', before: 'hit', gap: 0.88, setup: b => (b.fighters[0].hp = 34), keep: b => (b.fighters[0].hp = Math.max(b.fighters[0].hp, 20)), view: { yaw: 0.3, pitch: 0.24 }
   },
   {
     id: 'worn', name: '지친 기색', en: 'Worn down', group: '맞기', hurt: true,

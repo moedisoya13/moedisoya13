@@ -13,7 +13,9 @@
                    slip: 1 | -1 (the head off the line, to his left or right), duck: true | 1 | -1 (down under a punch in a
                    shallow U, coming up on his left, or with -1 his right),
                    roll: 1 | -1 (bob and weave: down under it and up on his left or right), pull: true (the head swayed
-                   back out of reach) }
+                   back out of reach); duck with a dash ahead in the same tick is the duck in (duckIn: down and in under
+                   the punches, to right up close); away: 'pivot' | 'circle' with side: 1 | -1 (his left or right) is
+                   moving off out of range with the guard let go of (hopPivot, hopCircle) }
      bout.events            what happened this step, for the picture and the sound (a dirty boxer's fouls among them:
                             { type: 'foul', name: stomp | thumb, who, on, J }; nobody penalises them). A punch that misses
                             says by how much (whiff: margin, metres between the glove's and the head's surfaces at the
@@ -63,6 +65,7 @@ export const RULES = {
   head: 0.125,
   bounce: 0.3, // how much of the glove's speed comes back off the head
   graze: 6, // newton-seconds: less than this is a touch, not a punch
+  touch: 1, // metres a second: a glove already against him (right up close) has to be going on into him faster than this to count
   damage: 0.035, // health lost per newton-second
   mass: 75, // kilograms: what a blow has to push
   shove: 2.2, // how much more than physics a blow moves a man (it is a game)
@@ -77,10 +80,14 @@ export const RULES = {
   buffer: 0.2,
   combo: 0.55, // a power punch this soon after the last becomes the next in the chain
   chain: ['cross', 'hook', 'upper'],
+  // right up close (centre to centre, as the power punch is pressed) the chain is the inside hook and the inside uppercut, in
+  // turn: no straight punch is thrown from there
+  inside: 0.72,
+  chainIn: ['hookIn', 'upperIn'],
   dash: { reach: 1.2 },
   stepIn: 2.6, // metres a second he closes at while throwing, down to the punch's own range
   lunge: 60, // metres a second a second: how quickly a step in gathers speed and sheds it
-  hookDrop: 0.09, // how far below his own head a hook can be swung
+  hookDrop: 0.05, // how far below his own head a hook can be swung
   drop: 1, // health a finishing blow had to spare at most to put him down on a knee rather than flat
   jaw: 0.08, // how far below the middle of the head a hook is aimed
   startGap: 2.4
@@ -116,7 +123,14 @@ export const local = (f, x, z) => [x * Math.cos(f.yaw) - z * Math.sin(f.yaw), x 
 const punching = f => !!f.action && !!MOVES[f.action.name].punch;
 // the ways of getting the head out of the way, as controls name them (each a move of its own, with a side where it has one)
 const EVADE = ['slip', 'duck', 'roll', 'pull'];
-const pressOf = input => (input.dash ? ['dash', input.dash] : EVADE.find(n => input[n]) ? [EVADE.find(n => input[n]), input[EVADE.find(n => input[n])]] : input.jab ? ['jab'] : input.power ? ['power'] : null);
+const pressOf = input =>
+  input.dash && input.duck && input.dash !== true ? ['duckIn', input.dash] : input.away ? [input.away === 'pivot' ? 'hopPivot' : 'hopCircle', input.side || 1] : input.dash ? ['dash', input.dash] : EVADE.find(n => input[n]) ? [EVADE.find(n => input[n]), input[EVADE.find(n => input[n])]] : input.jab ? ['jab'] : input.power ? ['power'] : null;
+// moving off somewhere as a move of its own: the dash, the duck in, and the two ways away
+const GOING = ['dash', 'duckIn', 'hopPivot', 'hopCircle'];
+/* The duck in ends right up close (centre to centre, short of it by his grade: skill.mjs, entry.stop), and goes there at
+   most this far, `wide` degrees to his right of the line to the other man; moving away, each hop is a half beat long (`beat`): `backHop` metres back after the pivot (which takes
+   `turn` seconds), or `hop` metres round him and `out` away from him. */
+export const GO = { wide: 8, inTo: 0.67, inMost: 0.5, inFrom: 0.05, inTime: 0.31, hop: 0.16, backHop: 0.21, out: 0.12, beat: 0.16, turn: 0.22, back: 3, round: 4 };
 // a punch still on its way out: wound up or being thrown, and not yet landed
 export const incoming = f => (punching(f) && !f.action.struck && (f.action.chain.phase === 'coil' || f.action.chain.phase === 'throw') ? f.action : null);
 // may he start something new? In the middle of a punch, only another punch, and only once this one has been thrown
@@ -125,12 +139,22 @@ const open = (f, punch) =>
   (!f.action ||
     (punch && punching(f) && (f.action.chain.phase === 'hold' || f.action.chain.phase === 'recover')) ||
     // (out of an evasion, from the moment his grade lets him: anim/skill.mjs, evade.cut)
-    (punch && isEvasion(f.action.name) && f.action.t >= timeline(f.action.name, f.action.level).cut - 1e-9));
+    (punch && isEvasion(f.action.name) && f.action.t >= timeline(f.action.name, f.action.level).cut - 1e-9) ||
+    // (and out of a duck in once he has landed)
+    (punch && f.action.name === 'duckIn' && f.action.t >= DUCK_IN.landed - 1e-9));
+// (the duck in has landed at this; the knees stay bent, the wind-up of what he throws next, `wound` seconds after it)
+const DUCK_IN = { landed: 0.4, wound: 0.15 };
 
 const isEvasion = name => EVADE.includes(name);
 // the evasion a man is in (or came out of a moment ago), and how far into it: what a punch started now is thrown out of
 const GRACE = 0.1; // seconds after an evasion is over that its end is still the coil of the next punch
 function loadOf(f, bout, move) {
+  // (out of a duck in, landed and still bent: an inside punch, as much of its wind-up done as his grade leaves wound)
+  const din = f.action && f.action.name === 'duckIn' ? f.action : f.lastIn && bout.t - f.lastIn.endedAt <= DUCK_IN.wound + 1e-9 - Math.max(0, MOVES.duckIn.dur - DUCK_IN.landed - DUCK_IN.wound) ? f.lastIn.action : null;
+  if (din && (move.name === 'hookIn' || move.name === 'upperIn')) {
+    const since = din === f.action ? din.t - DUCK_IN.landed : DUCK_IN.landed + DUCK_IN.wound;
+    if (since >= -1e-9 && since <= DUCK_IN.wound + 1e-9 && din.level.entry.load > 0) return { load: din.level.entry.load, from: din.id };
+  }
   const e = f.action && isEvasion(f.action.name) ? f.action : f.lastEvade && f.lastEvade.endedAt !== null && bout.t - f.lastEvade.endedAt <= GRACE ? f.lastEvade.action : null;
   if (e) {
     const ev = e.level.evade;
@@ -156,10 +180,36 @@ function begin(f, name, more, bout) {
   // out of the end of an evasion or a parry: wound up already
   const loaded = chain && bout ? loadOf(f, bout, move) : null;
   if (loaded) preload(chain, move, loaded.load, loaded.shoulder);
+  // (a great one's spring waits for his next foot to come down, half a beat at most, and goes down with it)
+  if (chain && chain.springWait && !(loaded && loaded.load > 0)) {
+    const r = f.animator.rhythm;
+    chain.wait = Math.max(0, Math.min(r.left, r.half));
+  }
   if (before && isEvasion(before.name) && f.lastEvade && f.lastEvade.action === before) f.lastEvade.endedAt = bout ? bout.t : 0;
+  if (before && before.name === 'duckIn') f.lastIn = { action: before, endedAt: bout ? bout.t : 0 };
   f.action = Object.assign({ name, t: 0, id: name + ++f.serial, struck: false, chain, level, at: bout ? bout.t : 0, loaded: loaded && loaded.load > 0 ? loaded : null }, more);
   if (isEvasion(name)) (f.lastEvade = { action: f.action, name, start: bout ? bout.t : 0, endedAt: null }), (f.action.head0 = f.points ? f.points.head.slice() : null);
   f.cover = false;
+}
+
+/* Where a duck in or a way away goes, decided as it starts: the duck in, toward the other man to right up close (short of it
+   by his grade), turned out by his grade's angle; the pivot, round the ball of his lead foot by his grade's degrees to the
+   side asked, and then back; the circle, round him to that side and out. */
+function plan(f, other, name, dir) {
+  const lv = levelOf(f.skills, name);
+  if (name === 'duckIn') {
+    const e = lv.entry,
+      dx = other.x - f.x,
+      dz = other.z - f.z,
+      d = Math.hypot(dx, dz) || 1,
+      a = (-(GO.wide + e.angle) * Math.PI) / 180,
+      // (turned out to his right, outside the other man's lead arm: a few degrees always, and his grade's angle)
+      go = [(dx * Math.cos(a) + dz * Math.sin(a)) / d, (dz * Math.cos(a) - dx * Math.sin(a)) / d];
+    return { go, reach: Math.max(0, Math.min(GO.inMost, d - GO.inTo - e.stop)), side: 1, dir: local(f, go[0], go[1]) };
+  }
+  const side = dir === -1 ? -1 : 1,
+    ball = f.pose ? at(f, 'LeftToeBase') : [f.x, 0, f.z];
+  return { side, centre: [ball[0], ball[2]], from: [f.x, f.z], dir: [0, -1] };
 }
 
 function decide(bout, f, input, dt, who) {
@@ -168,9 +218,9 @@ function decide(bout, f, input, dt, who) {
   else if (f.want && (f.wantAge += dt) > RULES.buffer) f.want = null;
   if (f.want) {
     const [what, dir] = f.want,
-      punch = what !== 'dash' && !EVADE.includes(what);
-    // (a man whose lead foot is stood on cannot dash or sway back off it; he can still slip and duck)
-    if (f.pinned > 0 && (what === 'dash' || what === 'pull')) f.want = null;
+      punch = !GOING.includes(what) && !EVADE.includes(what);
+    // (a man whose lead foot is stood on cannot dash or sway back off it, or go in or away; he can still slip and duck)
+    if (f.pinned > 0 && (GOING.includes(what) || what === 'pull')) f.want = null;
     else if (open(f, punch)) {
       f.want = null;
       if (EVADE.includes(what)) {
@@ -179,6 +229,9 @@ function decide(bout, f, input, dt, who) {
         const other = bout.fighters[1 - who],
           coming = incoming(other) || (punching(other) && other.action.chain.phase === 'hold' && !other.action.struck ? other.action : null);
         f.defence = { kind: 'evade', start: bout.t, of: coming ? coming.id : null, from: coming ? coming.at : bout.t, margin: null, late: false, counterAt: null, event: null, said: false };
+        bout.events.push({ type: what, who });
+      } else if (what === 'duckIn' || what === 'hopPivot' || what === 'hopCircle') {
+        begin(f, what, plan(f, bout.fighters[1 - who], what, dir), bout);
         bout.events.push({ type: what, who });
       } else if (!punch) {
         const [fx, fz] = aheadOf(f);
@@ -192,12 +245,17 @@ function decide(bout, f, input, dt, who) {
         // (out of an evasion, a power punch is the one it has wound up: the rear hand's straight, the lead hook off a slip
         // or a weave to the left, the uppercut out of a duck)
         const out = f.action && isEvasion(f.action.name) ? f.action : f.lastEvade && f.lastEvade.endedAt !== null && bout.t - f.lastEvade.endedAt <= GRACE ? f.lastEvade.action : null;
+        // (right up close, the inside chain: the lead hand's the inside hook, the rear hand's the inside uppercut)
+        const other = bout.fighters[1 - who],
+          inside = Math.hypot(other.x - f.x, other.z - f.z) < RULES.inside,
+          chain = inside ? RULES.chainIn : RULES.chain;
         if (what === 'power' && out && out.level.evade.load > 0) {
           name = LOADED(out.name, out.side) === 'L' ? 'hook' : out.name === 'duck' ? 'upper' : 'cross';
-          f.link = Math.max(0, RULES.chain.indexOf(name));
+          if (inside) name = name === 'hook' ? 'hookIn' : 'upperIn';
+          f.link = Math.max(0, chain.indexOf(name));
         } else if (what === 'power') {
-          f.link = f.sinceLast < RULES.combo && f.lastPower ? (f.link + 1) % RULES.chain.length : 0;
-          name = RULES.chain[f.link];
+          f.link = f.sinceLast < RULES.combo && f.lastPower ? (f.link + 1) % chain.length : 0;
+          name = chain[f.link];
         }
         begin(f, name, { counter: f.counter > 0 }, bout);
         // a loaded punch answering a defence: what makes the defence brilliant, if it was close enough
@@ -245,6 +303,53 @@ function travel(f, input, dt, other) {
       rate = (30 * u * u * (1 - u) * (1 - u) * f.k.dash * fresh) / dur;
     sx = f.action.go[0] * rate;
     sz = f.action.go[1] * rate;
+  } else if (f.action && f.action.name === 'duckIn') {
+    // (in, the same curve, over the stretch the rear leg pushes him and the lead foot lands; after his grade's seam)
+    const a = f.action,
+      e = a.level.entry,
+      u = (a.t - GO.inFrom - e.seam) / GO.inTime,
+      rate = u > 0 && u < 1 ? (30 * u * u * (1 - u) * (1 - u) * a.reach) / GO.inTime : 0;
+    sx = a.go[0] * rate;
+    sz = a.go[1] * rate;
+    // (a legend goes on round on the ball of his lead foot at the end, to the other man's side: to his own left)
+    const [pa, pr] = e.pivot,
+      w = (a.t - (GO.inFrom + e.seam + GO.inTime * 0.85)) / 0.12;
+    if (pr && w > 0 && w < 1) {
+      const side = [a.go[1], -a.go[0]],
+        v = (pr * 30 * w * w * (1 - w) * (1 - w)) / 0.12;
+      sx += side[0] * v;
+      sz += side[1] * v;
+    }
+  } else if (f.action && (f.action.name === 'hopPivot' || f.action.name === 'hopCircle')) {
+    const a = f.action,
+      aw = a.level.away,
+      [fx, fz] = aheadOf(f),
+      left = [fz, -fx];
+    if (a.name === 'hopPivot' && aw.pivot) {
+      // round the ball of his lead foot, the rear foot drawing the circle; then hopped back, half a beat a hop
+      const k = (aw.pivot * Math.PI) / 180,
+        e = u => (u <= 0 ? 0 : u >= 1 ? 1 : u * u * (3 - 2 * u)),
+        place = t => {
+          const ang = -a.side * k * e(t / GO.turn), // (+ side: round to his left)
+            ox = a.from[0] - a.centre[0],
+            oz = a.from[1] - a.centre[1];
+          return [a.centre[0] + ox * Math.cos(ang) + oz * Math.sin(ang), a.centre[1] - ox * Math.sin(ang) + oz * Math.cos(ang)];
+        };
+      if (a.t <= GO.turn + dt) {
+        const p0 = place(a.t - dt),
+          p1 = place(a.t);
+        sx = (p1[0] - p0[0]) / dt;
+        sz = (p1[1] - p0[1]) / dt;
+      } else if (a.t < GO.turn + GO.back * GO.beat) (sx = -fx * (GO.backHop / GO.beat)), (sz = -fz * (GO.backHop / GO.beat));
+    } else if (a.name === 'hopPivot' || !aw.hop) {
+      // (a man who cannot hop walks back, and goes no further than his hops would)
+      const n = a.name === 'hopPivot' ? GO.back : GO.round;
+      if (a.t < n * GO.beat * 1.4) (sx = -fx * (GO.backHop / (GO.beat * 1.4))), (sz = -fz * (GO.backHop / (GO.beat * 1.4)));
+    } else if (a.t < GO.round * GO.beat) {
+      // round him, still facing him, and out (his chest kept on him: face)
+      sx = (left[0] * a.side * GO.hop - fx * GO.out) / GO.beat;
+      sz = (left[1] * a.side * GO.hop - fz * GO.out) / GO.beat;
+    }
   }
   let ix = 0,
     iz = 0;
@@ -469,14 +574,16 @@ function solvePose(bout, f, i, dt) {
 }
 
 /* Does the glove, on its way from where it was last step to where it is now, meet a ball of radius r that has itself moved
-   from c0 to c1? -> how far through the step (0..1) they first touch, or -1. */
-function meets(g0, g1, c0, c1, r) {
+   from c0 to c1? -> how far through the step (0..1) they first touch, or -1. (A glove that starts the step already against
+   it, as one held up right up close is, meets it only if it is going on into it, by more than `least` metres this step: a
+   glove resting on a face, or drawn back off one, has not hit it.) */
+function meets(g0, g1, c0, c1, r, least) {
   const p = M.sub(g0, c0),
     d = M.sub(M.sub(g1, c1), p),
     dd = d[0] * d[0] + d[1] * d[1] + d[2] * d[2],
     pd = p[0] * d[0] + p[1] * d[1] + p[2] * d[2],
     pp = p[0] * p[0] + p[1] * p[1] + p[2] * p[2];
-  if (pp <= r * r) return 0;
+  if (pp <= r * r) return -pd / (Math.sqrt(pp) || 1e-9) > (least || 0) ? 0 : -1;
   if (dd < 1e-12) return -1;
   const disc = pd * pd - dd * (pp - r * r);
   if (disc < 0) return -1;
@@ -500,6 +607,38 @@ function segment(p, a, b) {
     s = l < 1e-12 ? 0 : Math.max(0, Math.min(1, (ap[0] * ab[0] + ap[1] * ab[1] + ap[2] * ab[2]) / l));
   return Math.hypot(ap[0] - ab[0] * s, ap[1] - ab[1] * s, ap[2] - ab[2] * s);
 }
+/* A man laid out by a blow is shoved the way the glove goes on through his head: each step for FOLLOW.time after the contact,
+   his body (the fall) is given its share of the shove along the glove's way along the canvas that step (its share of the
+   blow's up or down with it), and at the end the bout says where the glove went on to: { type: 'follow', who, on, follow
+   (its mean velocity over that time, m/s, on the canvas) }. The blow's own vec, the way the glove was going as it met him,
+   is what his head takes at once (phys/fall.mjs). */
+const FOLLOW = { time: 0.08, first: 0.5 };
+function follow(bout, f, who, dt) {
+  /* (the way it goes is the glove's way from the step before it met him to where it is now: what it was doing as it met him
+     and what it has done since, so that a straight punch at the end of its reach, whose glove has all but stopped, shoves
+     him the way it came, and a hook, swinging on round, the way it swings) */
+  const k = f.follow,
+    other = bout.fighters[k.on],
+    g = f.points[k.hand],
+    v = M.sub(g, k.back),
+    flat = Math.hypot(v[0], v[2]);
+  k.t += dt;
+  const last = k.t >= FOLLOW.time - 1e-9,
+    // (most of it at once, as the blow lands, and the rest as the glove goes on through)
+    share = last ? k.shove - k.given : Math.min(k.shove - k.given, k.given ? k.shove * (1 - k.first) * (dt / (FOLLOW.time - dt)) : k.shove * k.first);
+  if (flat > 1e-6 && share > 0 && other.animator.shove) {
+    const way = M.app(M.tr(other.place.R), [v[0] / flat, 0, v[2] / flat]);
+    other.animator.shove([way[0] * share, k.up * share, way[2] * share]);
+    k.given += share;
+  }
+  if (last) {
+    const mean = M.scale(M.sub(g, k.from), 1 / k.t);
+    bout.events.push({ type: 'follow', who, on: k.on, follow: mean });
+    other.followed = mean;
+    f.follow = null;
+  }
+}
+
 function strike(bout, f, other, who, dt) {
   const action = incoming(f);
   if (!action || !f.before || !other.before || other.down) return;
@@ -545,10 +684,13 @@ function strike(bout, f, other, who, dt) {
       away.cap = clear + (full - moved) > just && full > 1e-3 ? Math.min(1, Math.max(p.k, p.k + (just - clear) / full)) : 1;
     }
   }
+  // (a wind-up is not a punch on its way: a glove drawn back or set against his face as the arm is set has not hit him)
+  if (action.chain.phase === 'coil') return;
   // what is in the way: his head, and, if he is covering up, his gloves in front of it
   let first = null;
   const test = (what, key, r) => {
-    const s = meets(g0, g1, other.before[key], other.points[key], r);
+    // (a glove already against his guard is met by it however it moves: it is in the way)
+    const s = meets(g0, g1, other.before[key], other.points[key], r, what === 'head' ? RULES.touch * dt : -Infinity);
     if (s >= 0 && (!first || s < first.s)) first = { what, key, s };
   };
   test('head', 'head', RULES.glove + RULES.head);
@@ -619,9 +761,10 @@ function strike(bout, f, other, who, dt) {
   other.want = null;
   other.counter = 0;
   other.stun = (RULES.stun[0] + worth * RULES.stun[1]) * other.k.stunTaken;
-  /* A dirty boxer does not let a man he has hit get away: he goes in after him (skill.mjs: dirty). */
+  /* A dirty boxer does not let a man he has hit get away: he goes in after him (skill.mjs: dirty); from right up close he is
+     in already, and does not walk into him. */
   const dirty = (action.level && action.level.form.dirty) || 0,
-    after = dirty ? 0.75 : 0,
+    after = dirty && move.close >= RULES.inside ? 0.75 : 0,
     // (and a man whose foot is stood on can hardly be moved off it)
     push = (worth / RULES.mass) * RULES.shove * (other.pinned > 0 ? 0.3 : 1);
   other.kx += dir[0] * push;
@@ -645,8 +788,15 @@ function strike(bout, f, other, who, dt) {
     if (!knee) {
       const way = M.app(M.tr(other.place.R), vec), // (in his own terms)
         [x, z] = local(other, other.kx - dir[0] * push + other.vx + other.ix, other.kz - dir[1] * push + other.vz + other.iz);
-      laid = { J: worth, dir: way, at: mine(other, blow.at), push: [x + way[0] * push, way[1] * push, z + way[2] * push] };
+      /* (the shove itself is not given here: a head with nothing holding it up does not stop the glove, which carries on
+         through, and he is shoved the way it carries on, over the first FOLLOW.time of the fall: follow, below) */
+      // (a straight punch is at the end of its reach as it lands, and its glove's way on through is its way in: shoved that
+      // way at once, as the fall starts; a hook swings on round, and shoves him the way it swings)
+      const swung = move.arm === 'swing';
+      laid = { J: worth, dir: way, at: mine(other, blow.at), push: swung ? [x, 0, z] : [x + way[0] * push, way[1] * push, z + way[2] * push] };
       other.vx = other.vz = other.ix = other.iz = 0;
+      action.chain.landed = false;
+      f.follow = { on: 1 - who, hand, from: f.points[hand].slice(), back: f.before[hand].slice(), t: 0, shove: swung ? push : 0, up: way[1], given: 0, first: FOLLOW.first };
     }
     begin(other, knee ? 'drop' : move.kind === 'hook' ? 'slump' : 'ko', knee ? {} : { blow: laid });
     // (laid out, the shove is his body's now; dropped to a knee, he sags where he stands, his feet under him)
@@ -771,11 +921,13 @@ export function step(bout, inputs, dt) {
     f.gx = (f.x - f.px) / dt;
     f.gz = (f.z - f.pz) / dt;
   }
-  // the bodies, solved; then whether a glove on its way has met anything
+  // the bodies, solved; then whether a foot or a glove on its way has met anything (a foot first: a stamp is the drive of
+  // the hook it goes with, and comes down before the glove gets there, or in the same frame)
   bout.fighters.forEach((f, i) => solvePose(bout, f, i, dt));
-  strike(bout, a, b, 0, dt);
-  if (bout.stop <= 0) strike(bout, b, a, 1, dt);
+  bout.fighters.forEach((f, i) => f.follow && follow(bout, f, i, dt));
   fouls(bout, a, b, 0, dt);
   fouls(bout, b, a, 1, dt);
+  strike(bout, a, b, 0, dt);
+  if (bout.stop <= 0) strike(bout, b, a, 1, dt);
   return bout;
 }

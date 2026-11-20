@@ -87,7 +87,7 @@ export const SHAPE = {
     // (the lead glove in on his cheek while the hook goes over: out of its way)
     '4m': { add: { twist: 10, lz: -0.12, ly: -0.02 } },
     // (a low man, under a hook aimed at his jaw: the U is narrower, and goes back further)
-    '4a': { size: { hx: 0.8, hz: 2 }, add: { twist: 10, ly: -0.04, ry: -0.03, lz: -0.1, lx: -0.03 } },
+    '4a': { size: { hx: 0.8, hz: 2.5 }, add: { twist: 10, ly: -0.04, ry: -0.03, lz: -0.1, lx: -0.03 } },
     '5m': { add: { twist: 10, lz: -0.12, ly: -0.02 } },
     '5a': { size: { hx: 0.8, hz: 2 }, time: { out: 0.75 }, add: { twist: 10, ly: -0.07, ry: -0.03, lz: -0.15, lx: -0.04 } }
   },

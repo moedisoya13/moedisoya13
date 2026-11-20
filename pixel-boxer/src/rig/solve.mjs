@@ -247,7 +247,9 @@ export function solve(stance) {
           return now === null || Math.abs(wrap(now - r.was)) <= r.most;
         };
       // (a punch on its way is thrown, and where it goes is what it hits: its elbow is where the throw puts it)
-      return hand.punch ? [onTop, rate] : [onTop, ball(wrist), rate, swing];
+      // (a hook's elbow, which goes round the arm with the wrist where the throw puts it, is kept where the shoulder lets the
+      // upper arm be, too: hand.locked)
+      return hand.punch ? (hand.locked ? [onTop, ball(wrist), rate] : [onTop, rate]) : [onTop, ball(wrist), rate, swing];
     };
     // (of two ways round that will do, the one nearer where the elbow was round the arm last frame)
     const nearer = wrist => (hand.round && hand.round.was !== null && hand.round.was !== undefined ? elbow => {
