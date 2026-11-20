@@ -166,6 +166,10 @@ function loadOf(f, bout, move) {
     const cv = p.level.cover;
     if ((cv.hand === 'same') === (move.hand === p.hand)) return { load: cv.load, shoulder: cv.q, from: 'parry' };
   }
+  /* a legend on the move (anim/legend.mjs): his knees bent and his trunk leant by the shape of his going are the wind-up of
+     whatever he throws out of it, as far as they go; he does not wind up again */
+  const lg = f.animator.legend;
+  if (lg) return { load: Math.min(1, lg.load), from: 'legend' };
   return null;
 }
 function begin(f, name, more, bout) {
@@ -259,7 +263,7 @@ function decide(bout, f, input, dt, who) {
         }
         begin(f, name, { counter: f.counter > 0 }, bout);
         // a loaded punch answering a defence: what makes the defence brilliant, if it was close enough
-        if (f.action.loaded && f.defence && f.defence.counterAt === null && bout.t - f.defence.start <= BRILLIANT.within + 1e-9) (f.defence.counterAt = bout.t), (f.defence.counter = f.action.id), judge(bout, f, who);
+        if (f.action.loaded && f.action.loaded.from !== 'legend' && f.defence && f.defence.counterAt === null && bout.t - f.defence.start <= BRILLIANT.within + 1e-9) (f.defence.counterAt = bout.t), (f.defence.counter = f.action.id), judge(bout, f, who);
         f.lastPower = what === 'power';
         f.counter = 0;
         bout.events.push({ type: 'punch', who, name });

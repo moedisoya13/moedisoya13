@@ -92,6 +92,17 @@
      travel also: order (the chance the wrong foot steps first), width (the share of his stance kept in the middle of a
               step: under 1, the feet come together), face (seconds his chest is behind the other man going round him),
               pivot (degrees he lets him get round before he turns, all at once)
+     legend   a legend's movement (anim/legend.mjs, docs/moves-plan-4.md §12): the head and the knees part of the shape of
+              going anywhere. null below 5. { beat: the bottom of each U, and the slip, on a foot coming down (clean) or
+              not (dirty: loose); weave: [metres the head goes to either side of the middle as each foot comes down (a third
+              of it the hips over the feet), metres it goes down under it on the knees]; deep: [every so many landings,
+              metres down] (clean), deepLean: degrees of waist in a deep one; slip: metres the head goes outside as the
+              lead foot lands stepping in; knee: degrees the knees stay bent going in; sway: degrees the trunk lies back as
+              the rear foot lands stepping out; dash: { in: [knees, degrees, at the bottom; metres off to his right; knees
+              left bent at the end], back: [degrees of sway, metres of the slip on landing], side: [metres down, seconds
+              the U takes, metres across] }; loose (dirty): { off: half beats a U is off its landing, at most; size:
+              [least, most] times; flip: the chance it goes the other way; skip: the chance a landing brings nothing; feint:
+              the chance of a feint of the lead shoulder; shoulder: degrees of it } }
    evade: how he gets his head out of the way (anim/evade.mjs; each 0 or 1 in the textbook unless said)
      flinch   seconds he flinches before anything of the evasion starts; wince: how much of a beginner's flinch shows (the
               gloves up in front of his own eyes, the head jerked back and turned away)
@@ -167,7 +178,8 @@ const TEXTBOOK_STANCE = {
   head: { A: 0.022, D: 0, T: 4, beat: 'free' },
   travel: TEXTBOOK_TRAVEL,
   flourish: null,
-  paw: 0
+  paw: 0,
+  legend: null
 };
 const stance = more => Object.assign({}, TEXTBOOK_STANCE, more, { guard: Object.assign({}, TEXTBOOK_STANCE.guard, more.guard), travel: Object.assign({}, TEXTBOOK_STANCE.travel, more.travel) });
 const TEXTBOOK_FORM = { guard: 0, chin: 0, over: 0, tell: 0, dirty: 0, lively: 0.35, dip: -0.015, late: 0, drop: false, sep: 3, off: 0.03, with: 'trunk', tuck: 0, look: 0.9, bend: 0, exit: null, beat: null };
@@ -185,6 +197,10 @@ const TEXTBOOK_ENTRY = { waist: 0, look: 0, seam: 0, step: 0.02, stop: 0, rise: 
 const entry = more => Object.assign({}, TEXTBOOK_ENTRY, more);
 const TEXTBOOK_AWAY = { hop: 1, drop: 1, slide: false, pivot: 75, accent: false, shuffle: false, jitter: 0, upright: 0, together: 0 };
 const away = more => Object.assign({}, TEXTBOOK_AWAY, more);
+
+// a legend's movement (anim/legend.mjs): clean, on his beat; dirty, off it, never the same twice, a shoulder feinted in it
+const LEGEND_CLEAN = { beat: true, weave: [0.07, 0.05], deep: [4, 0.085], deepLean: 4, slip: 0.07, knee: 10, sway: 5, dash: { in: [24, 0.04, 15], back: [8, 0.06], side: [0.11, 0.38, 0.05] }, loose: null };
+const LEGEND_DIRTY = Object.assign({}, LEGEND_CLEAN, { beat: false, weave: [0.065, 0.055], deepLean: 0, loose: { off: 0.4, size: [0.5, 1.3], flip: 0.3, skip: 0.15, feint: 0.2, shoulder: 9 } });
 
 export const LEVEL = {
   1: {
@@ -257,7 +273,8 @@ export const LEVEL = {
     chain: { early: [0.4, 0.4, 0, 0, 0], damp: [0.6, 0.6, 0.5, 0.6, 0.6], amp: [1.15, 1.25, 1.18, 1, 1], coil: 0.2, shown: 0.55, back: 1.15, backLag: 1, firm: 1.2, spring: { down: 0.4 } },
     form: form({ guard: -0.4, chin: -0.6, lively: 0.7, dip: -0.04, drop: true, sep: 11, off: 0.1, with: 'legs', tuck: 6, look: 1, bend: 6, exit: 'angle', beat: 'off' }),
     // the lightest feet: a swung beat, a phrase that quickens, stops dead and breaks out into something
-    stance: stance({ bounce: 1.1, knee: 7.7, hop: 1.3, rock: 1.1, lag: 1.25, swing: 0.58, tempo: 'phrase', guard: { y: -0.02, loose: 1 }, look: 1, head: { A: 0.045, D: 0.025, T: 4, beat: 'phrase', level: { depth: 0.07, lean: 5 } }, flourish: 'clean' }),
+    // (and going anywhere, the head and the knees are the shape of it, on his beat: a slower travelling beat, room for a U)
+    stance: stance({ bounce: 1.1, knee: 7.7, hop: 1.3, rock: 1.1, lag: 1.25, swing: 0.58, tempo: 'phrase', guard: { y: -0.02, loose: 1 }, look: 1, head: { A: 0.045, D: 0.025, T: 4, beat: 'phrase', level: { depth: 0.07, lean: 5 } }, flourish: 'clean', travel: { cycle: 1.9 }, legend: LEGEND_CLEAN }),
     evade: evade({ knee: { share: 1.15, depth: 1.1 }, out: 0.55, hold: 0, back: 0.6, move: 0.9, delay: { trunk: 0.017, head: 0.033 }, cut: 'clear', load: 1, look: 1, lively: 0.7, follow: 0.3, exit: 'angle', just: -0.008 }),
     cover: cover({ arrive: 0.03, hands: { ly: -0.02, lx: 0.015, rx: -0.015 }, look: 1, meet: { scale: 0.45, add: { hx: 0.04, twist: -8 } }, block: { brace: 0.7, settle: 1.5, meet: [0.04, 12] }, back: 1.8, load: 1, hand: 'same', q: 0.3 }),
     dash: dash({ land: 'angle', turn: 9, bend: 0.04 }),
@@ -271,7 +288,7 @@ export const LEVEL = {
     chain: { early: [0.4, 0.4, 0, 0, 0], damp: [0.6, 0.6, 0.5, 0.6, 0.6], amp: [1.15, 1.25, 1.18, 1, 1], coil: 0.25, shown: 0.55, back: 1.12, backLag: 1, firm: 1.2, hold: 0.08, spring: { down: 0.4 } },
     form: form({ guard: -0.3, chin: -0.5, over: 0.1, dirty: 2, lively: 0.7, dip: -0.04, drop: true, sep: 11, off: 0.1, with: 'legs', tuck: 6, look: 1, bend: 6, exit: 'angle' }),
     // lower still and always rolling, the lead shoulder up and the lead hand in his eyes, the beat nowhere
-    stance: stance({ bounce: 0.35, knee: 1.9, hop: 0.5, rock: 0.8, lag: 1.1, jitter: 0.25, drag: 0.7, hips: -0.04, lean: 5, shoulder: 3, guard: { lead: [-0.03, 0.03, 0.07] }, travel: { width: 0.95, face: 0.1, pivot: 8 }, look: 1, head: { A: 0.06, D: 0.05, T: 4, beat: 'roll', level: { every: 1.9, depth: 0.08, lean: 5 } }, flourish: 'dirty' }),
+    stance: stance({ bounce: 0.35, knee: 1.9, hop: 0.5, rock: 0.8, lag: 1.1, jitter: 0.25, drag: 0.7, hips: -0.04, lean: 5, shoulder: 3, guard: { lead: [-0.03, 0.03, 0.07] }, travel: { width: 0.95, face: 0.1, pivot: 8, cycle: 1.9 }, look: 1, head: { A: 0.06, D: 0.05, T: 4, beat: 'roll', level: { every: 1.9, depth: 0.08, lean: 5 } }, flourish: 'dirty', legend: LEGEND_DIRTY }),
     evade: evade({ knee: { share: 1.15, depth: 1.1 }, out: 0.62, hold: 0, back: 0.73, move: 0.92, delay: { trunk: 0.017, head: 0.033 }, cut: 'clear', load: 1, look: 1, lively: 0.3, follow: 0.3, in: 0.06, low: 0.02, just: 0.015 }),
     cover: cover({ arrive: 0.035, hands: { lz: -0.02 }, body: { hy: -0.045, lean: 4, side: -3 }, look: 1, meet: { scale: 0.45, add: { hx: 0.04, twist: -8 } }, block: { brace: 0.6, lean: 4, settle: 1.2 }, back: 1.8, load: 1, hand: 'same', q: 0.3 }),
     dash: dash({ drag: 1, low: 0.02 }),

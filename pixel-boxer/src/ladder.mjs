@@ -187,6 +187,29 @@ function stepCue(id, lv) {
     b = second ? cue(second[0], level.grade === 2 ? { grade: 3, form: {} } : level, own => (own.first === undefined ? null : own.first + 0.2), 'second') : null;
   return { cue: (bout, t) => a(bout, t) || (b && b(bout, t)) };
 }
+/* A clean legend dashes on his beat (anim/legend.mjs): the dash a drill presses at a moment of its loop he presses as the
+   next foot comes down after it, and he stays where he is until he has (a dash out of the top of his bounce, his body still
+   on its way up, could not go under anything: only gravity takes him down), and the rest of the drill goes on from then. */
+function dashOnBeat(e) {
+  const [when, button, value] = e.press[0];
+  return {
+    press: [],
+    cue: (bout, t) => {
+      const f = bout.fighters[0],
+        own = (f.cues = f.cues || {}),
+        r = f.animator.rhythm,
+        seen = own.seenDash;
+      own.seenDash = r.halves;
+      if (own.dash !== undefined || t < when - 1e-9 || seen === undefined || seen === r.halves) return null;
+      own.dash = t;
+      return [button, value === undefined ? true : value];
+    },
+    me: (t, f) => {
+      const at = f && f.cues ? f.cues.dash : undefined;
+      return t < when ? e.me(t) : at === undefined ? e.me(0) : e.me(Math.min(e.loop - 1e-6, when + t - at));
+    }
+  };
+}
 export const FOOTWORK = ENTRIES.filter(e => e.id !== 'bounce').flatMap(e =>
   LEVELS.map(lv => {
     const g = Object.assign({}, e, {
@@ -202,6 +225,7 @@ export const FOOTWORK = ENTRIES.filter(e => e.id !== 'bounce').flatMap(e =>
     if (step && step.press) g.press = step.press;
     if (step && step.cue) (g.press = []), (g.cue = step.cue);
     if (STEP[e.id]) g.me = stayIn(e, e.id, step);
+    if (lv === '5m' && /^dash/.test(e.id)) Object.assign(g, dashOnBeat(e));
     return g;
   })
 );
