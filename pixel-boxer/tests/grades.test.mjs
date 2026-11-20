@@ -34,7 +34,10 @@ test('grades: the better he is, the later he can leave it (the back end of the w
   const order = (card, chain) => chain.every(([lo, hi, strict]) => (strict ? back(card, lo) < back(card, hi) : back(card, lo) <= back(card, hi)));
   assert.ok(order('slip', [['1', '2', true], ['2', '3'], ['3', '4m', true], ['4m', '5m']]), JSON.stringify(LEVELS.map(lv => back('slip', lv))));
   for (const card of ['slip-cross', 'pull', 'roll']) assert.ok(order(card, [['1', '2', true], ['2', '3'], ['3', '4m'], ['4m', '5m']]), `${card}: ${LEVELS.map(lv => back(card, lv))}`);
-  assert.ok(order('duck', [['1', '2'], ['2', '3']]), `duck: ${LEVELS.map(lv => back('duck', lv))}`);
+  /* (the duck: a beginner and an amateur both bow from the waist, and since the body takes the blow it blocks before the hook
+     by its vector, an amateur's window ends on frames that clear the hook by under a millimetre: which of the two leaves it a
+     frame or two later is not his grade. The textbook leaves it later than either.) */
+  assert.ok(order('duck', [['1', '3'], ['2', '3']]) && Math.abs(back('duck', '1') - back('duck', '2')) <= 2, `duck: ${LEVELS.map(lv => back('duck', lv))}`);
   // a dirty great one leaves it no later than the clean one of his grade, by a frame at most (slips and the sway)
   for (const card of ['slip', 'slip-cross', 'pull']) for (const g of ['4', '5']) assert.ok(back(card, g + 'a') <= back(card, g + 'm') && back(card, g + 'm') - back(card, g + 'a') <= 1, `${card}@${g}`);
 });

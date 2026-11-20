@@ -201,9 +201,12 @@ const PULL = { hz: -0.17, lean: -17, hp: -9, lfp: 10, lfz: 0.01, ly: 0.02, ry: 0
 // hands and knees, sitting up with the hands behind
 const KNEEL = { hy: -0.515, hz: -0.1, lean: 58, hp: 12, hr: 4, side: -16, yaw: 6, lx: 0.08, ly: -0.42, lz: 0.05, rx: -0.2, ry: -1.29, rz: -0.02, re: 0.3, rg: 1, rfx: -0.05, rfz: -0.16, rfp: 53, rk: 1, lfz: 0.12 };
 const FOURS = { hy: -0.385, hz: 0, tip: 42, lean: 28, yaw: 28, twist: 10, hp: 6, lx: 0.1, ly: -1.3, lz: 0.17, lg: 1, rx: -0.1, ry: -1.285, rz: 0.33, rg: 1, le: 0.3, re: 0.3, lfz: -0.68, lfp: 60, lk: 1, rfz: -0.2, rfp: 55, rk: 1 };
-const SIT = { hy: -0.755, hz: -0.22, lean: -30, hp: 10, lx: 0.12, ly: -1.3, lz: -0.82, lg: 1, rx: -0.12, ry: -1.285, rz: -0.66, rg: 1, lfz: -0.03, rfz: 0.4, rfw: 30 };
+const SIT = { hy: -0.755, hz: -0.22, lean: -30, hp: 10, lx: 0.2, ly: -1.3, lz: -0.87, lg: 1, rx: -0.2, ry: -1.285, rz: -0.71, rg: 1, lfz: -0.03, rfz: 0.4, rfw: 30 };
 // (between them: the rear knee drawn in under him off his seat, and the lead foot brought up off all fours)
 const TUCK = { hy: -0.62, hz: -0.18, lean: 8, side: -8, hp: 8, lx: 0.08, ly: -1.3, lz: -0.35, lg: 1, rx: -0.24, ry: -1.285, rz: -0.25, rg: 1, lfz: 0.05, rfx: -0.08, rfz: -0.1, rfp: 35, rk: 1 };
+// (getting up, the lead hand is brought up off the canvas round the front of him, the elbow first: on the knee it is still on
+// its way, low in front of him and the elbow out)
+const KNEEL_UP = { ...KNEEL, lx: 0.1, ly: -0.72, lz: 0.16, le: 0.35 };
 const STEP = { hy: -0.4, hz: -0.04, tip: 30, lean: 34, yaw: 20, twist: 8, hp: 8, lx: 0.1, ly: -1.3, lz: 0.15, lg: 1, rx: -0.1, ry: -1.285, rz: 0.3, rg: 1, le: 0.3, re: 0.3, lfz: -0.22, lfy: 0.05, lfp: 15, rfz: -0.2, rfp: 55, rk: 1 };
 const UP_HALF = { hy: -0.34, hz: -0.04, lean: 28, hp: 16, lx: 0.06, ly: -0.3, rx: -0.04, ry: -0.6, rz: 0.18, rg: 0.3, side: 3, yaw: 4, rfz: -0.16, rfp: 36, rk: 0.2, lfz: 0.06 };
 const UP_NEAR = { hy: -0.08, lean: 10, hp: 4, hw: 10, ly: -0.08, ry: -0.1 };
@@ -283,7 +286,7 @@ export const MOVES = Object.assign(
     // up off his back: sitting up on his hands behind him, over onto the rear knee, and up, a little unsteady
     rise: {
       floor: true, dur: 2.3, blend: 0.8,
-      keys: [{ t: 0.02, e: 'lin', ...SIT }, { t: 0.8, ...SIT }, { t: 1.1, ...TUCK }, { t: 1.4, ...KNEEL }, { t: 1.75, ...UP_HALF }, { t: 2.0, ...UP_NEAR }, { t: 2.15, ...UP_DONE }]
+      keys: [{ t: 0.02, e: 'lin', ...SIT }, { t: 0.7, ...SIT }, { t: 1.1, ...TUCK }, { t: 1.4, ...KNEEL_UP }, { t: 1.75, ...UP_HALF }, { t: 2.0, ...UP_NEAR }, { t: 2.15, ...UP_DONE }]
     },
     /* dropped: the legs go, he sags, and the rear knee and the rear glove go down onto the canvas (the solver puts them on
        it); he stays there, head down. He means this one, so it is a move, not a fall. */
@@ -302,13 +305,13 @@ export const MOVES = Object.assign(
     },
     // up off his front: pushed up onto his hands and knees, onto the rear knee, and up
     riseFront: {
-      floor: true, dur: 2.3, blend: 0.8,
-      keys: [{ t: 0.02, e: 'lin', ...FOURS }, { t: 0.8, ...FOURS }, { t: 1.05, ...STEP }, { t: 1.35, ...KNEEL }, { t: 1.7, ...UP_HALF }, { t: 1.95, ...UP_NEAR }, { t: 2.1, ...UP_DONE }]
+      floor: true, dur: 2.3, blend: 1,
+      keys: [{ t: 0.02, e: 'lin', ...FOURS }, { t: 0.8, ...FOURS }, { t: 1.05, ...STEP }, { t: 1.35, ...KNEEL_UP }, { t: 1.7, ...UP_HALF }, { t: 1.95, ...UP_NEAR }, { t: 2.1, ...UP_DONE }]
     },
     // up off his side: rolled over onto his hands and knees as he pushes up, and on as from his front
     riseSide: {
-      floor: true, dur: 2.4, blend: 0.9,
-      keys: [{ t: 0.02, e: 'lin', ...FOURS }, { t: 0.9, ...FOURS }, { t: 1.15, ...STEP }, { t: 1.45, ...KNEEL }, { t: 1.8, ...UP_HALF }, { t: 2.05, ...UP_NEAR }, { t: 2.2, ...UP_DONE }]
+      floor: true, dur: 2.4, blend: 1.1,
+      keys: [{ t: 0.02, e: 'lin', ...FOURS }, { t: 0.9, ...FOURS }, { t: 1.15, ...STEP }, { t: 1.45, ...KNEEL_UP }, { t: 1.8, ...UP_HALF }, { t: 2.05, ...UP_NEAR }, { t: 2.2, ...UP_DONE }]
     },
     // arms up, mixed in for the winner
     cheer: { stay: true, dur: 1, keys: [{ t: 1, e: 'lin', lx: 0.2, ly: 0.52, lz: -0.2, rx: -0.2, ry: 0.55, rz: -0.02, le: 0.7, re: 0.7, lean: -15, yaw: 24, twist: 8, hp: -10, hy: 0.04 }] }

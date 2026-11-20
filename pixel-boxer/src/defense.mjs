@@ -147,6 +147,9 @@ const DRILLS = [
    a knee; with plenty, flat out), only at `from`, just before it arrives (a hurt man's posture is his own and would
    change where it lands), and he beats the count `up` seconds into the loop, and gets up the way match.mjs gets a man up
    (bout.mjs: getUp, where he lies and the way that fits how he lies). */
+/* (caught coming in: he throws his rear hand from out of range, stepping in behind it, and the other man's jab meets him on
+   the way: when each is pressed, how far apart they stand, and when he beats the count) */
+const FRONT = { gap: 1.76, cross: 0.6, jab: 0.58, up: 2.8 };
 const down = (hp, from, up) => ({
   hurt: true,
   setup: b => (b.knockdowns = true),
@@ -172,17 +175,22 @@ DRILLS.push(
     loop: 4.2, punch: ['cross', 0.6], outcome: 'hit', fall: 'drop', view: { yaw: 0.5, pitch: 0.3 }
   }),
   Object.assign(down(1.5, 1.02, 2.8), {
-    id: 'down-face', name: '다운 · 앞으로', en: 'Face first', group: '다운',
-    note: '훅에 몸이 돌아가며 무릎이 꺾이고, 돌던 대로 넘어가 캔버스에 엎드립니다(물리라 어떻게 떨어질지는 정해 두지 않았습니다). 두 손으로 밀어 네발이 되고, 한쪽 무릎을 거쳐 일어납니다.',
-    loop: 5.4, punch: ['hook', 1.0], cover: t => t > 0.1 && t < 0.95, outcome: 'hit', before: 'block', fall: 'slump', view: { yaw: 0.5, pitch: 0.3 }
+    id: 'down-side', name: '다운 · 옆으로', en: 'Sideways', group: '다운',
+    note: '훅이 닿는 순간 글러브는 그의 오른쪽으로, 조금 뒤와 위로 가고 있었습니다(이 거리의 훅은 턱 밑을 지나쳤다가 어깨가 다시 끌어당기는 길에 닿습니다). 넘어지는 몸에는 그 방향 그대로 머리의 충격과 몸 전체의 밀림이 들어가, 무릎이 꺾이며 오른쪽 옆으로 쓰러집니다. 옆으로 떨어진 몸은 앞으로 숙인 상체와 가드 팔 쪽으로 굴러 엎드립니다(물리라 어떻게 눕는지는 정해 두지 않았습니다). 두 손으로 밀어 네발이 되고, 한쪽 무릎을 거쳐 일어납니다.',
+    loop: 5.4, punch: ['hook', 1.0], cover: t => t > 0.1 && t < 0.97, outcome: 'hit', before: 'block', fall: 'slump', view: { yaw: 0.5, pitch: 0.3 }
+  }),
+  Object.assign(down(0.05, FRONT.jab - 0.02, FRONT.up), {
+    id: 'down-front', name: '다운 · 앞으로', en: 'Caught coming in', group: '다운',
+    note: '멀리서 스트레이트를 치며 밟고 들어가다 상대의 잽에 맞습니다. 맞기 직전 몸이 앞으로 초속 3.6 m로 들어가고 있어, 잽이 민 것보다 들어가던 운동량이 커서 앞으로 쏟아져 엎드립니다(어디로 떨어질지는 물리가 정합니다). 두 손으로 밀어 네발이 되고, 한쪽 무릎을 거쳐 일어납니다.',
+    loop: 5.4, gap: FRONT.gap, press: [[FRONT.cross, 'power']], punch: ['jab', FRONT.jab], outcome: 'hit', fall: 'ko', view: { yaw: 0.5, pitch: 0.3 }
   })
 );
 
 const placed = e =>
   Object.assign({}, e, {
     me: () => HOME,
-    // (countered, he is left where the counter puts him: it is the end of the exchange)
-    him: t => (e.kind === 'counter' && t > e.punch[1] + 0.3 ? null : [HOME[0] + (e.punch ? RANGE[e.punch[0]] : 1.15), HOME[1]]),
+    // (countered, he is left where the counter puts him: it is the end of the exchange; a drill may put him further off)
+    him: t => (e.kind === 'counter' && t > e.punch[1] + 0.3 ? null : [HOME[0] + (e.gap || (e.punch ? RANGE[e.punch[0]] : 1.15)), HOME[1]]),
     against: e.throws || (e.punch ? THROW[e.punch[0]].map(([dt, button]) => [e.punch[1] + dt, button]) : [])
   });
 // the blows and the knockdowns (one card each: being hit has no grade), and the graded rows

@@ -1,7 +1,8 @@
 /* A physics audit of everything the boxers do: every scripted bout in the catalogue (footwork and the defence at every grade,
    the blows, the skill ladder) is fought once, and in every frame both bodies are held against what a body can do and what the world allows:
-     anatomy    joint ranges (rig/body.mjs: RANGE): elbow, shoulder, knee, hip, ankle, spine, neck; limbs changing length; a
-                joint flipping over between frames
+     anatomy    joint ranges (rig/body.mjs: RANGE, and SHOULDER for where the upper arm can point and how far it can turn
+                about itself): elbow, shoulder, knee, hip, ankle, spine, neck; limbs changing length; a joint flipping over
+                between frames
      contact    anything under the canvas; a man's own glove inside his trunk or head; one man inside the other
      dynamics   the centre of mass: falling faster than gravity, thrown upward, standing where he would topple; how fast the
                 joints of a punch turn
@@ -17,7 +18,7 @@
    its ankle is low or its ball is on the canvas (a heel raised off a ball that is down is still a foot on the canvas). */
 import * as M from './rig/m3.mjs';
 import { fk, TPOSE } from './rig/skeleton.mjs';
-import { RANGE as LIMIT, RADIUS, SEGMENTS, HEAD, GLOVE } from './rig/body.mjs';
+import { RANGE as LIMIT, RADIUS, SEGMENTS, HEAD, GLOVE, shoulderOf } from './rig/body.mjs';
 import { step } from './game/bout.mjs';
 import { ENTRIES, freshBout, drive } from './footwork.mjs';
 import { DEFENSE } from './defense.mjs';
@@ -68,9 +69,16 @@ export function measure(f) {
     out.lengths[S + 'Shin'] = dist(kn, an);
     // ---- arm
     a[S + 'Elbow'] = angle(M.sub(sh, el), M.sub(wr, el));
-    const u = mir(into(R.Chest, unit(M.sub(el, sh)))); // the upper arm as the chest sees it: x out, y up, z ahead
-    a[S + 'ShoulderBehind'] = u[2] < 0 ? Math.asin(Math.min(1, -u[2])) * DEG : 0;
-    a[S + 'ShoulderAcross'] = u[0] < 0 ? Math.asin(Math.min(1, -u[0])) * DEG : 0;
+    // the upper arm as the chest sees it (x out, y up, z ahead), and the way its forearm bends from it: read against the
+    // shoulder's table (body.mjs: SHOULDER)
+    const u = mir(into(R.Chest, unit(M.sub(el, sh)))),
+      sho = shoulderOf(u, mir(into(R.Chest, axis(R[S + 'Arm'], 2))));
+    a[S + 'ShoulderPlane'] = sho.plane;
+    a[S + 'ShoulderElev'] = sho.elev;
+    a[S + 'ShoulderTwist'] = sho.twist;
+    a[S + 'ShoulderZone'] = sho.zone;
+    a[S + 'ShoulderTurned'] = sho.turned;
+    a[S + 'ArmUp'] = u;
     // which way the elbow points round the line from shoulder to wrist (for seeing it flip between frames)
     const line = unit(M.sub(wr, sh)),
       off = reject(M.sub(el, sh), line),
@@ -227,8 +235,8 @@ export function audit(scripts, o) {
         for (const S of ['Left', 'Right']) {
           note('elbow past straight', a[S + 'Elbow'], where, a[S + 'Elbow'] > LIMIT.elbowStraight);
           note('elbow folded past its limit', a[S + 'Elbow'], where, a[S + 'Elbow'] < LIMIT.elbowFolded);
-          note('upper arm behind the chest', a[S + 'ShoulderBehind'], where, a[S + 'ShoulderBehind'] > LIMIT.shoulderBehind);
-          note('upper arm across the chest', a[S + 'ShoulderAcross'], where, a[S + 'ShoulderAcross'] > LIMIT.shoulderAcross);
+          note('upper arm in a place the shoulder cannot put it (degrees past)', a[S + 'ShoulderZone'], where, a[S + 'ShoulderZone'] > 0);
+          note('upper arm turned past its range (degrees past)', a[S + 'ShoulderTurned'], where, a[S + 'ShoulderTurned'] > 0);
           note('knee folded past its limit', a[S + 'Knee'], where, a[S + 'Knee'] < LIMIT.kneeFolded);
           if (a[S + 'KneeRound'] !== null && a[S + 'Knee'] < 160) note('knee bent the wrong way round', a[S + 'KneeRound'], where, a[S + 'KneeRound'] < LIMIT.kneeAzimuth[0] || a[S + 'KneeRound'] > LIMIT.kneeAzimuth[1]);
           note('thigh behind the pelvis', a[S + 'HipBehind'], where, a[S + 'HipBehind'] > LIMIT.hipBehind);

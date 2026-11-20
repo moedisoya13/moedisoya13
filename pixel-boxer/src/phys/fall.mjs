@@ -3,14 +3,19 @@
    are, each joint held inside the range a body has (rig/body.mjs), all of it under gravity, on a canvas that holds it up and
    grips it, and with his limbs kept out of his own trunk and head (and out of the other man's legs, if he falls at them).
    It starts as he was: his pose, how fast each part was moving, and the blow that put him there (its impulse at his head,
-   and the shove the bout gave him). His muscles hold the pose he was in and let go of it in a quarter of a second, from the
-   legs up: the knees and hips first, then the trunk, the neck, the arms last. So he goes at the knees and folds, and lands
-   however the blow and his weight take him: back and away from a straight, turned by a hook, further for a harder one.
+   the way the glove was going as it met him, and the shove the bout gave him that way, with whatever he was already moving
+   at: game/bout.mjs). His muscles hold the pose he was in and let go of it in a quarter of a second, from the legs up: the
+   knees and hips first, then the trunk, the neck, the arms last. So he goes at the knees and folds, and lands however the
+   blow and his weight take him: back and away from a straight, the way a hook's glove was going, forward if he was coming
+   in, further for a harder one. The shoulders are held to the same table the solver and the audit use (rig/body.mjs:
+   SHOULDER).
    Lying there, he still breathes.
    It is stepped at a fixed rate (twelve steps a frame), with nothing random in it, so a bout replays exactly.
      const body = createFall(pose, before, dt, blow)   pose, before: his last two solved poses (his own space); blow: { J
-                                                        (newton-seconds), dir (unit, his space), at (where, his space), push
-                                                        (his whole body's speed from the shove, [x, z] m/s) } | null
+                                                        (newton-seconds), dir (unit, his space: the way the glove was going
+                                                        as it met him), at (where, his space), push (his whole body's speed
+                                                        from the shove and from what he was already moving at, [x, y, z]
+                                                        m/s, or [x, z]) } | null
      stepFall(body, dt, obstacles)                     obstacles: [[centre, radius]] he cannot fall through (his space)
      poseOf(body, clock)                               -> a pose, as solve() returns one (rot, root, at, head, stretch)
      lyingOf(body)                                     -> how he has come to rest: { on: 'back' | 'front' | 'side', down:
@@ -21,7 +26,7 @@
    right by moving and turning the bodies as their masses and inertias share it, and the velocities are what that comes to. */
 import * as M from '../rig/m3.mjs';
 import { NAMES, PARENT, TPOSE, fk } from '../rig/skeleton.mjs';
-import { RANGE, FOOT, HEAD } from '../rig/body.mjs';
+import { RANGE, FOOT, HEAD, shoulderOf } from '../rig/body.mjs';
 
 const G = 9.81,
   STEPS = 12,
@@ -133,7 +138,7 @@ const LIM = {
   // (and the two together, the chest on the pelvis, as a whole: each half's limits do not add up to the whole's)
   trunk: { fwd: [-(R.spineBack - 4), R.spineForward - 6], side: R.spineSide - 4, twist: R.spineTwist - 5 },
   neck: { fwd: [-(R.neckUp - 6), R.neckDown - 6], side: R.neckTilt - 6, twist: R.neckTurn - 8 },
-  shoulder: { across: R.shoulderAcross - 5, behind: R.shoulderBehind - 5, twist: 80 },
+  shoulder: 4, // degrees inside where the shoulder lets the upper arm point and turn (body.mjs: SHOULDER)
   elbow: { fold: 180 - R.elbowFolded - 4 },
   hip: { behind: R.hipBehind - 4, out: R.hipOut - 4, in: R.hipIn - 4, up: 120, twist: 40 },
   knee: { fold: 180 - R.kneeFolded - 4 },
@@ -147,7 +152,8 @@ const HEAD_SHARE = 0.4; // of a blow's impulse, what his head takes (the rest re
 const DAMP = { move: 0.4, turn: 0.8, joint: 2.5, arm: 8, roll: 40 };
 // how near his own trunk's line a glove may come, and his head's middle a glove; any other part of a limb, its own thickness
 // and this much
-const KEEP = { glove: 0.16, head: 0.125, limb: 0.1 };
+const KEEP = { glove: 0.16, head: 0.13, limb: 0.1 };
+const PRESS = 0.004; // metres a pass a limb is pressed out of his trunk at the most
 
 const inertia = (m, [a, b, c]) => [(m / 3) * (b * b + c * c), (m / 3) * (a * a + c * c), (m / 3) * (a * a + b * b)];
 
@@ -229,7 +235,7 @@ export function createFall(pose, before, dt, blow) {
     /* The shove the bout gave him is the speed of all of him; the blow itself lands on his head, and turns him: its
        momentum is taken out of the shove so that he goes, all told, as far as the shove says. */
     const M_all = PIECES.reduce((s, p) => s + p.mass, 0),
-      push = [blow.push ? blow.push[0] : 0, 0, blow.push ? blow.push[1] : 0],
+      push = !blow.push ? [0, 0, 0] : blow.push.length === 3 ? blow.push.slice() : [blow.push[0], 0, blow.push[1]],
       J = M.scale(blow.dir, blow.J || 0),
       base = M.sub(push, M.scale(J, 1 / M_all));
     for (const b of bodies) b.v = M.add(b.v, base);
@@ -290,12 +296,20 @@ function limit(j, p, c) {
   // a ball: the bone's direction kept inside its cone, and its twist about itself
   const bone = j.kind === 'shoulder' ? [j.sOf, 0, 0] : [0, -1, 0],
     d = qrot(rel, bone);
-  let dn = d.slice();
+  let dn = d.slice(),
+    tw = null;
   if (j.kind === 'shoulder') {
-    const m = [d[0] * j.sOf, d[1], d[2]]; // mirrored: x out
-    m[0] = Math.max(m[0], -Math.sin(L.across * RAD));
-    m[2] = Math.max(m[2], -Math.sin(L.behind * RAD));
-    dn = unit([m[0] * j.sOf, m[1], m[2]]);
+    /* (where the shoulder lets the upper arm point, the table that the solver and the audit use: one raised past the most of
+       its plane is let down in that plane to it; and turned about itself, the way its forearm bends, past what that
+       elevation allows, turned back. Mirrored: x out, and a turn the other way for the right arm) */
+    const z = qrot(rel, [0, 0, 1]),
+      sh = shoulderOf([d[0] * j.sOf, d[1], d[2]], [z[0] * j.sOf, z[1], z[2]], L);
+    if (sh.zone > 0) {
+      const e = (sh.elev - sh.zone) * RAD,
+        pl = sh.plane * RAD;
+      dn = [Math.cos(pl) * Math.sin(e) * j.sOf, -Math.cos(e), Math.sin(pl) * Math.sin(e)];
+    }
+    if (sh.turned > 0) tw = toWorld(M.scale(d, -Math.sign(sh.twist) * j.sOf * sh.turned * RAD));
   } else if (j.kind === 'hip') {
     const m = [d[0] * j.sOf, d[1], d[2]];
     m[0] = clamp(m[0], -Math.sin(L.in * RAD), Math.sin(L.out * RAD));
@@ -322,8 +336,8 @@ function limit(j, p, c) {
   }
   const fix = cross(d, dn),
     a = Math.asin(clamp(len(fix), 0, 1)),
-    swing = len(fix) > 1e-6 ? M.scale(unit(fix), a) : [0, 0, 0],
-    tw = twist(rel, bone, L.twist, toWorld);
+    swing = len(fix) > 1e-6 ? M.scale(unit(fix), a) : [0, 0, 0];
+  if (j.kind !== 'shoulder') tw = twist(rel, bone, L.twist, toWorld);
   const out = M.add(toWorld(swing), tw || [0, 0, 0]);
   return len(out) > 1e-6 ? out : null;
 }
@@ -490,7 +504,9 @@ export function stepFall(body, dt, obstacles) {
             home = (b.leg && k < 0.25) || (b.name.endsWith('arm') && k > 0.8);
           if (!home && dl < keep) {
             const trunk = k < 0.2 ? pelvis : k < 0.6 ? bs[INDEX.belly] : chest;
-            positional(b, M.sub(pnt, b.x), trunk, M.sub(near, trunk.x), M.scale(unit(d, [1, 0, 0]), dl - keep), 0, h);
+            // (a glove all the way out at once; any other part of a limb so much a pass, so that a trunk landing on an arm
+            // presses it out from under him rather than flinging it)
+            positional(b, M.sub(pnt, b.x), trunk, M.sub(near, trunk.x), M.scale(unit(d, [1, 0, 0]), glove ? dl - keep : Math.max(dl - keep, -PRESS)), 0, h);
             pressed.push([b, local, trunk, unit(d, [1, 0, 0])]);
           }
           if (b.name.endsWith('fore')) {
@@ -502,6 +518,15 @@ export function stepFall(body, dt, obstacles) {
           }
         }
       }
+      /* (and the shoulders once more, after all that: a man who lands on his own arm does not have it shoved past where the
+         shoulder lets it go, the canvas or his trunk making room for it instead) */
+      JOINTS.forEach(j => {
+        if (j.kind !== 'shoulder') return;
+        const p = bs[INDEX[j.parent]],
+          c = bs[INDEX[j.child]],
+          fix = limit(Object.assign({ sOf: j.s === 'R' ? -1 : 1 }, j), p, c);
+        if (fix) angular(c, p, fix, 0, h);
+      });
       if (obstacles)
         for (const b of bs)
           for (const [local, r] of b.balls) {

@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { step } from '../src/game/bout.mjs';
 import { freshBout, drive } from '../src/footwork.mjs';
 import { DEFENSE } from '../src/defense.mjs';
-import { RISE, LIE } from '../src/anim/moves.mjs';
+import { RISE, LIE, MOVES } from '../src/anim/moves.mjs';
 
 const DT = 1 / 60;
 const OUTCOMES = ['hit', 'block', 'parry', 'whiff', 'graze'];
@@ -51,7 +51,8 @@ for (const entry of DEFENSE.filter(e => e.fall))
         name = a ? a.name : 'guard';
       if (done[done.length - 1] !== name) (done.push(name), a && a.from && (from = a.from));
     }
-    const moves = done.filter(n => n !== 'guard');
+    // (a man caught coming in is throwing a punch as he goes: what he does after it is the card's)
+    const moves = done.filter(n => n !== 'guard' && !MOVES[n].punch);
     assert.equal(moves[0], entry.fall, JSON.stringify(done));
     assert.equal(moves[1], entry.fall === 'drop' ? RISE.drop : LIE[from], `${JSON.stringify(done)} (lying on his ${from})`);
     assert.equal(moves.length, 2, JSON.stringify(done));

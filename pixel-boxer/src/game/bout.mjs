@@ -579,8 +579,9 @@ function strike(bout, f, other, who, dt) {
   f.sinceLast = 0;
   // (a touch on the head is nothing; on the gloves it is still met, however early and slow: turned aside or smothered)
   if (J < RULES.graze && first.what === 'head') return bout.events.push(Object.assign({ type: 'graze' }, blow));
-  const [side, front] = local(other, n[0], n[2]),
-    felt = { J, dir: [side, n[1], front] }; // the way the blow went, as the man who took it would say
+  // the way the blow went (the glove's way as it met him), as the man who took it would say: what his body takes it by
+  const [side, front] = local(other, vec[0], vec[2]),
+    felt = { J, dir: [side, vec[1], front] };
   const stop = Math.max(RULES.stop[0], Math.min(RULES.stop[1], J * RULES.stop[2]));
 
   if (first.what === 'guard') {
@@ -635,10 +636,19 @@ function strike(bout, f, other, who, dt) {
   bout.events.push(Object.assign({ type: 'hit', damage: +damage.toFixed(1), counter, down }, blow));
   if (down) {
     /* How he goes: a blow that only just finished him puts him down on a knee; one with plenty to spare lays him out, a
-       body falling the way the blow and his weight take it (phys/fall.mjs: it is handed the blow, and the shove, which
-       is then his body's and not his place's to carry). */
+       body falling the way the blow went and the way he was going (phys/fall.mjs: it is handed the blow, the way the glove
+       was going as it met him, and the shove that goes with it, the same way, up or down as well as along the canvas; on
+       top of what was still pushing him and all he was moving at, his walking and his stepping in. These are his body's
+       now, not his place's to carry). */
     const knee = damage - had < RULES.drop;
-    begin(other, knee ? 'drop' : move.kind === 'hook' ? 'slump' : 'ko', knee ? {} : { blow: { J: worth, dir: M.app(M.tr(other.place.R), n), at: mine(other, blow.at), push: local(other, other.kx, other.kz) } });
+    let laid = null;
+    if (!knee) {
+      const way = M.app(M.tr(other.place.R), vec), // (in his own terms)
+        [x, z] = local(other, other.kx - dir[0] * push + other.vx + other.ix, other.kz - dir[1] * push + other.vz + other.iz);
+      laid = { J: worth, dir: way, at: mine(other, blow.at), push: [x + way[0] * push, way[1] * push, z + way[2] * push] };
+      other.vx = other.vz = other.ix = other.iz = 0;
+    }
+    begin(other, knee ? 'drop' : move.kind === 'hook' ? 'slump' : 'ko', knee ? {} : { blow: laid });
     // (laid out, the shove is his body's now; dropped to a knee, he sags where he stands, his feet under him)
     other.kx = other.kz = 0;
     other.down = 1;

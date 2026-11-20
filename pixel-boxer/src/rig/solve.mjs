@@ -4,29 +4,35 @@
      { hips: [x, y, z],
        spine: { Hips, Spine1, Spine2, Chest, Neck1, Head: [x, y, z] degrees, or a 3x3 rotation },
        feet:  { L | R: { at: [x, y, z] (where the ankle would be with the foot flat: 0.09 high on the canvas), yaw, pitch
-                         (the heel raised, degrees); or ankle: [x, y, z] and R: the foot's 3x3 turn, as they are (a foot
+                         (the heel raised, degrees), roll (onto an edge, degrees: + its left side up); or ankle: [x, y, z] and R: the foot's 3x3 turn, as they are (a foot
                          lying however a fall left it); pole (where the knee points, in his space) and poleW (how much: left
                          out, it points over the foot, as the pelvis turns); out (degrees the knee is turned round the leg
                          from there: in, negative, as a hook's pivot turns it; out, positive, as a squat does) } },
        hands: { L | R: { at: [x, y, z] (the wrist), pole: where the elbow points, as the chest sees it (or toward: the same,
                          in his own space), round: { was, most } (where the elbow was round the arm last frame, degrees, and
-                         how far it may go round from there this frame) } },
+                         how far it may go round from there this frame), shoulder: { was, most } (the upper arm's way last
+                         frame, as solve() gave it in arms, and how many degrees it may swing from there this frame), last:
+                         where the wrist was last frame (where a hand the shoulder cannot put where it is sent goes instead,
+                         as near that as will do) } },
        stretch }
    solve(stance) -> { root, rot: { Joint: 3x3 local }, stretch, at: { Joint: where it is, in his space }, head (the middle
-                      of the head), round: { L, R }, knees: { L, R } (each knee round its leg, as the flip limit reads it),
+                      of the head), round: { L, R }, arms: { L, R } (each upper arm's way as the chest sees it, mirrored
+                      onto the left: what the shoulder's swing limit reads), knees: { L, R } (each knee round its leg, as
+                      the flip limit reads it),
                       knee: { L | R: { flex, out } } (each knee as it came out: degrees bent from straight, and degrees turned
                       out from over the foot, in negative) }
    centre(pose) -> his centre of mass, in his space as he is drawn (stretched about the canvas).
 
    The body is held inside what it can do (body.mjs), whatever it is asked: a heel that lifts turns the foot on its ball, so
    the ankle rises and the toes stay on the canvas, and nothing of the foot goes under it; a foot follows its shin when the
-   ankle would go past its range; the knee points the way the pelvis lets it and never under the canvas; the elbow keeps out
-   of the chest's way, off the canvas, and goes round the arm no faster than it can; a glove stays out of his own head and
+   ankle would go past its range; the knee points the way the pelvis lets it and never under the canvas; the elbow is put
+   where the shoulder lets the upper arm point and turn (body.mjs: SHOULDER), off the canvas, and goes round the arm and swings
+   no faster than it can, and where no elbow will do the hand goes less far; a glove stays out of his own head and
    trunk and on top of the canvas. Each of these moves a joint round the circle a limb's middle joint can be anywhere on, or
    moves the end of the limb, as little as it takes. */
 import * as M from './m3.mjs';
 import { NAMES, PARENT, TPOSE } from './skeleton.mjs';
-import { RANGE, RADIUS, FOOT, GLOVE, HEAD, SEGMENTS } from './body.mjs';
+import { RANGE, RADIUS, FOOT, GLOVE, HEAD, SEGMENTS, shoulderOf } from './body.mjs';
 
 const RAD = Math.PI / 180,
   DEG = 180 / Math.PI;
@@ -56,8 +62,7 @@ const KEEP = {
   ankleUp: RANGE.ankleUp - 3,
   ankleDown: RANGE.ankleDown - 3,
   ankleRoll: RANGE.ankleRoll - 3,
-  across: RANGE.shoulderAcross - 3,
-  behind: RANGE.shoulderBehind - 3,
+  shoulder: 3, // degrees inside where the shoulder lets the upper arm point and turn (body.mjs: SHOULDER)
   reach: 30, // how far behind the chest's plane a hand may be put, from its shoulder: so far there is always an elbow for it
   knee: [RANGE.kneeAzimuth[0] + 6, RANGE.kneeAzimuth[1] - 6],
   hipIn: RANGE.hipIn - 3,
@@ -175,7 +180,8 @@ export function solve(stance) {
     rot = {},
     round = {},
     knees = {},
-    knee = {};
+    knee = {},
+    arms = {};
   const place = (name, local) => {
     const parent = PARENT[name];
     rot[name] = local;
@@ -199,16 +205,20 @@ export function solve(stance) {
     const shoulder = P[Side + 'Arm'],
       // the elbow's direction turns with the chest, so it does not swing round when the shoulders do
       pole = hand.toward || M.app(G.Chest, hand.pole || [s * 0.5, -1, -0.2]), // (toward: the same, already in his own space)
-      // (the upper arm as the chest sees it, mirrored onto the left: x out, y up, z ahead)
-      seen = elbow => {
-        const d = M.app(M.tr(G.Chest), norm(M.sub(elbow, shoulder)));
+      // (a direction as the chest sees it, mirrored onto the left: x out, y up, z ahead; the upper arm's, for an elbow)
+      mirror = v => {
+        const d = M.app(M.tr(G.Chest), v);
         return [d[0] * s, d[1], d[2]];
       },
-      chestWay = elbow => {
-        const d = seen(elbow);
-        return Math.asin(clamp(-d[0], -1, 1)) * DEG <= KEEP.across && Math.asin(clamp(-d[2], -1, 1)) * DEG <= KEEP.behind;
+      seen = elbow => mirror(norm(M.sub(elbow, shoulder))),
+      // where the shoulder lets the upper arm point, and how far it lets it turn, for an elbow and the wrist it holds
+      ball = wrist => elbow => {
+        const sh = shoulderOf(seen(elbow), mirror(M.sub(wrist, elbow)), KEEP.shoulder);
+        return sh.zone <= 0 && sh.turned <= 0;
       },
-      rules = [elbow => elbow[1] >= RADIUS.ForeArm, chestWay];
+      // and how fast it lets it swing: so far from where it was last frame
+      swing = elbow => !hand.shoulder || !hand.shoulder.was || Math.acos(clamp(dot(seen(elbow), hand.shoulder.was), -1, 1)) * DEG <= hand.shoulder.most,
+      onTop = elbow => elbow[1] >= RADIUS.ForeArm;
     /* (a hand cannot be put far behind the chest's plane: the shoulder does not go there. A target that is, as a hook
        thrown by a body turned past what it was aimed at would ask, is brought round in front to where it can be reached) */
     let target = hand.at,
@@ -223,19 +233,50 @@ export function solve(stance) {
         target = M.add(shoulder, M.scale(M.app(G.Chest, [d[0] * k, d[1] * k, -most]), l));
       }
     }
+    /* The elbow is kept off the canvas and put where the shoulder lets the upper arm be (body.mjs: SHOULDER), and then (each
+       given up before the one ahead of it) goes round the arm only so fast, so that an arm passing through a pose with no
+       good answer does not flip over, and swings the upper arm only so fast; of two ways round, the nearer the way it went
+       last frame. Where no elbow lets the hand get where it is sent inside the shoulder's range without flipping over round
+       the arm, the hand goes less far: its way from the shoulder is brought round toward where a guard's hand is until one
+       does (but not a punching hand's). */
+    const rulesFor = wrist => {
+      const r = hand.round,
+        rate = elbow => {
+          if (!r || r.was === null || r.was === undefined) return true;
+          const now = roundOf(shoulder, elbow, wrist, chestUp);
+          return now === null || Math.abs(wrap(now - r.was)) <= r.most;
+        };
+      // (a punch on its way is thrown, and where it goes is what it hits: its elbow is where the throw puts it)
+      return hand.punch ? [onTop, rate] : [onTop, ball(wrist), rate, swing];
+    };
+    // (of two ways round that will do, the one nearer where the elbow was round the arm last frame)
+    const nearer = wrist => (hand.round && hand.round.was !== null && hand.round.was !== undefined ? elbow => {
+      const now = roundOf(shoulder, elbow, wrist, chestUp);
+      return now === null ? 0 : Math.abs(wrap(now - hand.round.was));
+    } : null);
+    // (whether an elbow lets the shoulder put the hand there without going round the arm faster than it can)
+    const reachable = to => {
+      const a = limb(shoulder, to, LEN.upperArm, LEN.foreArm, pole, rulesFor(to).slice(0, 3), undefined, undefined, nearer(to));
+      return a.kept === undefined ? ball(to)(a.mid) : a.kept >= 3;
+    };
+    // (not a punching hand: a punch is thrown, and where it goes is what it hits)
+    const within = at => {
+      if (hand.punch || reachable(at)) return at;
+      const to = M.sub(at, shoulder),
+        l = len(to),
+        from = norm(to),
+        // (toward where it was last frame first, so that it does not jump; and then toward where a guard's hand is)
+        ways = [hand.last ? norm(M.sub(hand.last, shoulder)) : null, M.app(G.Chest, norm([-s * 0.45, -0.2, 0.87]))].filter(Boolean);
+      for (const way of ways)
+        for (let k = 1; k <= 20; k++) {
+          const t = M.add(shoulder, M.scale(norm(M.lerp(from, way, k / 20)), l));
+          if (reachable(t)) return t;
+        }
+      return M.add(shoulder, M.scale(ways[ways.length - 1], l));
+    };
+    target = within(target);
     for (let pass = 0; pass < 5; pass++) {
-      const wrist = target;
-      if (hand.round && hand.round.was !== null && hand.round.was !== undefined) {
-        /* (it goes round the arm only so fast: an arm passing through a pose with no good answer does not flip over, and
-           where it cannot keep both, it keeps this before the chest's way, which it comes back to as it can) */
-        const r = hand.round,
-          rate = elbow => {
-            const now = roundOf(shoulder, elbow, wrist, chestUp);
-            return now === null || Math.abs(wrap(now - r.was)) <= r.most;
-          };
-        rules.splice(1, rules.length - 1, rate, chestWay);
-      }
-      arm = limb(shoulder, target, LEN.upperArm, LEN.foreArm, pole, rules);
+      arm = limb(shoulder, target, LEN.upperArm, LEN.foreArm, pole, rulesFor(target), undefined, undefined, nearer(target));
       // the glove: out of his own head and trunk, and on top of the canvas
       const glove = M.add(arm.end, M.scale(norm(M.sub(arm.end, arm.mid)), GLOVE.ahead)),
         trunk = M.sub(P.Chest, P.Hips),
@@ -249,12 +290,20 @@ export function solve(stance) {
       }
       if (glove[1] + push[1] < GLOVE.r) push[1] = GLOVE.r + 0.004 - glove[1];
       if (len(push) < 1e-4) break;
-      target = M.add(arm.end, push);
+      target = within(M.add(arm.end, push));
     }
     const d1 = norm(M.sub(arm.mid, shoulder)),
       d2 = norm(M.sub(arm.end, arm.mid));
     let fold = cross(d2, d1);
-    fold = len(fold) < 1e-4 ? norm(cross(norm(reject(pole, d1)), d1)) : norm(fold);
+    if (len(fold) < 0.05) {
+      /* (an arm all but straight is turned about itself the way its elbow is asked to point, and no further than the shoulder
+         lets it: what it bends toward is put back inside the turn its elevation allows) */
+      fold = norm(cross(norm(reject(pole, d1)), d1));
+      const bends = cross(d1, fold),
+        sh = shoulderOf(seen(arm.mid), mirror(bends), KEEP.shoulder);
+      // (turning it about itself by phi turns it by s phi as the mirrored chest sees it)
+      if (sh.turned > 0) fold = turned(fold, d1, -Math.sign(sh.twist) * s * sh.turned * RAD);
+    } else fold = norm(fold);
     fold = M.scale(fold, s);
     const x1 = M.scale(d1, s),
       x2 = M.scale(d2, s);
@@ -262,6 +311,7 @@ export function solve(stance) {
     aim(Side + 'ForeArm', fromCols(x2, fold, cross(x2, fold)));
     place(Side + 'Hand', M.id());
     round[side] = roundOf(shoulder, P[Side + 'ForeArm'], P[Side + 'Hand'], chestUp);
+    arms[side] = seen(P[Side + 'ForeArm']);
 
     // ---- leg: the bones run down their own -Y, and the knee folds about their X
     const foot = stance.feet[side];
@@ -295,7 +345,7 @@ export function solve(stance) {
       return x >= -Math.sin(KEEP.hipIn * RAD) && x <= Math.sin(KEEP.hipOut * RAD) && -t[2] <= Math.sin(KEEP.hipBehind * RAD);
     };
     let pitch = foot.pitch || 0,
-      roll = 0,
+      roll = foot.roll || 0,
       F,
       leg;
     for (let pass = 0; pass < 4; pass++) {
@@ -367,7 +417,7 @@ export function solve(stance) {
     place(Side + 'ToeBase', M.rx(-Math.max(0, foot.R ? 0 : pitch) * 0.8)); // the toes stay on the canvas when the heel lifts
   }
   for (const name of NAMES) if (!rot[name]) place(name, M.id());
-  return { root: M.sub(stance.hips, TPOSE.Hips), rot, stretch: stance.stretch || 1, at: P, head, round, knees, knee };
+  return { root: M.sub(stance.hips, TPOSE.Hips), rot, stretch: stance.stretch || 1, at: P, head, round, knees, knee, arms };
 }
 
 // his centre of mass (Dempster's shares, body.mjs), as he is drawn: stretched taller and thinner about the canvas

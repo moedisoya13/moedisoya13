@@ -12,7 +12,8 @@
                threat: { eta (seconds until the punch coming at him gets there), dir } | null, stun: bool (stopped by a blow),
                shoved: metres a second he is being knocked back at,
                cheer: bool, still: bool (lying on the canvas) }
-     a.strike({ J, dir: [left, up, ahead] })         he has just been hit: the impulse in newton-seconds, and the way it went
+     a.strike({ J, dir: [left, up, ahead] })         he has just been hit: the impulse in newton-seconds, and the way the glove
+                                                      was going as it met him
      a.rhythm                                         his beat: { beat, cycle, halves, stepping, landed, lead, flourish }
      a.covered                                        how far his gloves are up into his guard, 0..1
      a.getUp()                                        knocked down and lying still: the way up that fits how he lies, and
@@ -25,7 +26,7 @@ import { TPOSE, fk } from '../rig/skeleton.mjs';
 import { solve, centre, footPose, LEN } from '../rig/solve.mjs';
 import { createFall, stepFall, poseOf, lyingOf, moveFall } from '../phys/fall.mjs';
 import * as Q from './quat.mjs';
-import { FOOT, HEAD } from '../rig/body.mjs';
+import { FOOT, HEAD, shoulderOf } from '../rig/body.mjs';
 import { LINKS, stepChain } from '../phys/chain.mjs';
 import { CHANNELS, GUARD, MOVES, LEFT_BEND, LIE, UP, sampleMove, mirrorKnees } from './moves.mjs';
 import { LEVEL } from './skill.mjs';
@@ -46,6 +47,24 @@ const HOP = 0.03; // metres an unweighted foot clears the canvas by, bouncing on
 const BOUNCE = { contact: 0.38, float: 0.016, knee: 5.4, slope: 0.0027 };
 // rocked: seconds it takes to wear off (to a third), and how quickly it comes on
 const WOBBLE = { last: 0.95, onset: 0.1 };
+/* Being hit (strike): the whole of him takes the blow's vector, the head first and the rest after it, down the body: the
+   trunk `trunk` seconds after the head, the hips `hips` after, the feet `feet` after. Amounts are for `ref` newton-seconds
+   (a clean cross) and go with the impulse (the bout caps it at 110), each a velocity given to a spring that is let go of as
+   it always was (so a harder blow is longer getting over):
+     back    the trunk laid back (`lean` degrees: its springs take it `give` degrees a second of kick for each degree they
+             lean it and bend it, and it leans and bends as it faces, turned to his right), the hips pushed back
+             (`hz`: 4 cm), the weight onto his heels: the lead foot's toes up (`toes` degrees), the rear heel down with it
+     up      the body lifted, as fast as the blow throws 75 kg (the bout's shove, 2.2 times physics) and so as high as that
+             throws a body (v^2 / 2g), but no higher than his legs reach up on his toes (`lift`: the first `knee` metres as
+             thrown, the rest less and less, never past `most`), pushed up over `push` seconds (under 3 g), down again
+             under gravity, and into his knees; the heels go up as the hips pass `free` metres (`heel` degrees a metre), and
+             the spine is straightened (laid back `ext` as much again as it is lifted)
+     across  the trunk bent the way it went (`side` degrees), the hips after it (`hx`: 3 cm), the other foot rolled
+             onto its inside edge (`edge`)
+     down    pressed down into his knees */
+// (of a head thrown by a blow, how much the gloves are not carried with it)
+const SNAP = 0.25;
+const HIT = { ref: 85, trunk: 0.03, hips: 0.045, feet: 0.06, lean: 27, ext: 0.3, side: 11, give: [26.6, 20], hz: 1.25, toes: 360, hx: 0.85, edge: 260, lift: { knee: 0.04, most: 0.055, push: 0.045, free: 0.02, heel: 330 }, mass: 75, shove: 2.2 };
 BOUNCE.squash = (4 * BOUNCE.float * BOUNCE.contact) / ((1 - BOUNCE.contact) * Math.PI); // the depth that meets the float at the same speed
 const ROCK = 0.034; // metres the weight swings forward and back between the feet, bouncing on the spot
 /* A dash's knees, degrees and seconds: the leg he pushes off bent `push` in `load` (two frames), straightened back to `out` by
@@ -64,6 +83,8 @@ const FALL = { down: 1.3 * 9.81, up: 3 * 9.81, brake: 2.4 * 9.81, back: 15 }; //
    and puts an elbow it has unfolded back on top of the canvas), and the difference is let go of over this rather than in a
    frame. */
 const UNLIE = 0.25;
+// (and how much nearer its shoulder each hand is brought on its way there, the elbow bent, metres at the middle of it)
+const FREE = 0.12;
 const clamp = (x, a, b) => (x < a ? a : x > b ? b : x);
 const smooth = x => ((x = clamp(x, 0, 1)), x * x * (3 - 2 * x));
 const bump = x => (x <= 0 || x >= 1 ? 0 : Math.sin(Math.PI * x) ** 2);
@@ -92,12 +113,13 @@ function headOf(hips, spine) {
 }
 // where the chest is and how it is turned, for the same: a hand that is locked to it is swung by it
 function chestOf(hips, spine) {
-  let R = M.euler(spine.Hips),
+  const E = e => (e && e.length === 9 ? e : M.euler(e || [0, 0, 0])); // (degrees, or a turn already)
+  let R = E(spine.Hips),
     p = hips,
     prev = 'Hips';
   for (const name of ['Spine1', 'Spine2', 'Chest']) {
     p = M.add(p, M.app(R, M.sub(TPOSE[name], TPOSE[prev])));
-    R = M.mul(R, M.euler(spine[name] || [0, 0, 0]));
+    R = M.mul(R, E(spine[name]));
     prev = name;
   }
   return { p, R };
@@ -285,6 +307,8 @@ export function createAnimator(seed) {
     lag = { x: 0, v: 0 }, // the upper body following the bounce, a touch late: what makes the gloves and head ride it
     elbow = { L: null, R: null }, // which way each elbow was pointing from its shoulder, last frame
     round = { L: null, R: null }, // and where it was round the arm (solve.mjs: roundOf), degrees
+    arm = { L: null, R: null }, // and each upper arm's way as the chest saw it (solve.mjs: arms)
+    wrist = { L: null, R: null }, // and where each wrist was
     knees = { L: null, R: null }, // and each knee round its leg (solve.mjs: azimuth), degrees
     // where each hand was drawn last frame and how fast it was going, and what is still owed to the move before
     hand = { L: null, R: null },
@@ -292,10 +316,18 @@ export function createAnimator(seed) {
     handCarry = { L: { x: [0, 0, 0], v: [0, 0, 0] }, R: { x: [0, 0, 0], v: [0, 0, 0] } },
     steer = { L: [0, 0, 0], R: [0, 0, 0] }; // how far each hand is being carried off its punch's nominal line onto the target
   // the give of a struck body: head (nod, turn, tilt), trunk (lean, side, turn), and how far the guard is knocked open
-  const give = { hp: { x: 0, v: 0 }, hw: { x: 0, v: 0 }, hr: { x: 0, v: 0 }, lean: { x: 0, v: 0 }, side: { x: 0, v: 0 }, yaw: { x: 0, v: 0 }, open: { x: 0, v: 0 }, sink: { x: 0, v: 0 } };
+  // (and the rest of him: the hips back and across, the lead toes up, a foot rolled onto an edge, the knees taking him)
+  const give = { hp: { x: 0, v: 0 }, hw: { x: 0, v: 0 }, hr: { x: 0, v: 0 }, lean: { x: 0, v: 0 }, side: { x: 0, v: 0 }, yaw: { x: 0, v: 0 }, open: { x: 0, v: 0 }, sink: { x: 0, v: 0 }, hz: { x: 0, v: 0 }, hx: { x: 0, v: 0 }, toes: { x: 0, v: 0 }, edge: { x: 0, v: 0 }, settle: { x: 0, v: 0 } };
+  // the head as a blow throws it this frame (nod, turn, tilt: what of the give is the head's)
+  const snap = { hp: 0, hw: 0, hr: 0 };
+  // lifted by a blow: how high the hips are (metres), how fast they are going, and for how much longer they are being pushed up
+  const lift = { y: 0, v: 0, a: 0, push: 0 };
+  // what a blow has still to do to him, down the body after the head: [{ at (his clock), kick }]
+  let later = [];
   // and of each glove on its own, metres (in his terms, as the hand channels are): a glove that has met a punch
   const knock = { L: [0, 1, 2].map(() => ({ x: 0, v: 0 })), R: [0, 1, 2].map(() => ({ x: 0, v: 0 })) };
-  let leadOut = 1, // how far out a dirty man's lead hand is (put out in the other man's face, unless a punch is coming)
+  let edge = 0, // a foot rolled onto its inside edge by a blow across him: + the right foot (a blow to his left), - the left
+    leadOut = 1, // how far out a dirty man's lead hand is (put out in the other man's face, unless a punch is coming)
     knockRate = 1, // how quickly a knocked glove comes back, times (his guard's grade: a block, or a parry)
     lastEvade = null; // the evasion he was in last frame (what the way out of it starts from)
   // a great one riding a punch on his guard (going with it, or out to take it early), 0..1
@@ -325,34 +357,98 @@ export function createAnimator(seed) {
       const e = key.spine[j] || [0, 0, 0];
       out.spine[j] = Q.toM3(Q.slerp(Q.fromM3(rest.spine[j]), Q.fromM3(e.length === 9 ? e : M.euler(e)), w));
     }
+    // (each arm is brought round as the chest sees it, from where it lay to where the rise puts it)
+    const was = chestOf(rest.hips, rest.spine),
+      to = chestOf(key.hips, key.spine),
+      now = chestOf(out.hips, out.spine);
     for (const side of ['L', 'R']) {
       const kf = footPose(key.feet[side]),
         rf = rest.feet[side],
         kh = key.hands[side],
         rh = rest.hands[side];
       const kp = key.feet[side].pole,
-        pole = rf.pole && kp ? unit(M.lerp(rf.pole, kp, w)) : rf.pole || kp,
+        // (turned from one to the other the short way round, never through nothing: a knee that lay pointing one way and is to
+        // point nearly the other does not flip over half way)
+        pole = rf.pole && kp ? swingTo(unit(rf.pole), unit(kp), w) : rf.pole || kp,
         poleW = rf.pole && kp ? Math.max(1 - w, key.feet[side].poleW) : rf.pole ? 1 - w : kp ? key.feet[side].poleW * w : 0;
-      out.feet[side] = { ankle: M.lerp(rf.ankle, kf.ankle, w), R: Q.toM3(Q.slerp(Q.fromM3(rf.R), Q.fromM3(kf.R), w)), pole, poleW, round: key.feet[side].round };
-      out.hands[side] = Object.assign({}, kh, { at: M.lerp(rh.at, kh.at, w), toward: unit(M.lerp(rh.toward, kh.toward, w)) });
+      out.feet[side] = { ankle: M.lerp(rf.ankle, kf.ankle, w), R: Q.toM3(Q.slerp(Q.fromM3(rf.R), Q.fromM3(kf.R), w)), pole, poleW, round: key.feet[side].round, out: key.feet[side].out };
+      /* (the arm from its shoulder, as the chest sees it: swung out to his side and down on its way, its elbow out and back,
+         and not across or behind him: an arm lying across him or under him is freed, the shoulder rolled and the elbow out
+         to the side, before it is put anywhere) */
+      const S = side === 'L' ? 'LeftArm' : 'RightArm',
+        at = ch => M.add(ch.p, M.app(ch.R, M.sub(TPOSE[S], TPOSE.Chest))),
+        a0 = M.app(M.tr(was.R), M.sub(rh.at, at(was))),
+        a1 = M.app(M.tr(to.R), M.sub(kh.at, at(to))),
+        l0 = Math.hypot(...a0),
+        l1 = Math.hypot(...a1),
+        /* (half way, the way between where it lay and where it goes, taken out to his side: half way, or all the way if the
+           way straight there would put it where the shoulder cannot, across him or behind him) */
+        wide = unit([side === 'L' ? 0.8 : -0.8, -0.6, 0]),
+        mirror = v => [side === 'L' ? v[0] : -v[0], v[1], v[2]],
+        across = [0.1, 0.3, 0.5, 0.7, 0.9].some(k => shoulderOf(mirror(swingTo(unit(a0), unit(a1), k))).zone > 0),
+        /* (and an arm lying across his chest comes off it forward first, not down across his belly, if he lies with his chest
+           to the sky; lying on it, the arm is under him, and is drawn out to his side by his head, the shoulder rolled, not
+           down past his belly) */
+        aside = mirror(unit(a0))[0] < -0.2 ? unit(mirror(was.R[5] > -0.3 ? [0.45, -0.4, 0.8] : [0.75, 0.45, 0.1])) : across ? wide : swingTo(swingTo(unit(a0), unit(a1), 0.5), wide, 0.5),
+        way = w < 0.5 ? swingTo(unit(a0), aside, w * 2) : swingTo(aside, unit(a1), w * 2 - 1),
+        arm = M.scale(way, l0 + (l1 - l0) * w - FREE * Math.sin(Math.PI * w));
+      // (the elbow out to his side at once, and kept there through the first half)
+      const elbowOut = Math.min(1, w * 6) * (1 - smooth((w - 0.5) * 2));
+      out.hands[side] = Object.assign({}, kh, { at: M.add(at(now), M.app(now.R, arm)), toward: unit(M.lerp(M.lerp(rh.toward, kh.toward, w), M.app(now.R, [side === 'L' ? 0.7 : -0.7, -0.3, -0.6]), elbowOut)) });
     }
     return out;
   };
 
   return {
-    /* The blow's impulse is shared out by where it was going: back through the head nods it back, across turns and tilts
-       it, upward lifts the chin; the trunk follows more slowly; the guard is knocked open. */
+    /* The blow's impulse is shared out by the way the glove was going (HIT). The head takes it at once: back through it
+       nods it back, across turns and tilts it, upward lifts the chin, and the guard is knocked open. The rest of him takes
+       it after, down the body: the trunk laid back and bent the way it went, the hips pushed after it and lifted, the
+       weight onto his heels. */
     strike(hit) {
-      const k = hit.J / 55, // a clean cross is about 55 newton-seconds
-        [left, up, ahead] = hit.dir;
+      const k = hit.J / 55, // (the head's amounts are for 55 newton-seconds, as they always were)
+        K = hit.J / HIT.ref,
+        [left, up, ahead] = hit.dir,
+        back = Math.max(0, -ahead);
       give.hp.v += (ahead * 800 - up * 1000) * k;
       give.hw.v += left * 900 * k;
       give.hr.v += -left * 400 * k;
-      give.lean.v += (ahead * 300 - up * 260) * k;
-      give.side.v += -left * 260 * k;
-      give.yaw.v += left * 300 * k;
-      give.sink.v += Math.max(0, up) * 1.1 * k;
       give.open.v += 7 * k;
+      later.push({
+        at: clock + HIT.trunk,
+        kick: () => {
+          /* (tilted the way the blow went, and further back as it lifts him: the trunk leans and bends as it faces, turned to
+             his right in the guard, so so much of each as tilts it that way, by how far each of its springs takes it) */
+          const y = ((GUARD.yaw + GUARD.twist / 2 + shown.yaw) * Math.PI) / 180,
+            tilt = [left * HIT.side, (ahead - HIT.ext * Math.max(0, up)) * HIT.lean];
+          give.lean.v += (tilt[0] * Math.sin(y) + tilt[1] * Math.cos(y)) * HIT.give[0] * K;
+          give.side.v += (tilt[0] * Math.cos(y) - tilt[1] * Math.sin(y)) * HIT.give[1] * K;
+          give.yaw.v += left * 300 * k;
+        }
+      });
+      later.push({
+        at: clock + HIT.hips,
+        kick: () => {
+          give.hz.v += ahead * HIT.hz * K;
+          give.hx.v += left * HIT.hx * K;
+          // (how fast the blow throws all of him up, or down)
+          const v = ((hit.J * up) / HIT.mass) * HIT.shove,
+            L = HIT.lift;
+          if (v > 0) {
+            /* as high as that throws a body, as far as his legs reach; and so how fast he leaves, the push up included
+               (v0^2 / 2g + v0 push / 2 is that height) */
+            const h = soft((v * v) / (2 * 9.81), L),
+              v0 = 9.81 * (-L.push / 2 + Math.sqrt((L.push * L.push) / 4 + (2 * h) / 9.81));
+            if (v0 > lift.v) (lift.a = (v0 - Math.max(0, lift.v)) / L.push), (lift.push = L.push);
+          } else give.settle.v -= v; // (pressed down, the knees take it)
+        }
+      });
+      later.push({
+        at: clock + HIT.feet,
+        kick: () => {
+          give.toes.v += back * HIT.toes * K;
+          give.edge.v += left * HIT.edge * K;
+        }
+      });
       /* A blow that stops him long enough rocks him (the longer, the worse, and the more he has been hurt already, the
          worse again); another before he has got over it adds to what is left. */
       if (hit.stun !== undefined) {
@@ -393,7 +489,7 @@ export function createAnimator(seed) {
         g[0].v += (side === 'L' ? -0.4 : 0.4) * k * m; // and in toward the middle
       }
       give.hp.v -= 260 * k;
-      give.lean.v -= 150 * k;
+      give.lean.v -= 60 * k;
       give.sink.v += 0.5 * k;
     },
     /* A foul done to him (game/bout.mjs: fouls): stood on, he flinches and looks down at it; a glove left over his face, his
@@ -452,10 +548,16 @@ export function createAnimator(seed) {
     },
     update(view, dt) {
       clock += dt;
+      // (what a blow still has to do to him, down the body, as its moment comes)
+      if (later.length && later.some(k => clock >= k.at - 1e-9)) {
+        const due = later.filter(k => clock >= k.at - 1e-9);
+        later = later.filter(k => clock < k.at - 1e-9);
+        for (const k of due) k.kick();
+      }
       // ---- knocked down: his body is the fall's until he gets up (breathing as it settles)
       if (view.action && MOVES[view.action.name].fall) {
         const act = view.action;
-        if (!fall || fall.id !== act.id) (fall = createFall(poses[1] || guardPose(), poses[0], dt, act.blow)), (fall.id = act.id), (rising = null);
+        if (!fall || fall.id !== act.id) (fall = createFall(poses[1] || guardPose(), poses[0], dt, act.blow)), (fall.id = act.id), (rising = null), (later = []), (lift.y = lift.v = lift.push = 0);
         stepFall(fall, dt, view.near);
         /* (his place on the canvas goes with him as he is thrown and slides: the body is moved back under it, and the bout
            told how far it has to move his place for it: pose.drift, metres in his own terms) */
@@ -1101,13 +1203,45 @@ export function createAnimator(seed) {
       }
 
       // ---- the give of a body that has been hit
-      c.hp += spring(give.hp, 0, dt, 3.4, 0.42);
-      c.hw += spring(give.hw, 0, dt, 3.4, 0.42);
-      c.hr += spring(give.hr, 0, dt, 3.4, 0.42);
+      snap.hp = spring(give.hp, 0, dt, 3.4, 0.42);
+      snap.hw = spring(give.hw, 0, dt, 3.4, 0.42);
+      snap.hr = spring(give.hr, 0, dt, 3.4, 0.42);
+      c.hp += snap.hp;
+      c.hw += snap.hw;
+      c.hr += snap.hr;
       c.lean += spring(give.lean, 0, dt, 2.1, 0.55);
       c.side += spring(give.side, 0, dt, 2.1, 0.55);
       c.yaw += spring(give.yaw, 0, dt, 2.1, 0.55);
       c.hy -= Math.abs(spring(give.sink, 0, dt, 2.4, 0.6)) * 0.5;
+      c.hz += spring(give.hz, 0, dt, 2.1, 0.55);
+      c.hx += spring(give.hx, 0, dt, 2.1, 0.55);
+      {
+        // (the weight onto his heels: the lead foot's toes up, the rear heel down with them)
+        const toes = spring(give.toes, 0, dt, 2.1, 0.55);
+        c.lfp -= toes;
+        c.rfp -= 0.8 * toes;
+      }
+      edge = spring(give.edge, 0, dt, 2.1, 0.55);
+      /* lifted: pushed up, thrown, and down again under gravity onto his knees, which take him (settle: metres the hips are
+         let down by them, the bounce's knees: BOUNCE.slope). The heels go up as he goes. */
+      if (lift.push > 0 || lift.y > 0) {
+        const p = Math.min(dt, lift.push),
+          f = dt - p;
+        lift.y += lift.v * p + 0.5 * lift.a * p * p;
+        lift.v += lift.a * p;
+        lift.push -= p;
+        lift.y += lift.v * f - 0.5 * 9.81 * f * f;
+        lift.v -= 9.81 * f;
+        if (lift.y <= 0) (give.settle.v -= lift.v), (lift.y = lift.v = lift.push = 0);
+      }
+      c.hy += lift.y;
+      c.lfp += Math.max(0, lift.y - HIT.lift.free) * HIT.lift.heel;
+      c.rfp += Math.max(0, lift.y - HIT.lift.free) * HIT.lift.heel;
+      {
+        const settle = spring(give.settle, 0, dt, 2.4, 0.6) / BOUNCE.slope;
+        c.lkf += settle;
+        c.rkf += settle;
+      }
       const open = spring(give.open, 0, dt, 2.6, 0.6);
       c.lx += 0.09 * open;
       c.ly -= 0.05 * Math.abs(open);
@@ -1177,7 +1311,7 @@ export function createAnimator(seed) {
         rising.id = id;
         doing = id;
         for (const ch of CHANNELS) (shown[ch] = c[ch]), (speed[ch] = 0), (carry[ch].x = carry[ch].v = 0);
-        for (const side of ['L', 'R']) (hand[side] = null), (elbow[side] = null), (round[side] = null), (knees[side] = null), (steer[side] = [0, 0, 0]);
+        for (const side of ['L', 'R']) (hand[side] = null), (elbow[side] = null), (round[side] = null), (arm[side] = null), (wrist[side] = null), (knees[side] = null), (steer[side] = [0, 0, 0]);
         height = null;
         exit = null;
         fall = null;
@@ -1273,6 +1407,9 @@ export function createAnimator(seed) {
           yaw,
           pitch: gf.pitch + c[k + 'p'] + pitch
         };
+        // (rolled onto its inside edge by a blow across him: the outside edge up)
+        if (edge > 0.05 && side === 'R') feet[side].roll = -edge;
+        else if (edge < -0.05 && side === 'L') feet[side].roll = -edge;
         // (how far it is up off the canvas: a foot in the air carries no weight, and its knee bent folds it up under him; a
         // foot going up over his, from the start)
         elev[side] = c[k + 'y'] + lift + (stomp && side === 'L' && stomp.lift > 1e-4 ? 1 : 0);
@@ -1290,8 +1427,10 @@ export function createAnimator(seed) {
       const spine = trunk(c, gaze);
       // (the knees: the hips brought down over the planted feet as far as they say, a foot in the air folded up)
       if (c.lkf || c.rkf) hips = bend(hips, spine, feet, { L: c.lkf, R: c.rkf }, elev);
-      const head = headOf(hips, spine),
-        carried = M.sub(head, REST), // the hands go where the head goes: a guard is held to the face, not to the room
+      /* the hands go where the head goes: a guard is held to the face, not to the room (but only so far where a blow throws
+         the head, SNAP: the gloves are on the arms, which are not thrown with it, and are knocked about by it on their own) */
+      const head = Math.abs(snap.hp) + Math.abs(snap.hw) + Math.abs(snap.hr) > 0.01 ? headOf(hips, trunk(Object.assign({}, c, { hp: c.hp - snap.hp * SNAP, hw: c.hw - snap.hw * SNAP, hr: c.hr - snap.hr * SNAP }), gaze)) : headOf(hips, spine),
+        carried = M.sub(head, REST),
         hands = {};
       /* A punch is written to land at a nominal spot in front of the guard. With a head to hit, the hand is carried off
          that line by however much it takes to land there instead, in step with how far the punch has been thrown: so it
@@ -1348,7 +1487,10 @@ export function createAnimator(seed) {
         }
         /* Where the elbow points is asked for, not ordered: it leans toward where the move wants it from where it was, so an
            arm passing through a pose with no good answer (a wrist crossing its own shoulder) cannot flip over in a frame. */
-        const asked = M.app(chest.R, [s * (0.5 + 0.8 * flare), -1 + 1.3 * flare, -0.2 - 0.25 * flare]),
+        /* (a hand pushing on the canvas, put there in the room and down on it, has its elbow back and out behind it: the arm
+           that props or pushes him up) */
+        const pushing = clamp(c[k + 'g'], 0, 1) * (1 - smooth((free[1] - 0.25) / 0.2)),
+          asked = M.app(chest.R, M.lerp([s * (0.5 + 0.8 * flare), -1 + 1.3 * flare, -0.2 - 0.25 * flare], [s * 0.45, -0.35, -0.85], pushing)),
           l = Math.hypot(asked[0], asked[1], asked[2]) || 1,
           keep = elbow[side] ? Math.exp(-dt * 16) : 0;
         /* One punch handing over to the next (a double jab, a jab into a cross) starts the new chain from the guard while the
@@ -1369,8 +1511,9 @@ export function createAnimator(seed) {
         const at = M.add(raw, hc.x);
         if (hand[side] && dt > 0) handSpeed[side] = M.scale(M.sub(at, hand[side]), 1 / dt);
         hand[side] = at;
-        // (and it goes round the arm no faster than an elbow can: 1200 degrees a second)
-        hands[side] = { at, toward: M.lerp(M.scale(asked, 1 / l), elbow[side] || [0, 0, 0], keep), round: { was: round[side], most: 1200 * dt } };
+        // (and it goes round the arm no faster than an elbow can, 1200 degrees a second, and the shoulder swings it no faster
+        // than 900)
+        hands[side] = { at, toward: M.lerp(M.scale(asked, 1 / l), elbow[side] || [0, 0, 0], keep), round: { was: round[side], most: 1200 * dt }, shoulder: { was: arm[side], most: 900 * dt }, last: wrist[side], punch: !!mine && (action.chain.phase === 'coil' || action.chain.phase === 'throw') };
       }
       let stance = { hips, spine, feet, hands, stretch: 1 + c.st };
       if (rising && action && rising.id === id) {
@@ -1424,6 +1567,8 @@ export function createAnimator(seed) {
           l = Math.hypot(d[0], d[1], d[2]) || 1;
         elbow[side] = M.scale(d, 1 / l);
         round[side] = pose.round[side];
+        arm[side] = pose.arms ? pose.arms[side] : null;
+        wrist[side] = pose.at[Side + 'Hand'];
         knees[side] = pose.knees ? pose.knees[side] : null;
       }
       return remember(pose);
