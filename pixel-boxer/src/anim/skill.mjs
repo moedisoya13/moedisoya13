@@ -6,8 +6,8 @@
      3   프로      the textbook, as the moves are written (moves.mjs): each joint takes over as the one below passes its peak
      4명 일류      clean and strong: each joint is already going before the one below peaks, the peaks arrive together at
                    the contact, nothing shows before it, and the hand is home again at once
-     4암 일류      the same body, and dirty with it: the elbow, the forearm, the head, the laces, used where a referee might
-                   not see them
+     4암 일류      the same body, and dirty with it: a glove left over the face, a foot on the instep, where a referee
+                   might not see them
      5명 전설      a legend of another era: no wind-up at all, the whole chain one movement, relaxed until the instant it
                    snaps, and back before the other man has seen it
      5암 전설      the same, and dirty the way only a man who has done it for twenty years can be: the foul folded so far into
@@ -43,7 +43,7 @@
      chin     up and out (1), or tucked (negative)
      over     leaning in after it, the weight over the front foot
      tell     the wind-up shown: the hand drawn back and the elbow out before it goes
-     dirty    0 clean; 1 the punch's foul (moves.mjs: dirty), 2 that, refined, and a second one with it
+     dirty    0 clean; 1 the punch's foul, done in the open (moves.mjs: foul), 2 the same, small, passed off as an accident
      lively   how much of the bounce goes on under the punch (the textbook's 0.35)
      dip      metres the hips sink into the knees as the hips fire (negative), on a raised cosine; late: seconds later than
               that; a beginner instead stands up out of it as the arm goes out (positive)
@@ -81,7 +81,7 @@
               beats (or seconds, free), depth: metres, lean: degrees } } | null
      travel   { cycle: the travelling beat, times; lean: degrees he leans into it, the body ahead of the feet; lurch: metres
               he carries on past when he stops; halting: how nearly each step comes to a stop }
-     flourish 'nervous' (shifting his feet), 'clean' (the five), 'dirty' (the four) | null
+     flourish 'nervous' (shifting his feet), 'clean' (the five), 'dirty' (the two) | null
      paw      metres the lead hand reaches out, now and then, to find the range (a heavy, dirty man's) */
 export const LEVELS = ['1', '2', '3', '4m', '4a', '5m', '5a'];
 

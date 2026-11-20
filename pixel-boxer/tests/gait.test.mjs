@@ -7,6 +7,7 @@ import { createBout, step, settle } from '../src/game/bout.mjs';
 
 const DT = 1 / 60;
 const JOINT = { L: 'LeftFoot', R: 'RightFoot' };
+const BALL = { L: 'LeftToeBase', R: 'RightToeBase' };
 
 /* From standing, start travelling one way at walking pace; -> which foot is the first to be put down well over on the
    side he is going (more than 6 cm from its place in the guard, that way). */
@@ -42,7 +43,7 @@ test('gait: the foot on the side he is going steps first, whenever he sets off',
 });
 
 /* Set off at the bout's own acceleration and keep going, walking and turning; -> for each stance, in order, how far the
-   planted foot moved on the canvas while it was down. */
+   planted foot (its ball: what it turns on) moved on the canvas while it was down. */
 function stances(move, turn) {
   const a = createAnimator(0);
   for (let i = 0; i < 30; i++) a.update({}, DT);
@@ -61,7 +62,7 @@ function stances(move, turn) {
     z += (-m[0] * Math.sin(yaw) + m[1] * Math.cos(yaw)) * DT;
     yaw += turn * k * DT;
     for (const side of ['L', 'R']) {
-      const p = pose.at[JOINT[side]],
+      const p = pose.at[BALL[side]],
         world = [x + p[0] * Math.cos(yaw) + p[2] * Math.sin(yaw), z - p[0] * Math.sin(yaw) + p[2] * Math.cos(yaw)];
       if (stepping === side) {
         if (planted[side]) out.push(planted[side].worst);

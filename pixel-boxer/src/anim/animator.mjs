@@ -14,7 +14,8 @@
      a.rhythm                                         his beat: { beat, cycle, halves, stepping, landed, lead, flourish } */
 import * as M from '../rig/m3.mjs';
 import { TPOSE } from '../rig/skeleton.mjs';
-import { solve, LEN } from '../rig/solve.mjs';
+import { solve, centre, LEN } from '../rig/solve.mjs';
+import { FOOT } from '../rig/body.mjs';
 import { LINKS, stepChain } from '../phys/chain.mjs';
 import { CHANNELS, GUARD, MOVES, LEFT_BEND, sampleMove } from './moves.mjs';
 import { LEVEL } from './skill.mjs';
@@ -36,6 +37,12 @@ BOUNCE.squash = (4 * BOUNCE.float * BOUNCE.contact) / ((1 - BOUNCE.contact) * Ma
 const ROCK = 0.034; // metres the weight swings forward and back between the feet, bouncing on the spot
 const STRIDE = 0.42; // metres: the furthest a foot is ever put from its place in the guard
 const SETTLE = 30; // how fast the difference between two moves is let go of (1/seconds): gone in about a sixth of a second
+/* Nothing pulls a man down but gravity: his centre of mass can fall no faster than that (and a little faster as he is drawn,
+   1.3 g, with the muscles pulling the hips down under it), and it is stopped on the way down, or driven up, by the legs, up
+   to 3 g. Whatever a move asks of his height, and whatever his arms and legs are doing, this is what his body can do with
+   it: the centre of mass follows what is asked exactly while it is within that, and otherwise goes as fast as it can,
+   slowing in time to arrive at rest, and the hips carry it (metres a second a second). */
+const FALL = { down: 1.3 * 9.81, up: 3 * 9.81, brake: 2.4 * 9.81, back: 15 }; // (back: how quickly he comes back onto what is asked, 1/s)
 const clamp = (x, a, b) => (x < a ? a : x > b ? b : x);
 const smooth = x => ((x = clamp(x, 0, 1)), x * x * (3 - 2 * x));
 const bump = x => (x <= 0 || x >= 1 ? 0 : Math.sin(Math.PI * x) ** 2);
@@ -75,12 +82,19 @@ function chestOf(hips, spine) {
   return { p, R };
 }
 /* The trunk and the head. The eyes stay on the opponent whatever the shoulders do: of a turn of the shoulders away from the
-   guard, `gaze` of it is taken back by the neck (the textbook's 0.9; a beginner's head goes round with his shoulders). */
+   guard, `gaze` of it is taken back by the neck (the textbook's 0.9; a beginner's head goes round with his shoulders). But a
+   neck turns only so far: past 60 degrees it gives less and less, and never more than 75, and beyond that he is looking over
+   his shoulder (the eyes do the rest). */
+const NECK = { knee: 60, most: 75 };
+/* (and the spine twists only so far: the chest on the pelvis, past 34 degrees less and less, never past 42; the guard holds
+   it 10 degrees to his right already, so a lead hook has the less of it to use) */
+const TWIST = { knee: 34, most: 42 };
+const soft = (x, { knee, most }) => (Math.abs(x) <= knee ? x : Math.sign(x) * (knee + (most - knee) * Math.tanh((Math.abs(x) - knee) / (most - knee))));
 function trunk(c, gaze) {
   const lean = GUARD.lean + c.lean,
     yaw = GUARD.yaw + c.yaw,
-    twist = GUARD.twist + c.twist,
-    look = -(GUARD.yaw + GUARD.twist) * 0.45 - (c.yaw + c.twist) * (gaze ?? 0.9) * 0.5 + c.hw * 0.5;
+    twist = soft(GUARD.twist + c.twist, TWIST),
+    look = soft(2 * (-(GUARD.yaw + GUARD.twist) * 0.45 - (c.yaw + twist - GUARD.twist) * (gaze ?? 0.9) * 0.5 + c.hw * 0.5), NECK) / 2;
   return {
     Hips: [lean * 0.4 + c.tip, yaw, -c.side * 0.4],
     Spine2: [lean * 0.3, twist * 0.4, -c.side * 0.3],
@@ -92,6 +106,14 @@ function trunk(c, gaze) {
 const ZERO = Object.fromEntries(CHANNELS.map(ch => [ch, 0]));
 const REST = headOf(GUARD.hips, trunk(ZERO));
 const CHEST = chestOf(GUARD.hips, trunk(ZERO));
+
+/* A planted foot is kept by its ball: that is the spot on the canvas that stays where it was put, and the foot turns on it
+   (as the body turns over it, or a punch turns it) and its heel rises off it. Where each ball is in the guard: */
+const ballOf = (at, yaw) => {
+  const b = M.app(M.ry(yaw), FOOT.ball);
+  return [at[0] + b[0], at[1], at[2] + b[2]];
+};
+const BALL = { L: ballOf(GUARD.feet.L.at, GUARD.feet.L.yaw), R: ballOf(GUARD.feet.R.at, GUARD.feet.R.yaw) };
 
 const REACH = LEN.upperArm + LEN.foreArm - 0.03; // as far as a wrist gets from its shoulder
 const BENT = 0.4; // and as far as it gets with the elbow held at a right angle
@@ -140,6 +162,8 @@ export function createAnimator(seed) {
   for (const ch of CHANNELS) (shown[ch] = 0), (speed[ch] = 0), (carry[ch] = { x: 0, v: 0 });
   const roll = dice((seed || 0) + 1); // his own dice: the fidgets, the flourishes, the lurch of a man with no beat
   let sunk = 0, // how far the hips are down for the spread of the feet
+    feetLive = 1, // how lively his feet are, followed: a foot in the air is not snapped down by a move starting
+    height = null, // his centre of mass's height as drawn, and how fast it is changing: { y, v, want } (FALL)
     clock = (seed || 0) * 0.37,
     // ---- the beat: how far through this half beat he is (0 a foot has just come down), and how many half beats there have been
     u = 0,
@@ -179,10 +203,11 @@ export function createAnimator(seed) {
     /* The feet are on the canvas, not on the body. A planted foot stays where it was put while the body travels and turns
        over it (its place is kept in his own space and carried back as the canvas goes by); at every half beat one foot is
        chosen to step, and is brought from where it was to where it should be, leaving and landing at rest on the canvas. */
-    planted = { L: GUARD.feet.L.at.slice(), R: GUARD.feet.R.at.slice() },
+    planted = { L: BALL.L.slice(), R: BALL.R.slice() },
     swing = { side: null, from: null, last: ['L', 'R'], to: null, still: false, back: false, came: null },
     lag = { x: 0, v: 0 }, // the upper body following the bounce, a touch late: what makes the gloves and head ride it
     elbow = { L: null, R: null }, // which way each elbow was pointing from its shoulder, last frame
+    round = { L: null, R: null }, // and where it was round the arm (solve.mjs: roundOf), degrees
     // where each hand was drawn last frame and how fast it was going, and what is still owed to the move before
     hand = { L: null, R: null },
     handSpeed = { L: [0, 0, 0], R: [0, 0, 0] },
@@ -247,9 +272,8 @@ export function createAnimator(seed) {
       give.lean.v -= 150 * k;
       give.sink.v += 0.5 * k;
     },
-    /* A foul done to him (game/bout.mjs: fouls): stood on, he flinches and looks down at it; thumbed, his head goes back (if it
-       was done in the open) and his rear glove goes to his eye a while. (A head put into his is a blow: strike. Held round
-       the neck, his head is pulled down for as long as it lasts: view.pulled.) */
+    /* A foul done to him (game/bout.mjs: fouls): stood on, he flinches and looks down at it; a glove left over his face, his
+       head goes back (if it was done in the open) and his rear glove goes to his eye a while. */
     foul(hit) {
       if (hit.name === 'stomp') fouled.flinch = 0;
       if (hit.name === 'thumb') {
@@ -278,14 +302,11 @@ export function createAnimator(seed) {
         stun = !!view.stun;
 
       // ---- what he is doing
-      // what the punching hand does past where the chain puts it, and how much higher its elbow is (a dirty punch's)
-      const extra = { L: null, R: null },
-        raise = { L: 0, R: 0 };
+      // what the punching hand does past where the chain puts it (a dirty jab's glove pushed on into his face)
+      const extra = { L: null, R: null };
       let form = null, // how this punch's grade holds the body (skill.mjs)
         foul = null, // and the foul a dirty one throws with it (moves.mjs)
-        stomp = null, // a lead foot going onto his instep: { to, w, lift }
-        butt = null, // his head going into the other man's: { to, w, most }
-        grab = null; // a hand round the back of his neck: { side, to, w }
+        stomp = null; // a lead foot going onto his instep: { to, w, lift }
       if (punchMove) {
         // a punch: what its wind-up and each joint of its chain add, by how far each has turned (as far as he turns it)
         const move = punchMove,
@@ -353,9 +374,11 @@ export function createAnimator(seed) {
         const depth = form.dip * share.dip;
         if (form.dip > 0) c.hy += depth * out;
         else {
+          /* (no quicker than his hips can be let down: a dip so deep takes so long, and where that is longer than the time
+             to the hips' firing, its bottom comes later, toward the contact) */
           const at = chain.coilTime / (chain.quick || 1) + 0.03 + form.late,
-            half = Math.max(0.05, at),
-            from = Math.abs(action.t - at);
+            half = Math.max(0.05, at, Math.sqrt((-depth * Math.PI ** 2) / (2 * FALL.down))),
+            from = Math.abs(action.t - Math.max(at, half));
           if (from < half) c.hy += (depth * (1 + Math.cos((Math.PI * from) / half))) / 2;
         }
         if (form.drop) c.st += 0.015 * smooth(clamp(t, 0, 1)) * (1 - 0.5 * smooth(clamp(chain.q[3], 0, 1)));
@@ -371,12 +394,9 @@ export function createAnimator(seed) {
           oy = move.arm === 'swing' ? -0.35 * Math.abs(gone) : move.arm === 'lift' ? -0.3 * Math.abs(gone) * (1 - out) : 0;
         // (the way out of it starts as the hand starts home, and a head that moves on after punching is the way out's from then)
         // (a man who loses his balance after it, or stands flat, does so as soon as it has got there)
-        const comingOut = chain.phase === 'recover' || ((form.exit === 'stumble' || form.exit === 'flat') && chain.phase === 'hold'),
-          // (a legend who has put his head into a man after a cross says sorry for it, and that is his way out)
-          way = foul && foul.name === 'butt' && foul.sorry[form.dirty - 1] ? 'sorry' : form.exit;
-        if (comingOut && (!exit || exit.id !== id) && way) exit = { kind: way, id, from: halves + u, t: 0, x: off.x, y: off.y, side: off.x >= 0 ? -1 : 1, done: null };
-        if (foul && foul.name === 'butt') off.x = off.y = 0;
-        else if (!(chain.phase === 'recover' && (form.exit === 'roll' || form.exit === 'angle'))) {
+        const comingOut = chain.phase === 'recover' || ((form.exit === 'stumble' || form.exit === 'flat') && chain.phase === 'hold');
+        if (comingOut && (!exit || exit.id !== id) && form.exit) exit = { kind: form.exit, id, from: halves + u, t: 0, x: off.x, y: off.y, side: off.x >= 0 ? -1 : 1, done: null };
+        if (!(chain.phase === 'recover' && (form.exit === 'roll' || form.exit === 'angle'))) {
           headTo(c, ox, oy);
           off.x = ox;
           off.y = oy;
@@ -386,37 +406,19 @@ export function createAnimator(seed) {
         if (foul) {
           const n = form.dirty - 1;
           if (foul.name === 'thumb') extra[me] = M.add(extra[me] || [0, 0, 0], [0, -0.01, foul.push[n] * reach]); // pushed on into his face
-          else if (foul.name === 'butt') {
-            /* the head kept on the line of the punch, the crown tipped forward and down into it from the moment the shoulder
-               goes (bowed from the neck and the trunk, so the shoulder is not crowded onto the punch), and then the lunge
-               after the fist, from the hips, level with his head: that is what meets him */
-            const w = smooth(clamp(chain.q[3], 0, 1)) * (chain.phase === 'recover' ? 1 - smooth(chain.since / 0.2) : 1),
-              [ahead, down] = foul.head[n],
-              go = reach * (chain.phase === 'recover' ? 1 - smooth(chain.since / 0.2) : 1);
-            c.hp += 60 * ahead * w;
-            c.lean += 30 * ahead * w + 12 * go;
-            c.hy -= 0.3 * down * w;
-            // (the lunge itself is aimed at his head, wherever the punch has knocked it, once he knows where his own is: solve)
-            if (view.foe && go > 0) butt = { to: view.foe.head, w: go, most: foul.on[n] };
-            if (!foul.sorry[n]) raise[o.toUpperCase()] += 0.6 * reach; // (and the forearm across, shoving)
-          } else if (foul.name === 'stomp' && view.foe) {
-            // the lead foot over his in the wind-up and down on it with the drive, if it will reach
+          else if (foul.name === 'stomp' && view.foe) {
+            /* the lead foot over his in the wind-up and down on it with the drive, if it will reach: decided as the punch
+               starts, and kept to (a foot does not set off for his halfway through) */
             const to = view.foe.foot,
-              from = planted.L,
-              far = Math.hypot(to[0] - from[0], to[2] - from[2]);
-            if (far < foul.reach) {
+              from = planted.L;
+            if (!chain.stomp) chain.stomp = { go: Math.hypot(to[0] - from[0], to[2] - from[2]) < foul.reach };
+            if (chain.stomp.go) {
               const on = smooth(clamp(chain.coil.q * 1.2 + chain.q[0], 0, 1)),
                 off = foul.off[n] === null ? (chain.phase === 'recover' ? smooth(chain.since / 0.25) : 0) : chain.thrownAt >= 0 ? smooth((chain.t - chain.thrownAt - foul.off[n]) / 0.1) : 0;
               stomp = { to: to.slice(), w: on * (1 - off), lift: foul.lift[n] * Math.sin(Math.PI * clamp(chain.coil.q * (1 - clamp(chain.q[0], 0, 1)), 0, 1)) };
               c.hp += foul.look[n] * chain.coil.q * (1 - chain.q[0]);
               c.hy -= foul.sink * smooth(clamp(chain.q[0], 0, 1)) * (1 - off);
             }
-          } else if (foul.name === 'hold' && view.foe) {
-            // the lead hand round the back of his neck in the wind-up, held there while the uppercut goes, and let go
-            const w = chain.phase === 'coil' ? smooth(chain.coil.q) : chain.phase === 'recover' ? 1 - smooth(chain.since / 0.15) : 1,
-              h = view.foe.head;
-            grab = { side: o.toUpperCase(), to: [h[0] - s * 0.04, h[1] - 0.12, h[2] + 0.06], w };
-            raise[me] += foul.elbow[n] * reach; // (a legend's elbow comes up the same way after the fist)
           }
         }
       } else if (action) {
@@ -459,13 +461,13 @@ export function createAnimator(seed) {
       {
         const follow = 1 - Math.exp(-dt * 16);
         for (const side of ['L', 'R']) {
-          const g = GUARD.feet[side],
+          const g = BALL[side],
             uu = under[side];
           // the ground speed of this foot's place under the body, walking and turning together, followed a little late
-          uu[0] += (vx + turn * g.at[2] - uu[0]) * follow;
-          uu[1] += (vz - turn * g.at[0] - uu[1]) * follow;
+          uu[0] += (vx + turn * g[2] - uu[0]) * follow;
+          uu[1] += (vz - turn * g[0] - uu[1]) * follow;
           fastest = Math.max(fastest, Math.hypot(uu[0], uu[1]));
-          feet[side] = { g, fx: uu[0], fz: uu[1] };
+          feet[side] = { fx: uu[0], fz: uu[1] };
         }
       }
       const going = clamp(fastest / 1.5, 0, 1), // 0 bouncing on the spot .. 1 travelling
@@ -478,9 +480,9 @@ export function createAnimator(seed) {
       cycle += (CYCLE.rest * quick + (CYCLE.travel * st.travel.cycle - CYCLE.rest * quick) * going - cycle) * (1 - Math.exp(-dt * 10)); // (quick enough to keep up, slow enough not to snap the bounce)
       /* Setting off: the foot on the side he is going should move first. If the other one was already up, hopping in place,
          it is only set back down under him in its place (it takes no step of its own), and the right foot steps first. */
-      const mid = [(GUARD.feet.L.at[0] + GUARD.feet.R.at[0]) / 2, (GUARD.feet.L.at[2] + GUARD.feet.R.at[2]) / 2],
+      const mid = [(BALL.L[0] + BALL.R[0]) / 2, (BALL.L[2] + BALL.R[2]) / 2],
         leads = side => {
-          const g = GUARD.feet[side].at,
+          const g = BALL[side],
             out = [g[0] - mid[0], g[2] - mid[1]];
           return speedNow > 0.25 ? (vx * out[0] + vz * out[1]) / (speedNow * Math.hypot(out[0], out[1])) : 0;
         };
@@ -543,8 +545,8 @@ export function createAnimator(seed) {
         }
       // where a foot should come down: centred on its place, so that it is drawn back through it while it is planted
       const landing = side => {
-        if (swing.back && swing.side === side) return GUARD.feet[side].at.slice();
-        const g = GUARD.feet[side].at,
+        if (swing.back && swing.side === side) return BALL[side].slice();
+        const g = BALL[side],
           f = feet[side],
           ahead = cycle / 4,
           l = Math.hypot(f.fx, f.fz) * ahead,
@@ -602,6 +604,7 @@ export function createAnimator(seed) {
       const flat = exit && exit.kind === 'flat' ? 1 - smooth(exit.done === null ? 0 : (halves + u - exit.done - 2) / 0.5) : 0,
         lively = (view.still ? 0 : action ? (form ? form.lively * ((punchMove.body && punchMove.body.lively) ?? 1) : 0.35) : 1 + cheer * 1.6) * (1 - 0.5 * tired) * (1 - 0.3 * hurt) * st.bounce * (1 - 0.7 * rocked) * (1 - flat),
         spot = (1 - going) * lively, // how much of this is bouncing on the spot
+        footSpot = (1 - going) * (feetLive += (lively - feetLive) * (1 - Math.exp(-dt * 20))),
         /* he bounces most on the spot: travelling, the beat quickens and the bounce shrinks with the square of it, so it is as
            soft a rebound at a run as standing (and at full speed he glides) */
         ride = lively * (cycle / CYCLE.rest) ** 2,
@@ -647,7 +650,7 @@ export function createAnimator(seed) {
       c.yaw += st.yaw;
       c.lfz += st.gap / 2;
       c.rfz -= st.gap / 2;
-      if (st.shoulder) (c.side -= st.shoulder), (c.hr += st.shoulder * 0.6);
+      if (st.shoulder) (c.side -= st.shoulder * unwind), (c.hr += st.shoulder * 0.6 * unwind); // (the hunched lead shoulder too)
       {
         const gd = st.guard,
           free = { L: !(punchMove && punchMove.hand === 'L'), R: !(punchMove && punchMove.hand === 'R') };
@@ -770,18 +773,6 @@ export function createAnimator(seed) {
           c.ly -= 0.05 * hands;
           c.ry -= 0.06 * hands;
           if (exit.t > 1) exit = null;
-        } else if (exit.kind === 'sorry') {
-          // the rear glove held up over the shoulder, open, a nod, and half a step back before he bounces again
-          const up = exit.t < 0.15 ? smooth(exit.t / 0.15) : 1 - smooth((exit.t - 0.5) / 0.2),
-            nod = bump((exit.t - 0.2) / 0.25),
-            back = exit.t < 0.35 ? smooth(exit.t / 0.35) : 1 - smooth((exit.t - 0.45) / 0.3);
-          c.ry += 0.34 * up;
-          c.rz -= 0.12 * up;
-          c.rx += 0.06 * up;
-          c.re += 0.5 * up;
-          c.hp += 9 * nod;
-          c.hz -= 0.08 * back;
-          if (exit.t > 0.8) exit = null;
         } else if (exit.kind === 'flat') {
           if (exit.done !== null && halves + u - exit.done > 2.6) exit = null;
         } else if (exit.kind === 'roll' || exit.kind === 'angle') {
@@ -836,7 +827,7 @@ export function createAnimator(seed) {
         c.hz += vz * k;
       }
 
-      // ---- fouls done to him: a flinch, an eye covered, a head pulled down onto what is coming
+      // ---- fouls done to him: a flinch, an eye covered
       fouled.flinch += dt;
       fouled.blind += dt;
       if (fouled.flinch < 0.3) {
@@ -851,13 +842,6 @@ export function createAnimator(seed) {
         c.rz += 0.04 * k;
         c.rx += 0.05 * k;
         c.hw -= 6 * k;
-      }
-      if (view.pulled > 0.002) {
-        const k = view.pulled;
-        c.hy -= 0.04 * k;
-        c.lean += 10 * k;
-        c.hp += 8 * k;
-        c.hz += 0.03 * k;
       }
 
       // ---- the give of a body that has been hit
@@ -967,7 +951,7 @@ export function createAnimator(seed) {
           stepping = swing.side === side;
         let at = planted[side],
           lift = 0,
-          pitch = st.flat ? 0 : (side === 'R' ? 6 : 3) * up * lively; // a planted foot is on its ball, the heel riding up with the float
+          pitch = st.flat ? 0 : (side === 'R' ? 6 : 3) * up * feetLive; // a planted foot is on its ball, the heel riding up with the float
         if (stepping) {
           // where it will come down, as a spot on the canvas: carried back with the canvas for the time still to go
           const land = landing(side),
@@ -981,14 +965,15 @@ export function createAnimator(seed) {
           at = [from[0] + (to[0] - from[0]) * e, gf.at[1], from[2] + (to[2] - from[2]) * e];
           // travelling, a foot is lifted by its stride; on the spot it is only unweighted and snapped up off the canvas (a
           // dirty man slides his along instead)
-          lift = (Math.min(0.075, length * 0.35) * (1 - st.drag) + HOP * spot * st.hop) * Math.pow(Math.sin(Math.PI * u), 1.3) * dropped;
-          pitch = st.flat ? 0 : (14 * Math.sin(TAU * u) * clamp(length / 0.2, 0, 1) * (1 - 0.6 * st.drag) + 8 * spot * Math.min(1, st.hop) * Math.sin(Math.PI * u)) * dropped;
+          lift = (Math.min(0.075, length * 0.35) * (1 - st.drag) + HOP * footSpot * st.hop) * Math.pow(Math.sin(Math.PI * u), 1.3) * dropped;
+          pitch = st.flat ? 0 : (14 * Math.sin(TAU * u) * clamp(length / 0.2, 0, 1) * (1 - 0.6 * st.drag) + 8 * footSpot * Math.min(1, st.hop) * Math.sin(Math.PI * u)) * dropped;
         } else {
           // a foot left too far behind by a shove or a dash is dragged, not left to pull the leg straight
-          const o = [at[0] - gf.at[0], at[2] - gf.at[2]],
+          const g = BALL[side],
+            o = [at[0] - g[0], at[2] - g[2]],
             l = Math.hypot(o[0], o[1]),
             most = STRIDE * 1.2;
-          if (l > most) (at[0] = gf.at[0] + (o[0] * most) / l), (at[2] = gf.at[2] + (o[1] * most) / l);
+          if (l > most) (at[0] = g[0] + (o[0] * most) / l), (at[2] = g[2] + (o[1] * most) / l);
         }
         // (a dirty man's lead foot on its way onto the other man's, and on it: the bout's to say whether it got there)
         if (stomp && side === 'L') {
@@ -996,10 +981,13 @@ export function createAnimator(seed) {
           lift += stomp.lift;
         }
         // the hips come down a little as the feet are spread (as much as a long stride asks, and no more)
-        dip += Math.min(0.04, (at[0] - gf.at[0]) ** 2 + (at[2] - gf.at[2]) ** 2) * 0.3;
+        dip += Math.min(0.04, (at[0] - BALL[side][0]) ** 2 + (at[2] - BALL[side][2]) ** 2) * 0.3;
+        // (the solver is told where the ankle would be with the foot flat, turned as it is now, over that ball)
+        const yaw = gf.yaw + c[k + 'w'],
+          back = M.app(M.ry(yaw), FOOT.ball);
         feet[side] = {
-          at: [at[0] + c[k + 'x'], gf.at[1] + c[k + 'y'] + lift, at[2] + c[k + 'z']],
-          yaw: gf.yaw + c[k + 'w'],
+          at: [at[0] + c[k + 'x'] - back[0], gf.at[1] + c[k + 'y'] + lift, at[2] + c[k + 'z'] - back[2]],
+          yaw,
           pitch: gf.pitch + c[k + 'p'] + pitch
         };
       }
@@ -1008,16 +996,6 @@ export function createAnimator(seed) {
       sunk += (dip - sunk) * (1 - Math.exp(-dt * 24)); // (followed, so a foot snapping through its swing does not jerk the hips)
       const hips = [GUARD.hips[0] + c.hx, Math.max(0.15, GUARD.hips[1] + c.hy - sunk), GUARD.hips[2] + c.hz],
         spine = trunk(c, gaze);
-      /* (a head put into a man: the hips are carried on until his own head is against the other man's, as far as a lunge
-         goes; the rest of him is solved from there) */
-      if (butt) {
-        const h = headOf(hips, spine),
-          d = [butt.to[0] - h[0], butt.to[2] - h[2]],
-          l = Math.hypot(d[0], d[1]) || 1,
-          go = Math.min(butt.most, Math.max(0, l - 0.16)) * butt.w;
-        hips[0] += (d[0] / l) * go;
-        hips[2] += (d[1] / l) * go;
-      }
       const head = headOf(hips, spine),
         carried = M.sub(head, REST), // the hands go where the head goes: a guard is held to the face, not to the room
         hands = {};
@@ -1035,12 +1013,10 @@ export function createAnimator(seed) {
       for (const side of ['L', 'R']) {
         const k = side === 'L' ? 'l' : 'r',
           s = side === 'L' ? 1 : -1,
-          flare = clamp(c[k + 'e'], 0, 1) + raise[side],
+          flare = clamp(c[k + 'e'], 0, 1),
           open = M.add(GUARD.hands[side], [c[k + 'x'], c[k + 'y'], c[k + 'z']]),
           // held to the face, or locked to the chest and swung with it, or part way between
-          held = M.lerp(M.add(open, carried), M.add(chest.p, M.app(swung, M.sub(open, CHEST.p))), clamp(c[k + 'c'], 0, 1)),
-          // (or reaching round the back of the other man's neck)
-          free = grab && grab.side === side ? M.lerp(held, grab.to, grab.w) : held,
+          free = M.lerp(M.add(open, carried), M.add(chest.p, M.app(swung, M.sub(open, CHEST.p))), clamp(c[k + 'c'], 0, 1)),
           mine = punchMove && punchMove.hand === side ? punchMove : null;
         if (mine) {
           /* The punching arm is not sent anywhere: it is thrown. The shoulder and elbow are the last two joints of the
@@ -1098,13 +1074,54 @@ export function createAnimator(seed) {
         const at = M.add(raw, hc.x);
         if (hand[side] && dt > 0) handSpeed[side] = M.scale(M.sub(at, hand[side]), 1 / dt);
         hand[side] = at;
-        hands[side] = { at, toward: M.lerp(M.scale(asked, 1 / l), elbow[side] || [0, 0, 0], keep) };
+        // (and it goes round the arm no faster than an elbow can: 1200 degrees a second)
+        hands[side] = { at, toward: M.lerp(M.scale(asked, 1 / l), elbow[side] || [0, 0, 0], keep), round: { was: round[side], most: 1200 * dt } };
       }
-      const pose = solve({ hips, spine, feet, hands, stretch: 1 + c.st });
+      let pose = solve({ hips, spine, feet, hands, stretch: 1 + c.st });
+      {
+        const want = centre(pose)[1];
+        if (!height || dt <= 0) height = { y: want, v: 0, want, vt: 0 };
+        else {
+          /* (what is asked is followed exactly while he can do it; once he cannot, he goes as hard as he can, and comes
+             back onto it smoothly, as a spring does, rather than as hard again the other way; and never faster toward it
+             than he could stop at it, if it stopped now) */
+          const vt = (want - height.want) / dt,
+            at = (vt - height.vt) / dt,
+            e = want - height.y,
+            W = FALL.back,
+            most = e >= 0 ? Math.sqrt(2 * FALL.down * e + Math.max(vt, 0) ** 2) : -Math.sqrt(2 * FALL.brake * -e + Math.min(vt, 0) ** 2);
+          // (on it, the spring has nothing to do and he goes exactly where it is asked)
+          let a = at + W * W * (height.want - height.y) + 2 * W * (height.vt - height.v);
+          if (e >= 0 && height.v + a * dt > most) a = (most - height.v) / dt;
+          if (e < 0 && height.v + a * dt < most) a = (most - height.v) / dt;
+          a = clamp(a, -FALL.down, FALL.up);
+          height.v += a * dt;
+          height.y += height.v * dt;
+          height.want = want;
+          height.vt = vt;
+          /* (where he cannot do what is asked, his hips carry the difference, and all of him that goes with them: the hips
+             move the centre of mass by about 0.85 of their own travel, the legs staying where they are, and by what it
+             turns out to be, the second time) */
+          const off = height.y - want;
+          if (Math.abs(off) > 2e-4) {
+            const shifted = h => {
+              const by = [0, h / (1 + c.st), 0],
+                moved = {};
+              for (const side of ['L', 'R']) moved[side] = Object.assign({}, hands[side], { at: M.add(hands[side].at, by) });
+              return solve({ hips: M.add(hips, by), spine, feet, hands: moved, stretch: 1 + c.st });
+            };
+            let h = off / 0.85;
+            pose = shifted(h);
+            const got = centre(pose)[1] - want;
+            if (Math.abs(got - off) > 2e-4 && Math.abs(got) > 1e-5) (h *= clamp(off / got, 0.5, 2)), (pose = shifted(h));
+          }
+        }
+      }
       for (const [side, Side] of [['L', 'Left'], ['R', 'Right']]) {
         const d = M.sub(pose.at[Side + 'ForeArm'], pose.at[Side + 'Arm']),
           l = Math.hypot(d[0], d[1], d[2]) || 1;
         elbow[side] = M.scale(d, 1 / l);
+        round[side] = pose.round[side];
       }
       return pose;
     }

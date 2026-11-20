@@ -2,13 +2,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { ENTRIES, HOME, AWAY, drive } from '../src/footwork.mjs';
 import { createBout, step, settle } from '../src/game/bout.mjs';
+import { sole, UP, DOWN } from '../src/measure.mjs';
 
 const DT = 1 / 60;
 // play an entry for `loops` of its script; -> what the lead boxer's feet did
 function play(entry, loops) {
   const bout = createBout(7),
     [a, b] = bout.fighters,
-    up = { LeftFoot: false, RightFoot: false },
+    up = { Left: false, Right: false },
     plants = [],
     ends = [];
   let far = 0,
@@ -20,10 +21,10 @@ function play(entry, loops) {
   for (let i = 0; i < ticks; i++) {
     step(bout, drive(entry, bout, i * DT, DT), DT);
     b.hp = 1000;
-    for (const joint of ['LeftFoot', 'RightFoot']) {
-      const y = a.pose.at[joint][1];
-      if (y > 0.099) up[joint] = true;
-      else if (up[joint] && y < 0.094) (up[joint] = false), plants.push({ t: i * DT, joint });
+    for (const joint of ['Left', 'Right']) {
+      const y = sole(a.pose.at, joint);
+      if (y > UP) up[joint] = true;
+      else if (up[joint] && y < DOWN) (up[joint] = false), plants.push({ t: i * DT, joint });
     }
     if ((i + 1) % Math.round(entry.loop / DT) === 0) ends.push([a.x, a.z]);
     const off = Math.hypot(a.x - HOME[0], a.z - HOME[1]);

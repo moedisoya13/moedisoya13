@@ -17,11 +17,11 @@ import { LADDER, STANCES, DIRTY } from './ladder.mjs';
 import { LEVEL } from './anim/skill.mjs';
 import { LINKS } from './phys/chain.mjs';
 import { MOVES } from './anim/moves.mjs';
-import { across, lineAngle, guardOf } from './measure.mjs';
+import { across, lineAngle, guardOf, sole, UP, DOWN } from './measure.mjs';
 
 const ALL = [...ENTRIES, ...DEFENSE, ...STANCES, ...LADDER, ...DIRTY];
 // the fouls, as a card names them
-const FOUL = { stomp: '발등 밟기', butt: '박치기', thumb: '눈 찌르기', hold: '목 잡기', shoulder: '어깨치기' };
+const FOUL = { stomp: '발등 밟기', thumb: '안면' };
 // a clean great one's and a clean legend's cards keep his beat: a lamp lit on the strong one (his lead foot coming down)
 const keepsBeat = e => e.level && LEVEL[e.level].side === 'm';
 const JOINT = { drive: '다리', hips: '엉덩이', trunk: '몸통', shoulder: '어깨', elbow: '팔꿈치' };
@@ -318,10 +318,10 @@ function start({ manifest, boxer }) {
     }
     // a foot coming down: light its lamp, leave its print, and keep the time for the pace
     if (!cell.exchange && !entry.kind) for (const [side, joint] of [['L', 'LeftFoot'], ['R', 'RightFoot']]) {
-      const y = a.pose.at[joint][1],
+      const y = sole(a.pose.at, side === 'L' ? 'Left' : 'Right'),
         wasUp = cell.up[side];
-      if (y > 0.099) cell.up[side] = true;
-      else if (wasUp && y < 0.094) {
+      if (y > UP) cell.up[side] = true;
+      else if (wasUp && y < DOWN) {
         cell.up[side] = false;
         cell.lamps[side].classList.remove('on');
         void cell.lamps[side].offsetWidth;

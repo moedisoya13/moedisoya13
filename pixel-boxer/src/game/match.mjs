@@ -174,7 +174,7 @@ export function nextRound(match, plans) {
     f.action = null;
     f.cover = false;
     f.stun = f.counter = 0;
-    f.vx = f.vz = f.kx = f.kz = 0;
+    f.vx = f.vz = f.kx = f.kz = f.ix = f.iz = 0;
     f.x = (i ? 1 : -1) * (RULES.startGap / 2);
     f.z = 0;
     f.yaw = i ? -Math.PI / 2 : Math.PI / 2;

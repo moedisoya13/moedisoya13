@@ -8,6 +8,7 @@ import { createChain, stepChain, effectiveMass, LINKS } from '../src/phys/chain.
 import { NAMES } from '../src/rig/skeleton.mjs';
 import { toWorld } from '../src/anim/pose.mjs';
 import * as M from '../src/rig/m3.mjs';
+import { sole, UP, DOWN } from '../src/measure.mjs';
 
 const DT = 1 / 60;
 // judged apart, because they are meant to be quick: the arms from the elbow down, and the feet
@@ -177,13 +178,13 @@ for (const name of ['jab', 'cross', 'hook', 'upper']) {
 {
   const run = play(2, () => [idle, idle]),
     hips = run.frames.map(f => f.joints.Hips[1]),
-    up = { LeftFoot: false, RightFoot: false },
+    up = { Left: false, Right: false },
     downs = [];
   run.frames.forEach((f, i) => {
-    for (const joint of ['LeftFoot', 'RightFoot']) {
-      const y = f.joints[joint][1];
-      if (y > 0.099) up[joint] = true;
-      else if (up[joint] && y < 0.094) (up[joint] = false), downs.push(i / 60);
+    for (const joint of ['Left', 'Right']) {
+      const y = sole(f.joints, joint);
+      if (y > UP) up[joint] = true;
+      else if (up[joint] && y < DOWN) (up[joint] = false), downs.push(i / 60);
     }
   });
   const gaps = downs.slice(1).map((t, i) => t - downs[i]);
@@ -194,15 +195,15 @@ for (const name of ['jab', 'cross', 'hook', 'upper']) {
   };
 }
 
-// ---- footwork: a foot that is down stays where it was put
+// ---- footwork: a foot that is down stays where it was put (its ball, which it turns on and its heel rises off)
 {
   const run = play(1.4, () => [{ move: [1, 0] }, idle], { gap: 4.6 });
   let slide = 0;
-  for (const side of ['LeftFoot', 'RightFoot']) {
+  for (const side of ['Left', 'Right']) {
     let planted = null;
     run.frames.forEach((f, i) => {
-      const p = f.joints[side];
-      if (i < 40 || p[1] > 0.0905) return void (planted = null); // getting up to speed, or in the air
+      const p = f.joints[side + 'ToeBase'];
+      if (i < 40 || sole(f.joints, side) > 0.0005) return void (planted = null); // getting up to speed, or in the air
       if (!planted) planted = p;
       slide = Math.max(slide, Math.hypot(p[0] - planted[0], p[2] - planted[2]));
     });

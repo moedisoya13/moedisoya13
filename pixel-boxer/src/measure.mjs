@@ -7,7 +7,10 @@
                            line then, the most the hips turned and the shoulders were held back behind them, where the hips were
      stance(level, s)      a grade's footwork standing: hips and head travel, feet a minute, the beat, the flourishes
      across(f, other, p)   where a point is across the line from boxer f to the other man (+ to his left), metres
-     lineAngle(pose, a, b) the line through two joints as an angle about the vertical, in his own space */
+     lineAngle(pose, a, b) the line through two joints as an angle about the vertical, in his own space
+     sole(at, Side)        how far the lowest of a foot's ball and heel is off the canvas, from his joints (a heel risen off a
+                           ball still on the canvas is a foot on the canvas): UP and DOWN are the heights a foot counts as
+                           having left the canvas and come back down at */
 import { step } from './game/bout.mjs';
 import { freshBout, drive } from './footwork.mjs';
 import { LADDER, STANCES } from './ladder.mjs';
@@ -18,6 +21,9 @@ import { toWorld } from './anim/pose.mjs';
 
 const DT = 1 / 60;
 const deg = r => (r * 180) / Math.PI;
+export const sole = (at, Side) => Math.min(at[Side + 'ToeBase'][1] - 0.03, at[Side + 'Foot'][1] - 0.09);
+export const UP = 0.009,
+  DOWN = 0.004;
 const wrap = a => Math.atan2(Math.sin(a), Math.cos(a));
 
 /* Where a point of him is across the line to the other man (+ to his left), and the line of a pair of joints (hips, shoulders)
@@ -65,9 +71,9 @@ export function run(entry, seconds) {
       landed: r.landed,
       flourish: r.flourish,
       action: a.action ? a.action.name : null,
-      foot: { L: a.pose.at.LeftFoot.slice(), R: a.pose.at.RightFoot.slice() },
+      foot: { L: a.pose.at.LeftToeBase.slice(), R: a.pose.at.RightToeBase.slice() },
       // and the other man: his lead foot on the canvas, whether it is stood on, what he is doing
-      foe: { foot: toWorld(b.place, b.pose.at.LeftFoot, b.pose.stretch), pinned: b.pinned > 0, action: b.action ? b.action.id : null }
+      foe: { foot: toWorld(b.place, b.pose.at.LeftToeBase, b.pose.stretch), pinned: b.pinned > 0, action: b.action ? b.action.id : null }
     });
   }
   return { frames, bout, chain };
@@ -163,10 +169,10 @@ export function stance(level, seconds) {
     lifted = 0;
   for (const f of settled)
     for (const side of ['L', 'R']) {
-      const y = f.joints[side === 'L' ? 'LeftFoot' : 'RightFoot'][1];
-      lifted = Math.max(lifted, y - 0.09);
-      if (y > 0.099) up[side] = true;
-      else if (up[side] && y < 0.094) (up[side] = false), plants++;
+      const y = sole(f.joints, side === 'L' ? 'Left' : 'Right');
+      lifted = Math.max(lifted, y);
+      if (y > UP) up[side] = true;
+      else if (up[side] && y < DOWN) (up[side] = false), plants++;
     }
   const seen = [...new Set(settled.map(f => f.flourish).filter(Boolean))];
   return {

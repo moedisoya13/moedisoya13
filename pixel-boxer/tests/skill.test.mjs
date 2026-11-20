@@ -126,26 +126,13 @@ test('skill: a dirty hook stands on his instep before it lands, and his lead foo
     assert.ok(moved <= 0.01, `${id}: his lead foot moved ${(moved * 100).toFixed(1)} cm while it was stood on`);
   }
 });
-test('skill: a dirty cross is followed in by the head, which meets his within 120 ms of the fist; only a legend says sorry', () => {
-  for (const lv of ['4a', '5a']) {
-    const id = `butt@${lv}`,
-      hit = first(id, 'hit', 'cross'),
-      butt = first(id, 'foul', 'butt');
-    assert.ok(hit && butt && butt.i > hit.i, `${id}: ${JSON.stringify(events(id).map(e => e.type + ' ' + (e.name || '')))}`);
-    assert.ok(((butt.drawn - hit.drawn) * 1000) / 60 <= 120, `${id}: ${(((butt.drawn - hit.drawn) * 1000) / 60).toFixed(0)} ms after the fist`);
-    // (his rear glove held up over his shoulder, by it, once the punch has come home: from a quarter second after to 0.6 s)
-    const after = technique[id].frames.slice(butt.i + 15, butt.i + 36),
-      sorry = after.some(f => f.joints.RightHand[1] > f.joints.RightArm[1] + 0.12 && Math.hypot(f.joints.RightHand[0] - f.joints.RightArm[0], f.joints.RightHand[2] - f.joints.RightArm[2]) < 0.3);
-    assert.equal(sorry, lv === '5a', `${id}: the rear glove ${sorry ? 'goes' : 'does not go'} up over the shoulder`);
-  }
-});
-test('skill: a dirty jab leaves the glove in his eye, and a dirty uppercut holds his head down onto it', () => {
+test('skill: a dirty jab leaves the glove over his face after it lands', () => {
   for (const lv of ['4a', '5a']) {
     const jab = first(`thumb@${lv}`, 'hit', 'jab'),
-      thumb = first(`thumb@${lv}`, 'foul', 'thumb'),
-      upper = first(`hold@${lv}`, 'hit', 'upper'),
-      hold = first(`hold@${lv}`, 'foul', 'hold');
+      thumb = first(`thumb@${lv}`, 'foul', 'thumb');
     assert.ok(jab && thumb && thumb.i > jab.i, `thumb@${lv}`);
-    assert.ok(upper && hold && hold.i < upper.i, `hold@${lv}`);
   }
+});
+test('skill: the cross and the uppercut have no foul at any grade', () => {
+  for (const id of Object.keys(ladder).filter(id => /^(cross|upper)@/.test(id))) assert.ok(!ladder[id].frames.some(f => f.events.some(e => e.type === 'foul')), id);
 });

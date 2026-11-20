@@ -157,7 +157,8 @@ export function stepChain(c, move, dt) {
    once it is past its peak, because a body that has finished turning and stopped is no longer pushing anything. So the
    whole of a punch's weight is there only in the moment the chain arrives together: land early and the body has not come
    yet, land late and it has gone, and either way it is an arm punch.
-     move.chain.turn: degrees the hips and trunk each turn through (a small turn carries less of the body)
+     move.chain.turn: degrees the hips and trunk each turn through (a small turn carries less of the body: each carries all
+                      it can from 30 degrees)
      move.chain.locked: the arm is held bent and stiff (hook, uppercut), so it carries the body from the start */
 const MASS = { fist: 0.75, forearm: 1.2, upper: 2.0, trunk: 32, legs: 25 };
 const FRESH = 0.11; // seconds a joint's turn stays behind the punch after its peak
@@ -167,8 +168,8 @@ export function effectiveMass(c, move) {
     stiff = (spec.locked ? 0.85 : smooth((c.q[4] - 0.25) / 0.55)) * (c.firm || 1),
     behind = i => (c.peakAt[i] < 0 ? 0 : Math.min(1, Math.max(0, c.q[i])) * Math.exp(-Math.max(0, c.t - c.peakAt[i] - 0.04) / FRESH)),
     amp = c.amp || [1, 1, 1, 1, 1],
-    hips = behind(1) * Math.min(1, (Math.abs(spec.turn[0]) * amp[1]) / 45),
-    trunk = behind(2) * Math.min(1, (Math.abs(spec.turn[1]) * amp[2]) / 18),
+    hips = behind(1) * Math.min(1, (Math.abs(spec.turn[0]) * amp[1]) / 30),
+    trunk = behind(2) * Math.min(1, (Math.abs(spec.turn[1]) * amp[2]) / 30),
     legs = behind(0) * Math.min(1, amp[0]);
   return MASS.fist + MASS.forearm * (0.4 + 0.6 * stiff) + stiff * (MASS.upper * 0.5 + MASS.trunk * 0.05 * (hips + trunk) + MASS.legs * 0.03 * legs);
 }

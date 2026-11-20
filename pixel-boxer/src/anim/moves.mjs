@@ -82,80 +82,74 @@ export function sampleMove(move, t, out) {
             the glove meeting the head); close: the distance he steps in to
      body: how much of a grade's way of using the body (anim/skill.mjs: form) this punch takes, times: turn (of the extra
             turn a better man gives the legs, hips and trunk), off (of the head off the line), bend, tuck
-     foul: the one foul a dirty boxer throws with it (anim/skill.mjs: form.dirty), which has to land as truly as a punch
-            does: a part of him (a foot, his head, a glove) meeting the other man (his instep, his head), judged the way a
-            punch is (game/bout.mjs: fouls), with an impulse the way a punch's is, from the mass of the part. Pairs of
-            amounts are [4암, 5암]: a great dirty fighter does it in the open, a legend does it small and passes it off as an
-            accident. The body it takes is the animator's (anim/animator.mjs: the foul); these are its amounts. */
+     foul: the foul a dirty boxer throws with it (anim/skill.mjs: form.dirty), where there is one (the jab and the hook; the
+            cross and the uppercut are thrown with a dirty grade's body and nothing else), which has to land as truly as a
+            punch does: a part of him (a foot, a glove) meeting the other man (his instep, his face), judged the way a punch
+            is (game/bout.mjs: fouls), with an impulse the way a punch's is, from the mass of the part. Pairs of amounts are
+            [4암, 5암]: a great dirty fighter does it in the open, a legend does it small and passes it off as an accident.
+            The body it takes is the animator's (anim/animator.mjs: the foul); these are its amounts. */
 const PUNCHES = {
   jab: {
     hand: 'L', arm: 'straight', kind: 'straight', reach: 1.15, close: 1.0,
-    chain: { coil: 0, rate: [58, 52, 52, 46, 44], turn: [15, 8] },
+    chain: { coil: 0, rate: [58, 50, 56, 46, 44], turn: [9, 14] },
     body: { off: 0.6, dip: 0.5 },
     coil: {},
-    links: { drive: { hz: 0.06, lfz: 0.07 }, hips: { yaw: -15, rx: 0.02, ry: 0.03 }, trunk: { twist: -8, lean: 4, hp: 3 }, shoulder: {}, elbow: {} },
-    /* the thumb: the glove left on his face after it lands and pushed on into it, so he cannot see (blatant: his head snapped
-       back; a legend's a short push, the wrist turned to put the thumb in, and home as if nothing had happened). It counts
+    links: { drive: { hz: 0.06, lfz: 0.07 }, hips: { yaw: -9, rx: 0.02, ry: 0.03 }, trunk: { twist: -14, lean: 4, hp: 3 }, shoulder: {}, elbow: {} },
+    /* the face jab (`thumb`): the glove left over his face after it lands and pushed on into it, so he cannot see (blatant:
+       his head snapped back; a legend's a short push, the wrist turned in, and home as if nothing had happened). It counts
        a few hundredths after the contact, if the glove is still on him; he covers the eye with his rear glove a while. */
     foul: { name: 'thumb', hold: [0.2, 0.1], push: [0.06, 0.03], at: 0.04, blind: 0.4, snap: [10, 0] }
   },
   cross: {
     hand: 'R', arm: 'straight', kind: 'straight', reach: 1.15, close: 1.0,
-    chain: { coil: 0.05, rate: [52, 44, 46, 50, 52], turn: [61, 18] },
+    chain: { coil: 0.05, rate: [58, 36, 50, 54, 54], turn: [41, 38] },
     coil: { yaw: -7, hz: -0.025, hy: -0.015, rz: -0.04, ry: -0.02 },
     links: {
       drive: { rfw: 40, rfp: 24, rfz: 0.05, hz: 0.11, hy: -0.03, st: 0.02 }, // the rear foot turns on its ball and pushes
-      hips: { yaw: 54, hx: 0.03 },
-      trunk: { twist: 18, lean: 7, side: 3, lx: -0.04, ly: 0.03, lz: -0.1 }, // the other hand stays at the chin
+      hips: { yaw: 34, hx: 0.03 },
+      trunk: { twist: 38, lean: 7, side: 3, lx: -0.04, ly: 0.03, lz: -0.1 }, // the other hand stays at the chin
       shoulder: {},
       elbow: {}
-    },
-    /* the head: not taken off the line with the punch but along it, forward and down from the moment the shoulder goes
-       (metres [forward, down]), and on into him after the fist, so that the heads meet a moment after it lands, whether it
-       landed or was slipped. Blatant, he stays there and shoves with his forearm; a legend holds up his rear glove, open,
-       nods, and steps back (sorry). Heads are 9 kg. */
-    foul: { name: 'butt', head: [[0.15, 0.1], [0.12, 0.08]], on: [0.5, 0.5], within: 0.12, mass: 9, sorry: [false, true] }
+    }
   },
   hook: {
     hand: 'L', arm: 'swing', kind: 'hook', reach: 0.9, close: 0.82,
-    chain: { coil: 0.085, rate: [55, 42, 44, 60, 0], skip: ['elbow'], turn: [59, 26], locked: true },
+    chain: { coil: 0.085, rate: [58, 42, 52, 60, 0], skip: ['elbow'], turn: [41, 32], locked: true },
     /* (the arm is locked to the chest, so the body's turn is the fist's path: a better man's turn is aimed at the head, not
        more of it; his head stays where the arm can still reach from; and it is thrown off set feet, the bounce stopped under
        it, because the jaw is above the fist and a body coming down as it lands takes the speed out of it) */
-    body: { turn: 0.2, off: 0, bend: 0, tuck: 0, sep: 0.3, dip: 1.5, lively: 0 },
+    body: { turn: 0.2, off: 0, bend: 0, tuck: 0, sep: 0.5, dip: 1.5, lively: 0 },
     // the arm is set at a right angle and locked to the chest, the weight goes onto the lead leg
-    coil: { yaw: 15, twist: 6, hx: 0.03, hy: -0.035, lean: 2, lx: 0.1, ly: -0.05, lz: 0.12, le: 0.9, lc: 1 },
+    coil: { yaw: 15, twist: 6, hx: 0.03, hy: -0.035, lean: 2, lx: 0.1, ly: 0, lz: 0.12, le: 0.9, lc: 1 },
     links: {
-      drive: { lfw: -38, lfp: 20, hz: 0.05, lx: 0.02, ly: 0.02, lz: 0.14, le: 1, lc: 1 }, // the lead foot turns in, the arm stays locked
-      hips: { yaw: -44, hx: -0.02, hy: -0.02 },
-      trunk: { twist: -20, side: -4, rz: -0.02, ry: 0.03 },
+      drive: { lfw: -38, lfp: 20, hz: 0.05, lx: 0.02, ly: 0.02, lz: 0.06, le: 1, lc: 1 }, // the lead foot turns in, the arm stays locked
+      hips: { yaw: -26, hx: -0.02, hy: -0.02 },
+      trunk: { twist: -26, side: -4, rz: -0.02, ry: 0.03 },
       shoulder: {},
       elbow: {}
     },
     /* the stomp: the lead foot lifted over his lead foot in the wind-up (the eyes going down to it, blatant) and put down
        on his instep as the legs drive, the weight coming onto it: the stomp is the hook's drive. If it comes down within
        12 cm of his instep he is pinned there for 0.45 s. Blatant, the foot stays and grinds until the hand is home; a
-       legend's comes off 50 ms after the hook lands. A foot is reckoned with the leg behind it, 12 kg; it can reach 0.45 m. */
-    foul: { name: 'stomp', lift: [0.06, 0.02], look: [8, 0], sink: 0.04, near: 0.12, reach: 0.45, mass: 12, pin: 0.45, off: [null, 0.05] }
+       legend's comes off 50 ms after the hook lands. A foot is reckoned with the leg behind it, 12 kg; its ball can reach
+       0.32 m. */
+    foul: { name: 'stomp', lift: [0.06, 0.02], look: [8, 0], sink: 0.04, near: 0.12, reach: 0.32, mass: 12, pin: 0.45, off: [null, 0.05] }
   },
   upper: {
     hand: 'R', arm: 'lift', kind: 'upper', reach: 0.9, close: 0.8,
-    chain: { coil: 0.09, rate: [40, 44, 46, 52, 0], skip: ['elbow'], turn: [46, 12], locked: true },
+    chain: { coil: 0.09, rate: [44, 36, 52, 52, 0], skip: ['elbow'], turn: [32, 26], locked: true },
     /* (a punch that comes up out of the knees goes down into them further, and is lifted enough by them to need little more
        of a better man's turn, or of his head off the line, before the chin is over it; and with the bounce in it already,
        half the bounce goes on under it) */
     body: { dip: 1.2, turn: 0.3, off: 0.5, lively: 0.5 },
-    coil: { hy: -0.09, lean: 9, yaw: -6, side: -7, rx: 0.02, ry: -0.18, rz: 0.02, hp: 4, st: -0.03 }, // down onto bent knees, the hand dropped
+    coil: { hy: -0.05, lean: 9, yaw: -6, side: -7, rx: 0.02, ry: -0.18, rz: 0.02, hp: 4, st: -0.01 }, // down onto bent knees, the hand dropped (as far as the hips can be let down in the time)
     links: {
-      drive: { hy: 0.035, st: 0.05, rfw: 32, rfp: 28 }, // the legs straighten under it
-      hips: { yaw: 40, hz: 0.07 },
-      trunk: { twist: 12, lean: -5, side: 3, lz: -0.06 },
+      drive: { hy: 0.02, st: 0.02, rfw: 32, rfp: 28 }, // the legs straighten under it (as far as a body driven up can be stopped again by gravity)
+      hips: { yaw: 26, hz: 0.09 },
+      trunk: { twist: 26, lean: -5, side: 3, lz: -0.06 },
       shoulder: {},
       elbow: {}
-    },
-    /* the hold: in the wind-up the lead hand goes round the back of his neck and pulls his head down onto the uppercut
-       coming up (it counts when the glove reaches his head); a legend's elbow comes up the same way after the fist. */
-    foul: { name: 'hold', pull: 0.08, mass: 2, elbow: [0, 0.9] }
+    }
   }
 };
 for (const [name, punch] of Object.entries(PUNCHES)) {
@@ -207,19 +201,22 @@ export const MOVES = Object.assign(
       dur: 0.42,
       keys: [{ t: 0.1, e: 'out', side: 16, hx: 0.12, hy: -0.07, lean: 6, hw: 8, hr: 6, lx: 0.02, rx: 0.02 }, { t: 0.2, e: 'lin', side: 16, hx: 0.12, hy: -0.07, lean: 6, hw: 8, hr: 6, lx: 0.02, rx: 0.02 }]
     },
-    // a duck: the knees go and he folds at the hips, chin on his chest, gloves still at his face, straight down and up
+    /* a duck: he folds at the hips, chin on his chest, gloves still at his face, the knees giving under it and the hips going
+       back to keep him over his feet: the head goes down by the fold more than by the knees (the hips can only be let down
+       so fast: animator.mjs, FALL), and straight back up */
     duck: {
       dur: 0.5,
-      keys: [{ t: 0.12, e: 'out', hy: -0.31, hz: -0.15, lean: 28, hp: 12, lfp: 8, rfp: 18 }, { t: 0.24, e: 'lin', hy: -0.31, hz: -0.15, lean: 28, hp: 12, lfp: 8, rfp: 18 }]
+      keys: [{ t: 0.12, e: 'out', hy: -0.2, hz: -0.36, hx: 0.17, lean: 58, hp: 8, lfp: 8, rfp: 14 }, { t: 0.24, e: 'lin', hy: -0.2, hz: -0.36, hx: 0.17, lean: 58, hp: 8, lfp: 8, rfp: 14 }]
     },
-    // bob and weave: down to one side, under, and up on the other, the head drawing a U (the side is the one he comes up on)
+    /* bob and weave: down to one side, under, and up on the other, the head drawing a U (the side is the one he comes up
+       on); like the duck, folded under it more than dropped */
     roll: {
       sided: true,
       dur: 0.52,
       keys: [
-        { t: 0.1, e: 'out', hy: -0.15, hz: -0.05, side: -16, hx: -0.11, lean: 16, hw: -8, hr: -6, lfp: 6, rfp: 10 },
-        { t: 0.22, hy: -0.31, hz: -0.14, side: 0, hx: 0, lean: 28, hp: 12, hw: 0, hr: 0, lfp: 8, rfp: 18 },
-        { t: 0.36, hy: -0.12, hz: -0.04, side: 16, hx: 0.11, lean: 12, hp: 4, hw: 8, hr: 6, lfp: 4, rfp: 8 }
+        { t: 0.1, e: 'out', hy: -0.08, hz: -0.09, side: -16, hx: -0.11, lean: 24, hw: -8, hr: -6, lfp: 6, rfp: 10 },
+        { t: 0.22, hy: -0.16, hz: -0.19, side: 0, hx: 0, lean: 44, hp: 8, hw: 0, hr: 0, lfp: 8, rfp: 14 },
+        { t: 0.36, hy: -0.06, hz: -0.07, side: 16, hx: 0.11, lean: 18, hp: 3, hw: 8, hr: 6, lfp: 4, rfp: 8 }
       ]
     },
     // a sway: the weight rocked onto the back foot and the trunk drawn up and back, so the head is just out of reach

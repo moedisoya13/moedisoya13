@@ -83,13 +83,12 @@ export const LADDER = PUNCHES.flatMap(p =>
 );
 
 /* The dirty fighter's techniques (moves.mjs: foul), each at 4암 and 5암 side by side: thrown from where the foul can reach
-   (a foot on his instep, a head into his, from closer than the punch alone is thrown from), at a man who stands in his own
-   guard, a pro's. The card shows what the bout said of the foul. */
+   (a foot on his instep, from closer than the punch alone is thrown from), at a man who stands in his own guard, a pro's.
+   The card shows what the bout said of the foul. (Only these two are kept; the rest of the plan's dirty techniques were
+   set aside, to be planned again.) */
 export const TECHNIQUES = [
   { id: 'stomp', punch: 'hook', range: 0.8, name: '발등 밟고 훅', en: 'Stomp and hook' },
-  { id: 'butt', punch: 'cross', range: 0.85, name: '실수인 척 박치기', en: 'The accidental butt' },
-  { id: 'thumb', punch: 'jab', range: 0.985, name: '눈 찌르는 잽', en: 'Thumbing jab' },
-  { id: 'hold', punch: 'upper', range: 0.835, name: '잡고 올려치기', en: 'Hold and hit' }
+  { id: 'thumb', punch: 'jab', range: 0.985, name: '안면 잽', en: 'Face jab' }
 ];
 export const DIRTY = TECHNIQUES.flatMap(tq =>
   ['4a', '5a'].map(lv => ({

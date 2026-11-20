@@ -2,14 +2,30 @@
    and solved again every frame, so a planted foot stays planted and a fist goes exactly where it is sent.
    In the boxer's own space (origin on the canvas under him, +Z ahead, +X to his left, metres):
      { hips: [x, y, z],
-       spine: { Hips, Spine1, Spine2, Chest, Neck1, Head: [x, y, z] degrees },
-       feet:  { L | R: { at: [x, y, z] (the ankle: 0.09 high when flat), yaw, pitch, pole } },
-       hands: { L | R: { at: [x, y, z] (the wrist), pole: where the elbow points, as the chest sees it } },
+       spine: { Hips, Spine1, Spine2, Chest, Neck1, Head: [x, y, z] degrees, or a 3x3 rotation },
+       feet:  { L | R: { at: [x, y, z] (where the ankle would be with the foot flat: 0.09 high on the canvas), yaw, pitch
+                         (the heel raised, degrees), pole (where the knee points, in his space: left out, it points over the
+                         foot, as the pelvis turns) } },
+       hands: { L | R: { at: [x, y, z] (the wrist), pole: where the elbow points, as the chest sees it (or toward: the same,
+                         in his own space), round: { was, most } (where the elbow was round the arm last frame, degrees, and
+                         how far it may go round from there this frame) } },
        stretch }
-   solve(stance) -> { root, rot: { Joint: 3x3 local }, stretch, at: { Joint: where it is, in his space } }. */
+   solve(stance) -> { root, rot: { Joint: 3x3 local }, stretch, at: { Joint: where it is, in his space }, head (the middle
+                      of the head), round: { L, R } }
+   centre(pose) -> his centre of mass, in his space as he is drawn (stretched about the canvas).
+
+   The body is held inside what it can do (body.mjs), whatever it is asked: a heel that lifts turns the foot on its ball, so
+   the ankle rises and the toes stay on the canvas, and nothing of the foot goes under it; a foot follows its shin when the
+   ankle would go past its range; the knee points the way the pelvis lets it and never under the canvas; the elbow keeps out
+   of the chest's way, off the canvas, and goes round the arm no faster than it can; a glove stays out of his own head and
+   trunk and on top of the canvas. Each of these moves a joint round the circle a limb's middle joint can be anywhere on, or
+   moves the end of the limb, as little as it takes. */
 import * as M from './m3.mjs';
 import { NAMES, PARENT, TPOSE } from './skeleton.mjs';
+import { RANGE, RADIUS, FOOT, GLOVE, HEAD, SEGMENTS } from './body.mjs';
 
+const RAD = Math.PI / 180,
+  DEG = 180 / Math.PI;
 const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 const len = a => Math.hypot(a[0], a[1], a[2]);
@@ -20,6 +36,23 @@ const norm = (a, fallback) => {
 const reject = (v, d) => M.sub(v, M.scale(d, dot(v, d)));
 const fromCols = (c0, c1, c2) => [c0[0], c1[0], c2[0], c0[1], c1[1], c2[1], c0[2], c1[2], c2[2]];
 const dist = (a, b) => len(M.sub(a, b));
+const col = (R, i) => [R[i], R[3 + i], R[6 + i]];
+const clamp = (x, a, b) => (x < a ? a : x > b ? b : x);
+const wrap = d => ((((d + 180) % 360) + 360) % 360) - 180;
+
+/* What the solver holds him to: the body's ranges, a little inside them (the audit holds him to the ranges themselves), and
+   how close a glove may come to his own head and trunk (a glove at the cheek or against the ribs is not in them). */
+const KEEP = {
+  ankleUp: RANGE.ankleUp - 3,
+  ankleDown: RANGE.ankleDown - 3,
+  ankleRoll: RANGE.ankleRoll - 3,
+  across: RANGE.shoulderAcross - 3,
+  behind: RANGE.shoulderBehind - 3,
+  reach: 30, // how far behind the chest's plane a hand may be put, from its shoulder: so far there is always an elbow for it
+  knee: [RANGE.kneeAzimuth[0] + 6, RANGE.kneeAzimuth[1] - 6],
+  head: RADIUS.glove + RADIUS.head - 0.08,
+  trunk: RADIUS.glove + RADIUS.Chest - 0.07 + 0.01
+};
 
 /* The middle joint of a two-bone limb. A target past the limb's length is brought back onto it, but softly: the last few
    centimetres of reach are approached, never hit, so a fully thrown punch does not lock the elbow with a click. */
@@ -38,6 +71,52 @@ function twoBone(a, target, l1, l2, pole) {
   return { mid: M.add(M.add(a, M.scale(dir, along)), M.scale(sideways, out)), end: M.add(a, M.scale(dir, want)) };
 }
 
+/* The same limb with its middle joint turned round the line from root to end, as little as it takes to satisfy each of
+   `rules` (predicates on where the middle joint is), the first ones before the later: if no turn satisfies all of them, the
+   last is let go of, and so on. */
+function limb(a, target, l1, l2, pole, rules) {
+  const base = twoBone(a, target, l1, l2, pole),
+    line = M.sub(base.end, a),
+    dir = norm(line),
+    centre = M.add(a, M.scale(dir, dot(M.sub(base.mid, a), dir))),
+    r = dist(base.mid, centre);
+  if (r < 1e-4) return base;
+  const u = M.scale(M.sub(base.mid, centre), 1 / r),
+    v = cross(dir, u),
+    at = th => M.add(centre, M.add(M.scale(u, r * Math.cos(th)), M.scale(v, r * Math.sin(th))));
+  for (let n = rules.length; n > 0; n--) {
+    const ok = th => rules.slice(0, n).every(rule => rule(at(th)));
+    if (ok(0)) return base;
+    for (let k = 1; k <= 36; k++)
+      for (const sg of [1, -1]) {
+        let hi = sg * k * 5 * RAD;
+        if (!ok(hi)) continue;
+        let lo = sg * (k - 1) * 5 * RAD;
+        for (let i = 0; i < 10; i++) {
+          const mid = (lo + hi) / 2;
+          if (ok(mid)) hi = mid;
+          else lo = mid;
+        }
+        return { mid: at(hi), end: base.end };
+      }
+  }
+  return base;
+}
+
+// the foot turned (yaw), its heel raised (pitch) and rolled onto an edge (roll), degrees
+const footFrame = (yaw, pitch, roll) => M.mul(M.ry(yaw), M.mul(M.rx(pitch), M.rz(roll)));
+/* Where the ankle is for a foot set down at `at` (where the ankle would be, flat) and turned so: a raised heel turns the
+   foot on its ball, raised toes on its heel, and then it is lifted until no part of the sole is under the canvas. */
+function ankleFor(at, yaw, F, pitch) {
+  const pivot = pitch >= 0 ? FOOT.ball : FOOT.heel,
+    spot = M.add(at, M.app(M.ry(yaw), pivot)),
+    ankle = M.sub(spot, M.app(F, pivot));
+  let low = Infinity;
+  for (const [c, r] of FOOT.sole) low = Math.min(low, ankle[1] + M.app(F, c)[1] - r);
+  if (low < 0) ankle[1] -= low;
+  return ankle;
+}
+
 export const LEN = {
   upperArm: dist(TPOSE.LeftForeArm, TPOSE.LeftArm),
   foreArm: dist(TPOSE.LeftHand, TPOSE.LeftForeArm),
@@ -46,11 +125,23 @@ export const LEN = {
 };
 const SPINE = ['Hips', 'Spine1', 'Spine2', 'Chest', 'Neck1', 'Head', 'LeftShoulder', 'RightShoulder'];
 
+/* Where an elbow is round its arm: the angle of its offset from the line from shoulder to wrist, measured from the chest's up
+   (as tools/audit.mjs measures it). */
+export function roundOf(shoulder, elbow, wrist, chestUp) {
+  const line = norm(M.sub(wrist, shoulder)),
+    off = reject(M.sub(elbow, shoulder), line);
+  if (len(off) < 0.03) return null;
+  const ref = norm(reject(chestUp, line)),
+    ref2 = cross(line, ref);
+  return Math.atan2(dot(off, ref2), dot(off, ref)) * DEG;
+}
+
 export function solve(stance) {
   const spine = stance.spine || {},
     G = {},
     P = {},
-    rot = {};
+    rot = {},
+    round = {};
   const place = (name, local) => {
     const parent = PARENT[name];
     rot[name] = local;
@@ -58,19 +149,75 @@ export function solve(stance) {
     P[name] = parent ? M.add(P[parent], M.app(G[parent], M.sub(TPOSE[name], TPOSE[parent]))) : stance.hips;
   };
   const aim = (name, world) => place(name, M.mul(M.tr(G[PARENT[name]]), world));
-  for (const name of SPINE) place(name, M.euler(spine[name] || [0, 0, 0]));
+  for (const name of SPINE) {
+    const e = spine[name] || [0, 0, 0];
+    place(name, e.length === 9 ? e : M.euler(e));
+  }
+  const head = M.add(P.Head, M.app(G.Head, HEAD)),
+    chestUp = col(G.Chest, 1);
 
   for (const side of ['L', 'R']) {
     const Side = side === 'L' ? 'Left' : 'Right',
       s = side === 'L' ? 1 : -1;
-    // arm: the bones run along their own X, outward, and the elbow folds about their Y
+    // ---- arm: the bones run along their own X, outward, and the elbow folds about their Y
     const hand = stance.hands[side];
     place(Side + 'Arm', M.id());
     const shoulder = P[Side + 'Arm'],
       // the elbow's direction turns with the chest, so it does not swing round when the shoulders do
       pole = hand.toward || M.app(G.Chest, hand.pole || [s * 0.5, -1, -0.2]), // (toward: the same, already in his own space)
-      arm = twoBone(shoulder, hand.at, LEN.upperArm, LEN.foreArm, pole),
-      d1 = norm(M.sub(arm.mid, shoulder)),
+      // (the upper arm as the chest sees it, mirrored onto the left: x out, y up, z ahead)
+      seen = elbow => {
+        const d = M.app(M.tr(G.Chest), norm(M.sub(elbow, shoulder)));
+        return [d[0] * s, d[1], d[2]];
+      },
+      chestWay = elbow => {
+        const d = seen(elbow);
+        return Math.asin(clamp(-d[0], -1, 1)) * DEG <= KEEP.across && Math.asin(clamp(-d[2], -1, 1)) * DEG <= KEEP.behind;
+      },
+      rules = [elbow => elbow[1] >= RADIUS.ForeArm, chestWay];
+    /* (a hand cannot be put far behind the chest's plane: the shoulder does not go there. A target that is, as a hook
+       thrown by a body turned past what it was aimed at would ask, is brought round in front to where it can be reached) */
+    let target = hand.at,
+      arm;
+    {
+      const to = M.sub(target, shoulder),
+        l = len(to),
+        d = M.app(M.tr(G.Chest), M.scale(to, 1 / (l || 1))),
+        most = Math.sin(KEEP.reach * RAD);
+      if (l > 1e-6 && d[2] < -most) {
+        const k = Math.sqrt((1 - most * most) / (d[0] * d[0] + d[1] * d[1] || 1e-9));
+        target = M.add(shoulder, M.scale(M.app(G.Chest, [d[0] * k, d[1] * k, -most]), l));
+      }
+    }
+    for (let pass = 0; pass < 3; pass++) {
+      const wrist = target;
+      if (hand.round && hand.round.was !== null && hand.round.was !== undefined) {
+        /* (it goes round the arm only so fast: an arm passing through a pose with no good answer does not flip over, and
+           where it cannot keep both, it keeps this before the chest's way, which it comes back to as it can) */
+        const r = hand.round,
+          rate = elbow => {
+            const now = roundOf(shoulder, elbow, wrist, chestUp);
+            return now === null || Math.abs(wrap(now - r.was)) <= r.most;
+          };
+        rules.splice(1, rules.length - 1, rate, chestWay);
+      }
+      arm = limb(shoulder, target, LEN.upperArm, LEN.foreArm, pole, rules);
+      // the glove: out of his own head and trunk, and on top of the canvas
+      const glove = M.add(arm.end, M.scale(norm(M.sub(arm.end, arm.mid)), GLOVE.ahead)),
+        trunk = M.sub(P.Chest, P.Hips),
+        k = clamp(dot(M.sub(glove, P.Hips), trunk) / dot(trunk, trunk), 0, 1),
+        spine0 = M.add(P.Hips, M.scale(trunk, k));
+      let push = [0, 0, 0];
+      for (const [from, most] of [[head, KEEP.head], [spine0, KEEP.trunk]]) {
+        const d = M.sub(glove, from),
+          l = len(d);
+        if (l < most) push = M.add(push, M.scale(norm(d, [s, 0, 0]), most - l));
+      }
+      if (glove[1] + push[1] < GLOVE.r) push[1] = GLOVE.r - glove[1];
+      if (len(push) < 1e-4) break;
+      target = M.add(arm.end, push);
+    }
+    const d1 = norm(M.sub(arm.mid, shoulder)),
       d2 = norm(M.sub(arm.end, arm.mid));
     let fold = cross(d2, d1);
     fold = len(fold) < 1e-4 ? norm(cross(norm(reject(pole, d1)), d1)) : norm(fold);
@@ -80,15 +227,54 @@ export function solve(stance) {
     aim(Side + 'Arm', fromCols(x1, fold, cross(x1, fold)));
     aim(Side + 'ForeArm', fromCols(x2, fold, cross(x2, fold)));
     place(Side + 'Hand', M.id());
+    round[side] = roundOf(shoulder, P[Side + 'ForeArm'], P[Side + 'Hand'], chestUp);
 
-    // leg: the bones run down their own -Y, and the knee folds about their X
+    // ---- leg: the bones run down their own -Y, and the knee folds about their X
     const foot = stance.feet[side];
     place(Side + 'Leg', M.id());
     const hip = P[Side + 'Leg'],
-      yaw = M.ry(foot.yaw || 0),
-      kneeTo = foot.pole || M.app(yaw, [0, 0.1, 1]),
-      leg = twoBone(hip, foot.at, LEN.thigh, LEN.shin, kneeTo),
-      t1 = norm(M.sub(leg.mid, hip)),
+      yaw = foot.yaw || 0,
+      pz = col(G.Hips, 2),
+      py = col(G.Hips, 1),
+      px = M.scale(col(G.Hips, 0), s),
+      // (the knee points over the foot, as the pelvis carries it: the foot's turn out from the pelvis, in the pelvis's terms)
+      rel = (wrap(yaw - Math.atan2(pz[0], pz[2]) * DEG) * RAD),
+      kneeTo = foot.pole || M.app(G.Hips, [Math.sin(rel), 0.1, Math.cos(rel)]),
+      /* which way the knee points round the leg's own line, from the front of the thigh (ahead of the pelvis when the leg
+         hangs under it, up from it when the leg is out in front, down when it is out behind): it is a hinge, and the thigh
+         turns in the hip only so far */
+      azimuth = (knee, ankle) => {
+        const down = norm(M.sub(ankle, hip)),
+          off = reject(M.sub(knee, hip), down);
+        if (len(off) < 0.04) return 0;
+        const ahead = dot(down, pz),
+          w = clamp((Math.abs(ahead) - 0.6) / 0.3, 0, 1),
+          front = norm(reject(M.lerp(pz, M.scale(py, ahead > 0 ? 1 : -1), w * w * (3 - 2 * w)), down)),
+          outward = norm(reject(px, down));
+        return Math.atan2(dot(off, outward), dot(off, front)) * DEG;
+      };
+    let pitch = foot.pitch || 0,
+      roll = 0,
+      F,
+      leg;
+    for (let pass = 0; pass < 4; pass++) {
+      F = footFrame(yaw, pitch, roll);
+      const ankle = ankleFor(foot.at, yaw, F, pitch);
+      leg = limb(hip, ankle, LEN.thigh, LEN.shin, kneeTo, [knee => knee[1] >= RADIUS.Shin, knee => {
+        const a = azimuth(knee, ankle);
+        return a >= KEEP.knee[0] && a <= KEEP.knee[1];
+      }]);
+      // the foot follows its shin past the ankle's range: up onto its ball, down off its toes, over onto an edge
+      const shin = M.app(M.tr(F), norm(M.sub(leg.mid, leg.end))),
+        up = Math.atan2(shin[2], shin[1]) * DEG,
+        edge = Math.asin(clamp(shin[0], -1, 1)) * DEG,
+        dp = up > KEEP.ankleUp ? up - KEEP.ankleUp : up < -KEEP.ankleDown ? up + KEEP.ankleDown : 0,
+        dr = edge > KEEP.ankleRoll ? edge - KEEP.ankleRoll : edge < -KEEP.ankleRoll ? edge + KEEP.ankleRoll : 0;
+      if ((Math.abs(dp) < 0.2 && Math.abs(dr) < 0.2) || pass === 3) break;
+      pitch += dp * 1.05;
+      roll -= dr * 1.05;
+    }
+    const t1 = norm(M.sub(leg.mid, hip)),
       t2 = norm(M.sub(leg.end, leg.mid));
     let hinge = cross(t1, t2);
     hinge = len(hinge) < 1e-4 ? norm(cross(norm(reject(kneeTo, t1)), t1)) : norm(hinge);
@@ -96,9 +282,22 @@ export function solve(stance) {
       y2 = M.scale(t2, -1);
     aim(Side + 'Leg', fromCols(hinge, y1, cross(hinge, y1)));
     aim(Side + 'Shin', fromCols(hinge, y2, cross(hinge, y2)));
-    aim(Side + 'Foot', M.mul(yaw, M.rx(foot.pitch || 0)));
-    place(Side + 'ToeBase', M.rx(-(foot.pitch || 0) * 0.8)); // the toes stay on the canvas when the heel lifts
+    aim(Side + 'Foot', F);
+    place(Side + 'ToeBase', M.rx(-Math.max(0, pitch) * 0.8)); // the toes stay on the canvas when the heel lifts
   }
   for (const name of NAMES) if (!rot[name]) place(name, M.id());
-  return { root: M.sub(stance.hips, TPOSE.Hips), rot, stretch: stance.stretch || 1, at: P };
+  return { root: M.sub(stance.hips, TPOSE.Hips), rot, stretch: stance.stretch || 1, at: P, head, round };
 }
+
+// his centre of mass (Dempster's shares, body.mjs), as he is drawn: stretched taller and thinner about the canvas
+export function centre(pose) {
+  const at = pose.at,
+    P = name => (name === 'head' ? pose.head : name.startsWith('glove') ? glove(at, name.slice(5)) : at[name]),
+    s = pose.stretch || 1,
+    w = 1 / Math.sqrt(s);
+  let c = [0, 0, 0],
+    mass = 0;
+  for (const [from, to, share, along] of SEGMENTS) (c = M.add(c, M.scale(M.lerp(P(from), P(to), along), share))), (mass += share);
+  return [(c[0] / mass) * w, (c[1] / mass) * s, (c[2] / mass) * w];
+}
+const glove = (at, Side) => M.add(at[Side + 'Hand'], M.scale(norm(M.sub(at[Side + 'Hand'], at[Side + 'ForeArm'])), GLOVE.ahead));

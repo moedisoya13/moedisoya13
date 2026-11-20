@@ -129,7 +129,8 @@ export const FLOURISH = {
       c.side -= 5 * side * Math.sin(Math.PI * clamp(p, 0, 2)) * k;
     }
   },
-  // ---- dirty: the paw, the lead hand stuck out in his eyes and tapping at his gloves
+  // ---- dirty (the stance forms of the two dirty techniques kept): the paw, the lead hand stuck out in his eyes and tapping
+  // at his gloves (the face jab's), and a step onto his lead foot (the stomp's)
   paw: {
     len: 2, dirty: true,
     at(c, p, t, k) {
@@ -140,7 +141,6 @@ export const FLOURISH = {
       c.le += 0.1 * e;
     }
   },
-  // a step on to his lead foot: the lead foot well in and the shoulder after it
   stompStep: {
     len: 2, dirty: true,
     at(c, p, t, k) {
@@ -149,28 +149,6 @@ export const FLOURISH = {
       c.lfy += 0.025 * bump(p / 1.2) * k;
       c.twist -= 6 * w;
       c.hz += 0.04 * w;
-    }
-  },
-  // the head feint: the head dropped and pushed in, as if to come in with it
-  headFeint: {
-    len: 1, dirty: true,
-    at(c, p, t, k) {
-      const w = bump(p) * k;
-      c.hz += 0.03 * w;
-      c.lean += 6 * w;
-      c.hy -= 0.03 * w;
-      c.hp += 4 * w;
-    }
-  },
-  // the elbow put up, the point of it at him: keep off
-  elbowUp: {
-    len: 2, dirty: true,
-    at(c, p, t, k) {
-      const e = env(p, 2) * k;
-      c.le += 0.6 * e;
-      c.lx -= 0.03 * e;
-      c.ly += 0.02 * e;
-      c.twist -= 3 * e;
     }
   }
 };

@@ -24,12 +24,12 @@ const DRILLS = [
   {
     id: 'slip', name: '슬립', en: 'Slip', group: '피하기',
     note: '잽의 어깨가 발사된 다음 머리를 바깥으로 뺍니다. 주먹은 이미 머리가 있던 자리로 가고 있습니다.',
-    loop: 2, punch: ['jab', 0.8], press: [[0.8 + 3 * F, 'slip', -1]], outcome: 'whiff', view: { yaw: 0.75, pitch: 0.28 }
+    loop: 2, punch: ['jab', 0.8], press: [[0.8 + 4 * F, 'slip', -1]], outcome: 'whiff', view: { yaw: 0.75, pitch: 0.28 }
   },
   {
     id: 'slip-cross', name: '슬립 · 스트레이트', en: 'Slip the cross', group: '피하기',
     note: '뒷손 스트레이트는 더 늦게 오고 더 멀리 뻗습니다. 몸통이 돌기 시작한 걸 보고 한 박자 늦게 뺍니다.',
-    loop: 2, punch: ['cross', 0.8], press: [[0.8 + 6 * F, 'slip', -1]], outcome: 'whiff', view: { yaw: 0.75, pitch: 0.28 }
+    loop: 2, punch: ['cross', 0.8], press: [[0.8 + 7 * F, 'slip', -1]], outcome: 'whiff', view: { yaw: 0.75, pitch: 0.28 }
   },
   {
     id: 'pull', name: '스웨이 백', en: 'Pull back', group: '피하기',
@@ -38,13 +38,13 @@ const DRILLS = [
   },
   {
     id: 'duck', name: '더킹', en: 'Duck', group: '피하기',
-    note: '스트레이트는 가드로 받고, 이어지는 훅 밑으로 무릎을 굽혀 곧장 내려갑니다. 팔을 어깨 높이에 굳혀 휘두르는 훅은 내려간 머리를 따라오지 못합니다.',
-    loop: 2.4, punch: ['hook', 1.1], cover: t => t > 0.2 && t < 1.05, press: [[1.1 + 8 * F, 'duck']], outcome: 'whiff', before: 'block', view: { yaw: 0.5, pitch: 0.22 }
+    note: '스트레이트는 가드로 받고, 이어지는 훅이 출발하자마자 상체를 접고 무릎을 굽혀 내려갑니다. 팔을 어깨 높이에 굳혀 휘두르는 훅은 자기 머리보다 9 cm 넘게 낮게 내려오지 못해, 머리 위로 지나갑니다.',
+    loop: 2.4, punch: ['hook', 1.1], cover: t => t > 0.2 && t < 1.05, press: [[1.1 + 1 * F, 'duck']], outcome: 'whiff', before: 'block', view: { yaw: 0.5, pitch: 0.22 }
   },
   {
     id: 'roll', name: '위빙', en: 'Bob and weave', group: '피하기',
     note: '훅이 오는 쪽으로 머리를 숙여 U자를 그리며 밑으로 빠지고, 반대편으로 올라옵니다. 올라온 자리가 다음 주먹을 던질 자리입니다.',
-    loop: 2.4, punch: ['hook', 1.1], cover: t => t > 0.2 && t < 1.05, press: [[1.1 + 8 * F, 'roll', 1]], outcome: 'whiff', before: 'block', view: { yaw: 0.5, pitch: 0.22 }
+    loop: 2.4, punch: ['hook', 1.1], cover: t => t > 0.2 && t < 1.05, press: [[1.1 + 6 * F, 'roll', 1]], outcome: 'whiff', before: 'block', view: { yaw: 0.5, pitch: 0.22 }
   },
   // ---- meeting it with the gloves
   {
