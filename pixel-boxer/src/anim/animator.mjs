@@ -11,13 +11,20 @@
                stance: his grade of footwork (skill.mjs) | null, stun: bool (stopped by a blow),
                cheer: bool, still: bool (lying on the canvas) }
      a.strike({ J, dir: [left, up, ahead] })         he has just been hit: the impulse in newton-seconds, and the way it went
-     a.rhythm                                         his beat: { beat, cycle, halves, stepping, landed, lead, flourish } */
+     a.rhythm                                         his beat: { beat, cycle, halves, stepping, landed, lead, flourish }
+     a.getUp()                                        knocked down and lying still: the way up that fits how he lies, and
+                                                      how to turn and move his place so that he gets up where he lies:
+                                                      { name, on, down, move: [x, z] (his space), turn (radians) } | null
+   Knocked down (a move that is a fall: ko, slump), his body is a body (phys/fall.mjs) from the pose he was in, and the next
+   rise is blended out of the pose he comes to rest in (view.near: what of the other man he cannot fall through). */
 import * as M from '../rig/m3.mjs';
-import { TPOSE } from '../rig/skeleton.mjs';
-import { solve, centre, LEN } from '../rig/solve.mjs';
-import { FOOT } from '../rig/body.mjs';
+import { TPOSE, fk } from '../rig/skeleton.mjs';
+import { solve, centre, footPose, LEN } from '../rig/solve.mjs';
+import { createFall, stepFall, poseOf, lyingOf, moveFall } from '../phys/fall.mjs';
+import * as Q from './quat.mjs';
+import { FOOT, HEAD } from '../rig/body.mjs';
 import { LINKS, stepChain } from '../phys/chain.mjs';
-import { CHANNELS, GUARD, MOVES, LEFT_BEND, sampleMove } from './moves.mjs';
+import { CHANNELS, GUARD, MOVES, LEFT_BEND, LIE, UP, sampleMove } from './moves.mjs';
 import { LEVEL } from './skill.mjs';
 import { H, headAt, headTo, phraseX, PHRASE, FLOURISH, CLEAN, DIRTY, dice } from './stance.mjs';
 
@@ -43,6 +50,11 @@ const SETTLE = 30; // how fast the difference between two moves is let go of (1/
    it: the centre of mass follows what is asked exactly while it is within that, and otherwise goes as fast as it can,
    slowing in time to arrive at rest, and the hips carry it (metres a second a second). */
 const FALL = { down: 1.3 * 9.81, up: 3 * 9.81, brake: 2.4 * 9.81, back: 15 }; // (back: how quickly he comes back onto what is asked, 1/s)
+/* Seconds over which the first of a rise is drawn out of the pose he lay in, bone by bone. The rise itself is blended out of
+   that pose as the solver takes it, but the solver does not take it exactly (it folds no arm as tight as a limp one can be,
+   and puts an elbow it has unfolded back on top of the canvas), and the difference is let go of over this rather than in a
+   frame. */
+const UNLIE = 0.25;
 const clamp = (x, a, b) => (x < a ? a : x > b ? b : x);
 const smooth = x => ((x = clamp(x, 0, 1)), x * x * (3 - 2 * x));
 const bump = x => (x <= 0 || x >= 1 ? 0 : Math.sin(Math.PI * x) ** 2);
@@ -164,6 +176,9 @@ export function createAnimator(seed) {
   let sunk = 0, // how far the hips are down for the spread of the feet
     feetLive = 1, // how lively his feet are, followed: a foot in the air is not snapped down by a move starting
     height = null, // his centre of mass's height as drawn, and how fast it is changing: { y, v, want } (FALL)
+    fall = null, // his body while he is knocked down (phys/fall.mjs)
+    rising = null, // the pose he lay in, as the solver takes one and as it was, for the rise to be blended out of: { rest, pose, blend, id }
+    poses = [null, null], // his last two poses (what a fall starts from)
     clock = (seed || 0) * 0.37,
     // ---- the beat: how far through this half beat he is (0 a foot has just come down), and how many half beats there have been
     u = 0,
@@ -208,6 +223,7 @@ export function createAnimator(seed) {
     lag = { x: 0, v: 0 }, // the upper body following the bounce, a touch late: what makes the gloves and head ride it
     elbow = { L: null, R: null }, // which way each elbow was pointing from its shoulder, last frame
     round = { L: null, R: null }, // and where it was round the arm (solve.mjs: roundOf), degrees
+    knees = { L: null, R: null }, // and each knee round its leg (solve.mjs: azimuth), degrees
     // where each hand was drawn last frame and how fast it was going, and what is still owed to the move before
     hand = { L: null, R: null },
     handSpeed = { L: [0, 0, 0], R: [0, 0, 0] },
@@ -223,6 +239,38 @@ export function createAnimator(seed) {
   const off = { x: 0, y: 0 };
   // what a dirty man's fouls are doing to him: a flinch at a foot stood on, a glove over an eye he has been thumbed in
   const fouled = { flinch: 9, blind: 9, long: 0.4 };
+  const remember = pose => ((poses = [poses[1], pose]), pose);
+  // a pose part of the way from another to it, each bone turned part of the way (what the solver said of it kept)
+  const between = (from, to, w) => {
+    const out = Object.assign({}, to, { root: M.lerp(from.root, to.root, w), rot: {} });
+    for (const name in to.rot) out.rot[name] = from.rot[name] ? Q.toM3(Q.slerp(Q.fromM3(from.rot[name]), Q.fromM3(to.rot[name]), w)) : to.rot[name];
+    const F = fk(out);
+    out.at = F.p;
+    out.head = M.add(F.p.Head, M.app(F.R.Head, HEAD));
+    return out;
+  };
+
+  /* A rise is the pose he lay in turning into the rise's own over its first part: the solver's inputs, blended (the hips
+     and the ends of his limbs moved straight, the joints turned the short way), and solved as anything is. */
+  const blendStance = (rest, key, w) => {
+    const out = { hips: M.lerp(rest.hips, key.hips, w), spine: {}, feet: {}, hands: key.hands, stretch: key.stretch };
+    for (const j in rest.spine) {
+      const e = key.spine[j] || [0, 0, 0];
+      out.spine[j] = Q.toM3(Q.slerp(Q.fromM3(rest.spine[j]), Q.fromM3(e.length === 9 ? e : M.euler(e)), w));
+    }
+    for (const side of ['L', 'R']) {
+      const kf = footPose(key.feet[side]),
+        rf = rest.feet[side],
+        kh = key.hands[side],
+        rh = rest.hands[side];
+      const kp = key.feet[side].pole,
+        pole = rf.pole && kp ? unit(M.lerp(rf.pole, kp, w)) : rf.pole || kp,
+        poleW = rf.pole && kp ? Math.max(1 - w, key.feet[side].poleW) : rf.pole ? 1 - w : kp ? key.feet[side].poleW * w : 0;
+      out.feet[side] = { ankle: M.lerp(rf.ankle, kf.ankle, w), R: Q.toM3(Q.slerp(Q.fromM3(rf.R), Q.fromM3(kf.R), w)), pole, poleW, round: key.feet[side].round };
+      out.hands[side] = Object.assign({}, kh, { at: M.lerp(rh.at, kh.at, w), toward: unit(M.lerp(rh.toward, kh.toward, w)) });
+    }
+    return out;
+  };
 
   return {
     /* The blow's impulse is shared out by where it was going: back through the head nods it back, across turns and tilts
@@ -291,8 +339,55 @@ export function createAnimator(seed) {
       const lengthNow = (cycle / 2) * stretch;
       return { beat: ((((halves - 1) % 2) + 2) % 2 + u) / 2, cycle, halves, stepping: swing.side, landed: swing.came, lead: halves + u - ref, u, half: lengthNow, left: stop > 0 ? stop + lengthNow * (1 - u) : (lengthNow * (1 - u)) / Math.max(0.05, rate), flourish: flourish && flourish.k > 0.5 ? flourish.name : null, stopped: stop > 0 };
     },
+    /* Lying still after a fall: which way up fits how he lies (moves.mjs: LIE), and the turn and move of his place that put
+       that rise's start where he lies (moves.mjs: UP), so that he gets up there; the body is carried into that place, and
+       the pose he lies in kept for the rise to come out of. */
+    getUp() {
+      if (!fall) return null;
+      const lying = lyingOf(fall),
+        name = LIE[lying.on],
+        want = UP[name],
+        heading = Math.atan2(lying.head[0] - lying.hips[0], lying.head[2] - lying.hips[2]),
+        turn = Math.atan2(Math.sin(heading - want.heading), Math.cos(heading - want.heading)),
+        Rt = M.ry((turn * 180) / Math.PI),
+        k = M.app(Rt, [want.hips[0], 0, want.hips[1]]),
+        o = [lying.hips[0] - k[0], 0, lying.hips[2] - k[2]];
+      // (into the new place: p' = R^T (p - o))
+      const back = M.tr(Rt);
+      moveFall(fall, back, M.scale(M.app(back, o), -1));
+      // (as he was last drawn, breathing and all)
+      const pose = poseOf(fall, clock, fall.breath || 0),
+        F = fk(pose),
+        rest = { hips: M.add(pose.root, TPOSE.Hips), spine: {}, feet: {}, hands: {} };
+      for (const j of ['Hips', 'Spine1', 'Spine2', 'Chest', 'Neck1', 'Head', 'LeftShoulder', 'RightShoulder']) rest.spine[j] = pose.rot[j];
+      for (const [side, S] of [['L', 'Left'], ['R', 'Right']]) {
+        const mid = (a, b) => M.scale(M.add(F.p[a], F.p[b]), 0.5);
+        // (where his knee points, if the leg is bent enough to say: a straight one says nothing)
+        const bend = M.sub(F.p[S + 'Shin'], mid(S + 'Leg', S + 'Foot'));
+        rest.feet[side] = { ankle: F.p[S + 'Foot'], R: F.R[S + 'Foot'], pole: Math.hypot(...bend) > 0.04 ? unit(bend) : null };
+        rest.hands[side] = { at: F.p[S + 'Hand'], toward: unit(M.sub(F.p[S + 'ForeArm'], mid(S + 'Arm', S + 'Hand'))) };
+      }
+      rising = { rest, pose, blend: MOVES[name].blend, id: null };
+      return { name, on: lying.on, down: lying.down, move: [o[0], o[2]], turn };
+    },
     update(view, dt) {
       clock += dt;
+      // ---- knocked down: his body is the fall's until he gets up (breathing as it settles)
+      if (view.action && MOVES[view.action.name].fall) {
+        const act = view.action;
+        if (!fall || fall.id !== act.id) (fall = createFall(poses[1] || guardPose(), poses[0], dt, act.blow)), (fall.id = act.id), (rising = null);
+        stepFall(fall, dt, view.near);
+        /* (his place on the canvas goes with him as he is thrown and slides: the body is moved back under it, and the bout
+           told how far it has to move his place for it: pose.drift, metres in his own terms) */
+        const lying = lyingOf(fall),
+          drift = [lying.hips[0], 0, lying.hips[2]];
+        moveFall(fall, M.id(), M.scale(drift, -1));
+        if (poses[1]) poses[1] = Object.assign({}, poses[1], { root: M.sub(poses[1].root, drift) });
+        fall.breath = smooth((fall.t - 0.3) / 1.2);
+        const pose = poseOf(fall, clock, fall.breath);
+        pose.drift = [drift[0], drift[2]];
+        return remember(pose);
+      }
       for (const ch of CHANNELS) c[ch] = 0;
       const action = view.action,
         id = action ? action.id : null,
@@ -415,7 +510,8 @@ export function createAnimator(seed) {
             if (chain.stomp.go) {
               const on = smooth(clamp(chain.coil.q * 1.2 + chain.q[0], 0, 1)),
                 off = foul.off[n] === null ? (chain.phase === 'recover' ? smooth(chain.since / 0.25) : 0) : chain.thrownAt >= 0 ? smooth((chain.t - chain.thrownAt - foul.off[n]) / 0.1) : 0;
-              stomp = { to: to.slice(), w: on * (1 - off), lift: foul.lift[n] * Math.sin(Math.PI * clamp(chain.coil.q * (1 - clamp(chain.q[0], 0, 1)), 0, 1)) };
+              // (up through the wind-up, highest as it ends, and stamped down with the drive: it lands moving, and stops on his)
+              stomp = { to: to.slice(), w: on * (1 - off), lift: foul.lift[n] * smooth(chain.coil.q) * (1 - clamp(chain.q[0], 0, 1)) };
               c.hp += foul.look[n] * chain.coil.q * (1 - chain.q[0]);
               c.hy -= foul.sink * smooth(clamp(chain.q[0], 0, 1)) * (1 - off);
             }
@@ -914,6 +1010,16 @@ export function createAnimator(seed) {
         if (free.R) (c.ry -= (0.07 * hurt + 0.07 * tired - 0.018 * tired * breath) * guardUp), (c.rx -= 0.03 * hurt), (c.rz -= 0.02 * tired);
       }
 
+      // ---- getting up out of a fall: what was showing before he went down is gone, not let go of
+      if (rising && action && rising.id === null && MOVES[action.name].blend) {
+        rising.id = id;
+        doing = id;
+        for (const ch of CHANNELS) (shown[ch] = c[ch]), (speed[ch] = 0), (carry[ch].x = carry[ch].v = 0);
+        for (const side of ['L', 'R']) (hand[side] = null), (elbow[side] = null), (round[side] = null), (knees[side] = null), (steer[side] = [0, 0, 0]);
+        height = null;
+        exit = null;
+        fall = null;
+      }
       // ---- one move handing over to another: what was showing is let go of, not dropped
       const handover = id !== doing;
       if (handover) {
@@ -965,7 +1071,9 @@ export function createAnimator(seed) {
           at = [from[0] + (to[0] - from[0]) * e, gf.at[1], from[2] + (to[2] - from[2]) * e];
           // travelling, a foot is lifted by its stride; on the spot it is only unweighted and snapped up off the canvas (a
           // dirty man slides his along instead)
-          lift = (Math.min(0.075, length * 0.35) * (1 - st.drag) + HOP * footSpot * st.hop) * Math.pow(Math.sin(Math.PI * u), 1.3) * dropped;
+          // (a foot only put right under a man who has stopped is skimmed back into place, not lifted: he stands on the other
+          // one meanwhile, and could not for long with it high)
+          lift = (Math.min(0.075, length * 0.35) * (1 - st.drag) * (0.5 + 0.5 * going) + HOP * footSpot * st.hop) * Math.pow(Math.sin(Math.PI * u), 1.3) * dropped;
           pitch = st.flat ? 0 : (14 * Math.sin(TAU * u) * clamp(length / 0.2, 0, 1) * (1 - 0.6 * st.drag) + 8 * footSpot * Math.min(1, st.hop) * Math.sin(Math.PI * u)) * dropped;
         } else {
           // a foot left too far behind by a shove or a dash is dragged, not left to pull the leg straight
@@ -976,9 +1084,10 @@ export function createAnimator(seed) {
           if (l > most) (at[0] = g[0] + (o[0] * most) / l), (at[2] = g[2] + (o[1] * most) / l);
         }
         // (a dirty man's lead foot on its way onto the other man's, and on it: the bout's to say whether it got there)
+        // (and it comes down on top of his, not through it to the canvas: his instep is a few centimetres up)
         if (stomp && side === 'L') {
           at = [at[0] + (stomp.to[0] - at[0]) * stomp.w, at[1], at[2] + (stomp.to[2] - at[2]) * stomp.w];
-          lift += stomp.lift;
+          lift = Math.max(lift, stomp.to[1] * stomp.w) + stomp.lift; // (the sole under his ball on the point aimed at, and lifted over it)
         }
         // the hips come down a little as the feet are spread (as much as a long stride asks, and no more)
         dip += Math.min(0.04, (at[0] - BALL[side][0]) ** 2 + (at[2] - BALL[side][2]) ** 2) * 0.3;
@@ -990,6 +1099,10 @@ export function createAnimator(seed) {
           yaw,
           pitch: gf.pitch + c[k + 'p'] + pitch
         };
+        // (a knee put down points at the canvas, ahead: the solver stops it on it)
+        feet[side].round = { was: knees[side], most: 900 * dt };
+        const kneeDown = c[side === 'L' ? 'lk' : 'rk'];
+        if (kneeDown > 0.001) Object.assign(feet[side], { pole: [0, -1, 0.8], poleW: clamp(kneeDown, 0, 1) });
       }
 
       // ---- solve
@@ -1016,7 +1129,8 @@ export function createAnimator(seed) {
           flare = clamp(c[k + 'e'], 0, 1),
           open = M.add(GUARD.hands[side], [c[k + 'x'], c[k + 'y'], c[k + 'z']]),
           // held to the face, or locked to the chest and swung with it, or part way between
-          free = M.lerp(M.add(open, carried), M.add(chest.p, M.app(swung, M.sub(open, CHEST.p))), clamp(c[k + 'c'], 0, 1)),
+          // (or put on the canvas: where its channels say, in the room)
+          free = M.lerp(M.lerp(M.add(open, carried), M.add(chest.p, M.app(swung, M.sub(open, CHEST.p))), clamp(c[k + 'c'], 0, 1)), open, clamp(c[k + 'g'], 0, 1)),
           mine = punchMove && punchMove.hand === side ? punchMove : null;
         if (mine) {
           /* The punching arm is not sent anywhere: it is thrown. The shoulder and elbow are the last two joints of the
@@ -1077,7 +1191,13 @@ export function createAnimator(seed) {
         // (and it goes round the arm no faster than an elbow can: 1200 degrees a second)
         hands[side] = { at, toward: M.lerp(M.scale(asked, 1 / l), elbow[side] || [0, 0, 0], keep), round: { was: round[side], most: 1200 * dt } };
       }
-      let pose = solve({ hips, spine, feet, hands, stretch: 1 + c.st });
+      let stance = { hips, spine, feet, hands, stretch: 1 + c.st };
+      if (rising && action && rising.id === id) {
+        const w = smooth(action.t / rising.blend);
+        if (w < 1) stance = blendStance(rising.rest, stance, w);
+        else rising = null;
+      } else if (rising && rising.id !== null) rising = null;
+      let pose = solve(stance);
       {
         const want = centre(pose)[1];
         if (!height || dt <= 0) height = { y: want, v: 0, want, vt: 0 };
@@ -1107,8 +1227,8 @@ export function createAnimator(seed) {
             const shifted = h => {
               const by = [0, h / (1 + c.st), 0],
                 moved = {};
-              for (const side of ['L', 'R']) moved[side] = Object.assign({}, hands[side], { at: M.add(hands[side].at, by) });
-              return solve({ hips: M.add(hips, by), spine, feet, hands: moved, stretch: 1 + c.st });
+              for (const side of ['L', 'R']) moved[side] = Object.assign({}, stance.hands[side], { at: M.add(stance.hands[side].at, by) });
+              return solve(Object.assign({}, stance, { hips: M.add(stance.hips, by), hands: moved }));
             };
             let h = off / 0.85;
             pose = shifted(h);
@@ -1117,13 +1237,15 @@ export function createAnimator(seed) {
           }
         }
       }
+      if (rising && action && rising.id === id && action.t < UNLIE) pose = between(rising.pose, pose, smooth(action.t / UNLIE));
       for (const [side, Side] of [['L', 'Left'], ['R', 'Right']]) {
         const d = M.sub(pose.at[Side + 'ForeArm'], pose.at[Side + 'Arm']),
           l = Math.hypot(d[0], d[1], d[2]) || 1;
         elbow[side] = M.scale(d, 1 / l);
         round[side] = pose.round[side];
+        knees[side] = pose.knees ? pose.knees[side] : null;
       }
-      return pose;
+      return remember(pose);
     }
   };
 }

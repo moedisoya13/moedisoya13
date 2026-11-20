@@ -9,10 +9,10 @@
                                        result)
      match.result                      { winner, how: 'KO' | 'TKO' | 'decision' | 'draw', round, time, cards }
    Fight to the end without a screen: finish(match). */
-import { createBout, step, settle, random, RULES } from './bout.mjs';
+import { createBout, step, settle, random, getUp, RULES } from './bout.mjs';
 import { createBrain, think, PLANS } from './brain.mjs';
 import { fatigue } from './profile.mjs';
-import { MOVES, RISE } from '../anim/moves.mjs';
+import { MOVES } from '../anim/moves.mjs';
 
 export const MATCH = {
   rounds: 3,
@@ -117,10 +117,8 @@ export function stepMatch(match, dt, inputs) {
     if (n !== c.n) (c.n = n), match.events.push({ type: 'count', who: c.who, n });
     if (c.up && n >= c.up && f.down) {
       // up, at the count he had in him
-      f.down = 0;
       f.hp = c.health;
-      const name = RISE[f.action.name] || 'rise';
-      f.action = { name, t: 0, id: name + ++f.serial, struck: false, chain: null };
+      getUp(bout, f);
       match.events.push({ type: 'up', who: c.who, n });
     }
     if (!f.down && (!f.action || !MOVES[f.action.name].floor)) {

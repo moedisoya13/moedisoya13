@@ -6,12 +6,14 @@
      dynamics   the centre of mass: falling faster than gravity, thrown upward, standing where he would topple; how fast the
                 joints of a punch turn
    Nothing here fixes anything. tools/audit.mjs prints what it finds; tests/audit.test.mjs holds it to nothing.
-     audit(scripts, { only })   -> { found: { check: { frames, bad, worst, by, most, cases } }, falls, turning }
+     audit(scripts, { only })   -> { found: { check: { frames, bad, worst, by, most, cases } }, seen, falls, turning }
+                                    seen: how many frames of a man were checked
                                     cases: every frame that broke the check (up to a few hundred of them), with where it was
      measure(f)                 one man in one frame: where everything is on the canvas, and every angle the checks need
      SCRIPTS                    every scripted bout there is
    What is left out on purpose, because it is the game and not the body: the frames held at the moment of a blow (time is
-   stopped), and the three frames after anyone is struck (a blow is meant to jolt). A foot counts as holding him up while
+   stopped), and the three frames drawn after anyone is struck (a blow is meant to jolt; the frames held in between are not
+   counted, or a long hold would use the three up). A foot counts as holding him up while
    its ankle is low or its ball is on the canvas (a heel raised off a ball that is down is still a foot on the canvas). */
 import * as M from './rig/m3.mjs';
 import { fk, TPOSE } from './rig/skeleton.mjs';
@@ -74,7 +76,8 @@ export function measure(f) {
       off = reject(M.sub(el, sh), line),
       ref = unit(reject(axis(R.Chest, 1), line)),
       ref2 = [line[1] * ref[2] - line[2] * ref[1], line[2] * ref[0] - line[0] * ref[2], line[0] * ref[1] - line[1] * ref[0]];
-    a[S + 'ElbowRound'] = len(off) > 0.03 ? Math.atan2(dot(off, ref2), dot(off, ref)) * DEG : null;
+    // (and not where it is undefined: an elbow straight, or the arm along the chest's own up, which is what it is measured from)
+    a[S + 'ElbowRound'] = len(off) > 0.03 && Math.abs(dot(line, axis(R.Chest, 1))) < 0.95 ? Math.atan2(dot(off, ref2), dot(off, ref)) * DEG : null;
     // ---- leg
     a[S + 'Knee'] = angle(M.sub(hip, kn), M.sub(an, kn));
     const t = mir(into(R.Hips, unit(M.sub(kn, hip)))); // the thigh as the pelvis sees it
@@ -135,11 +138,14 @@ export function measure(f) {
 }
 export const SOLID = [['head', RADIUS.head], ['Chest', RADIUS.Chest], ['Hips', RADIUS.Hips], ...['Left', 'Right'].flatMap(S => [['glove' + S, RADIUS.glove], [S + 'Arm', RADIUS.Arm], [S + 'ForeArm', RADIUS.ForeArm], [S + 'Shin', RADIUS.Shin], [S + 'Foot', RADIUS.Foot], [S + 'ToeBase', RADIUS.ToeBase]])];
 
-// the ground a man's feet cover: is a point over it? -> how far outside, metres (0 inside)
-export function outsideSupport(at, point) {
+// the ground a man's feet cover: is a point over it? -> how far outside, metres (0 inside). under: the other man's joints,
+// whose feet can be stood on
+export function outsideSupport(at, point, under) {
   const pts = [];
   for (const S of ['Left', 'Right']) {
-    if (at[S + 'Foot'][1] > 0.13 && at[S + 'ToeBase'][1] > 0.06) continue; // (a foot in the air holds nothing up)
+    // (a foot in the air holds nothing up; one stood on the other man's foot does, as the canvas would)
+    const onHis = under && ['Left', 'Right'].some(T => Math.hypot(at[S + 'ToeBase'][0] - under[T + 'Foot'][0], at[S + 'ToeBase'][2] - under[T + 'Foot'][2]) < 0.15 && at[S + 'ToeBase'][1] < under[T + 'Foot'][1] + 0.06);
+    if (at[S + 'Foot'][1] > 0.13 && at[S + 'ToeBase'][1] > 0.06 && !onHis) continue;
     const heel = at[S + 'Foot'],
       toe = at[S + 'ToeBase'],
       d = unit([toe[0] - heel[0], 0, toe[2] - heel[2]]),
@@ -184,6 +190,7 @@ export function audit(scripts, o) {
     found = {}, // check -> { frames, bad, worst, by, most, cases }
     falls = {},
     turning = {}; // punch -> grade -> joint -> fastest it turned, degrees a second
+  let seen = 0;
   const note = (check, value, where, bad) => {
     const c = (found[check] = found[check] || { frames: 0, bad: 0, worst: null, by: {}, most: {}, cases: [] });
     c.frames++;
@@ -198,13 +205,13 @@ export function audit(scripts, o) {
     const bout = freshBout(entry),
       prev = [null, null],
       prev2 = [null, null];
-    let struck = [-9, -9],
+    let struck = [99, 99], // frames drawn since each man was in a blow
       unbalanced = [0, 0];
     for (let tick = 0; tick < Math.round(entry.loop / DT); tick++) {
       step(bout, drive(entry, bout, tick * DT, DT), DT);
       bout.fighters[1].hp = 1000;
       if (!entry.hurt) bout.fighters[0].hp = 1000;
-      for (const e of bout.events) if (['hit', 'block', 'parry'].includes(e.type)) (struck[e.on] = tick), (struck[e.who] = tick);
+      for (const e of bout.events) if (['hit', 'block', 'parry'].includes(e.type)) (struck[e.on] = 0), (struck[e.who] = 0);
       const held = bout.stop > 0,
         now = bout.fighters.map(measure);
       bout.fighters.forEach((f, i) => {
@@ -212,6 +219,7 @@ export function audit(scripts, o) {
           doing = f.action ? f.action.name : f.cover ? 'cover' : 'guard',
           where = { script: entry.id, t: +(tick * DT).toFixed(3), who: i, doing };
         if (only && !only.includes(doing)) return;
+        seen++;
         const a = m.angles,
           move = MOVES[doing],
           floor = move && move.floor;
@@ -246,7 +254,7 @@ export function audit(scripts, o) {
         // ---- between frames
         const before = prev[i],
           before2 = prev2[i],
-          fresh = tick - struck[i] <= 3;
+          fresh = struck[i] <= 3;
         if (before && !held && !fresh) {
           for (const S of ['Left', 'Right']) {
             for (const [what, key, bent] of [['elbow flipping round', S + 'ElbowRound', a[S + 'Elbow'] < 150], ['knee flipping round', S + 'KneeRound', a[S + 'Knee'] < 150]]) {
@@ -264,7 +272,7 @@ export function audit(scripts, o) {
           }
         }
         if (!floor && !f.down) {
-          const out = outsideSupport(m.at, m.com);
+          const out = outsideSupport(m.at, m.com, now[1 - i].at);
           if (out !== null) {
             unbalanced[i] = out > 0.06 ? unbalanced[i] + 1 : 0;
             note('standing where he would topple (cm outside his feet, held over 0.3 s)', out * 100, where, out > 0.06 && unbalanced[i] > 18);
@@ -291,8 +299,8 @@ export function audit(scripts, o) {
           if (only && !only.some(o => doing.includes(o))) continue;
           note(glove ? 'a glove inside the other man' : 'the two men inside each other', depth * 100, { script: entry.id, t: +(tick * DT).toFixed(3), who: na + ' in ' + nb, doing }, depth > (glove ? 0.08 : 0.05));
         }
-      if (!held) (prev2[0] = prev[0]), (prev2[1] = prev[1]), (prev[0] = now[0]), (prev[1] = now[1]);
+      if (!held) (prev2[0] = prev[0]), (prev2[1] = prev[1]), (prev[0] = now[0]), (prev[1] = now[1]), struck[0]++, struck[1]++;
     }
   }
-  return { found, falls, turning };
+  return { found, seen, falls, turning };
 }

@@ -16,13 +16,13 @@ const args = process.argv.slice(2),
 
 const pick = opt('script') ? opt('script').split(',') : null,
   scripts = pick ? SCRIPTS.filter(e => pick.includes(e.id)) : SCRIPTS,
-  { found, falls, turning } = audit(scripts, { only: opt('only') ? opt('only').split(',') : null });
+  { found, seen, falls, turning } = audit(scripts, { only: opt('only') ? opt('only').split(',') : null });
 
 if (opt('json')) (await import('node:fs')).writeFileSync(opt('json'), JSON.stringify({ found, falls: Object.fromEntries(Object.entries(falls).map(([k, v]) => [k, v.map(f => ({ t: f.t, doing: f.doing, com: f.com, head: f.head, hips: f.hips, angles: f.angles }))])), turning }));
 const rows = Object.entries(found)
   .filter(([, c]) => c.bad)
   .sort((x, y) => y[1].bad - x[1].bad);
-console.log(`${scripts.length} scripts, ${Object.values(found)[0] ? Object.values(found).reduce((m, c) => Math.max(m, c.frames), 0) : 0} frames of a man checked\n`);
+console.log(`${scripts.length} scripts, ${seen} frames of a man checked\n`);
 console.log('check'.padEnd(70) + 'frames'.padStart(7) + '  worst'.padEnd(10) + '  where (script @ s, who, doing)   | most often while');
 for (const [check, c] of rows) {
   const w = c.worst,

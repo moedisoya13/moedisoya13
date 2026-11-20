@@ -1,7 +1,8 @@
 /* A contact sheet of one scripted exchange, drawn by the game's own renderer: both boxers, a frame a cell, for looking at a
    move a sixtieth of a second at a time.
-     review.html?entry=slip&from=0.7&to=1.1&n=12&cols=6      (and yaw, pitch, dist, y: the camera; px: screen pixels to an art
-   pixel; flash=1: the white of a hit, left out by default so that the pose under it can be seen)
+     review.html?entry=slip&from=0.7&to=1.1&n=12&cols=6      (and yaw, pitch, dist, y: the camera; focus=0 or 1: on that man
+   alone; px: screen pixels to an art pixel; flash=1: the white of a hit, left out by default so that the pose under it can
+   be seen)
    The bout is run once from the start of the script and the chosen moments are kept; nothing moves on the page after that.
    Under each cell: the time, and what the bout said happened in that step. globalThis.__review.ready when it is drawn. */
 import { createRenderer, paletteArray, rgb } from './render/renderer.mjs';
@@ -98,7 +99,9 @@ async function start() {
       top = box.top + scrollY,
       rect = { x: Math.round((box.left * dpr) / grid.scale), y: Math.round(((canvas.height / dpr - top - box.height) * dpr) / grid.scale), w: Math.round((box.width * dpr) / grid.scale), h: Math.round((box.height * dpr) / grid.scale) },
       [a, b] = f.men,
-      cam = { target: [(a.x + b.x) / 2, num('y', 0.95), (a.z + b.z) / 2], yaw: num('yaw', entry.view.yaw), pitch: num('pitch', entry.view.pitch), dist: num('dist', 3.4) };
+      // (on the two of them, or on one: focus=0 or 1)
+      on = q.has('focus') ? [f.men[num('focus', 0)], f.men[num('focus', 0)]] : [a, b],
+      cam = { target: [(on[0].x + on[1].x) / 2, num('y', 0.95), (on[0].z + on[1].z) / 2], yaw: num('yaw', entry.view.yaw), pitch: num('pitch', entry.view.pitch), dist: num('dist', 3.4) };
     const layers = [{ mesh: shadows, palette: palettes[0], mask: 0.6 }];
     f.men.forEach((m, i) => {
       R.packBones(m.bones, bones[i]);

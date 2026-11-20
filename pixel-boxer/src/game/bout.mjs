@@ -6,6 +6,8 @@
                                      knockdowns: true (a boxer who runs out of health goes down and the match counts him;
                                      left out, he is knocked out and the bout is over) })
      step(bout, [mine, his], dt)
+     getUp(bout, f)         a man who has beaten the count gets up, where he lies, the way that fits how he lies (anim/
+                            animator.mjs: getUp); -> the rise he starts
        controls: { move: [x, z] (a direction on the canvas, up to 1 long), jab, power (true on the tick pressed),
                    cover (true while held), dash: [x, z] | true (on the tick flicked; true is straight back),
                    slip: 1 | -1 (the head off the line, to his left or right), duck: true (straight down under a punch),
@@ -22,7 +24,7 @@
    is weak, and getting the head out of the way is the dodge. A guard held up puts the gloves in the way; one raised just
    before the punch turns it aside and opens a counter. */
 import * as M from '../rig/m3.mjs';
-import { MOVES } from '../anim/moves.mjs';
+import { MOVES, RISE } from '../anim/moves.mjs';
 import { createAnimator } from '../anim/animator.mjs';
 import { toWorld } from '../anim/pose.mjs';
 import { createChain, stepChain, effectiveMass } from '../phys/chain.mjs';
@@ -218,7 +220,8 @@ function travel(f, input, dt, other) {
 }
 
 function face(f, other, dt) {
-  if (f.down) return void (f.turn = 0);
+  // (a man on the canvas, or getting up off it, does not turn to face anyone)
+  if (f.down || (f.action && MOVES[f.action.name].floor)) return void (f.turn = 0);
   const want = Math.atan2(other.x - f.x, other.z - f.z),
     // a boxer who has thrown his weight into a punch cannot swing round with it
     rate = RULES.turnRate * (punching(f) ? 0.35 : f.stun > 0 ? 0.2 : 1);
@@ -269,7 +272,9 @@ function viewOf(bout, i) {
       // the other man, in his own terms: his lead foot's instep (what a dirty man stands on), and whether this man's own lead
       // foot is stood on
       foe: f.place && other.pose && other.points ? { foot: mine(f, at(other, 'LeftFoot', [0, -0.02, 0.07])) } : null,
-      pinned: f.pinned > 0
+      pinned: f.pinned > 0,
+      // knocked down: what of the other man he cannot fall through, in his own terms
+      near: f.down && f.place && other.pose ? NEAR.map(([joint, r]) => [mine(f, at(other, joint)), r]) : null
     };
   if (punching(f) && !other.down && other.points) {
     /* Where the punch is thrown: at the head as it is now, wherever that is. The wrist is sent so that the glove's centre
@@ -298,6 +303,7 @@ function viewOf(bout, i) {
   }
   return view;
 }
+const NEAR = [['Hips', 0.14], ['Spine2', 0.14], ['Chest', 0.15], ['LeftShin', 0.07], ['RightShin', 0.07], ['LeftLeg', 0.1], ['RightLeg', 0.1], ['LeftFoot', 0.06], ['RightFoot', 0.06]];
 // a point on the canvas in boxer f's own space (as he was last drawn), and a point of his on the canvas (a joint, and so far on
 // from it in that joint's terms)
 const mine = (f, p) => {
@@ -308,8 +314,14 @@ const mine = (f, p) => {
 const at = (f, joint, by) => P.toWorld(f.place, M.add(f.pose.at[joint], by || [0, 0, 0]), f.pose.stretch);
 // solve boxer i for this step, and find his gloves and head on the canvas
 function solvePose(bout, f, i, dt) {
-  const pose = f.animator.update(viewOf(bout, i), dt),
-    place = { R: M.ry((f.yaw * 180) / Math.PI), p: [f.x, 0, f.z] },
+  const pose = f.animator.update(viewOf(bout, i), dt);
+  // (a man knocked down takes his place with him as he slides: anim/animator.mjs)
+  if (pose.drift) {
+    const d = M.app(M.ry((f.yaw * 180) / Math.PI), [pose.drift[0], 0, pose.drift[1]]);
+    f.x += d[0];
+    f.z += d[2];
+  }
+  const place = { R: M.ry((f.yaw * 180) / Math.PI), p: [f.x, 0, f.z] },
     at = name => toWorld(place, pose.at[name], pose.stretch),
     beyond = (a, b, far) => {
       const d = M.sub(b, a),
@@ -429,9 +441,13 @@ function strike(bout, f, other, who, dt) {
   const down = other.hp <= 0;
   bout.events.push(Object.assign({ type: 'hit', damage: +damage.toFixed(1), counter, down }, blow));
   if (down) {
-    /* How he goes: a blow that only just finished him puts him down on a knee; one with plenty to spare lays him out, on
-       his back from a straight punch or an uppercut, on his face from a hook that turns him. */
-    begin(other, damage - had < RULES.drop ? 'drop' : move.kind === 'hook' ? 'slump' : 'ko');
+    /* How he goes: a blow that only just finished him puts him down on a knee; one with plenty to spare lays him out, a
+       body falling the way the blow and his weight take it (phys/fall.mjs: it is handed the blow, and the shove, which
+       is then his body's and not his place's to carry). */
+    const knee = damage - had < RULES.drop;
+    begin(other, knee ? 'drop' : move.kind === 'hook' ? 'slump' : 'ko', knee ? {} : { blow: { J: worth, dir: M.app(M.tr(other.place.R), n), at: mine(other, blow.at), push: local(other, other.kx, other.kz) } });
+    // (laid out, the shove is his body's now; dropped to a knee, he sags where he stands, his feet under him)
+    other.kx = other.kz = 0;
     other.down = 1;
     other.stun = 0;
     other.downs = (other.downs || 0) + 1;
@@ -443,7 +459,7 @@ function strike(bout, f, other, who, dt) {
 /* A dirty boxer's foul (moves.mjs: foul), judged the way a punch is: the part of him it is done with has to meet the part of
    the other man it is done to. Once a punch, at most. What it does to him is his body's (the animator's), and to his feet:
    stood on, he is pinned where he is. Nobody penalises any of it: it is only seen. */
-const FOULS = { foot: 0.06 }; // radius of a foot, metres
+const FOULS = { foot: 0.06, ball: 0.03 }; // radius of a foot, and of the ball of it, metres
 function fouls(bout, f, other, who, dt) {
   const action = f.action,
     move = action && MOVES[action.name],
@@ -468,12 +484,13 @@ function fouls(bout, f, other, who, dt) {
       other.animator.foul && other.animator.foul({ name, J, tier: k });
     };
   if (foul.name === 'stomp') {
-    // the ball of his foot coming down on the instep as the legs drive: within so much of it, and down on the canvas
+    // the ball of his foot coming down on the instep as the legs drive: within so much of it, and down on it (the sole of the
+    // ball as low as the point on the instep it is aimed at)
     const foot = at(f, 'LeftToeBase'),
       was = f.footWas || foot,
       on = at(other, 'LeftFoot', [0, -0.02, 0.07]);
     f.footWas = foot;
-    if ((chain.phase === 'throw' || chain.phase === 'coil') && chain.q[0] > 0.3 && foot[1] < 0.05 && Math.hypot(foot[0] - on[0], foot[2] - on[2]) < foul.near) {
+    if ((chain.phase === 'throw' || chain.phase === 'coil') && chain.q[0] > 0.3 && foot[1] - FOULS.ball < on[1] + 0.01 && Math.hypot(foot[0] - on[0], foot[2] - on[2]) < foul.near) {
       hit('stomp', blow(was, foot, on, on, foul.mass));
       other.pinned = foul.pin;
     }
@@ -481,6 +498,23 @@ function fouls(bout, f, other, who, dt) {
     // the face jab: the glove still over his face so long after it landed
     if (action.struck && landed >= foul.at && Math.hypot(...M.sub(f.points[move.hand], other.points.head)) < RULES.glove + RULES.head + 0.03) hit('thumb', blow(f.before[move.hand], f.points[move.hand], other.before.head, other.points.head, effectiveMass(chain, move)));
   }
+}
+
+/* Up off the canvas, where he lies (his place turned and moved under him: anim/animator.mjs getUp), the way that fits how
+   he lies; or, off a knee, the way up off a knee. */
+export function getUp(bout, f) {
+  const up = f.animator.getUp(),
+    name = up ? up.name : RISE[f.action && f.action.name] || 'riseKnee';
+  if (up) {
+    const o = M.app(M.ry((f.yaw * 180) / Math.PI), [up.move[0], 0, up.move[1]]);
+    f.x += o[0];
+    f.z += o[2];
+    f.yaw = wrap(f.yaw + up.turn);
+  }
+  f.down = 0;
+  f.kx = f.kz = f.ix = f.iz = f.vx = f.vz = 0;
+  f.action = { name, t: 0, id: name + ++f.serial, struck: false, chain: null, from: up ? up.on : 'knee', side: up && up.down === 'R' ? -1 : 1 };
+  return f.action;
 }
 
 export function step(bout, inputs, dt) {

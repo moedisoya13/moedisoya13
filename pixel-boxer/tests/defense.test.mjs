@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { step } from '../src/game/bout.mjs';
 import { freshBout, drive } from '../src/footwork.mjs';
 import { DEFENSE } from '../src/defense.mjs';
-import { RISE } from '../src/anim/moves.mjs';
+import { RISE, LIE } from '../src/anim/moves.mjs';
 
 const DT = 1 / 60;
 const OUTCOMES = ['hit', 'block', 'parry', 'whiff', 'graze'];
@@ -38,17 +38,23 @@ for (const entry of DEFENSE.filter(e => e.punch))
       else assert.notEqual(before.type, 'hit', 'an earlier punch landed: ' + JSON.stringify(out));
   });
 
+/* Going down: laid out, he is a body that comes to rest however it lands, and gets up the way that fits how it lies (off his
+   back, front or side: moves.mjs LIE); dropped to a knee, he gets up off the knee. */
 for (const entry of DEFENSE.filter(e => e.fall))
-  test(`defence catalogue: ${entry.id} goes down as ${entry.fall}, gets up the way that goes with it, and is back in his guard`, () => {
+  test(`defence catalogue: ${entry.id} goes down as ${entry.fall}, gets up the way that goes with how he lies, and is back in his guard`, () => {
     const bout = freshBout(entry),
       done = [];
+    let from = null;
     for (let tick = 0; tick < Math.round(entry.loop / DT); tick++) {
       step(bout, drive(entry, bout, tick * DT, DT), DT);
       const a = bout.fighters[0].action,
         name = a ? a.name : 'guard';
-      if (done[done.length - 1] !== name) done.push(name);
+      if (done[done.length - 1] !== name) (done.push(name), a && a.from && (from = a.from));
     }
-    assert.deepEqual(done.filter(n => n !== 'guard'), [entry.fall, RISE[entry.fall]]);
+    const moves = done.filter(n => n !== 'guard');
+    assert.equal(moves[0], entry.fall, JSON.stringify(done));
+    assert.equal(moves[1], entry.fall === 'drop' ? RISE.drop : LIE[from], `${JSON.stringify(done)} (lying on his ${from})`);
+    assert.equal(moves.length, 2, JSON.stringify(done));
     assert.equal(done[done.length - 1], 'guard');
     assert.equal(bout.fighters[0].down, 0);
   });

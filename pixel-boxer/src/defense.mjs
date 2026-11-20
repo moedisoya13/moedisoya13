@@ -8,7 +8,7 @@
    the bout gives, sixtieths of a second after the press that throws the punch (tools/windows.mjs measures them, in these
    same drills: the boxer is a pro, whose head moves of its own accord, so the windows are his). */
 import { HOME } from './footwork.mjs';
-import { RISE } from './anim/moves.mjs';
+import { getUp } from './game/bout.mjs';
 
 const F = 1 / 60;
 // where the other man stands for each punch, from the boxer: at the range it is thrown from
@@ -93,7 +93,8 @@ const DRILLS = [
 /* Going down. The bout counts knockdowns (as a match does) instead of ending at the first, and the script is the referee:
    the boxer is left as much health as makes the finishing blow put him down the way the card says (with little to spare,
    a knee; with plenty, flat out), only at `from`, just before it arrives (a hurt man's posture is his own and would
-   change where it lands), and he beats the count `up` seconds into the loop, the way match.mjs gets a man up. */
+   change where it lands), and he beats the count `up` seconds into the loop, and gets up the way match.mjs gets a man up
+   (bout.mjs: getUp, where he lies and the way that fits how he lies). */
 const down = (hp, from, up) => ({
   hurt: true,
   setup: b => (b.knockdowns = true),
@@ -102,17 +103,15 @@ const down = (hp, from, up) => ({
     if (t < from) f.hp = 100;
     else if (t < from + 1 / 60 + 1e-9) f.hp = hp;
     if (f.down && t >= up) {
-      const name = RISE[f.action.name];
-      f.down = 0;
       f.hp = 40;
-      f.action = { name, t: 0, id: name + ++f.serial, struck: false, chain: null };
+      getUp(b, f);
     }
   }
 });
 DRILLS.push(
   Object.assign(down(1, 0.62, 2.6), {
     id: 'down-back', name: '다운 · 뒤로', en: 'Laid out', group: '다운',
-    note: '여유 있게 넘친 스트레이트는 무릎을 먼저 꺾고, 이어 몸 전체를 뒤로 눕힙니다. 카운트 중에 팔꿈치와 무릎을 짚고 일어납니다.',
+    note: '여유 있게 넘친 스트레이트에 몸이 물리가 됩니다. 근육이 다리부터 풀려 무릎이 꺾이고, 주먹이 민 대로 뒤로 넘어가 등으로 눕습니다. 누운 자세에서 앉고, 무릎을 세워 한쪽 무릎을 거쳐 일어납니다.',
     loop: 5, punch: ['cross', 0.6], outcome: 'hit', fall: 'ko', view: { yaw: 0.5, pitch: 0.3 }
   }),
   Object.assign(down(2.4, 0.62, 2.2), {
@@ -122,7 +121,7 @@ DRILLS.push(
   }),
   Object.assign(down(1.5, 1.02, 2.8), {
     id: 'down-face', name: '다운 · 앞으로', en: 'Face first', group: '다운',
-    note: '훅에 몸이 돌아가며 무릎이 꺾이고, 앞으로 고꾸라져 캔버스에 엎어집니다. 두 손으로 밀어 무릎을 세우고, 한쪽 무릎을 거쳐 일어납니다.',
+    note: '훅에 몸이 돌아가며 무릎이 꺾이고, 돌던 대로 넘어가 캔버스에 엎드립니다(물리라 어떻게 떨어질지는 정해 두지 않았습니다). 두 손으로 밀어 네발이 되고, 한쪽 무릎을 거쳐 일어납니다.',
     loop: 5.4, punch: ['hook', 1.0], cover: t => t > 0.1 && t < 0.95, outcome: 'hit', before: 'block', fall: 'slump', view: { yaw: 0.5, pitch: 0.3 }
   })
 );

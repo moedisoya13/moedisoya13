@@ -11,13 +11,16 @@
      lx ly lz le       left hand, metres, and how far its elbow is lifted out (0 down .. 1 level with the shoulder)
      rx ry rz re       right hand
      lc rc             how far each hand is locked to the chest and swung by it (1), not held to the face (0): a hook
+     lg rg             how far each hand is put where its channels say in the room, not carried with the head (1): a glove
+                       planted on the canvas (the solver stops it there, on top)
      lfx lfy lfz lfw lfp   left foot: metres across, up, ahead; degrees turned out, heel raised
      rfx rfy rfz rfw rfp   right foot
+     lk rk             how far each knee is pointed down at the canvas (1): a knee put down (the solver stops it there, on it)
      st                taller and thinner by this share
      aim               how much the punching hand is steered onto the target (0..1) */
 
-export const CHANNELS = ['hx', 'hy', 'hz', 'lean', 'tip', 'yaw', 'side', 'twist', 'hp', 'hw', 'hr', 'lx', 'ly', 'lz', 'le', 'lc', 'rx', 'ry', 'rz', 're', 'rc',
-  'lfx', 'lfy', 'lfz', 'lfw', 'lfp', 'rfx', 'rfy', 'rfz', 'rfw', 'rfp', 'st', 'aim'];
+export const CHANNELS = ['hx', 'hy', 'hz', 'lean', 'tip', 'yaw', 'side', 'twist', 'hp', 'hw', 'hr', 'lx', 'ly', 'lz', 'le', 'lc', 'lg', 'rx', 'ry', 'rz', 're', 'rc', 'rg',
+  'lfx', 'lfy', 'lfz', 'lfw', 'lfp', 'lk', 'rfx', 'rfy', 'rfz', 'rfw', 'rfp', 'rk', 'st', 'aim'];
 
 // Orthodox guard: left foot and hand lead, chin down, weight on the balls of the feet.
 export const GUARD = {
@@ -163,8 +166,28 @@ for (const [name, punch] of Object.entries(PUNCHES)) {
    across and less than 1 cm toward the other man.) */
 export const LEFT_BEND = { side: 0.375, lean: -0.69 };
 
-/* How a man goes down, and the way up from each: off his back, off a knee, off his face. */
-export const RISE = { ko: 'rise', drop: 'riseKnee', slump: 'riseFront' };
+/* How a man goes down, and the way up. Laid out, he is a body (phys/fall.mjs: ko from a straight punch or an uppercut,
+   slump from a hook, the same body either way, the blow's direction is what differs), and the way up is chosen by how he
+   came to rest: off his back, off his front, off his side. Dropped to a knee, he means it, and gets up off the knee. */
+export const RISE = { drop: 'riseKnee' };
+export const LIE = { back: 'rise', front: 'riseFront', side: 'riseSide' };
+/* Where each way up has his hips at the end of its first part, and which way his body lies along the canvas there (from
+   his hips to his head, radians from straight ahead): a man getting up where he lies is turned and moved so that his hips
+   and that line are where he lies (bout.mjs: getUp), and the rise is blended out of the pose he lay in over that first
+   part (`blend`, seconds). */
+export const UP = { rise: { hips: [0, -0.22], heading: Math.PI }, riseFront: { hips: [0, -0.02], heading: 0 }, riseSide: { hips: [0, -0.02], heading: 0 } };
+
+// the poses the ways up go through, as channels: kneeling on the rear knee with the rear glove down by the lead foot, on
+// hands and knees, sitting up with the hands behind
+const KNEEL = { hy: -0.515, hz: -0.1, lean: 58, hp: 12, hr: 4, side: -16, yaw: 6, lx: 0.08, ly: -0.42, lz: 0.05, rx: -0.2, ry: -1.29, rz: -0.02, re: 0.3, rg: 1, rfx: -0.05, rfz: -0.16, rfp: 53, rk: 1, lfz: 0.12 };
+const FOURS = { hy: -0.385, hz: 0, tip: 42, lean: 28, yaw: 28, twist: 10, hp: 6, lx: 0.1, ly: -1.3, lz: 0.17, lg: 1, rx: -0.1, ry: -1.285, rz: 0.33, rg: 1, le: 0.3, re: 0.3, lfz: -0.68, lfp: 60, lk: 1, rfz: -0.2, rfp: 55, rk: 1 };
+const SIT = { hy: -0.755, hz: -0.22, lean: -30, hp: 10, lx: 0.12, ly: -1.3, lz: -0.82, lg: 1, rx: -0.12, ry: -1.285, rz: -0.66, rg: 1, lfz: -0.03, rfz: 0.4, rfw: 30 };
+// (between them: the rear knee drawn in under him off his seat, and the lead foot brought up off all fours)
+const TUCK = { hy: -0.62, hz: -0.18, lean: 8, side: -8, hp: 8, lx: 0.08, ly: -1.3, lz: -0.35, lg: 1, rx: -0.24, ry: -1.285, rz: -0.25, rg: 1, lfz: 0.05, rfx: -0.08, rfz: -0.1, rfp: 35, rk: 1 };
+const STEP = { hy: -0.4, hz: -0.04, tip: 30, lean: 34, yaw: 20, twist: 8, hp: 8, lx: 0.1, ly: -1.3, lz: 0.15, lg: 1, rx: -0.1, ry: -1.285, rz: 0.3, rg: 1, le: 0.3, re: 0.3, lfz: -0.22, lfy: 0.05, lfp: 15, rfz: -0.2, rfp: 55, rk: 1 };
+const UP_HALF = { hy: -0.34, hz: -0.04, lean: 28, hp: 16, lx: 0.06, ly: -0.3, rx: -0.04, ry: -0.6, rz: 0.18, rg: 0.3, side: 3, yaw: 4, rfz: -0.16, rfp: 36, rk: 0.2, lfz: 0.06 };
+const UP_NEAR = { hy: -0.08, lean: 10, hp: 4, hw: 10, ly: -0.08, ry: -0.1 };
+const UP_DONE = { hy: -0.04, lean: 6, hw: -8, hr: 4, ly: -0.04, ry: -0.05 };
 
 export const MOVES = Object.assign(
   {},
@@ -184,16 +207,9 @@ export const MOVES = Object.assign(
       dur: 0.62,
       keys: [{ t: 0.1, e: 'out', lean: -15, hz: -0.1, hy: 0.01, lx: 0.2, ly: 0.08, lz: -0.14, rx: -0.2, ry: 0.1, rz: -0.1, hp: -12, le: 0.5, re: 0.5 }, { t: 0.3, lean: -9, hz: -0.07, lx: 0.12, ly: 0.02, lz: -0.08, rx: -0.12, ry: 0.03, rz: -0.06, hp: -5 }]
     },
-    // knocked out: the knees go, then the rest of him, onto his back
-    ko: {
-      floor: true, stay: true, dur: 1.2,
-      keys: [
-        { t: 0.24, e: 'out', hy: -0.2, lean: -12, hp: -22, lx: 0.08, ly: -0.3, lz: -0.06, rx: -0.08, ry: -0.3, rz: -0.02, yaw: 14, twist: 10 },
-        { t: 0.72, e: 'in', hy: -0.735, hz: -0.5, tip: -76, lean: -8, hp: 12, lx: 0.46, ly: -0.02, lz: -0.25, rx: -0.58, ry: -0.15, rz: 0, le: 0.9, re: 0.9, yaw: 26, twist: 6, lfp: 20, rfp: 10, rfz: 0.16, rfw: 20 },
-        { t: 0.86, e: 'out', hy: -0.7, tip: -72, hp: 2 },
-        { t: 1.08, e: 'io', hy: -0.735, hz: -0.5, tip: -76, lean: -8, hp: 12, lx: 0.46, ly: -0.02, lz: -0.25, rx: -0.58, ry: -0.15, rz: 0, le: 0.9, re: 0.9, yaw: 26, twist: 6, lfp: 20, rfp: 10, rfz: 0.16, rfw: 20 }
-      ]
-    },
+    // knocked down and out: a body (phys/fall.mjs); these only say so, and how long before he is lying still
+    ko: { floor: true, stay: true, fall: true, dur: 1.2, keys: [] },
+    slump: { floor: true, stay: true, fall: true, dur: 1.2, keys: [] },
     // a slip: the head taken off the line of a punch, bent and dipped to one side and straight back (which side is the
     // action's: see the animator)
     slip: {
@@ -224,56 +240,35 @@ export const MOVES = Object.assign(
       dur: 0.5,
       keys: [{ t: 0.12, e: 'out', hz: -0.15, hy: -0.03, lean: -17, hp: -9, lfp: 16, lfz: 0.01, ly: 0.02, ry: 0.02 }, { t: 0.26, e: 'lin', hz: -0.15, hy: -0.03, lean: -17, hp: -9, lfp: 16, lfz: 0.01, ly: 0.02, ry: 0.02 }]
     },
-    // up off the canvas: onto an elbow, a knee, and back into the guard, a little unsteady
+    // up off his back: sitting up on his hands behind him, over onto the rear knee, and up, a little unsteady
     rise: {
-      floor: true, dur: 1.7,
-      keys: [
-        { t: 0.02, e: 'lin', hy: -0.735, hz: -0.5, tip: -76, lean: -8, hp: 12, lx: 0.46, ly: -0.02, lz: -0.25, rx: -0.58, ry: -0.15, rz: 0, le: 0.9, re: 0.9, yaw: 26, twist: 6, lfp: 20, rfp: 10, rfz: 0.16, rfw: 20 },
-        { t: 0.55, hy: -0.52, hz: -0.25, tip: -34, lean: 18, hp: 16, lx: 0.3, ly: -0.55, lz: 0.1, rx: -0.35, ry: -0.6, rz: 0.1, le: 0.5, re: 0.5, yaw: 12, lfp: 10, rfp: 30, rfz: 0.05 },
-        { t: 1.05, hy: -0.24, hz: -0.08, tip: -8, lean: 22, hp: 10, lx: 0.08, ly: -0.25, lz: -0.05, rx: -0.1, ry: -0.3, rz: 0, rfp: 18 },
-        { t: 1.4, hy: -0.06, lean: 8, hp: 4, side: 3, ly: -0.05, ry: -0.06 }
-      ]
+      floor: true, dur: 2.3, blend: 0.8,
+      keys: [{ t: 0.02, e: 'lin', ...SIT }, { t: 0.8, ...SIT }, { t: 1.1, ...TUCK }, { t: 1.4, ...KNEEL }, { t: 1.75, ...UP_HALF }, { t: 2.0, ...UP_NEAR }, { t: 2.15, ...UP_DONE }]
     },
-    // dropped: the legs go, he sags, and the rear knee and a glove go down to the canvas; he stays there, head down
+    /* dropped: the legs go, he sags, and the rear knee and the rear glove go down onto the canvas (the solver puts them on
+       it); he stays there, head down. He means this one, so it is a move, not a fall. */
     drop: {
       floor: true, stay: true, dur: 0.9,
       keys: [
         { t: 0.2, e: 'out', hy: -0.2, lean: 14, hp: 20, hr: 8, lx: 0.04, ly: -0.2, rx: -0.04, ry: -0.24, side: 4 },
-        { t: 0.62, e: 'in', hy: -0.57, hz: -0.1, lean: 32, hp: 26, hr: 6, lx: 0.08, ly: -0.42, lz: 0.05, rx: -0.02, ry: -1.04, rz: 0.36, re: 0.4, side: 6, yaw: 6, rfz: -0.36, rfp: 62, lfz: 0.12 },
-        { t: 0.9, e: 'io', hy: -0.55, hz: -0.1, lean: 30, hp: 24, hr: 4, lx: 0.08, ly: -0.4, lz: 0.05, rx: -0.02, ry: -1.02, rz: 0.36, re: 0.4, side: 5, yaw: 6, rfz: -0.36, rfp: 62, lfz: 0.12 }
-      ]
-    },
-    // slumped: a hook turns him, the knees go, and he pitches forward onto his face, stretched out on the canvas
-    slump: {
-      floor: true, stay: true, dur: 1.3,
-      keys: [
-        { t: 0.18, e: 'out', hy: -0.18, lean: 10, hp: 24, hw: 25, hr: 14, yaw: 22, twist: 10, lx: 0.06, ly: -0.22, rx: -0.06, ry: -0.26 },
-        { t: 0.55, e: 'in', hy: -0.42, hz: 0.02, lean: 34, tip: 8, hp: 30, hw: 18, hr: 10, yaw: 30, twist: 6, lx: 0.1, ly: -0.5, lz: 0.2, rx: -0.12, ry: -0.55, rz: 0.24, le: 0.5, re: 0.5, rfz: -0.18, rfp: 40, lfz: -0.08, lfp: 30 },
-        { t: 0.95, e: 'in', hy: -0.5, hz: 0.1, lean: 40, tip: 38, hp: 18, hw: 10, hr: 6, yaw: 32, twist: 4, lx: 0.14, ly: -0.42, lz: 0.32, rx: -0.16, ry: -0.46, rz: 0.36, le: 0.9, re: 0.9, rfz: -0.3, rfp: 60, lfz: -0.22, lfp: 60 },
-        { t: 1.12, e: 'out', hy: -0.48, hz: 0.1, lean: 38, tip: 34, hp: 20, hw: 10, hr: 6, yaw: 32, twist: 4, lx: 0.14, ly: -0.42, lz: 0.32, rx: -0.16, ry: -0.46, rz: 0.36, le: 0.9, re: 0.9, rfz: -0.3, rfp: 60, lfz: -0.22, lfp: 60 },
-        { t: 1.3, e: 'io', hy: -0.5, hz: 0.1, lean: 40, tip: 38, hp: 18, hw: 10, hr: 6, yaw: 32, twist: 4, lx: 0.14, ly: -0.42, lz: 0.32, rx: -0.16, ry: -0.46, rz: 0.36, le: 0.9, re: 0.9, rfz: -0.3, rfp: 60, lfz: -0.22, lfp: 60 }
+        { t: 0.7, ...KNEEL, rg: 0.9, ry: -1.25 },
+        { t: 0.9, ...KNEEL }
       ]
     },
     // up off a knee: the glove pushes off the canvas, the rear foot comes under him, and he is up, shaking it off
     riseKnee: {
       floor: true, dur: 1.15,
-      keys: [
-        { t: 0.02, e: 'lin', hy: -0.55, hz: -0.1, lean: 30, hp: 24, hr: 4, lx: 0.08, ly: -0.4, lz: 0.05, rx: -0.02, ry: -1.02, rz: 0.36, re: 0.4, side: 5, yaw: 6, rfz: -0.36, rfp: 62, lfz: 0.12 },
-        { t: 0.4, hy: -0.36, lean: 30, hp: 18, lx: 0.06, ly: -0.3, rx: -0.04, ry: -0.6, rz: 0.18, side: 3, yaw: 4, rfz: -0.16, rfp: 36, lfz: 0.06 },
-        { t: 0.75, hy: -0.08, lean: 10, hp: 4, hw: 10, ly: -0.08, ry: -0.1 },
-        { t: 0.95, hy: -0.04, lean: 6, hw: -8, hr: 4, ly: -0.04, ry: -0.05 }
-      ]
+      keys: [{ t: 0.02, e: 'lin', ...KNEEL }, { t: 0.4, ...UP_HALF }, { t: 0.75, ...UP_NEAR }, { t: 0.95, ...UP_DONE }]
     },
-    // up from face down: onto his hands and knees, onto one knee, and up
+    // up off his front: pushed up onto his hands and knees, onto the rear knee, and up
     riseFront: {
-      floor: true, dur: 1.9,
-      keys: [
-        { t: 0.02, e: 'lin', hy: -0.5, hz: 0.1, lean: 40, tip: 38, hp: 18, hw: 10, hr: 6, yaw: 32, twist: 4, lx: 0.14, ly: -0.42, lz: 0.32, rx: -0.16, ry: -0.46, rz: 0.36, le: 0.9, re: 0.9, rfz: -0.3, rfp: 60, lfz: -0.22, lfp: 60 },
-        { t: 0.5, hy: -0.48, hz: 0.04, lean: 36, tip: 22, hp: 10, hw: 4, yaw: 18, lx: 0.12, ly: -0.62, lz: 0.22, rx: -0.14, ry: -0.66, rz: 0.24, le: 0.3, re: 0.3, rfz: -0.3, rfp: 55, lfz: -0.2, lfp: 50 },
-        { t: 1.0, hy: -0.44, hz: -0.06, lean: 28, hp: 20, hr: 4, lx: 0.08, ly: -0.36, lz: 0.05, rx: -0.02, ry: -0.9, rz: 0.34, re: 0.4, side: 5, yaw: 6, rfz: -0.2, rfp: 45, lfz: 0.1 },
-        { t: 1.45, hy: -0.12, lean: 12, hp: 6, hw: 8, ly: -0.1, ry: -0.14 },
-        { t: 1.7, hy: -0.05, lean: 7, hw: -6, hr: 3, ly: -0.05, ry: -0.06 }
-      ]
+      floor: true, dur: 2.3, blend: 0.8,
+      keys: [{ t: 0.02, e: 'lin', ...FOURS }, { t: 0.8, ...FOURS }, { t: 1.05, ...STEP }, { t: 1.35, ...KNEEL }, { t: 1.7, ...UP_HALF }, { t: 1.95, ...UP_NEAR }, { t: 2.1, ...UP_DONE }]
+    },
+    // up off his side: rolled over onto his hands and knees as he pushes up, and on as from his front
+    riseSide: {
+      floor: true, dur: 2.4, blend: 0.9,
+      keys: [{ t: 0.02, e: 'lin', ...FOURS }, { t: 0.9, ...FOURS }, { t: 1.15, ...STEP }, { t: 1.45, ...KNEEL }, { t: 1.8, ...UP_HALF }, { t: 2.05, ...UP_NEAR }, { t: 2.2, ...UP_DONE }]
     },
     // arms up, mixed in for the winner
     cheer: { stay: true, dur: 1, keys: [{ t: 1, e: 'lin', lx: 0.2, ly: 0.52, lz: -0.2, rx: -0.2, ry: 0.55, rz: -0.02, le: 0.7, re: 0.7, lean: -15, yaw: 24, twist: 8, hp: -10, hy: 0.04 }] }
