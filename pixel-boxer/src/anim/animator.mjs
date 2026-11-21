@@ -888,7 +888,7 @@ export function createAnimator(seed) {
           for (const ch in tmp) c[ch] += tmp[ch];
           // (pressed down: the arm held where it was met, as it was drawn then, and let down: clean.mjs)
           if (action.name === 'patted') {
-            if (!action.held && hand[action.hand === 'R' ? 'R' : 'L']) action.held = hand[action.hand === 'R' ? 'R' : 'L'].slice();
+            if (!action.held && wrist[action.hand === 'R' ? 'R' : 'L']) action.held = wrist[action.hand === 'R' ? 'R' : 'L'].slice();
             pattedArm(c, action, MOVES.patted.drop);
           }
         } else {

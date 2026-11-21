@@ -334,8 +334,9 @@ export function patDown(c, p, s) {
 }
 
 /* The man pressed down: the glove that was met held where it was met (action.held: the wrist, in his own space, as it was
-   drawn then: the animator keeps it) and pressed down `drop` metres in 0.06 s, his own carriage of it let go of (its channels
-   are where it is in the room), and given back over the end of the move. -> how much of it is held */
+   drawn then: the animator keeps it) and pressed down `drop` metres in 0.06 s, [down, and back toward him as the arm gives],
+   his own carriage of it let go of (its channels are where it is in the room), and given back over the end of the move.
+   -> how much of it is held */
 export function pattedArm(c, action, drop) {
   if (!action.held) return 0;
   const side = action.hand === 'R' ? 'R' : 'L',
@@ -343,7 +344,7 @@ export function pattedArm(c, action, drop) {
     g = GUARD.hands[side],
     down = smooth(action.t / 0.06),
     w = 1 - smooth((action.t - 0.24) / 0.16),
-    T = [action.held[0] - g[0], action.held[1] - drop * down - g[1], action.held[2] - g[2]];
+    T = [action.held[0] - g[0], action.held[1] - drop[0] * down - g[1], action.held[2] - drop[1] * down - g[2]];
   c[k + 'x'] += (T[0] - c[k + 'x']) * w;
   c[k + 'y'] += (T[1] - c[k + 'y']) * w;
   c[k + 'z'] += (T[2] - c[k + 'z']) * w;

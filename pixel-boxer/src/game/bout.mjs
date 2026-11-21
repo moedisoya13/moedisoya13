@@ -945,12 +945,12 @@ function trickOf(f, other, button, name, forced) {
 // a forearm, as the bout reckons it in the way: so many balls from the elbow to the glove, each as thick as the forearm
 const FOREARM = { n: 6, r: 0.045 };
 /* ---- The down parry, as a blow judges it (anim/clean.mjs, docs/moves-plan-5.md §4.2): his rear glove coming down (the
-   animator's patting, a guard put up for it: f.pat) on a punch his grade presses down is the down parry's, not a glove held in
-   the way. It presses down a glove it meets from above (the middle of his glove higher than the middle of the one coming in, as
+   animator's patting, a guard put up for it: f.pat) on a punch his grade presses down, while his guard is as fresh as a parry's
+   has to be, is the down parry's, not a glove held in the way. It presses down a glove it meets from above (the middle of his glove higher than the middle of the one coming in, as
    they meet, less `above`): the arm that threw it is held down where it was met (moves.mjs: patted), not knocked back, and the
    defender has his opening, the counter wound up in the hand that pressed it. Met any other way, by it or by the guard put up
    for it, the punch is blocked (as a hammer's: a guard put up for it turns nothing aside). */
-const patNow = (other, move) => !!other.pat && other.pat.met === null && other.animator.patting && presses(other.pat.pat, move.name);
+const patNow = (other, move) => !!other.pat && other.pat.met === null && other.animator.patting && presses(other.pat.pat, move.name) && other.coverAge <= other.k.parry * (0.7 + 0.3 * fatigue(other));
 const patAbove = (first, g0, g1) => M.lerp(first.c0, first.c1, first.s)[1] >= M.lerp(g0, g1, first.s)[1] - PAT.above;
 function patted(bout, f, other, who, action, blow) {
   const pat = other.pat.pat,

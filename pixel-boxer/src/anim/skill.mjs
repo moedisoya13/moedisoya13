@@ -294,8 +294,8 @@ const WAVE_5M = Object.assign({}, WAVE_4M, { hands: [-0.36, -0.3], wide: 0.08, s
               its wind-up done, waiting out `hold` first) or 'jab' (5명: the lead hand's jab at once, `jab` of its wind-up done,
               and the pressing hand's cross, `load` of it done, pressed `follow` seconds after the contact)
      stun     seconds the man pressed down is tied up (moves.mjs: patted; he is not knocked back) */
-const PAT_4M = { set: 0.04, at: [-0.005, 0.175, 0.15], elbow: 0.2, lead: [0.02, 0.025, -0.03], go: 0.05, down: 0.16, fall: 0.07, out: 0.03, hold: 0.1, back: 0.15, presses: ['jab'], counter: 'cross', load: 0.7, jab: 0, follow: 0, stun: 0.35 };
-const PAT_5M = Object.assign({}, PAT_4M, { set: 0.035, down: 0.09, fall: 0.05, out: 0.015, hold: 0.18, presses: ['jab', 'cross'], counter: 'jab', load: 1, jab: 0.5, follow: 0.16 });
+const PAT_4M = { set: 0.04, at: [-0.005, 0.175, 0.15], elbow: 0.38, lead: [0.02, 0.025, -0.03], go: 0.05, down: 0.16, fall: 0.07, out: -0.12, hold: 0.14, back: 0.15, presses: ['jab'], counter: 'cross', load: 0.7, jab: 0, follow: 0, stun: 0.35 };
+const PAT_5M = Object.assign({}, PAT_4M, { set: 0.035, down: 0.09, fall: 0.07, out: -0.06, hold: 0.18, presses: ['jab', 'cross'], counter: 'jab', load: 1, jab: 0, follow: 0.16 });
 
 export const LEVEL = {
   1: {

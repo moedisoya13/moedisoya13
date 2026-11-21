@@ -214,3 +214,34 @@ const placed = e =>
   });
 // the blows and the knockdowns (one card each: being hit has no grade), and the graded rows
 export const DEFENSE = [...GRADED.map(placed), ...DRILLS.map(placed)];
+
+/* The down parry and counter (anim/clean.mjs, docs/moves-plan-5.md §4.2): a clean great one's and a clean legend's own, a
+   card each, for the catalogue's technique rows (stage I puts them on the page; tests/clean.test.mjs holds them to what they
+   say). The same pro throws the same jab as the parry card, at the same moment; the boxer carries the technique (his loadout:
+   game/techniques.mjs) and puts his guard up meant as it (tech: 'parryDown', from the frame of the card on), and takes the
+   opening it makes at once (a power press as soon as the jab is pressed down: his counter, the cross of the hand that
+   pressed it, a legend's jab first). The frame he puts it up on is the middle of the window measured in these same drills
+   (WINDOWS.parryDown once tools/windows.mjs measures it; until then PARRY_DOWN_WINDOW, measured the same way: frames after
+   the press that throws the jab on which the guard put up for it presses it down). The card's numbers: the window, and how
+   long after the glove was pressed down his counter lands. */
+export const PARRY_DOWN_WINDOW = { '4m': { from: -8, to: 3, at: -3 }, '5m': { from: -7, to: 3, at: -2 } };
+export const PARRY_DOWN = ['4m', '5m'].map(lv => {
+  const item = { id: 'parryDown', punch: ['jab', 0.8] },
+    w = (WINDOWS.parryDown && WINDOWS.parryDown[lv]) || PARRY_DOWN_WINDOW[lv],
+    at = item.punch[1] + w.at * F;
+  return placed({
+    id: `parryDown@${lv}`, item: 'parryDown', level: lv, card: 'parryDown', answer: w.at, window: [w.from, w.to],
+    name: `다운패링 카운터 ${lv === '4m' ? '4명' : '5명'}`, en: 'Down parry and counter', group: '명의 기술', kind: 'parry',
+    note: '막 올린 가드가 잽을 옆으로 쳐내지 않고, 뒷손이 턱 앞으로 나가 들어오는 글러브를 위에서 눌러 내립니다. 실제로 위에서 닿아야 내리고(닿지 못하면 블록), 눌린 팔은 닿은 자리에서 20 cm 떨어지고 어깨가 딸려 내려가 0.35초 묶입니다. 4명은 누른 손이 가드로 돌아가지 않고 그 자리에서 스트레이트로 뻗고, 5명은 손목만 9 cm 내리며 앞손 잽이 같이 나가고 누른 손의 스트레이트가 뒤따릅니다. 카드 아래는 구간과 눌린 뒤 반격이 닿기까지입니다.',
+    loop: 2.4, punch: item.punch, outcome: 'parry', view: { yaw: 0.4, pitch: 0.26 },
+    setup: b => ((b.fighters[0].skills = { all: lv }), (b.fighters[0].techniques = ['parryDown'])),
+    cover: t => t >= at - 1e-9 && t < item.punch[1] + 0.4,
+    // (the guard meant as the down parry; and the counter, once, as soon as the glove has been pressed down)
+    cue: (bout, t) => {
+      const f = bout.fighters[0],
+        own = (f.cues = f.cues || {});
+      if (!own.countered && f.parried && f.parried.down && f.counter > 0) return (own.countered = true), 'power';
+      return t >= at - 1e-9 && t < item.punch[1] + 0.4 ? ['tech', 'parryDown'] : null;
+    }
+  });
+});
