@@ -315,6 +315,10 @@ export const MOVES = Object.assign(
       dur: 0.6,
       keys: [{ t: 0.08, e: 'out', ly: -0.34, lz: -0.1, lx: -0.03, le: -0.2, side: 4, lean: 5, hp: 5, twist: -5 }, { t: 0.32, e: 'lin', ly: -0.28, lz: -0.08, lx: -0.02, le: -0.15, side: 3, lean: 4, hp: 3, twist: -4 }]
     },
+    /* a straight rolled off the other man's shoulder (his shoulder roll, anim/show.mjs; docs/moves-plan-5.md §4A.4): the punch
+       goes on where it was stopped, held out the 0.3 s it is tied up (game/bout.mjs), and this is the rest of him, laid on
+       over it from the moment it was rolled: carried on after it, the weight over the front foot, 5 cm, and the head with it */
+    rolled: { dur: 0.3, keys: [{ t: 0.07, e: 'out', hz: 0.05, lean: 4, hp: 3, lkf: 4 }, { t: 0.2, e: 'lin', hz: 0.045, lean: 3.5, hp: 2, lkf: 3 }] },
     // knocked down and out: a body (phys/fall.mjs); these only say so, and how long before he is lying still
     ko: { floor: true, stay: true, fall: true, dur: 1.2, keys: [] },
     slump: { floor: true, stay: true, fall: true, dur: 1.2, keys: [] },

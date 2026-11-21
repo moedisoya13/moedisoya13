@@ -27,7 +27,7 @@ import { DEFENSE } from '../src/defense.mjs';
 import { BODYSHOTS, shot, aimAt } from '../src/bodyshots.mjs';
 import { audit, measure } from '../src/audit.mjs';
 import { createAnimator } from '../src/anim/animator.mjs';
-import { LEVEL, LEVELS } from '../src/anim/skill.mjs';
+import { LEVEL, LEVELS, CROSS } from '../src/anim/skill.mjs';
 import { MOVES } from '../src/anim/moves.mjs';
 import { fk } from '../src/rig/skeleton.mjs';
 import { where, middle, aimed, balls, TRUNK } from '../src/game/trunk.mjs';
@@ -269,11 +269,14 @@ test('the elbow: a guard held up meets a hook aimed at the liver with an elbow o
   assert.ok(e.type === 'hit' && e.part === 'body', `1: ${JSON.stringify(e)}`);
 });
 
-// his guard up and a punch at his liver seen so many seconds ago: when his rear elbow has come 5 cm down, and how far it goes
-function lowered(level, zone) {
+/* his guard up and a punch at his liver seen so many seconds ago: when his rear elbow has come 5 cm down, and how far it goes
+   (cross: the cross-arm guard he holds, if he carries it, as the bout tells his body: game/bout.mjs crossOf; by default the
+   dirty great ones carry it) */
+const carried = lv => (lv === '4a' || lv === '5a' ? CROSS[lv] : null);
+function lowered(level, zone, cross = null) {
   const a = createAnimator(0),
     b = createAnimator(0),
-    view = { move: [0, 0], turn: 0, cover: 1, action: null, guard: level, stance: level };
+    view = { move: [0, 0], turn: 0, cover: 1, action: null, guard: level, stance: level, cross };
   for (let i = 0; i < 90; i++) a.update(view, DT), b.update(view, DT);
   const out = { at: null, most: 0, gap: -1 };
   for (let i = 1; i <= 45; i++) {
@@ -286,14 +289,13 @@ function lowered(level, zone) {
   return out;
 }
 test('the elbow: brought down the sooner the better he is; a beginner never, nor a man holding the cross-arm guard', () => {
-  const at = Object.fromEntries(LEVELS.map(lv => [lv, lowered(LEVEL[lv], 'liver')]));
+  const at = Object.fromEntries(LEVELS.map(lv => [lv, lowered(LEVEL[lv], 'liver', carried(lv))]));
   assert.equal(at['1'].at, null, 'a beginner');
   assert.ok(at['2'].at > at['3'].at && at['3'].at > at['4m'].at && at['4m'].at > at['5m'].at, LEVELS.map(lv => `${lv} ${at[lv].at}`).join(', '));
   for (const lv of ['4a', '5a']) assert.equal(at[lv].at, null, `${lv}: his cross-arm guard`);
   // (a dirty great one without the cross-arm guard brings it down as the clean one does)
   for (const [d, m] of [['4a', '4m'], ['5a', '5m']]) {
-    const bare = Object.assign({}, LEVEL[d], { cover: Object.assign({}, LEVEL[d].cover, { cross: null, hammer: null }) });
-    const got = lowered(bare, 'liver').at;
+    const got = lowered(LEVEL[d], 'liver', null).at;
     assert.ok(got !== null && Math.abs(got - at[m].at) <= 2 * DT + 1e-9, `${d} without the cross-arm guard: ${got} against ${at[m].at}`);
   }
   // (a pro's: down to his side over the liver, ten centimetres and more)
