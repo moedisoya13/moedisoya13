@@ -266,7 +266,9 @@ define('crossArm', {
 });
 
 define('rollCounter', {
-  name: '숄더 롤 & 카운터', section: '§4A.7', open: ['4m', '4a', '5m', '5a'],
+  name: '숄더 롤 & 카운터', section: '§4A.7', open: ['4m', '4a', '5m', '5a'], ready: true,
+  /* (the roll is built, stage H1: the guard put up meant as rollCounter rolls, game/bout.mjs rollFor, anim/show.mjs
+     shoulderRoll; the rear hook it winds up is stage H2's, and until then the counter is the power press it would have been) */
   // a straight at his head within reach: the guard up as a parry's, and rolled (60% of his parries)
   answer: { of: 'parry', share: 0.6, when: s => s.inReach && s.head && s.punch === 'straight', control: s => ({ cover: s.soon, tech: 'rollCounter' }) },
   // rolled: the straight met his lead shoulder as it rolled (stage H1's block: part 'shoulder', roll: true)

@@ -34,7 +34,10 @@
                             liver | solar | ribs | body, trunk: { at: waist, to: chest, r } (what to throw sweat off), breath
                             (the share of all his breath it took), liver: true (it puts him down) }; one met by an elbow or a
                             forearm on its way there is { type: 'block', part: 'elbow' | 'forearm', zone (where it was aimed) };
-                            and a man doubled up by one goes down a moment later: { type: 'buckle', who }
+                            and a man doubled up by one goes down a moment later: { type: 'buckle', who }. A guard put up
+                            meant as a shoulder roll says so ({ type: 'roll', who }), and a punch met by the lead shoulder (a
+                            cross-arm guard's, or a roll's) is { type: 'block', part: 'shoulder', roll: true (rolled off it as
+                            his chest turned away) | false, margin (metres between the glove and his head as it met it) }
      bout.fighters[i].pose  his solved pose this step (and .place: where on the canvas, .points: gloves and head in the world)
 
    A punch is physics from the feet to the glove. Pressing a button only starts a kinetic chain (phys/chain.mjs); the joints
@@ -286,8 +289,10 @@ function rollFor(bout, f, input, dt) {
   if (f.roll) {
     f.roll.t += dt;
     const r = f.roll.roll;
+    // (he stays rolled under the arm he has rolled off his shoulder for as long as it is held out there)
+    if (f.roll.rolled && bout.t - f.roll.rolled.at < SHOULDER.tied) f.roll.t = Math.min(f.roll.t, r.lag + r.go + r.hold);
     // (over once it has unwound, or the moment he does anything else or is stopped by a blow)
-    if (f.roll.t >= r.go + r.hold + r.home || f.action || f.stun > 0) f.roll = null;
+    if (f.roll.t >= r.lag + r.go + r.hold + r.home || f.action || f.stun > 0) f.roll = null;
   }
   const a = !f.roll && !f.action && f.stun <= 0 && input.cover && asked(f, input);
   if (a && a.tech === 'rollCounter' && rollOf(f)) {
@@ -314,10 +319,10 @@ const turning = (other, dt) => {
   const way = p => Math.atan2(p.LS[0] - p.RS[0], p.LS[2] - p.RS[2]);
   return (-(((way(other.points) - way(other.before) + 3 * Math.PI) % (2 * Math.PI)) - Math.PI) * 180) / Math.PI / dt;
 };
-function shouldered(bout, f, other, who, action, blow, J, felt, stop, dt) {
+function shouldered(bout, f, other, who, action, blow, J, felt, stop, dt, s) {
   const roll = !!other.roll && turning(other, dt) >= SHOULDER.rolling,
-    // (and how far his head was from it as it met his shoulder: how much room the roll left)
-    margin = closest(f.before[blow.hand], f.points[blow.hand], other.before.head, other.points.head) - RULES.glove - RULES.head;
+    // (and how far his head was from the glove as it met his shoulder, surface to surface: how much room the roll left)
+    margin = Math.hypot(...M.sub(M.lerp(f.before[blow.hand], f.points[blow.hand], s), M.lerp(other.before.head, other.points.head, s))) - RULES.glove - RULES.head;
   other.hp = Math.max(1, other.hp - J * RULES.damage * other.k.smother * (roll ? SHOULDER.soft : SHOULDER.hard) * other.k.chin);
   other.kx += ((blow.dir[0] * J) / RULES.mass) * RULES.shove * 0.6;
   other.kz += ((blow.dir[1] * J) / RULES.mass) * RULES.shove * 0.6;
@@ -1130,7 +1135,7 @@ function strike(bout, f, other, who, dt) {
     other.defence = { kind: 'parry', start: bout.t - other.coverAge, of: action.id, from: action.at, margin: null, late: false, counterAt: null, event: e, said: false };
     return bout.events.push(e);
   }
-  if (first.what === 'shoulder') return shouldered(bout, f, other, who, action, blow, J, felt, stop, dt);
+  if (first.what === 'shoulder') return shouldered(bout, f, other, who, action, blow, J, felt, stop, dt, first.s);
   if (first.what === 'guard') {
     /* (a show-off's guard turns nothing aside but by its hammer, a pro's cross-arm guard nothing at all, and a guard up for a
        roll is the roll: met fresh, it is a block) */

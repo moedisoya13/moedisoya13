@@ -86,20 +86,21 @@ export function ear(c, cross, k) {
   c.rx += cross.to[2] * k;
 }
 
-/* The shoulder roll, t seconds after it started. roll (skill.mjs: ROLL[grade]): the chest turned further away from him, to his
-   right, in `go` seconds (the hips `turn[0]` degrees and the chest `turn[1]` more), laid back `lean` degrees and bent away to
-   his right `side` (the lead shoulder up, the head away from the punch), sat on the rear leg (`knee`: [lead, rear] degrees, the
-   lead knee straightened and the rear one bent, the weight going back over the rear foot; the hips `back` metres back), the chin `chin` degrees down behind the lead shoulder as it is shrugged `shoulder` metres more into the
-   punch's way, the rear glove tucked in under the chin behind it (`tuck`: [x, z] metres), and a great one's lead forearm
-   lifted `lift` off his belly; held `hold` and
+/* The shoulder roll, t seconds after it started. roll (skill.mjs: ROLL[grade]): in its first `set` seconds he is laid back
+   `lean` degrees and bent away to his right `side` (the lead shoulder up, the head away from the punch), sat on the rear leg
+   (`knee`: [lead, rear] degrees, the lead knee straightened and the rear one bent, the weight going back over the rear foot;
+   the hips `back` metres back), the chin `chin` degrees down behind the lead shoulder as it is shrugged `shoulder` metres more
+   into the punch's way, the rear glove tucked in under the chin behind it (`tuck`: [x, z] metres), and a great one's lead
+   forearm lifted `lift` off his belly; and from `lag` seconds in, over `go`, the chest is turned further away from him, to his
+   right (the hips `turn[0]` degrees and the chest `turn[1]` more), turning hardest as the punch gets there. Held `hold`, and
    unwound over `home`. -> { shrug: metres more the lead shoulder is up, w: how much of the roll there is (0..1), done }. The
    bout judges it: a punch that meets the lead shoulder while the chest is turning away is rolled off it (game/bout.mjs). */
 export function shoulderRoll(c, roll, t) {
-  const go = smooth(t / roll.go),
-    home = smooth((t - roll.go - roll.hold) / roll.home),
-    w = go * (1 - home);
-  c.yaw += roll.turn[0] * w;
-  c.twist += roll.turn[1] * w;
+  const home = smooth((t - roll.lag - roll.go - roll.hold) / roll.home),
+    turn = smooth((t - roll.lag) / roll.go) * (1 - home),
+    w = smooth(t / roll.set) * (1 - home);
+  c.yaw += roll.turn[0] * turn;
+  c.twist += roll.turn[1] * turn;
   c.lean -= roll.lean * w;
   c.side += roll.side * w;
   c.lkf += roll.knee[0] * w;
@@ -109,7 +110,7 @@ export function shoulderRoll(c, roll, t) {
   c.ly += roll.lift * w;
   c.rx += roll.tuck[0] * w;
   c.rz += roll.tuck[1] * w;
-  return { shrug: roll.shoulder * w, w, done: t >= roll.go + roll.hold + roll.home };
+  return { shrug: roll.shoulder * w, w, done: t >= roll.lag + roll.go + roll.hold + roll.home };
 }
 
 /* The hammering parry: the guard put up fresh is a stroke of the rear fist, its underside brought down on the glove coming in.

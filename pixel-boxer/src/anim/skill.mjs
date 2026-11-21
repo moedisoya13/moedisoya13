@@ -239,12 +239,13 @@ const SHOW_5A = { drop: [0.02, -0.31, 0.01], swing: [0.012, 0.8, 2.6, 4], lean: 
               chin: the clean great ones'), 'hammer' (the rear fist brought down on it: hammer, the dirty great ones')
      ear      seconds after a lead hook starts (its wind-up) that the rear glove goes up and back to the ear, over 0.04 s (`to`,
               metres: back, up, out to his right: up past the temple, where a hook thrown down at a crouched man comes)
-     sag      metres the lead forearm gives each time a blow lands on it, and is back in 0.3 s; lively: the bounce under it, times
+     sag      metres the lead forearm gives each time a blow lands on it, and is back in 0.3 s; lively, head: the bounce and the
+              head's own movement under it, times (a clean great one's head keeps his beat, smaller: his chin stays down)
    A great dirty fighter's is the bigger and higher (the lead forearm the higher: less room under the rear glove), a legend's
    tighter and lower; a pro's is a great one's, the lead forearm a little lower, slower up, and nothing done with it but
    taking punches; the clean great ones hold the dirty ones' shapes and parry as they always do. */
-const CROSS_4A = { L: [-0.2, -0.39, -0.1, 0], R: [0.05, -0.065, -0.005, -0.3], lock: 1, pole: { L: [1, -0.7, 0.4], R: [0.2, -1, 0.2] }, lean: 6, chin: 10, turn: -6, close: [-8, -6], knee: 6, shoulder: 0.05, arrive: 0.045, parry: 'hammer', ear: 0.09, to: [-0.1, 0.13, -0.07], sag: 0.02, lively: 1 };
-const CROSS_5A = Object.assign({}, CROSS_4A, { L: [-0.2, -0.40, -0.11, 0], R: [0.055, -0.05, -0.01, -0.3], lean: 7, chin: 12, close: [-6, -4], knee: 7, shoulder: 0.04, arrive: 0.035, ear: 0.05, sag: 0.01 });
+const CROSS_4A = { L: [-0.2, -0.39, -0.1, 0], R: [0.05, -0.065, -0.005, -0.3], lock: 1, pole: { L: [1, -0.7, 0.4], R: [0.2, -1, 0.2] }, lean: 6, chin: 10, turn: -6, close: [-8, -6], knee: 6, shoulder: 0.05, arrive: 0.045, parry: 'hammer', ear: 0.09, to: [-0.1, 0.13, -0.07], sag: 0.02, lively: 1, head: 1 };
+const CROSS_5A = Object.assign({}, CROSS_4A, { L: [-0.2, -0.425, -0.11, 0], R: [0.055, -0.05, -0.03, -0.3], lean: 7, chin: 12, close: [-6, -4], knee: 7, shoulder: 0.04, arrive: 0.035, ear: 0.05, sag: 0.01, head: 0.3 });
 /* (the hammer: up to the cheekbone from the chin, and down onto the jab's line, a great dirty fighter's swung, a legend's the
    wrist let fall: { up, rise: metres up and seconds, down, fall: metres down and seconds, out: metres out in front as it
    comes down, across: to his left, back: seconds into the guard }) */
@@ -254,21 +255,26 @@ CROSS_4A.hammer = HAMMER_4A;
 CROSS_5A.hammer = HAMMER_5A;
 export const CROSS = {
   3: Object.assign({}, CROSS_4A, { L: [CROSS_4A.L[0], CROSS_4A.L[1] - 0.02, CROSS_4A.L[2], 0], arrive: 0.06, parry: 'block', hammer: null, ear: 0.12, sag: 0.04, lively: 0.5 }),
-  '4m': Object.assign({}, CROSS_4A, { arrive: 0.04, parry: 'meet', hammer: null }),
+  '4m': Object.assign({}, CROSS_4A, { arrive: 0.04, parry: 'meet', hammer: null, head: 0.4 }),
   '4a': CROSS_4A,
-  // (a legend's guard is held 2 cm lower all the time, skill.mjs stance.guard.y: his cross-arm guard is where a dirty legend's is)
-  '5m': Object.assign({}, CROSS_5A, { L: [CROSS_5A.L[0], CROSS_5A.L[1] + 0.02, CROSS_5A.L[2], 0], R: [CROSS_5A.R[0], CROSS_5A.R[1] + 0.02, CROSS_5A.R[2], CROSS_5A.R[3]], arrive: 0.03, parry: 'meet', hammer: null }),
+  // (a legend's guard is held 2 cm lower all the time, skill.mjs stance.guard.y: his lead forearm is held up the more, level)
+  '5m': Object.assign({}, CROSS_5A, { L: [CROSS_5A.L[0], CROSS_5A.L[1] + 0.035, CROSS_5A.L[2], 0], R: CROSS_5A.R, arrive: 0.03, parry: 'meet', hammer: null, head: 0.4 }),
   '5a': CROSS_5A
 };
-/* The shoulder roll (anim/show.mjs: shoulderRoll; docs/moves-plan-5.md §4A.4): at a cross coming at his head he turns his chest
-   further away (`turn`: [yaw, twist] degrees to his right, in `go` seconds), lies back (`lean`), sits on his rear leg (`knee`,
-   and the hips `back` metres), shrugs the lead shoulder `shoulder` metres more into the punch's way and buries the chin
-   behind it, and the glove meets the shoulder; held `hold`, and unwound over `home`. A great one's is the big roll, the lead
-   forearm lifted `lift` metres off his belly as he goes (his left ribs open); a legend's goes as far as it has to. Only 4
-   and 5 have it, carrying it (game/techniques.mjs: rollCounter). */
-const ROLL_4 = { turn: [-10, -10], go: 0.08, hold: 0.06, home: 0.16, lean: 6, side: -14, knee: [-8, 10], back: 0.02, shoulder: 0.05, chin: 6, lift: 0.06, tuck: [-0.02, -0.06] };
-const ROLL_5 = Object.assign({}, ROLL_4, { turn: [-6, -7], lean: 4, side: -10, knee: [-6, 8], back: 0.015, shoulder: 0.04, lift: 0 });
-export const ROLL = { '4m': ROLL_4, '4a': ROLL_4, '5m': ROLL_5, '5a': ROLL_5 };
+/* The shoulder roll (anim/show.mjs: shoulderRoll; docs/moves-plan-5.md §4A.4): at a cross coming at his head, in `set`
+   seconds he lies back (`lean`), bends away to his right (`side`), sits on his rear leg (`knee`, and the hips `back` metres),
+   shrugs the lead shoulder `shoulder` metres more into the punch's way and buries the chin behind it, the rear glove tucked
+   in (`tuck`); and from `lag` seconds in he turns his chest further away (`turn`: [yaw, twist] degrees to his right, over
+   `go` seconds), so that it is turning hardest as the punch meets the shoulder; held `hold`, and unwound over `home`. A
+   great one's is the big roll, the lead forearm lifted `lift` metres off his belly as he goes (his left ribs open); a
+   legend's turns less and quicker, as far as it has to. Only 4 and 5 have it, meaning it (game/techniques.mjs: rollCounter).
+   (The plan's roll starts as the cross's shoulder fires; here that is about 25 ms before it lands, too late for anything, so
+   the head has it start four frames or so before, as a slip does.) */
+const ROLL_4 = { turn: [-10, -10], set: 0.05, lag: 0.03, go: 0.1, hold: 0.04, home: 0.16, lean: 6, side: -20, knee: [-8, 10], back: 0.02, shoulder: 0.05, chin: 6, lift: 0.06, tuck: [-0.05, -0.06] };
+const ROLL_5A = Object.assign({}, ROLL_4, { turn: [-6, -7], go: 0.07, hold: 0.06, side: -18, lift: 0, tuck: [-0.02, -0.06] });
+// (a clean legend stands taller in it, his head over his feet: he bends the further away to get his head behind the shoulder)
+const ROLL_5M = Object.assign({}, ROLL_5A, { side: -22, tuck: [-0.05, -0.06] });
+export const ROLL = { '4m': ROLL_4, '4a': ROLL_4, '5m': ROLL_5M, '5a': ROLL_5A };
 
 /* the tricks a show-off's press may turn into (anim/show.mjs: choose, docs/moves-plan-4.md §5.2), each button's, the table's
    bottom row first: [trick, chance] */

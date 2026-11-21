@@ -235,6 +235,8 @@ const BENT = 0.4; // and as far as it gets with the elbow held at a right angle
    shoulder: `arm` metres out) turned up so far that the shoulder rises so many metres, and `ahead` degrees forward at `most`
    metres of it (into the punch's way) */
 const SHRUG = { arm: Math.abs(TPOSE.LeftArm[0] - TPOSE.LeftShoulder[0]), ahead: 18, most: 0.07 };
+// (a straight rolled off a shoulder: how far its fist goes on, over it, in his own terms: moves.mjs rolled, game/bout.mjs)
+const ROLLED = [0, 0.03, 0.08];
 /* (his grade's way of covering up with the cross-arm guard he holds put in its place, for body.mjs coverLow: the same object
    when they are the same, as they are for the dirty great ones' default) */
 const LOW_GUARDS = new Map();
@@ -867,8 +869,15 @@ export function createAnimator(seed) {
         /* (a flicker's wrist snaps over at the end of it: the glove goes on a few centimetres, up and in, as the elbow gets
            straight, and back as it comes home) */
         if (move.snap) extra[me] = M.add(extra[me] || [0, 0, 0], [0, move.snap * 0.4, move.snap].map(v => v * smooth(clamp((chain.q[4] - 0.75) / 0.25, 0, 1)) * (chain.phase === 'recover' ? 1 - smooth(chain.since / 0.12) : 1)));
-        // (rolled off his shoulder: carried on after it while it is held out, game/bout.mjs; moves.mjs rolled)
-        if (action.rolled) sampleMove(MOVES.rolled, chain.t - action.rolled.at, c);
+        /* (rolled off his shoulder: carried on after it while it is held out, game/bout.mjs; moves.mjs rolled. The fist goes on
+           with him, up and over the shoulder it was turned off, ROLLED metres, so that it is the fist that goes past and not the
+           elbow folded into the shoulder) */
+        if (action.rolled) {
+          const since = chain.t - action.rolled.at;
+          sampleMove(MOVES.rolled, since, c);
+          const on = smooth(since / 0.1) * (chain.phase === 'recover' ? 1 - smooth(chain.since / 0.12) : chain.phase === 'done' ? 0 : 1);
+          if (on > 0) extra[me] = M.add(extra[me] || [0, 0, 0], M.scale(ROLLED, on));
+        }
         if (foul) {
           const n = form.dirty - 1;
           if (foul.name === 'thumb') extra[me] = M.add(extra[me] || [0, 0, 0], [0, -0.01, foul.push[n] * reach]); // pushed on into his face
@@ -1323,13 +1332,13 @@ export function createAnimator(seed) {
       const lg = st.legend;
       if (lg) {
         // (his own going: not a blow knocking him back)
-        const want = !action && !view.still && !stun ? smooth((speedNow - 0.2) / 0.4) * (1 - smooth((view.shoved || 0) / 0.2)) * intact * comeback * (cv.textbook ? 1 : 1 - cover * (1 - cv.head)) : 0;
+        const want = !action && !view.still && !stun ? smooth((speedNow - 0.2) / 0.4) * (1 - smooth((view.shoved || 0) / 0.2)) * intact * comeback * (cv.textbook ? 1 : 1 - cover * (1 - cv.head)) * (xc ? 1 - cover * (1 - xc.head) : 1) : 0;
         legend.w = action ? 0 : legend.w + (want - legend.w) * (1 - Math.exp(-dt * 12));
         // (the knees bent going in stay bent a while after he stops: the spring of what he throws next)
         const sp = Math.max(speedNow, 1e-3);
         legend.bent = action ? 0 : Math.max(legend.bent * Math.exp(-dt * 2.5), (legend.w * Math.max(0, vz)) / sp);
       }
-      const hw = action ? 0 : (1 - 0.5 * going) * intact * comeback * (cv.textbook ? 1 : 1 - cover * (1 - cv.head)) * (lg ? 1 - legend.w : 1);
+      const hw = action ? 0 : (1 - 0.5 * going) * intact * comeback * (cv.textbook ? 1 : 1 - cover * (1 - cv.head)) * (xc ? 1 - cover * (1 - xc.head) : 1) * (lg ? 1 - legend.w : 1);
       if (st.head && hw > 0) {
         const head = st.head;
         let X = 0,
