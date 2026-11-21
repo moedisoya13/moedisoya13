@@ -188,6 +188,7 @@ export function createRenderer(canvas, o) {
     };
   }
 
+  // (the depth buffer carries a stencil too: a layer may keep its silhouette there for another layer to stay out of)
   const target = { fbo: gl.createFramebuffer(), colour: gl.createTexture(), depth: gl.createRenderbuffer(), w: 0, h: 0, scale: 1 };
   const still = new Float32Array(MAX_BONES * 12);
   for (let b = 0; b < MAX_BONES; b++) (still[b * 12] = 1), (still[b * 12 + 5] = 1), (still[b * 12 + 10] = 1);
@@ -209,10 +210,10 @@ export function createRenderer(canvas, o) {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     gl.bindRenderbuffer(gl.RENDERBUFFER, target.depth);
-    gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT24, w, h);
+    gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH24_STENCIL8, w, h);
     gl.bindFramebuffer(gl.FRAMEBUFFER, target.fbo);
     gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, target.colour, 0);
-    gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, target.depth);
+    gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_STENCIL_ATTACHMENT, gl.RENDERBUFFER, target.depth);
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     return target;
   }
@@ -221,19 +222,28 @@ export function createRenderer(canvas, o) {
        rect:  { x, y, w, h } in art pixels from the bottom left of the grid, or none for the whole grid
        frame: { camera: { target, yaw, pitch, dist }, shake: [x, y] art pixels,
                 layers: [{ mesh, bones (vec4 rows, or none for things that stand still), palette (paletteArray), mask, flash,
-                           wave: [x, y, z, front, width, strength, sway] (a ripple through it, from a point in the world: it sways, with no light) }] }
+                           wave: [x, y, z, front, width, strength, sway] (a ripple through it, from a point in the world: it sways, with no light),
+                           silhouette: k, 1 to 8 (every pixel of the cell this layer covers is kept as silhouette k, whether or not
+                             something nearer hides it there: its whole outline in the picture, not only what shows of it),
+                           outside: k (this layer is drawn only off silhouette k, in front of it or behind it alike; elsewhere depth
+                             decides as for anything else. Such a layer is drawn after the cell's others, wherever it is in the
+                             list, so that the silhouette is all there when it comes: what a blow throws off a man, which must
+                             never be seen over him) }] }
        post:  { white, dim, hall: [4 colours], ink }
      draw(frame) is the three together for a picture of one cell. */
   function begin() {
     gl.bindFramebuffer(gl.FRAMEBUFFER, target.fbo);
     gl.viewport(0, 0, target.w, target.h);
     gl.disable(gl.SCISSOR_TEST);
+    gl.disable(gl.STENCIL_TEST);
     gl.clearColor(0, 0, 0, 0);
     gl.clearDepth(1);
+    gl.clearStencil(0);
+    gl.stencilMask(0xff);
     gl.enable(gl.DEPTH_TEST);
     gl.depthFunc(gl.LESS);
     gl.disable(gl.BLEND);
-    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT | gl.STENCIL_BUFFER_BIT);
     gl.useProgram(splat.p);
     gl.uniform2f(splat.u.u_depth, 0.3, 40);
   }
@@ -258,9 +268,20 @@ export function createRenderer(canvas, o) {
     gl.uniform2f(splat.u.u_art, r.w, r.h);
     gl.uniform1f(splat.u.u_focal, r.h / 2 / Math.tan(FOV / 2));
     gl.uniform2f(splat.u.u_shake, Math.round(frame.shake ? frame.shake[0] : 0), Math.round(frame.shake ? frame.shake[1] : 0));
+    const layers = frame.layers.filter(l => !l.outside).concat(frame.layers.filter(l => l.outside));
+    if (layers.some(l => l.silhouette || l.outside)) (gl.stencilMask(0xff), gl.clear(gl.STENCIL_BUFFER_BIT)); // (this cell's, under the scissor)
     let drawn = 0;
-    for (const layer of frame.layers) {
+    for (const layer of layers) {
       if (!layer.mesh.count) continue;
+      const keep = layer.silhouette ? 1 << (layer.silhouette - 1) : 0,
+        off = layer.outside ? 1 << (layer.outside - 1) : 0;
+      if (keep || off) {
+        gl.enable(gl.STENCIL_TEST);
+        // (a silhouette is kept whether or not the depth test lets the fragment through: a man behind something is still there)
+        gl.stencilFunc(off ? gl.EQUAL : gl.ALWAYS, keep, off);
+        gl.stencilOp(gl.KEEP, keep ? gl.REPLACE : gl.KEEP, keep ? gl.REPLACE : gl.KEEP);
+        gl.stencilMask(keep);
+      } else gl.disable(gl.STENCIL_TEST);
       gl.uniform4fv(splat.u.u_bones, layer.bones || still);
       gl.uniform3fv(splat.u.u_palette, layer.palette);
       gl.uniform1f(splat.u.u_mask, layer.mask === undefined ? 0.5 : layer.mask);
@@ -272,6 +293,7 @@ export function createRenderer(canvas, o) {
       gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, layer.mesh.count);
       drawn += layer.mesh.count;
     }
+    gl.disable(gl.STENCIL_TEST);
     return drawn;
   }
   function end(frame) {
