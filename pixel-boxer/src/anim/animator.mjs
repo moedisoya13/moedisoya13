@@ -14,10 +14,12 @@
                guard it takes on, if he holds none) } | null (show.mjs),
                hook: seconds since a lead hook coming at him started | null,
                threat: { eta (seconds until the punch coming at him gets there), dir } | null, stun: bool (stopped by a blow),
+               low: { zone, t, id } | null (a punch coming at his body: where, and seconds since he could see it: body.mjs),
                shoved: metres a second he is being knocked back at,
                cheer: bool, still: bool (lying on the canvas) }
      a.strike({ J, dir: [left, up, ahead] })         he has just been hit: the impulse in newton-seconds, and the way the glove
-                                                      was going as it met him
+                                                      was going as it met him (on his body: zone, a, k, the place it met
+                                                      him, game/trunk.mjs; and his grade's cover.low: body.mjs)
      a.rhythm                                         his beat: { beat, cycle, halves, stepping, landed, lead, flourish }
      a.covered                                        how far his gloves are up into his guard, 0..1
      a.legend                                         a legend on the move (legend.mjs): how much of the wind-up of a
@@ -43,6 +45,7 @@ import { H, headAt, headTo, phraseX, PHRASE, FLOURISH, CLEAN, DIRTY, dice } from
 import { sampleEvade, EVASIONS, timeline, evadeTime } from './evade.mjs';
 import { travel as legendTravel, dash as legendDash, dashShape } from './legend.mjs';
 import { stance as showStance, crossGuard, ear, shoulderRoll, hammer, paw, PAW, collar, COLLAR, ELBOW } from './show.mjs';
+import { bodyState, struck as foldUp, give as bodyGive, coverLow } from './body.mjs';
 import { createWave, waveBeat, waveLand, waveLanding, waveDrag, waveBody } from './clean.mjs';
 
 const TAU = Math.PI * 2;
@@ -232,6 +235,16 @@ const BENT = 0.4; // and as far as it gets with the elbow held at a right angle
    shoulder: `arm` metres out) turned up so far that the shoulder rises so many metres, and `ahead` degrees forward at `most`
    metres of it (into the punch's way) */
 const SHRUG = { arm: Math.abs(TPOSE.LeftArm[0] - TPOSE.LeftShoulder[0]), ahead: 18, most: 0.07 };
+/* (his grade's way of covering up with the cross-arm guard he holds put in its place, for body.mjs coverLow: the same object
+   when they are the same, as they are for the dirty great ones' default) */
+const LOW_GUARDS = new Map();
+const lowGuard = (cv, xc) => {
+  if ((cv.cross || null) === xc) return cv;
+  if (!LOW_GUARDS.has(cv)) LOW_GUARDS.set(cv, new Map());
+  const m = LOW_GUARDS.get(cv);
+  if (!m.has(xc)) m.set(xc, Object.assign({}, cv, { cross: xc }));
+  return m.get(xc);
+};
 const unit = v => {
   const l = Math.hypot(v[0], v[1], v[2]) || 1;
   return [v[0] / l, v[1] / l, v[2] / l];
@@ -461,6 +474,8 @@ export function createAnimator(seed) {
   let pawedBy = null;
   // his neck in a show-off's hand, his head pulled forward and down (show.mjs: collar): { dir, d, time, t } | null
   let pulledBy = null;
+  // what blows to his body are still doing to him, and his elbow brought down over one coming (body.mjs)
+  const bodyHits = bodyState();
   const remember = pose => ((poses = [poses[1], pose]), pose);
   // a pose part of the way from another to it, each bone turned part of the way (what the solver said of it kept)
   const between = (from, to, w) => {
@@ -528,6 +543,8 @@ export function createAnimator(seed) {
        it after, down the body: the trunk laid back and bent the way it went, the hips pushed after it and lifted, the
        weight onto his heels. */
     strike(hit) {
+      // (a blow to his body, the trunk first and the head last: body.mjs)
+      if (hit.zone) return foldUp(bodyHits, hit, clock);
       const k = hit.J / 55, // (the head's amounts are for 55 newton-seconds, as they always were)
         K = hit.J / HIT.ref,
         [left, up, ahead] = hit.dir,
@@ -979,6 +996,9 @@ export function createAnimator(seed) {
          guard's, a dirty great one's. Not in a roll: the rear glove stays at the chin) */
       const hammers = !!(xc && xc.hammer);
       hammering = hammers && !rolling && view.fresh !== null && view.fresh !== undefined && hammer(c, xc.hammer, view.fresh);
+      /* (and with it up, an elbow brought down over a punch coming at his body, body.mjs; not by a man who holds the cross-arm
+         guard, whose lead forearm is across his belly already: what body.mjs reads as cv.cross is the guard he holds) */
+      coverLow(bodyHits, c, view.low, lowGuard(cv, xc), cover, dt, clock);
       if (cheer > 0.002) for (const [ch, v] of Object.entries(sampleMove(MOVES.cheer, 1, {}))) c[ch] += v * smooth(cheer);
       // (the gloves out to meet it: his grade's parry, unless his cross-arm guard does not parry so, or he is rolling)
       if (meet > 0.002 && !(xc && xc.parry !== 'meet') && !rolling) {
@@ -1536,6 +1556,8 @@ export function createAnimator(seed) {
         c.lkf += settle;
         c.rkf += settle;
       }
+      // (and folded round blows to his body: body.mjs)
+      bodyGive(bodyHits, c, clock);
       const open = spring(give.open, 0, dt, 2.6, 0.6);
       c.lx += 0.09 * open;
       c.ly -= 0.05 * Math.abs(open);
