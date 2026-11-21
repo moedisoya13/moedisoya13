@@ -22,14 +22,14 @@ import { RANGE as LIMIT, RADIUS, SEGMENTS, HEAD, GLOVE, shoulderOf } from './rig
 import { step } from './game/bout.mjs';
 import { ENTRIES, freshBout, drive } from './footwork.mjs';
 import { DEFENSE } from './defense.mjs';
-import { LADDER, DIRTY, STANCES, FOOTWORK, ENTRY } from './ladder.mjs';
+import { LADDER, DIRTY, STANCES, FOOTWORK, ENTRY, SHOWOFF } from './ladder.mjs';
 import { MOVES } from './anim/moves.mjs';
 
 const DT = 1 / 60,
   G = 9.81,
   DEG = 180 / Math.PI;
 export { LIMIT };
-export const SCRIPTS = [...ENTRIES, ...DEFENSE, ...LADDER, ...DIRTY, ...STANCES, ...FOOTWORK, ...ENTRY];
+export const SCRIPTS = [...ENTRIES, ...DEFENSE, ...LADDER, ...DIRTY, ...STANCES, ...FOOTWORK, ...ENTRY, ...SHOWOFF];
 
 const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2],
   len = a => Math.hypot(a[0], a[1], a[2]),

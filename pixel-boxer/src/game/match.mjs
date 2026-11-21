@@ -28,7 +28,7 @@ const tally = () => ({ thrown: 0, landed: 0, power: 0, J: 0, blocked: 0, downs: 
 
 export function createMatch(o) {
   o = o || {};
-  const bout = createBout(o.seed || 1, { sheets: o.sheets, knockdowns: true }),
+  const bout = createBout(o.seed || 1, { sheets: o.sheets, knockdowns: true, vary: true }),
     plans = o.plans || [PLANS.steady, PLANS.steady];
   return {
     bout,

@@ -704,7 +704,8 @@ export function createAnimator(seed) {
           chain = action.chain,
           amp = chain.amp || [1, 1, 1, 1, 1];
         form = (action.level || LEVEL[3]).form;
-        foul = form.dirty && move.foul ? move.foul : null;
+        // (only when the press turned into it: game/bout.mjs, anim/show.mjs)
+        foul = form.dirty && move.foul && action.variant === move.foul.name ? move.foul : null;
         const sg = Math.sign(move.links.trunk.twist), // which way this punch turns the body
           share = Object.assign({ off: 1, bend: 1, tuck: 1, sep: 1, dip: 1, over: 1 }, move.body), // how much of each this punch takes
           [d, hp, t] = [0, 1, 2].map(i => clamp(chain.q[i], 0, 1.2));
@@ -715,8 +716,10 @@ export function createAnimator(seed) {
         const knees = form.dip > 0 ? 0 : 1,
           height = ch => (ch === 'hy' || ch === 'lkf' || ch === 'rkf' ? knees : 1);
         for (const ch in move.coil) c[ch === 'twist' && !form.sep ? 'yaw' : ch] += move.coil[ch] * chain.coil.q * (ch === 'lc' || ch === 'le' || ch === 'rc' || ch === 're' || (ch === 'twist' && move.chain.locked) || (ch === 'yaw' && move.arm === 'swing') ? 1 : chain.shown ?? 1) * height(ch);
+        // (a flicker's body: a great dirty fighter's swing, a legend's wrist: moves.mjs)
+        const flick = move.flick ? move.flick[Math.max(0, (form.dirty || 1) - 1)] : 1;
         LINKS.forEach((link, i) => {
-          for (const ch in move.links[link]) c[ch] += move.links[link][ch] * chain.q[i] * amp[i] * height(ch);
+          for (const ch in move.links[link]) c[ch] += move.links[link][ch] * chain.q[i] * amp[i] * height(ch) * flick;
         });
         /* How the rest of him is held while it goes, by how good he is (skill.mjs): all of it grows with the arm, so it is
            there as the punch is and gone as it comes home. */
@@ -799,6 +802,9 @@ export function createAnimator(seed) {
         }
         /* Dirty: the punch's foul (moves.mjs: foul), blatant (a great dirty fighter's) or passed off (a legend's). Whether it
            lands is the bout's to judge (game/bout.mjs: fouls); this is the body that does it. */
+        /* (a flicker's wrist snaps over at the end of it: the glove goes on a few centimetres, up and in, as the elbow gets
+           straight, and back as it comes home) */
+        if (move.snap) extra[me] = M.add(extra[me] || [0, 0, 0], [0, move.snap * 0.4, move.snap].map(v => v * smooth(clamp((chain.q[4] - 0.75) / 0.25, 0, 1)) * (chain.phase === 'recover' ? 1 - smooth(chain.since / 0.12) : 1)));
         if (foul) {
           const n = form.dirty - 1;
           if (foul.name === 'thumb') extra[me] = M.add(extra[me] || [0, 0, 0], [0, -0.01, foul.push[n] * reach]); // pushed on into his face

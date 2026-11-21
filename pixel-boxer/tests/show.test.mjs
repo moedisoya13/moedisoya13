@@ -8,7 +8,7 @@ import { freshBout, drive, HOME } from '../src/footwork.mjs';
 import { RANGE, THROW } from '../src/defense.mjs';
 import { LEVELS, LEVEL } from '../src/anim/skill.mjs';
 import { run } from '../src/measure.mjs';
-import { STANCES } from '../src/ladder.mjs';
+import { STANCES, SHOWOFF } from '../src/ladder.mjs';
 import { WINDOWS } from '../src/windows.data.mjs';
 import * as M from '../src/rig/m3.mjs';
 
@@ -118,4 +118,45 @@ test('hammering parry: the rear fist comes down on the glove, and turns it aside
     const p = fight(into(lv, 'jab', { range: 1.0, k: WINDOWS.parry[lv].at })).find(e => e.type === 'parry');
     assert.ok(p && !p.hammer, lv);
   }
+});
+
+/* ---- the tricks (§5.3), off their catalogue rows (src/ladder.mjs: SHOWOFF): the press names the trick; a dirty great one
+   and a dirty legend do it, every other grade throws the punch pressed */
+const tricks = {};
+const trick = (id, lv) => {
+  const key = `${id}@${lv}`;
+  if (tricks[key]) return tricks[key];
+  const e = SHOWOFF.find(x => x.id === key),
+    { frames, bout } = run(e),
+    events = frames.flatMap((f, i) => f.events.map(ev => Object.assign({ i }, ev)));
+  return (tricks[key] = { e, frames, bout, events, punches: events.filter(ev => ev.type === 'punch' && ev.who === 0), hits: events.filter(ev => ev.type === 'hit' && ev.who === 0) });
+};
+const msOf = (t, a, b) => Math.round(((b.i - a.i) * 1000) / 60);
+
+test('flicker: thrown at 4암 and 5암 only; quick and light, out of the waist and back to it, and again without a wind-up', () => {
+  for (const lv of others) assert.ok(trick('flicker', lv).punches.every(p => p.name === 'jab'), lv);
+  for (const lv of SHOW) {
+    const t = trick('flicker', lv),
+      first = t.hits[0],
+      press = t.punches[0],
+      ms = msOf(t, press, first);
+    assert.equal(press.name, 'flicker', lv);
+    assert.ok(ms >= 83 && ms <= 100, `${lv}: lands ${ms} ms after the press`);
+    assert.ok(first.J >= 15 && first.J <= 25, `${lv}: ${first.J} N·s`);
+    // (from under his eyes, and home to the waist, not the guard)
+    const at = t.frames[press.i - 1],
+      after = t.frames[t.punches[1].i - 1];
+    assert.ok(at.headY - at.gloves.L[1] >= 0.3, `${lv}: the glove goes from ${((at.headY - at.gloves.L[1]) * 100).toFixed(0)} cm under his head`);
+    assert.ok(after.headY - after.gloves.L[1] >= 0.3, `${lv}: and is back ${((after.headY - after.gloves.L[1]) * 100).toFixed(0)} cm under it before the next`);
+    // three in a row, each pressed within a quarter of a second of the last arriving (it has no wind-up at all)
+    assert.deepEqual(t.punches.map(p => p.name), ['flicker', 'flicker', 'flicker'], lv);
+    assert.equal(t.hits.length, 3, `${lv}: ${t.hits.map(h => h.J).join(' ')}`);
+  }
+  // (a great dirty fighter's is the bigger swing: more body behind it)
+  assert.ok(trick('flicker', '4a').hits[0].J > trick('flicker', '5a').hits[0].J);
+});
+
+test('flicker: the same bout goes the same way', () => {
+  const once = () => run(SHOWOFF.find(x => x.id === 'flicker@5a')).frames.map(f => f.gloves.L.map(v => +v.toFixed(6)));
+  assert.deepEqual(once(), once());
 });

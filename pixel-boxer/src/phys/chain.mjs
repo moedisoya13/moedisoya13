@@ -27,7 +27,7 @@ const HOLD = 0.03;
 const NATURAL = [[0], { 0: [1], 1: [2], 2: [3], 3: [4], 4: [] }]; // the legs first, each joint handing on to the one above
 const each = x => (Array.isArray(x) ? x : new Array(N).fill(x || 0)); // a number for every joint, or one for all of them
 
-export function createChain(move, quick, skill) {
+export function createChain(move, quick, skill, variant) {
   // quick: how much faster than written this boxer's muscles are (his speed, and how tired he is): every rate, times this
   const k = (skill && skill.chain) || {},
     /* (a wind-up that sets the arm, as a hook's and an uppercut's does, is mechanics: only so much of it can go, `set` of it,
@@ -46,9 +46,10 @@ export function createChain(move, quick, skill) {
     // (a punch swung by the body, a hook, can use only so much of a better man's turn: past the target is past the target)
     amp: (k.amp || [1, 1, 1, 1, 1]).map(a => (a > 1 ? 1 + (a - 1) * ((move.body && move.body.turn) ?? 1) : a)),
     back: k.back || 1,
-    firm: k.firm || 1, // how solid the arm and wrist are at the instant it lands
+    firm: (k.firm || 1) * (move.chain.firm ?? 1), // how solid the arm and wrist are at the instant it lands (a whip's, loose)
     // how long it stays out once it has got there (a dirty one stays for its foul, a thumb in his eye as long as it takes)
-    hold: skill && skill.form && skill.form.dirty && move.foul && move.foul.hold ? move.foul.hold[skill.form.dirty - 1] : k.hold || HOLD,
+    // (a foul is a trick a dirty grade's press may turn into: variant, game/bout.mjs)
+    hold: skill && skill.form && skill.form.dirty && move.foul && move.foul.hold && variant === move.foul.name ? move.foul.hold[skill.form.dirty - 1] : k.hold || HOLD,
     shown: k.shown ?? 1, // how much of the wind-up's movement shows (its setting of the arm always does)
     backLag: k.backLag ?? 1,
     coilTime: coil,

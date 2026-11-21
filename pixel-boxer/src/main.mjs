@@ -68,7 +68,7 @@ function start({ manifest, boxer, ring }) {
     stats = { frames: 0, ms: 0, drawn: 0 };
 
   function reset() {
-    bout = createBout(Number(query.get('seed')) || (Date.now() & 0xffff) || 1);
+    bout = createBout(Number(query.get('seed')) || (Date.now() & 0xffff) || 1, { vary: true });
     rival = createRival(STAGES[stage].level);
     pose(true);
     dim = 0;

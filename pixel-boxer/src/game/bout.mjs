@@ -50,6 +50,8 @@ import { LEN } from '../rig/solve.mjs';
 import { body, blank, fatigue, COST } from './profile.mjs';
 import { levelOf } from '../anim/skill.mjs';
 import { timeline, evadeTime, progress, LOADED } from '../anim/evade.mjs';
+import { choose, THROWS } from '../anim/show.mjs';
+import { dice } from '../anim/stance.mjs';
 
 export const RULES = {
   hp: 100,
@@ -96,12 +98,15 @@ const DT = 1 / 60;
 
 function boxer(x, yaw, seed, sheet, skills) {
   const k = body(sheet);
-  return { sheet: sheet || blank(), skills: skills || {}, k, stamina: k.staminaMax, x, z: 0, vx: 0, vz: 0, kx: 0, kz: 0, ix: 0, iz: 0, gx: 0, gz: 0, yaw, turn: 0, hp: RULES.hp, action: null, cover: false, coverAge: 0, stun: 0, counter: 0, flash: 0, want: null, wantAge: 0, link: 0, sinceHit: 9, sinceLast: 9, serial: 0, down: 0, pinned: 0, animator: createAnimator(seed), pose: null, place: null, points: null, before: null };
+  return { vary: false, luck: null, sheet: sheet || blank(), skills: skills || {}, k, stamina: k.staminaMax, x, z: 0, vx: 0, vz: 0, kx: 0, kz: 0, ix: 0, iz: 0, gx: 0, gz: 0, yaw, turn: 0, hp: RULES.hp, action: null, cover: false, coverAge: 0, stun: 0, counter: 0, flash: 0, want: null, wantAge: 0, link: 0, sinceHit: 9, sinceLast: 9, serial: 0, down: 0, pinned: 0, animator: createAnimator(seed), pose: null, place: null, points: null, before: null };
 }
 export function createBout(seed, o) {
   o = o || {};
   const sheets = o.sheets || [],
     bout = { t: 0, stop: 0, over: null, overAt: 0, seed: seed || 1, events: [], knockdowns: !!o.knockdowns, fighters: [boxer(-RULES.startGap / 2, Math.PI / 2, 0, sheets[0], (o.skills || [])[0]), boxer(RULES.startGap / 2, -Math.PI / 2, 1, sheets[1], (o.skills || [])[1])] };
+  /* (a show-off's tricks and taunts come up by his own dice, thrown from the bout's seed, in a real bout: o.vary. Scripts and
+     tests name what they want instead: anim/show.mjs) */
+  bout.fighters.forEach((f, i) => ((f.vary = !!o.vary), (f.luck = dice((seed || 1) * 31 + i * 7919 + 5))));
   settle(bout);
   return bout;
 }
@@ -124,7 +129,7 @@ const punching = f => !!f.action && !!MOVES[f.action.name].punch;
 // the ways of getting the head out of the way, as controls name them (each a move of its own, with a side where it has one)
 const EVADE = ['slip', 'duck', 'roll', 'pull'];
 const pressOf = input =>
-  input.dash && input.duck && input.dash !== true ? ['duckIn', input.dash] : input.away ? [input.away === 'pivot' ? 'hopPivot' : 'hopCircle', input.side || 1] : input.dash ? ['dash', input.dash] : EVADE.find(n => input[n]) ? [EVADE.find(n => input[n]), input[EVADE.find(n => input[n])]] : input.jab ? ['jab'] : input.power ? ['power'] : null;
+  input.dash && input.duck && input.dash !== true ? ['duckIn', input.dash] : input.away ? [input.away === 'pivot' ? 'hopPivot' : 'hopCircle', input.side || 1] : input.dash ? ['dash', input.dash] : EVADE.find(n => input[n]) ? [EVADE.find(n => input[n]), input[EVADE.find(n => input[n])]] : input.jab ? ['jab', input.jab] : input.power ? ['power', input.power] : input.taunt ? ['taunt', input.taunt] : null;
 // moving off somewhere as a move of its own: the dash, the duck in, and the two ways away
 const GOING = ['dash', 'duckIn', 'hopPivot', 'hopCircle'];
 /* The duck in ends right up close (centre to centre, short of it by his grade: skill.mjs, entry.stop), and goes there at
@@ -177,7 +182,7 @@ function begin(f, name, more, bout) {
     before = f.action,
     level = levelOf(f.skills, name),
     // his muscles: as quick as his speed, and slower as he tires (never below three quarters of it); his skill: how he uses them
-    chain = move.punch ? createChain(move, f.k.rate * (0.75 + 0.25 * fatigue(f)), level) : null;
+    chain = move.punch ? createChain(move, f.k.rate * (0.75 + 0.25 * fatigue(f)), level, more && more.variant) : null;
   if (COST[name]) f.stamina = Math.max(0, f.stamina - COST[name]);
   // a punch thrown with the hand that has just punched starts from where that arm's joints still are (a double jab)
   if (chain && before && before.chain && MOVES[before.name].hand === move.hand) (chain.q = before.chain.q.slice()), (chain.v = before.chain.v.slice());
@@ -218,13 +223,15 @@ function plan(f, other, name, dir) {
 
 function decide(bout, f, input, dt, who) {
   const pressed = pressOf(input);
-  if (pressed) (f.want = pressed), (f.wantAge = 0);
+  if (pressed) (f.want = pressed), (f.wantAge = 0), (f.wantAt = bout.t);
   else if (f.want && (f.wantAge += dt) > RULES.buffer) f.want = null;
   if (f.want) {
     const [what, dir] = f.want,
       punch = !GOING.includes(what) && !EVADE.includes(what);
     // (a man whose lead foot is stood on cannot dash or sway back off it, or go in or away; he can still slip and duck)
     if (f.pinned > 0 && (GOING.includes(what) || what === 'pull')) f.want = null;
+    // (a jab pressed in a flicker waits for the hand to be home at his waist: a flicker goes again from there, at once)
+    else if (what === 'jab' && f.action && f.action.name === 'flicker' && Math.max(f.action.chain.q[3], f.action.chain.q[4]) > FLICK.home);
     else if (open(f, punch)) {
       f.want = null;
       if (EVADE.includes(what)) {
@@ -265,7 +272,14 @@ function decide(bout, f, input, dt, who) {
           f.link = f.sinceLast < RULES.combo && f.lastPower ? (f.link + 1) % chain.length : 0;
           name = chain[f.link];
         }
-        begin(f, name, { counter: f.counter > 0 }, bout);
+        /* a show-off's trick (anim/show.mjs, docs/moves-plan-4.md §5.2): the one the press names, or one his dice turn up; a
+           flicker pressed again within FLICK.again of the last one arriving is another, with no wind-up, up to FLICK.most */
+        const again = what === 'jab' && f.flicks && f.flicks.n < FLICK.most && f.wantAt - f.flicks.at <= FLICK.again + 1e-9,
+          trick = again ? 'flicker' : trickOf(f, other, what, name, dir);
+        if (trick && THROWS[trick]) name = trick === 'pawUp' && inside ? 'upperIn' : THROWS[trick];
+        if (name === 'flicker') f.flicks = { n: again ? f.flicks.n + 1 : 1, at: Infinity };
+        else if (what === 'jab') f.flicks = null;
+        begin(f, name, { counter: f.counter > 0, variant: trick }, bout);
         // a loaded punch answering a defence: what makes the defence brilliant, if it was close enough
         if (f.action.loaded && f.action.loaded.from !== 'legend' && f.defence && f.defence.counterAt === null && bout.t - f.defence.start <= BRILLIANT.within + 1e-9) (f.defence.counterAt = bout.t), (f.defence.counter = f.action.id), judge(bout, f, who);
         f.lastPower = what === 'power';
@@ -421,6 +435,8 @@ function advance(bout, f, dt, who) {
       now = stepChain(f.action.chain, move, dt);
     if (was === 'throw' && now !== 'throw') {
       f.sinceLast = 0;
+      // (a flicker's hand has got there: pressed again soon enough, it goes again)
+      if (move.name === 'flicker' && f.flicks) f.flicks.at = bout.t;
       if (!f.action.struck) {
         const near = f.action.near,
           e = { type: 'whiff', who, name: move.name, margin: near ? +near.gap.toFixed(4) : null };
@@ -652,6 +668,32 @@ function follow(bout, f, who, dt) {
   }
 }
 
+/* A show-off's tricks (anim/show.mjs): which of his grade's the press can turn into now. The elbow is thrown from so far
+   (centre to centre), the collar from closer than so far; a guard has to have been held so long to be pushed out of the way;
+   a stomp needs the lead foot to reach his. FLICK: a flicker pressed again this soon after the last arrives goes again, so
+   many in a row at most, as soon as the arm is so far back (its shoulder and elbow, 0..1 of the way out). */
+const TRICK = { elbow: [0.75, 0.85], collar: 0.75, guarded: 0.2 };
+const FLICK = { again: 0.25, most: 3, home: 0.25 };
+function trickOf(f, other, button, name, forced) {
+  const level = levelOf(f.skills, name),
+    table = level.vary && level.vary[button];
+  if (!table) return null;
+  const d = Math.hypot(other.x - f.x, other.z - f.z),
+    foot = () => f.pose && other.pose && Math.hypot(...[0, 2].map(i => at(f, 'LeftToeBase')[i] - at(other, 'LeftFoot', [0, -0.02, 0.07])[i])) < MOVES.hook.foul.reach,
+    when = t =>
+      t === 'flicker' || t === 'thumb'
+        ? name === 'jab'
+        : t === 'stomp'
+          ? name === 'hook' && foot()
+          : t === 'elbow'
+            ? name === 'cross' && d >= TRICK.elbow[0] && d <= TRICK.elbow[1]
+            : t === 'collar'
+              ? (name === 'upper' || name === 'upperIn') && d < TRICK.collar
+              : t === 'pawDown' || t === 'pawUp'
+                ? other.cover && other.coverAge > TRICK.guarded
+                : false;
+  return choose(table, when, typeof forced === 'string' ? forced : null, f.vary && f.luck ? f.luck() : null);
+}
 // a forearm, as the bout reckons it in the way: so many balls from the elbow to the glove, each as thick as the forearm
 const FOREARM = { n: 6, r: 0.045 };
 function strike(bout, f, other, who, dt) {
@@ -864,7 +906,7 @@ function fouls(bout, f, other, who, dt) {
     move = action && MOVES[action.name],
     level = action && action.level,
     tier = level && level.form.dirty;
-  if (!move || !move.punch || !move.foul || !tier || action.fouled || other.down || !f.before || !other.before) return;
+  if (!move || !move.punch || !move.foul || !tier || action.variant !== move.foul.name || action.fouled || other.down || !f.before || !other.before) return;
   const foul = move.foul,
     chain = action.chain,
     k = tier - 1,

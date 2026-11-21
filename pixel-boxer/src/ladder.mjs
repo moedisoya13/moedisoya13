@@ -122,7 +122,43 @@ export const DIRTY = TECHNIQUES.flatMap(tq =>
       b.fighters[0].skills = { all: lv };
       if (tq.punch === 'hook' || tq.punch === 'upper') Object.assign(b.fighters[0], { lastPower: true, sinceLast: 0, link: tq.punch === 'hook' ? 0 : 1 });
     },
-    press: [[AT, tq.punch === 'jab' ? 'jab' : 'power']]
+    // (the trick named: a dirty grade throws it, the rest throw the punch: anim/show.mjs)
+    press: [[AT, tq.punch === 'jab' ? 'jab' : 'power', tq.id]]
+  }))
+);
+
+/* The show-off's tricks (anim/show.mjs, docs/moves-plan-4.md §5.3), at every grade side by side as the fouls are: the press
+   names the trick, and only 4암 and 5암 have it; every other grade throws the punch pressed from the same spot. The man in
+   front of him is a pro; for the tricks on a guard he holds his guard up all through (hisCover). `press`: the button, and
+   `again`: more presses of it (the flicker's, each within a quarter of a second of the last arriving). */
+export const TRICKS = [
+  { id: 'flicker', punch: 'jab', button: 'jab', range: 0.985, name: '플리커', en: 'Flicker', again: [0.3, 0.6] }
+];
+export const SHOWOFF = TRICKS.flatMap(tq =>
+  LEVELS.map(lv => ({
+    id: `${tq.id}@${lv}`,
+    punch: tq.punch,
+    level: lv,
+    trick: tq.id,
+    name: `${tq.name} ${LEVEL[lv].label}`,
+    en: `${tq.en} · ${LEVEL[lv].name}`,
+    group: tq.name,
+    item: tq.id,
+    loop: tq.loop || 2.2,
+    view: { yaw: 0.25, pitch: 0.25 },
+    me: () => HOME,
+    him: t => (t < AT + 0.25 ? [HOME[0] + tq.range, HOME[1]] : null),
+    hisCover: tq.guarded ? t => t > 0.1 : undefined,
+    setup: b => {
+      b.fighters[0].skills = { all: lv };
+      b.fighters[1].skills = { stance: '2' };
+      if (tq.second !== undefined) Object.assign(b.fighters[0], { lastPower: true, sinceLast: 0, link: tq.second });
+    },
+    keep: b => {
+      const f = b.fighters[0];
+      if (tq.second !== undefined && !(f.cues && f.cues.pressed !== undefined)) f.sinceLast = 0;
+    },
+    press: [AT, ...(tq.again || []).map(dt => AT + dt)].map(t => [t, tq.button, tq.id])
   }))
 );
 

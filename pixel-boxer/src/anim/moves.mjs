@@ -168,6 +168,19 @@ const PUNCHES = {
       elbow: {}
     }
   },
+  /* ---- a show-off's (anim/show.mjs, docs/moves-plan-4.md §5.3): the flicker, the jab a press may turn into at 4암 and 5암. The
+     lead hand let down at his waist (low: it goes from there and comes back there, not to the guard) is whipped up at a slant
+     onto the head: the shoulder hardly turns, the elbow straightens and the wrist snaps over at the end (`snap`, metres the
+     glove goes on with it). Quick and light: the arm is loose (`firm`), and so little of the body is behind it. A great dirty
+     fighter swings it big (his body behind it as written), a legend flicks it off the wrist (`body`, [4암, 5암]: how much of
+     the written turn each puts into it). */
+  flicker: {
+    hand: 'L', arm: 'straight', kind: 'straight', low: true, reach: 1.15, close: 1.0, snap: 0.03, flick: [0.6, 0.4],
+    chain: { coil: 0, rate: [40, 40, 46, 48, 56], turn: [5, 6], firm: 0.15 },
+    body: { off: 0.3, dip: 0.3, sep: 0.2, tuck: 0.5, over: 0.3 },
+    coil: {},
+    links: { drive: { hz: 0.03, lfz: 0.03, lkf: 3 }, hips: { yaw: -5 }, trunk: { twist: -8, lean: 2, lkf: -4 }, shoulder: {}, elbow: {} }
+  },
   /* ---- right up close (game/bout.mjs: RULES.inside, centre to centre; the power chain there is the inside hook and the inside
      uppercut, in turn). Each is its long-range punch thrown with more of the body and less of the arm. */
   /* The inside hook (docs/moves-plan-4.md §1): thrown at 0.64 m, the arm folded tighter to the chest, wound up further (the

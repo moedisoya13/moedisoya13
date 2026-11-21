@@ -7,7 +7,9 @@
                                shoulder up, leant back, the chin out
      crossGuard(c, cross, k)   the cross-arm guard (§5.5), k of the way up
      hammer(c, h, t)           the hammering parry (§5.5): the rear fist's stroke t seconds after the guard went up; -> whether
-                               it is coming down now (what the bout judges a parry by) */
+                               it is coming down now (what the bout judges a parry by)
+     choose(table, when, forced, u)   which trick a press turns into (§5.2), or null: the plain punch
+     THROWS                    the punch each trick throws in place of the one pressed (where it changes it) */
 
 const TAU = Math.PI * 2;
 const clamp = (x, a, b) => (x < a ? a : x > b ? b : x);
@@ -75,4 +77,23 @@ export function hammer(c, h, t) {
   c.rx += (h.across * down + 0.03 * up * (1 - down)) * w;
   c.re += (0.35 * up - 0.2 * down) * w;
   return t >= h.rise - 1 / 120 && t <= h.rise + h.fall + 1 / 60;
+}
+
+/* The tricks a press may turn into (§5.2). table (skill.mjs: vary[button]): [[trick, chance], ...], the table's bottom row
+   first (the one that fits the moment better comes first). when(trick): whether it can be done now (the bout's: how far
+   apart they are, whether his guard has been up a while, whether a foot will reach). forced: a trick a script names (the
+   catalogue and the tests name it; it is done if the grade has it and it can be done now), or 'plain'; otherwise one throw u
+   of his dice (0..1) decides it, each trick taking its chance's share of the throw in turn, so that each comes up as often as
+   its chance says whatever else could have (the shares of tricks that cannot be done now are the plain punch's). */
+export const THROWS = { flicker: 'flicker', pawDown: 'cross', pawUp: 'upper' };
+export function choose(table, when, forced, u) {
+  if (!table || forced === 'plain') return null;
+  if (typeof forced === 'string') return table.some(([n]) => n === forced) && when(forced) ? forced : null;
+  if (u === null || u === undefined) return null;
+  let at = 0;
+  for (const [name, p] of table) {
+    if (u >= at && u < at + p) return when(name) ? name : null;
+    at += p;
+  }
+  return null;
 }

@@ -65,6 +65,8 @@
               other side), 'angle' (that, and a step off to the side, turned back in)
      beat     where on his beat the punch lands: 'on' (the contact on a foot coming down), 'off' (halfway between two), or
               null (wherever it lands)
+   vary: the tricks a press may turn into (a show-off's, 4암 and 5암 only: anim/show.mjs, choose): { jab, power: [[trick,
+         chance], ...] }; the fouls (thumb, stomp) are two of them, and a dirty grade's punch is clean unless one comes up
    stance: how he stands and moves when he is not doing anything else (each 1, or 0, in the textbook unless said)
      bounce, hop, rock, lag   the bounce, the foot snapped off the canvas, the weight's pendulum, how much the head and the
               gloves ride the bounce behind the hips: times what is written
@@ -230,6 +232,11 @@ const CROSS_5A = { L: [-0.08, 0.24, 0.02, 1.2], R: [-0.07, 0.17, -0.04, 0.8], le
 const HAMMER_4A = { up: 0.06, rise: 0.05, down: 0.25, fall: 0.07, out: 0.16, across: 0.12, back: 0.15 };
 const HAMMER_5A = { up: 0.04, rise: 0.04, down: 0.1, fall: 0.06, out: 0.12, across: 0.1, back: 0.12 };
 
+/* the tricks a show-off's press may turn into (anim/show.mjs: choose, docs/moves-plan-4.md §5.2), each button's, the table's
+   bottom row first: [trick, chance] */
+const VARY_4A = { jab: [['thumb', 0.2], ['flicker', 0.35]], power: [['pawUp', 0.15], ['pawDown', 0.25], ['collar', 0.3], ['elbow', 0.2], ['stomp', 0.3]] };
+const VARY_5A = { jab: [['thumb', 0.15], ['flicker', 0.5]], power: [['pawUp', 0.2], ['pawDown', 0.3], ['collar', 0.3], ['elbow', 0.15], ['stomp', 0.25]] };
+
 export const LEVEL = {
   1: {
     grade: 1, side: null, name: '입문', label: '1',
@@ -285,7 +292,7 @@ export const LEVEL = {
     away: away({ accent: true, drop: 1.3 })
   },
   '4a': {
-    grade: 4, side: 'a', name: '일류 · 암', label: '4암',
+    grade: 4, side: 'a', name: '일류 · 암', label: '4암', vary: VARY_4A,
     chain: { early: [0.25, 0.25, 0, 0, 0], damp: [0.6, 0.6, 0.56, 0.6, 0.6], amp: [1.1, 1.15, 1.1, 1, 1], coil: 0.55, shown: 0.65, back: 1.05, backLag: 1, firm: 1.08, hold: 0.1, spring: { down: 0.6, wait: true } },
     form: form({ guard: -0.2, chin: -0.4, over: 0.15, dirty: 1, lively: 0.5, dip: -0.03, drop: true, sep: 7, off: 0.07, with: 'hips', tuck: 4, look: 1, bend: 4, exit: 'roll' }),
     // the beat rubbed out: low and heavy, the feet dragged and lurching, the head rolling low in its own time
@@ -312,7 +319,7 @@ export const LEVEL = {
     away: away({ shuffle: true, drop: 1.2 })
   },
   '5a': {
-    grade: 5, side: 'a', name: '전설 · 암', label: '5암',
+    grade: 5, side: 'a', name: '전설 · 암', label: '5암', vary: VARY_5A,
     chain: { early: [0.4, 0.4, 0, 0, 0], damp: [0.6, 0.6, 0.5, 0.6, 0.6], amp: [1.15, 1.25, 1.18, 1, 1], coil: 0.25, shown: 0.55, back: 1.12, backLag: 1, firm: 1.2, hold: 0.08, spring: { down: 0.4 } },
     form: form({ guard: -0.3, chin: -0.5, over: 0.1, dirty: 2, lively: 0.7, dip: -0.04, drop: true, sep: 11, off: 0.1, with: 'legs', tuck: 6, look: 1, bend: 6, exit: 'angle' }),
     // lower still and always rolling, the lead shoulder up and the lead hand in his eyes, the beat nowhere
