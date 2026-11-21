@@ -142,8 +142,10 @@ export function stepMatch(match, dt, inputs) {
       t[who].downs++;
       if (t[who].downs >= MATCH.tko) return end(match, 1 - who, 'TKO'), match;
       // whether he beats the count is settled now, by how much he has in him: less each time he has been down
+      // (and a man knocked out cold does not: the count goes to ten)
       const will = f.k.will * Math.pow(0.8, (f.downs || 1) - 1) * (0.6 + 0.4 * fatigue(f)),
-        up = random(bout) < will ? 4 + Math.floor(random(bout) * 5) : null;
+        rises = random(bout) < will ? 4 + Math.floor(random(bout) * 5) : null,
+        up = e.out ? null : rises;
       match.count = { who, n: 0, t: 0, up, health: MATCH.rise.health[0] + (MATCH.rise.health[1] - MATCH.rise.health[0]) * will };
       match.phase = 'count';
       match.events.push({ type: 'down', who, round: match.round });

@@ -13,7 +13,7 @@ export function createFx(random) {
   const add = item => {
     if (items.length < CAP - 16) items.push(Object.assign({ age: 0, v: null, g: 0, drag: 0, width: 0.03, grow: 0 }, item));
   };
-  function write(n, a, b, width, pal, flat, dense) {
+  function write(n, a, b, width, pal, flat, dense, light) {
     const half = M.scale(M.sub(b, a), 0.5),
       l = len(half),
       sw = (width / 1.9) ** 2,
@@ -32,7 +32,7 @@ export function createFx(random) {
     rows[o + 7] = k * d[1] * d[2];
     rows[o + 8] = sw + k * d[2] * d[2];
     rows[o + 9] = pal;
-    rows[o + 10] = 0;
+    rows[o + 10] = light ? 1 : 0; // (a speck of light: the renderer never inks it, even in front of a boxer)
     rows[o + 11] = dense ?? 3; // (how solid: under a half it is not drawn at all, so a mote thinning toward that winks out)
   }
   return {
@@ -97,7 +97,7 @@ export function createFx(random) {
           v = M.scale(way, go / wl);
         add({
           a: at, b: at.slice(), v, g: bead ? -9.8 : o.g ?? -1.2, drag: drag * (bead ? 0.3 : 0.8 + 0.4 * rnd()),
-          width: (o.size ?? 0.008) * (bead ? 1.7 : 0.7 + 0.6 * rnd()), pal: pick(), life: (o.life ?? 0.42) * (bead ? 1.3 : 0.55 + 0.75 * rnd()), tail: bead ? 0.012 : 0.007,
+          width: (o.size ?? 0.015) * (bead ? 1.7 : 0.7 + 0.6 * rnd()), pal: pick(), life: (o.life ?? 0.42) * (bead ? 1.3 : 0.55 + 0.75 * rnd()), tail: bead ? 0.012 : 0.007,
           shrink: 0.2, thin: !bead, splat: true
         });
       }
@@ -205,7 +205,7 @@ export function createFx(random) {
         if (it.stick && it.top <= 0.5) continue; // (a bead is not seen until the head moves under it)
         const u = it.age / it.life;
         // (a mote of the mist is a single pixel while it flies, and thins away to nothing over the rest of its life)
-        write(n++, it.a, it.b, it.width * (it.stick ? 0.6 : 1 - it.shrink * u), Array.isArray(it.pal) ? it.pal[Math.min(it.pal.length - 1, Math.floor(u * it.pal.length))] : it.pal, it.flat, it.thin ? 1.5 - 1.1 * Math.max(0, (u - 0.4) / 0.6) ** 1.5 : 3);
+        write(n++, it.a, it.b, it.width * (it.stick ? 0.6 : 1 - it.shrink * u), Array.isArray(it.pal) ? it.pal[Math.min(it.pal.length - 1, Math.floor(u * it.pal.length))] : it.pal, it.flat, it.thin ? 1.5 - 1.1 * Math.max(0, (u - 0.4) / 0.6) ** 1.5 : 3, it.thin);
       }
       this.count = n;
       return n;

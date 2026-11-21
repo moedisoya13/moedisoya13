@@ -1,6 +1,6 @@
 /* A study of how a blow is drawn: the spray of sweat off the shadowed side of what was struck (render/fx.mjs: spray) in
    place of the blow's sparks, and a ripple through the struck man from where it landed (render/renderer.mjs: a layer's
-   wave) in place of his flash of white. Every card is a real bout from the catalogue (src/defense.mjs, src/ladder.mjs),
+   wave: he sways as it passes, with no light) in place of his flash of white. Every card is a real bout from the catalogue (src/defense.mjs, src/ladder.mjs),
    looped; the cards of a row are the same exchange, frame for frame, and differ only in how the blow is drawn. */
 import { createRenderer, paletteArray, rgb } from './render/renderer.mjs';
 import { createFx } from './render/fx.mjs';
@@ -17,23 +17,24 @@ import { LADDER } from './ladder.mjs';
 const DT = 1 / 60;
 /* What a mote goes through as it hangs, one run taken for each: the colours of the blow's sparks as they are now (white,
    the pale yellow, the gold, the pale blue), staying light as the mist thins: a mote gone grey over his face would read as a speck of dirt on it. Palette indices (assets/manifest.json). */
-const MIST = [[38, 38, 41, 41], [38, 39, 40, 40], [38, 41, 41, 41], [39, 40, 40, 40], [38, 39, 41, 25]];
-/* The versions. spray is fx.spray's o (n motes and range metres for a blow of 85 N s, both in proportion to the impulse).
-   wave: the ripple: speed (m/s its front travels), last (seconds), width (metres of the ring), lift (metres it raises
-   what it passes: none here, since moving the splats of a body a few millimetres lets the dark ones under them show); how strong it starts is the blow's impulse over 60 N s, up to 1. */
+const MIST = [[39, 39, 40, 40], [40, 40, 39, 41], [41, 41, 41, 25], [38, 39, 40, 40], [41, 38, 41, 41]];
+/* The versions. spray is fx.spray's o (n motes and range metres for a blow of 85 N s, both in proportion to the impulse;
+   size is a mote's, metres). wave: the ripple: speed (m/s its front travels), last (seconds), width (metres of the train
+   of waves riding the front), sway (metres it carries what it passes to either side, at the start of a blow of 60 N s
+   or more: a weaker one sways less). There is no light in it. */
 const VERSIONS = [
   { id: 'now', name: '지금', note: '지금의 색 입자와 흰 번쩍임. 비교 기준입니다.' },
-  { id: 'base', name: 'A · 기본', note: '타격 방향을 빛으로 보고, 맞은 부위의 그늘진 면 전체에서 입자가 나옵니다. 85 N·s에 80 cm까지 뻗습니다. 파문은 초속 3 m로 0.3초 동안 퍼집니다.', spray: { n: 130, range: 0.8, flare: 0.5 }, wave: { speed: 3, last: 0.3, width: 0.05, lift: 0 } },
-  { id: 'wide', name: 'B · 넓고 굵게', note: '입자가 더 많고 가장자리에서 더 벌어져, 짧고 넓은 구름이 됩니다. 파문은 느리고 굵습니다.', spray: { n: 180, range: 0.65, flare: 0.9, life: 0.5 }, wave: { speed: 2.4, last: 0.38, width: 0.08, lift: 0 } },
-  { id: 'long', name: 'C · 길고 가늘게', note: '입자가 덜 벌어지고 1 m 넘게 뻗어 타격의 선이 남습니다. 파문은 빠르고 가는 고리입니다.', spray: { n: 120, range: 1.05, flare: 0.28 }, wave: { speed: 4.2, last: 0.24, width: 0.035, lift: 0 } }
+  { id: 'base', name: 'A · 기본', note: '입자는 타격이 가는 쪽, 맞은 부위의 그늘진 면 전체에서 나옵니다. 파문은 빛 없이 몸이 일렁이며 초속 3 m로 0.4초 동안 퍼집니다.', spray: { n: 130, range: 0.8, flare: 0.5 }, wave: { speed: 3, last: 0.4, width: 0.14, sway: 0.034 } },
+  { id: 'wide', name: 'B · 크고 느리게', note: '입자가 더 많고 굵으며 가장자리에서 더 벌어집니다. 파문은 느리고 크게 일렁입니다.', spray: { n: 180, range: 0.65, flare: 0.9, life: 0.5, size: 0.018 }, wave: { speed: 2.2, last: 0.55, width: 0.2, sway: 0.05 } },
+  { id: 'long', name: 'C · 잘고 빠르게', note: '입자가 덜 벌어지고 1 m 넘게 뻗어 타격의 선이 남습니다. 파문은 잘게 떨며 빠르게 지나갑니다.', spray: { n: 120, range: 1.05, flare: 0.28 }, wave: { speed: 4.2, last: 0.3, width: 0.1, sway: 0.024 } }
 ];
-/* The rows: a light blow, the two hard ones, an uppercut under the chin (the catalogue's own is thrown from too close to be
-   hard, so the rung of the skill ladder stands in: there it is the other man who is struck), and a knockdown. */
+/* The rows: a light blow, the two hard ones, an uppercut under the chin (the inside uppercut of the skill ladder, the one
+   that comes straight up: there it is the other man who is struck), and a knockdown. */
 const ROWS = [
   ['hit-jab', '잽 · 가벼운 타격'],
   ['hit-cross', '스트레이트'],
   ['hit-hook', '훅', -1.05], // (seen from behind the man it lands on, so that the way it goes is across the picture)
-  ['upper@3', '어퍼컷 · 턱'],
+  ['upperIn@3', '어퍼컷 · 턱'],
   ['down-back', '다운']
 ].map(([id, name, yaw]) => {
   const entry = [...DEFENSE, ...LADDER].find(e => e.id === id);
@@ -186,7 +187,7 @@ function start({ manifest, boxer }) {
         w.age += elapsed;
         if (w.age >= set.last) return (cell.waves[i] = null);
         const h = f.points.head;
-        return [h[0] + w.off[0], h[1] + w.off[1], h[2] + w.off[2], set.speed * w.age, set.width, w.strength * (1 - w.age / set.last) ** 1.2, set.lift];
+        return [h[0] + w.off[0], h[1] + w.off[1], h[2] + w.off[2], set.speed * w.age, set.width, w.strength * (1 - w.age / set.last) ** 1.2, set.sway];
       });
       layers.push(
         { mesh: cell.mesh, palette: palettes[0], mask: 0.6 },
