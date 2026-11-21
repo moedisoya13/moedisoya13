@@ -36,7 +36,7 @@ import { LEVEL } from './skill.mjs';
 import { H, headAt, headTo, phraseX, PHRASE, FLOURISH, CLEAN, DIRTY, dice } from './stance.mjs';
 import { sampleEvade, EVASIONS, timeline, evadeTime } from './evade.mjs';
 import { travel as legendTravel, dash as legendDash, dashShape } from './legend.mjs';
-import { stance as showStance, crossGuard, hammer } from './show.mjs';
+import { stance as showStance, crossGuard, hammer, paw, PAW } from './show.mjs';
 
 const TAU = Math.PI * 2;
 /* The feet keep time. One beat is one foot coming down; a cycle is both. Standing, the boxer rocks between his feet on that
@@ -437,6 +437,8 @@ export function createAnimator(seed) {
   const off = { x: 0, y: 0 };
   // what a dirty man's fouls are doing to him: a flinch at a foot stood on, a glove over an eye he has been thumbed in
   const fouled = { flinch: 9, blind: 9, long: 0.4 };
+  // a glove of his a show-off has pushed out of the way (show.mjs: paw): { hand, dy, hold, free, t } | null
+  let pawedBy = null;
   const remember = pose => ((poses = [poses[1], pose]), pose);
   // a pose part of the way from another to it, each bone turned part of the way (what the solver said of it kept)
   const between = (from, to, w) => {
@@ -598,6 +600,12 @@ export function createAnimator(seed) {
     },
     /* A foul done to him (game/bout.mjs: fouls): stood on, he flinches and looks down at it; a glove left over his face, his
        head goes back (if it was done in the open) and his rear glove goes to his eye a while. */
+    /* His guard pushed down or up by the other man's lead hand (game/bout.mjs: paws): the glove goes with it, is held there
+       and comes back. */
+    pawed(p) {
+      pawedBy = pawedBy && pawedBy.t === 0 && pawedBy.hand !== p.hand ? [].concat(pawedBy.list || [pawedBy], [Object.assign({ t: 0 }, p)]) : Object.assign({ t: 0 }, p);
+      if (Array.isArray(pawedBy)) pawedBy = { t: 0, list: pawedBy };
+    },
     foul(hit) {
       if (hit.name === 'stomp') fouled.flinch = 0;
       if (hit.name === 'thumb') {
@@ -1172,7 +1180,7 @@ export function createAnimator(seed) {
            way, and as he throws anything with it but the flicker, which goes out of the waist and back to it: show.mjs) */
         if (st.show) {
           // (snapped up into a punch thrown with it, so that it is up and still before the glove gets there; let down slowly)
-          const lowHand = !action || hopping || (punchMove && (punchMove.hand === 'R' || punchMove.low)),
+          const lowHand = !action || hopping || (punchMove && ((punchMove.hand === 'R' && action.variant !== 'pawDown' && action.variant !== 'pawUp') || punchMove.low)),
             want = lowHand && !evading && !view.threat ? 1 - cover : 0;
           showDown += (want - showDown) * (1 - Math.exp(-dt * (want > showDown ? 8 : punchMove && !lowHand ? 45 : 16)));
           showStance(c, st.show, { clock, down: showDown, unwind, cover, seed: seed || 0 });
@@ -1368,6 +1376,18 @@ export function createAnimator(seed) {
         c.hz += vz * k;
       }
 
+      // ---- a glove pushed out of the way (show.mjs: paw): with it at once, held, and back
+      if (pawedBy) {
+        pawedBy.t += dt;
+        for (const p of pawedBy.list || [pawedBy]) {
+          const t = pawedBy.t,
+            k = t < 0.06 + p.hold ? smooth(t / 0.06) : 1 - smooth((t - 0.06 - p.hold) / p.free);
+          c[p.hand === 'L' ? 'ly' : 'ry'] += p.dy * k;
+          c[p.hand === 'L' ? 'lx' : 'rx'] += (p.dx || 0) * k;
+          if (t > 0.06 + p.hold + p.free) pawedBy.done = true;
+        }
+        if (pawedBy.done) pawedBy = null;
+      }
       // ---- fouls done to him: a flinch, an eye covered
       fouled.flinch += dt;
       fouled.blind += dt;
@@ -1645,6 +1665,24 @@ export function createAnimator(seed) {
         tall = 1 + c.st,
         wide = Math.sqrt(tall),
         target = view.aim && [view.aim[0] * wide, view.aim[1] / tall, view.aim[2] * wide];
+      /* (a show-off's lead hand going for the other man's glove, to push his guard out of the way: show.mjs, paw; the target
+         is where it will be drawn, so put back through his stretch as the punch's is) */
+      /* (once it has met his glove, it goes with the glove it pushes, from where it met it, not after his glove as his body
+         carries it about: game/bout.mjs, paws) */
+      let pawAt = null;
+      if (punchMove && action.pawed && view.foe && view.foe.glove) {
+        if (!action.pawed.mine) action.pawed.mine = { at: view.foe.glove[PAW.glove[action.variant]].slice(), t: action.t };
+        const m = action.pawed.mine,
+          k = smooth((action.t - m.t) / 0.06),
+          d = action.pawed.push || [0, 0];
+        pawAt = [m.at[0] + d[0] * k, m.at[1] + d[1] * k, m.at[2]];
+      }
+      const pawing = punchMove && action.variant && (action.variant === 'pawDown' || action.variant === 'pawUp') && view.foe && view.foe.glove ? paw(action.variant, action.t, pawAt || view.foe.glove[PAW.glove[action.variant]]) : null;
+      /* (it lets go as the hips fire the punch that follows: no shoulder holds a hand out across him while the trunk turns
+         under it; the glove it has pushed stays where it is pushed a while on its own, game/bout.mjs) */
+      if (pawing) pawing.w *= 1 - smooth(clamp(action.chain.q[1] * 2, 0, 1));
+      // (its elbow up and out, over the top of his guard or under it)
+      if (pawing) c.le += PAW.elbow[action.variant] * pawing.w;
       for (const side of ['L', 'R']) {
         const k = side === 'L' ? 'l' : 'r',
           s = side === 'L' ? 1 : -1,
@@ -1652,7 +1690,8 @@ export function createAnimator(seed) {
           open = M.add(GUARD.hands[side], [c[k + 'x'], c[k + 'y'], c[k + 'z']]),
           // held to the face, or locked to the chest and swung with it, or part way between
           // (or put on the canvas: where its channels say, in the room)
-          free = M.lerp(M.lerp(M.add(open, carried), M.add(chest.p, M.app(swung, M.sub(open, CHEST.p))), clamp(c[k + 'c'], 0, 1)), open, clamp(c[k + 'g'], 0, 1)),
+          kept = M.lerp(M.lerp(M.add(open, carried), M.add(chest.p, M.app(swung, M.sub(open, CHEST.p))), clamp(c[k + 'c'], 0, 1)), open, clamp(c[k + 'g'], 0, 1)),
+          free = pawing && side === 'L' && pawing.w > 0 ? M.lerp(kept, [pawing.to[0] * wide, pawing.to[1] / tall, pawing.to[2] * wide], pawing.w) : kept,
           mine = punchMove && punchMove.hand === side ? punchMove : null;
         if (mine) {
           /* The punching arm is not sent anywhere: it is thrown. The shoulder and elbow are the last two joints of the

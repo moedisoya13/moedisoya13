@@ -50,7 +50,7 @@ import { LEN } from '../rig/solve.mjs';
 import { body, blank, fatigue, COST } from './profile.mjs';
 import { levelOf } from '../anim/skill.mjs';
 import { timeline, evadeTime, progress, LOADED } from '../anim/evade.mjs';
-import { choose, THROWS } from '../anim/show.mjs';
+import { choose, THROWS, PAW } from '../anim/show.mjs';
 import { dice } from '../anim/stance.mjs';
 
 export const RULES = {
@@ -189,6 +189,8 @@ function begin(f, name, more, bout) {
   // out of the end of an evasion or a parry: wound up already
   const loaded = chain && bout ? loadOf(f, bout, move) : null;
   if (loaded) preload(chain, move, loaded.load, loaded.shoulder);
+  // (a guard pushed out of the way first: the punch waits for the lead hand to get it there, anim/show.mjs)
+  if (chain && more && (more.variant === 'pawDown' || more.variant === 'pawUp')) chain.wait = PAW.wait[name] || PAW.wait.cross;
   // (a great one's spring waits for his next foot to come down, half a beat at most, and goes down with it)
   if (chain && chain.springWait && !(loaded && loaded.load > 0)) {
     const r = f.animator.rhythm;
@@ -518,7 +520,7 @@ function viewOf(bout, i) {
       reach: null,
       // the other man, in his own terms: his lead foot's instep (what a dirty man stands on), and whether this man's own lead
       // foot is stood on
-      foe: f.place && other.pose && other.points ? { foot: mine(f, at(other, 'LeftFoot', [0, -0.02, 0.07])) } : null,
+      foe: f.place && other.pose && other.points ? { foot: mine(f, at(other, 'LeftFoot', [0, -0.02, 0.07])), glove: { L: mine(f, other.points.L), R: mine(f, other.points.R) } } : null,
       pinned: f.pinned > 0,
       // knocked down: what of the other man he cannot fall through, in his own terms
       near: f.down && f.place && other.pose ? NEAR.map(([joint, r]) => [mine(f, at(other, joint)), r]) : null
@@ -941,6 +943,25 @@ function fouls(bout, f, other, who, dt) {
   }
 }
 
+/* A show-off's lead hand on the other man's lead glove (anim/show.mjs: paw): when it meets it, the glove is pushed down (or
+   up) out of the way, held there and let go (his body's: animator.pawed). Only once a punch, and only if it gets there. */
+function paws(bout, f, other, who) {
+  const action = f.action,
+    v = action && action.variant;
+  if ((v !== 'pawDown' && v !== 'pawUp') || action.pawed || other.down || !other.points || action.t > PAW.reach + PAW.hold) return;
+  const hand = PAW.glove[v];
+  if (Math.hypot(...M.sub(f.points.L, other.points[hand])) > RULES.glove * 2 + 0.01) return;
+  const tier = Math.max(0, (action.level.form.dirty || 1) - 1),
+    d = PAW.press[tier];
+  // (in his own terms as the pushing man would see it: across to his left, up)
+  action.pawed = { at: bout.t, push: [(hand === 'L' ? -1 : 1) * d * PAW.aside, (v === 'pawDown' ? -1 : 1) * d] };
+  other.animator.pawed && other.animator.pawed({ hand, dy: (v === 'pawDown' ? -1 : 1) * d, dx: (hand === 'L' ? 1 : -1) * d * PAW.aside, hold: PAW.hold, free: PAW.free });
+  // (and the other glove of a tight guard, against the one pushed, goes with it)
+  const o = hand === 'L' ? 'R' : 'L';
+  if (Math.hypot(...M.sub(other.points.L, other.points.R)) < RULES.glove * 2 + 0.03) other.animator.pawed({ hand: o, dy: (v === 'pawDown' ? -1 : 1) * d, dx: (o === 'L' ? 1 : -1) * d * PAW.aside, hold: PAW.hold, free: PAW.free });
+  bout.events.push({ type: 'paw', name: v, who, on: 1 - who, t: +action.t.toFixed(3) });
+}
+
 /* Up off the canvas, where he lies (his place turned and moved under him: anim/animator.mjs getUp), the way that fits how
    he lies; or, off a knee, the way up off a knee. */
 export function getUp(bout, f) {
@@ -1015,6 +1036,8 @@ export function step(bout, inputs, dt) {
   bout.fighters.forEach((f, i) => f.follow && follow(bout, f, i, dt));
   fouls(bout, a, b, 0, dt);
   fouls(bout, b, a, 1, dt);
+  paws(bout, a, b, 0);
+  paws(bout, b, a, 1);
   strike(bout, a, b, 0, dt);
   if (bout.stop <= 0) strike(bout, b, a, 1, dt);
   return bout;

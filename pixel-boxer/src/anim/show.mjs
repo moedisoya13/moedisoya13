@@ -9,7 +9,9 @@
      hammer(c, h, t)           the hammering parry (§5.5): the rear fist's stroke t seconds after the guard went up; -> whether
                                it is coming down now (what the bout judges a parry by)
      choose(table, when, forced, u)   which trick a press turns into (§5.2), or null: the plain punch
-     THROWS                    the punch each trick throws in place of the one pressed (where it changes it) */
+     THROWS                    the punch each trick throws in place of the one pressed (where it changes it)
+     PAW, paw(trick, t, glove, tier)   the guard pushed down or up (§5.3): where the lead hand goes for his glove, and how
+                               much of the way */
 
 const TAU = Math.PI * 2;
 const clamp = (x, a, b) => (x < a ? a : x > b ? b : x);
@@ -96,4 +98,20 @@ export function choose(table, when, forced, u) {
     at += p;
   }
   return null;
+}
+
+/* Pushing his guard down (pawDown) or up (pawUp) and hitting with the other hand. The lead hand goes for the other man's lead
+   glove (`reach` seconds), onto the top of it to push it down or under it to lift it (`over`: metres from the middle of his
+   glove to the middle of mine, a little less than the two gloves are thick, so that it meets it), stays on it `hold` and lets
+   go over `back`; the rear hand's punch waits `wait` seconds before it starts (a straight over it, an uppercut under it), so
+   that it lands as the glove is out of the way. How far his glove is pushed is the bout's to do when the hands meet (game/
+   bout.mjs: pawed): `press` metres, [4암, 5암] (a great dirty fighter hauls it down, a legend taps it), and `aside` times
+   that out to the side it is on, for `hold` seconds, and back over `free`. Which glove: the one in the way of the punch that
+   follows (`glove`): his lead glove for the straight over it, his rear glove for the uppercut under it. */
+export const PAW = { reach: 0.12, hold: 0.25, back: 0.15, over: 0.17, press: [0.26, 0.22], aside: 0.6, free: 0.3, glove: { pawDown: 'L', pawUp: 'R' }, elbow: { pawDown: 0.8, pawUp: 0 }, wait: { cross: 0.15, upper: 0.1, upperIn: 0.1 } };
+// -> { to: where the lead glove is to be (his own space), w: how much of the way it is sent there }
+export function paw(trick, t, glove) {
+  const w = t < PAW.reach ? smooth(t / PAW.reach) : t < PAW.reach + PAW.hold ? 1 : 1 - smooth((t - PAW.reach - PAW.hold) / PAW.back),
+    up = trick === 'pawDown' ? 1 : -1;
+  return { to: [glove[0], glove[1] + up * PAW.over, glove[2] - 0.02], w };
 }

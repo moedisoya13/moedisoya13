@@ -132,7 +132,9 @@ export const DIRTY = TECHNIQUES.flatMap(tq =>
    front of him is a pro; for the tricks on a guard he holds his guard up all through (hisCover). `press`: the button, and
    `again`: more presses of it (the flicker's, each within a quarter of a second of the last arriving). */
 export const TRICKS = [
-  { id: 'flicker', punch: 'jab', button: 'jab', range: 0.985, name: '플리커', en: 'Flicker', again: [0.3, 0.6] }
+  { id: 'flicker', punch: 'jab', button: 'jab', range: 0.985, name: '플리커', en: 'Flicker', again: [0.3, 0.6] },
+  { id: 'pawDown', punch: 'cross', button: 'power', range: 0.985, name: '가드 내리고 치기', en: 'Paw down and cross', guarded: true },
+  { id: 'pawUp', punch: 'upper', button: 'power', range: 0.835, name: '가드 올리고 치기', en: 'Lift the guard and uppercut', guarded: true, second: 1 }
 ];
 export const SHOWOFF = TRICKS.flatMap(tq =>
   LEVELS.map(lv => ({

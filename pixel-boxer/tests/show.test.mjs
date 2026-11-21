@@ -156,6 +156,31 @@ test('flicker: thrown at 4암 and 5암 only; quick and light, out of the waist a
   assert.ok(trick('flicker', '4a').hits[0].J > trick('flicker', '5a').hits[0].J);
 });
 
+/* Pushing his guard out of the way: the lead hand meets his glove (a 'paw' event: only when the gloves touch) and pushes it
+   down or up, and the rear hand's punch that follows lands; the same punch pressed plain, into the same guard, is blocked. */
+test('paw down / paw up: the lead hand moves his glove first, and the punch that follows gets through where the plain one is blocked', () => {
+  for (const id of ['pawDown', 'pawUp'])
+    for (const lv of LEVELS) {
+      const t = trick(id, lv),
+        last = t.events.filter(ev => ev.who === 0 && ['hit', 'block', 'whiff', 'graze'].includes(ev.type)).pop(),
+        paw = t.events.find(ev => ev.type === 'paw' && ev.who === 0);
+      if (!SHOW.includes(lv)) {
+        assert.ok(!paw && last.type === 'block', `${id}@${lv}: ${last.type}`);
+        continue;
+      }
+      assert.ok(paw && paw.name === id, `${id}@${lv}: ${JSON.stringify(t.events.map(e => e.type))}`);
+      assert.equal(last.type, 'hit', `${id}@${lv}`);
+      assert.ok(paw.i < last.i, `${id}@${lv}: the glove is out of the way first`);
+      const ms = msOf(t, t.punches[0], last);
+      assert.ok(ms >= 233 && ms <= 300, `${id}@${lv}: lands ${ms} ms after the press`);
+      // (the same man, the same punch pressed plain: blocked)
+      const plain = Object.assign({}, t.e, { press: t.e.press.map(([at, b]) => [at, b, 'plain']) }),
+        { frames } = run(plain),
+        out = frames.flatMap(f => f.events).filter(ev => ev.who === 0 && ['hit', 'block', 'whiff', 'graze'].includes(ev.type)).pop();
+      assert.equal(out.type, 'block', `${id}@${lv} plain`);
+    }
+});
+
 test('flicker: the same bout goes the same way', () => {
   const once = () => run(SHOWOFF.find(x => x.id === 'flicker@5a')).frames.map(f => f.gloves.L.map(v => +v.toFixed(6)));
   assert.deepEqual(once(), once());
