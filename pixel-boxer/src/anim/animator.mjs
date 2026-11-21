@@ -19,6 +19,8 @@
      a.legend                                         a legend on the move (legend.mjs): how much of the wind-up of a
                                                       punch thrown now his bent knees and the lean of his trunk have done
                                                       already, { load: 0..1 } | null
+     a.wave                                           the wave his feet are in (clean.mjs): { plan, k, phi, ending, done,
+                                                      slicked } | null (view.wave: the bout's, while he is in one)
      a.getUp()                                        knocked down and lying still: the way up that fits how he lies, and
                                                       how to turn and move his place so that he gets up where he lies:
                                                       { name, on, down, move: [x, z] (his space), turn (radians) } | null
@@ -37,6 +39,7 @@ import { H, headAt, headTo, phraseX, PHRASE, FLOURISH, CLEAN, DIRTY, dice } from
 import { sampleEvade, EVASIONS, timeline, evadeTime } from './evade.mjs';
 import { travel as legendTravel, dash as legendDash, dashShape } from './legend.mjs';
 import { stance as showStance, crossGuard, hammer, paw, PAW, collar, COLLAR, ELBOW } from './show.mjs';
+import { createWave, waveBeat, waveLand, waveLanding, waveDrag, waveBody } from './clean.mjs';
 
 const TAU = Math.PI * 2;
 /* The feet keep time. One beat is one foot coming down; a cycle is both. Standing, the boxer rocks between his feet on that
@@ -391,6 +394,8 @@ export function createAnimator(seed) {
   /* a legend on the move (legend.mjs): the foot that came down at each half beat (by its count), how much of the shape of
      his going there is (followed), the dash he is shaping (and when it started), and how wound up all that leaves him */
   const legend = { feet: {}, sides: {}, w: 0, across: 0, bent: 0, dash: null, load: 0, k: { L: 0, R: 0 }, air: { L: 0, R: 0 } };
+  // a clean great one's wave (clean.mjs): its own beat for his feet, and its body
+  const wave = createWave();
   // a beginner's feet, shifted about the canvas a few centimetres at a time: where each is now, and the one moving
   const fidget = { L: 0, R: 0, move: null, next: 1.8 + 1.4 * roll(), side: 'R' };
   // how far a beginner's body goes on past his feet when he stops, sprung back
@@ -638,6 +643,9 @@ export function createAnimator(seed) {
     get legend() {
       return legend.load > 0.05 ? { load: legend.load } : null;
     },
+    get wave() {
+      return wave.on ? { plan: wave.plan, k: wave.k, phi: wave.phi, ending: wave.end !== null, done: wave.done, slicked: wave.slick > 0.05 } : null;
+    },
     get rhythm() {
       const lengthNow = (cycle / 2) * stretch;
       return { beat: ((((halves - 1) % 2) + 2) % 2 + u) / 2, cycle, halves, stepping: swing.side, landed: swing.came, lead: halves + u - ref, u, half: lengthNow, left: stop > 0 ? stop + lengthNow * (1 - u) : (lengthNow * (1 - u)) / Math.max(0.05, rate), flourish: flourish && flourish.k > 0.5 ? flourish.name : null, stopped: stop > 0 };
@@ -768,7 +776,7 @@ export function createAnimator(seed) {
         else if (form.guard < 0) (c[o + 'y'] += 0.02 * -form.guard * out), (c[o + 'z'] -= 0.025 * -form.guard * out), (c[o + 'x'] += s * 0.015 * -form.guard * out);
         /* (a punch thrown out of the end of an evasion: the other glove is still on his cheek where the evasion put it, out of
            the way of the arm that has just gone past his head, and comes off it as the punch goes) */
-        if (action.loaded && action.loaded.from !== 'parry' && action.loaded.from !== 'legend') (c[o + 'z'] -= 0.12 * (1 - smooth(action.t / 0.2))), (c[o + 'y'] -= 0.01 * (1 - smooth(action.t / 0.2)));
+        if (action.loaded && action.loaded.from !== 'parry' && action.loaded.from !== 'legend' && action.loaded.from !== 'wave') (c[o + 'z'] -= 0.12 * (1 - smooth(action.t / 0.2))), (c[o + 'y'] -= 0.01 * (1 - smooth(action.t / 0.2)));
         c.hp -= 11 * form.chin * out; // the chin up and out after it (tucked, the better he is)
         c.lean += 9 * form.over * share.over * out; // and the weight thrown in after it, over the front foot (right up close there is no room)
         c.hz += 0.05 * form.over * share.over * out;
@@ -981,6 +989,9 @@ export function createAnimator(seed) {
       const travelK = dashing ? 1 : st.legend ? 1 + (st.travel.cycle - 1) * legend.across : st.travel.cycle;
       // (a beginner's and an amateur's travelling beat is slower, but not a dash's: that is one burst, whoever makes it)
       cycle += (CYCLE.rest * quick + (CYCLE.travel * travelK - CYCLE.rest * quick) * going - cycle) * (1 - Math.exp(-dt * 10)); // (quick enough to keep up, slow enough not to snap the bounce)
+      // (in the wave, his feet keep its beat: a slide out and a slide in to a wave, clean.mjs)
+      const wv = waveBeat(wave, { wave: view.wave, level: view.wave && view.wave.level, seed: seed || 0, halves, u, dt });
+      if (wv) cycle = wv.cycle;
       /* Setting off: the foot on the side he is going should move first. If the other one was already up, hopping in place,
          it is only set back down under him in its place (it takes no step of its own), and the right foot steps first. */
       const mid = [(BALL.L[0] + BALL.R[0]) / 2, (BALL.L[2] + BALL.R[2]) / 2],
@@ -1059,8 +1070,10 @@ export function createAnimator(seed) {
           f = feet[side],
           ahead = cycle / 4,
           l = Math.hypot(f.fx, f.fz) * ahead,
-          k = l > STRIDE ? STRIDE / l : 1;
-        return [g[0] + f.fx * ahead * k, g[1], g[2] + f.fz * ahead * k];
+          k = l > STRIDE ? STRIDE / l : 1,
+          // (in the wave, the lead foot out further and the trail foot in, clean.mjs)
+          wl = waveLanding(wave, side) || [0, 0, 0];
+        return [g[0] + f.fx * ahead * k + wl[0], g[1], g[2] + f.fz * ahead * k + wl[2]];
       };
       if (fresh || u >= 1) {
         // ---- a foot comes down, and the next is chosen to step
@@ -1090,11 +1103,13 @@ export function createAnimator(seed) {
             // setting off from a hop in place, the first step is always the foot on the side he is going
             first = hopped && speedNow > 0.25 && !(swing.last[0] === swing.last[1] && leads(swing.last[1]) > 0),
             right = leads('L') >= leads('R') ? 'L' : 'R',
+            // (in the wave, its foot: clean.mjs)
+            waveFoot = waveLand(wave, halves),
             // (a beginner as often as not sets off with the wrong one)
-            side = first ? (st.travel.order && roll() < st.travel.order ? (right === 'L' ? 'R' : 'L') : right) : score('L') >= score('R') ? 'L' : 'R';
+            side = waveFoot || (first ? (st.travel.order && roll() < st.travel.order ? (right === 'L' ? 'R' : 'L') : right) : score('L') >= score('R') ? 'L' : 'R');
           swing.side = side;
           swing.skid = 0;
-          swing.still = speedNow < 0.25; // (a hop in place, not a step anywhere)
+          swing.still = !waveFoot && speedNow < 0.25; // (a hop in place, not a step anywhere)
           swing.from = planted[side].slice();
           swing.last = [swing.last[1], side];
         }
@@ -1105,6 +1120,8 @@ export function createAnimator(seed) {
         if (st.swing !== 0.5) stretch = 1 + (2 * (swing.came === 'L' ? st.swing : 1 - st.swing) - 1) * (st.legend ? 1 - legend.w : 1);
         // (a dirty legend going sideways lurches less, his steps long already: legend.mjs keeps him off the beat instead)
         if (st.jitter) stretch *= 1 + (roll() < 0.5 ? -1 : 1) * st.jitter * (0.5 + 0.5 * roll()) * (st.legend ? 1 - 0.6 * legend.w * legend.across : 1);
+        // (the wave's half beats are even)
+        if (wave.on && wave.end === null && wave.anchor !== null) stretch = 1;
         // a legend's phrase stops dead where it says (if he is free to), and a flourish breaks out of the stop
         const at = (((halves - ref) % PHRASE.length) + PHRASE.length) % PHRASE.length;
         if (st.tempo === 'phrase' && Math.abs(at - PHRASE.stop) < 0.5 && idle && stop <= 0 && stopped === 0) (stop = H), (stopped = 1e-9);
@@ -1118,7 +1135,7 @@ export function createAnimator(seed) {
       // ---- the bounce: down into each landing and back up off it, the weight swinging between the feet like a pendulum
       // (a tired man's feet barely leave the canvas, and a hurt man's legs are heavy; and the grade's own rhythm)
       const flat = exit && exit.kind === 'flat' ? 1 - smooth(exit.done === null ? 0 : (halves + u - exit.done - 2) / 0.5) : 0,
-        pep = (view.still ? 0 : action ? (form ? form.lively * ((punchMove.body && punchMove.body.lively) ?? 1) : evading ? evading.lively : hopping ? 1.4 * (action.level || LEVEL[3]).away.hop : 0.35) : (1 + cheer * 1.6) * (cv.textbook ? 1 : 1 - cover * (1 - cv.lively))) * (1 - 0.5 * tired) * (1 - 0.3 * hurt) * (1 - 0.7 * rocked) * (1 - flat),
+        pep = (view.still ? 0 : action ? (form ? form.lively * ((punchMove.body && punchMove.body.lively) ?? 1) : evading ? evading.lively : hopping ? 1.4 * (action.level || LEVEL[3]).away.hop : action.name === 'wave' ? 0 : 0.35) : (1 + cheer * 1.6) * (cv.textbook ? 1 : 1 - cover * (1 - cv.lively))) * (1 - 0.5 * tired) * (1 - 0.3 * hurt) * (1 - 0.7 * rocked) * (1 - flat),
         lively = pep * st.bounce,
         spot = (1 - going) * lively, // how much of this is bouncing on the spot
         footSpot = (1 - going) * (feetLive += (lively - feetLive) * (1 - Math.exp(-dt * 20))),
@@ -1295,6 +1312,8 @@ export function createAnimator(seed) {
       if (legend.dash && legendDash(c, legend.dash.d, clock - legend.dash.from) === false) legend.dash = null;
       legend.k = { L: c.lkf - kneesWere[0], R: c.rkf - kneesWere[1] };
       legend.load = Math.max(legend.w > 0.3 ? legend.w : 0, legend.bent > 0.3 ? legend.bent : 0, legend.dash && clock - legend.dash.from < 0.65 ? 1 : 0);
+      // ---- the wave (clean.mjs): the hands let down, upright, the knees making the wave, the head across, the slick back
+      if (action && action.name === 'wave') waveBody(c, wave, { view, clock, dt });
       // a heavy, dirty man puts his lead hand out now and then to find the range
       if (st.paw && !punchMove) {
         const w = bump(((clock + 1.3) % 5.2) / 1.2) * (action ? 0 : 1);
@@ -1626,9 +1645,11 @@ export function createAnimator(seed) {
           // him on the other one, his weight past it)
           // (the whole of a step that a shove came in: skidding)
           swing.skid = Math.max(swing.skid || 0, view.shoved || 0);
-          const drag = Math.max(action && action.name === 'dash' ? Math.max(st.drag, (action.level || LEVEL[3]).dash.drag) : action && action.name === 'duckIn' ? 0 : st.drag, smooth((swing.skid - 0.8) / 1.2));
+          // (in the wave, a slide: clean.mjs)
+          const slide = waveDrag(wave, side),
+            drag = Math.max(slide ?? (action && action.name === 'dash' ? Math.max(st.drag, (action.level || LEVEL[3]).dash.drag) : action && action.name === 'duckIn' ? 0 : st.drag), smooth((swing.skid - 0.8) / 1.2));
           lift = (Math.min(0.075, length * 0.35) * (1 - drag) * (0.5 + 0.5 * going) + HOP * footSpot * st.hop) * Math.pow(Math.sin(Math.PI * u), 1.3) * dropped;
-          pitch = st.flat ? 0 : (14 * Math.sin(TAU * u) * clamp(length / 0.2, 0, 1) * (1 - 0.6 * st.drag) + 8 * footSpot * Math.min(1, st.hop) * Math.sin(Math.PI * u)) * dropped;
+          pitch = st.flat ? 0 : (14 * Math.sin(TAU * u) * clamp(length / 0.2, 0, 1) * (1 - 0.6 * Math.max(st.drag, slide || 0)) + 8 * footSpot * Math.min(1, st.hop) * Math.sin(Math.PI * u)) * dropped;
         } else {
           // a foot left too far behind by a shove or a dash is dragged, not left to pull the leg straight
           const g = BALL[side],

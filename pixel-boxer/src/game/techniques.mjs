@@ -110,6 +110,7 @@ export function situation(bout, who, mind, o) {
     rocked: bout.t - mind.mem.hurtAt <= ROCKED.last,
     ropes: ropes(me), // metres to the ropes behind him (the nearer side), and behind the other man
     hisRopes: ropes(him),
+    resting: mind.rest > 0, // (between combinations, not yet ready to start the next)
     range: o.range, side: o.side || 1, iq: o.iq ?? 0.5, plan: o.plan || null, roll: o.roll
   };
 }
@@ -206,11 +207,11 @@ define('pullCounter', {
 });
 
 define('wave', {
-  name: '파도', section: '§4.1', open: CLEAN,
-  /* (stage E builds the wave with a gate on the grade; at its merge, set ready: true here and make that gate has(f, 'wave'),
-     so that the loadout opens it and the grade still does) */
-  // wanting to be off at 1.3 m or more (defend, breathe, or tired), with room to go round; the jab plan, half his rests
-  move: { when: s => s.ropes > 0.8 && (s.range >= 1.3 || s.plan === 'jab'), chance: s => (s.range >= 1.3 ? 1 : 0.5), control: s => ({ away: 'wave', side: s.side }) }
+  name: '파도', section: '§4.1', open: CLEAN, ready: true,
+  /* (built by stage E, anim/clean.mjs; the bout lets a man into it who carries it and whose grade has one: bout.mjs wavesAt)
+     wanting to be off at 1.3 m or more (defend, breathe, or tired), with room to go round; the jab plan, in half his rests
+     between combinations, and only while he rests (the wave holds him off at 1.55-1.85 m, out of reach of starting one) */
+  move: { when: s => s.ropes > 0.8 && (s.range >= 1.3 || (s.plan === 'jab' && s.resting)), chance: s => (s.range >= 1.3 ? 1 : 0.5), control: s => ({ away: 'wave', side: s.side }) }
 });
 
 define('parryDown', {

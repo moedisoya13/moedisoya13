@@ -261,9 +261,33 @@ test('techniques: the shift in place of a combination, and the wave for his feet
   };
   assert.equal(wave({}, 200), 1);
   near(wave({ range: 1.12, plan: 'jab' }, 1000), 0.5, 0.05, 'the jab plan');
+  mind.rest = 0;
+  assert.equal(wave({ range: 1.12, plan: 'jab' }, 200), 0, 'the jab plan, his rest over');
+  mind.rest = 1;
   assert.equal(wave({ range: 1.0, plan: 'steady' }, 200), 0);
   me.x = -2.1;
   assert.equal(wave({}, 200), 0, 'the ropes');
+});
+
+// the wave is built (stage E): a head that carries it takes it, and the bout puts him in it; not carried, never
+test('techniques: a defending 4명 who carries the wave goes round in it; one who does not, never', () => {
+  const go = techniques => {
+    const match = createMatch({ seed: 9, skills: [{ all: '4m' }, { all: '3' }], techniques: [techniques, []], plans: [PLANS.defend, PLANS.steady], rounds: 1, roundTime: 60 }),
+      seen = { asked: 0, waving: 0, circling: 0 };
+    for (let i = 0; i < 360; i++) {
+      const controls = [0, 1].map(w => think(match.brains[w], match.bout, w, DT));
+      if (controls[0].away === 'wave') seen.asked++;
+      stepMatch(match, DT, controls);
+      const a = match.bout.fighters[0].action;
+      if (a && a.name === 'wave') seen.waving++;
+      if (a && a.name === 'hopCircle') seen.circling++;
+    }
+    return seen;
+  };
+  const carried = go(['wave']),
+    not = go([]);
+  assert.ok(carried.asked > 100 && carried.waving > 100 && carried.circling === 0, JSON.stringify(carried));
+  assert.deepEqual(not, { asked: 0, waving: 0, circling: 0 });
 });
 
 /* Body punches are a basic move, and his sense turns a punch of a combination into one (§4.0): 0.10 + 0.30 × iq, nothing under
@@ -344,7 +368,7 @@ test('techniques: not built, they change nothing; rehearsed, only what he carrie
   assert.ok(a.events.length > 2000);
   assert.equal(a.events, b.events, 'all of them carried, none built, against only the built ones');
   assert.equal(c.events, d.events, 'the loadouts their grades give them, against only the built ones of those');
-  assert.deepEqual(a.techs, [[], []]);
+  assert.deepEqual(a.techs.map(l => l.filter(t => !(TECHNIQUES[t] && TECHNIQUES[t].ready))), [[], []], 'nothing not built comes out');
   // rehearsed: a 4명 who carries three, against a pro who asked for three his grade does not open
   const r = fight(33, { sheets, skills: [{ all: '4m' }, { all: '3' }], techniques: [['parryDown', 'pullCounter', 'wave'], ['shift', 'parryDown', 'shell']], plans: [PLANS.counter, PLANS.pressure], rehearse: true }, 2000),
     carried = new Set(r.techs[0]);
