@@ -256,7 +256,7 @@ function singleCard(e) {
   card.dataset.entry = e.id;
   card.innerHTML = `<div class="stage" role="img" aria-label="${e.name} 애니메이션"></div>
     <div class="info"><h3>${e.name} <span class="en">${e.en}</span></h3><p>${e.note}</p>
-      ${e.status ? `<div class="feet result"><span class="tag">${e.status}</span></div>` : `<div class="feet result"><span class="tag" data-tag>–</span><span class="pace"><b data-blow>–</b> N·s</span></div>`}</div>`;
+      ${e.status ? `<div class="feet result"><span class="tag">${e.status}</span></div>` : `<div class="feet result"><span class="tag" data-tag>–</span><span class="pace"><b data-blow>–</b> N·s</span></div>`}${e.out ? `<div class="feet stats"><span>머리가 닿기까지 <b data-a>–</b> s</span></div>` : ''}</div>`;
   return card;
 }
 
@@ -372,7 +372,7 @@ function start({ manifest, boxer }) {
       newHalf = m.halves !== undefined && r.halves !== m.halves;
     for (const e of bout.events) {
       const by = e.type === 'parry' ? e.on : e.who;
-      if (by === 1 && SAID[e.type]) tell(cell, e.down ? '다운' : SAID[e.type] + (e.brilliant ? '!' : ''), e.J);
+      if (by === 1 && SAID[e.type]) tell(cell, e.down ? (e.out ? '실신' : '다운') : SAID[e.type] + (e.brilliant ? '!' : ''), e.J);
       // (a defence found brilliant after the event it was: the counter decides it)
       if (e.type === 'brilliant' && e.who === 0 && cell.tag) tell(cell, SAID[e.of] + '!');
       // the blow itself, as the game shows it: sparks and sweat sized by its impulse, and the picture shaken
@@ -460,6 +460,10 @@ function start({ manifest, boxer }) {
           cell.at.classList.add('on');
         }
         break;
+      case 'single':
+        // (knocked out cold: from the blow to his head on the canvas)
+        if (entry.out && e.type === 'hit' && e.who === 1 && e.down) m.downAt = cell.t;
+        break;
       case 'foul':
         if (e.who === 0 && e.type === 'foul') (put(cell, 'fj', String(Math.round(e.J))), put(cell, 'fat', m.landedAt === undefined ? '주먹 전' : `주먹 뒤 ${Math.round((cell.t - m.landedAt) * 1000)} ms`));
         if (e.who === 0 && e.type === 'hit' && e.name === entry.punch) (put(cell, 'blow', String(Math.round(e.J))), (m.landedAt = cell.t));
@@ -488,6 +492,9 @@ function start({ manifest, boxer }) {
       if (!a.action) m.kneeWas = { hy, y };
     }
     switch (item.stat) {
+      case 'single':
+        if (m.downAt !== undefined && m.headDown === undefined && a.points.head[1] < 0.16) (m.headDown = cell.t - m.downAt), put(cell, 'a', m.headDown.toFixed(2));
+        break;
       case 'stance': {
         m.track.push([a.pose.at.Hips[1] * a.pose.stretch, across(a, b, a.points.head)]);
         if (m.track.length > 240) m.track.shift();

@@ -15,7 +15,8 @@ import { MOVES, LIE, UP } from '../src/anim/moves.mjs';
 import { RADIUS, GLOVE } from '../src/rig/body.mjs';
 
 const DT = 1 / 60,
-  DOWNS = DEFENSE.filter(e => e.fall);
+  // (knocked out cold he does not get up: tests/faint.test.mjs)
+  DOWNS = DEFENSE.filter(e => e.fall && !MOVES[e.fall].faint);
 
 // one knockdown drill, frame by frame: what the knocked-down man was doing and where he was
 function drill(entry) {

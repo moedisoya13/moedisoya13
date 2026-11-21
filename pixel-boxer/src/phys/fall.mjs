@@ -9,18 +9,26 @@
    blow and his weight take him: back and away from a straight, the way a hook's glove was going, forward if he was coming
    in, further for a harder one. The shoulders are held to the same table the solver and the audit use (rig/body.mjs:
    SHOULDER).
-   Lying there, he still breathes.
+   Knocked out cold (docs/moves-plan-4.md §6), it is not his legs that go but he, and the same body is let go of another
+   way (OUT): limp, every joint at once; or stiff as a log, locked as he was until he is down on the canvas. Lying there he
+   breathes, one forearm stays up off the canvas a while and comes down slowly, and nothing else of him moves.
+   Lying there, any man still breathes.
    It is stepped at a fixed rate (twelve steps a frame), with nothing random in it, so a bout replays exactly.
-     const body = createFall(pose, before, dt, blow)   pose, before: his last two solved poses (his own space); blow: { J
+     const body = createFall(pose, before, dt, blow, out)
+                                                        pose, before: his last two solved poses (his own space); blow: { J
                                                         (newton-seconds), dir (unit, his space: the way the glove was going
                                                         as it met him), at (where, his space), push (his whole body's speed
                                                         from the shove and from what he was already moving at, [x, y, z]
-                                                        m/s, or [x, z]) } | null
+                                                        m/s, or [x, z]) } | null; out: 'limp' | 'log' if he is out cold
      stepFall(body, dt, obstacles)                     obstacles: [[centre, radius]] he cannot fall through (his space)
      poseOf(body, clock)                               -> a pose, as solve() returns one (rot, root, at, head, stretch)
      lyingOf(body)                                     -> how he has come to rest: { on: 'back' | 'front' | 'side', down:
                                                           'L' | 'R' (the side he lies on), hips, head (his space) }
+     muscles(body)                                     -> what is left of his muscles' hold on each joint, now: [{ kind,
+                                                          s, tone (0 none .. 1) }]
      moveFall(body, R, off)                            carry the body into another frame of his own (getting up where he lies)
+   Out cold, body.freed is when a log's locked joints let go (seconds), body.lay when he has come to lie still, and body.post
+   the arm whose forearm stays up ({ s: 'L' | 'R' }).
    The method is position-based dynamics of rigid bodies (Mueller et al., "Detailed rigid body simulation with extended
    position based dynamics", 2020): each step the bodies move freely, then every joint, limit, contact and muscle is put
    right by moving and turning the bodies as their masses and inertias share it, and the velocities are what that comes to. */
@@ -201,7 +209,7 @@ function angular(a, b, rot, compliance, h) {
 const at = (b, local) => M.add(b.x, qrot(b.q, M.sub(local, b.com))); // a point of a piece (local: in its own frame, from its joint)
 const off = (b, local) => qrot(b.q, M.sub(local, b.com)); // and its offset from the piece's middle
 
-export function createFall(pose, before, dt, blow) {
+export function createFall(pose, before, dt, blow, out) {
   const now = fk(pose),
     was = before ? fk(before) : now,
     /* (the belly is one piece: it takes the turn of its upper half, set to run from where his lower spine is to where his
@@ -226,7 +234,8 @@ export function createFall(pose, before, dt, blow) {
       w = dt > 0 ? M.scale(qvec(dq), 1 / dt) : [0, 0, 0];
     return Object.assign({}, def, { x, q, v, w, xp: x, qp: q, im: 1 / def.mass, ii: I.map(i => 1 / i) });
   });
-  const body = { bodies, t: 0, rest: 0, still: 0, base: {} };
+  // (and what he was made from, so that the same fall can be made again: the same pose, the same blow, let go of another way)
+  const body = { bodies, t: 0, rest: 0, still: 0, base: {}, out: out || null, made: { pose, before, dt, blow } };
   // what each muscle holds: the child's turn on its parent as he went down
   body.hold = JOINTS.map(j => qmul(qconj(bodies[INDEX[j.parent]].q), bodies[INDEX[j.child]].q));
   // where each child hangs from its parent: its joint, in the parent's frame (from the T-pose: everything between is rigid)
@@ -409,6 +418,7 @@ function energy(bs) {
   let kin = 0,
     pot = 0;
   for (const b of bs) {
+    if (b.frozen) continue; // (held where he lies: it neither moves nor falls)
     const l = qrot(qconj(b.q), b.w);
     kin += 0.5 * (dot(b.v, b.v) / b.im + l[0] * l[0] / b.ii[0] + l[1] * l[1] / b.ii[1] + l[2] * l[2] / b.ii[2]);
     pot += (G * b.x[1]) / b.im;
@@ -418,14 +428,188 @@ function energy(bs) {
 // how much of his muscles' hold on joint j is left at time t: all of it, and gone over its span
 const tone = (j, t) => 1 - smooth((t - j.tone[0]) / (j.tone[1] - j.tone[0]));
 
+/* ---- Out cold (createFall's `out`; docs/moves-plan-4.md §6).
+     limp   every joint's hold gone in OUT.limp seconds, all at once: he folds where he stands and goes over whichever way he
+            is going, and nothing of him tries to stop it
+     log    his spine, hips, knees and arms (LOCKED) held as they were, as stiff as OUT.lock, for OUT.hold seconds and after
+            that until something of him but his feet is down on the canvas (OUT.most at the latest), and then let go of in
+            OUT.let; his neck and ankles go at once, as a limp man's do. So he goes over on his heels like a tree, his arms as
+            they were, and the back of his head meets the canvas and comes up off it once, a little (BOUNCE)
+   He has come to lie when no part of him has gone faster than OUT.lay.speed (an arm OUT.lay.arm) for OUT.lay.for seconds (OUT.lay.most at the
+   latest). From then on he lies as he is (frozen: as a body put to sleep is), all but one arm, whose forearm is up off the
+   canvas: a limp man's is put up then (over OUT.rise: the upper arm turned about itself so that the elbow bends upward, and
+   the elbow bent: raise), a log's is whichever of his locked arms he landed with its glove the higher, kept as it was. It is
+   held there (as stiff as OUT.stiff) OUT.raised seconds, then let down slowly, the elbow opening to OUT.open degrees over
+   OUT.down seconds (the canvas, or his own body, stopping it where it meets them), and the hold goes out of it in OUT.fade. */
+const OUT = { limp: 0.04, hold: 0.5, most: 1.5, let: 0.04, lock: 30000, lay: { speed: 0.1, arm: 0.2, for: 0.25, most: 4 }, rise: 0.3, raised: 1.5, down: 1.6, open: 10, fade: 0.3, stiff: 400 };
+const LOCKED = ['spine', 'hip', 'knee', 'shoulder', 'elbow'];
+// (the back of a log's head off the canvas: so much of the speed it lands at, and no faster than this, m/s)
+// (the back of a log's head off the canvas: so much of the speed it lands at, and no faster than this, m/s; for so long, s)
+const BOUNCE = { e: 0.2, most: 0.8, for: 0.05 };
+// the forearm put up: how far the elbow is bent (degrees, tried in turn), where the glove is along the forearm, and what it
+// is kept clear of the canvas, his trunk and his head by, past what the fall keeps them apart by (KEEP)
+const POST = { bend: [95, 75, 115], glove: 0.325, clear: 0.04 };
+const ARM = Object.fromEntries(['L', 'R'].map(s => [s, ['shoulder', 'elbow'].map(kind => JOINTS.findIndex(j => j.kind === kind && j.s === s))]));
+// (how far an elbow is bent, degrees, in a turn of the forearm on the upper arm; and the turn that bends it so far)
+const bendOf = (q, sOf) => -sOf * qvec(q)[1] * DEG;
+const bent = (deg, sOf) => qaxis([0, 1, 0], -sOf * deg * RAD);
+function qslerp(a, b, t) {
+  let d = a[0] * b[0] + a[1] * b[1] + a[2] * b[2] + a[3] * b[3];
+  if (d < 0) (b = b.map(x => -x)), (d = -d);
+  if (d > 0.9995) return qnorm(a.map((x, i) => x + (b[i] - x) * t));
+  const th = Math.acos(d),
+    s = Math.sin(th);
+  return a.map((x, i) => (x * Math.sin((1 - t) * th) + b[i] * Math.sin(t * th)) / s);
+}
+/* The posed arm's hold now: how much of it (put up over its rise, gone in OUT.fade once it is down), the upper arm's turn on
+   the chest and how far the elbow is bent: as it was put up, and going over to the way down (p.to) as it is let down. */
+function posed(p, t) {
+  const down = p.until === undefined || !p.to ? 0 : smooth((t - p.until) / OUT.down);
+  return {
+    w: Math.min(p.rise ? smooth((t - p.from) / p.rise) : 1, p.until === undefined ? 1 : 1 - smooth((t - p.until - OUT.down) / OUT.fade)),
+    shoulder: down ? qslerp(p.shoulder, p.to.shoulder, down) : p.shoulder,
+    bend: down ? p.bend + (p.to.bend - p.bend) * down : p.bend
+  };
+}
+const UPPER = len(M.sub(TPOSE.LeftForeArm, TPOSE.LeftArm)); // (the upper arm's length)
+// where the posed arm's glove would be with the upper arm turned so on his chest (as he lies, still) and the elbow bent so far
+function gloveAt(body, s, rel, bend) {
+  const bs = body.bodies,
+    sOf = s === 'L' ? 1 : -1,
+    q = qmul(bs[INDEX.chest].q, rel),
+    u = qrot(q, [sOf, 0, 0]),
+    n = qrot(q, [0, 0, 1]),
+    elbow = M.add(at(bs[INDEX[s + 'arm']], [0, 0, 0]), M.scale(u, UPPER));
+  return M.add(elbow, M.scale(M.add(M.scale(u, Math.cos(bend * RAD)), M.scale(n, Math.sin(bend * RAD))), POST.glove));
+}
+// (how far a point is from his trunk's line, hips to chest, and from the middle of his head)
+function clearOf(body, p) {
+  const bs = body.bodies,
+    lo = at(bs[INDEX.pelvis], [0, 0, 0]),
+    line = M.sub(at(bs[INDEX.chest], [0, 0, 0]), lo);
+  return { trunk: len(M.sub(p, M.add(lo, M.scale(line, clamp(dot(M.sub(p, lo), line) / dot(line, line), 0, 1))))), head: len(M.sub(p, at(bs[INDEX.head], [0, 0.18, 0.02]))) };
+}
+/* The way the forearm comes down from where it is held up: the elbow opening, or closing, or the upper arm turning about
+   itself one way or the other (as far as the shoulder lets it), whichever takes the glove lowest without its ever going up
+   on the way or into his trunk or head; -> { shoulder, bend } where it ends (the canvas or his body stop it short of there). */
+function downward(body, p) {
+  const s = p.s,
+    sOf = p.sOf,
+    ways = [{ shoulder: p.shoulder, bend: OUT.open }, { shoulder: p.shoulder, bend: 135 }];
+  for (const turn of [90, 60, -90, -60]) ways.push({ shoulder: qnorm(qmul(p.shoulder, qaxis([sOf, 0, 0], turn * RAD))), bend: p.bend });
+  let best = null;
+  for (const to of ways) {
+    let last = gloveAt(body, s, p.shoulder, p.bend)[1],
+      fine = true;
+    for (let i = 1; i <= 12 && fine; i++) {
+      const k = i / 12,
+        rel = qslerp(p.shoulder, to.shoulder, k),
+        g = gloveAt(body, s, rel, p.bend + (to.bend - p.bend) * k),
+        c = clearOf(body, g),
+        d = qrot(rel, [sOf, 0, 0]),
+        z = qrot(rel, [0, 0, 1]),
+        sh = shoulderOf([d[0] * sOf, d[1], d[2]], [z[0] * sOf, z[1], z[2]], LIM.shoulder + 2);
+      if (Math.max(g[1], 0.1) > last + 0.005 || c.trunk < KEEP.glove || c.head < KEEP.head || sh.zone > 0 || sh.turned > 0) fine = false;
+      last = Math.min(last, Math.max(g[1], 0.1));
+    }
+    if (fine && (!best || last < best.y - 0.01)) best = { y: last, to };
+  }
+  return best ? best.to : ways[0];
+}
+/* What holds joint k now: how much (w, 0..1), to what (the child's turn on its parent) and how stiffly. */
+function holdOf(body, j, k, t) {
+  let w,
+    stiff = j.stiff;
+  if (!body.out) w = tone(j, t);
+  else if (body.out === 'log' && LOCKED.includes(j.kind)) (w = body.freed === undefined ? 1 : 1 - smooth((t - body.freed) / OUT.let)), (stiff = body.freed === undefined ? OUT.lock : j.stiff);
+  else w = 1 - smooth(t / OUT.limp);
+  const p = body.post;
+  if (p && (k === p.k[0] || k === p.k[1])) {
+    const now = posed(p, t);
+    if (now.w >= w) return { w: now.w, to: k === p.k[0] ? now.shoulder : bent(now.bend, p.sOf), stiff: OUT.stiff };
+  }
+  return { w, to: body.hold[k], stiff };
+}
+// what is left of his muscles' hold on each joint, now
+export function muscles(body) {
+  return JOINTS.map((j, k) => ({ kind: j.kind, s: j.s || null, tone: holdOf(body, j, k, body.t).w }));
+}
+const gloveOf = (bs, s) => at(bs[INDEX[s + 'fore']], [(s === 'L' ? 1 : -1) * POST.glove, 0, 0]);
+/* A forearm put up off the canvas from where the arm lies: the upper arm left where it is and turned about its own line
+   (no further than the shoulder lets it: SHOULDER) so that the elbow bends as nearly straight up as it can, and the elbow
+   bent; -> { y (how high the glove would be), shoulder (the upper arm's turn on the chest), bend (degrees) } or null if no
+   such forearm keeps its glove clear of the canvas, his trunk and his head. */
+function raise(body, s) {
+  const bs = body.bodies,
+    chest = bs[INDEX.chest],
+    arm = bs[INDEX[s + 'arm']],
+    sOf = s === 'L' ? 1 : -1,
+    u = qrot(arm.q, [sOf, 0, 0]),
+    flat = [-u[0] * u[1], 1 - u[1] * u[1], -u[2] * u[1]]; // (up, less its part along the upper arm)
+  if (len(flat) < 0.3) return null;
+  const want = unit(flat),
+    n = qrot(arm.q, [0, 0, 1]), // (the way the elbow bends the forearm: elbow, in limit)
+    phi = Math.atan2(dot(cross(n, want), u), dot(n, want)),
+    elbow = at(bs[INDEX[s + 'fore']], [0, 0, 0]),
+    lo = at(bs[INDEX.pelvis], [0, 0, 0]),
+    line = M.sub(at(chest, [0, 0, 0]), lo),
+    headC = at(bs[INDEX.head], [0, 0.18, 0.02]),
+    toTrunk = p => len(M.sub(p, M.add(lo, M.scale(line, clamp(dot(M.sub(p, lo), line) / dot(line, line), 0, 1)))));
+  let best = null;
+  for (const share of [1, 0.8, 0.6, 0.4, 0.2]) {
+    const q = qnorm(qmul(qaxis(u, phi * share), arm.q)),
+      rel = qmul(qconj(chest.q), q),
+      d = qrot(rel, [sOf, 0, 0]),
+      z = qrot(rel, [0, 0, 1]),
+      sh = shoulderOf([d[0] * sOf, d[1], d[2]], [z[0] * sOf, z[1], z[2]], LIM.shoulder + 2);
+    if (sh.zone > 0 || sh.turned > 0) continue;
+    const n2 = qrot(q, [0, 0, 1]);
+    for (const bend of POST.bend) {
+      const b = bend * RAD,
+        f = M.add(M.scale(u, Math.cos(b)), M.scale(n2, Math.sin(b))),
+        glove = M.add(elbow, M.scale(f, POST.glove)),
+        mid = M.add(elbow, M.scale(f, 0.12));
+      if (glove[1] < 0.1 + POST.clear || toTrunk(glove) < KEEP.glove + POST.clear || toTrunk(mid) < KEEP.limb + 0.05 + POST.clear || len(M.sub(glove, headC)) < KEEP.head + POST.clear) continue;
+      if (!best || glove[1] > best.y) best = { y: glove[1], shoulder: rel, bend };
+    }
+  }
+  return best;
+}
+// a log's locked joints let go, now: and the arm he keeps up is the one whose glove is the higher, as it was
+function free(body) {
+  body.freed = body.t;
+  const s = gloveOf(body.bodies, 'L')[1] >= gloveOf(body.bodies, 'R')[1] ? 'L' : 'R',
+    sOf = s === 'L' ? 1 : -1;
+  body.post = { s, sOf, k: ARM[s], shoulder: body.hold[ARM[s][0]], bend: bendOf(body.hold[ARM[s][1]], sOf), rise: 0, from: body.t };
+}
+/* He has come to lie: the forearm is put up (a limp man's) or kept up (a log's) for so long from now, and the rest of him
+   lies still. */
+function lie(body) {
+  body.lay = body.t;
+  if (body.out === 'limp') {
+    const pick = ['L', 'R'].map(s => [s, raise(body, s)]).filter(([, r]) => r).sort((a, b) => b[1].y - a[1].y)[0];
+    if (pick) body.post = { s: pick[0], sOf: pick[0] === 'L' ? 1 : -1, k: ARM[pick[0]], shoulder: pick[1].shoulder, bend: pick[1].bend, rise: OUT.rise, from: body.t };
+  }
+  if (body.post) (body.post.until = body.t + body.post.rise + OUT.raised), (body.post.to = downward(body, body.post));
+  for (const b of body.bodies) if (!body.post || (b.name !== body.post.s + 'arm' && b.name !== body.post.s + 'fore')) freeze(b, true);
+}
+// (a piece held where it is, as if nothing could move it: what a body put to sleep is, a piece at a time; and let go of)
+function freeze(b, on) {
+  if (on && !b.frozen) (b.frozen = { im: b.im, ii: b.ii }), (b.im = 0), (b.ii = [0, 0, 0]), (b.v = [0, 0, 0]), (b.w = [0, 0, 0]);
+  else if (!on && b.frozen) (b.im = b.frozen.im), (b.ii = b.frozen.ii), (b.frozen = null);
+}
+
 export function stepFall(body, dt, obstacles) {
   if (dt <= 0) return body;
   // (asleep, he lies exactly as he came to rest, until the other man's legs come into him)
-  if (body.asleep && !(obstacles && obstacles.some(([c, r]) => body.bodies.some(b => b.balls.some(([local, rb]) => len(M.sub(at(b, local), c)) < r + rb))))) {
+  const into = obstacles && obstacles.some(([c, r]) => body.bodies.some(b => b.balls.some(([local, rb]) => len(M.sub(at(b, local), c)) < r + rb)));
+  if (body.asleep && !into) {
     body.still += dt;
     return body;
   }
   body.asleep = false;
+  // (and so does a man out cold, lying still but for his forearm)
+  if (into) for (const b of body.bodies) freeze(b, false);
   const h = dt / STEPS,
     bs = body.bodies,
     pelvis = bs[INDEX.pelvis],
@@ -437,9 +621,10 @@ export function stepFall(body, dt, obstacles) {
       touching = [], // contacts this step: [piece, its local point, normal, how fast that point was going along it]
       pressed = []; // a limb kept out of his own trunk or head this step: [limb, its local point, the other piece, normal]
     for (const b of bs) {
-      b.v[1] -= G * h;
       b.xp = b.x.slice();
       b.qp = b.q.slice();
+      if (b.frozen) continue;
+      b.v[1] -= G * h;
       b.x = M.add(b.x, M.scale(b.v, h));
       turnBy(b, M.scale(b.w, h));
     }
@@ -453,11 +638,11 @@ export function stepFall(body, dt, obstacles) {
           rc = off(c, [0, 0, 0]),
           gap = M.sub(M.add(c.x, rc), M.add(p.x, rp));
         positional(c, rc, p, rp, gap, 0, h);
-        const w = tone(j, body.t);
-        if (w > 0.001) {
+        const m = holdOf(body, j, k, body.t);
+        if (m.w > 0.001) {
           const rel = qmul(qconj(p.q), c.q),
-            rot = qrot(p.q, qvec(qmul(body.hold[k], qconj(rel))));
-          angular(c, p, rot, 1 / (j.stiff * w * w), h);
+            rot = qrot(p.q, qvec(qmul(m.to, qconj(rel))));
+          angular(c, p, rot, 1 / (m.stiff * m.w * m.w), h);
         }
         const fix = limit(Object.assign({ sOf: j.s === 'R' ? -1 : 1 }, j), p, c);
         if (fix) angular(c, p, most(fix), 0, h);
@@ -466,7 +651,7 @@ export function stepFall(body, dt, obstacles) {
         const fix = limit({ kind: 'trunk' }, pelvis, chest);
         if (fix) angular(chest, pelvis, most(fix), 0, h);
       }
-      for (const s of LIMB) kneeWay(bs, s);
+      for (const s of LIMB) if (!bs[INDEX[s + 'thigh']].frozen) kneeWay(bs, s);
       // ---- the canvas, which holds him up and grips him
       for (const b of bs)
         for (const [local, r] of b.balls) {
@@ -475,7 +660,9 @@ export function stepFall(body, dt, obstacles) {
           const ro = M.sub(pnt, b.x),
             vn = b.v[1] + cross(b.w, ro)[1],
             depth = positional(b, ro, null, null, [0, pnt[1] - r, 0], 0, h);
-          if (!pass) touching.push([b, local, [0, 1, 0], vn]);
+          if (!pass) touching.push([b, local, [0, 1, 0], vn, true]);
+          // (something of him but his feet down on the canvas: what lets a log's locks go)
+          if (!b.name.endsWith('foot')) body.landed = true;
           // (where that point was at the start of the step: what it has slid since is taken back, as far as the grip goes)
           const now = at(b, local),
             then = M.add(b.xp, qrot(b.qp, M.sub(local, b.com))),
@@ -554,16 +741,23 @@ export function stepFall(body, dt, obstacles) {
     }
     /* (a body that lands does not bounce off the canvas: what putting it back on top would add, it loses, and what it
        slides with, the grip takes, up to what the landing pressed into it) */
-    for (const [b, local, n, before] of touching) {
+    for (const [b, local, n, before, canvas] of touching) {
+      if (b.frozen) continue;
       const r = off(b, local),
         vp = M.add(b.v, cross(b.w, r)),
         vn = dot(vp, n),
-        want = Math.max(0, -0 * before),
+        /* (but the back of a log's head comes up off it, once, a little: so much of the speed it met it at, for as long as it
+           is pressed to it in the moment after, while the rest of him comes down behind it) */
+        skull = canvas && body.out === 'log' && b.name === 'head' && local === b.balls[0][0],
+        first = skull && body.bounced === undefined && before < -1;
+      if (first) (body.bounced = body.t), (body.rebound = Math.min(BOUNCE.most, -BOUNCE.e * before));
+      const bounce = skull && body.bounced !== undefined && body.t < body.bounced + BOUNCE.for,
+        want = bounce ? body.rebound : 0,
         dvn = want - vn;
       const vt = M.sub(vp, M.scale(n, vn)),
         st = len(vt),
         grip = Math.min(st, MU * Math.max(0, -before) * 0.5 + MU * Math.max(0, -dvn));
-      let dv = dvn < 0 ? M.scale(n, dvn) : [0, 0, 0];
+      let dv = dvn < 0 || bounce ? M.scale(n, dvn) : [0, 0, 0];
       if (st > 1e-9) dv = M.sub(dv, M.scale(vt, grip / st));
       const dl = len(dv);
       if (dl < 1e-9) continue;
@@ -614,16 +808,27 @@ export function stepFall(body, dt, obstacles) {
       const k = Math.sqrt(Math.max(0, before.total - after.pot) / Math.max(after.kin, 1e-9));
       for (const b of bs) (b.v = M.scale(b.v, k)), (b.w = M.scale(b.w, k));
     }
+    // (a log, down on the canvas once he has been held long enough, or held as long as he can be, lets go)
+    if (body.out === 'log' && body.freed === undefined && ((body.landed && body.t >= OUT.hold - 1e-9) || body.t >= OUT.most)) free(body);
   }
   // how long he has lain still (his middle hardly moving)
   const v = len(bs[INDEX.belly].v) + 0.3 * len(bs[INDEX.belly].w);
   body.still = v < 0.05 ? body.still + dt : 0;
+  // (out cold: he has come to lie once no part of him is going anywhere, for a moment, or once he has been down so long)
+  if (body.out && body.lay === undefined && (body.out === 'limp' || body.freed !== undefined)) {
+    // (an arm, that trembles where it is pressed between him and the canvas, a little faster)
+    const slow = bs.every(b => len(b.v) < (b.name.endsWith('arm') || b.name.endsWith('fore') ? OUT.lay.arm : OUT.lay.speed));
+    body.calmFor = slow ? (body.calmFor || 0) + dt : 0;
+    if (body.calmFor >= OUT.lay.for - 1e-9 || body.t >= OUT.lay.most) lie(body);
+  }
   /* and once no part of him has got anywhere for a while, he is let stop: a body heaped up on itself, held together by
      corrections that each put a little of it right, otherwise trembles on the spot and creeps by fractions of a millimetre
-     a frame for as long as he lies there (rigid-body engines put such a body to sleep for the same reason) */
+     a frame for as long as he lies there (rigid-body engines put such a body to sleep for the same reason); not while a
+     forearm he has kept up is still to come down */
   if (!body.calm || bs.some((b, i) => len(M.sub(b.x, body.calm.at[i])) > SLEEP.moved)) body.calm = { at: bs.map(b => b.x.slice()), t: 0 };
   else body.calm.t += dt;
-  if (body.calm.t > SLEEP.after) {
+  const posing = body.out && (body.lay === undefined || (body.post && body.t < body.post.until + OUT.down + OUT.fade));
+  if (body.calm.t > SLEEP.after && !posing) {
     body.asleep = true;
     for (const b of bs) (b.v = [0, 0, 0]), (b.w = [0, 0, 0]);
   }
