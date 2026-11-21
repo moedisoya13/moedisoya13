@@ -36,7 +36,7 @@ import { LEVEL } from './skill.mjs';
 import { H, headAt, headTo, phraseX, PHRASE, FLOURISH, CLEAN, DIRTY, dice } from './stance.mjs';
 import { sampleEvade, EVASIONS, timeline, evadeTime } from './evade.mjs';
 import { travel as legendTravel, dash as legendDash, dashShape } from './legend.mjs';
-import { stance as showStance, crossGuard, hammer, paw, PAW } from './show.mjs';
+import { stance as showStance, crossGuard, hammer, paw, PAW, collar, COLLAR } from './show.mjs';
 
 const TAU = Math.PI * 2;
 /* The feet keep time. One beat is one foot coming down; a cycle is both. Standing, the boxer rocks between his feet on that
@@ -333,6 +333,8 @@ function away(action, clock, c, show) {
   }
 }
 
+// (a show-off's tricks that send his lead hand for the other man: show.mjs)
+const REACHING = ['pawDown', 'pawUp', 'collar'];
 // a move written for the lead hand, made the rear hand's: the hands' channels swapped, and everything across him mirrored
 function swapHands(c) {
   for (const [a, b] of [['lx', 'rx'], ['ly', 'ry'], ['lz', 'rz'], ['le', 're'], ['lc', 'rc'], ['lg', 'rg']]) {
@@ -439,6 +441,8 @@ export function createAnimator(seed) {
   const fouled = { flinch: 9, blind: 9, long: 0.4 };
   // a glove of his a show-off has pushed out of the way (show.mjs: paw): { hand, dy, hold, free, t } | null
   let pawedBy = null;
+  // his neck in a show-off's hand, his head pulled forward and down (show.mjs: collar): { dir, d, time, t } | null
+  let pulledBy = null;
   const remember = pose => ((poses = [poses[1], pose]), pose);
   // a pose part of the way from another to it, each bone turned part of the way (what the solver said of it kept)
   const between = (from, to, w) => {
@@ -602,6 +606,10 @@ export function createAnimator(seed) {
        head goes back (if it was done in the open) and his rear glove goes to his eye a while. */
     /* His guard pushed down or up by the other man's lead hand (game/bout.mjs: paws): the glove goes with it, is held there
        and comes back. */
+    /* His neck caught by the other man's lead hand (game/bout.mjs: collars): his head and trunk pulled down toward him. */
+    pulled(p) {
+      pulledBy = Object.assign({ t: 0 }, p);
+    },
     pawed(p) {
       pawedBy = pawedBy && pawedBy.t === 0 && pawedBy.hand !== p.hand ? [].concat(pawedBy.list || [pawedBy], [Object.assign({ t: 0 }, p)]) : Object.assign({ t: 0 }, p);
       if (Array.isArray(pawedBy)) pawedBy = { t: 0, list: pawedBy };
@@ -1180,7 +1188,7 @@ export function createAnimator(seed) {
            way, and as he throws anything with it but the flicker, which goes out of the waist and back to it: show.mjs) */
         if (st.show) {
           // (snapped up into a punch thrown with it, so that it is up and still before the glove gets there; let down slowly)
-          const lowHand = !action || hopping || (punchMove && ((punchMove.hand === 'R' && action.variant !== 'pawDown' && action.variant !== 'pawUp') || punchMove.low)),
+          const lowHand = !action || hopping || (punchMove && ((punchMove.hand === 'R' && !REACHING.includes(action.variant)) || punchMove.low)),
             want = lowHand && !evading && !view.threat ? 1 - cover : 0;
           showDown += (want - showDown) * (1 - Math.exp(-dt * (want > showDown ? 8 : punchMove && !lowHand ? 45 : 16)));
           showStance(c, st.show, { clock, down: showDown, unwind, cover, seed: seed || 0 });
@@ -1387,6 +1395,18 @@ export function createAnimator(seed) {
           if (t > 0.06 + p.hold + p.free) pawedBy.done = true;
         }
         if (pawedBy.done) pawedBy = null;
+      }
+      // ---- the neck pulled: the head and the trunk dragged forward and down toward him over `time`, and let up
+      if (pulledBy) {
+        pulledBy.t += dt;
+        const p = pulledBy,
+          k = p.t < p.time ? Math.sin((Math.PI / 2) * (p.t / p.time)) ** 2 : 1 - smooth((p.t - p.time) / 0.25),
+          down = (p.d / 0.1) * k;
+        c.lean += 11 * down * Math.max(0, p.dir[1]);
+        c.hp += 9 * down;
+        c.hz += 0.03 * down * p.dir[1];
+        c.hx += 0.03 * down * p.dir[0];
+        if (p.t > p.time + 0.25) pulledBy = null;
       }
       // ---- fouls done to him: a flinch, an eye covered
       fouled.flinch += dt;
@@ -1683,6 +1703,15 @@ export function createAnimator(seed) {
       if (pawing) pawing.w *= 1 - smooth(clamp(action.chain.q[1] * 2, 0, 1));
       // (its elbow up and out, over the top of his guard or under it)
       if (pawing) c.le += PAW.elbow[action.variant] * pawing.w;
+      /* (or round his head to the back of his neck, the elbow up, and off it a moment after the uppercut lands: show.mjs) */
+      let collaring = null;
+      if (punchMove && action.variant === 'collar' && view.foe && view.foe.nape) {
+        collaring = collar(action.t, view.foe);
+        const lands = action.chain.thrownAt >= 0 ? action.chain.t - action.chain.thrownAt : -1;
+        if (lands >= 0) collaring.w *= 1 - smooth((lands - COLLAR.let[Math.max(0, (form.dirty || 1) - 1)]) / 0.1);
+        c.le += 0.9 * collaring.w;
+      }
+      const reach = pawing || collaring;
       for (const side of ['L', 'R']) {
         const k = side === 'L' ? 'l' : 'r',
           s = side === 'L' ? 1 : -1,
@@ -1691,7 +1720,7 @@ export function createAnimator(seed) {
           // held to the face, or locked to the chest and swung with it, or part way between
           // (or put on the canvas: where its channels say, in the room)
           kept = M.lerp(M.lerp(M.add(open, carried), M.add(chest.p, M.app(swung, M.sub(open, CHEST.p))), clamp(c[k + 'c'], 0, 1)), open, clamp(c[k + 'g'], 0, 1)),
-          free = pawing && side === 'L' && pawing.w > 0 ? M.lerp(kept, [pawing.to[0] * wide, pawing.to[1] / tall, pawing.to[2] * wide], pawing.w) : kept,
+          free = reach && side === 'L' && reach.w > 0 ? M.lerp(kept, [reach.to[0] * wide, reach.to[1] / tall, reach.to[2] * wide], reach.w) : kept,
           mine = punchMove && punchMove.hand === side ? punchMove : null;
         if (mine) {
           /* The punching arm is not sent anywhere: it is thrown. The shoulder and elbow are the last two joints of the

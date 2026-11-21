@@ -11,7 +11,8 @@
      choose(table, when, forced, u)   which trick a press turns into (§5.2), or null: the plain punch
      THROWS                    the punch each trick throws in place of the one pressed (where it changes it)
      PAW, paw(trick, t, glove, tier)   the guard pushed down or up (§5.3): where the lead hand goes for his glove, and how
-                               much of the way */
+                               much of the way
+     COLLAR, collar(t, foe)    the collar and uppercut (§5.3): the lead hand round his head to the back of his neck */
 
 const TAU = Math.PI * 2;
 const clamp = (x, a, b) => (x < a ? a : x > b ? b : x);
@@ -114,4 +115,21 @@ export function paw(trick, t, glove) {
   const w = t < PAW.reach ? smooth(t / PAW.reach) : t < PAW.reach + PAW.hold ? 1 : 1 - smooth((t - PAW.reach - PAW.hold) / PAW.back),
     up = trick === 'pawDown' ? 1 : -1;
   return { to: [glove[0], glove[1] + up * PAW.over, glove[2] - 0.02], w };
+}
+
+/* The collar and uppercut: the lead hand goes round the outside of his head (by `side` metres out from it, his right, the
+   side it is on) and onto the back of his neck (`nape`: the point the bout judges it by, behind and under the middle of his
+   head), getting there in `reach` seconds, which is about when the uppercut's legs drive; it pulls his head forward and down
+   (game/bout.mjs: collared; his body's, animator.pulled: `pull` metres over `time`), and lets go `let` seconds after the
+   uppercut lands, [4암, 5암]. A hand that does not get there is an uppercut and nothing else. */
+export const COLLAR = { reach: 0.1, side: 0.2, nape: [0.1, 0.06], pull: 0.1, time: 0.3, let: [0.1, 0.05] };
+// -> { to: where the lead glove is to be (his own space), w } (foe: { head, right, back }: his head, and his right and back, unit)
+export function collar(t, foe) {
+  const w = smooth(t / COLLAR.reach),
+    nape = foe.nape,
+    beside = [foe.head[0] + foe.right[0] * COLLAR.side, foe.head[1] - 0.04, foe.head[2] + foe.right[2] * COLLAR.side],
+    // (round the outside: to beside his head first, and then in behind it)
+    k = smooth((t / COLLAR.reach - 0.45) / 0.55),
+    to = [beside[0] + (nape[0] - beside[0]) * k, beside[1] + (nape[1] - beside[1]) * k, beside[2] + (nape[2] - beside[2]) * k];
+  return { to, w };
 }

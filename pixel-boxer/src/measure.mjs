@@ -81,7 +81,7 @@ export function run(entry, seconds) {
       gloves: { L: a.points.L.slice(), R: a.points.R.slice(), head: a.points.head.slice() },
       foot: { L: a.pose.at.LeftToeBase.slice(), R: a.pose.at.RightToeBase.slice() },
       // and the other man: his lead foot on the canvas, whether it is stood on, what he is doing
-      foe: { foot: toWorld(b.place, b.pose.at.LeftToeBase, b.pose.stretch), pinned: b.pinned > 0, action: b.action ? b.action.id : null }
+      foe: { foot: toWorld(b.place, b.pose.at.LeftToeBase, b.pose.stretch), pinned: b.pinned > 0, action: b.action ? b.action.id : null, head: b.points.head.slice(), gloves: { L: b.points.L.slice(), R: b.points.R.slice() } }
     });
   }
   return { frames, bout, chain };

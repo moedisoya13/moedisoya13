@@ -50,7 +50,7 @@ import { LEN } from '../rig/solve.mjs';
 import { body, blank, fatigue, COST } from './profile.mjs';
 import { levelOf } from '../anim/skill.mjs';
 import { timeline, evadeTime, progress, LOADED } from '../anim/evade.mjs';
-import { choose, THROWS, PAW } from '../anim/show.mjs';
+import { choose, THROWS, PAW, COLLAR } from '../anim/show.mjs';
 import { dice } from '../anim/stance.mjs';
 
 export const RULES = {
@@ -520,7 +520,7 @@ function viewOf(bout, i) {
       reach: null,
       // the other man, in his own terms: his lead foot's instep (what a dirty man stands on), and whether this man's own lead
       // foot is stood on
-      foe: f.place && other.pose && other.points ? { foot: mine(f, at(other, 'LeftFoot', [0, -0.02, 0.07])), glove: { L: mine(f, other.points.L), R: mine(f, other.points.R) } } : null,
+      foe: f.place && other.pose && other.points ? { foot: mine(f, at(other, 'LeftFoot', [0, -0.02, 0.07])), glove: { L: mine(f, other.points.L), R: mine(f, other.points.R) }, head: mine(f, other.points.head), nape: mine(f, napeOf(other)), right: dirIn(f, [-Math.cos(other.yaw), Math.sin(other.yaw)]) } : null,
       pinned: f.pinned > 0,
       // knocked down: what of the other man he cannot fall through, in his own terms
       near: f.down && f.place && other.pose ? NEAR.map(([joint, r]) => [mine(f, at(other, joint)), r]) : null
@@ -566,6 +566,17 @@ function viewOf(bout, i) {
   }
   return view;
 }
+/* the back of a man's neck, as a show-off's collar hand goes for it (anim/show.mjs: COLLAR): behind the middle of his head
+   and under it; and a way on the canvas ([x, z]) in boxer f's own terms */
+const napeOf = f => {
+  const [ax, az] = aheadOf(f),
+    h = f.points.head;
+  return [h[0] - ax * COLLAR.nape[0], h[1] - COLLAR.nape[1], h[2] - az * COLLAR.nape[0]];
+};
+const dirIn = (f, d) => {
+  const v = M.app(M.tr(f.place.R), [d[0], 0, d[1]]);
+  return [v[0], 0, v[2]];
+};
 const NEAR = [['Hips', 0.14], ['Spine2', 0.14], ['Chest', 0.15], ['LeftShin', 0.07], ['RightShin', 0.07], ['LeftLeg', 0.1], ['RightLeg', 0.1], ['LeftFoot', 0.06], ['RightFoot', 0.06]];
 // a point on the canvas in boxer f's own space (as he was last drawn), and a point of his on the canvas (a joint, and so far on
 // from it in that joint's terms)
@@ -962,6 +973,21 @@ function paws(bout, f, other, who) {
   bout.events.push({ type: 'paw', name: v, who, on: 1 - who, t: +action.t.toFixed(3) });
 }
 
+/* A show-off's lead hand behind the other man's neck (anim/show.mjs: collar): when it gets there, it pulls his head forward
+   and down into the uppercut (his body's: animator.pulled) until it lets go. Only if it gets there. */
+function collars(bout, f, other, who) {
+  const action = f.action;
+  if (!action || action.variant !== 'collar' || action.collared || other.down || !other.points || action.t > COLLAR.reach * 2.5) return;
+  if (Math.hypot(...M.sub(f.points.L, napeOf(other))) > RULES.glove + 0.04) return;
+  action.collared = { at: bout.t };
+  const to = [f.x - other.x, f.z - other.z],
+    // (toward the man pulling him, in his own terms)
+    [x, z] = local(other, to[0], to[1]),
+    l = Math.hypot(x, z) || 1;
+  other.animator.pulled && other.animator.pulled({ dir: [x / l, z / l], d: COLLAR.pull, time: COLLAR.time });
+  bout.events.push({ type: 'collar', who, on: 1 - who, t: +action.t.toFixed(3) });
+}
+
 /* Up off the canvas, where he lies (his place turned and moved under him: anim/animator.mjs getUp), the way that fits how
    he lies; or, off a knee, the way up off a knee. */
 export function getUp(bout, f) {
@@ -1038,6 +1064,8 @@ export function step(bout, inputs, dt) {
   fouls(bout, b, a, 1, dt);
   paws(bout, a, b, 0);
   paws(bout, b, a, 1);
+  collars(bout, a, b, 0);
+  collars(bout, b, a, 1);
   strike(bout, a, b, 0, dt);
   if (bout.stop <= 0) strike(bout, b, a, 1, dt);
   return bout;

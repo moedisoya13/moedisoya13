@@ -181,6 +181,30 @@ test('paw down / paw up: the lead hand moves his glove first, and the punch that
     }
 });
 
+/* The collar: the lead hand round his head to the back of his neck (a 'collar' event: only when it gets there), his head
+   coming down toward the uppercut as it goes up, and the uppercut harder for it than the same one pressed plain. */
+test('collar: the lead hand catches the back of his neck, pulls his head down into the uppercut, and it lands harder', () => {
+  for (const lv of LEVELS) {
+    const t = trick('collar', lv),
+      hit = t.hits[0],
+      c = t.events.find(ev => ev.type === 'collar' && ev.who === 0);
+    assert.ok(hit && hit.name === 'upper', `collar@${lv}`);
+    if (!SHOW.includes(lv)) {
+      assert.ok(!c, lv);
+      continue;
+    }
+    assert.ok(c && c.i < hit.i, `collar@${lv}: ${JSON.stringify(t.events.map(e => e.type))}`);
+    // (caught at about the moment the uppercut's legs drive: within the first tenth and a half of a second)
+    assert.ok(msOf(t, t.punches[0], c) <= 150, `collar@${lv}: caught ${msOf(t, t.punches[0], c)} ms after the press`);
+    // his head on its way down as the uppercut meets it (the frame before it lands, against the frame it was caught)
+    const down = t.frames[c.i].foe.head[1] - t.frames[hit.i - 1].foe.head[1];
+    assert.ok(down >= 0.01, `collar@${lv}: his head came down ${(down * 100).toFixed(1)} cm`);
+    const plain = Object.assign({}, t.e, { press: t.e.press.map(([at, b]) => [at, b, 'plain']) }),
+      p = run(plain).frames.flatMap(f => f.events).find(ev => ev.who === 0 && ev.type === 'hit');
+    assert.ok(hit.J > p.J, `collar@${lv}: ${hit.J} N·s against ${p.J} plain`);
+  }
+});
+
 test('flicker: the same bout goes the same way', () => {
   const once = () => run(SHOWOFF.find(x => x.id === 'flicker@5a')).frames.map(f => f.gloves.L.map(v => +v.toFixed(6)));
   assert.deepEqual(once(), once());
