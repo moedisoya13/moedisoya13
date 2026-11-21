@@ -14,6 +14,7 @@ import { freshBout, drive, HOME } from '../src/footwork.mjs';
 import { RANGE, THROW, PARRY_DOWN, PARRY_DOWN_WINDOW } from '../src/defense.mjs';
 import { LEVELS, LEVEL } from '../src/anim/skill.mjs';
 import * as M from '../src/rig/m3.mjs';
+import { WINDOWS } from '../src/windows.data.mjs';
 
 const DT = 1 / 60;
 const card = id => WAVING.find(e => e.id === id);
@@ -270,7 +271,8 @@ function pressDown(lv, punch, k, o = {}) {
       me: () => HOME,
       him: () => [HOME[0] + RANGE[punch], HOME[1]],
       against: THROW[punch].map(([dt, b]) => [at + dt, b]),
-      setup: b => ((b.fighters[0].skills = { all: lv }), (b.fighters[0].techniques = o.carry || ['parryDown'])),
+      // (o.carry false: what his grades give him, game/profile.mjs loadout, as the catalogue's other cards carry)
+      setup: b => ((b.fighters[0].skills = { all: lv }), o.carry !== false && (b.fighters[0].techniques = o.carry || ['parryDown'])),
       cover: t => t >= at + k * DT - 1e-9 && t < at + 0.4,
       cue: (b, t) => {
         const f = b.fighters[0],
@@ -387,8 +389,11 @@ test('down parry: the counter goes from the hand that pressed it, from where it 
   assert.ok(cross5 && cross5.dt > jab5.dt && cross5.dt <= 0.3, `5명 cross: ${JSON.stringify(cross5)}`);
 });
 
-test('down parry: the parry he puts up without it is as it was (4명·5명 and 1–3 turn it aside, 4암·5암 hammer it)', () => {
-  for (const lv of LEVELS) assert.equal(fate(pressDown(lv, 'jab', -1, { tech: null })), LEVEL[lv].cover.hammer ? 'parryH' : 'parry', lv);
+test('down parry: the parry he puts up without it is as it was (4명·5명 and 1–3 turn it aside, 4암·5암 with their cross-arm guard hammer it)', () => {
+  // (each on the frame his parry card puts it up: the middle of his window, src/windows.data.mjs)
+  for (const lv of LEVELS) assert.equal(fate(pressDown(lv, 'jab', WINDOWS.parry[lv].at, { tech: null, carry: false })), lv === '4a' || lv === '5a' ? 'parryH' : 'parry', lv);
+  // (and carrying it, not asked for it: the same)
+  for (const lv of ['4m', '5m']) assert.equal(fate(pressDown(lv, 'jab', -1, { tech: null })), 'parry', lv);
 });
 
 test('down parry: the cards press the jab down and the counter lands, the same every time, and nothing in them breaks anything a body can do', () => {

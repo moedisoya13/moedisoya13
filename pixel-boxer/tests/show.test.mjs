@@ -1,18 +1,23 @@
 /* The showy dirty fighter (docs/moves-plan-4.md §5, anim/show.mjs): at 4암 and 5암 only, and nothing of it at any other grade.
    Each technique is held to showing at the right grades, to being the same for the same seed, and to doing what the plan
-   says it does, measured on the bout. */
+   says it does, measured on the bout. The cross-arm guard and the shoulder roll (docs/moves-plan-5.md §4A) are techniques a
+   man carries (game/techniques.mjs: crossArm from 3 up, by default the dirty great ones'; rollCounter from 4 up), held to
+   the plan's §4A.10. */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { step } from '../src/game/bout.mjs';
+import { step, crossOf } from '../src/game/bout.mjs';
 import { freshBout, drive, HOME } from '../src/footwork.mjs';
 import { RANGE, THROW } from '../src/defense.mjs';
-import { LEVELS, LEVEL } from '../src/anim/skill.mjs';
+import { LEVELS, LEVEL, CROSS } from '../src/anim/skill.mjs';
+import { audit, measure } from '../src/audit.mjs';
+import { fk } from '../src/rig/skeleton.mjs';
 import { run } from '../src/measure.mjs';
 import { STANCES, SHOWOFF, TAUNTING } from '../src/ladder.mjs';
 import { WINDOWS } from '../src/windows.data.mjs';
 import * as M from '../src/rig/m3.mjs';
 import { createBout, settle } from '../src/game/bout.mjs';
 import { choose } from '../src/anim/show.mjs';
+import { MOVES } from '../src/anim/moves.mjs';
 import { dice } from '../src/anim/stance.mjs';
 
 const DT = 1 / 60;
@@ -32,24 +37,41 @@ function fight(e, each) {
   }
   return out;
 }
-// the other man throws `punch` (as the defence cards throw it) into his guard, held from `from` (or put up k frames after the press)
+/* the other man throws `punch` (as the defence cards throw it) into his guard, held from early on (or put up k frames after
+   the press; or, roll: put up k frames after it meant as a shoulder roll, game/techniques.mjs rollCounter). tech: what he
+   carries (left out: what his grade gives him) */
 const into = (lv, punch, o = {}) => {
-  const at = { jab: 0.8, cross: 0.8, hook: 1.1, upper: 1.3 }[punch];
+  const at = { jab: 0.8, cross: 0.8, hook: 1.1, upper: 1.3 }[punch],
+    from = o.roll !== undefined ? o.roll : o.k;
   return {
-    id: `into-${punch}@${lv}`,
+    id: `into-${punch}@${lv}${o.roll !== undefined ? ' roll ' + o.roll : o.k !== undefined ? ' k ' + o.k : ''}${o.tech ? ' ' + o.tech.join('+') : ''}`,
     loop: at + 0.8,
     me: () => HOME,
     him: () => [HOME[0] + (o.range || RANGE[punch]), HOME[1]],
     against: THROW[punch].map(([dt, b]) => [at + dt, b]),
-    cover: o.k !== undefined ? t => t >= at + o.k * DT - 1e-9 && t < at + 0.4 : t => t > 0.2,
-    setup: b => (b.fighters[0].skills = { all: lv })
+    press: o.roll !== undefined ? [[at + o.roll * DT, 'tech', 'rollCounter']] : [],
+    // (a roll's guard is kept up as long as the arm it rolled is held out there: half a second)
+    cover: from !== undefined ? t => t >= at + from * DT - 1e-9 && t < at + (o.roll !== undefined ? 0.5 : 0.4) : t => t > 0.2,
+    setup: b => {
+      b.fighters[0].skills = { all: lv };
+      if (o.tech) b.fighters[0].techniques = o.tech;
+    }
   };
 };
 const last = (events, name) => events.filter(e => e.who === 1 && e.name === name && ['hit', 'block', 'parry', 'whiff', 'graze'].includes(e.type)).concat(events.filter(e => e.type === 'parry' && e.on === 1 && e.name === name)).pop();
 
-test('show: the show-off\'s stance, guard and parry are the dirty great ones\' alone', () => {
-  for (const lv of SHOW) assert.ok(LEVEL[lv].stance.show && LEVEL[lv].cover.cross && LEVEL[lv].cover.hammer, lv);
-  for (const lv of others) assert.ok(!LEVEL[lv].stance.show && !LEVEL[lv].cover.cross && !LEVEL[lv].cover.hammer, lv);
+test('show: the show-off\'s stance and the hammer are the dirty great ones\' alone; the cross-arm guard is carried', () => {
+  for (const lv of SHOW) assert.ok(LEVEL[lv].stance.show && CROSS[lv].hammer, lv);
+  for (const lv of others) assert.ok(!LEVEL[lv].stance.show && !(CROSS[lv] && CROSS[lv].hammer), lv);
+  // (what his grade gives him: the dirty great ones carry the cross-arm guard, nobody else)
+  const holds = (lv, tech) => {
+    const b = createBout(1, { skills: [{ all: lv }, {}], techniques: [tech] });
+    return crossOf(b.fighters[0]);
+  };
+  for (const lv of LEVELS) assert.equal(holds(lv), SHOW.includes(lv) ? CROSS[lv] : null, lv);
+  // (given it, a pro and the clean great ones hold their grade's; a beginner and an amateur cannot; taken off a dirty one, none)
+  for (const lv of LEVELS) assert.equal(holds(lv, ['crossArm']), lv === '1' || lv === '2' ? null : CROSS[lv], lv);
+  for (const lv of SHOW) assert.equal(holds(lv, []), null, lv);
 });
 
 test('show: the stance lets the lead hand down to the waist (it swings), the rear hand stays at the chin', () => {
@@ -74,18 +96,163 @@ test('show: the stance is the same for the same seed', () => {
   assert.deepEqual(once(), once());
 });
 
-test('cross-arm guard: the forearms stop a jab and a cross; an uppercut comes up under them and lands', () => {
-  for (const lv of SHOW) {
-    for (const p of ['jab', 'cross']) {
-      const e = last(fight(into(lv, p)), p);
-      assert.equal(e && e.type, 'block', `${p}@${lv}: ${JSON.stringify(e)}`);
-      assert.equal(e.part, 'forearm', `${p}@${lv}: met by the ${e.part}`);
-    }
-    const up = last(fight(into(lv, 'upper')), 'upper');
-    assert.equal(up && up.type, 'hit', `upper@${lv}: ${JSON.stringify(up)}`);
+/* ---- the cross-arm guard (docs/moves-plan-5.md §4A.2): the classic one. Measured on a guard held up a second, in his own
+   body's terms (the pose's), against the same man standing as he does without it. */
+const GUARDS = ['3', '4m', '4a', '5m', '5a'];
+const shapes = {};
+function shape(lv, cover, tech) {
+  const key = `${lv} ${cover} ${tech}`;
+  if (shapes[key]) return shapes[key];
+  const bout = freshBout({ me: () => HOME, him: () => [HOME[0] + 1.0, HOME[1]], setup: b => ((b.fighters[0].skills = { all: lv }), tech && (b.fighters[0].techniques = tech)) }),
+    a = bout.fighters[0],
+    seen = [];
+  for (let i = 0; i < 90; i++) {
+    step(bout, [{ cover: cover && i > 10 }, {}], DT);
+    if (i < 60) continue;
+    const { R, p } = fk(a.pose),
+      head = M.add(p.Head, M.app(R.Head, [0, 0.1, 0.02])),
+      glove = S => M.add(p[S + 'Hand'], M.scale(M.sub(p[S + 'Hand'], p[S + 'ForeArm']), 0.075 / Math.hypot(...M.sub(p[S + 'Hand'], p[S + 'ForeArm'])))),
+      L = glove('Left'),
+      fore = M.sub(L, p.LeftForeArm),
+      angles = measure(a).angles;
+    seen.push({
+      rear: M.sub(glove('Right'), head),
+      level: (Math.atan2(fore[1], Math.hypot(fore[0], fore[2])) * 180) / Math.PI,
+      lead: [L[1], p.LeftForeArm[1]],
+      waist: p.Spine1[1],
+      chest: p.Chest[1],
+      shoulder: p.LeftArm[1] - head[1],
+      line: (Math.atan2(p.LeftArm[2] - p.RightArm[2], p.LeftArm[0] - p.RightArm[0]) * 180) / Math.PI,
+      zone: ['Left', 'Right'].map(S => angles[S + 'ShoulderZone'] + angles[S + 'ShoulderTurned'])
+    });
   }
-  // (a clean great one's two gloves in front of his face take the same uppercut)
-  for (const lv of ['3', '4m']) assert.equal(last(fight(into(lv, 'upper')), 'upper').type, 'block', lv);
+  const mean = k => (Array.isArray(seen[0][k]) ? seen[0][k].map((_, i) => seen.reduce((t, f) => t + f[k][i], 0) / seen.length) : seen.reduce((t, f) => t + f[k], 0) / seen.length);
+  return (shapes[key] = Object.fromEntries(Object.keys(seen[0]).map(k => [k, mean(k)])));
+}
+test('cross-arm guard: the rear glove at the chin, the lead forearm level across the belly, side on behind a raised lead shoulder', () => {
+  for (const lv of GUARDS) {
+    const tech = SHOW.includes(lv) ? null : ['crossArm'],
+      up = shape(lv, true, tech),
+      bare = shape(lv, false, tech),
+      cm = x => (x * 100).toFixed(1);
+    // the rear glove within 23 cm of the middle of his head, at his chin (5 to 13 cm under the middle)
+    assert.ok(Math.hypot(...up.rear) <= 0.23, `${lv}: the rear glove ${cm(Math.hypot(...up.rear))} cm from his head`);
+    assert.ok(up.rear[1] <= -0.05 && up.rear[1] >= -0.13, `${lv}: the rear glove ${cm(up.rear[1])} cm under it`);
+    // the lead forearm level (12 degrees), the glove and the elbow between his waist and his chest
+    assert.ok(Math.abs(up.level) <= 12, `${lv}: the lead forearm ${up.level.toFixed(1)}° off level`);
+    for (const y of up.lead) assert.ok(y > up.waist && y < up.chest, `${lv}: ${cm(y)} cm high, the waist ${cm(up.waist)}, the chest ${cm(up.chest)}`);
+    // the lead shoulder up toward his chin: 3 cm nearer his head than as he stands without it (a dirty great one's show stance)
+    assert.ok(up.shoulder - bare.shoulder >= 0.03, `${lv}: the lead shoulder ${cm(up.shoulder - bare.shoulder)} cm up`);
+    // side on: the shoulders 9 degrees and more further round than without it
+    assert.ok(up.line - bare.line >= 9, `${lv}: closed ${(up.line - bare.line).toFixed(1)}°`);
+    // (and no arm anywhere the shoulder cannot put it)
+    assert.ok(Math.max(...up.zone) <= 0, `${lv}: ${up.zone}`);
+  }
+  // a great dirty fighter's lead forearm is the higher, 4 cm and more (its middle: the glove and the elbow)
+  const mid = lv => (shape(lv, true, null).lead[0] + shape(lv, true, null).lead[1]) / 2,
+    four = mid('4a'),
+    five = mid('5a');
+  assert.ok(four - five >= 0.04, `4a ${(four * 100).toFixed(1)}, 5a ${(five * 100).toFixed(1)} cm`);
+});
+
+/* How it meets each punch (§4A.3): a jab, a cross, a lead hook and an uppercut into it held up, all blocked; the uppercut
+   by the rear glove (the plan's fourth edition had it come up under the crossed forearms and land: the classic guard is
+   closed in the middle). And a dirty great one who does not carry it holds the guard a clean great one does. */
+const nearer = (bout, hand) => {
+  const [a, b] = bout.fighters,
+    g = b.points[hand];
+  return Math.hypot(...M.sub(g, a.points.R)) < Math.hypot(...M.sub(g, a.points.L)) ? 'R' : 'L';
+};
+test('cross-arm guard: a jab, a cross, a lead hook and an uppercut are blocked, the uppercut by the rear glove', () => {
+  for (const lv of GUARDS)
+    for (const p of ['jab', 'cross', 'hook', 'upper']) {
+      let by = null;
+      const tech = SHOW.includes(lv) ? null : ['crossArm'],
+        ev = fight(into(lv, p, { tech }), bout => {
+          const e = bout.events.find(x => x.type === 'block' && x.who === 1);
+          if (e && e.name === p) by = nearer(bout, MOVES[p].hand);
+        }),
+        e = last(ev, p);
+      assert.equal(e && e.type, 'block', `${p}@${lv}: ${JSON.stringify(e)}`);
+      assert.ok(['glove', 'forearm', 'shoulder'].includes(e.part), `${p}@${lv}: met by the ${e.part}`);
+      if (p === 'upper') assert.equal(by, 'R', `upper@${lv}: met nearer his ${by} glove`);
+    }
+  // (the same man without it: a dirty great one holds a clean great one's high guard, and turns the jab aside as one does)
+  for (const lv of SHOW) {
+    const e = fight(into(lv, 'jab', { range: 1.0, k: WINDOWS.parry[lv[0] + 'm'].at, tech: [] })).find(x => x.type === 'parry');
+    assert.ok(e && !e.hammer, `${lv} without it: ${JSON.stringify(e)}`);
+  }
+});
+
+/* ---- the shoulder roll (§4A.4): the guard put up meant as rollCounter, k frames after the cross is pressed. A cross that
+   meets the lead shoulder while his chest is turning away is rolled off it (part 'shoulder', roll: true); the frames either
+   side of the window are not; the roll lets less through than the same guard put up at the same moment and not rolled, a
+   legend's roll leaves less room than a great one's, and the cross is held out where it was stopped, tied up. */
+const ROLLERS = ['4m', '4a', '5m', '5a'];
+const rolls = {};
+function rollAt(lv, k, tech = ['crossArm', 'rollCounter']) {
+  const key = `${lv} ${k} ${tech}`;
+  if (rolls[key]) return rolls[key];
+  let tied = null;
+  const ev = fight(into(lv, 'cross', { roll: k, tech }), bout => {
+    const b = bout.fighters[1];
+    if (b.action && b.action.rolled && b.action.chain.phase !== 'recover' && b.action.chain.phase !== 'done') tied = (tied || 0) + DT;
+  });
+  return (rolls[key] = { e: last(ev, 'cross'), tied, rolled: ev.some(x => x.type === 'roll' && x.who === 0) });
+}
+const rolled = r => !!(r.e && r.e.type === 'block' && r.e.part === 'shoulder' && r.e.roll === true);
+function rollWindow(lv) {
+  const ks = [];
+  for (let k = -4; k <= 9; k++) if (rolled(rollAt(lv, k))) ks.push(k);
+  return ks;
+}
+test('shoulder roll: a cross rolled off the lead shoulder, in a window of frames; tied up; softer than the same guard unrolled', () => {
+  const at = {};
+  for (const lv of ROLLERS) {
+    const ks = rollWindow(lv);
+    assert.ok(ks.length >= 1, `${lv}: no frame rolls it`);
+    assert.ok(!rolled(rollAt(lv, ks[0] - 1)) && !rolled(rollAt(lv, ks[ks.length - 1] + 1)), `${lv}: ${ks}`);
+    const mid = ks[Math.floor((ks.length - 1) / 2)],
+      r = rollAt(lv, mid);
+    at[lv] = r.e;
+    // (the cross held out where it was stopped, and the rest of him carried on after it: tied up 0.3 s)
+    assert.ok(r.tied >= 0.25, `${lv}: tied up ${r.tied}`);
+    // (the same frame, the same guard put up without meaning it as a roll: no roll)
+    const plain = last(fight(into(lv, 'cross', { k: mid, tech: ['crossArm', 'rollCounter'] })), 'cross');
+    assert.ok(!rolled({ e: plain }), `${lv}: rolled without rolling: ${JSON.stringify(plain)}`);
+  }
+  /* (rolled as late as it can be, the chest turning away the fastest as it gets there, the cross lets less through than the
+     same cross taken on the rear glove of his guard held up, a dirty great one's and a dirty legend's: the shoulder going
+     away from it. Earlier in the window it can be more: README, the numbers) */
+  for (const lv of SHOW) {
+    const ks = rollWindow(lv),
+      late = rollAt(lv, ks[ks.length - 1]).e,
+      held = last(fight(into(lv, 'cross')), 'cross');
+    assert.ok(held && held.type === 'block' && late.J < held.J, `${lv}: rolled ${late.J} N·s, on the guard ${held && held.J}`);
+  }
+  // (a legend goes as far as he has to: less room between the glove and his head than a great one leaves)
+  assert.ok(at['5a'].margin < at['4a'].margin, `margin 4a ${at['4a'].margin}, 5a ${at['5a'].margin}`);
+  // a pro's grade does not open it: meant as a roll, his guard does not roll
+  for (let k = 0; k <= 6; k++) assert.ok(!rolled(rollAt('3', k)) && !rollAt('3', k).rolled, `3: frame ${k}`);
+});
+test('shoulder roll: a shoulder standing still takes it unrolled; and the rolls are within the physics audit', () => {
+  // (rolled too early, the chest has finished turning by the time the cross gets there: on the shoulder, not rolled)
+  const early = rollAt('4a', -1).e;
+  assert.ok(early && early.type === 'block' && early.part === 'shoulder' && early.roll === false, JSON.stringify(early));
+  const scripts = [
+    ...GUARDS.flatMap(lv => ['jab', 'cross', 'hook', 'upper'].map(p => into(lv, p, { tech: SHOW.includes(lv) ? null : ['crossArm'] }))),
+    ...ROLLERS.flatMap(lv => rollWindow(lv).map(k => into(lv, 'cross', { roll: k, tech: ['crossArm', 'rollCounter'] }))),
+    ...ROLLERS.map(lv => into(lv, 'cross', { roll: 3, tech: ['rollCounter'] }))
+  ];
+  const { found } = audit(scripts),
+    broken = Object.entries(found)
+      .filter(([, c]) => c.bad)
+      .map(([check, c]) => `${check}: ${c.bad} (${JSON.stringify(c.cases.slice(0, 2))})`);
+  assert.deepEqual(broken, []);
+});
+test('cross-arm guard and roll: the same script goes the same way', () => {
+  const once = () => fight(into('5a', 'cross', { roll: rollWindow('5a')[0], tech: ['crossArm', 'rollCounter'] })).map(e => `${e.tick} ${e.type} ${e.J ?? ''} ${e.part ?? ''}`);
+  assert.deepEqual(once(), once());
 });
 
 /* The hammering parry: the guard put up fresh is the rear fist brought down on the jab coming in, and it turns it aside only

@@ -248,8 +248,9 @@ export function mirrorKnees(c) {
 /* How a man goes down, and the way up. Laid out, he is a body (phys/fall.mjs: ko from a straight punch or an uppercut,
    slump from a hook, the same body either way, the blow's direction is what differs), and the way up is chosen by how he
    came to rest: off his back, off his front, off his side. Dropped to a knee, he means it, and gets up off the knee.
-   Knocked out cold (out from a hook or an uppercut, limp; outStiff from a jab or a cross, stiff as a log) there is no way
-   up: he lies there. */
+   Knocked out cold (outStiff from a jab or a cross, stiff as a log; outTwist from a hook, a log with his neck wrenched round;
+   outLift from an uppercut, lifted and let go of slowly; out, limp all at once, from nothing now) there is no way up: he
+   lies there. */
 export const RISE = { drop: 'riseKnee', dropLiver: 'riseLiver' };
 export const LIE = { back: 'rise', front: 'riseFront', side: 'riseSide' };
 /* Where each way up has his hips at the end of its first part, and which way his body lies along the canvas there (from
@@ -316,21 +317,28 @@ export const MOVES = Object.assign(
     },
     /* a punch pressed down (a clean great one's down parry, anim/clean.mjs: patDown): the arm that threw it pressed down where
        it was met, `drop` metres down (and back toward him, as the arm gives: the animator holds the glove where it was met and
-       lets it down, clean.mjs pattedArm), the shoulder
-       dragged down after it and the head brought forward, open; not knocked back. Shorter than a parry's reel or a hammer's,
-       and the counter comes the sooner. Written for the lead hand; the rear's is the mirror (`hand`) */
+       lets it down, clean.mjs pattedArm), the shoulder dragged down after it and the head brought forward, open; not
+       knocked back. Shorter than a parry's reel or a hammer's, and the counter comes the sooner. Written for the lead hand;
+       the rear's is the mirror (`hand`) */
     patted: {
       hand: true,
       dur: 0.4,
       drop: [0.2, 0.1],
       keys: [{ t: 0.07, e: 'out', side: 4, lean: 1, hz: 0.03, hp: 5, twist: -2 }, { t: 0.28, e: 'lin', side: 3, lean: 1, hz: 0.025, hp: 4, twist: -2 }]
     },
+    /* a straight rolled off the other man's shoulder (his shoulder roll, anim/show.mjs; docs/moves-plan-5.md §4A.4): the punch
+       goes on where it was stopped, held out the 0.3 s it is tied up (game/bout.mjs), and this is the rest of him, laid on
+       over it from the moment it was rolled: carried on after it, the weight over the front foot, 5 cm, and the head with it */
+    rolled: { dur: 0.3, keys: [{ t: 0.07, e: 'out', hz: 0.05, lean: 4, hp: 3, lkf: 4 }, { t: 0.2, e: 'lin', hz: 0.045, lean: 3.5, hp: 2, lkf: 3 }] },
     // knocked down and out: a body (phys/fall.mjs); these only say so, and how long before he is lying still
     ko: { floor: true, stay: true, fall: true, dur: 1.2, keys: [] },
     slump: { floor: true, stay: true, fall: true, dur: 1.2, keys: [] },
     // knocked out cold (docs/moves-plan-4.md §6): the same body let go of another way, and he does not get up
     out: { floor: true, stay: true, fall: true, faint: 'limp', dur: 1.2, keys: [] },
     outStiff: { floor: true, stay: true, fall: true, faint: 'log', dur: 1.2, keys: [] },
+    // (docs/moves-plan-5.md §1: from a hook, a log whose neck is wrenched round and locked; from an uppercut, lifted and let go slowly)
+    outTwist: { floor: true, stay: true, fall: true, faint: 'twist', dur: 1.2, keys: [] },
+    outLift: { floor: true, stay: true, fall: true, faint: 'lift', dur: 1.2, keys: [] },
     /* a slip: the head taken off the line of a punch, bent and dipped to one side and straight back (which side is the
        action's: see the animator): the knee on that side bends and takes the weight, the other straightens, and the bend
        at the side is the less for it */

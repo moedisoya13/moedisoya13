@@ -34,7 +34,10 @@
                             liver | solar | ribs | body, trunk: { at: waist, to: chest, r } (what to throw sweat off), breath
                             (the share of all his breath it took), liver: true (it puts him down) }; one met by an elbow or a
                             forearm on its way there is { type: 'block', part: 'elbow' | 'forearm', zone (where it was aimed) };
-                            and a man doubled up by one goes down a moment later: { type: 'buckle', who }
+                            and a man doubled up by one goes down a moment later: { type: 'buckle', who }. A guard put up
+                            meant as a shoulder roll says so ({ type: 'roll', who }), and a punch met by the lead shoulder (a
+                            cross-arm guard's, or a roll's) is { type: 'block', part: 'shoulder', roll: true (rolled off it as
+                            his chest turned away) | false, margin (metres between the glove and his head as it met it) }
      bout.fighters[i].pose  his solved pose this step (and .place: where on the canvas, .points: gloves and head in the world)
 
    A punch is physics from the feet to the glove. Pressing a button only starts a kinetic chain (phys/chain.mjs); the joints
@@ -61,8 +64,8 @@ import * as P from '../anim/pose.mjs';
 import { RING } from '../world/ring.mjs';
 import { LEN } from '../rig/solve.mjs';
 import { body, blank, fatigue, COST, loadout } from './profile.mjs';
-import { asked, has } from './techniques.mjs';
-import { levelOf } from '../anim/skill.mjs';
+import { asked, has, gradeOf } from './techniques.mjs';
+import { levelOf, CROSS, ROLL } from '../anim/skill.mjs';
 import { timeline, evadeTime, progress, LOADED } from '../anim/evade.mjs';
 import { choose, THROWS, PAW, COLLAR, ELBOW } from '../anim/show.mjs';
 import { waveOf, waveTravel, waveTurn, waveBlocked, patOf, presses } from '../anim/clean.mjs';
@@ -253,6 +256,7 @@ function begin(f, name, more, bout) {
   f.action = Object.assign({ name, t: 0, id: name + ++f.serial, struck: false, chain, level, at: bout ? bout.t : 0, loaded: loaded && loaded.load > 0 ? loaded : null }, more);
   if (isEvasion(name)) (f.lastEvade = { action: f.action, name, start: bout ? bout.t : 0, endedAt: null }), (f.action.head0 = f.points ? f.points.head.slice() : null);
   f.cover = false;
+  f.roll = null;
 }
 
 /* Where a duck in or a way away goes, decided as it starts: the duck in, toward the other man to right up close (short of it
@@ -323,6 +327,68 @@ function patCounter(bout, f, inside) {
     return 'jab';
   }
   return inside ? 'upperIn' : 'cross';
+}
+/* The cross-arm guard (anim/show.mjs, docs/moves-plan-5.md §4A): a man who carries it (game/techniques.mjs: crossArm, by default
+   the dirty great ones) holds his grade's whenever his guard is up (skill.mjs: CROSS, his grade at it being his guard's
+   unless his skills name it). The one place it is decided. -> the shape, or null */
+export const crossOf = f => (has(f, 'crossArm') ? CROSS[gradeOf(f.skills, 'crossArm').id] || null : null);
+/* The shoulder roll (§4A.4): a press of the guard meant as rollCounter (game/techniques.mjs; a script names it the same way),
+   at a grade that opens it, rolls at once; the roll is his grade's (skill.mjs: ROLL). While it lasts his guard is up (a fresh
+   one neither hammers nor meets the punch: the roll is the answer), and the lead shoulder is in the way whatever guard he
+   holds, a roll taking the cross-arm shape on for its moment if he holds none. f.roll: { t, roll, rolled (a punch rolled off
+   it: { at, J }) } */
+const rollOf = f => ROLL[gradeOf(f.skills, 'rollCounter').id] || null;
+function rollFor(bout, f, input, dt) {
+  if (f.roll) {
+    f.roll.t += dt;
+    const r = f.roll.roll;
+    // (he stays rolled under the arm he has rolled off his shoulder for as long as it is held out there)
+    if (f.roll.rolled && bout.t - f.roll.rolled.at < SHOULDER.tied) f.roll.t = Math.min(f.roll.t, r.lag + r.go + r.hold);
+    // (over once it has unwound, or the moment he does anything else or is stopped by a blow)
+    if (f.roll.t >= r.lag + r.go + r.hold + r.home || f.action || f.stun > 0) f.roll = null;
+  }
+  const a = !f.roll && !f.action && f.stun <= 0 && input.cover && asked(f, input);
+  if (a && a.tech === 'rollCounter' && rollOf(f)) {
+    f.roll = { t: 0, roll: rollOf(f), at: bout.t, rolled: null };
+    bout.events.push({ type: 'roll', who: bout.fighters.indexOf(f) });
+  }
+}
+/* What of his guard is in the way, for the bout's strike: the cross-arm guard he holds (its forearms; the hammer, a dirty
+   great one's parry), and whether a guard put up fresh turns a punch aside the way his grade parries (not in a roll, not with a
+   cross-arm guard that takes a jab rather than meeting it) */
+const guardOf = other => {
+  const cross = crossOf(other);
+  return { cross, hammer: cross && cross.hammer, parries: !other.roll && (!cross || cross.parry === 'meet') };
+};
+/* The lead shoulder (§4A.4): a ball of `r` round the shoulder joint, in the way of a punch while a cross-arm guard is up or a
+   roll is on. A punch that meets it while his chest is turning away to his right at `rolling` degrees a second or more, in a
+   roll, is rolled off it: a block (part 'shoulder', roll: true) that lets `soft` of the held guard's share through, and the
+   arm that threw it is held out where it was stopped for `tied` seconds, carried on after it (moves.mjs rolled). One that
+   meets a shoulder standing still lets `hard` of it through (roll: false). */
+const SHOULDER = { r: 0.07, rolling: 200, soft: 0.5, hard: 2, tied: 0.3 };
+const shoulderUp = other => !!other.before && !!other.before.LS && (!!other.roll || (!!crossOf(other) && other.cover && other.animator.covered >= RULES.guardUp));
+// (how fast his shoulders turned to his right this step, degrees a second: the line from the rear shoulder to the lead one)
+const turning = (other, dt) => {
+  const way = p => Math.atan2(p.LS[0] - p.RS[0], p.LS[2] - p.RS[2]);
+  return (-(((way(other.points) - way(other.before) + 3 * Math.PI) % (2 * Math.PI)) - Math.PI) * 180) / Math.PI / dt;
+};
+function shouldered(bout, f, other, who, action, blow, J, felt, stop, dt, s) {
+  const roll = !!other.roll && turning(other, dt) >= SHOULDER.rolling,
+    // (and how far his head was from the glove as it met his shoulder, surface to surface: how much room the roll left)
+    margin = Math.hypot(...M.sub(M.lerp(f.before[blow.hand], f.points[blow.hand], s), M.lerp(other.before.head, other.points.head, s))) - RULES.glove - RULES.head;
+  other.hp = Math.max(1, other.hp - J * RULES.damage * other.k.smother * (roll ? SHOULDER.soft : SHOULDER.hard) * other.k.chin);
+  other.kx += ((blow.dir[0] * J) / RULES.mass) * RULES.shove * 0.6;
+  other.kz += ((blow.dir[1] * J) / RULES.mass) * RULES.shove * 0.6;
+  other.animator.strike({ J: J * 0.25, dir: felt.dir });
+  bout.stop = stop * 0.4;
+  if (roll) {
+    // (held out where it was stopped, and carried on after it: tied up)
+    action.chain.hold = Math.max(action.chain.hold, SHOULDER.tied);
+    action.rolled = { at: action.chain.t };
+    f.stun = Math.max(f.stun, SHOULDER.tied);
+    other.roll.rolled = { at: bout.t, J };
+  }
+  return bout.events.push(Object.assign({ type: 'block' }, blow, { part: 'shoulder', roll, margin: +margin.toFixed(4) }));
 }
 
 /* The wave from step to step (anim/clean.mjs): held while it is asked for; the ropes in the way he is going are the end of it,
@@ -444,8 +510,10 @@ function decide(bout, f, input, dt, who) {
   }
   /* A stunned boxer can still pull his hands up (it is what a hurt man does) but not in time to turn a punch aside: his guard
      counts as an old one at once. A man thrown open by a parry, or in the middle of anything, cannot. */
+  // (a shoulder roll: started by the guard put up meant as one, and the guard up for as long as it lasts)
+  rollFor(bout, f, input, dt);
   const dazed = f.stun > 0,
-    covering = !!input.cover && !f.action;
+    covering = (!!input.cover || !!f.roll) && !f.action;
   f.coverAge = covering ? (f.cover ? f.coverAge + dt : dazed ? 9 : 0) : 0;
   if (covering && !f.cover) bout.events.push({ type: 'cover', who });
   // (a guard meant as a down parry: anim/clean.mjs)
@@ -677,8 +745,8 @@ function viewOf(bout, i) {
       cover: f.cover ? 1 : 0,
       // a guard still young enough to turn a punch aside: the gloves are out meeting it, not yet pulled in to the face
       meet: f.cover && f.coverAge < f.k.parry ? 1 - f.coverAge / f.k.parry : 0,
-      // (and how long it has been up: a show-off's hammer is timed from it)
-      fresh: f.cover ? f.coverAge : null,
+      // (and how long it has been up: a show-off's hammer is timed from it; a guard up for a shoulder roll is not one)
+      fresh: f.cover && !f.roll ? f.coverAge : null,
       // what the fight has taken out of him, for his body to show: hurt from his health, tired from his breath
       hurt: Math.max(0, Math.min(1, (45 - f.hp) / 45)),
       tired: Math.max(0, Math.min(1, (0.6 - f.stamina / f.k.staminaMax) / 0.6)),
@@ -688,8 +756,12 @@ function viewOf(bout, i) {
       aim: null,
       // how he stands and moves when he is doing nothing else (his grade of footwork), and whether a blow has stopped him
       stance: levelOf(f.skills, 'stance'),
-      // and how he covers up (the guard, the block, the parry)
+      // and how he covers up (the guard, the block, the parry), and the cross-arm guard he holds if he carries it
       guard: levelOf(f.skills, 'cover'),
+      cross: crossOf(f),
+      // (a shoulder roll he is in, and the cross-arm shape it takes on if he holds none: anim/show.mjs)
+      roll: f.roll ? { t: f.roll.t, roll: f.roll.roll, shape: crossOf(f) ? null : CROSS[gradeOf(f.skills, 'rollCounter').id] || null } : null,
+      hook: null,
       stun: f.stun > 0,
       shoved: Math.hypot(f.kx, f.kz),
       reach: null,
@@ -707,6 +779,9 @@ function viewOf(bout, i) {
   /* A punch coming at him: how soon it will get to his head at the speed it is closing, and which way it is going (his own
      terms). A great one covering up rides it, or goes out to take it early, the instant before it lands. */
   const coming = incoming(other);
+  /* (a lead hook on its way: how long since it started, what a cross-arm guard's rear glove goes back to the ear by. From its
+     start, the wind-up that sets the arm: its hips fire only 40 ms or so before it lands, too late for anyone to answer) */
+  if (coming && MOVES[coming.name].hand === 'L' && MOVES[coming.name].arm === 'swing') view.hook = coming.t;
   if (coming && other.points && other.before && f.points) {
     const hand = MOVES[coming.name].hand,
       g = other.points[hand],
@@ -816,6 +891,10 @@ function solvePose(bout, f, i, dt) {
     // (and the elbows: a show-off's crossed forearms are in the way, and his elbow is what lands of an elbow strike)
     LE: at('LeftForeArm'),
     RE: at('RightForeArm'),
+    // (and the shoulders: the lead one is in the way of a punch in a cross-arm guard or a roll, and the line between them is
+    // how fast his chest is turning, docs/moves-plan-5.md §4A.4)
+    LS: at('LeftArm'),
+    RS: at('RightArm'),
     // (and his trunk: the spine from his hips to his chest, and which way his shoulders lie: game/trunk.mjs)
     ...trunk(at)
   };
@@ -1052,7 +1131,8 @@ function strike(bout, f, other, who, dt) {
     balls(other.points).forEach(([c, r], i) => test('trunk', 'trunk', gr + r, was[i][0], c));
   }
   // (the gloves are in the way once they have got most of the way up: how quickly is his grade's)
-  const guard = levelOf(other.skills, 'cover').cover,
+  // (his cross-arm guard, if he carries it, and its parry: guardOf)
+  const guard = guardOf(other),
     // (a rear glove coming down to press a punch down is the down parry's, below)
     patting = patNow(other, move);
   if (other.cover && other.animator.covered >= RULES.guardUp) {
@@ -1070,6 +1150,8 @@ function strike(bout, f, other, who, dt) {
   // (a show-off's guard put up fresh is a hammer of his rear fist: it turns a punch aside only if it comes down on the glove)
   if (guard.hammer && other.cover && other.animator.hammering) test('hammer', 'R', RULES.glove + gr);
   if (patting) test('pat', 'R', RULES.glove + gr);
+  // (and his lead shoulder, in a cross-arm guard or a roll: rolled off it, or taken on it, shouldered)
+  if (shoulderUp(other)) test('shoulder', 'LS', SHOULDER.r + gr);
   // (a punch to his body: his elbows and forearms are in the way, where they are, his guard up or not)
   if (low && other.before.LE)
     for (const key of ['L', 'R']) {
@@ -1148,9 +1230,11 @@ function strike(bout, f, other, who, dt) {
     other.defence = { kind: 'parry', start: bout.t - other.coverAge, of: action.id, from: action.at, margin: null, late: false, counterAt: null, event: e, said: false };
     return bout.events.push(e);
   }
+  if (first.what === 'shoulder') return shouldered(bout, f, other, who, action, blow, J, felt, stop, dt, first.s);
   if (first.what === 'guard') {
-    // (a show-off's guard turns nothing aside but by its hammer, nor one put up to press it down but by that: met fresh anywhere else, it is a block)
-    if (!guard.hammer && !other.pat && other.coverAge <= other.k.parry * (0.7 + 0.3 * fatigue(other))) {
+    /* (a show-off's guard turns nothing aside but by its hammer, a pro's cross-arm guard nothing at all, a guard up for a
+       roll is the roll, and one put up to press it down turns it aside only by that: met fresh, it is a block) */
+    if (guard.parries && !other.pat && other.coverAge <= other.k.parry * (0.7 + 0.3 * fatigue(other))) {
       // turned aside: the puncher is thrown open, the defender has his opening
       begin(f, 'reel');
       f.stun = 0.6;
@@ -1212,9 +1296,10 @@ function strike(bout, f, other, who, dt) {
     liver = !!spot && spot.zone === 'liver' && livered(bout, other, worth);
   if (spot) other.stamina = Math.max(0, other.stamina - winded);
   const down = other.hp <= 0 || liver,
-    /* (out cold: a finishing blow with RULES.out of health or more to spare, or one that caught him throwing; limp from a
-       hook or an uppercut, stiff as a log from a jab or a cross; never from a blow to the body) */
-    out = down && !spot && (damage - had >= RULES.out || caught) ? (move.kind === 'straight' ? 'outStiff' : 'out') : null;
+    /* (out cold: a finishing blow with RULES.out of health or more to spare, or one that caught him throwing; stiff as a log
+       from a jab or a cross, a log with his neck wrenched round from a hook, lifted and let go of slowly from an uppercut:
+       docs/moves-plan-5.md §1; never from a blow to the body) */
+    out = down && !spot && (damage - had >= RULES.out || caught) ? { straight: 'outStiff', hook: 'outTwist', upper: 'outLift' }[move.kind] || 'out' : null;
   bout.events.push(Object.assign({ type: 'hit', damage: +damage.toFixed(1), counter, down }, blow, spot ? { breath: +(winded / other.k.staminaMax).toFixed(3), liver: liver || undefined } : null, out ? { out } : null));
   if (down && spot) return doubled(bout, other, who);
   if (down) {
@@ -1223,7 +1308,7 @@ function strike(bout, f, other, who, dt) {
        was going as it met him, and the shove that goes with it, the same way, up or down as well as along the canvas; on
        top of what was still pushing him and all he was moving at, his walking and his stepping in. These are his body's
        now, not his place's to carry). Out cold, he is laid out the same way, and his body let go of as an unconscious
-       man's is (out, outStiff: phys/fall.mjs), and he does not get up. */
+       man's is (outStiff, outTwist, outLift: phys/fall.mjs), and he does not get up. */
     const knee = !out && damage - had < RULES.drop;
     let laid = null;
     if (!knee) {

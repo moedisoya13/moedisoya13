@@ -9,6 +9,10 @@
                aim: [x, y, z] where the punching wrist is to go, in his space | null,
                reach: metres between the punching glove and the head it is going for (their surfaces) | null,
                stance: his grade of footwork (skill.mjs) | null, guard: his grade of covering up | null,
+               cross: the cross-arm guard he holds when his guard is up (skill.mjs CROSS[grade], show.mjs) | null,
+               roll: a shoulder roll he is in, { t (seconds into it), roll (skill.mjs ROLL[grade]), shape (the cross-arm
+               guard it takes on, if he holds none) } | null (show.mjs),
+               hook: seconds since a lead hook coming at him started | null,
                threat: { eta (seconds until the punch coming at him gets there), dir } | null, stun: bool (stopped by a blow),
                low: { zone, t, id } | null (a punch coming at his body: where, and seconds since he could see it: body.mjs),
                shoved: metres a second he is being knocked back at,
@@ -28,12 +32,12 @@
      a.getUp()                                        knocked down and lying still: the way up that fits how he lies, and
                                                       how to turn and move his place so that he gets up where he lies:
                                                       { name, on, down, move: [x, z] (his space), turn (radians) } | null
-   Knocked down (a move that is a fall: ko, slump, and out cold: out, outStiff), his body is a body (phys/fall.mjs) from the pose he was in, and the next
+   Knocked down (a move that is a fall: ko, slump, and out cold: out, outStiff, outTwist, outLift), his body is a body (phys/fall.mjs) from the pose he was in, and the next
    rise is blended out of the pose he comes to rest in (view.near: what of the other man he cannot fall through). */
 import * as M from '../rig/m3.mjs';
 import { TPOSE, fk } from '../rig/skeleton.mjs';
 import { solve, centre, footPose, LEN } from '../rig/solve.mjs';
-import { createFall, stepFall, poseOf, lyingOf, moveFall } from '../phys/fall.mjs';
+import { createFall, stepFall, shoveFall, poseOf, lyingOf, moveFall } from '../phys/fall.mjs';
 import * as Q from './quat.mjs';
 import { FOOT, HEAD, RADIUS, shoulderOf } from '../rig/body.mjs';
 import { LINKS, stepChain } from '../phys/chain.mjs';
@@ -42,7 +46,7 @@ import { LEVEL } from './skill.mjs';
 import { H, headAt, headTo, phraseX, PHRASE, FLOURISH, CLEAN, DIRTY, dice } from './stance.mjs';
 import { sampleEvade, EVASIONS, timeline, evadeTime } from './evade.mjs';
 import { travel as legendTravel, dash as legendDash, dashShape } from './legend.mjs';
-import { stance as showStance, crossGuard, hammer, paw, PAW, collar, COLLAR, ELBOW } from './show.mjs';
+import { stance as showStance, crossGuard, ear, shoulderRoll, hammer, paw, PAW, collar, COLLAR, ELBOW } from './show.mjs';
 import { bodyState, struck as foldUp, give as bodyGive, coverLow } from './body.mjs';
 import { createWave, waveBeat, waveLand, waveLanding, waveDrag, waveBody, createPat, patDown, pattedArm } from './clean.mjs';
 
@@ -229,6 +233,22 @@ function bend(hips, spine, feet, kf, elev) {
 const REACH = LEN.upperArm + LEN.foreArm - 0.03; // as far as a wrist gets from its shoulder
 const HOLD_ROUND = 750; // degrees a second: the fastest a hook's fist is taken round to its side as the legs drive (sweep)
 const BENT = 0.4; // and as far as it gets with the elbow held at a right angle
+/* A shoulder shrugged up (the cross-arm guard's lead shoulder: show.mjs): the collarbone (LeftShoulder, from the chest to the
+   shoulder: `arm` metres out) turned up so far that the shoulder rises so many metres, and `ahead` degrees forward at `most`
+   metres of it (into the punch's way) */
+const SHRUG = { arm: Math.abs(TPOSE.LeftArm[0] - TPOSE.LeftShoulder[0]), ahead: 18, most: 0.07 };
+// (a straight rolled off a shoulder: how far its fist goes on, over it, in his own terms: moves.mjs rolled, game/bout.mjs)
+const ROLLED = [0, 0.03, 0.08];
+/* (his grade's way of covering up with the cross-arm guard he holds put in its place, for body.mjs coverLow: the same object
+   when they are the same, as they are for the dirty great ones' default) */
+const LOW_GUARDS = new Map();
+const lowGuard = (cv, xc) => {
+  if ((cv.cross || null) === xc) return cv;
+  if (!LOW_GUARDS.has(cv)) LOW_GUARDS.set(cv, new Map());
+  const m = LOW_GUARDS.get(cv);
+  if (!m.has(xc)) m.set(xc, Object.assign({}, cv, { cross: xc }));
+  return m.get(xc);
+};
 const unit = v => {
   const l = Math.hypot(v[0], v[1], v[2]) || 1;
   return [v[0] / l, v[1] / l, v[2] / l];
@@ -442,10 +462,15 @@ export function createAnimator(seed) {
     leadOut = 1, // how far out a dirty man's lead hand is (put out in the other man's face, unless a punch is coming)
     showDown = 1, // how far down a show-off's lead hand is let (show.mjs)
     hammering = false, // a show-off's rear fist coming down on a punch, his guard put up fresh (show.mjs)
+    shrug = 0, // metres his lead shoulder is shrugged up (the cross-arm guard, the shoulder roll: show.mjs)
+    crossHeld = null, // the cross-arm guard he held last frame, if it was up (what a block on its lead forearm sags)
+    hooked = 0, // how far his rear glove has gone back to the ear for a lead hook (the cross-arm guard's)
     knockRate = 1, // how quickly a knocked glove comes back, times (his guard's grade: a block, or a parry)
     lastEvade = null; // the evasion he was in last frame (what the way out of it starts from)
   // a great one riding a punch on his guard (going with it, or out to take it early), 0..1
   const riding = { x: 0 };
+  // the lead forearm of a cross-arm guard given by a blow on it: metres, and how long ago (show.mjs, skill.mjs CROSS: sag)
+  const sag = { d: 0, t: 9 };
   // a man rocked by a blow: how badly (0..1) and how long ago; his legs are gone for a second or so
   const wobble = { amount: 0, t: 9 };
   // the head's offset off the line of the punch, as it was last frame (what the way out of the punch starts from)
@@ -580,9 +605,10 @@ export function createAnimator(seed) {
       }
     },
     /* Knocked down, shoved on by the glove going on through him (game/bout.mjs: follow): all of his falling body given this
-       velocity, his own terms (none before the fall has started: the bout gives it from the step after the blow) */
+       velocity, his own terms, or, out cold and stiff, turned over his foot by it (phys/fall.mjs: shoveFall; none before the
+       fall has started: the bout gives it from the step after the blow) */
     shove(v) {
-      if (fall) for (const b of fall.bodies) b.v = M.add(b.v, v);
+      if (fall) shoveFall(fall, v);
     },
     /* A parry: the glove that met the punch sweeps it off the line, across his body and down, and comes back; his
        shoulders turn a little with it. (The puncher's side of it is the reel.) */
@@ -618,6 +644,8 @@ export function createAnimator(seed) {
       give.hp.v -= 260 * k;
       give.lean.v -= 60 * k;
       give.sink.v += 0.5 * k;
+      // (a cross-arm guard's lead forearm, hit, gives and comes back: show.mjs)
+      if (crossHeld && hit.hand === 'L') (sag.d = crossHeld.sag), (sag.t = 0);
     },
     /* A foul done to him (game/bout.mjs: fouls): stood on, he flinches and looks down at it; a glove left over his face, his
        head goes back (if it was done in the open) and his rear glove goes to his eye a while. */
@@ -851,6 +879,15 @@ export function createAnimator(seed) {
         /* (a flicker's wrist snaps over at the end of it: the glove goes on a few centimetres, up and in, as the elbow gets
            straight, and back as it comes home) */
         if (move.snap) extra[me] = M.add(extra[me] || [0, 0, 0], [0, move.snap * 0.4, move.snap].map(v => v * smooth(clamp((chain.q[4] - 0.75) / 0.25, 0, 1)) * (chain.phase === 'recover' ? 1 - smooth(chain.since / 0.12) : 1)));
+        /* (rolled off his shoulder: carried on after it while it is held out, game/bout.mjs; moves.mjs rolled. The fist goes on
+           with him, up and over the shoulder it was turned off, ROLLED metres, so that it is the fist that goes past and not the
+           elbow folded into the shoulder) */
+        if (action.rolled) {
+          const since = chain.t - action.rolled.at;
+          sampleMove(MOVES.rolled, since, c);
+          const on = smooth(since / 0.1) * (chain.phase === 'recover' ? 1 - smooth(chain.since / 0.12) : chain.phase === 'done' ? 0 : 1);
+          if (on > 0) extra[me] = M.add(extra[me] || [0, 0, 0], M.scale(ROLLED, on));
+        }
         if (foul) {
           const n = form.dirty - 1;
           if (foul.name === 'thumb') extra[me] = M.add(extra[me] || [0, 0, 0], [0, -0.01, foul.push[n] * reach]); // pushed on into his face
@@ -938,9 +975,12 @@ export function createAnimator(seed) {
       }
       lastEvade = action && (EVASIONS.includes(action.name) || action.name === 'dash') ? action : null;
       const evading = action && EVASIONS.includes(action.name) ? (action.level || LEVEL[3]).evade : null,
-        cv = (view.guard || LEVEL[3]).cover;
-      // (how quickly the gloves get up into the guard is his grade's)
-      cover += (clamp(view.cover || 0, 0, 1) - cover) * (1 - Math.exp(-dt * (cv.textbook ? 22 : 1 / cv.arrive)));
+        cv = (view.guard || LEVEL[3]).cover,
+        // (the cross-arm guard he holds, if he carries it: show.mjs; and a shoulder roll he is in)
+        xc = view.cross || null,
+        rolling = view.roll || null;
+      // (how quickly the gloves get up into the guard is his grade's, or his cross-arm guard's)
+      cover += (clamp(view.cover || 0, 0, 1) - cover) * (1 - Math.exp(-dt * (xc ? 1 / xc.arrive : cv.textbook ? 22 : 1 / cv.arrive)));
       meet += (clamp(view.meet || 0, 0, 1) - meet) * (1 - Math.exp(-dt * 30));
       hurt += (clamp(view.hurt || 0, 0, 1) - hurt) * (1 - Math.exp(-dt * 1.5));
       tired += (clamp(view.tired || 0, 0, 1) - tired) * (1 - Math.exp(-dt * 1.5));
@@ -950,19 +990,43 @@ export function createAnimator(seed) {
         for (const [ch, v] of Object.entries(sampleMove(MOVES.cover, 1, {}))) c[ch] += v * cover;
         // the guard as his grade holds it
         if (!cv.textbook) {
-          for (const ch in cv.hands) c[ch] += cv.hands[ch] * cover;
+          // (where his grade holds the hands, unless he holds a cross-arm guard: its hands are its own, below)
+          if (!xc) for (const ch in cv.hands) c[ch] += cv.hands[ch] * cover;
           for (const ch in cv.body) c[ch] += cv.body[ch] * cover;
           if (cv.block.lean) c.lean += cv.block.lean * cover;
-          // (a show-off crosses his arms: show.mjs)
-          if (cv.cross) crossGuard(c, cv.cross, cover);
         }
       }
-      // (and a guard he puts up fresh is a hammer of the rear fist, not the gloves put out to meet it: show.mjs)
-      hammering = !!cv.hammer && view.fresh !== null && view.fresh !== undefined && hammer(c, cv.hammer, view.fresh);
-      // (and with it up, an elbow brought down over a punch coming at his body: body.mjs)
-      coverLow(bodyHits, c, view.low, cv, cover, dt, clock);
+      /* The cross-arm guard (show.mjs), if he carries it, as far as his guard is up; a shoulder roll takes the guard's shape on
+         for as long as it lasts even if he holds none (the lead forearm down across him, the rear glove at the chin), and turns
+         him away behind the lead shoulder. */
+      shrug = 0;
+      let crossK = 0;
+      const shape = xc || (rolling && rolling.shape) || null;
+      {
+        const r = rolling ? shoulderRoll(c, rolling.roll, rolling.t) : null;
+        crossK = shape ? Math.max(xc ? cover : 0, r && !xc ? r.w : 0) : 0;
+        if (crossK > 0.002) shrug += crossGuard(c, shape, crossK);
+        if (r) shrug += r.shrug;
+        // (a lead hook coming: the rear glove back to the ear, so long after it starts, in 0.04 s, and back as it goes)
+        const want = shape && crossK > 0.5 && view.hook !== null && view.hook !== undefined ? smooth((view.hook - shape.ear) / 0.04) : 0;
+        hooked += (want - hooked) * (want > hooked ? 1 : 1 - Math.exp(-dt * 12));
+        if (hooked > 0.002) ear(c, shape, hooked * crossK);
+        // (and a blow on the lead forearm gives it, and it is back in 0.3 s)
+        sag.t += dt;
+        if (sag.d && sag.t < 0.3) c.ly -= sag.d * crossK * Math.min(1, sag.t / 0.03) * (1 - smooth((sag.t - 0.03) / 0.27));
+        crossHeld = xc && cover >= 0.5 ? xc : null;
+      }
+      /* (and a guard he puts up fresh is a hammer of the rear fist, not the gloves put out to meet it: show.mjs; his cross-arm
+         guard's, a dirty great one's. Not in a roll: the rear glove stays at the chin) */
+      const hammers = !!(xc && xc.hammer);
+      hammering = hammers && !rolling && view.fresh !== null && view.fresh !== undefined && hammer(c, xc.hammer, view.fresh);
+      /* (and with it up, an elbow brought down over a punch coming at his body, body.mjs; not by a man who holds the cross-arm
+         guard, whose lead forearm is across his belly already: what body.mjs reads as cv.cross is the guard he holds) */
+      coverLow(bodyHits, c, view.low, lowGuard(cv, xc), cover, dt, clock);
       if (cheer > 0.002) for (const [ch, v] of Object.entries(sampleMove(MOVES.cheer, 1, {}))) c[ch] += v * smooth(cheer);
-      if (meet > 0.002 && !cv.hammer && !view.pat) {
+      // (the gloves out to meet it: his grade's parry, unless his cross-arm guard does not parry so, or he is rolling, or his
+      // rear glove is out to press it down: clean.mjs)
+      if (meet > 0.002 && !(xc && xc.parry !== 'meet') && !rolling && !view.pat) {
         for (const [ch, v] of Object.entries(sampleMove(MOVES.meet, 1, {}))) c[ch] += v * meet * cv.meet.scale;
         for (const ch in cv.meet.add) c[ch] += cv.meet.add[ch] * meet;
       }
@@ -1160,7 +1224,7 @@ export function createAnimator(seed) {
       // ---- the bounce: down into each landing and back up off it, the weight swinging between the feet like a pendulum
       // (a tired man's feet barely leave the canvas, and a hurt man's legs are heavy; and the grade's own rhythm)
       const flat = exit && exit.kind === 'flat' ? 1 - smooth(exit.done === null ? 0 : (halves + u - exit.done - 2) / 0.5) : 0,
-        pep = (view.still ? 0 : action ? (form ? form.lively * ((punchMove.body && punchMove.body.lively) ?? 1) : evading ? evading.lively : hopping ? 1.4 * (action.level || LEVEL[3]).away.hop : action.name === 'wave' ? 0 : 0.35) : (1 + cheer * 1.6) * (cv.textbook ? 1 : 1 - cover * (1 - cv.lively))) * (1 - 0.5 * tired) * (1 - 0.3 * hurt) * (1 - 0.7 * rocked) * (1 - flat),
+        pep = (view.still ? 0 : action ? (form ? form.lively * ((punchMove.body && punchMove.body.lively) ?? 1) : evading ? evading.lively : hopping ? 1.4 * (action.level || LEVEL[3]).away.hop : action.name === 'wave' ? 0 : 0.35) : (1 + cheer * 1.6) * (cv.textbook ? 1 : 1 - cover * (1 - cv.lively)) * (xc ? 1 - cover * (1 - xc.lively) : 1)) * (1 - 0.5 * tired) * (1 - 0.3 * hurt) * (1 - 0.7 * rocked) * (1 - flat),
         lively = pep * st.bounce,
         spot = (1 - going) * lively, // how much of this is bouncing on the spot
         footSpot = (1 - going) * (feetLive += (lively - feetLive) * (1 - Math.exp(-dt * 20))),
@@ -1286,13 +1350,13 @@ export function createAnimator(seed) {
       const lg = st.legend;
       if (lg) {
         // (his own going: not a blow knocking him back)
-        const want = !action && !view.still && !stun ? smooth((speedNow - 0.2) / 0.4) * (1 - smooth((view.shoved || 0) / 0.2)) * intact * comeback * (cv.textbook ? 1 : 1 - cover * (1 - cv.head)) : 0;
+        const want = !action && !view.still && !stun ? smooth((speedNow - 0.2) / 0.4) * (1 - smooth((view.shoved || 0) / 0.2)) * intact * comeback * (cv.textbook ? 1 : 1 - cover * (1 - cv.head)) * (xc ? 1 - cover * (1 - xc.head) : 1) : 0;
         legend.w = action ? 0 : legend.w + (want - legend.w) * (1 - Math.exp(-dt * 12));
         // (the knees bent going in stay bent a while after he stops: the spring of what he throws next)
         const sp = Math.max(speedNow, 1e-3);
         legend.bent = action ? 0 : Math.max(legend.bent * Math.exp(-dt * 2.5), (legend.w * Math.max(0, vz)) / sp);
       }
-      const hw = action ? 0 : (1 - 0.5 * going) * intact * comeback * (cv.textbook ? 1 : 1 - cover * (1 - cv.head)) * (lg ? 1 - legend.w : 1);
+      const hw = action ? 0 : (1 - 0.5 * going) * intact * comeback * (cv.textbook ? 1 : 1 - cover * (1 - cv.head)) * (xc ? 1 - cover * (1 - xc.head) : 1) * (lg ? 1 - legend.w : 1);
       if (st.head && hw > 0) {
         const head = st.head;
         let X = 0,
@@ -1719,6 +1783,9 @@ export function createAnimator(seed) {
       sunk += (dip - sunk) * (1 - Math.exp(-dt * 24)); // (followed, so a foot snapping through its swing does not jerk the hips)
       let hips = [GUARD.hips[0] + c.hx, Math.max(0.15, GUARD.hips[1] + c.hy - sunk), GUARD.hips[2] + c.hz];
       const spine = trunk(c, gaze);
+      /* (the lead shoulder shrugged up, the chin behind it: the collarbone turned up about the line ahead of him, so far that
+         the shoulder rises so many metres, and a little forward with it: show.mjs) */
+      if (shrug > 1e-4) spine.LeftShoulder = [0, -SHRUG.ahead * (shrug / SHRUG.most), (Math.asin(clamp(shrug / SHRUG.arm, 0, 0.9)) * 180) / Math.PI];
       // (the knees: the hips brought down over the planted feet as far as they say, a foot in the air folded up)
       /* (what a legend's going bends the knees by is a bend of the leg he stands on: a foot in the air is not folded up by it,
          legend.mjs) */
@@ -1877,9 +1944,9 @@ export function createAnimator(seed) {
         /* (and a show-off's lead hand let down to his waist hangs from an elbow by his side, the forearm out in front: show.mjs) */
         const pushing = clamp(c[k + 'g'], 0, 1) * (1 - smooth((free[1] - 0.25) / 0.2)),
           hang = side === 'L' && st.show ? showDown : 0,
-          // (and a show-off's crossed arms: each elbow where his guard puts it, as the chest sees it: show.mjs)
-          crossed = cv.cross && cover > 0.002 ? cover : 0,
-          asked = M.app(chest.R, M.lerp(M.lerp(M.lerp([s * (0.5 + 0.8 * flare), -1 + 1.3 * flare, -0.2 - 0.25 * flare], [s * 0.45, -0.35, -0.85], pushing), [s * 0.15, -1, -0.2], hang), crossed ? cv.cross.pole[side] : [0, 0, 0], crossed)),
+          // (and a cross-arm guard: each elbow where it puts it, as the chest sees it: show.mjs)
+          crossed = shape && crossK > 0.002 ? crossK : 0,
+          asked = M.app(chest.R, M.lerp(M.lerp(M.lerp([s * (0.5 + 0.8 * flare), -1 + 1.3 * flare, -0.2 - 0.25 * flare], [s * 0.45, -0.35, -0.85], pushing), [s * 0.15, -1, -0.2], hang), crossed ? shape.pole[side] : [0, 0, 0], crossed)),
           l = Math.hypot(asked[0], asked[1], asked[2]) || 1,
           keep = elbow[side] ? Math.exp(-dt * 16) : 0;
         /* One punch handing over to the next (a double jab, a jab into a cross) starts the new chain from the guard while the

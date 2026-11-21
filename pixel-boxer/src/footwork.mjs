@@ -2,6 +2,7 @@
    and which buttons are pressed when. Nothing here draws; drive() turns a script into the controls a bout takes, so the same
    scripts run in the page and under node --test. */
 import { RULES, createBout, settle } from './game/bout.mjs';
+import { loadout } from './game/profile.mjs';
 
 export const HOME = [0, 0]; // where the boxer starts each loop, and the other man 1.25 m in front of him
 export const AWAY = [1.25, 0];
@@ -116,7 +117,12 @@ export function freshBout(entry) {
   const bout = createBout(7);
   [bout.fighters[0].x, bout.fighters[0].z] = (entry && entry.me && entry.me(0)) || HOME;
   [bout.fighters[1].x, bout.fighters[1].z] = entry && entry.him ? entry.him(0) : AWAY;
-  if (entry && entry.setup) entry.setup(bout);
+  if (entry && entry.setup) {
+    const carried = bout.fighters.map(f => f.techniques);
+    entry.setup(bout);
+    // (a script that gives him his grades and not his techniques: he carries what his grades give him, game/profile.mjs)
+    bout.fighters.forEach((f, i) => f.techniques === carried[i] && (f.techniques = loadout(f.skills)));
+  }
   settle(bout);
   return bout;
 }
