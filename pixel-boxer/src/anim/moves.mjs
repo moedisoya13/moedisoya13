@@ -283,6 +283,14 @@ export const MOVES = Object.assign(
       dur: 0.62,
       keys: [{ t: 0.1, e: 'out', lean: -15, hz: -0.1, hy: 0.01, lx: 0.2, ly: 0.08, lz: -0.14, rx: -0.2, ry: 0.1, rz: -0.1, hp: -12, le: 0.5, re: 0.5 }, { t: 0.3, lean: -9, hz: -0.07, lx: 0.12, ly: 0.02, lz: -0.08, rx: -0.12, ry: 0.03, rz: -0.06, hp: -5 }]
     },
+    /* a punch hammered down (a show-off's parry, anim/show.mjs): the arm that threw it knocked down and falling away, the
+       shoulder dragged down after it and the head left forward, open. Written for the lead hand; the rear's is the mirror
+       (the animator swaps the hands: `hand`) */
+    hammered: {
+      hand: true,
+      dur: 0.6,
+      keys: [{ t: 0.08, e: 'out', ly: -0.34, lz: -0.1, lx: -0.03, le: -0.2, side: 4, lean: 5, hp: 5, twist: -5 }, { t: 0.32, e: 'lin', ly: -0.28, lz: -0.08, lx: -0.02, le: -0.15, side: 3, lean: 4, hp: 3, twist: -4 }]
+    },
     // knocked down and out: a body (phys/fall.mjs); these only say so, and how long before he is lying still
     ko: { floor: true, stay: true, fall: true, dur: 1.2, keys: [] },
     slump: { floor: true, stay: true, fall: true, dur: 1.2, keys: [] },

@@ -257,6 +257,10 @@ function decide(bout, f, input, dt, who) {
           name = LOADED(out.name, out.side) === 'L' ? 'hook' : out.name === 'duck' ? 'upper' : 'cross';
           if (inside) name = name === 'hook' ? 'hookIn' : 'upperIn';
           f.link = Math.max(0, chain.indexOf(name));
+        } else if (what === 'power' && f.parried && f.parried.hammer && bout.t - f.parried.at <= RULES.counter) {
+          // (out of a hammering parry, the rear fist down: the power punch is the lead hook it has wound up, anim/show.mjs)
+          name = inside ? 'hookIn' : 'hook';
+          f.link = Math.max(0, chain.indexOf(name));
         } else if (what === 'power') {
           f.link = f.sinceLast < RULES.combo && f.lastPower ? (f.link + 1) % chain.length : 0;
           name = chain[f.link];
@@ -480,6 +484,8 @@ function viewOf(bout, i) {
       cover: f.cover ? 1 : 0,
       // a guard still young enough to turn a punch aside: the gloves are out meeting it, not yet pulled in to the face
       meet: f.cover && f.coverAge < f.k.parry ? 1 - f.coverAge / f.k.parry : 0,
+      // (and how long it has been up: a show-off's hammer is timed from it)
+      fresh: f.cover ? f.coverAge : null,
       // what the fight has taken out of him, for his body to show: hurt from his health, tired from his breath
       hurt: Math.max(0, Math.min(1, (45 - f.hp) / 45)),
       tired: Math.max(0, Math.min(1, (0.6 - f.stamina / f.k.staminaMax) / 0.6)),
@@ -573,7 +579,10 @@ function solvePose(bout, f, i, dt) {
   f.points = {
     L: beyond(at('LeftForeArm'), at('LeftHand'), 0.075), // the middle of each glove: on past the wrist
     R: beyond(at('RightForeArm'), at('RightHand'), 0.075),
-    head: beyond(at('Neck1'), at('Head'), 0.1)
+    head: beyond(at('Neck1'), at('Head'), 0.1),
+    // (and the elbows: a show-off's crossed forearms are in the way, and his elbow is what lands of an elbow strike)
+    LE: at('LeftForeArm'),
+    RE: at('RightForeArm')
   };
 }
 
@@ -643,6 +652,8 @@ function follow(bout, f, who, dt) {
   }
 }
 
+// a forearm, as the bout reckons it in the way: so many balls from the elbow to the glove, each as thick as the forearm
+const FOREARM = { n: 6, r: 0.045 };
 function strike(bout, f, other, who, dt) {
   const action = incoming(f);
   if (!action || !f.before || !other.before || other.down) return;
@@ -692,23 +703,39 @@ function strike(bout, f, other, who, dt) {
   if (action.chain.phase === 'coil') return;
   // what is in the way: his head, and, if he is covering up, his gloves in front of it
   let first = null;
-  const test = (what, key, r) => {
+  const test = (what, key, r, c0, c1) => {
     // (a glove already against his guard is met by it however it moves: it is in the way)
-    const s = meets(g0, g1, other.before[key], other.points[key], r, what === 'head' ? RULES.touch * dt : -Infinity);
-    if (s >= 0 && (!first || s < first.s)) first = { what, key, s };
+    c0 = c0 || other.before[key];
+    c1 = c1 || other.points[key];
+    const s = meets(g0, g1, c0, c1, r, what === 'head' ? RULES.touch * dt : -Infinity);
+    if (s >= 0 && (!first || s < first.s)) first = { what, key, s, c0, c1 };
   };
   test('head', 'head', RULES.glove + RULES.head);
   // (the gloves are in the way once they have got most of the way up: how quickly is his grade's)
-  if (other.cover && other.animator.covered >= RULES.guardUp) for (const key of ['L', 'R']) test('guard', key, RULES.glove * 2);
+  const guard = levelOf(other.skills, 'cover').cover;
+  if (other.cover && other.animator.covered >= RULES.guardUp) {
+    // (a fist coming down as a hammer is the hammer's, below, not a glove held in the way)
+    for (const key of ['L', 'R']) if (!(key === 'R' && guard.hammer && other.animator.hammering)) test('guard', key, RULES.glove * 2);
+    /* (a show-off's crossed arms: the forearms are in the way too, from the elbow to the glove, a capsule as thick as the
+       forearm and the glove coming at it: anim/show.mjs) */
+    if (guard.cross && other.before.LE && !other.animator.hammering)
+      for (const key of ['L', 'R'])
+        for (let i = 0; i < FOREARM.n; i++) {
+          const k = i / FOREARM.n;
+          test('guard', key, RULES.glove + FOREARM.r, M.lerp(other.before[key + 'E'], other.before[key], k), M.lerp(other.points[key + 'E'], other.points[key], k));
+        }
+  }
+  // (a show-off's guard put up fresh is a hammer of his rear fist: it turns a punch aside only if it comes down on the glove)
+  if (guard.hammer && other.cover && other.animator.hammering) test('hammer', 'R', RULES.glove * 2);
   if (!first) return;
 
   // ---- the blow: how fast the glove is closing on what it hit, and how much is behind it
   const at = M.lerp(g0, g1, first.s),
-    centre = M.lerp(other.before[first.key], other.points[first.key], first.s),
+    centre = M.lerp(first.c0, first.c1, first.s),
     line = M.sub(centre, at),
     ll = Math.hypot(line[0], line[1], line[2]) || 1,
     n = M.scale(line, 1 / ll),
-    closing = M.scale(M.sub(M.sub(g1, g0), M.sub(other.points[first.key], other.before[first.key])), 1 / dt),
+    closing = M.scale(M.sub(M.sub(g1, g0), M.sub(first.c1, first.c0)), 1 / dt),
     speed = Math.max(0, closing[0] * n[0] + closing[1] * n[1] + closing[2] * n[2]),
     mass = effectiveMass(action.chain, move),
     // (his power is how much of his body he gets behind it; a tired man gets less)
@@ -730,8 +757,22 @@ function strike(bout, f, other, who, dt) {
     felt = { J, dir: [side, vec[1], front] };
   const stop = Math.max(RULES.stop[0], Math.min(RULES.stop[1], J * RULES.stop[2]));
 
+  if (first.what === 'hammer') {
+    /* hammered down: the arm that threw it is knocked down and falls away, his head left open in front, and the defender has
+       his opening (and a lead hand wound up: his rear fist is down) */
+    begin(f, 'hammered', { hand });
+    f.stun = 0.6;
+    other.counter = RULES.counter;
+    const cover = levelOf(other.skills, 'cover');
+    bout.stop = 0.1;
+    other.parried = { hand: 'R', at: bout.t, level: cover, hammer: true };
+    const e = Object.assign({ type: 'parry', hammer: true }, blow, { who: 1 - who, on: who });
+    other.defence = { kind: 'parry', start: bout.t - other.coverAge, of: action.id, from: action.at, margin: null, late: false, counterAt: null, event: e, said: false };
+    return bout.events.push(e);
+  }
   if (first.what === 'guard') {
-    if (other.coverAge <= other.k.parry * (0.7 + 0.3 * fatigue(other))) {
+    // (a show-off's guard turns nothing aside but by its hammer: met fresh anywhere else, it is a block)
+    if (!guard.hammer && other.coverAge <= other.k.parry * (0.7 + 0.3 * fatigue(other))) {
       // turned aside: the puncher is thrown open, the defender has his opening
       begin(f, 'reel');
       f.stun = 0.6;
@@ -753,7 +794,8 @@ function strike(bout, f, other, who, dt) {
     other.animator.strike({ J: J * 0.25, dir: felt.dir });
     other.animator.brace({ J, hand: first.key, dir: felt.dir, level: levelOf(other.skills, 'cover') });
     bout.stop = stop * 0.4;
-    return bout.events.push(Object.assign({ type: 'block' }, blow));
+    // (and what of his guard it met: a glove, or a show-off's crossed forearm)
+    return bout.events.push(Object.assign({ type: 'block', part: first.c0 === other.before[first.key] ? 'glove' : 'forearm' }, blow));
   }
   const counter = !!action.counter,
     worth = J * (counter ? RULES.counterGain : 1),

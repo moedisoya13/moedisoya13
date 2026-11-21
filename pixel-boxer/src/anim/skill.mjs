@@ -103,6 +103,13 @@
               the U takes, metres across] }; loose (dirty): { off: half beats a U is off its landing, at most; size:
               [least, most] times; flip: the chance it goes the other way; skip: the chance a landing brings nothing; feint:
               the chance of a feint of the lead shoulder; shoulder: degrees of it } }
+     show     a show-off's stance (anim/show.mjs, docs/moves-plan-4.md §5.1): null but at 4암 and 5암. { drop: [x, y, z] metres
+              the lead hand is let down to the waist, swing: [metres it swings, a second, every: seconds between big swings (0:
+              it never stops), big: times] (the rear hand stays where a guard's is, at the chin), lean: degrees leant back, chin: degrees
+              the chin is pushed out, shoulder: degrees the lead shoulder is hunched up, roll: degrees it is turned in; taunt:
+              the chance of a taunt { idle: every 16 half beats standing, evade: just after a punch has missed him, hit: just
+              after one under 30 N·s has landed, hop: on the last hop moving away }, and long: how long a taunt lasts, times
+              the plan's, size: how big }
    evade: how he gets his head out of the way (anim/evade.mjs; each 0 or 1 in the textbook unless said)
      flinch   seconds he flinches before anything of the evasion starts; wince: how much of a beginner's flinch shows (the
               gloves up in front of his own eyes, the head jerked back and turned away)
@@ -138,6 +145,12 @@
               meet (metres the glove goes out to take it early, and degrees the shoulder rolls it off) }
      back     how quickly the parrying hand comes home, times; load, hand: the punch a parry leaves wound up, and which hand
               ('other', 'same'), q: how far the shoulder of that punch is already out
+     cross    a show-off's cross-arm guard (anim/show.mjs, docs/moves-plan-4.md §5.5): null but at 4암 and 5암. { L, R: [x, y,
+              z, elbow] each hand moved from the covered guard, lean: degrees further forward, chin: degrees buried }. The
+              forearms stop a punch as the gloves do (game/bout.mjs)
+     hammer   and his parry, the rear fist hammered down on the glove coming in: { up, rise: metres up to the ear and seconds,
+              down, fall: metres down and seconds, out: metres out in front as it comes down, back: seconds into the guard }
+              (block.push: metres the arm that took it drives on in, a legend's)
    dash: how he dashes (each 0 in the textbook unless said)
      upright  he does not sink into it (nor lean into it): stood up, the hands thrown open; rise: metres more he comes up
      prep     metres he stands up first, before he pushes
@@ -179,7 +192,8 @@ const TEXTBOOK_STANCE = {
   travel: TEXTBOOK_TRAVEL,
   flourish: null,
   paw: 0,
-  legend: null
+  legend: null,
+  show: null
 };
 const stance = more => Object.assign({}, TEXTBOOK_STANCE, more, { guard: Object.assign({}, TEXTBOOK_STANCE.guard, more.guard), travel: Object.assign({}, TEXTBOOK_STANCE.travel, more.travel) });
 const TEXTBOOK_FORM = { guard: 0, chin: 0, over: 0, tell: 0, dirty: 0, lively: 0.35, dip: -0.015, late: 0, drop: false, sep: 3, off: 0.03, with: 'trunk', tuck: 0, look: 0.9, bend: 0, exit: null, beat: null };
@@ -201,6 +215,20 @@ const away = more => Object.assign({}, TEXTBOOK_AWAY, more);
 // a legend's movement (anim/legend.mjs): clean, on his beat; dirty, off it, never the same twice, a shoulder feinted in it
 const LEGEND_CLEAN = { beat: true, weave: [0.07, 0.05], deep: [4, 0.085], deepLean: 4, slip: 0.07, knee: 10, sway: 5, dash: { in: [24, 0.04, 15], back: [8, 0.06], side: [0.11, 0.38, 0.05] }, loose: null };
 const LEGEND_DIRTY = Object.assign({}, LEGEND_CLEAN, { beat: false, weave: [0.065, 0.055], deepLean: 0, loose: { off: 0.4, size: [0.5, 1.3], flip: 0.3, skip: 0.15, feint: 0.2, shoulder: 9 } });
+
+/* a show-off's stance (anim/show.mjs, docs/moves-plan-4.md §5.1): the lead hand let down to the waist, swinging, leant back with
+   the chin out and the lead shoulder up; a great dirty fighter big and blatant about it, a legend all but still and then one big
+   swing, and his taunts the shorter and smaller (§5.4) */
+const SHOW_4A = { drop: [0.03, -0.33, 0], swing: [0.06, 1.1, 0, 1], lean: 6, chin: 6, shoulder: 5, roll: 3, taunt: { idle: 0.3, evade: 0.25, hit: 0.2, hop: 0.6 }, long: 1.25, size: 1 };
+const SHOW_5A = { drop: [0.02, -0.31, 0.01], swing: [0.012, 0.8, 2.6, 4], lean: 6, chin: 4, shoulder: 4, roll: 2, taunt: { idle: 0.15, evade: 0.4, hit: 0.3, hop: 0.4 }, long: 1, size: 0.6 };
+
+/* a show-off's guard (anim/show.mjs, §5.5): the arms crossed, the lead forearm across the chin and the rear one up over the
+   forehead, a great dirty fighter's high and wide open between them, a legend's low and tight; and the guard put up fresh is a
+   hammer of the rear fist on the glove coming in, a great dirty fighter's swung, a legend's the wrist let fall */
+const CROSS_4A = { L: [-0.11, 0.21, 0.012, 1.2], R: [-0.061, 0.186, -0.021, 0.8], lean: 6, chin: 6, pole: { L: [1, 0.8, 0], R: [-0.4, -0.2, 1] } };
+const CROSS_5A = { L: [-0.08, 0.24, 0.02, 1.2], R: [-0.07, 0.17, -0.04, 0.8], lean: 6, chin: 8, pole: { L: [1, 0.8, 0], R: [-0.4, -0.2, 1] } };
+const HAMMER_4A = { up: 0.06, rise: 0.05, down: 0.25, fall: 0.07, out: 0.16, across: 0.12, back: 0.15 };
+const HAMMER_5A = { up: 0.04, rise: 0.04, down: 0.1, fall: 0.06, out: 0.12, across: 0.1, back: 0.12 };
 
 export const LEVEL = {
   1: {
@@ -261,9 +289,9 @@ export const LEVEL = {
     chain: { early: [0.25, 0.25, 0, 0, 0], damp: [0.6, 0.6, 0.56, 0.6, 0.6], amp: [1.1, 1.15, 1.1, 1, 1], coil: 0.55, shown: 0.65, back: 1.05, backLag: 1, firm: 1.08, hold: 0.1, spring: { down: 0.6, wait: true } },
     form: form({ guard: -0.2, chin: -0.4, over: 0.15, dirty: 1, lively: 0.5, dip: -0.03, drop: true, sep: 7, off: 0.07, with: 'hips', tuck: 4, look: 1, bend: 4, exit: 'roll' }),
     // the beat rubbed out: low and heavy, the feet dragged and lurching, the head rolling low in its own time
-    stance: stance({ bounce: 0.45, knee: 2.4, hop: 0.6, rock: 0.8, jitter: 0.25, drag: 0.6, hips: -0.03, lean: 4, guard: { lead: [-0.01, 0, 0.03] }, travel: { width: 0.95, face: 0.1, pivot: 8 }, look: 1, head: { A: 0.055, D: 0.04, T: 4, beat: 'roll', level: { every: 2.6, depth: 0.08, lean: 5 } }, paw: 0.06 }),
+    stance: stance({ bounce: 0.45, knee: 2.4, hop: 0.6, rock: 0.8, jitter: 0.25, drag: 0.6, hips: -0.03, travel: { width: 0.95, face: 0.1, pivot: 8 }, look: 1, head: { A: 0.055, D: 0.04, T: 4, beat: 'roll', level: { every: 2.6, depth: 0.08, lean: 5 } }, show: SHOW_4A }),
     evade: evade({ knee: { share: 1.1, depth: 1.05 }, out: 0.75, hold: 0.8, back: 0.8, move: 0.95, delay: { feet: 0.017, trunk: 0.017, head: 0.033 }, cut: 'clear', load: 0.7, look: 1, lively: 0.3, in: 0.04, low: 0.02, just: 0.008 }),
-    cover: cover({ arrive: 0.045, hands: { lz: 0.02, lx: -0.04, ly: -0.01 }, body: { hy: -0.035, lean: 4 }, look: 1, meet: { scale: 0.7, add: { hx: 0.03, twist: -5 } }, block: { brace: 0.6, lean: 4, settle: 1.2 }, back: 1.5, load: 0.7, hand: 'other' }),
+    cover: cover({ arrive: 0.045, cross: CROSS_4A, hammer: HAMMER_4A, look: 1, meet: { scale: 0.7, add: { hx: 0.03, twist: -5 } }, block: { brace: 0.6, settle: 1.2 }, back: 1.5, load: 0.7, hand: 'other' }),
     dash: dash({ drag: 1, low: 0.02, extra: 0.16 }),
     entry: entry({ angle: 15, load: 1 }),
     away: away({ jitter: 0.25, drop: 1.2 })
@@ -288,9 +316,9 @@ export const LEVEL = {
     chain: { early: [0.4, 0.4, 0, 0, 0], damp: [0.6, 0.6, 0.5, 0.6, 0.6], amp: [1.15, 1.25, 1.18, 1, 1], coil: 0.25, shown: 0.55, back: 1.12, backLag: 1, firm: 1.2, hold: 0.08, spring: { down: 0.4 } },
     form: form({ guard: -0.3, chin: -0.5, over: 0.1, dirty: 2, lively: 0.7, dip: -0.04, drop: true, sep: 11, off: 0.1, with: 'legs', tuck: 6, look: 1, bend: 6, exit: 'angle' }),
     // lower still and always rolling, the lead shoulder up and the lead hand in his eyes, the beat nowhere
-    stance: stance({ bounce: 0.35, knee: 1.9, hop: 0.5, rock: 0.8, lag: 1.1, jitter: 0.25, drag: 0.7, hips: -0.04, lean: 5, shoulder: 3, guard: { lead: [-0.03, 0.03, 0.07] }, travel: { width: 0.95, face: 0.1, pivot: 8, cycle: 1.9 }, look: 1, head: { A: 0.06, D: 0.05, T: 4, beat: 'roll', level: { every: 1.9, depth: 0.08, lean: 5 } }, flourish: 'dirty', legend: LEGEND_DIRTY }),
+    stance: stance({ bounce: 0.35, knee: 1.9, hop: 0.5, rock: 0.8, lag: 1.1, jitter: 0.25, drag: 0.7, hips: -0.04, show: SHOW_5A, travel: { width: 0.95, face: 0.1, pivot: 8, cycle: 1.9 }, look: 1, head: { A: 0.06, D: 0.05, T: 4, beat: 'roll', level: { every: 1.9, depth: 0.08, lean: 5 } }, flourish: 'dirty', legend: LEGEND_DIRTY }),
     evade: evade({ knee: { share: 1.15, depth: 1.1 }, out: 0.62, hold: 0, back: 0.73, move: 0.92, delay: { trunk: 0.017, head: 0.033 }, cut: 'clear', load: 1, look: 1, lively: 0.3, follow: 0.3, in: 0.06, low: 0.02, just: 0.015 }),
-    cover: cover({ arrive: 0.035, hands: { lz: -0.02 }, body: { hy: -0.045, lean: 4, side: -3 }, look: 1, meet: { scale: 0.45, add: { hx: 0.04, twist: -8 } }, block: { brace: 0.6, lean: 4, settle: 1.2 }, back: 1.8, load: 1, hand: 'same', q: 0.3 }),
+    cover: cover({ arrive: 0.035, cross: CROSS_5A, hammer: HAMMER_5A, look: 1, meet: { scale: 0.45, add: { hx: 0.04, twist: -8 } }, block: { brace: 0.6, lean: 4, settle: 1.2, push: 0.04 }, back: 1.8, load: 1, hand: 'other' }),
     dash: dash({ drag: 1, low: 0.02 }),
     entry: entry({ pivot: [30, 0.12], load: 1 }),
     away: away({ jitter: 0.25, drop: 1.2 })

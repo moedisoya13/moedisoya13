@@ -60,7 +60,10 @@ test('grades: the better he is, the later he can leave it (the back end of the w
 test('grades: a parry is a guard up in time, and how quickly the gloves get there is the grade', () => {
   const p = lv => W('parry', lv);
   assert.ok(p('1').to < p('2').to && p('2').to < p('3').to && p('3').to <= p('4m').to && p('4m').to <= p('5m').to, LEVELS.map(lv => p(lv).to).join(' '));
-  assert.ok(Math.max(...LEVELS.map(lv => p(lv).from)) - Math.min(...LEVELS.map(lv => p(lv).from)) <= 1, 'the front of the window is the rule\'s, not the grade\'s');
+  // (a show-off's parry is a hammer of the rear fist that has to come down on the glove: his window is his own, and narrower,
+  // docs/moves-plan-4.md §5.5; tests/show.test.mjs)
+  const clean = LEVELS.filter(lv => !LEVEL[lv].cover.hammer);
+  assert.ok(Math.max(...clean.map(lv => p(lv).from)) - Math.min(...clean.map(lv => p(lv).from)) <= 1, 'the front of the window is the rule\'s, not the grade\'s');
   const arrive = lv => LEVEL[lv].cover.arrive;
   assert.ok(arrive('1') > arrive('2') && arrive('2') > arrive('3') && arrive('3') >= arrive('4m') && arrive('4m') > arrive('5m'));
 });
