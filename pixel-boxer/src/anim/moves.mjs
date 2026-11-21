@@ -239,9 +239,10 @@ const PUNCHES = {
     hand: 'L', arm: 'straight', kind: 'straight', zone: 'solar', of: 'jab', reach: 1.12, close: 1.0,
     chain: { coil: 0.07, rate: [58, 50, 56, 46, 44], turn: [9, 14], set: 0.8 },
     body: { off: 0.6, dip: 0.5 },
-    level: { lkf: 22, rkf: 20, lean: 14, bow: 8 },
-    spot: [2.3, -30],
-    coil: { ly: -0.13, lz: -0.04, lx: -0.02 },
+    // (the hand let down with him, under the other man's lead arm, and held there until the shoulder sends it)
+    level: { lkf: 22, rkf: 20, lean: 14, bow: 8, ly: -0.2, lz: -0.04, lx: -0.02 },
+    spot: [1.8, -10],
+    coil: {},
     links: { drive: { hz: 0.06, lfz: 0.07 }, hips: { yaw: -9, rx: 0.02, ry: 0.03 }, trunk: { twist: -14, lean: 4, hp: 3 }, shoulder: {}, elbow: {} }
   },
   // the body cross: down further, the shoulder brought down to the height of the target so that the arm goes out level
@@ -265,15 +266,15 @@ const PUNCHES = {
      side under the elbow, on its sweep, as the hook lands (anim/animator.mjs: sweep; bent, the furthest the bent arm reaches
      from the shoulder). It turns a little further than the hook. */
   hookBody: {
-    hand: 'L', arm: 'swing', kind: 'hook', zone: 'liver', of: 'hook', reach: 0.84, close: 0.74, land: 0.7, bent: 0.46,
+    hand: 'L', arm: 'swing', kind: 'hook', zone: 'liver', of: 'hook', reach: 0.84, close: 0.8, land: 0.7, bent: 0.46,
     chain: { coil: 0.13, rate: [58, 42, 52, 60, 0], skip: ['elbow'], turn: [41, 34], locked: true },
     body: { turn: 0.4, off: 0, bend: 0, tuck: 0, sep: 0.5, dip: 0, lively: 0 },
-    level: { lkf: 30, rkf: 20, side: 14, lean: 25, bow: 14 },
+    level: { lkf: 38, rkf: 28, side: 20, lean: 18, hz: -0.08, hx: 0.08, bow: 14 },
     spot: [1.2, 60],
     coil: { yaw: 15, twist: 6, lean: 2, lx: 0.1, ly: -0.1, lz: 0.08, le: 0.3, lc: 1 },
     links: {
       drive: { lfw: -38, lfp: 20, lkx: -26, hz: 0.05, lx: 0.02, lz: 0.04, le: 0.35, lc: 1 },
-      hips: { yaw: -34, hx: -0.02 },
+      hips: { yaw: -30, hx: -0.02 },
       trunk: { twist: -30, side: -2, rz: -0.02, ry: 0.03 },
       shoulder: {},
       elbow: {}
@@ -287,9 +288,9 @@ const PUNCHES = {
     level: {},
     coil: { lkf: 30, rkf: 34, lean: 9, yaw: -6, side: -4, rx: 0.06, ry: -0.3, rz: 0.1, re: -0.2, hp: 4, st: -0.01 },
     links: {
-      drive: { lkf: -22, rkf: -24, st: 0.01, rfw: 30, rfp: 26, lfp: 10, ry: -0.6 },
+      drive: { lkf: -30, rkf: -34, st: 0.01, rfw: 30, rfp: 26, lfp: 10, ry: -0.6 },
       hips: { yaw: 20, hz: 0.08 },
-      trunk: { twist: 22, lean: -4, side: 3, lz: -0.06 },
+      trunk: { twist: 22, lean: -8, side: 3, lz: -0.06 },
       shoulder: {},
       elbow: {}
     }

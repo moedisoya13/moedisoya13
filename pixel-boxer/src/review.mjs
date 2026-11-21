@@ -16,13 +16,13 @@ import { guardPose } from './anim/animator.mjs';
 import { step } from './game/bout.mjs';
 import { ENTRIES, freshBout, drive } from './footwork.mjs';
 import { DEFENSE } from './defense.mjs';
-import { LADDER, STANCES, DIRTY, FOOTWORK, ENTRY, SHOWOFF, TAUNTING } from './ladder.mjs';
+import { LADDER, STANCES, DIRTY, FOOTWORK, ENTRY, SHOWOFF, TAUNTING, BODY_LADDER, REAR_LADDER } from './ladder.mjs';
 import { BODYSHOTS } from './bodyshots.mjs';
 
 const DT = 1 / 60,
   q = new URLSearchParams(location.search),
   num = (name, d) => (q.has(name) ? Number(q.get(name)) : d),
-  all = [...ENTRIES, ...DEFENSE, ...STANCES, ...LADDER, ...DIRTY, ...FOOTWORK, ...ENTRY, ...SHOWOFF, ...TAUNTING, ...BODYSHOTS],
+  all = [...ENTRIES, ...DEFENSE, ...STANCES, ...LADDER, ...DIRTY, ...FOOTWORK, ...ENTRY, ...SHOWOFF, ...TAUNTING, ...BODYSHOTS, ...BODY_LADDER, ...REAR_LADDER],
   entry = all.find(e => e.id === q.get('entry')) || all[0],
   n = num('n', 12),
   from = num('from', 0),

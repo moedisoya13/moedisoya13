@@ -165,15 +165,21 @@ test('a press carries what the head means by it, and is otherwise the press it a
     settle(bout);
     step(bout, [Object.assign({ power: true }, extra), idle], DT);
     const asked = bout.fighters[0].action.asked,
+      name = bout.fighters[0].action.name,
       seen = run(bout, 0.8);
-    return { asked, seen, at: bout.fighters.map(f => [f.x, f.z, f.points.head]) };
+    return { asked, name, seen, at: bout.fighters.map(f => [f.x, f.z, f.points.head]) };
   };
   const plain = press({}, { all: '4m' }),
-    meant = press({ tech: 'shift', body: true }, { all: '4m' });
+    meant = press({ tech: 'shift', body: true }, { all: '4m' }),
+    tech = press({ tech: 'shift' }, { all: '4m' });
   assert.equal(plain.asked, undefined);
   assert.deepEqual(meant.asked, { tech: 'shift', body: true });
-  assert.deepEqual(meant.seen, plain.seen);
-  assert.deepEqual(meant.at, plain.at);
+  // (a technique whose motion is not built changes nothing; a press for the body is the body punch, stage C2: bout.mjs decide)
+  assert.deepEqual(tech.asked, { tech: 'shift', body: false });
+  assert.deepEqual(tech.seen, plain.seen);
+  assert.deepEqual(tech.at, plain.at);
+  assert.equal(plain.name, 'cross');
+  assert.equal(meant.name, 'crossBody');
   // (a technique his grade does not open is not carried; nor one nobody has heard of)
   assert.deepEqual(press({ tech: 'shift', body: true }, { all: '3' }).asked, { tech: null, body: true });
   assert.equal(press({ tech: 'shift' }, { all: '3' }).asked, undefined);

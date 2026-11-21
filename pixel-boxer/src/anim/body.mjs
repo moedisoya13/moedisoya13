@@ -165,10 +165,8 @@ export function lower(c, action, move, lv) {
     back = chain.phase === 'recover' ? 1 - smooth(chain.since / L.up) : chain.phase === 'done' ? 0 : 1,
     x = go * back * L.depth;
   if (x <= 0) return 0;
-  c.lkf += (w.lkf || 0) * L.knee * x;
-  c.rkf += (w.rkf || 0) * L.knee * x;
-  c.lean += ((w.lean || 0) + (w.bow || 0) * (1 - L.knee)) * x;
-  c.side += (w.side || 0) * x;
+  for (const ch in w) if (ch !== 'bow') c[ch] += w[ch] * (ch === 'lkf' || ch === 'rkf' ? L.knee : 1) * x;
+  c.lean += (w.bow || 0) * (1 - L.knee) * x;
   c.hp += L.look * x;
   return x;
 }

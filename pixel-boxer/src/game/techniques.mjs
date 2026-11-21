@@ -64,7 +64,7 @@ export function asked(f, input) {
    iq at all (one thing at a time). ready: the body punches are built (stage C2 sets it); until then the head does not roll
    for them, so a bout rolls as it did. LOW: the punches for the body (§3.3, §4.4) and their kinds; a press with body: true is
    one too. */
-export const BODY = { ready: false, base: 0.1, iq: 0.3, guarded: 2, held: 0.3, pressure: 1.4, blocked: 0.6, within: 1, after: 0.35, least: 0.3 };
+export const BODY = { ready: true, base: 0.1, iq: 0.3, guarded: 2, held: 0.3, pressure: 1.4, blocked: 0.6, within: 1, after: 0.35, least: 0.3 };
 const LOW = { jabBody: 'straight', crossBody: 'straight', hookBody: 'hook', upperBody: 'upper', shiftHook: 'hook' };
 export const forBody = (name, action) => name in LOW || !!(action && action.asked && action.asked.body);
 const toBody = e => !!e.zone || e.part === 'body';

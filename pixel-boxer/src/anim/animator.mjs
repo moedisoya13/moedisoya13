@@ -752,8 +752,7 @@ export function createAnimator(seed) {
         // (and a beginner does not use his knees at all: what the wind-up and the chain do to his height is not done)
         const knees = form.dip > 0 ? 0 : 1,
           height = ch => (ch === 'hy' || ch === 'lkf' || ch === 'rkf' ? knees : 1);
-        // (a punch to the body's wind-up is the way down to it, and all of that shows: moves.mjs level)
-        for (const ch in move.coil) c[ch === 'twist' && !form.sep ? 'yaw' : ch] += move.coil[ch] * chain.coil.q * (ch === 'lc' || ch === 'le' || ch === 'rc' || ch === 're' || (ch === 'twist' && move.chain.locked) || (ch === 'yaw' && move.arm === 'swing') || move.level ? 1 : chain.shown ?? 1) * height(ch);
+        for (const ch in move.coil) c[ch === 'twist' && !form.sep ? 'yaw' : ch] += move.coil[ch] * chain.coil.q * (ch === 'lc' || ch === 'le' || ch === 'rc' || ch === 're' || (ch === 'twist' && move.chain.locked) || (ch === 'yaw' && move.arm === 'swing') ? 1 : chain.shown ?? 1) * height(ch);
         // (a flicker's body: a great dirty fighter's swing, a legend's wrist: moves.mjs)
         const flick = move.flick ? move.flick[Math.max(0, (form.dirty || 1) - 1)] : 1;
         LINKS.forEach((link, i) => {

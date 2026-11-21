@@ -270,7 +270,7 @@ TEXTBOOK_COVER.low = LOW_3;
    (game/bout.mjs: seen; anim/body.mjs: coverLow) */
 const DOWN_1 = { depth: 0.65, knee: 0.4, look: 10, up: 0.35 };
 const DOWN_2 = { depth: 0.87, knee: 0.6, seam: 0.05, up: 0.25 };
-const DOWN_4M = { look: -3, show: 0.05 };
+const DOWN_4M = { depth: 1.15, look: -3, show: 0.05 };
 const DOWN_4A = { depth: 0.85 };
 const DOWN_5M = { look: -3, show: 0.05 };
 const DOWN_5A = { depth: 0.85, look: -3, show: 0.05 };

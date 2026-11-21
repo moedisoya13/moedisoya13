@@ -368,7 +368,7 @@ function decide(bout, f, input, dt, who) {
            flicker pressed again within FLICK.again of the last one arriving is another, with no wind-up, up to FLICK.most */
         /* (a press that names a punch is that punch: a script's, or a technique's answer, the rear hook out of a sway back or a
            shoulder roll; and a press for the body is the body punch of the one it would have been: moves.mjs TO_BODY) */
-        const named = typeof dir === 'string' && MOVES[dir] && MOVES[dir].punch ? dir : null,
+        const named = typeof dir === 'string' && MOVES[dir] && MOVES[dir].punch && !THROWS[dir] ? dir : null,
           low = !named && !!sign && !!sign.body && !!TO_BODY[name];
         if (named) name = named;
         else if (low) name = TO_BODY[name];
@@ -484,10 +484,12 @@ function travel(f, input, dt, other) {
   if (incoming(f) && other && !other.down) {
     /* A punch is stepped into: he closes on a head that is just out of range, so a combination follows its target back
        and a counter reaches a man who has been thrown onto his heels. (It is the head he measures to, not the feet.) */
-    const head = other.points ? other.points.head : [other.x, 0, other.z],
+    // (a punch to the body measures to his trunk: moves.mjs zone)
+    const low = !!MOVES[f.action.name].zone && !!other.points && !!other.points.waist,
+      head = other.points ? (low ? other.points.waist : other.points.head) : [other.x, 0, other.z],
       ox = head[0] - f.x,
       oz = head[2] - f.z,
-      far = (Math.hypot(ox, oz) || 1) + 0.09,
+      far = (Math.hypot(ox, oz) || 1) + (low ? 0 : 0.09),
       close = Math.max(0, Math.min(RULES.stepIn * (f.action.counter ? 1.5 : 1), (far - (f.action.variant === 'elbow' ? ELBOW.close : MOVES[f.action.name].close)) * 9));
     if (far < MOVES[f.action.name].reach + 0.6) (ix = (ox / far) * close), (iz = (oz / far) * close);
   }
@@ -1034,8 +1036,12 @@ function strike(bout, f, other, who, dt) {
   action.struck = true;
   action.chain.landed = true;
   action.chain.v[3] = action.chain.v[4] = 0; // the arm is stopped by what it hit
-  // (an elbow that has landed comes away off his jaw at once: the arm starts home, it does not lean on into his head)
-  if (elbow) (action.chain.phase = 'recover'), (action.chain.since = 0);
+  // (an elbow that has landed comes away off his jaw at once: the arm starts home, it does not lean on into his head; and so
+  // does a punch to the body, his trunk folding round where it was: anim/body.mjs)
+  if (elbow || move.level) (action.chain.phase = 'recover'), (action.chain.since = 0);
+  // (and the body turning behind a punch to the body is stopped with it, and all of it starts home at once: the fist is in him,
+  // and he is folding round it)
+  if (move.level) action.chain.v.fill(0), (action.chain.since = 0.06), (action.chain.back *= 1.8);
   f.sinceLast = 0;
   /* (on his trunk: where, game/trunk.mjs, and the part of him the effects throw sweat off; below his hips, nothing that
      counts has happened, and the glove is stopped there) */
@@ -1137,7 +1143,8 @@ function strike(bout, f, other, who, dt) {
   bout.stop = Math.min(RULES.stop[1], stop * (counter ? 1.5 : 1));
   // (to the body: his breath, and on the liver, his legs, a moment late)
   const winded = spot ? breathOf(other, worth, spot) : 0,
-    liver = !!spot && spot.zone === 'liver' && livered(bout, other, worth);
+    // (a man who only stands there and takes it, a rung's or a card's target, f.stands: src/ladder.mjs, src/bodyshots.mjs)
+    liver = !!spot && spot.zone === 'liver' && !other.stands && livered(bout, other, worth);
   if (spot) other.stamina = Math.max(0, other.stamina - winded);
   const down = other.hp <= 0 || liver,
     /* (out cold: a finishing blow with RULES.out of health or more to spare, or one that caught him throwing; limp from a

@@ -88,3 +88,20 @@ export const BODYSHOTS = [
     })
   )
 ];
+
+/* The elbow block against the liver hook itself (docs/moves-plan-5.md §3.3, §3.4; the second stage of the body shots): a pro
+   throws the liver hook (moves.mjs hookBody, pressed by name) from its range at a man of each grade holding his guard up. The
+   man reads it off the way down to it, from the moment that shows (game/bout.mjs: seen; anim/body.mjs: shown), and brings his
+   elbow down his grade's moment later (skill.mjs: cover.low); the hook lands a fifth of a second after it is pressed. */
+export const LIVER_BLOCK = LEVELS.map(lv => ({
+  id: `block-liver@${lv}`, name: '팔꿈치 블록 (리버 훅)', en: 'The elbow block against the liver hook', group: '막기', zone: 'liver', level: lv, item: 'block-liver',
+  note: '가드를 든 채 프로의 리버 훅을 받습니다. 상대가 무릎으로 내려가기 시작하는 순간부터 읽고, 등급만큼 지나 맞는 쪽 팔꿈치가 옆구리로 내려옵니다. 프로부터는 훅보다 먼저 내려와 팔꿈치로 막고, 아마추어는 두 팔을 다 늦게 내려 맞으며, 입문은 내리지 않습니다.',
+  loop: 2, hurt: true, view: { yaw: 1.0, pitch: 0.2 },
+  me: () => HOME,
+  // (from 0.85 m, stepping in to its reach as it goes: closer, his guard and the arms of the man throwing it are in each other)
+  him: () => [HOME[0] + 0.85, HOME[1]],
+  cover: t => t > 0.1 && t < 1.3,
+  against: [[0.6, 'power', 'hookBody']],
+  // (the card is the block: one it gets through to his liver does not put him down here, game/bout.mjs f.stands)
+  setup: b => ((b.fighters[0].skills = { all: lv }), (b.fighters[0].stands = true))
+}));
