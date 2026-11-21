@@ -261,15 +261,21 @@ define('shell', {
 
 define('crossArm', {
   name: '크로스암 가드', section: '§4A.8', open: ['3', '4m', '4a', '5m', '5a'], as: 'cover', standard: lv => lv.grade >= 4 && lv.side === 'a', ready: true
-  /* no dice: carried, his guard is this shape whenever it is up. (Today the guard reads the shape off his grade, skill.mjs
-     cover.cross; stage H1 makes it read has(f, 'crossArm') and the grade's CROSS.) */
+  /* no dice: carried, his guard is this shape whenever it is up (game/bout.mjs crossOf: has(f, 'crossArm') and his grade's
+     skill.mjs CROSS; the shape, anim/show.mjs crossGuard) */
 });
 
+// (the rear hook out of a roll, or right up close, centre to centre, the rear uppercut: §4A.7)
+const ROLLED = { inside: 0.74 };
 define('rollCounter', {
-  name: '숄더 롤 & 카운터', section: '§4A.7', open: ['4m', '4a', '5m', '5a'],
-  // a straight at his head within reach: the guard up as a parry's, and rolled (60% of his parries)
-  answer: { of: 'parry', share: 0.6, when: s => s.inReach && s.head && s.punch === 'straight', control: s => ({ cover: s.soon, tech: 'rollCounter' }) },
+  name: '숄더 롤 & 카운터', section: '§4A.7', open: ['4m', '4a', '5m', '5a'], ready: true,
+  /* (the roll is built, stage H1: the guard put up meant as rollCounter rolls, game/bout.mjs rollFor, anim/show.mjs
+     shoulderRoll; the counter is the rear hook, stage C2 (moves.mjs hookR, pressed by name), the rear uppercut right up close
+     (§4A.7: inside 0.74 m); how much of it the roll has wound up already is stage H2's) */
+  /* a straight at his head within reach: the guard up as a parry's, and rolled (60% of his parries). Rolled as its legs drive:
+     its trunk fires too late for a roll to be turning as it lands (it makes the punch miss instead), stage H1's measure */
+  answer: { of: 'parry', share: 0.6, when: s => s.inReach && s.head && s.punch === 'straight', control: s => (s.coming.chain.on[0] ? { cover: true, tech: 'rollCounter' } : {}) },
   // rolled: the straight met his lead shoulder as it rolled (stage H1's block: part 'shoulder', roll: true)
   opening: s => (s.used && s.used.id === 'rollCounter' && since(s, s.mem.kept, 0.3) && s.mem.kept.roll ? 'rollCounter:' + s.mem.kept.at : null),
-  counter: () => ({ power: true, tech: 'rollCounter' })
+  counter: s => ({ power: s.far < ROLLED.inside ? 'upperIn' : 'hookR', tech: 'rollCounter' })
 });

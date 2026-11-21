@@ -48,22 +48,22 @@ export const ITEMS = [
   },
   {
     id: 'roll', name: '위빙', en: 'Bob and weave', group: '피하기', kind: 'evade', move: ['roll', 1], card: 'roll',
-    note: '훅이 오는 쪽으로 머리를 숙여 U자를 그리며 밑으로 빠지고, 반대편으로 올라옵니다. U자는 무릎이 그립니다: 들어가는 쪽 무릎이 먼저 굽고, 바닥에서 두 무릎이 다 굽고, 나오는 쪽 무릎이 받는 동안 반대쪽은 펴며 밀어 체중이 한 발에서 다른 발로 넘어갑니다. 1은 무릎을 거의 안 써 모서리가 있는 길로 숙였다 일어나고, 2는 구간마다 끊기고, 3부터 매끄러운 U, 암은 좁게, 더 뒤로 빠집니다. 카드 아래는 가장 늦은 프레임, 위빙 전체 시간, 머리가 내려간 깊이 가운데 골반(무릎)이 낸 몫입니다.',
+    note: '훅이 오는 쪽으로 머리를 숙여 U자를 그리며 밑으로 빠지고, 반대편으로 올라옵니다. U자는 무릎이 그립니다: 들어가는 쪽 무릎이 먼저 굽고, 바닥에서 두 무릎이 다 굽고, 나오는 쪽 무릎이 받는 동안 반대쪽은 펴며 밀어 체중이 한 발에서 다른 발로 넘어갑니다. 1은 무릎을 거의 안 쓰고 허리로 깊이 숙여 바닥을 보며 두 글러브를 머리 위로 올리고, U 없이 숙인 채 그대로 일어섭니다. 숙이는 데 오래 걸리고 오래 숙이고 있어서 훅이 나오기 훨씬 전에 찍어야 피합니다(읽은 것이 아니라 겁먹고 미리 숙인 것). 2는 허리가 먼저 접히고 무릎이 뒤따르며 바닥에서 잠깐 멈추고 U를 반만 그립니다. 1·2도 3단계만큼(26 cm 넘게) 내려갑니다. 3부터 매끄러운 U, 암은 좁게, 더 뒤로 빠집니다. 카드 아래는 가장 늦은 프레임, 위빙 전체 시간, 머리가 내려간 깊이 가운데 골반(무릎)이 낸 몫입니다.',
     loop: 2.4, punch: ['hook', 1.1], outcome: 'whiff', before: 'block', view: { yaw: 0.5, pitch: 0.22 }
   },
   {
     id: 'parry', name: '패리', en: 'Parry', group: '막기', kind: 'parry', card: 'parry',
-    note: '주먹이 닿기 직전에 올린 가드는 주먹을 옆으로 쳐냅니다. 글러브가 가드 자리에 도착하는 빠르기가 등급이라 구간의 뒤끝이 갈립니다. 1은 팔 전체로 쫓아가 쳐내고, 5는 손목만 틀어 넘깁니다. 4암·5암은 뒷손 주먹의 아랫면으로 잽을 위에서 내려칩니다(해머링 패리): 귀 높이로 올렸다 내려찍는 글러브가 잽 글러브에 실제로 닿아야 쳐내고, 쳐내면 잽을 던진 팔이 아래로 떨어집니다. 내려찍는 때를 맞춰야 해서 구간이 좁고, 이어지는 장전 카운터는 앞손 훅입니다. 카드 아래는 패리가 되는 구간과 손이 가드에서 나간 거리입니다.',
+    note: '주먹이 닿기 직전에 올린 가드는 주먹을 옆으로 쳐냅니다. 글러브가 가드 자리에 도착하는 빠르기가 등급이라 구간의 뒤끝이 갈립니다. 1은 팔 전체로 쫓아가 쳐내고, 5는 손목만 틀어 넘깁니다. 4암·5암은 뒷손 주먹의 아랫면으로 잽을 위에서 내려칩니다(해머링 패리): 턱 앞에서 광대뼈 높이로 올렸다 내려찍는 글러브가 잽 글러브에 실제로 닿아야 쳐내고, 쳐내면 잽을 던진 팔이 아래로 떨어집니다. 내려찍는 때를 맞춰야 해서 구간이 좁고, 이어지는 장전 카운터는 앞손 훅입니다. 카드 아래는 패리가 되는 구간과 손이 가드에서 나간 거리입니다.',
     loop: 2, punch: ['jab', 0.8], outcome: 'parry', view: { yaw: 0.4, pitch: 0.26 }
   },
   {
     id: 'block', name: '블록', en: 'Block', group: '막기', kind: 'block',
-    note: '미리 굳혀 둔 가드는 막기만 합니다. 1은 글러브가 얼굴까지 밀려 들어오고 손이 벌어지고, 4명은 닿기 직전 몸통을 돌리며 머리를 빼 주먹과 같이 가고, 4·5암은 팔을 엇갈린 가드로 받아 주먹이 글러브가 아니라 팔뚝에 막히고, 5암은 막은 팔로 밀고 들어옵니다. 카드 아래는 충격량과 가드가 다시 선 시간입니다.',
+    note: '미리 굳혀 둔 가드는 막기만 합니다. 1은 글러브가 얼굴까지 밀려 들어오고 손이 벌어지고, 4명은 닿기 직전 몸통을 돌리며 머리를 빼 주먹과 같이 가고, 4·5암은 크로스암 가드(뒷 글러브는 턱 앞, 앞팔은 배 앞에 가로로)로 받아 주먹이 뒷 글러브에 막히고, 5암은 막은 팔로 밀고 들어옵니다. 카드 아래는 충격량과 가드가 다시 선 시간입니다.',
     loop: 2, punch: ['cross', 0.8], cover: t => t > 0.2 && t < 1.3, outcome: 'block', view: { yaw: 0.4, pitch: 0.26 }
   },
   {
     id: 'guard', name: '가드', en: 'Covering up', group: '막기', kind: 'guard',
-    note: '잽, 잽, 스트레이트를 제자리에서 가드로 받습니다. 1은 두 글러브로 눈을 가리고 팔꿈치가 벌어지고, 2는 귀마개처럼 높게, 4암·5암은 팔을 엇갈려(앞팔은 가로로 눈썹 높이, 뒷팔은 비스듬히 세워) 팔뚝으로 막고, 5명은 느슨하게 듭니다. 엇갈린 팔 밑으로 올라오는 어퍼는 맞습니다. 카드 아래는 밀린 거리와 두 글러브 사이 간격입니다.',
+    note: '잽, 잽, 스트레이트를 제자리에서 가드로 받습니다. 1은 두 글러브로 눈을 가리고 팔꿈치가 벌어지고, 2는 귀마개처럼 높게, 4암·5암은 고전형 크로스암(뒷 글러브는 턱 앞, 앞팔은 배 앞에 가로로, 옆으로 서서 앞어깨를 올림)으로 뒷 글러브와 어깨로 막고, 5명은 느슨하게 듭니다. 카드 아래는 밀린 거리와 두 글러브 사이 간격입니다.',
     loop: 2.4, punch: ['cross', 1.6], throws: [[0.8, 'jab'], [1.2, 'jab'], [1.6, 'power']], cover: t => t > 0.2, outcome: 'block', before: 'block', view: { yaw: 0.4, pitch: 0.26 }
   },
   {
@@ -73,8 +73,8 @@ export const ITEMS = [
   }
 ];
 // the frame (after the press that throws the punch) a grade answers on: the middle of his window for that card (a grade with
-// no window at all answers where a pro does, and is hit: a beginner's and an amateur's weave under a hook that lands on its
-// sweep, README)
+// no window at all, which no card has since a beginner's and an amateur's weave got under the hook (docs/moves-plan-5.md §2),
+// answers where a pro does, and is hit)
 const answer = (item, lv) => {
   const w = WINDOWS[item.card];
   return w && w[lv] && w[lv].at !== null ? w[lv].at : w && w['3'] && w['3'].at !== null ? w['3'].at : 0;
@@ -191,25 +191,35 @@ DRILLS.push(
     note: '멀리서 스트레이트를 치며 밟고 들어가다 상대의 잽에 맞습니다. 맞기 직전 몸이 앞으로 초속 3.6 m로 들어가고 있어, 잽이 민 것보다 들어가던 운동량이 커서 앞으로 쏟아져 엎드립니다(어디로 떨어질지는 물리가 정합니다). 두 손으로 밀어 네발이 되고, 한쪽 무릎을 거쳐 일어납니다.',
     loop: 5.4, gap: FRONT.gap, press: [[FRONT.cross, 'power']], punch: ['jab', FRONT.jab], outcome: 'hit', fall: 'ko', view: { yaw: 0.5, pitch: 0.3 }
   }),
-  /* Out cold (docs/moves-plan-4.md §6): the finishing blow with RULES.out of health or more to spare (bout.mjs). The script
-     tries to get him up as the knockdowns' do, and nothing happens: a man out cold does not get up. */
+  /* Out cold (docs/moves-plan-4.md §6, docs/moves-plan-5.md §1): the finishing blow with RULES.out of health or more to
+     spare (bout.mjs). The script tries to get him up as the knockdowns' do, and nothing happens: a man out cold does not get
+     up. A hook knocks him out stiff with his neck wrenched round (outTwist), a cross stiff as a log (outStiff), an uppercut
+     limp, lifted and let go of slowly (outLift); the limp that lets go of everything at once (out) is no blow's now. */
   Object.assign(down(0.05, 1.02, 2.8), {
-    id: 'out-limp', name: '실신 · 림프', en: 'Out cold, limp', group: '다운', out: true,
-    note: '다운 · 옆으로와 같은 훅이 체력을 2.5 넘게 넘겨 의식이 끊깁니다. 모든 관절의 근육이 0.04초 안에 한꺼번에 풀려, 선 자리에서 무릎부터 접히며 훅이 지나간 쪽으로 쏟아지고, 팔은 몸을 받치지 않아 머리가 그대로 캔버스에 닿습니다. 누운 뒤에는 숨만 쉬고, 한쪽 아래팔이 캔버스에서 들려 1.5초 굳어 있다가 천천히 내려옵니다. 카운트가 끝나도 일어나지 않습니다. 카드 아래는 맞고 나서 머리가 캔버스에 닿기까지의 시간입니다.',
-    loop: 6.4, punch: ['hook', 1.0], cover: t => t > 0.1 && t < 0.97, outcome: 'hit', before: 'block', fall: 'out', view: { yaw: 0.5, pitch: 0.3 }
+    id: 'out-twist', name: '실신 · 통나무 · 훅', en: 'Out cold, twisted', group: '다운', out: true,
+    note: '다운 · 옆으로와 같은 훅이 체력을 2.5 넘게 넘겨 의식이 끊깁니다. 맞는 순간 목만 움직여 고개가 훅이 지나간 쪽(왼쪽)으로 약 60° 돌아가고 턱이 당겨진 채 0.06초 만에 굳고, 척추·엉덩관절·무릎·발목·팔은 가드 그대로 굳어 있습니다. 굳은 몸은 훅이 민 쪽 발(앞발)의 바깥날을 축으로 한 덩어리로 옆으로 넘어가며 그쪽으로 조금 돌아, 위팔과 어깨부터 캔버스에 닿습니다. 닿은 뒤에야 풀려 등으로 구르고, 한쪽 아래팔이 들린 채 1.5초 있다가 천천히 내려옵니다. 상대는 쓰러지는 그에게서 한 걸음 물러납니다. 일어나지 않습니다. 카드 아래는 맞고 나서 머리가 캔버스에 닿기까지의 시간입니다.',
+    // (the other man steps back off him as he goes down: his rear foot comes down where the other man's lead foot is)
+    loop: 7.6, punch: ['hook', 1.0], cover: t => t > 0.1 && t < 0.97, outcome: 'hit', before: 'block', fall: 'outTwist', back: [1.3, 0.4], view: { yaw: 0.5, pitch: 0.3 }
   }),
   Object.assign(down(0.05, 0.62, 2.6), {
     id: 'out-log', name: '실신 · 통나무', en: 'Out cold, stiff', group: '다운', out: true,
     note: '다운 · 뒤로와 같은 스트레이트가 체력을 2.5 넘게 넘겨 의식이 끊깁니다. 척추·엉덩관절·무릎·팔이 가드 자세 그대로 굳어, 무릎을 꺾지 않고 나무처럼 뒤로 넘어갑니다(목과 발목만 풀림). 캔버스에 닿은 뒤에야 굳은 관절이 풀리고, 뒤통수가 캔버스에 닿아 한 번 작게 튑니다. 가드에 굳어 있던 한쪽 아래팔은 누운 뒤에도 들린 채 1.5초 있다가 천천히 내려오고, 숨 말고는 움직이지 않으며 일어나지 않습니다. 카드 아래는 맞고 나서 머리가 캔버스에 닿기까지의 시간입니다.',
     loop: 7.2, punch: ['cross', 0.6], outcome: 'hit', fall: 'outStiff', view: { yaw: 0.5, pitch: 0.3 }
+  }),
+  // (a pro's uppercut has too little in it to go RULES.out past anything: a great one's, 4m, does)
+  Object.assign(down(0.05, 1.36, 3.1), { setup: b => ((b.knockdowns = true), (b.fighters[1].skills = { upper: '4m' })) }, {
+    id: 'out-limp', name: '실신 · 림프 · 어퍼', en: 'Out cold, limp', group: '다운', out: true,
+    note: '4명의 어퍼컷이 체력을 2.5 넘게 넘겨 의식이 끊깁니다(프로의 어퍼는 그만큼 세지 않습니다). 맞는 순간 고개가 뒤로 40° 넘게 젖혀지며 몸이 발끝으로 4~5 cm 들렸다가, 들린 채 매달린 듯 멈추고 발바닥이 다시 닿습니다. 그다음 아래에서 위로 천천히 풀립니다: 무릎이 먼저 꺾여 주저앉고, 가드가 풀려 글러브가 내려오고, 엉덩관절, 목(젖혀졌던 머리가 앞으로 떨어짐), 마지막으로 척추가 풀려 상체가 접힙니다. 팔은 몸을 받치지 않고, 선 자리에서 0.5 m 안에 무너집니다. 누운 뒤에는 숨만 쉬고 한쪽 아래팔이 들려 1.5초 있다가 천천히 내려오며, 일어나지 않습니다. 카드 아래는 맞고 나서 머리가 캔버스에 닿기까지의 시간입니다.',
+    loop: 7.4, punch: ['upper', 1.34], cover: t => t > 0.1 && t < 1.25, outcome: 'hit', before: 'block', fall: 'outLift', back: [1.6, 0.4], view: { yaw: 0.5, pitch: 0.3 }
   })
 );
 
 const placed = e =>
   Object.assign({}, e, {
     me: () => HOME,
-    // (countered, he is left where the counter puts him: it is the end of the exchange; a drill may put him further off)
-    him: t => (e.kind === 'counter' && t > e.punch[1] + 0.3 ? null : [HOME[0] + (e.gap || (e.punch ? RANGE[e.punch[0]] : 1.15)), HOME[1]]),
+    // (countered, he is left where the counter puts him: it is the end of the exchange; a drill may put him further off, or
+    // step him back off a man he has knocked out: back)
+    him: t => (e.kind === 'counter' && t > e.punch[1] + 0.3 ? null : [HOME[0] + (e.gap || (e.punch ? RANGE[e.punch[0]] : 1.15)) + (e.back && t > e.back[0] ? e.back[1] : 0), HOME[1]]),
     against: e.throws || (e.punch ? THROW[e.punch[0]].map(([dt, button]) => [e.punch[1] + dt, button]) : [])
   });
 // the blows and the knockdowns (one card each: being hit has no grade), and the graded rows

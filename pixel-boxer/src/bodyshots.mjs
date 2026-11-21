@@ -83,8 +83,8 @@ export const BODYSHOTS = [
   ...LEVELS.map(lv =>
     shot({
       id: `block-elbow@${lv}`, name: '팔꿈치 블록 (간)', en: 'The elbow block', group: '막기', zone: 'liver', level: lv, item: 'block-elbow',
-      note: '가드를 든 채 간을 노린 훅을 팔로 받습니다. 가드의 팔꿈치와 아래팔이 몸통 앞에 있어 길을 막고, 상대의 엉덩이가 발사된 뒤 등급만큼 지나 맞는 쪽 팔꿈치가 옆구리로 내려오며(2는 두 팔을 다), 반대 글러브는 머리에 붙어 있습니다. 1은 팔꿈치를 벌린 가드라 맞습니다.',
-      loop: 2, gap: 0.85, punch: ['hook', 0.6], cover: t => t > 0.1 && t < 1.3, outcome: lv === '1' || lv === '4a' || lv === '5a' ? 'hit' : 'block', setup: b => (b.fighters[0].skills = { all: lv }), view: { yaw: 1.0, pitch: 0.2 }
+      note: '가드를 든 채 간을 노린 훅을 팔로 받습니다. 가드의 팔꿈치와 아래팔이 몸통 앞에 있어 길을 막고, 상대의 엉덩이가 발사된 뒤 등급만큼 지나 맞는 쪽 팔꿈치가 옆구리로 내려오며(2는 두 팔을 다), 반대 글러브는 머리에 붙어 있습니다. 1은 팔꿈치를 벌린 가드라 맞습니다. 크로스암 가드(4암·5암)는 팔이 이미 배 앞에 있어 팔꿈치를 내리지 않고 그 팔로 받습니다.',
+      loop: 2, gap: 0.85, punch: ['hook', 0.6], cover: t => t > 0.1 && t < 1.3, outcome: lv === '1' ? 'hit' : 'block', setup: b => (b.fighters[0].skills = { all: lv }), view: { yaw: 1.0, pitch: 0.2 }
     })
   )
 ];

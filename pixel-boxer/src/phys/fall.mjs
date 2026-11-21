@@ -9,9 +9,11 @@
    blow and his weight take him: back and away from a straight, the way a hook's glove was going, forward if he was coming
    in, further for a harder one. The shoulders are held to the same table the solver and the audit use (rig/body.mjs:
    SHOULDER).
-   Knocked out cold (docs/moves-plan-4.md §6), it is not his legs that go but he, and the same body is let go of another
-   way (OUT): limp, every joint at once; or stiff as a log, locked as he was until he is down on the canvas. Lying there he
-   breathes, one forearm stays up off the canvas a while and comes down slowly, and nothing else of him moves.
+   Knocked out cold (docs/moves-plan-4.md §6, docs/moves-plan-5.md §1), it is not his legs that go but he, and the same body
+   is let go of another way (OUT): limp, every joint at once; stiff as a log, locked as he was until he is down on the
+   canvas; from a hook, a log whose neck has been wrenched round and locked so (TWIST); from an uppercut, lifted onto his
+   toes, held there a moment and let go of slowly from the knees up (LIFT). Lying there he breathes, one forearm stays up off
+   the canvas a while and comes down slowly, and nothing else of him moves.
    Lying there, any man still breathes.
    It is stepped at a fixed rate (twelve steps a frame), with nothing random in it, so a bout replays exactly.
      const body = createFall(pose, before, dt, blow, out)
@@ -19,8 +21,12 @@
                                                         (newton-seconds), dir (unit, his space: the way the glove was going
                                                         as it met him), at (where, his space), push (his whole body's speed
                                                         from the shove and from what he was already moving at, [x, y, z]
-                                                        m/s, or [x, z]) } | null; out: 'limp' | 'log' if he is out cold
+                                                        m/s, or [x, z]) } | null; out: 'limp' | 'log' | 'twist' | 'lift' if
+                                                        he is out cold
      stepFall(body, dt, obstacles)                     obstacles: [[centre, radius]] he cannot fall through (his space)
+     shoveFall(body, v)                                the shove of a glove going on through him, given as he falls (his
+                                                        space, m/s: game/bout.mjs, follow): all of him given it, or, stiff,
+                                                        turned over his foot by it
      poseOf(body, clock)                               -> a pose, as solve() returns one (rot, root, at, head, stretch)
      lyingOf(body)                                     -> how he has come to rest: { on: 'back' | 'front' | 'side', down:
                                                           'L' | 'R' (the side he lies on), hips, head (his space) }
@@ -28,13 +34,15 @@
                                                           s, tone (0 none .. 1) }]
      moveFall(body, R, off)                            carry the body into another frame of his own (getting up where he lies)
    Out cold, body.freed is when a log's locked joints let go (seconds), body.lay when he has come to lie still, and body.post
-   the arm whose forearm stays up ({ s: 'L' | 'R' }).
+   the arm whose forearm stays up ({ s: 'L' | 'R' }); a twisted log's body.pivot the foot he goes over on the edge of
+   ({ foot }), and a lifted man's body.lift how high the blow throws him ({ h (metres), a (m/s^2 up, while pushed), land
+   (when he is down on his feet again, seconds), feet (where the balls of the feet that were down stay) }).
    The method is position-based dynamics of rigid bodies (Mueller et al., "Detailed rigid body simulation with extended
    position based dynamics", 2020): each step the bodies move freely, then every joint, limit, contact and muscle is put
    right by moving and turning the bodies as their masses and inertias share it, and the velocities are what that comes to. */
 import * as M from '../rig/m3.mjs';
 import { NAMES, PARENT, TPOSE, fk } from '../rig/skeleton.mjs';
-import { RANGE, FOOT, HEAD, shoulderOf } from '../rig/body.mjs';
+import { RANGE, FOOT, HEAD, SHOULDER, shoulderOf } from '../rig/body.mjs';
 
 const G = 9.81,
   STEPS = 12,
@@ -247,12 +255,38 @@ export function createFall(pose, before, dt, blow, out) {
     /* (A man out cold and locked stiff is one rigid piece standing on his feet: the shove reaches him where it lands, at
        his chest, and the canvas holds his feet, so it turns him over them like a tree rather than carrying all of him,
        feet and all, off them; and nothing of it lifts him: its upward part, and the blow's, are left out.) */
+    /* (A hook that wrenches his neck round spends itself on his neck (body.neck, below): what turns him over is the shove of
+       the glove going on through, given as he falls (shoveFall); here, only what he was already moving at. An uppercut's
+       upward part throws him up onto his toes (body.lift, below) and is left out of the shove, and he is shoved along the
+       canvas only so much of what an ordinary knockdown is: he crumples where he stands.) */
     const log = out === 'log',
-      flat = v => (log ? [v[0], Math.min(0, v[1]), v[2]] : v),
+      twist = out === 'twist',
+      lift = out === 'lift',
+      flat = v => (log || twist || lift ? [v[0], Math.min(0, v[1]), v[2]] : v),
+      along = v => (lift ? [v[0] * LIFT.along, v[1], v[2] * LIFT.along] : v),
       M_all = PIECES.reduce((s, p) => s + p.mass, 0),
-      push = flat(!blow.push ? [0, 0, 0] : blow.push.length === 3 ? blow.push.slice() : [blow.push[0], 0, blow.push[1]]),
-      J = flat(M.scale(blow.dir, blow.J || 0)),
+      push = along(flat(!blow.push ? [0, 0, 0] : blow.push.length === 3 ? blow.push.slice() : [blow.push[0], 0, blow.push[1]])),
+      J = twist ? [0, 0, 0] : along(flat(M.scale(blow.dir, blow.J || 0))),
       base = M.sub(push, M.scale(J, 1 / M_all));
+    if (lift) {
+      /* thrown up as fast as the blow's upward part throws 75 kg (the bout's shove: THROW times physics), so as high as that
+         throws a body, but no higher than his legs reach on his toes, as the animator lifts a man hit from under (HIT.lift);
+         and an uppercut that puts him out cold throws him up so far at the least (least). Pushed up over LIFT.time and then
+         let fly, the push included in the height (v0^2 / 2g + v0 time / 2 is it), and down on his feet when he has come
+         back down as far (land, seconds) */
+      const v = ((blow.J || 0) * Math.max(0, blow.dir[1]) * LIFT.throw) / M_all,
+        x = (v * v) / (2 * G),
+        h = Math.max(LIFT.least, x <= LIFT.knee ? x : LIFT.knee + (LIFT.most - LIFT.knee) * Math.tanh((x - LIFT.knee) / (LIFT.most - LIFT.knee))),
+        T = LIFT.time,
+        v0 = G * (-T / 2 + Math.sqrt((T * T) / 4 + (2 * h) / G)),
+        y1 = (v0 * T) / 2;
+      body.lift = { h, a: v0 / T, land: T + (v0 + Math.sqrt(v0 * v0 + 2 * G * y1)) / G, feet: {} };
+      // (and a foot that was on the canvas stays on the ball of it, where it was, while he is up: tiptoe)
+      for (const s of LIMB) {
+        const ball = at(bodies[INDEX[s + 'foot']], FOOT.ball);
+        if (ball[1] - FOOT.sole[0][1] < LIFT.on) body.lift.feet[s] = [ball[0], FOOT.sole[0][1], ball[2]];
+      }
+    }
     if (!log) for (const b of bodies) b.v = M.add(b.v, base);
     else {
       /* (the shove, all of his weight times its speed along the canvas, lands high on his chest and turns him over the
@@ -283,6 +317,76 @@ export function createFall(pose, before, dt, blow, out) {
       b.w = M.add(b.w, iw(b, cross(r, p)));
     }
   }
+  /* (out cold from a hook: his neck wrenched round the way the glove went, his chin pulled down and his head tilted after
+     it, by as much as the blow's size says (TWIST); from an uppercut: his head thrown back, and later dropping onto his
+     chest (LIFT)) */
+  const neck = JOINTS.findIndex(j => j.kind === 'neck');
+  if (out === 'twist') {
+    const s = blow && blow.dir[0] < 0 ? -1 : 1,
+      k = blow ? (blow.J || 0) / TWIST.ref : 1,
+      by = ([at, lo, hi]) => clamp(at * k, lo, hi);
+    body.neck = { from: body.hold[neck], to: neckAt(by(TWIST.down), s * by(TWIST.tilt), s * by(TWIST.turn)), s };
+  } else if (out === 'lift') {
+    const was = neckOf(body.hold[neck]);
+    body.neck = { from: body.hold[neck], to: neckAt(-LIFT.neck, 0, was.turn), down: neckAt(LIFT.chin, 0, was.turn) };
+  }
+  return body;
+}
+
+/* A neck as tools/audit.mjs reads one (the head's turn on the chest): its up tilted forward, the chin down (+), and to his
+   left (+), and its front turned to his left (+), degrees; and the turn of the head on the chest that is so many of each. */
+function neckOf(q) {
+  const up = qrot(q, [0, 1, 0]),
+    f = qrot(q, [0, 0, 1]);
+  return { down: Math.atan2(up[2], up[1]) * DEG, tilt: Math.atan2(up[0], up[1]) * DEG, turn: Math.atan2(f[0], f[2]) * DEG };
+}
+function neckAt(down, tilt, turn) {
+  const u = unit([Math.tan(tilt * RAD), 1, Math.tan(down * RAD)]),
+    ax = cross([0, 1, 0], u),
+    swing = len(ax) > 1e-9 ? qaxis(unit(ax), Math.acos(clamp(u[1], -1, 1))) : [0, 0, 0, 1];
+  return qnorm(qmul(swing, qaxis([0, 1, 0], turn * RAD)));
+}
+
+/* The shove of the glove going on through him, given to his body as he falls (his space, m/s). All of him is given it; but
+   a man locked stiff with his neck wrenched round (a twisted log) is one rigid piece standing on his feet, so it reaches him
+   at his chest and turns him over the foot it goes toward, as a body hinged there takes a blow so high: about the outside
+   edge of that foot, the line from the outside of its heel to the outside of its ball (through the middles of the balls of
+   the sole there, so that they roll on the canvas and do not dig into it), by as much of it as goes across that line, and
+   none of it lifts him. Which foot is found the first time and kept (body.pivot). He is turned about the upright through
+   the middle of that edge too, the way his head was wrenched, so much for each metre a second of the shove (TWIST.spin):
+   a hook glances off him going round. */
+export function shoveFall(body, v) {
+  const bs = body.bodies;
+  if (body.out !== 'twist') {
+    for (const b of bs) b.v = M.add(b.v, v);
+    return body;
+  }
+  const flatV = [v[0], 0, v[2]],
+    s = len(flatV);
+  if (s < 1e-9) return body;
+  if (!body.pivot) {
+    const d = M.scale(flatV, 1 / s);
+    body.pivot = { foot: ['Lfoot', 'Rfoot'].map(n => bs[INDEX[n]]).reduce((a, b) => (dot(b.x, d) > dot(a.x, d) ? b : a)).name };
+  }
+  const foot = bs[INDEX[body.pivot.foot]],
+    x = body.pivot.foot[0] === 'L' ? 1 : -1,
+    ball = at(foot, FOOT.sole[x > 0 ? 1 : 2][0]),
+    heel = at(foot, FOOT.sole[x > 0 ? 4 : 5][0]),
+    pivot = M.scale(M.add(ball, heel), 0.5),
+    // (the way across the edge, outward: the foot's own outside, along the canvas)
+    side = qrot(foot.q, [x, 0, 0]),
+    out = unit([side[0], 0, side[2]]),
+    across = Math.max(0, dot(flatV, out)),
+    axis = unit(cross([0, 1, 0], out)),
+    M_all = bs.reduce((m, b) => m + 1 / b.im, 0),
+    moment = bs.reduce((m, b) => {
+      const r = M.sub(b.x, pivot),
+        o = M.sub(r, M.scale(axis, dot(r, axis)));
+      return m + dot(o, o) / b.im;
+    }, 0),
+    high = at(bs[INDEX.chest], TWIST.at)[1] - pivot[1],
+    w = M.add(M.scale(axis, (across * M_all * high) / moment), [0, (body.neck ? body.neck.s : 1) * TWIST.spin * s, 0]);
+  for (const b of bs) (b.v = M.add(b.v, cross(w, M.sub(b.x, pivot)))), (b.w = M.add(b.w, w));
   return body;
 }
 
@@ -338,7 +442,10 @@ function limit(j, p, c) {
     const z = qrot(rel, [0, 0, 1]),
       sh = shoulderOf([d[0] * j.sOf, d[1], d[2]], [z[0] * j.sOf, z[1], z[2]], L);
     if (sh.zone > 0) {
-      const e = (sh.elev - sh.zone) * RAD,
+      /* (hanging low behind him, where the table lets an arm be in any plane up to SHOULDER.low, the margin does not reach,
+         and put back onto the line itself it reads a hair past it: there, half a degree further in) */
+      const line = sh.elev - sh.zone,
+        e = (line - (line <= SHOULDER.low + 1e-6 ? 0.5 : 0)) * RAD,
         pl = sh.plane * RAD;
       dn = [Math.cos(pl) * Math.sin(e) * j.sOf, -Math.cos(e), Math.sin(pl) * Math.sin(e)];
     }
@@ -467,6 +574,47 @@ const tone = (j, t) => 1 - smooth((t - j.tone[0]) / (j.tone[1] - j.tone[0]));
    OUT.down seconds (the canvas, or his own body, stopping it where it meets them), and the hold goes out of it in OUT.fade. */
 const OUT = { limp: 0.04, hold: 0.5, most: 1.5, let: 0.04, lock: 30000, lay: { speed: 0.1, arm: 0.2, for: 0.25, most: 4 }, rise: 0.3, raised: 1.5, down: 1.6, open: 10, fade: 0.3, stiff: 400 };
 const LOCKED = ['spine', 'hip', 'knee', 'shoulder', 'elbow'];
+/* ---- Out cold from a hook (docs/moves-plan-5.md §1.2): a log, whose neck is not let go but wrenched round.
+     twist  in the first TWIST.time his neck alone moves: his head turned the way the glove went (TWIST.turn: degrees at
+            TWIST.ref newton-seconds, in proportion, kept between the two after it), his chin pulled down (down) and his head
+            tilted that way (tilt), the rest of him locked as a log's from the blow on, and his ankles too (a log's go at
+            once: but he goes over sideways on the edge of a foot, which must turn with the leg to stay on it); then the neck
+            is locked as it has come to be, and he goes over in one piece, turned over the outside edge of the foot the
+            glove's shove goes toward (shoveFall: the shove taken at his breastbone, TWIST.at on his chest, a little lower
+            than a log takes his: higher, he lands too hard) and round the upright through it, the way his head went,
+            TWIST.spin radians a second for each metre a second of the shove; let go of as a log is (OUT), neck and all.
+            The back of his head does not come up off the canvas (BOUNCE): his head is turned, and it is his upper arm and
+            shoulder that meet the canvas first; he rolls onto his back, and a forearm is put up as a limp man's is. */
+const TWIST = { ref: 85, turn: [55, 45, 65], down: [22, 15, 28], tilt: [8, 5, 11], time: 0.06, spin: 0.5, at: [0, -0.05, 0], locked: [...LOCKED, 'ankle'] };
+/* ---- Out cold from an uppercut (§1.3): lifted, held, and let go of slowly from the knees up.
+     lift   thrown up onto his toes as the animator lifts a man hit from under (THROW times physics, so high as that throws
+            a body, as far as his legs reach: knee, most metres), pushed up over LIFT.time and let fly, his head thrown back
+            (neck degrees) over hold seconds; then held, LIFT.tone of his muscles, while he comes down onto his feet again,
+            his head still back; and then let go of, each kind of joint over its own span of seconds (let): the knees first,
+            the arms, the hips, the neck (his head dropping forward, toward chin degrees, as it goes), and the spine last.
+            Every joint is held as stiffly as LIFT.stiff (or its own: JOINTS) at all of its tone, and the hips and the spine
+            fold forward as they go (fold, degrees). Shoved along the canvas LIFT.along of what an ordinary knockdown is (and
+            not up: the lift is that), he crumples where he stands. An uppercut that puts him out throws him up `least`
+            metres at the least; the balls of his feet that were on the canvas (within `on` of it) stay where they were while
+            he is up (tiptoe), his ankles loose (`loose` of their hold) until he is down on his feet again. */
+const LIFT = {
+  on: 0.015,
+  time: 0.03,
+  knee: 0.04,
+  most: 0.055,
+  least: 0.045,
+  throw: 2.2,
+  along: 0.3,
+  neck: 40,
+  chin: 35,
+  hold: 0.05,
+  tone: 0.6,
+  let: { knee: [0.25, 0.55], ankle: [0.25, 0.55], shoulder: [0.3, 0.55], elbow: [0.3, 0.55], hip: [0.35, 0.7], neck: [0.4, 0.75], spine: [0.5, 0.95] },
+  loose: 0.1,
+  fold: { spine: 10, hip: -15 },
+  stiff: { spine: 6000, hip: 6000, knee: 6000, ankle: 6000, neck: 1200 }
+};
+const LIFTED = Math.max(...Object.values(LIFT.let).map(s => s[1])); // (all of it let go of by then)
 // (the back of a log's head coming up off the canvas as it first meets it: how fast, m/s, held for so long, s, while the rest of
 // him comes down behind it; it is set down by a body turned over its heel, not thrown at the canvas, so the speed is its own)
 const BOUNCE = { speed: 1.2, for: 0.06 };
@@ -514,13 +662,15 @@ function clearOf(body, p) {
   return { trunk: len(M.sub(p, M.add(lo, M.scale(line, clamp(dot(M.sub(p, lo), line) / dot(line, line), 0, 1))))), head: len(M.sub(p, at(bs[INDEX.head], [0, 0.18, 0.02]))) };
 }
 /* The way the forearm comes down from where it is held up: the elbow opening, or closing, or the upper arm turning about
-   itself one way or the other (as far as the shoulder lets it), whichever takes the glove lowest without its ever going up
-   on the way or into his trunk or head; -> { shoulder, bend } where it ends (the canvas or his body stop it short of there). */
+   itself one way or the other (as far as the shoulder lets it), or turning and opening together, whichever takes the glove
+   lowest without its ever going up on the way or into his trunk or head; -> { shoulder, bend } where it ends (the canvas or
+   his body stop it short of there), or null if every way goes up or into him. */
 function downward(body, p) {
   const s = p.s,
     sOf = p.sOf,
     ways = [{ shoulder: p.shoulder, bend: OUT.open }, { shoulder: p.shoulder, bend: 135 }];
   for (const turn of [90, 60, -90, -60]) ways.push({ shoulder: qnorm(qmul(p.shoulder, qaxis([sOf, 0, 0], turn * RAD))), bend: p.bend });
+  for (const turn of [90, 60, -90, -60]) ways.push({ shoulder: qnorm(qmul(p.shoulder, qaxis([sOf, 0, 0], turn * RAD))), bend: OUT.open });
   let best = null;
   for (const to of ways) {
     let last = gloveAt(body, s, p.shoulder, p.bend)[1],
@@ -538,21 +688,63 @@ function downward(body, p) {
     }
     if (fine && (!best || last < best.y - 0.01)) best = { y: last, to };
   }
-  return best ? best.to : ways[0];
+  return best ? best.to : null;
 }
 /* What holds joint k now: how much (w, 0..1), to what (the child's turn on its parent) and how stiffly. */
 function holdOf(body, j, k, t) {
   let w,
-    stiff = j.stiff;
+    stiff = j.stiff,
+    to = body.hold[k];
+  const wrung = body.out === 'twist' && j.kind === 'neck';
   if (!body.out) w = tone(j, t);
-  else if (body.out === 'log' && LOCKED.includes(j.kind)) (w = body.freed === undefined ? 1 : 1 - smooth((t - body.freed) / OUT.let)), (stiff = body.freed === undefined ? OUT.lock : j.stiff);
-  else w = 1 - smooth(t / OUT.limp);
+  else if (body.out === 'lift') ({ w, to, stiff } = lifted(body, j, k, t));
+  else if ((body.out === 'log' && LOCKED.includes(j.kind)) || (body.out === 'twist' && (TWIST.locked.includes(j.kind) || wrung))) {
+    (w = body.freed === undefined ? 1 : 1 - smooth((t - body.freed) / OUT.let)), (stiff = body.freed === undefined ? OUT.lock : j.stiff);
+    if (wrung) to = wrenched(body, t);
+  } else w = 1 - smooth(t / OUT.limp);
   const p = body.post;
   if (p && (k === p.k[0] || k === p.k[1])) {
     const now = posed(p, t);
     if (now.w >= w) return { w: now.w, to: k === p.k[0] ? now.shoulder : bent(now.bend, p.sOf), stiff: OUT.stiff };
   }
-  return { w, to: body.hold[k], stiff };
+  return { w, to, stiff };
+}
+/* A twisted log's neck: going round to where the hook wrenches it over TWIST.time, and then locked as it has come to be. */
+function wrenched(body, t) {
+  const n = body.neck;
+  if (t < TWIST.time - 1e-9) return qslerp(n.from, n.to, smooth(t / TWIST.time));
+  if (!n.locked) n.locked = qmul(qconj(body.bodies[INDEX.chest].q), body.bodies[INDEX.head].q);
+  return n.locked;
+}
+/* A lifted man's foot on the ball of it: turned about his ankle, wherever his ankle has been thrown to, so that the ball is
+   where it was on the canvas (body.lift.feet), the heel coming up off it. */
+function tiptoe(body, s) {
+  const foot = body.bodies[INDEX[s + 'foot']],
+    ankle = at(foot, [0, 0, 0]),
+    u = unit(M.sub(at(foot, FOOT.ball), ankle)),
+    want = unit(M.sub(body.lift.feet[s], ankle)),
+    ax = cross(u, want),
+    sn = len(ax);
+  if (sn < 1e-9) return;
+  const R = qaxis(M.scale(ax, 1 / sn), Math.atan2(sn, dot(u, want)));
+  foot.x = M.add(ankle, qrot(R, M.sub(foot.x, ankle)));
+  foot.q = qnorm(qmul(R, foot.q));
+}
+/* A lifted man's hold on each joint now: all of it while he is thrown up, LIFT.tone of it while he hangs there, and gone over
+   the span of that kind of joint; to how he was, but his neck thrown back and then dropping forward as it goes. */
+function lifted(body, j, k, t) {
+  const span = LIFT.let[j.kind],
+    held = t < LIFT.hold ? 1 - (1 - LIFT.tone) * smooth(t / LIFT.hold) : LIFT.tone,
+    // (his ankles let his heels up off the canvas as he is thrown up, and take him again as he comes down onto his feet)
+    up = j.kind === 'ankle' && body.lift ? LIFT.loose + (1 - LIFT.loose) * smooth((t - body.lift.land + LIFT.hold) / LIFT.hold) : 1,
+    w = held * up * (1 - smooth((t - span[0]) / (span[1] - span[0]))),
+    stiff = LIFT.stiff[j.kind] || j.stiff;
+  // (the hips and the spine folding forward as they go: he settles onto his feet and pours forward over them)
+  if (LIFT.fold[j.kind]) return { w, to: qslerp(body.hold[k], qmul(qaxis([1, 0, 0], LIFT.fold[j.kind] * RAD), body.hold[k]), smooth((t - span[0]) / (span[1] - span[0]))), stiff };
+  if (j.kind !== 'neck' || !body.neck) return { w, to: body.hold[k], stiff };
+  const n = body.neck,
+    to = t < LIFT.hold ? qslerp(n.from, n.to, smooth(t / LIFT.hold)) : qslerp(n.to, n.down, smooth((t - span[0]) / (span[1] - span[0])));
+  return { w, to, stiff };
 }
 // what is left of his muscles' hold on each joint, now
 export function muscles(body) {
@@ -610,12 +802,20 @@ function free(body) {
    lies still. */
 function lie(body) {
   body.lay = body.t;
-  // (a log whose locked arm has been pressed down onto the canvas as he landed has it put up as a limp man's is)
-  if (body.out === 'limp' || (body.post && gloveOf(body.bodies, body.post.s)[1] < POST.up)) {
+  const put = () => {
     const pick = ['L', 'R'].map(s => [s, raise(body, s)]).filter(([, r]) => r).sort((a, b) => b[1].y - a[1].y)[0];
     if (pick) body.post = { s: pick[0], sOf: pick[0] === 'L' ? 1 : -1, k: ARM[pick[0]], shoulder: pick[1].shoulder, bend: pick[1].bend, rise: OUT.rise, from: body.t };
+  };
+  /* (a log whose locked arm has been pressed down onto the canvas as he landed has it put up as a limp man's is; and so has a
+     twisted log, who goes over on his shoulder and rolls onto his back with his locked arm up off the canvas from the
+     shoulder: it would only come down by dropping) */
+  if (body.out === 'limp' || body.out === 'lift' || body.out === 'twist' || (body.post && gloveOf(body.bodies, body.post.s)[1] < POST.up)) put();
+  if (body.post) {
+    let to = downward(body, body.post);
+    // (and so is one that has no way down that does not go into him: lying across him, it would only drop off him)
+    if (!to && !body.post.rise) put(), (to = body.post.rise ? downward(body, body.post) : null);
+    (body.post.until = body.t + body.post.rise + OUT.raised), (body.post.to = to || { shoulder: body.post.shoulder, bend: OUT.open });
   }
-  if (body.post) (body.post.until = body.t + body.post.rise + OUT.raised), (body.post.to = downward(body, body.post));
   for (const b of body.bodies) if (!body.post || (b.name !== body.post.s + 'arm' && b.name !== body.post.s + 'fore')) freeze(b, true);
 }
 // (a piece held where it is, as if nothing could move it: what a body put to sleep is, a piece at a time; and let go of)
@@ -642,6 +842,9 @@ export function stepFall(body, dt, obstacles) {
     head = bs[INDEX.head];
   for (let n = 0; n < STEPS; n++) {
     body.t += h;
+    // (lifted: all of him but his feet pushed up while the blow throws him, his feet drawn up after him by his ankles; given
+    // before what he has is reckoned, as a shove is)
+    if (body.lift && body.t <= LIFT.time + 1e-9) for (const b of bs) if (!b.frozen && !b.name.endsWith('foot')) b.v[1] += (body.lift.a + G) * h;
     const before = energy(bs),
       touching = [], // contacts this step: [piece, its local point, normal, how fast that point was going along it]
       pressed = []; // a limb kept out of his own trunk or head this step: [limb, its local point, the other piece, normal]
@@ -677,6 +880,7 @@ export function stepFall(body, dt, obstacles) {
         if (fix) angular(chest, pelvis, most(fix), 0, h);
       }
       for (const s of LIMB) if (!bs[INDEX[s + 'thigh']].frozen) kneeWay(bs, s);
+      if (body.lift && body.t < body.lift.land) for (const s in body.lift.feet) tiptoe(body, s);
       // ---- the canvas, which holds him up and grips him
       for (const b of bs)
         for (const [local, r] of b.balls) {
@@ -768,6 +972,8 @@ export function stepFall(body, dt, obstacles) {
        slides with, the grip takes, up to what the landing pressed into it) */
     for (const [b, local, n, before, canvas] of touching) {
       if (b.frozen) continue;
+      // (a lifted man's feet are let leave the canvas with him while he is thrown up: they are not landing)
+      if (canvas && body.lift && body.t < body.lift.land && b.name.endsWith('foot')) continue;
       const r = off(b, local),
         vp = M.add(b.v, cross(b.w, r)),
         vn = dot(vp, n),
@@ -827,22 +1033,25 @@ export function stepFall(body, dt, obstacles) {
       }
     }
     /* (and a limp body has nothing in it to give it energy: what the corrections above add, where contacts, limits and
-       joints pull against each other in a body heaped up on itself, is taken back, all of him slowed alike) */
+       joints pull against each other in a body heaped up on itself, is taken back, all of him slowed alike; but a man
+       thrown up onto his toes is not limp until he is down on his feet again: what his muscles do then is his) */
     const after = energy(bs);
-    if (after.total > before.total + 1e-3) {
+    if (after.total > before.total + 1e-3 && !(body.lift && body.t < body.lift.land)) {
       const k = Math.sqrt(Math.max(0, before.total - after.pot) / Math.max(after.kin, 1e-9));
       for (const b of bs) (b.v = M.scale(b.v, k)), (b.w = M.scale(b.w, k));
     }
     // (a log, down on the canvas once he has been held long enough, or held as long as he can be, lets go)
-    if (body.out === 'log' && body.freed === undefined && ((body.landed && body.t >= OUT.hold - 1e-9) || body.t >= OUT.most)) free(body);
+    if ((body.out === 'log' || body.out === 'twist') && body.freed === undefined && ((body.landed && body.t >= OUT.hold - 1e-9) || body.t >= OUT.most)) free(body);
   }
   // how long he has lain still (his middle hardly moving)
   const v = len(bs[INDEX.belly].v) + 0.3 * len(bs[INDEX.belly].w);
   body.still = v < 0.05 ? body.still + dt : 0;
   // (out cold: he has come to lie once no part of him is going anywhere, for a moment, or once he has been down so long)
-  if (body.out && body.lay === undefined && (body.out === 'limp' || body.freed !== undefined)) {
-    // (an arm, that trembles where it is pressed between him and the canvas, a little faster)
-    const slow = bs.every(b => len(b.v) < (b.name.endsWith('arm') || b.name.endsWith('fore') ? OUT.lay.arm : OUT.lay.speed));
+  // (a lifted man is not lying until all of him has been let go of: he hangs there a moment first, still)
+  if (body.out && body.lay === undefined && (body.out === 'limp' || body.freed !== undefined || (body.out === 'lift' && body.t >= LIFTED - 1e-9))) {
+    // (an arm, that trembles where it is pressed between him and the canvas, a little faster; and a foot, that creeps on its
+    // edge where a leg has come to rest across the other)
+    const slow = bs.every(b => len(b.v) < (b.name.endsWith('arm') || b.name.endsWith('fore') || b.name.endsWith('foot') ? OUT.lay.arm : OUT.lay.speed));
     body.calmFor = slow ? (body.calmFor || 0) + dt : 0;
     if (body.calmFor >= OUT.lay.for - 1e-9 || body.t >= OUT.lay.most) lie(body);
   }
@@ -922,5 +1131,6 @@ export function moveFall(body, Rm, offset) {
     b.v = M.app(Rm, b.v);
     b.w = M.app(Rm, b.w);
   }
+  if (body.lift) for (const s in body.lift.feet) body.lift.feet[s] = M.add(M.app(Rm, body.lift.feet[s]), offset);
   return body;
 }

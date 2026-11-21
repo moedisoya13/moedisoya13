@@ -79,11 +79,18 @@ export const SHAPE = {
     '5a': { time: { out: 0.8 }, add: { hp: -6, ly: -0.03, ry: -0.03 } }
   },
   roll: {
-    // no U: bowed, pushed across bowed, and stood up, the gloves over his head (and not deep: the plan's 60%)
-    1: { knee: { share: 0.2, depth: 0.6 }, size: { hx: 0.3, hz: 1.1, side: 0.8 }, time: { out: 1.05, flinch: 0.04 }, add: { hp: 10, ly: -0.2, ry: -0.08, lx: 0.04 } },
-    /* (the knees with the hips and the waist after them: an amateur's weave with the waist first and the knees after it
-       is over before a beginner's, since it is the knees that take it under the hook) */
-    2: { knee: { share: 0.55, depth: 0.8 }, size: { hx: 0.5 }, delay: { hips: 0, trunk: 0.03 }, add: { ly: -0.04, ry: -0.03, lz: -0.1, lx: -0.03 } },
+    /* (docs/moves-plan-5.md §2: the beginner and the amateur get as deep as the pro, 26 cm and more, the hook needing 23 cm
+       under the line of the jaw; the grade is how they get there, how long it takes and how long they stay down. On the
+       card the weave cannot start before the cross ahead of the hook has met the guard (11 frames before the hook is
+       pressed): the beginner's and the amateur's windows lie between that and the pro's, a frame or two each)
+       No U: a deep bow from the waist, the knees all but locked, the hips back to keep him over his feet, his chin on his
+       chest and his eyes on the canvas, the gloves over his head; pushed a few centimetres across, bowed, and straight
+       back up. Slow down (0.32 s after his flinch) and down long: he ducked before the hook was coming */
+    1: { knee: { share: 0.12, depth: 0.82 }, size: { hx: 0.12, hz: 1.6, side: 0.15, hr: 0, hw: 0, twist: 0 }, delay: { trunk: 0, hips: 0, feet: 0 }, time: { out: 1.45, flinch: 0.04, back: 1.8 }, pauses: [0, 0.2], add: { hp: 46, ly: 0.1, ry: 0.1, lz: -0.04, rz: -0.04 } },
+    /* the waist first and the knees after it, a stop at the bottom, half the U: an amateur's (the eyes tilted with his
+       shoulders, the gloves at his face). He freezes 0.08 s first (the plan's 0.03 gets him, as deep as he goes, under a
+       hook pressed later than a pro can leave it) */
+    2: { knee: { share: 0.7, depth: 1.25 }, size: { hx: 0.5, side: 0.5, hz: 1.2 }, delay: { hips: 0.1, trunk: 0 }, time: { out: 1.05, back: 0.95, flinch: 0.08 }, pauses: [0, 0.04], add: { hp: 6, ly: -0.04, ry: -0.03, lz: -0.1, lx: -0.03 } },
     // (the lead glove in on his cheek while the hook goes over: out of its way)
     '4m': { add: { twist: 10, lz: -0.12, ly: -0.02 } },
     // (a low man, under a hook aimed at his jaw: the U is narrower, and goes back further)
@@ -107,7 +114,8 @@ const SIDED = ['side', 'hx', 'hw', 'hr', 'lx', 'rx', 'twist'];
 const KNEES = ['lkf', 'rkf'];
 
 /* Where each written stretch falls in his time. A beginner's flinch comes first, with nothing of the curve in it; the going
-   is quicker or slower by `out`, the time out there and the way back by `hold` and `back` (a roll's corners held by `pause`). */
+   is quicker or slower by `out`, the time out there and the way back by `hold` and `back` (a roll's corners held by `pause`,
+   or by the move's own `pauses` at that grade). */
 const timelines = new Map();
 export function timeline(name, level) {
   const ev = level.evade,
@@ -118,7 +126,8 @@ export function timeline(name, level) {
     // (a move may keep its own time at a grade: shape.time)
     time = Object.assign({ out: ev.out, hold: ev.hold, back: ev.back, flinch: ev.flinch }, ((SHAPE[name] || {})[level.id] || {}).time);
   let t = time.flinch;
-  const outs = w.segs.filter(s => s[0] === 'out').length;
+  const outs = w.segs.filter(s => s[0] === 'out').length,
+    pauses = ((SHAPE[name] || {})[level.id] || {}).pauses;
   let seen = 0,
     clear = null,
     backAt = null,
@@ -129,7 +138,9 @@ export function timeline(name, level) {
     map.push([t, t + len, s0, s1]);
     t += len;
     if (clear === null && s1 >= w.clear - 1e-9) clear = t;
-    if (kind === 'out' && ++seen < outs && ev.pause) (map.push([t, t + ev.pause, s1, s1]), (t += ev.pause));
+    // (a move may hold its own corners at a grade: shape.pauses, seconds at each)
+    const pause = kind === 'out' && ++seen < outs ? (pauses ? pauses[seen - 1] : ev.pause) : 0;
+    if (pause) (map.push([t, t + pause, s1, s1]), (t += pause));
     if (kind === 'out' && seen === outs) hold = t;
   }
   const delay = Object.assign({}, ev.delay, ((SHAPE[name] || {})[level.id] || {}).delay),

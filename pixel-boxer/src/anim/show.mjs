@@ -1,11 +1,17 @@
 /* The showy dirty fighter (docs/moves-plan-4.md §5): at 4암 and 5암 the dirty grades are a show-off's. His stance, his guard,
    his parry, the tricks a press may turn into, and his taunts are here, as layers of numbers on the animator's channels and
    as rules the bout reads; where a thing lands (a glove on a glove, a hand behind a neck, an elbow on a chin) is the bout's to
-   judge, by real contact, as a punch's is (game/bout.mjs). Grades below 4 and the clean grades have none of it (skill.mjs:
-   stance.show, cover.cross, vary are theirs alone), and nothing here runs for them.
+   judge, by real contact, as a punch's is (game/bout.mjs). Grades below 4 and the clean grades have none of the show-off's
+   own (skill.mjs: stance.show, vary are theirs alone), and none of that runs for them. The cross-arm guard and the shoulder
+   roll are techniques a man carries (game/techniques.mjs: crossArm from 3 up, rollCounter from 4 up; docs/moves-plan-5.md
+   §4A), here because the dirty great ones carry the guard by default and the hammer is theirs alone.
      stance(c, show, s)        the stance (§5.1): the lead hand let down to the waist, swinging like a pendulum, the lead
                                shoulder up, leant back, the chin out
-     crossGuard(c, cross, k)   the cross-arm guard (§5.5), k of the way up
+     crossGuard(c, cross, k)   the cross-arm guard, the classic one (docs/moves-plan-5.md §4A.2), k of the way up; -> metres
+                               the lead shoulder is shrugged up. A technique (game/techniques.mjs: crossArm): whoever carries
+                               it from 3 up holds his grade's (skill.mjs: CROSS), and by default the dirty great ones do
+     ear(c, cross, k)          its rear glove taken back to the ear as a lead hook comes (§4A.3)
+     shoulderRoll(c, roll, t)  the shoulder roll (§4A.4) t seconds after it started; -> { shrug, w, done }
      hammer(c, h, t)           the hammering parry (§5.5): the rear fist's stroke t seconds after the guard went up; -> whether
                                it is coming down now (what the bout judges a parry by)
      choose(table, when, forced, u)   which trick a press turns into (§5.2), or null: the plain punch
@@ -49,11 +55,12 @@ export function stance(c, show, s) {
   c.twist -= show.roll * k;
 }
 
-/* The cross-arm guard, as the guard is up (k: 0..1). cross (skill.mjs: cover.cross): { L: [x, y, z, elbow], R: [...] (each
-   hand moved from where the textbook's covered guard holds it: the lead forearm laid across in front of the chin and mouth,
-   its glove in front of the rear shoulder; the rear forearm stood up across it at a slant over the forehead and the temple,
-   its glove by the lead temple), lean: degrees bent forward, chin: degrees the chin is buried behind the forearm }. A punch
-   is stopped by the forearms here, not by the gloves alone (game/bout.mjs: the forearms are in the way). */
+/* The cross-arm guard, the classic one, as the guard is up (k: 0..1). cross (skill.mjs: CROSS[grade]): the rear glove up at
+   the chin, held to the face as a guard's is, its forearm stood up under it and the elbow down in front of the ribs; the lead
+   forearm laid across the belly, locked to the chest (it goes where the trunk goes, not where the head goes), the elbow at
+   the lead side; side on, the chest closed, bent forward on bent knees, the chin down and turned behind the lead shoulder,
+   which is shrugged up (the animator's to do: not a channel; -> how far). The head is the rear glove's and the shoulder's to
+   keep, the body the forearm's (game/bout.mjs: the forearms and the lead shoulder are in the way of a punch). */
 export function crossGuard(c, cross, k) {
   for (const [side, [x, y, z, e]] of [['l', cross.L], ['r', cross.R]]) {
     c[side + 'x'] += x * k;
@@ -61,8 +68,49 @@ export function crossGuard(c, cross, k) {
     c[side + 'z'] += z * k;
     c[side + 'e'] += e * k;
   }
+  c.lc += cross.lock * k;
   c.lean += cross.lean * k;
   c.hp += cross.chin * k;
+  c.hw += cross.turn * k;
+  c.yaw += cross.close[0] * k;
+  c.twist += cross.close[1] * k;
+  c.lkf += cross.knee * k;
+  c.rkf += cross.knee * k;
+  return cross.shoulder * k;
+}
+/* Its rear glove at the chin goes up and back to the ear as a lead hook comes (k: 0..1 of the way: the animator times it from
+   the hook's start, cross.ear seconds after it); back, up and out to his right by cross.to. */
+export function ear(c, cross, k) {
+  c.rz += cross.to[0] * k;
+  c.ry += cross.to[1] * k;
+  c.rx += cross.to[2] * k;
+}
+
+/* The shoulder roll, t seconds after it started. roll (skill.mjs: ROLL[grade]): in its first `set` seconds he is laid back
+   `lean` degrees and bent away to his right `side` (the lead shoulder up, the head away from the punch), sat on the rear leg
+   (`knee`: [lead, rear] degrees, the lead knee straightened and the rear one bent, the weight going back over the rear foot;
+   the hips `back` metres back), the chin `chin` degrees down behind the lead shoulder as it is shrugged `shoulder` metres more
+   into the punch's way, the rear glove tucked in under the chin behind it (`tuck`: [x, z] metres), and a great one's lead
+   forearm lifted `lift` off his belly; and from `lag` seconds in, over `go`, the chest is turned further away from him, to his
+   right (the hips `turn[0]` degrees and the chest `turn[1]` more), turning hardest as the punch gets there. Held `hold`, and
+   unwound over `home`. -> { shrug: metres more the lead shoulder is up, w: how much of the roll there is (0..1), done }. The
+   bout judges it: a punch that meets the lead shoulder while the chest is turning away is rolled off it (game/bout.mjs). */
+export function shoulderRoll(c, roll, t) {
+  const home = smooth((t - roll.lag - roll.go - roll.hold) / roll.home),
+    turn = smooth((t - roll.lag) / roll.go) * (1 - home),
+    w = smooth(t / roll.set) * (1 - home);
+  c.yaw += roll.turn[0] * turn;
+  c.twist += roll.turn[1] * turn;
+  c.lean -= roll.lean * w;
+  c.side += roll.side * w;
+  c.lkf += roll.knee[0] * w;
+  c.rkf += roll.knee[1] * w;
+  c.hz -= roll.back * w;
+  c.hp += roll.chin * w;
+  c.ly += roll.lift * w;
+  c.rx += roll.tuck[0] * w;
+  c.rz += roll.tuck[1] * w;
+  return { shrug: roll.shoulder * w, w, done: t >= roll.lag + roll.go + roll.hold + roll.home };
 }
 
 /* The hammering parry: the guard put up fresh is a stroke of the rear fist, its underside brought down on the glove coming in.

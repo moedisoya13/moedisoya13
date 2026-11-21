@@ -27,7 +27,7 @@ import { DEFENSE } from '../src/defense.mjs';
 import { BODYSHOTS, shot, aimAt } from '../src/bodyshots.mjs';
 import { audit, measure } from '../src/audit.mjs';
 import { createAnimator } from '../src/anim/animator.mjs';
-import { LEVEL, LEVELS } from '../src/anim/skill.mjs';
+import { LEVEL, LEVELS, CROSS } from '../src/anim/skill.mjs';
 import { MOVES } from '../src/anim/moves.mjs';
 import { fk } from '../src/rig/skeleton.mjs';
 import { where, middle, aimed, balls, TRUNK } from '../src/game/trunk.mjs';
@@ -35,6 +35,7 @@ import { BODY_LADDER, REAR_LADDER } from '../src/ladder.mjs';
 import { LIVER_BLOCK } from '../src/bodyshots.mjs';
 import { guardOf } from '../src/measure.mjs';
 import { createBout, local } from '../src/game/bout.mjs';
+import { TECHNIQUES } from '../src/game/techniques.mjs';
 
 const DT = 1 / 60,
   DEG = 180 / Math.PI,
@@ -273,11 +274,14 @@ test('the elbow: a guard held up meets a hook aimed at the liver with an elbow o
   assert.ok(e.type === 'hit' && e.part === 'body', `1: ${JSON.stringify(e)}`);
 });
 
-// his guard up and a punch at his liver seen so many seconds ago: when his rear elbow has come 5 cm down, and how far it goes
-function lowered(level, zone) {
+/* his guard up and a punch at his liver seen so many seconds ago: when his rear elbow has come 5 cm down, and how far it goes
+   (cross: the cross-arm guard he holds, if he carries it, as the bout tells his body: game/bout.mjs crossOf; by default the
+   dirty great ones carry it) */
+const carried = lv => (lv === '4a' || lv === '5a' ? CROSS[lv] : null);
+function lowered(level, zone, cross = null) {
   const a = createAnimator(0),
     b = createAnimator(0),
-    view = { move: [0, 0], turn: 0, cover: 1, action: null, guard: level, stance: level };
+    view = { move: [0, 0], turn: 0, cover: 1, action: null, guard: level, stance: level, cross };
   for (let i = 0; i < 90; i++) a.update(view, DT), b.update(view, DT);
   const out = { at: null, most: 0, gap: -1 };
   for (let i = 1; i <= 45; i++) {
@@ -290,14 +294,13 @@ function lowered(level, zone) {
   return out;
 }
 test('the elbow: brought down the sooner the better he is; a beginner never, nor a man holding the cross-arm guard', () => {
-  const at = Object.fromEntries(LEVELS.map(lv => [lv, lowered(LEVEL[lv], 'liver')]));
+  const at = Object.fromEntries(LEVELS.map(lv => [lv, lowered(LEVEL[lv], 'liver', carried(lv))]));
   assert.equal(at['1'].at, null, 'a beginner');
   assert.ok(at['2'].at > at['3'].at && at['3'].at > at['4m'].at && at['4m'].at > at['5m'].at, LEVELS.map(lv => `${lv} ${at[lv].at}`).join(', '));
   for (const lv of ['4a', '5a']) assert.equal(at[lv].at, null, `${lv}: his cross-arm guard`);
   // (a dirty great one without the cross-arm guard brings it down as the clean one does)
   for (const [d, m] of [['4a', '4m'], ['5a', '5m']]) {
-    const bare = Object.assign({}, LEVEL[d], { cover: Object.assign({}, LEVEL[d].cover, { cross: null, hammer: null }) });
-    const got = lowered(bare, 'liver').at;
+    const got = lowered(LEVEL[d], 'liver', null).at;
     assert.ok(got !== null && Math.abs(got - at[m].at) <= 2 * DT + 1e-9, `${d} without the cross-arm guard: ${got} against ${at[m].at}`);
   }
   // (a pro's: down to his side over the liver, ten centimetres and more)
@@ -458,7 +461,9 @@ test('the elbow block against the liver hook: read off the way down to it; a pro
     if (['3', '4m', '5m'].includes(lv)) {
       assert.ok(e.type === 'block' && (e.part === 'elbow' || e.part === 'forearm') && e.zone === 'liver', `${lv}: ${JSON.stringify(e)}`);
       assert.ok(gap <= 0.04, `${lv}: the other glove ${(gap * 100).toFixed(1)} cm off his head`);
-    } else assert.ok(e.type === 'hit' && e.part === 'body' && e.zone === 'liver', `${lv}: ${JSON.stringify(e)}`);
+      // (a dirty great one holds the cross-arm guard, the lead glove across his belly: the hook meets it, docs/moves-plan-5.md §4A.3)
+    } else if (lv === '4a' || lv === '5a') assert.ok(e.type === 'block' && ['elbow', 'forearm', 'glove'].includes(e.part), `${lv}: ${JSON.stringify(e)}`);
+    else assert.ok(e.type === 'hit' && e.part === 'body' && e.zone === 'liver', `${lv}: ${JSON.stringify(e)}`);
   }
   // (read off the way down, not off the hips firing: a pro whose elbow waited as long as that would be hit)
   const late = Object.assign({}, LEVEL['3'], { cover: Object.assign({}, LEVEL['3'].cover, { low: Object.assign({}, LEVEL['3'].cover.low, { delay: 0.2 }) }) }),
@@ -491,6 +496,11 @@ test('the rear hook: every grade lands it on his head from 0.80 m; down, he fall
   assert.ok(hit && hit.e.name === 'hookR' && rest, JSON.stringify(hit && hit.e));
   const moved = local({ yaw: hit.yaw }, rest[0] - from[0], rest[2] - from[2]);
   assert.ok(moved[0] < -0.3 && Math.abs(moved[0]) > Math.abs(moved[1]), `moved [${moved.map(x => x.toFixed(2))}] (+ his left, + ahead)`);
+});
+
+test('the rear hook is what a shoulder roll winds up: the roll counter presses it by name, the rear uppercut right up close', () => {
+  assert.deepEqual(TECHNIQUES.rollCounter.counter({ far: 0.9 }), { power: 'hookR', tech: 'rollCounter' });
+  assert.deepEqual(TECHNIQUES.rollCounter.counter({ far: 0.7 }), { power: 'upperIn', tech: 'rollCounter' });
 });
 
 test("body punches: every rung of them, the rear hook's and the elbow block against the liver hook, within the physics audit", () => {
