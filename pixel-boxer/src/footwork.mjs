@@ -15,6 +15,8 @@ const around = (centre, from, angle) => {
 const wave = (t, period) => Math.sin((2 * Math.PI * t) / period);
 // a place to be that is held, then left: 0 until `from`, 1 until `to`, eased over `over` seconds at each end
 const hold = (t, from, to) => (t >= from && t < to ? 1 : 0);
+// and the same, gone back from over `back` seconds (walked back, not run)
+const held = (t, from, to, back) => (t < from ? 0 : t < to ? 1 : 1 - Math.min(1, (t - to) / back) ** 2 * (3 - 2 * Math.min(1, (t - to) / back)));
 
 /* The pendulum step, on his own beat (it reads the rhythm of his feet, so it is in time whatever the pace): six half beats
    to a swing. The lead foot steps in and the rear follows it; he rocks back on the lead; the rear steps out and the lead
@@ -44,7 +46,8 @@ function pendulum(f) {
    setup(bout): anything about the men to set before the loop starts; keep(bout, t): anything to hold as it was, every step
    (how hurt or tired he is, say, which the bout would otherwise change), or to do at a moment of the loop. cue(bout, t):
    a button to press now, for a press that waits on something (his own beat, say) rather than a moment of the loop; what
-   a cue keeps of what it has done (f.cues) is the loop's, and is cleared as each loop starts. */
+   a cue keeps of what it has done (f.cues) is the loop's, and is cleared as each loop starts; a cue may name the
+   button, or the button and what is pressed with it ([button, value]). */
 export const ENTRIES = [
   {
     id: 'bounce', name: '리듬 바운스', en: 'Rhythm bounce', group: '박자',
@@ -85,6 +88,16 @@ export const ENTRIES = [
     id: 'dash', name: '대시', en: 'Dash step', group: '직선',
     note: '한 박자에 크게 빠집니다. 가라앉았다 올라오며 다시 원래 박자로 돌아옵니다.',
     loop: 2.6, me: t => [-0.9 * hold(t, 0.4, 1.3), 0], press: [[0.4, 'dash']], view: { yaw: 0, pitch: 0.55 }
+  },
+  {
+    id: 'dashIn', name: '전방 대시', en: 'Dash in', group: '직선',
+    note: '한 박자에 크게 들어갑니다. 뒷다리가 밀고 앞다리가 받습니다. 상대는 대시가 끝나도 닿지 않는 2.3 m에 서 있습니다.',
+    loop: 2.6, me: t => [0.9 * held(t, 0.4, 1.2, 1), 0], him: () => [2.3, 0], press: [[0.4, 'dash', [1, 0]]], view: { yaw: 0, pitch: 0.55 }
+  },
+  {
+    id: 'dashSide', name: '측면 대시', en: 'Dash to the side', group: '좌우',
+    note: '한 박자에 크게 옆으로(왼쪽으로) 빠집니다. 가는 쪽 반대 다리가 밀고 가는 쪽 다리가 받습니다.',
+    loop: 2.6, me: t => [0, -0.9 * held(t, 0.4, 1.2, 1)], press: [[0.4, 'dash', [0, -1]]], view: { yaw: 1.2, pitch: 0.6 }
   },
   {
     id: 'stepjab', name: '스텝 잽', en: 'Step jab', group: '주먹과 함께',
@@ -135,8 +148,10 @@ export function drive(entry, bout, at, dt) {
     // (a drill that is not started afresh each loop goes on from where it was, but a cue that has pressed in one loop
     // presses again in the next: what it keeps of having pressed is forgotten as each loop starts)
     if (tick % loop === 1 % loop) a.cues = {};
+    // (a cue names a button, or a button and what is pressed with it: [button, value])
     const button = entry.cue(bout, t);
-    if (button) mine[button] = true;
+    if (Array.isArray(button)) mine[button[0]] = button[1];
+    else if (button) mine[button] = true;
   }
   return [mine, his];
 }

@@ -74,6 +74,7 @@ export function run(entry, seconds) {
       action: a.action ? a.action.name : null,
       // (where the two of them stand, and how far his facing is off the line to the other man, radians)
       at: [a.x, a.z],
+      yaw: a.yaw,
       him: [b.x, b.z],
       face: Math.atan2(Math.sin(Math.atan2(b.x - a.x, b.z - a.z) - a.yaw), Math.cos(Math.atan2(b.x - a.x, b.z - a.z) - a.yaw)),
       cover: a.cover,
@@ -89,6 +90,47 @@ export function run(entry, seconds) {
 // the landings in a run of frames: the tick each foot came down on, and which
 export const landings = frames => frames.filter((f, i) => i > 0 && f.halves !== frames[i - 1].halves).map(f => ({ tick: f.tick, foot: f.landed }));
 
+/* The head over each step he takes while he travels (docs/moves-plan-4.md §12): for every foot that comes down while he is
+   going faster than `fast` metres a second, the window from halfway back to the landing before to halfway on to the next,
+   and in it how far the head went from side to side of his hips (in his own terms, across), how far it went up and down
+   (its height on the canvas: what his knees do to it moves his hips with it), and how many frames from the landing it was
+   lowest (+ after). -> [{ tick, foot, speed, side, up, low, back }] (cm, frames; back: the most the head went back of his
+   hips, less the least) */
+export function steps(frames, fast = 0.5) {
+  const land = landings(frames),
+    rel = f => {
+      const h = f.gloves.head,
+        p = f.joints.Hips,
+        d = [h[0] - p[0], h[2] - p[2]];
+      // (his left, and ahead of him, on the canvas: bout.mjs, local)
+      return [d[0] * Math.cos(f.yaw) - d[1] * Math.sin(f.yaw), d[0] * Math.sin(f.yaw) + d[1] * Math.cos(f.yaw)];
+    },
+    out = [];
+  for (let k = 1; k + 1 < land.length; k++) {
+    const i = frames.findIndex(f => f.tick === land[k].tick),
+      a = frames.findIndex(f => f.tick === Math.round((land[k - 1].tick + land[k].tick) / 2)),
+      b = frames.findIndex(f => f.tick === Math.round((land[k].tick + land[k + 1].tick) / 2));
+    if (a < 1 || b < 0) continue;
+    const speed = Math.hypot(frames[b].at[0] - frames[a].at[0], frames[b].at[1] - frames[a].at[1]) / ((b - a) * DT);
+    if (speed < fast) continue;
+    const win = frames.slice(a, b + 1),
+      side = win.map(f => rel(f)[0]),
+      ahead = win.map(f => rel(f)[1]),
+      up = win.map(f => f.gloves.head[1]),
+      low = up.indexOf(Math.min(...up));
+    out.push({
+      tick: land[k].tick,
+      foot: land[k].foot,
+      speed: +speed.toFixed(2),
+      side: +((Math.max(...side) - Math.min(...side)) * 100).toFixed(1),
+      up: +((Math.max(...up) - Math.min(...up)) * 100).toFixed(1),
+      low: a + low - i,
+      back: +((Math.max(...ahead) - Math.min(...ahead)) * 100).toFixed(1)
+    });
+  }
+  return out;
+}
+
 /* His own guard, as his grade holds it: where his head is across the line, and his hip and shoulder lines, standing in his
    grade's posture with his head held still (no head movement, no flourishes), over six seconds of it. */
 const guards = {};
@@ -98,7 +140,7 @@ export function guardOf(level) {
   const base = STANCES.find(e => e.id === `stance@${level}`),
     { frames } = run(Object.assign({}, base, { setup: b => (b.fighters[0].skills = { all: still }) }), 6),
     mean = k => frames.reduce((s, f) => s + f[k], 0) / frames.length;
-  return (guards[level] = { head: mean('head'), hips: mean('hips'), shoulders: mean('shoulders'), hipsY: mean('hipsY') });
+  return (guards[level] = { head: mean('head'), hips: mean('hips'), shoulders: mean('shoulders'), hipsY: mean('hipsY'), headY: mean('headY') });
 }
 
 // one rung: the blow and how the body was used to throw it
