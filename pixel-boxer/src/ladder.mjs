@@ -193,6 +193,7 @@ export const TAUNTING = TAUNT_ROWS.flatMap(tq =>
     id: `${tq.id}@${lv}`,
     level: lv,
     taunt: tq.id,
+    fresh: true,
     name: `${tq.name} ${LEVEL[lv].label}`,
     en: `${tq.en} · ${LEVEL[lv].name}`,
     group: tq.name,

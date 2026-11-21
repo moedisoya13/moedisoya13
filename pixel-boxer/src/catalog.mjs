@@ -18,7 +18,7 @@ import { step } from './game/bout.mjs';
 
 import { ENTRIES, freshBout, drive } from './footwork.mjs';
 import { DEFENSE, ITEMS as GUARDS } from './defense.mjs';
-import { LADDER, STANCES, DIRTY, FOOTWORK, PUNCHES, TECHNIQUES, ENTRY, MOVING } from './ladder.mjs';
+import { LADDER, STANCES, DIRTY, FOOTWORK, PUNCHES, TECHNIQUES, ENTRY, MOVING, TRICKS, SHOWOFF, TAUNT_ROWS, TAUNTING } from './ladder.mjs';
 import { LEVELS, LEVEL } from './anim/skill.mjs';
 import { LINKS } from './phys/chain.mjs';
 import { MOVES } from './anim/moves.mjs';
@@ -39,7 +39,7 @@ const signed = (n, bare) => (n < 0 ? `−${-n}` : bare ? `${n}` : `+${n}`);
 const FOOTWORK_STATS = ['pendulum', 'inout', 'stalk', 'side', 'circle', 'turn', 'dash', 'stepjab', 'onetwo'];
 // (the dashes each way are dash cards)
 const STAT = { bounce: 'stance', dashIn: 'dash', dashSide: 'dash' };
-const byId = Object.fromEntries([...ENTRIES, ...DEFENSE, ...STANCES, ...LADDER, ...DIRTY, ...FOOTWORK, ...ENTRY].map(e => [e.id, e]));
+const byId = Object.fromEntries([...ENTRIES, ...DEFENSE, ...STANCES, ...LADDER, ...DIRTY, ...FOOTWORK, ...ENTRY, ...SHOWOFF, ...TAUNTING].map(e => [e.id, e]));
 
 /* ---- what is in the catalogue: parts, and in each the techniques, each a row of seven grades (or, being hit, one card) */
 const FOOT_NOTE = {
@@ -73,6 +73,21 @@ const TECH_NOTE = {
   stomp: '발등이 닿는 거리(0.8 m)에서 던지는 훅. 반칙은 4암과 5암에만 있습니다: 코일 동안 앞발을 들어 상대 앞발 위로 가져가 다리 구동과 함께 내려 밟고, 상대는 0.45초 묶입니다. 나머지 등급은 같은 자리에서 반칙 없이 훅만 던집니다.',
   thumb: '잽이 닿은 뒤 글러브를 얼굴에 올려 둔 채 밀어 넣는 반칙. 4암은 대놓고 0.2초, 5암은 0.1초 손목을 돌려 넣고 시치미를 뗍니다. 나머지 등급은 같은 잽을 반칙 없이 칩니다.'
 };
+/* the show-off's tricks and taunts (anim/show.mjs, docs/moves-plan-4.md §5): what each does, as its row says it */
+const TRICK_NOTE = {
+  flicker: '허리에 내려 둔 앞손이 아래에서 비스듬히 위로 채찍처럼 올라오는 잽. 어깨는 거의 돌지 않고 팔꿈치가 펴지며 손목이 마지막에 튑니다. 손은 가드가 아니라 허리로 돌아가고, 손이 돌아온 뒤 0.25초 안에 다시 누르면 와인드업 없이 연달아 나갑니다(최대 3번). 4암은 크게 휘두르고 5암은 손목만 씁니다. 나머지 등급은 같은 자리에서 보통 잽을 칩니다. 카드 아래는 첫 번째의 충격량과 닿기까지입니다.',
+  pawDown: '상대가 가드를 들고 있을 때, 앞손으로 그 앞 글러브를 위에서 눌러 내리고(꽉 붙은 가드면 다른 글러브도 같이) 뒷손 스트레이트가 그 위로 넘어갑니다. 앞손이 실제로 글러브에 닿아야 치워지고, 치워진 글러브는 0.3초 뒤 돌아옵니다. 나머지 등급의 같은 스트레이트는 가드에 막힙니다. 카드 아래는 스트레이트의 충격량과 누른 뒤 닿기까지입니다.',
+  pawUp: '앞손이 밑에서 상대의 뒷 글러브를 들어 올리고(꽉 붙은 가드면 다른 글러브도 같이) 뒷손 어퍼가 그 밑으로 올라옵니다. 맞는 판정이 머리뿐이라 올린 가드 밑으로 턱을 칩니다. 나머지 등급의 같은 어퍼는 가드에 막힙니다.',
+  collar: '앞손이 상대 머리 바깥을 돌아 뒷목에 걸리고(글러브가 머리 뒤에 실제로 닿아야 함), 어퍼의 다리 구동과 함께 머리를 앞·아래로 당기는 동안 뒷손 어퍼가 올라옵니다. 내려오는 머리와 올라오는 주먹의 속도가 더해집니다. 닿고 0.1초(5암 0.05초) 뒤 놓습니다.',
+  elbow: '스트레이트를 상대 머리 바깥(자기 왼쪽)으로 비껴 던지며 파고들고, 다 펴지 않은 팔꿈치가 뒤따라 턱에 닿습니다. 맞는 것은 아래팔 뿌리이고, 주먹이 손목 없이 실린 팔과 몸의 질량으로 칩니다. 4암은 대놓고 팔꿈치를 세우고, 5암은 빗나간 주먹을 거두는 척합니다.'
+};
+const TAUNT_NOTE = {
+  beckon: '앞 글러브를 내밀어 손바닥을 위로 두 번 까딱입니다. 도발 중에는 가드가 없고, 어떤 입력으로든 끊깁니다. 시합에서는 서 있는 동안 16반박자마다 굴려(4암 30%, 5암 15%) 손짓·턱 내밀기·풍차 가운데 하나가 나오고, 가드 풀고 멀어지기의 마지막 뜀에도 붙습니다(60%, 40%). 4암은 크고 길게(1.25배), 5암은 작게(0.6배) 합니다. 카드 아래는 도발이 이어진 시간입니다.',
+  chinOut: '두 손을 내리고 턱을 내밀어 좌우로 흔듭니다.',
+  wind: '뒷팔을 몸 앞에서 크게 한 바퀴 돌려 볼로 펀치를 흉내 냅니다(어깨가 갈 수 없는 등 뒤로는 돌리지 않습니다).',
+  shrug: '상대 잽을 슬립으로 피한 직후 두 손을 벌리고 어깨를 올립니다(시합에서는 4암 25%, 5암 40%).',
+  tapChin: '맞은 뒤 자기 턱을 뒷 글러브로 톡톡 칩니다(시합에서는 30 N·s 미만으로 맞았을 때 4암 20%, 5암 30%).'
+};
 const footRow = e => ({
   id: e.id,
   name: e.name,
@@ -104,6 +119,14 @@ const PARTS = [
       ['주먹', PUNCHES.filter(p => !p.inside).map(p => ({ id: p.id, name: p.name, en: p.en, note: PUNCH_NOTE[p.id], stat: 'rung', cards: LEVELS.map(lv => `${p.id}@${lv}`) }))],
       ['초근거리', PUNCHES.filter(p => p.inside).map(p => ({ id: p.id, name: p.name, en: p.en, note: PUNCH_NOTE[p.id], stat: 'rung', knee: p.id === 'upperIn', cards: LEVELS.map(lv => `${p.id}@${lv}`) }))],
       ['암의 기술', TECHNIQUES.map(t => ({ id: t.id, name: t.name, en: t.en, note: TECH_NOTE[t.id], stat: 'foul', cards: LEVELS.map(lv => `${t.id}@${lv}`) }))]
+    ]
+  },
+  {
+    part: '과시형 암',
+    note: '4암과 5암은 과시형입니다. 앞손을 허리에 내리고(진자처럼 흔들림) 상체를 뒤로 눕히고 턱을 내밀며, 가드는 팔을 엇갈리고, 막 올린 가드는 뒷손으로 내려찍는 패리입니다(수비의 4암·5암 카드). 버튼을 누르면 조건이 맞을 때 시드에서 나온 확률로 기술이 바뀌고, 동작이 없을 때와 특정 순간에 도발합니다. 카탈로그는 기술과 도발을 지정해서 돌립니다. 일곱 장 가운데 기술은 4암·5암에만 있고, 나머지 등급은 같은 자리에서 같은 버튼의 보통 동작을 합니다. 상대는 프로입니다.',
+    groups: [
+      ['기술', TRICKS.map(t => ({ id: t.id, name: t.name, en: t.en, note: TRICK_NOTE[t.id], stat: 'trick', cards: LEVELS.map(lv => `${t.id}@${lv}`) }))],
+      ['도발', TAUNT_ROWS.map(t => ({ id: t.id, name: t.name, en: t.en, note: TAUNT_NOTE[t.id], stat: 'taunt', cards: LEVELS.map(lv => `${t.id}@${lv}`) }))]
     ]
   },
   {
@@ -247,6 +270,12 @@ function gradeCard(e, item) {
     }
     case 'foul':
       stats = pair(`${level.side === 'a' ? FOUL[e.foul] : '반칙 없음'}`, level.side === 'a' ? '<b data-fj>–</b> N·s' : '') + pair('<span data-fat></span>') + pair('주먹 <b data-blow>–</b> N·s');
+      break;
+    case 'trick':
+      stats = `<div class="feet result"><span class="tag" data-tag>–</span></div>` + pair(level.vary ? item.name : '보통 주먹', '<b data-blow>–</b> N·s') + pair('<b data-ms>–</b> ms');
+      break;
+    case 'taunt':
+      stats = pair(level.stance.show ? item.name : '도발 없음', '<b data-a>–</b> 초');
       break;
   }
   card.innerHTML = `<div class="stage" role="img" aria-label="${item.name} ${level.label} 애니메이션"><span class="replay" hidden>리플레이 ¼</span></div>
@@ -468,6 +497,13 @@ function start({ manifest, boxer }) {
         // (knocked out cold: from the blow to his head on the canvas)
         if (entry.out && e.type === 'hit' && e.who === 1 && e.down) m.downAt = cell.t;
         break;
+      case 'trick':
+        if (e.type === 'punch' && e.who === 0 && m.press === null) m.press = cell.t;
+        if (e.who === 0 && ['hit', 'block', 'whiff', 'graze'].includes(e.type) && !m.said) (m.said = true), put(cell, 'blow', e.J === undefined ? '–' : String(Math.round(e.J))), put(cell, 'ms', m.press === null ? '–' : String(Math.round((cell.t - m.press) * 1000))), tell(cell, SAID[e.type] + (e.part === 'elbow' ? ' (팔꿈치)' : ''));
+        break;
+      case 'taunt':
+        if (e.type === 'taunt' && e.who === 0) m.tauntAt = cell.t;
+        break;
       case 'foul':
         if (e.who === 0 && e.type === 'foul') (put(cell, 'fj', String(Math.round(e.J))), put(cell, 'fat', m.landedAt === undefined ? '주먹 전' : `주먹 뒤 ${Math.round((cell.t - m.landedAt) * 1000)} ms`));
         if (e.who === 0 && e.type === 'hit' && e.name === entry.punch) (put(cell, 'blow', String(Math.round(e.J))), (m.landedAt = cell.t));
@@ -496,6 +532,9 @@ function start({ manifest, boxer }) {
       if (!a.action) m.kneeWas = { hy, y };
     }
     switch (item.stat) {
+      case 'taunt':
+        if (m.tauntAt !== undefined && m.tauntLen === undefined && !(a.action && MOVES[a.action.name].taunt)) (m.tauntLen = cell.t - m.tauntAt), put(cell, 'a', m.tauntLen.toFixed(2));
+        break;
       case 'single':
         if (m.downAt !== undefined && m.headDown === undefined && a.points.head[1] < 0.16) (m.headDown = cell.t - m.downAt), put(cell, 'a', m.headDown.toFixed(2));
         break;
