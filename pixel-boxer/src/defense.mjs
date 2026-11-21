@@ -48,7 +48,7 @@ export const ITEMS = [
   },
   {
     id: 'roll', name: '위빙', en: 'Bob and weave', group: '피하기', kind: 'evade', move: ['roll', 1], card: 'roll',
-    note: '훅이 오는 쪽으로 머리를 숙여 U자를 그리며 밑으로 빠지고, 반대편으로 올라옵니다. U자는 무릎이 그립니다: 들어가는 쪽 무릎이 먼저 굽고, 바닥에서 두 무릎이 다 굽고, 나오는 쪽 무릎이 받는 동안 반대쪽은 펴며 밀어 체중이 한 발에서 다른 발로 넘어갑니다. 1은 무릎을 거의 안 써 모서리가 있는 길로 숙였다 일어나고, 2는 구간마다 끊기고, 3부터 매끄러운 U, 암은 좁게, 더 뒤로 빠집니다. 카드 아래는 가장 늦은 프레임, 위빙 전체 시간, 머리가 내려간 깊이 가운데 골반(무릎)이 낸 몫입니다.',
+    note: '훅이 오는 쪽으로 머리를 숙여 U자를 그리며 밑으로 빠지고, 반대편으로 올라옵니다. U자는 무릎이 그립니다: 들어가는 쪽 무릎이 먼저 굽고, 바닥에서 두 무릎이 다 굽고, 나오는 쪽 무릎이 받는 동안 반대쪽은 펴며 밀어 체중이 한 발에서 다른 발로 넘어갑니다. 1은 무릎을 거의 안 쓰고 허리로 깊이 숙여 바닥을 보며 두 글러브를 머리 위로 올리고, U 없이 숙인 채 그대로 일어섭니다. 숙이는 데 오래 걸리고 오래 숙이고 있어서 훅이 나오기 훨씬 전에 찍어야 피합니다(읽은 것이 아니라 겁먹고 미리 숙인 것). 2는 허리가 먼저 접히고 무릎이 뒤따르며 바닥에서 잠깐 멈추고 U를 반만 그립니다. 1·2도 3단계만큼(26 cm 넘게) 내려갑니다. 3부터 매끄러운 U, 암은 좁게, 더 뒤로 빠집니다. 카드 아래는 가장 늦은 프레임, 위빙 전체 시간, 머리가 내려간 깊이 가운데 골반(무릎)이 낸 몫입니다.',
     loop: 2.4, punch: ['hook', 1.1], outcome: 'whiff', before: 'block', view: { yaw: 0.5, pitch: 0.22 }
   },
   {
@@ -73,8 +73,8 @@ export const ITEMS = [
   }
 ];
 // the frame (after the press that throws the punch) a grade answers on: the middle of his window for that card (a grade with
-// no window at all answers where a pro does, and is hit: a beginner's and an amateur's weave under a hook that lands on its
-// sweep, README)
+// no window at all, which no card has since a beginner's and an amateur's weave got under the hook (docs/moves-plan-5.md §2),
+// answers where a pro does, and is hit)
 const answer = (item, lv) => {
   const w = WINDOWS[item.card];
   return w && w[lv] && w[lv].at !== null ? w[lv].at : w && w['3'] && w['3'].at !== null ? w['3'].at : 0;

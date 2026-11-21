@@ -5,42 +5,46 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { LEVELS, LEVEL } from '../src/anim/skill.mjs';
 import { WINDOWS } from '../src/windows.data.mjs';
-import { outcome, drill as windowDrill, CARDS } from '../tools/windows.mjs';
+import { outcome, drill as windowDrill, CARDS, window as windowOf, middle } from '../tools/windows.mjs';
 import { defence, drill } from '../tools/grades.mjs';
-import { sampleEvade } from '../src/anim/evade.mjs';
+import { sampleEvade, timeline } from '../src/anim/evade.mjs';
+import { measure } from '../src/audit.mjs';
+import { HOME } from '../src/footwork.mjs';
 import { MOVES, LEFT_BEND, sampleMove, mirrorKnees } from '../src/anim/moves.mjs';
 import { DEFENSE } from '../src/defense.mjs';
 import { step } from '../src/game/bout.mjs';
 import { freshBout, drive } from '../src/footwork.mjs';
 
-const W = (card, lv) => WINDOWS[card][lv];
-const back = (card, lv) => W(card, lv).to;
 /* (a hook that lands on its sweep goes through where the head was at the height of the jaw, and a head has to be 23 cm under
-   that line to let the glove over it: a beginner's and an amateur's weave, a bow of 14 and 21 cm that gets there late, never
-   is, at any frame tried, and a pro's and a great one's only from a weave started before the hook (README: the hook fix).
-   Those two cards say so: no window, and the card is a hit) */
-const NONE = { roll: ['1', '2'] };
-const none = (card, lv) => (NONE[card] || []).includes(lv);
+   that line to let the glove over it. A beginner's and an amateur's weave go as deep as a pro's and deeper now, and slower:
+   docs/moves-plan-5.md §2. Their windows are measured here as the bout fights them, for until node tools/windows.mjs --write
+   has been run again, src/windows.data.mjs still says they have none) */
+const LIVE = {};
+const live = (card, lv) => {
+  const key = card + '@' + lv;
+  if (!LIVE[key]) {
+    const c = CARDS.find(c => c.id === card),
+      w = windowOf(c.punch, c.move, c.value, { all: lv }, c.guard),
+      mid = middle(w.works);
+    LIVE[key] = mid ? { from: mid.from, to: mid.to, at: mid.at, works: w.works } : { from: null, to: null, at: null, works: [] };
+  }
+  return LIVE[key];
+};
+const W = (card, lv) => (card === 'roll' && WINDOWS[card][lv].from === null ? live(card, lv) : WINDOWS[card][lv]);
+const back = (card, lv) => W(card, lv).to;
 
 test('grades: every grade gets out of the way of every card\'s punch, and the window written down is the bout\'s', () => {
   for (const card of CARDS) {
     for (const lv of LEVELS) {
       const w = W(card.id, lv);
-      if (none(card.id, lv)) {
-        // (none at all: the frame the pro answers on does not work for him either)
-        assert.ok(w && w.from === null, `${card.id}@${lv}: ${JSON.stringify(w)}`);
-        const pro = outcome(windowDrill(card.punch, card.move, card.value, W(card.id, '3').at, { all: lv }, card.guard));
-        assert.notEqual(pro && pro.type, 'whiff', `${card.id}@${lv}: the pro's frame works`);
-        continue;
-      }
       assert.ok(w && w.from !== null && w.to >= w.from && w.at >= w.from && w.at <= w.to, `${card.id}@${lv}: ${JSON.stringify(w)}`);
       // (a frame past the back end of it is too late: the window is measured, not written)
       const late = outcome(windowDrill(card.punch, card.move, card.value, w.to + 1, { all: lv }, card.guard));
       assert.notEqual(late && late.type, card.guard ? 'parry' : 'whiff', `${card.id}@${lv}: frame ${w.to + 1} still works`);
     }
     // from an amateur up, two frames or more where a pro has two (the slip at the cross is a frame for the dirty great ones)
-    // (the weave under a hook that lands on its sweep: a frame for a great one and a legend, none below a pro)
-    for (const lv of ['2', '3', '4m', '5m']) if ((card.id !== 'slip-cross' || lv !== '4a') && card.id !== 'roll') assert.ok(W(card.id, lv).to - W(card.id, lv).from >= 1, `${card.id}@${lv}: ${W(card.id, lv).from}–${W(card.id, lv).to}`);
+    // (the weave under a hook that lands on its sweep: two frames for an amateur and a pro, a frame for a great one and a legend)
+    for (const lv of ['2', '3', '4m', '5m']) if ((card.id !== 'slip-cross' || lv !== '4a') && (card.id !== 'roll' || lv === '2' || lv === '3')) assert.ok(W(card.id, lv).to - W(card.id, lv).from >= 1, `${card.id}@${lv}: ${W(card.id, lv).from}–${W(card.id, lv).to}`);
   }
 });
 
@@ -48,7 +52,8 @@ test('grades: the better he is, the later he can leave it (the back end of the w
   const order = (card, chain) => chain.every(([lo, hi, strict]) => (strict ? back(card, lo) < back(card, hi) : back(card, lo) <= back(card, hi)));
   assert.ok(order('slip', [['1', '2', true], ['2', '3'], ['3', '4m', true], ['4m', '5m']]), JSON.stringify(LEVELS.map(lv => back('slip', lv))));
   for (const card of ['slip-cross', 'pull']) assert.ok(order(card, [['1', '2', true], ['2', '3'], ['3', '4m'], ['4m', '5m']]), `${card}: ${LEVELS.map(lv => back(card, lv))}`);
-  assert.ok(order('roll', [['3', '4m'], ['4m', '5m']]), `roll: ${LEVELS.map(lv => back('roll', lv))}`);
+  // (the weave: a beginner has to start it before an amateur, an amateur before a pro: docs/moves-plan-5.md §2.3)
+  assert.ok(order('roll', [['1', '2', true], ['2', '3', true], ['3', '4m'], ['4m', '5m']]), `roll: ${LEVELS.map(lv => back('roll', lv))}`);
   /* (the duck: a beginner and an amateur both bow from the waist, and since the body takes the blow it blocks before the hook
      by its vector, an amateur's window ends on frames that clear the hook by under a millimetre: which of the two leaves it a
      frame or two later is not his grade. The textbook leaves it later than either.) */
@@ -132,6 +137,49 @@ test('grades: a pro\'s evasions are the curves as written', () => {
         }
         for (const ch in want) assert.ok(mine[ch] === want[ch], `${name} ${side} ${ch} at ${t}: ${mine[ch]} / ${want[ch]}`);
       }
+});
+
+/* ---- the weave at the bottom of the grades (docs/moves-plan-5.md §2): a weave with nothing thrown at him, his own head as it
+   goes (how far down from where it was as he pressed, how much of that his hips, which are his knees, how far his head is
+   bowed on his chest as it is lowest), and how long it ties him up */
+const WEAVES = {};
+function weave(lv) {
+  if (WEAVES[lv]) return WEAVES[lv];
+  const at = 1.1,
+    entry = { id: 'weave', loop: 2.6, me: () => HOME, him: () => [HOME[0] + 1.6, HOME[1]], press: [[at, 'roll', 1]], setup: b => (b.fighters[0].skills = { all: lv }) },
+    bout = freshBout(entry),
+    f = bout.fighters[0];
+  let base = null,
+    low = null,
+    hips = Infinity;
+  for (let tick = 0; tick < Math.round(entry.loop * 60); tick++) {
+    step(bout, drive(entry, bout, tick / 60, 1 / 60), 1 / 60);
+    const m = measure(f);
+    if (Math.abs(tick / 60 - (at - 1 / 60)) < 1e-6) base = { head: m.at.head[1], hips: m.at.Hips[1] };
+    if (!base || !f.action || f.action.name !== 'roll') continue;
+    if (!low || m.at.head[1] < low.head) low = { head: m.at.head[1], neck: m.angles.NeckForward };
+    hips = Math.min(hips, m.at.Hips[1]);
+  }
+  const down = base.head - low.head;
+  return (WEAVES[lv] = { down, share: (base.hips - hips) / down, bowed: low.neck, tied: timeline('roll', LEVEL[lv]).end });
+}
+test('weave: a beginner and an amateur get under the hook too, a beginner sooner than an amateur, an amateur sooner than a pro', () => {
+  for (const lv of ['1', '2', '3']) {
+    const w = live('roll', lv);
+    assert.ok(w.from !== null && w.to - w.from >= (lv === '1' ? 0 : 1), `roll@${lv}: ${JSON.stringify(w.works)}`);
+  }
+  assert.ok(live('roll', '1').to < live('roll', '2').to && live('roll', '2').to < live('roll', '3').to, ['1', '2', '3'].map(lv => live('roll', lv).to).join(' '));
+});
+test('weave: as deep as a pro (25 cm and more), the knees taking more of it grade by grade (a beginner\'s a fifth at most)', () => {
+  const w = ['1', '2', '3'].map(weave);
+  for (const [i, r] of w.entries()) assert.ok(r.down >= 0.25, `${i + 1}: ${(r.down * 100).toFixed(1)} cm`);
+  assert.ok(w[0].share < w[1].share && w[1].share < w[2].share && w[0].share <= 0.2, w.map(r => (r.share * 100).toFixed(0) + '%').join(' '));
+});
+test('weave: a beginner is tied up in it longest, an amateur longer than a pro; a beginner looks at the canvas', () => {
+  const t = lv => weave(lv).tied;
+  assert.ok(t('1') > t('2') && t('2') > t('3'), ['1', '2', '3'].map(t).join(' '));
+  assert.ok(t('1') >= 0.95 && t('1') <= 1.05 + 1e-9 && t('2') >= 0.68 && t('2') <= 0.75 + 1e-9 && Math.abs(t('3') - 0.52) < 1e-9, ['1', '2', '3'].map(t).join(' '));
+  assert.ok(weave('1').bowed >= 15, `his head bowed ${weave('1').bowed.toFixed(1)} degrees on his chest`);
 });
 
 const steps = Object.fromEntries(['side', 'inout', 'circle', 'turn', 'dash'].flatMap(item => LEVELS.map(lv => [`${item}@${lv}`, drill(`${item}@${lv}`)])));
