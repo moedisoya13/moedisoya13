@@ -406,16 +406,19 @@ export function fireBody(c, action, move) {
      createShell()               his shell as his body keeps it
      shellBody(c, st, s)         s = { view (view.shell, the bout's: { sh, t, from } | null), low (his elbow block's state:
                                  anim/body.mjs bodyState().low), winding (a punch out of it still wound up, not yet
-                                 thrown), dt, clock }; -> how far in it */
+                                 thrown), quick (out of it into the Tyson shift, the rear foot gone: let go of in SHELL_QUICK seconds), dt, clock };
+                                 -> how far in it */
 export const shellOf = level => (level && level.shell) || null;
 export const createShell = () => ({ sh: null, x: 0, away: 0 });
+const SHELL_QUICK = 0.12;
 export function shellBody(c, st, s) {
   const v = s.view.shell;
   if (v) st.sh = v.sh;
   const sh = st.sh;
   if (!sh) return 0;
   // (and held, not let go of, while what he throws out of it is still being wound up: the crouch is its wind-up)
-  st.x = v ? Math.min(1, st.x + s.dt / sh.down) : s.winding ? st.x : Math.max(0, st.x - s.dt / sh.up);
+  // (out of it into the Tyson shift, it is let go of at once as the rear foot goes: the shift's crouch takes it over, anim/shift.mjs: s.quick)
+  st.x = v ? Math.min(1, st.x + s.dt / sh.down) : s.winding ? st.x : Math.max(0, st.x - s.dt / (s.quick ? SHELL_QUICK : sh.up));
   if (st.x <= 0) return void (st.sh = null), 0;
   const w = (1 - Math.cos(Math.PI * st.x)) / 2;
   // the crouch: both knees, over at the waist, the chin in

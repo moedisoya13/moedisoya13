@@ -368,6 +368,19 @@ function fight(seed, o, steps) {
 }
 
 test('techniques: not built, they change nothing; rehearsed, only what he carries and can do comes out', () => {
+  /* (every technique of the plan is built since stage G2: the one not built is a stand-in defined here, a combination in place of
+     one started with a power punch, as the shift's entry was before its motion was) */
+  define('standIn', {
+    name: 'test', open: ['4m', '5m'],
+    combination: { when: s => s.far >= 0.9 && s.far <= 1.05 && (s.rocked || s.guarded || s.hisRopes < 1.2), weight: s => (0.15 + 0.35 * s.iq) * (s.plan === 'pressure' ? 1.5 : 1), burst: () => [{ power: true, tech: 'standIn', next: 0.3 }] }
+  });
+  try {
+    notBuilt();
+  } finally {
+    delete TECHNIQUES.standIn;
+  }
+});
+function notBuilt() {
   const sheets = [Object.assign(blank(), { defense: 90, iq: 90 }), blank()],
     skills = [{ all: '5m' }, { all: '4a' }],
     ready = list => list.filter(id => TECHNIQUES[id].ready);
@@ -382,9 +395,9 @@ test('techniques: not built, they change nothing; rehearsed, only what he carrie
   assert.equal(c.events, d.events, 'the loadouts their grades give them, against only the built ones of those');
   // (the body punches are built and are no technique: everyone throws them, stage C2)
   assert.deepEqual(a.techs.map(l => l.filter(t => t !== 'body' && !(TECHNIQUES[t] && TECHNIQUES[t].ready))), [[], []], 'nothing not built comes out');
-  /* rehearsed: a 4명 who carries three (the shift not built yet; pressing a pro who keeps his guard up, where it comes out),
+  /* rehearsed: a 4명 who carries three (the stand-in not built; pressing a pro who keeps his guard up, where it comes out),
      against a pro who asked for three his grade does not open */
-  const LOAD = [['parryDown', 'pullCounter', 'shift'], ['shift', 'parryDown', 'shell']];
+  const LOAD = [['parryDown', 'pullCounter', 'standIn'], ['standIn', 'parryDown', 'shell']];
   const r = fight(33, { sheets, skills: [{ all: '4m' }, { all: '3' }], techniques: LOAD, plans: [PLANS.pressure, PLANS.defend], rehearse: true }, 2000),
     carried = new Set(r.techs[0]);
   assert.deepEqual(r.match.bout.fighters[1].techniques, []);
@@ -392,14 +405,14 @@ test('techniques: not built, they change nothing; rehearsed, only what he carrie
   /* (one he carries whose motion is not built came out: the rehearsal is what let it. Which one depends on the course of the
      match, and the body punches, built since, change that course: stage C2) */
   assert.ok([...carried].some(t => TECHNIQUES[t] && !TECHNIQUES[t].ready), 'he did use one: ' + [...carried]);
-  for (const t of carried) assert.ok(['parryDown', 'pullCounter', 'shift', 'body'].includes(t), t);
+  for (const t of carried) assert.ok(['parryDown', 'pullCounter', 'standIn', 'body'].includes(t), t);
   // (the same seed: the same match; another seed: another)
   const again = fight(33, { sheets, skills: [{ all: '4m' }, { all: '3' }], techniques: LOAD, plans: [PLANS.pressure, PLANS.defend], rehearse: true }, 2000),
     other = fight(34, { sheets, skills: [{ all: '4m' }, { all: '3' }], techniques: LOAD, plans: [PLANS.pressure, PLANS.defend], rehearse: true }, 2000);
   assert.equal(again.events, r.events);
   assert.deepEqual(again.techs, r.techs);
   assert.notEqual(other.events, r.events);
-});
+}
 
 // a later stage adds its technique as one entry, and the head picks it where the entry says
 test('techniques: a stage adds one entry, and the head picks it', () => {

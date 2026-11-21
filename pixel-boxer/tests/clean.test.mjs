@@ -9,12 +9,17 @@
 // The peek-a-boo shell (§4.5): crouched 14 cm and more in 0.2 s behind the gloves at his cheekbones; the jab, the cross, the
 // hook and the liver hook kept off, the uppercut and the straight to the body let in; the lead hook and the body uppercut out
 // of it; it costs breath; the window he can go into it in against the jab (it never goes over him).
+// The Tyson shift (§4.4): the rear foot through the air past the lead one (which stays) to come down ahead of it and out to
+// the right, in close and off the other man's line, down low; the straight, the lead hand's body hook and the uppercut in turn,
+// at his grade's intervals; the body hook turning the hips further than a hook does, and harder than the liver hook; back round
+// into his own stance at the end, or at once if he is hit in it; out of the shell, the body hook the sooner; a legend does not
+// start it into a punch coming at him.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { run } from '../src/measure.mjs';
-import { WAVING, STANCES } from '../src/ladder.mjs';
+import { WAVING, STANCES, SHIFTING, SHIFT_LEVELS, LADDER, BODY_LADDER } from '../src/ladder.mjs';
 import { createBout, step, settle, RULES } from '../src/game/bout.mjs';
-import { audit } from '../src/audit.mjs';
+import { audit, measure } from '../src/audit.mjs';
 import { WAVE } from '../src/anim/clean.mjs';
 import { freshBout, drive, HOME } from '../src/footwork.mjs';
 import { RANGE, THROW, PARRY_DOWN, BLOCK_FIRE, FIRE_LEVELS, SHELL, SHELL_ROWS, SHELL_LEVELS } from '../src/defense.mjs';
@@ -630,6 +635,185 @@ test('shell: out of it, the lead hook 0.10–0.17 s after the jab is met and the
 test('shell: the cards, the same every time, and nothing in them breaks anything a body can do', () => {
   for (const e of SHELL) assert.deepEqual(events(loop(e)).map(x => `${x.type} ${x.who} ${x.name} ${x.J}`), events(loop(e)).map(x => `${x.type} ${x.who} ${x.name} ${x.J}`), e.id);
   const { found, seen } = audit(SHELL);
+  assert.ok(seen > 1000, `${seen} frames`);
+  const broken = Object.entries(found)
+    .filter(([, c]) => c.bad)
+    .flatMap(([check, c]) => c.cases.map(k => `${check}: ${k.value} at ${k.script} @ ${k.t}, ${k.who}, ${k.doing}`));
+  assert.deepEqual(broken, []);
+});
+
+
+/* ---- The Tyson shift (§4.4, anim/shift.mjs): its cards (src/ladder.mjs SHIFTING), a frame a step: where he and the other man
+   stand, his facing, the balls of his feet on the canvas, his head, his pelvis's turn, and what the bout says */
+const shiftCard = id => SHIFTING.find(e => e.id === id);
+function shiftLoop(e) {
+  const toCanvas = (f, p) => [f.x + p[0] * Math.cos(f.yaw) + p[2] * Math.sin(f.yaw), p[1], f.z - p[0] * Math.sin(f.yaw) + p[2] * Math.cos(f.yaw)];
+  return loop(e, b => {
+    const [a, o] = b.fighters;
+    return { at: [a.x, a.z], him: [o.x, o.z], yaw: a.yaw, shift: a.shift ? { off: a.shift.off, landed: a.shift.landed, hooked: a.shift.got.shiftHook !== undefined } : null, phase: a.action && a.action.chain ? a.action.chain.phase : null, L: toCanvas(a, a.pose.at.LeftToeBase), Rb: toCanvas(a, a.pose.at.RightToeBase), pelvis: measure(a).angles.PelvisYaw - (a.yaw * 180) / Math.PI };
+  });
+}
+const shiftStart = frames => events(frames).find(e => e.type === 'shift' && e.who === 0);
+const gotThere = frames => events(frames).filter(e => e.who === 0 && ['hit', 'block', 'whiff', 'graze'].includes(e.type));
+// his guard's head height, standing (as the shell's tests take it)
+const guardHead = lv => mean(run(STANCES.find(e => e.id === `stance@${lv}`), 3).frames.map(f => f.headY));
+
+test('shift: only 4명 and 5명 have it, and only a man who carries it shifts: anyone else\'s press meant as it is his straight', () => {
+  for (const lv of LEVELS) assert.equal(!!LEVEL[lv].shift, lv === '4m' || lv === '5m', lv);
+  for (const lv of SHIFT_LEVELS) {
+    const e = shiftCard(`shift@${lv}`),
+      frames = loop(e);
+    assert.ok(shiftStart(frames), lv);
+    assert.deepEqual(gotThere(frames).map(x => x.name), ['cross', 'shiftHook', 'upperIn'], lv);
+    const not = loop(Object.assign({}, e, { setup: b => (e.setup(b), (b.fighters[0].techniques = [])) }));
+    assert.ok(!shiftStart(not), `${lv}, not carried`);
+    assert.deepEqual(gotThere(not).map(x => x.name), ['cross'], `${lv}, not carried: the straight`);
+  }
+  const pro = shiftCard('shift@4m'),
+    three = loop(Object.assign({}, pro, { setup: b => (pro.setup(b), (b.fighters[0].skills = { all: '3' })) }));
+  assert.ok(!shiftStart(three), 'a pro carrying it');
+});
+
+test('shift: the rear foot off the canvas 4 cm at most and down 0.20 m and more ahead of the lead foot and 0.28 m and more out to the right of it; the lead foot stays', () => {
+  // (4명: the foot goes once the straight has got there; 5명: as its shoulder fires; seconds after the press it is off the canvas)
+  const air = { '4m': [0.1, 0.32], '5m': [0.05, 0.25] };
+  for (const lv of SHIFT_LEVELS) {
+    const frames = shiftLoop(shiftCard(`shift@${lv}`)),
+      t0 = shiftStart(frames).t,
+      i0 = frames.findIndex(f => f.t >= t0 - 1e-9),
+      start = frames[i0 - 1],
+      // (the terms he started in: the line to the other man, and to his right)
+      d = [start.him[0] - start.at[0], start.him[1] - start.at[1]].map(v => v / Math.hypot(start.him[0] - start.at[0], start.him[1] - start.at[1])),
+      right = [-d[1], d[0]],
+      rest = Math.min(...frames.map(f => f.Rb[1])), // (the ball of a foot flat on the canvas)
+      // (the step: from the bout's saying the rear foot goes until it says it is down)
+      up = frames.filter(f => f.shift && f.shift.off !== null && !f.shift.landed);
+    assert.ok(up.length > 3, lv);
+    assert.ok(up[0].t - t0 >= air[lv][0] - 1e-9 && up[up.length - 1].t - t0 <= air[lv][1] + 1e-9, `${lv}: off the canvas ${(up[0].t - t0).toFixed(3)}–${(up[up.length - 1].t - t0).toFixed(3)} s`);
+    assert.ok(Math.max(...up.map(f => f.Rb[1] - rest)) <= 0.04, `${lv}: ${(Math.max(...up.map(f => f.Rb[1] - rest)) * 100).toFixed(1)} cm up`);
+    for (const f of up) assert.ok(Math.hypot(f.L[0] - start.L[0], f.L[2] - start.L[2]) <= 0.02, `${lv}: the lead foot at ${(f.t - t0).toFixed(3)}`);
+    const down = frames.find(f => f.t > up[up.length - 1].t),
+      off = [down.Rb[0] - down.L[0], down.Rb[2] - down.L[2]],
+      ahead = off[0] * d[0] + off[1] * d[1],
+      out = off[0] * right[0] + off[1] * right[1];
+    assert.ok(ahead >= 0.2 && out >= 0.28, `${lv}: down ${ahead.toFixed(2)} m ahead and ${out.toFixed(2)} m to the right of the lead foot`);
+  }
+});
+
+test('shift: in close, 0.64–0.74 m off the other man and 20–38° off the line he faced him on, down 15 cm and more as he hooks', () => {
+  for (const lv of SHIFT_LEVELS) {
+    const frames = shiftLoop(shiftCard(`shift@${lv}`)),
+      t0 = shiftStart(frames).t,
+      start = frames[frames.findIndex(f => f.t >= t0 - 1e-9) - 1],
+      [, hook] = gotThere(frames),
+      head = guardHead(lv),
+      // (from the rear foot coming down to the body hook getting there)
+      low = frames.filter(f => f.shift && f.shift.landed && f.t <= hook.t + 1e-9);
+    assert.ok(low.length > 4, lv);
+    for (const f of low) {
+      const was = [start.at[0] - start.him[0], start.at[1] - start.him[1]],
+        now = [f.at[0] - f.him[0], f.at[1] - f.him[1]],
+        far = Math.hypot(...now),
+        off = deg(Math.acos((was[0] * now[0] + was[1] * now[1]) / Math.hypot(...was) / far));
+      assert.ok(far >= 0.64 && far <= 0.74, `${lv}: ${far.toFixed(3)} m at ${(f.t - t0).toFixed(3)}`);
+      assert.ok(off >= 20 && off <= 38, `${lv}: ${off.toFixed(1)}° at ${(f.t - t0).toFixed(3)}`);
+    }
+    // (down: from 0.30 s, and by a legend's grade from 0.25 s, until the hook has got there)
+    for (const f of frames.filter(f => f.t - t0 >= (lv === '4m' ? 0.3 : 0.25) - 1e-9 && f.t <= hook.t + 1e-9)) assert.ok(head - f.head[1] >= 0.15, `${lv}: ${((head - f.head[1]) * 100).toFixed(1)} cm down at ${(f.t - t0).toFixed(3)}`);
+  }
+});
+
+test('shift: the straight, the lead hand\'s body hook and the uppercut, 4명 0.33–0.42 s and 0.20–0.27 s apart, 5명 0.26–0.34 s and 0.17–0.24 s; a straight blocked, the two after it all the same', () => {
+  const apart = { '4m': [[0.33, 0.42], [0.2, 0.27]], '5m': [[0.26, 0.34], [0.17, 0.24]] };
+  for (const lv of SHIFT_LEVELS) {
+    const got = gotThere(shiftLoop(shiftCard(`shift@${lv}`))),
+      [a, b] = apart[lv];
+    assert.deepEqual(got.map(e => e.name), ['cross', 'shiftHook', 'upperIn'], lv);
+    // (the straight goes into his guard: the other two go on)
+    assert.equal(got[0].type, 'block', lv);
+    // (the hook to his body, the uppercut to his head)
+    assert.ok(got[1].zone || got[1].part === 'body' || got[1].part === 'elbow' || got[1].part === 'forearm', `${lv}: ${JSON.stringify(got[1])}`);
+    const one = got[1].t - got[0].t,
+      two = got[2].t - got[1].t;
+    assert.ok(one >= a[0] - 1e-9 && one <= a[1] + 1e-9, `${lv}: the body hook ${one.toFixed(3)} s after the straight`);
+    assert.ok(two >= b[0] - 1e-9 && two <= b[1] + 1e-9, `${lv}: the uppercut ${two.toFixed(3)} s after the body hook`);
+  }
+});
+
+test('shift: the body hook turns the hips further than his hook (1.25 times and more; the plan asks 1.6) and lands harder than his liver hook', () => {
+  // how far his pelvis turns (unwrapped, about his facing) through a punch, and for the shift's hook, the crouch it is wound up in
+  const turn = (frames, name) => {
+    let lo = Infinity,
+      hi = -Infinity,
+      acc = 0,
+      prev = null;
+    for (const f of frames) {
+      const on = (f.action === name && ['coil', 'throw', 'hold'].includes(f.phase)) || (name === 'shiftHook' && f.shift && f.shift.landed && !f.shift.hooked);
+      if (!on) continue;
+      if (prev !== null) acc += ((f.pelvis - prev + 540) % 360) - 180;
+      prev = f.pelvis;
+      (lo = Math.min(lo, acc)), (hi = Math.max(hi, acc));
+    }
+    return hi - lo;
+  };
+  for (const lv of SHIFT_LEVELS) {
+    const shift = shiftLoop(shiftCard(`shift@${lv}`)),
+      hook = shiftLoop(LADDER.find(e => e.id === `hook@${lv}`)),
+      liver = events(loop(BODY_LADDER.find(e => e.id === `hookBody@${lv}`))).find(e => e.who === 0 && e.type === 'hit'),
+      mine = gotThere(shift)[1],
+      k = turn(shift, 'shiftHook') / turn(hook, 'hook');
+    assert.ok(k >= 1.25, `${lv}: ${k.toFixed(2)} times the hook's turn`);
+    assert.ok(mine.J > liver.J, `${lv}: ${mine.J} N·s against the liver hook's ${liver.J}`);
+  }
+});
+
+test('shift: back round into his own stance at the end; hit in the middle of it, in his own stance within 0.4 s', () => {
+  const stance = Math.hypot(0.103 + 0.247, 0.327 + 0.153), // (the balls of his feet in his guard: moves.mjs GUARD)
+    orthodox = f => {
+      const toHim = [f.him[0] - f.at[0], f.him[1] - f.at[1]].map(v => v / Math.hypot(f.him[0] - f.at[0], f.him[1] - f.at[1])),
+        gap = Math.hypot(f.L[0] - f.Rb[0], f.L[2] - f.Rb[2]);
+      return (f.L[0] - f.Rb[0]) * toHim[0] + (f.L[2] - f.Rb[2]) * toHim[1] > 0.2 && gap >= 0.85 * stance && gap <= 1.15 * stance;
+    };
+  for (const lv of SHIFT_LEVELS) {
+    const frames = shiftLoop(shiftCard(`shift@${lv}`)),
+      over = frames.findIndex((f, i) => i > 0 && frames[i - 1].shift && !f.shift);
+    assert.ok(over > 0 && orthodox(frames[over]), `${lv}: in his stance as it is over`);
+    // (a pro's punch into him as he goes down into it, his guard kept up until then)
+    const base = shiftCard(`shift@${lv}`),
+      hit = shiftLoop(Object.assign({}, base, { against: [[0.62, 'power']], setup: b => (base.setup(b), (b.fighters[1].skills = { all: '3' })) })),
+      blow = events(hit).find(e => e.who === 1 && e.type === 'hit'),
+      t0 = shiftStart(hit).t;
+    assert.ok(blow && blow.t - t0 > 0.15 && blow.t - t0 < 0.4, `${lv}: hit ${blow && (blow.t - t0).toFixed(3)} s into it`);
+    const back = hit.find(f => f.t > blow.t && !f.shift && orthodox(f));
+    assert.ok(back && back.t - blow.t <= 0.4, `${lv}: in his stance ${back && (back.t - blow.t).toFixed(3)} s after`);
+    assert.ok(!hit.some(f => f.t > blow.t && f.shift), `${lv}: and it is over`);
+  }
+});
+
+test('shift: out of the shell, crouched already, the body hook gets there 50 ms and more sooner after the straight than standing', () => {
+  for (const lv of SHIFT_LEVELS) {
+    const after = id => {
+      const [a, b] = gotThere(shiftLoop(shiftCard(`${id}@${lv}`)));
+      return b.t - a.t;
+    };
+    const standing = after('shift'),
+      shelled = after('shift-shell');
+    assert.ok(standing - shelled >= 0.05 - 1e-9, `${lv}: ${(standing * 1000).toFixed(0)} ms standing, ${(shelled * 1000).toFixed(0)} ms out of the shell`);
+  }
+});
+
+test('shift: a legend does not start it into a punch on its way at him; a great one does', () => {
+  for (const lv of SHIFT_LEVELS) {
+    const base = shiftCard(`shift@${lv}`),
+      // (the other man's jab pressed just before he presses it)
+      into = loop(Object.assign({}, base, { against: [[0.47, 'jab']], hisCover: () => false }));
+    assert.equal(!!shiftStart(into), lv === '4m', lv);
+  }
+});
+
+test('shift: the cards, the same every time, and nothing in them breaks anything a body can do', () => {
+  for (const e of SHIFTING) assert.deepEqual(events(loop(e)).map(x => `${x.type} ${x.who} ${x.name} ${x.J}`), events(loop(e)).map(x => `${x.type} ${x.who} ${x.name} ${x.J}`), e.id);
+  const { found, seen } = audit(SHIFTING);
   assert.ok(seen > 1000, `${seen} frames`);
   const broken = Object.entries(found)
     .filter(([, c]) => c.bad)

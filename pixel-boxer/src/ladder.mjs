@@ -440,3 +440,49 @@ export const ENTRY = MOVING.flatMap(m =>
     against: m.against
   }))
 );
+
+/* The Tyson shift (anim/shift.mjs, docs/moves-plan-5.md §4.4), a clean great one's and a clean legend's own: 4명 and 5명, a card
+   each, in two rows. He carries it and presses his power punch meant as it once, as his head does (in place of a combination
+   started with a power punch), at `at` of the loop, from 1.0 m at an amateur who keeps his guard up and only takes it (no blow
+   to his liver puts him down: f.stands). Out of the shell: the same (the other man with a pro's guard: `his`), crouched in his
+   peek-a-boo shell (he carries it too) from `shell` of the loop until he presses it, as his head may pick it there
+   (game/techniques.mjs shell). Each loop is a fresh bout (he ends somewhere else). The card's numbers: the three punches' impulses, how long from the first getting there to the body
+   hook getting there (on the bout's clock), and where he ends: metres from the other man and degrees off the line the other
+   man faced him on. */
+export const SHIFT_FROM = 1.0;
+export const SHIFT_ROWS = [
+  { id: 'shift', name: '타이슨 시프트', en: 'The Tyson shift', at: 0.5, loop: 2.4, his: { all: '2' } },
+  { id: 'shift-shell', name: '타이슨 시프트 · 셸에서', en: 'The Tyson shift, out of the shell', shell: 0.3, at: 0.62, loop: 2.5, his: { all: '2', cover: '3' } }
+];
+export const SHIFT_LEVELS = ['4m', '5m'];
+export const shiftCue = row => (bout, t) => {
+  const f = bout.fighters[0],
+    own = (f.cues = f.cues || {});
+  if (own.pressed) return null;
+  if (t >= row.at - 1e-9) return (own.pressed = true), { power: true, tech: 'shift' };
+  // (crouched in the shell until then)
+  return row.shell !== undefined && t >= row.shell - 1e-9 ? { cover: true, tech: 'shell' } : null;
+};
+export const SHIFTING = SHIFT_ROWS.flatMap(row =>
+  SHIFT_LEVELS.map(lv => ({
+    id: `${row.id}@${lv}`,
+    item: row.id,
+    level: lv,
+    name: `${row.name} ${LEVEL[lv].label}`,
+    en: `${row.en} · ${LEVEL[lv].name}`,
+    group: '명의 기술',
+    fresh: true,
+    loop: row.loop,
+    view: { yaw: 0.9, pitch: 0.35 },
+    me: t => (t === 0 ? HOME : null),
+    him: t => (t === 0 ? [HOME[0] + SHIFT_FROM, HOME[1]] : null),
+    hisCover: () => true,
+    setup: b => {
+      b.fighters[0].skills = { all: lv };
+      b.fighters[0].techniques = row.shell !== undefined ? ['shift', 'shell'] : ['shift'];
+      b.fighters[1].skills = row.his;
+      b.fighters[1].stands = true;
+    },
+    cue: shiftCue(row)
+  }))
+);

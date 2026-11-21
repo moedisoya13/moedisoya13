@@ -155,7 +155,8 @@ test('the last of his health puts a boxer down and ends the bout', () => {
 });
 
 /* What the head adds to a press (game/techniques.mjs: the technique it means it as, a punch for the body) goes with the press
-   onto the move it starts, for the motion built for it to read; until one is, the press is the one it always was. */
+   onto the move it starts, for the motion built for it to read; for a man who does not carry it (here the shift, which his
+   grade's own loadout does not hold), the press is the one it always was. */
 test('a press carries what the head means by it, and is otherwise the press it always was', () => {
   const press = (extra, skills) => {
     const bout = createBout(3, { skills: [skills, {}] });
@@ -174,7 +175,7 @@ test('a press carries what the head means by it, and is otherwise the press it a
     tech = press({ tech: 'shift' }, { all: '4m' });
   assert.equal(plain.asked, undefined);
   assert.deepEqual(meant.asked, { tech: 'shift', body: true });
-  // (a technique whose motion is not built changes nothing; a press for the body is the body punch, stage C2: bout.mjs decide)
+  // (a technique he does not carry changes nothing, built or not; a press for the body is the body punch, stage C2: bout.mjs decide)
   assert.deepEqual(tech.asked, { tech: 'shift', body: false });
   assert.deepEqual(tech.seen, plain.seen);
   assert.deepEqual(tech.at, plain.at);

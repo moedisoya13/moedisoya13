@@ -409,6 +409,42 @@ const FIRE_5M = Object.assign({}, FIRE_4M, { load: 1, wait: 0.13, up: 0.15, foll
 const SHELL_4M = { down: 0.18, up: 0.2, knees: [12, 15], waist: 14, chin: 0, square: 20, lead: [0.04, 0.04, -0.12], rear: [-0.05, 0.05, -0.08], elbow: 0, pole: [0.3, -1, 0], low: [-0.02, -0.14, -0.02], open: 0.3, chase: 0.7, cost: 0.015, within: 0.25, inside: 0.74, load: 0.7, wait: 0.05, follow: 0.03, loadBody: 0.7, u: null, period: 0.8, away: null };
 const SHELL_5M = Object.assign({}, SHELL_4M, { down: 0.14, knees: [14, 17], load: 1, loadBody: 0.7, follow: 0.03, chase: 0.5, rear: [-0.08, 0.07, -0.1], u: null, away: 0.04 });
 
+/* the Tyson shift (anim/shift.mjs; docs/moves-plan-5.md §4.4; game/techniques.mjs shift, his head's to pick): a clean great
+   one's and a clean legend's. The rear hand's straight, the rear foot walked through past the lead one as it goes (the stance
+   changed over), down low in it, the lead hand's hook to the body thrown like a rear hand's, the rear hand's uppercut out of the
+   knees, and back round onto the lead foot. Only 4명 and 5명 have it (`shift` on their lines).
+     with, off    when the rear foot leaves the canvas: once the straight has got there ('arrived': all the way out), or as
+                  its shoulder fires ('shoulder': the punch and the step one movement), and not before `off` seconds after the
+                  press; step: seconds it is in the air
+     lift         metres it clears the canvas by (at most)
+     go           [from, to] seconds after the rear foot goes over which his centre goes where the step takes him
+     at           where he goes: [metres centre to centre from the other man, degrees off the line the other man first faced
+                  him on, out past the other man's lead foot (to the shifting man's right)]; most: metres his centre goes at
+                  the most (a man shoved off by the first punch is followed only so far), and long: metres at the most from
+                  the rear foot's spot to the lead foot (no wider a stance than his legs take)
+     foot         where the rear foot comes down: [metres to his right, ahead] of his centre there, in the terms he started in
+     rear, draw   metres from his centre the lead foot (behind him now) is drawn in to on its ball once the rear one is down,
+                  over `draw` seconds (as the weight comes down between his feet: it pushes the body hook from there)
+     down         [from, to] seconds after the rear foot goes over which he goes down into the crouch (at once out of the shell); knees: [lead (now behind), rear (now in front)]
+                  degrees more; sink: metres the hips are let down besides (the stride is long: a knee alone does not take
+                  them down far over a leg stretched out); seat: metres the hips go back (his head kept out of the other
+                  man's guard, outside whose lead arm he is); waist: degrees over; square: degrees the hips are turned to face him (the stance changed over)
+     hand         [x, y, z] metres on each glove's channels (the other way for the right) as he goes in: drawn in to his chest
+     pivot        degrees the lead foot turns on its ball as the rear one goes by it, and the rear foot turns in the air (out to
+                  point ahead: [lead, rear])
+     hook         seconds after the first punch got there (landed, blocked or gone by) that the lead hand's body hook gets
+                  there, and `hookGo`: seconds after it got there that the bout presses the hook (what makes it so: measured)
+     upper        seconds after the hook got there that the uppercut gets there; upperGo: when it is pressed; load: how much of
+                  the uppercut's wind-up the crouch has done
+     shell        seconds sooner both go out of the peek-a-boo shell, crouched already
+     back         seconds to come back round into his own stance (the lead foot round to the front past the rear, which turns
+                  on its ball and is drawn as far as it must be), from `backAt` seconds after the uppercut got there; end:
+                  [nearest, furthest] metres from the other man he ends; turn: degrees further round him at the end (a
+                  legend's, outside the other man's lead side)
+     read         a legend does not start it into a punch on its way at him (it would be a counter) */
+const SHIFT_4M = { with: 'arrived', off: 0, step: 0.17, lift: 0.025, go: [0, 0.22], at: [0.71, 23], most: 0.55, long: 0.55, foot: [0.09, 0.17], rear: 0.32, draw: 0.15, down: [0, 0.2], knees: [24, 28], sink: 0.05, seat: 0.07, waist: 14, square: 26, hand: [-0.04, -0.08, -0.06], pivot: [-35, 40], hook: 0.37, hookGo: 0.19, upper: 0.23, upperGo: 0.14, load: 0.6, shell: 0.07, back: 0.25, backAt: 0.02, end: [0.72, 0.8], turn: 0, read: false };
+const SHIFT_5M = Object.assign({}, SHIFT_4M, { with: 'shoulder', off: 0, step: 0.12, go: [0, 0.16], at: [0.7, 28], foot: [0.09, 0.18], down: [0, 0.16], hook: 0.3, hookGo: 0.13, upper: 0.2, upperGo: 0.12, load: 0.8, shell: 0.06, back: 0.18, backAt: 0, turn: 8, read: true });
+
 export const LEVEL = {
   1: {
     grade: 1, side: null, name: '입문', label: '1',
@@ -451,7 +487,7 @@ export const LEVEL = {
     away: TEXTBOOK_AWAY
   },
   '4m': {
-    grade: 4, side: 'm', name: '일류 · 명', label: '4명', wave: WAVE_4M, pat: PAT_4M, fire: FIRE_4M, shell: SHELL_4M,
+    grade: 4, side: 'm', name: '일류 · 명', label: '4명', wave: WAVE_4M, pat: PAT_4M, fire: FIRE_4M, shell: SHELL_4M, shift: SHIFT_4M,
     chain: { early: [0.25, 0.25, 0, 0, 0], damp: [0.6, 0.6, 0.56, 0.6, 0.6], amp: [1.1, 1.15, 1.1, 1, 1], coil: 0.55, shown: 0.65, back: 1.12, backLag: 1, firm: 1.08, spring: { down: 0.6, wait: true } },
     form: form({ guard: -0.3, chin: -0.5, lively: 0.5, dip: -0.03, drop: true, sep: 7, off: 0.07, with: 'hips', tuck: 4, look: 1, bend: 4, exit: 'roll', beat: 'on', level: DOWN_4M }),
     // strong and weak, the lead foot's landing the heavy one; the head an end on every lead foot, under in between
@@ -476,7 +512,7 @@ export const LEVEL = {
     away: away({ jitter: 0.25, drop: 1.2 })
   },
   '5m': {
-    grade: 5, side: 'm', name: '전설 · 명', label: '5명', wave: WAVE_5M, pat: PAT_5M, fire: FIRE_5M, shell: SHELL_5M,
+    grade: 5, side: 'm', name: '전설 · 명', label: '5명', wave: WAVE_5M, pat: PAT_5M, fire: FIRE_5M, shell: SHELL_5M, shift: SHIFT_5M,
     chain: { early: [0.4, 0.4, 0, 0, 0], damp: [0.6, 0.6, 0.5, 0.6, 0.6], amp: [1.15, 1.25, 1.18, 1, 1], coil: 0.2, shown: 0.55, back: 1.15, backLag: 1, firm: 1.2, spring: { down: 0.4 } },
     form: form({ guard: -0.4, chin: -0.6, lively: 0.7, dip: -0.04, drop: true, sep: 11, off: 0.1, with: 'legs', tuck: 6, look: 1, bend: 6, exit: 'angle', beat: 'off', level: DOWN_5M }),
     // the lightest feet: a swung beat, a phrase that quickens, stops dead and breaks out into something

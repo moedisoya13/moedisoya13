@@ -244,7 +244,10 @@ define('blockFire', {
 });
 
 define('shift', {
-  name: '타이슨 시프트', section: '§4.4', open: CLEAN,
+  name: '타이슨 시프트', section: '§4.4', open: CLEAN, ready: true,
+  /* (built, stage G2: game/bout.mjs f.shift, anim/shift.mjs, skill.mjs shift, moves.mjs shiftHook. One press meant as it is all
+     of it: the rear hand's straight, the rear foot through past the lead one and the stance changed over, down low, the body
+     hook and the uppercut the bout presses, and back round into his own stance; out of the shell, the crouch is there already) */
   // at 0.9-1.05 m with his breath (45%) for it, the other man rocked, covered up, or near the ropes: the shift, as one press
   combination: {
     when: s => s.far >= 0.9 && s.far <= 1.05 && s.breath >= 0.45 && (s.rocked || s.guarded || s.hisRopes < 1.2),
@@ -269,7 +272,7 @@ define('shell', {
     const e = [s.mem.by, s.mem.kept].find(e => since(s, e, 0.25));
     return e ? 'shell:' + e.at : null;
   },
-  // the hook and the body uppercut out of the crouch; or, carrying it, the shift by its own chance (stage G2's)
+  // the hook and the body uppercut out of the crouch; or, carrying it, the shift by its own chance (out of the crouch: stage G2)
   counter: s => (offered(s, 'shift') && s.roll() < TECHNIQUES.shift.combination.weight(s) ? { power: true, tech: 'shift' } : { power: true, tech: 'shell' })
 });
 

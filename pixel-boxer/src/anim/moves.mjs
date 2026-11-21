@@ -295,6 +295,28 @@ const PUNCHES = {
       elbow: {}
     }
   },
+  /* ---- the Tyson shift's body hook (docs/moves-plan-5.md §4.4; anim/shift.mjs): the lead hand's hook to the body, thrown out
+     of the shift with the stance changed over, so that the left side is behind and the hand is a rear hand: the hips and the
+     chest turn back through nearly twice a hook's, from turned to his left round to his right, the left foot (behind him now)
+     turning in on its ball and pushing, the knee in over it. The arm set as the liver hook's, locked to the chest, and swung
+     round on its sweep into his side. Pressed by the bout,
+     by name, in the shift (game/bout.mjs). */
+  shiftHook: {
+    hand: 'L', arm: 'swing', kind: 'hook', zone: 'liver', of: 'hook', reach: 0.82, close: 0.68, land: 0.7, bent: 0.44,
+    chain: { coil: 0.1, rate: [58, 42, 52, 60, 0], skip: ['elbow'], turn: [52, 46], locked: true },
+    body: { turn: 0.4, off: 0, bend: 0, tuck: 0, sep: 0.5, dip: 0, lively: 0 },
+    // (no way down of its own: he is down in the shift's crouch already)
+    level: {},
+    spot: [1.4, 40],
+    coil: { yaw: 12, twist: 8, lean: 2, lx: 0.1, ly: -0.08, lz: 0.06, le: 0.3, lc: 1 },
+    links: {
+      drive: { lfw: -40, lfp: 24, lkx: -22, hz: 0.04, lx: 0.02, lz: 0.04, le: 0.35, lc: 1 },
+      hips: { yaw: -52, hx: -0.03 },
+      trunk: { twist: -46, side: -2, rz: -0.02, ry: 0.03 },
+      shoulder: {},
+      elbow: {}
+    }
+  },
   /* ---- the rear hook (docs/moves-plan-5.md §3.8, §4A.7): not the hook in a mirror. The rear shoulder starts further back, so
      the body turns further, as far as a cross does: the weight onto the rear leg in the wind-up and the chest turned back to
      his right, then the rear foot turning out on its ball, the heel up, the rear knee in over it, the hips and the chest round

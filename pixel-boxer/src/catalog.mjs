@@ -18,7 +18,7 @@ import { step } from './game/bout.mjs';
 
 import { ENTRIES, freshBout, drive } from './footwork.mjs';
 import { DEFENSE, ITEMS as GUARDS, PARRY_DOWN, CROSS_ARM, ROLLING, CROSS_LEVELS, ROLL_LEVELS, PULL_WAYS, PULL_COUNTER, BLOCK_FIRE, FIRE_LEVELS, SHELL, SHELL_ROWS, SHELL_LEVELS } from './defense.mjs';
-import { LADDER, STANCES, DIRTY, FOOTWORK, PUNCHES, TECHNIQUES, ENTRY, MOVING, TRICKS, SHOWOFF, TAUNT_ROWS, TAUNTING, BODY_PUNCHES, BODY_LADDER, REAR, REAR_LADDER, WAVE_ROWS, WAVING } from './ladder.mjs';
+import { LADDER, STANCES, DIRTY, FOOTWORK, PUNCHES, TECHNIQUES, ENTRY, MOVING, TRICKS, SHOWOFF, TAUNT_ROWS, TAUNTING, BODY_PUNCHES, BODY_LADDER, REAR, REAR_LADDER, WAVE_ROWS, WAVING, SHIFT_ROWS, SHIFT_LEVELS, SHIFTING } from './ladder.mjs';
 import { BODYSHOTS, LIVER_BLOCK } from './bodyshots.mjs';
 import { LEVELS, LEVEL } from './anim/skill.mjs';
 import { LINKS } from './phys/chain.mjs';
@@ -45,7 +45,7 @@ const FOOTWORK_STATS = ['pendulum', 'inout', 'stalk', 'side', 'circle', 'turn', 
 // (the dashes each way are dash cards)
 const STAT = { bounce: 'stance', dashIn: 'dash', dashSide: 'dash' };
 // (the liver block cards have no punch of the other man's to fight round: each loop is a fresh bout all the same)
-const byId = Object.fromEntries([...ENTRIES, ...DEFENSE, ...STANCES, ...LADDER, ...DIRTY, ...FOOTWORK, ...ENTRY, ...SHOWOFF, ...TAUNTING, ...BODY_LADDER, ...REAR_LADDER, ...BODYSHOTS, ...LIVER_BLOCK.map(e => Object.assign({}, e, { fresh: true })), ...WAVING, ...PARRY_DOWN, ...CROSS_ARM, ...ROLLING, ...PULL_COUNTER, ...[...BLOCK_FIRE, ...SHELL].map(e => Object.assign({}, e, { fresh: true }))].map(e => [e.id, e]));
+const byId = Object.fromEntries([...ENTRIES, ...DEFENSE, ...STANCES, ...LADDER, ...DIRTY, ...FOOTWORK, ...ENTRY, ...SHOWOFF, ...TAUNTING, ...BODY_LADDER, ...REAR_LADDER, ...BODYSHOTS, ...LIVER_BLOCK.map(e => Object.assign({}, e, { fresh: true })), ...WAVING, ...PARRY_DOWN, ...CROSS_ARM, ...ROLLING, ...PULL_COUNTER, ...[...BLOCK_FIRE, ...SHELL].map(e => Object.assign({}, e, { fresh: true })), ...SHIFTING].map(e => [e.id, e]));
 
 /* ---- what is in the catalogue: parts, and in each the techniques, each a row of seven grades (or, being hit, one card) */
 const FOOT_NOTE = {
@@ -118,7 +118,9 @@ const CLEAN_NOTE = {
   blockFire: '가드를 든 채 프로의 리버 훅을 뒷팔꿈치로 막고(§3.4의 팔꿈치 블록), 막은 그 팔로 올려칩니다. 블록 & 파이어를 가진 4명·5명이 막은 뒤 0.25초 안에 강타를 누르면(머리가 k.counter × 작전으로 고름) 막느라 옆구리를 접은 것이 감기라 그 손의 어퍼(0.74 m 안이면 인사이드 어퍼)가 장전된 채(4명 0.7, 5명 1.0) 나갑니다. 주먹은 허리띠 높이에서 팔꿈치가 옆구리를 스치며 출발하고(4명 0.16초, 5명 0.13초), 그쪽 무릎이 펴지며 올라가고, 반대 글러브는 관자놀이에 붙어 있습니다. 상대는 훅을 던지느라 팔이 나와 있어 카운터입니다. 5명은 어퍼가 닿고 0.07초 뒤 반대 손 훅이 따라갑니다(따라 들어가며). 갈비로 온 훅을 앞팔꿈치로 막으면 앞손 훅이 같은 식으로 나갑니다. 카드 아래는 막은 뒤 어퍼가 닿기까지와 그 충격량입니다.',
   shell: '피커부 셸: 가드를 웅크려 올립니다. 두 무릎(4명 +12°/+15°, 5명 +14°/+17°)과 허리(14°)로 내려앉아 머리가 0.18초(5명 0.14초)에 15 cm 남짓 내려가고, 상체를 상대 쪽으로 20° 돌려 세우고, 두 글러브를 광대뼈 앞에, 아래팔을 세웁니다. 프로의 잽이 글러브에 막히면(또는 위로 지나가면) 0.25초 안에 그 자세에서 앞손 훅이 감기 없이 나가고(장전 4명 0.7, 5명 1.0) 이어서 뒷손 바디 어퍼가 따라갑니다. 웅크리고 있는 동안 숨이 초당 최대치의 1.5%씩 듭니다. 5명은 곧은 주먹이 오면 그 손의 반대쪽으로 머리가 4 cm 더 빠집니다. 카드 아래는 셸에 들어간 뒤 0.3초 동안 머리가 내려간 양(서 있을 때의 오르내림 포함), 바닥까지 걸린 시간, 상대 잽의 결과입니다.',
   'shell-hook': '같은 셸로 프로의 앞손 훅(0.85 m)을 받습니다. 광대뼈의 글러브와 세운 아래팔이 머리 옆을 덮어 막고, 몸통으로 온 리버 훅은 내려오는 뒷팔꿈치가 막습니다.',
-  'shell-upper': '셸이 비워 두는 곳: 어퍼. 글러브는 광대뼈에, 아래팔은 세워져 있어 밑에서 올라오는 어퍼는 두 팔 사이로 턱에 닿습니다(명치로 오는 바디 스트레이트도 벌어진 두 팔꿈치 사이로 들어옵니다).'
+  'shell-upper': '셸이 비워 두는 곳: 어퍼. 글러브는 광대뼈에, 아래팔은 세워져 있어 밑에서 올라오는 어퍼는 두 팔 사이로 턱에 닿습니다(명치로 오는 바디 스트레이트도 벌어진 두 팔꿈치 사이로 들어옵니다).',
+  shift: '타이슨 시프트("THE TYSON SHIFT" 영상): 한 번 누르면 전부 나갑니다. 뒷손 스트레이트(맞든 막히든 빗나가든 다음으로), 그것이 닿으면(4명) 또는 그 어깨가 발사될 때(5명) 뒷발이 떠서 앞발 옆을 지나 앞발보다 앞·오른쪽에 내려앉고(스탠스가 뒤바뀜, 4명 0.17초, 5명 0.12초, 4 cm 넘게 뜨지 않음), 몸이 상대 앞발 바깥으로 0.7 m 남짓, 그가 처음 마주 본 선에서 20~28° 벗어난 자리로 들어가 무릎과 허리로 내려앉습니다(머리가 가드보다 15 cm 넘게 낮게). 거기서 왼손 바디 훅(왼쪽이 뒤가 되어 뒷손처럼 골반이 크게 돔)이 첫 주먹 뒤 4명 0.37초, 5명 0.30초에, 오른손 어퍼가 그 뒤 4명 0.25초, 5명 0.22초에 닿고, 앞발을 앞으로 돌려 내며 오소독스로 돌아옵니다. 상대는 아마추어로 가드를 들고 맞기만 합니다. 카드 아래는 세 주먹의 충격량, 첫 주먹이 닿은 뒤 바디 훅이 닿기까지, 끝난 자리(상대와의 거리, 처음 선에서 벗어난 각)입니다.',
+  'shift-shell': '같은 시프트를 피커부 셸에서(셸도 가진 선수가 0.3초부터 웅크려 있다가). 이미 내려앉아 있어 내려앉는 동안을 건너뛰고, 첫 주먹이 닿은 뒤 바디 훅까지가 4명 0.30초, 5명 0.25초로 서서 시작한 것보다 50~70 ms 빠릅니다. 셸에서는 5명도 스트레이트가 닿은 뒤에 발이 뜹니다. 상대는 아마추어 자세에 프로의 가드입니다.'
 };
 const CROSS_NOTE = {
   crossArm: '고전형 크로스암 가드(아치 무어·켄 노턴·포먼). 가드를 올리면 뒷 글러브는 턱 앞에, 앞팔은 배 앞에 가로로 눕히고, 옆으로 서서 앞어깨를 올리고 턱을 당깁니다. 고르는 기술이라 가진 선수만 들고, 기본 로드아웃에서는 4암·5암이 갖습니다(이 줄은 3·4명·5명에게도 줌; 1·2는 가져도 안 나옴). 같은 프로의 스트레이트가 뒷 글러브에 막힙니다. 3은 4암의 모양에 앞팔이 2 cm 낮고 막기만 하며, 4명·5명은 자기 패리, 4암·5암은 해머링 패리입니다. 카드 아래는 블록 충격량과 막은 곳입니다.',
@@ -172,7 +174,9 @@ const SINCE = {
   blockFire: { since: 'new', note: '4명·5명 전용: 리버 훅을 팔꿈치로 막고 그 팔로 어퍼' },
   shell: { since: 'new', note: '4명·5명 전용: 웅크린 가드로 잽을 막고 앞손 훅 → 바디 어퍼' },
   'shell-hook': { since: 'new', note: '피커부 셸: 훅은 글러브와 세운 아래팔이 막음' },
-  'shell-upper': { since: 'new', note: '피커부 셸의 빈 곳: 어퍼가 두 팔 사이로 들어옴' }
+  'shell-upper': { since: 'new', note: '피커부 셸의 빈 곳: 어퍼가 두 팔 사이로 들어옴' },
+  shift: { since: 'new', note: '4명·5명 전용: 스트레이트 뒤 뒷발이 넘어가 스탠스가 바뀌고, 내려앉아 왼손 바디 훅 → 오른손 어퍼' },
+  'shift-shell': { since: 'new', note: '타이슨 시프트를 피커부 셸에서: 내려앉음을 건너뛰어 바디 훅이 빨라짐' }
 };
 const SINCE_SAID = { new: '새', changed: '바뀜' };
 
@@ -228,7 +232,8 @@ const PARTS = [
       ['파도', WAVE_ROWS.map(r => graded(r, CLEAN_NOTE[r.id], r.id === 'slick' ? 'slick' : 'wave', ['4m', '5m']))],
       ['다운패링 카운터', [graded({ id: 'parryDown', name: '다운패링 카운터', en: 'Down parry and counter' }, CLEAN_NOTE.parryDown, 'parryDown', ['4m', '5m'])]],
       ['블록 & 파이어', [graded({ id: 'blockFire', name: '블록 & 파이어', en: 'Block and fire' }, CLEAN_NOTE.blockFire, 'fired', FIRE_LEVELS)]],
-      ['피커부 셸', SHELL_ROWS.map(r => graded(r, CLEAN_NOTE[r.id], 'shell', SHELL_LEVELS))]
+      ['피커부 셸', SHELL_ROWS.map(r => graded(r, CLEAN_NOTE[r.id], 'shell', SHELL_LEVELS))],
+      ['타이슨 시프트', SHIFT_ROWS.map(r => graded(r, CLEAN_NOTE[r.id], 'shift', SHIFT_LEVELS))]
     ]
   },
   {
@@ -453,6 +458,10 @@ function gradeCard(e, item) {
       break;
     case 'shell':
       stats = `<div class="feet result"><span class="tag" data-tag>–</span></div>` + pair('머리 <b data-a>–</b> cm', '<b data-b>–</b> ms');
+      break;
+    // (the Tyson shift: the three punches' impulses, the first to the body hook, and where he ends)
+    case 'shift':
+      stats = `<div class="feet result"><span class="tag" data-tag>–</span></div>` + pair('<b data-a>–</b> N·s', '바디 훅까지 <b data-b>–</b> ms') + pair('끝 <b data-c>–</b>');
       break;
   }
   // (a card of a changed row that came out otherwise than it did: its own mark)
@@ -706,6 +715,15 @@ function start({ manifest, boxer }) {
         if (e.type === 'block' && e.on === 0 && (e.part === 'elbow' || e.part === 'forearm') && m.blockAt === undefined) m.blockAt = cell.bout.t;
         if (e.who === 0 && ['hit', 'block', 'whiff', 'graze'].includes(e.type) && m.blockAt !== undefined && !m.said) (m.said = true), put(cell, 'a', String(Math.round((cell.bout.t - m.blockAt) * 1000))), put(cell, 'b', e.J === undefined ? '–' : String(Math.round(e.J))), tell(cell, SAID[e.type] + (e.counter ? ' (카운터)' : ''));
         break;
+      case 'shift':
+        // (from the shift's start: each of its three punches as it got there, on the bout's clock, as tests/clean.test.mjs times it)
+        if (e.type === 'shift' && e.who === 0) (m.shiftAt = cell.bout.t), (m.from = [a.x - b.x, a.z - b.z]), (m.got = []);
+        if (e.who === 0 && ['hit', 'block', 'whiff', 'graze'].includes(e.type) && m.got && m.got.length < 3) {
+          m.got.push({ t: cell.bout.t, J: e.J });
+          put(cell, 'a', m.got.map(g => (g.J === undefined ? '–' : String(Math.round(g.J)))).join(' · '));
+          if (m.got.length === 2) put(cell, 'b', String(Math.round((m.got[1].t - m.got[0].t) * 1000))), tell(cell, '바디 훅 ' + SAID[e.type] + (MET[e.part] && e.part !== 'glove' ? ` (${MET[e.part]})` : ''));
+        }
+        break;
       case 'shell':
         // (crouched into it: where his head was then; and what became of the other man's punch)
         if (e.type === 'shell' && e.who === 0) (m.shellAt = cell.bout.t), (m.shellY = a.points.head[1]), (m.shellLow = a.points.head[1]), (m.shellLowAt = cell.bout.t);
@@ -746,6 +764,15 @@ function start({ manifest, boxer }) {
       if (!a.action) m.kneeWas = { hy, y };
     }
     switch (item.stat) {
+      case 'shift':
+        // (where he ends, once it is over: metres from the other man, and degrees off the line the other man faced him on)
+        if (m.shiftAt !== undefined && !m.ended && !a.shift && cell.bout.t > m.shiftAt) {
+          m.ended = true;
+          const now = [a.x - b.x, a.z - b.z],
+            off = (Math.acos(Math.max(-1, Math.min(1, (m.from[0] * now[0] + m.from[1] * now[1]) / Math.hypot(...m.from) / Math.hypot(...now)))) * 180) / Math.PI;
+          put(cell, 'c', `${Math.hypot(...now).toFixed(2)} m · ${Math.round(off)}°`);
+        }
+        break;
       case 'shell':
         // (how far down his head went in the first 0.3 s, and when it got within a centimetre of the bottom)
         if (m.shellAt !== undefined && !m.shellSaid) {

@@ -40,7 +40,8 @@
                             meant as a shoulder roll says so ({ type: 'roll', who }), and a punch met by the lead shoulder (a
                             cross-arm guard's, or a roll's) is { type: 'block', part: 'shoulder', roll: true (rolled off it as
                             his chest turned away) | false, margin (metres between the glove and his head as it met it) };
-                            a guard put up meant as the peek-a-boo shell says so too ({ type: 'shell', who })
+                            a guard put up meant as the peek-a-boo shell says so too ({ type: 'shell', who }), and a power
+                            press meant as the Tyson shift that starts one ({ type: 'shift', who })
      bout.fighters[i].pose  his solved pose this step (and .place: where on the canvas, .points: gloves and head in the world)
      bout.fighters[i].stands   a man who only stands there and takes it (a ladder rung's or a card's target): no blow to his
                             liver puts him down (anything else does as it would; a script keeps his health up besides)
@@ -64,7 +65,8 @@
    still turned it aside, and a loaded punch went back within 0.4 s of the defence starting. */
 const BRILLIANT = { margin: 0.03, within: 0.4 };
 import * as M from '../rig/m3.mjs';
-import { MOVES, RISE, TO_BODY } from '../anim/moves.mjs';
+import { MOVES, RISE, TO_BODY, GUARD } from '../anim/moves.mjs';
+import { FOOT } from '../rig/body.mjs';
 import { createAnimator, arrival } from '../anim/animator.mjs';
 import { toWorld } from '../anim/pose.mjs';
 import { createChain, stepChain, effectiveMass, preload } from '../phys/chain.mjs';
@@ -77,6 +79,7 @@ import { levelOf, CROSS, ROLL } from '../anim/skill.mjs';
 import { timeline, evadeTime, progress, LOADED, pullWait, pullTo } from '../anim/evade.mjs';
 import { choose, THROWS, PAW, COLLAR, ELBOW } from '../anim/show.mjs';
 import { waveOf, waveTravel, waveTurn, waveBlocked, patOf, presses, fireOf, shellOf } from '../anim/clean.mjs';
+import { shiftOf } from '../anim/shift.mjs';
 import { dice } from '../anim/stance.mjs';
 import { trunk, balls, where, aimed, aimFor, spray, ZONES } from './trunk.mjs';
 import { shown } from '../anim/body.mjs';
@@ -218,6 +221,8 @@ function loadOf(f, bout, move, more) {
     if (more && more.pulled && e.name === 'pull') return { load: ev.load, from: e.id, pulled: true, grade: e.level.id, wait: pullWait(e, move.name) };
     return LOADED(e.name, e.side) === move.hand ? { load: ev.load, from: e.id } : null;
   }
+  // (the Tyson shift: the crouch is the wind-up of the uppercut out of it, anim/shift.mjs)
+  if (more && more.shifted && move.name === 'upperIn' && f.shift) return { load: f.shift.sv.load, from: 'shift' };
   // (block and fire: the crunch of the elbow block is the wind-up of the punch the blocking arm fires, anim/clean.mjs)
   if (more && more.fired) return { load: more.fired.fire.load, from: 'block', fired: more.fired, wait: more.fired.fire.wait };
   // (and out of the peek-a-boo shell: the crouch is the wind-up of the lead hook, and of the body uppercut after it)
@@ -405,6 +410,163 @@ function shellCounter(bout, f, sign) {
   if (!sign || sign.tech !== 'shell' || !o || !has(f, 'shell') || bout.t - o.at > o.sh.within + 1e-9 || f.sinceHit < bout.t - o.at - 1e-9) return null;
   return o;
 }
+/* ---- The Tyson shift (anim/shift.mjs, docs/moves-plan-5.md §4.4): a power press meant as it (tech: 'shift') by a man who
+   carries it at a grade that has one (skill.mjs: shift, 4명 and 5명) is the rear hand's straight with the shift behind it, kept
+   as f.shift until he is back in his stance. The bout has all of it on the canvas and tells his body in his own terms (viewOf:
+   view.shift):
+     where he goes    a spot `at[0]` metres from the other man, `at[1]` degrees off the line he faced him on, out past his lead
+                      foot (to the shifting man's right), wherever the other man is as he goes (no further than `most` from
+                      where he started, and no wider a stance than `long`), his centre taken there over `go` from when the
+                      rear foot goes (once the straight has got there, or as its shoulder fires: `with`); the rear foot's
+                      spot is put by it (`foot`) and is fixed as it comes down. The lead foot stays where it is until then,
+                      and is drawn in on its ball after (`rear`, `draw`)
+     the punches      the body hook pressed `hookGo` after the straight got there (landed, blocked or gone by), the uppercut
+                      `upperGo` after the hook did (both by name, meant as the shift); out of the shell, both `shell` sooner
+     back round       `backAt` after the uppercut got there: the lead foot is brought round to the front past the rear one, which
+                      turns on its ball and is drawn as far as it must be, and his centre goes where his own stance puts it
+                      `end` metres from the other man, square to him (a legend `turn` degrees further round him)
+   Nothing else he is told is done while it lasts (no guard, no evasion, no walking: the crouch is his defence). A blow puts an
+   end to it (strike), and so does anything that is not its own punches (a parry's reel); his feet are put back under him then
+   (anim/shift.mjs). A legend reads a punch on its way at him and does not start it into it (`read`). */
+const shiftsAt = f => (has(f, 'shift') ? shiftOf(gradeOf(f.skills, 'shift')) : null);
+// (the breath it takes besides the straight's: the step, the hook, the uppercut; and seconds at the most it lasts)
+const SHIFT = { breath: 6 + 8 + 9, most: 1.6 };
+// (where the ball of his rear foot is in his own stance, and where a ball of his is on the canvas now)
+const BALL_R = (() => {
+  const b = M.app(M.ry(GUARD.feet.R.yaw), FOOT.ball);
+  return [GUARD.feet.R.at[0] + b[0], 0, GUARD.feet.R.at[2] + b[2]];
+})();
+const ball = (f, side) => {
+  const p = at(f, side === 'L' ? 'LeftToeBase' : 'RightToeBase');
+  return [p[0], p[2]];
+};
+function shiftBegin(bout, f, other, sv) {
+  const dx = other.x - f.x,
+    dz = other.z - f.z,
+    d = Math.hypot(dx, dz) || 1,
+    fa = [dx / d, dz / d];
+  f.stamina = Math.max(0, f.stamina - SHIFT.breath);
+  bout.events.push({ type: 'shift', who: bout.fighters.indexOf(f) });
+  return { id: 'shift' + ++f.serial, at: bout.t, sv, from: [f.x, f.z], fa, right: [-fa[1], fa[0]], R0: f.pose ? ball(f, 'R') : null, Lst: f.pose ? ball(f, 'L') : [f.x, f.z], R1: null, C: null, L0: null, got: {}, pressed: {}, back: null, shell: !!f.shell, landed: false, t: 0, off: null };
+}
+// where the shift takes his centre, from where the other man is now
+function shiftTarget(f, other) {
+  const s = f.shift,
+    sv = s.sv,
+    th = (sv.at[1] * Math.PI) / 180,
+    C = [other.x + sv.at[0] * (-Math.cos(th) * s.fa[0] + Math.sin(th) * s.right[0]), other.z + sv.at[0] * (-Math.cos(th) * s.fa[1] + Math.sin(th) * s.right[1])],
+    go = [C[0] - s.from[0], C[1] - s.from[1]],
+    l = Math.hypot(go[0], go[1]),
+    to = l > sv.most ? [s.from[0] + (go[0] * sv.most) / l, s.from[1] + (go[1] * sv.most) / l] : C,
+    // (and no wider a stance than `long`, from the rear foot's spot to the lead foot, which stays where it is)
+    R = shiftFootAt(s, to),
+    d = [R[0] - s.Lst[0], R[1] - s.Lst[1]],
+    k = Math.hypot(d[0], d[1]);
+  return k > sv.long ? [to[0] - d[0] * (1 - sv.long / k), to[1] - d[1] * (1 - sv.long / k)] : to;
+}
+// (the rear foot's spot, put by where his centre is going)
+const shiftFootAt = (s, C) => [C[0] + s.sv.foot[0] * s.right[0] + s.sv.foot[1] * s.fa[0], C[1] + s.sv.foot[0] * s.right[1] + s.sv.foot[1] * s.fa[1]];
+/* Each step, before he moves: what of it has got where, the punches it presses, and coming back round; or the end of it. */
+function shiftStep(bout, f, who) {
+  const s = f.shift,
+    sv = s.sv,
+    t = bout.t - s.at,
+    other = bout.fighters[1 - who],
+    a = f.action;
+  // (over: down, stopped, doing something that is not its own, or its punches never came)
+  if (f.down || f.stun > 0 || (a && !a.shifted) || t > SHIFT.most) return void (f.shift = null);
+  s.t = t;
+  // (each of its punches, as it got there: landed, blocked or gone by)
+  if (a && a.shifted && a.chain && (a.struck || a.chain.thrownAt >= 0 || a.chain.phase === 'recover' || a.chain.phase === 'done') && s.got[a.name] === undefined) s.got[a.name] = bout.t;
+  /* (the rear foot goes once the straight has got there, or, his grade's `with`, as its shoulder fires: the punch and the step
+     one movement; out of the shell, once it has got there, whatever his grade: he is down in his crouch already) */
+  if (s.off === null && (s.got.cross !== undefined || (sv.with === 'shoulder' && !s.shell && a && a.name === 'cross' && a.chain && a.chain.on[3])) && t >= sv.off - 1e-9) s.off = t;
+  const cut = s.shell ? sv.shell : 0,
+    press = (name, when) => {
+      if (s.pressed[name] || bout.t < when - 1e-9) return;
+      s.pressed[name] = true;
+      (f.want = ['power', name, { tech: 'shift', body: name === 'shiftHook' }]), (f.wantAge = 0), (f.wantAt = bout.t);
+    };
+  if (s.got.cross !== undefined) press('shiftHook', s.got.cross + sv.hookGo - cut);
+  if (s.got.shiftHook !== undefined) press('upperIn', s.got.shiftHook + sv.upperGo);
+  // (his centre: where the step takes him, the rear foot's spot with it until it comes down)
+  if (!s.back) {
+    const C = s.landed ? s.C : shiftTarget(f, other);
+    s.C = C;
+    if (!s.landed) s.R1 = shiftFootAt(s, C);
+    if (s.off !== null && t >= s.off + sv.step - 1e-9 && !s.landed) {
+      /* (down: the lead foot, behind him now, drawn in on its ball as the weight comes down between the feet, to no further
+         than `rear` metres from where his centre is going) */
+      s.landed = true;
+      s.Ls = ball(f, 'L');
+      const d = [s.Ls[0] - C[0], s.Ls[1] - C[1]],
+        l = Math.hypot(d[0], d[1]),
+        k = l > sv.rear ? sv.rear / l : 1;
+      s.Lin = [C[0] + d[0] * k, C[1] + d[1] * k];
+      s.inAt = t;
+    }
+  }
+  // back round, once the uppercut has got there
+  if (!s.back && s.got.upperIn !== undefined && bout.t >= s.got.upperIn + sv.backAt - 1e-9) {
+    /* (where his own stance puts him, square to the other man, `end` metres from him: of all those, the one whose rear foot is
+       nearest where his right foot is, which turns on its ball and is drawn there as the lead foot comes round; a legend
+       `turn` degrees further round him, away from the line the other man faced him on) */
+    const R = ball(f, 'R'),
+      O = [other.x, other.z],
+      from = Math.atan2(f.z - O[1], f.x - O[0]),
+      stand = (r, psi) => {
+        const C = [O[0] + r * Math.cos(psi), O[1] + r * Math.sin(psi)],
+          g = M.app(M.ry((Math.atan2(O[0] - C[0], O[1] - C[1]) * 180) / Math.PI), BALL_R);
+        return { C, psi, r, cost: Math.hypot(C[0] + g[0] - R[0], C[1] + g[2] - R[1]) };
+      };
+    let best = null;
+    for (let r = sv.end[0]; r <= sv.end[1] + 1e-9; r += 0.02)
+      for (let k = -30; k <= 30; k++) {
+        const c = stand(r, from + (k * Math.PI) / 90);
+        if (!best || c.cost < best.cost) best = c;
+      }
+    if (sv.turn) {
+      const off = psi => Math.abs(Math.atan2(Math.sin(psi - Math.atan2(-s.fa[1], -s.fa[0])), Math.cos(psi - Math.atan2(-s.fa[1], -s.fa[0])))),
+        r = (sv.turn * Math.PI) / 180,
+        psi = off(best.psi + r) > off(best.psi - r) ? best.psi + r : best.psi - r;
+      best = stand(best.r, psi);
+    }
+    s.back = { at: bout.t, from: [f.x, f.z], to: best.C };
+    s.L0 = ball(f, 'L');
+    s.Rb = R;
+  }
+  if (s.back && bout.t - s.back.at >= sv.back - 1e-9) f.shift = null;
+}
+// how fast the shift is taking his centre over the canvas this step: [x, z] metres a second
+function shiftTravel(f, dt) {
+  if (!f.shift.C) return [0, 0];
+  const s = f.shift,
+    sv = s.sv,
+    t = s.t,
+    e = u => ((u = Math.max(0, Math.min(1, u))), u * u * u * (10 + u * (6 * u - 15))),
+    want = s.back
+      ? M.lerp([...s.back.from, 0], [...s.back.to, 0], e((t - (s.back.at - s.at)) / sv.back))
+      : s.off === null
+        ? [...s.from, 0]
+        : M.lerp([...s.from, 0], [...s.C, 0], e((t - s.off - sv.go[0]) / (sv.go[1] - sv.go[0])));
+  return [(want[0] - f.x) / dt, (want[1] - f.z) / dt];
+}
+// what his body is told of it (view.shift), in his own terms
+function shiftView(bout, f) {
+  const s = f.shift,
+    sv = s.sv,
+    t = bout.t - s.at,
+    mineXZ = p => (p ? mine(f, [p[0], 0, p[1]]) : null);
+  return {
+    id: s.id, t, sv, shell: s.shell,
+    step: s.off === null ? null : (t - s.off) / sv.step,
+    off: s.off,
+    back: s.back ? (bout.t - s.back.at) / sv.back : null,
+    in: s.Lin ? (t - s.inAt) / sv.draw : null,
+    Ls: mineXZ(s.Ls), Lin: mineXZ(s.Lin),
+    R0: mineXZ(s.R0), R1: mineXZ(s.R1), L0: mineXZ(s.L0), Rb: mineXZ(s.Rb)
+  };
+}
 /* The cross-arm guard (anim/show.mjs, docs/moves-plan-5.md §4A): a man who carries it (game/techniques.mjs: crossArm, by default
    the dirty great ones) holds his grade's whenever his guard is up (skill.mjs: CROSS, his grade at it being his guard's
    unless his skills name it). The one place it is decided. -> the shape, or null */
@@ -482,6 +644,9 @@ function holdWave(bout, f, input, who) {
 }
 
 function decide(bout, f, input, dt, who) {
+  // (in the Tyson shift, nothing else he is told is done: its own punches are the bout's to press, anim/shift.mjs)
+  if (f.shift) shiftStep(bout, f, who);
+  if (f.shift) input = {};
   // (a legend's cross after the jab out of his down parry, pressed on its own when its moment comes: anim/clean.mjs)
   if (f.patFollow !== undefined && f.patFollow !== null && bout.t >= f.patFollow - 1e-9) {
     f.patFollow = null;
@@ -520,6 +685,8 @@ function decide(bout, f, input, dt, who) {
     else if (what === 'jab' && f.action && f.action.name === 'flicker' && Math.max(f.action.chain.q[3], f.action.chain.q[4]) > FLICK.home);
     // (the wave held: he is in it already)
     else if (what === 'wave' && f.action && f.action.name === 'wave') f.want = null;
+    // (a legend does not start the Tyson shift into a punch on its way at him: its first punch would be caught)
+    else if (what === 'power' && typeof dir !== 'string' && !!sign && sign.tech === 'shift' && !f.shift && shiftsAt(f) && shiftsAt(f).read && incoming(bout.fighters[1 - who])) f.want = null;
     else if (open(f, punch)) {
       f.want = null;
       if (EVADE.includes(what)) {
@@ -565,10 +732,14 @@ function decide(bout, f, input, dt, who) {
            the body, or the rear hook it names; anim/evade.mjs PULLED) */
         const pulled = what === 'power' && !!out && out.name === 'pull' && !!sign && sign.tech === 'pullCounter';
         // (off an elbow block, block and fire: the arm that blocked it, game/techniques.mjs, anim/clean.mjs)
-        const fired = what === 'power' && !pulled && typeof dir !== 'string' ? firedOf(bout, f, sign) : null,
+        /* (the Tyson shift, anim/shift.mjs: its first punch, the rear hand's straight; and the two after it, pressed by the bout
+           by name) */
+        const shifted = what === 'power' && !pulled && !!sign && sign.tech === 'shift' ? (f.shift ? (typeof dir === 'string' && dir !== 'cross' ? f.shift : null) : typeof dir !== 'string' ? shiftsAt(f) : null) : null;
+        const fired = what === 'power' && !pulled && !shifted && typeof dir !== 'string' ? firedOf(bout, f, sign) : null,
           // (out of the peek-a-boo shell: the lead hook, the inside one right up close; the body uppercut after it by name)
-          shelled = what === 'power' && !pulled && !fired ? (typeof dir === 'string' ? (dir === 'upperBody' && sign && sign.tech === 'shell' ? { follow: true } : null) : shellCounter(bout, f, sign)) : null;
+          shelled = what === 'power' && !pulled && !fired && !shifted ? (typeof dir === 'string' ? (dir === 'upperBody' && sign && sign.tech === 'shell' ? { follow: true } : null) : shellCounter(bout, f, sign)) : null;
         if (pulled) (name = sign.body ? 'hookBody' : 'cross'), (f.link = 0);
+        else if (shifted && !f.shift) (name = 'cross'), (f.link = 0);
         else if (fired) {
           name = fireName(fired.hand, Math.hypot(other.x - f.x, other.z - f.z) < fired.fire.inside);
           f.link = Math.max(0, chain.indexOf(name));
@@ -597,7 +768,7 @@ function decide(bout, f, input, dt, who) {
         /* (a press that names a punch is that punch: a script's, or a technique's answer, the rear hook out of a sway back or a
            shoulder roll; and a press for the body is the body punch of the one it would have been: moves.mjs TO_BODY) */
         const named = typeof dir === 'string' && MOVES[dir] && MOVES[dir].punch && !THROWS[dir] ? dir : null,
-          low = !named && !!sign && !!sign.body && !!TO_BODY[name];
+          low = !named && !shifted && !!sign && !!sign.body && !!TO_BODY[name];
         if (named) name = named;
         else if (low) name = TO_BODY[name];
         const again = !named && !low && what === 'jab' && f.flicks && f.flicks.n < FLICK.most && f.wantAt - f.flicks.at <= FLICK.again + 1e-9,
@@ -608,7 +779,8 @@ function decide(bout, f, input, dt, who) {
         // (a jab out of the wave goes on with it; a power punch puts an end to it)
         const fromWave = !!f.wave && what === 'jab' && !!f.action && f.action.name === 'wave';
         if (f.wave && !fromWave) f.wave = null;
-        begin(f, name, { counter: f.counter > 0 || !!fired, variant: trick, wave: fromWave || undefined, pulled: pulled || undefined, fired: fired || undefined, shelled: shelled || undefined }, bout);
+        if (shifted && !f.shift) f.shift = shiftBegin(bout, f, other, shifted);
+        begin(f, name, { counter: f.counter > 0 || !!fired, variant: trick, wave: fromWave || undefined, pulled: pulled || undefined, fired: fired || undefined, shelled: shelled || undefined, shifted: shifted ? true : undefined }, bout);
         if (fired) (f.elbowed = null), (f.fireFollow = null);
         if (shelled && !shelled.follow) (f.shellOpen = null), (f.shellFollow = null), (f.action.shellOut = shelled.sh);
         // a loaded punch answering a defence: what makes the defence brilliant, if it was close enough
@@ -626,7 +798,7 @@ function decide(bout, f, input, dt, who) {
   // (a shoulder roll: started by the guard put up meant as one, and the guard up for as long as it lasts)
   rollFor(bout, f, input, dt);
   const dazed = f.stun > 0,
-    covering = (!!input.cover || !!f.roll) && !f.action;
+    covering = (!!input.cover || !!f.roll) && !f.action && !f.shift;
   f.coverAge = covering ? (f.cover ? f.coverAge + dt : dazed ? 9 : 0) : 0;
   if (covering && !f.cover) bout.events.push({ type: 'cover', who });
   // (a guard meant as a down parry: anim/clean.mjs)
@@ -637,7 +809,8 @@ function decide(bout, f, input, dt, who) {
 }
 
 function travel(f, input, dt, other) {
-  const m = input.move || [0, 0],
+  // (in the Tyson shift, he goes where it takes him and nowhere else: anim/shift.mjs)
+  const m = (!f.shift && input.move) || [0, 0],
     l = Math.hypot(m[0], m[1]),
     k = l > 1 ? 1 / l : 1,
     fresh = 0.78 + 0.22 * fatigue(f),
@@ -711,13 +884,16 @@ function travel(f, input, dt, other) {
       sx = (left[0] * a.side * GO.hop - fx * GO.out) / GO.beat;
       sz = (left[1] * a.side * GO.hop - fz * GO.out) / GO.beat;
     }
+  } else if (f.shift) {
+    [sx, sz] = shiftTravel(f, dt);
+    f.vx = f.vz = 0;
   } else if (f.wave && other && f.stun <= 0 && (!f.action || f.action.name === 'wave' || f.action.wave)) {
     // (the wave: round him at the pace of the wave his feet are in, kept in its band, anim/clean.mjs)
     [sx, sz] = waveTravel(f, other, dt, !!incoming(other));
   }
   let ix = 0,
     iz = 0;
-  if (incoming(f) && other && !other.down) {
+  if (incoming(f) && other && !other.down && !f.shift) {
     /* A punch is stepped into: he closes on a head that is just out of range, so a combination follows its target back
        and a counter reaches a man who has been thrown onto his heels. (It is the head he measures to, not the feet.) */
     // (a punch to the body measures to his trunk: moves.mjs zone)
@@ -895,6 +1071,8 @@ function viewOf(bout, i) {
       pat: f.pat ? patView(bout, f, other) : null,
       // the peek-a-boo shell he is in, if he is (anim/clean.mjs): his grade's, how long, and the hand of a straight punch on its way
       // at him
+      // the Tyson shift he is in, if he is (anim/shift.mjs)
+      shift: f.shift ? shiftView(bout, f) : null,
       shell: f.shell ? { sh: f.shell.sh, t: bout.t - f.shell.at, from: incoming(other) && incoming(other).chain.on[1] && MOVES[incoming(other).name].arm === 'straight' ? MOVES[incoming(other).name].hand : null } : null,
       // the wave he is in, if he is (anim/clean.mjs): which way round, whether it is still held, his grade's
       wave: f.wave ? { side: f.wave.side, held: f.wave.held, blocked: f.wave.blocked, level: wavesAt(f) } : null,
@@ -1425,6 +1603,8 @@ function strike(bout, f, other, who, dt) {
     caught = punching(other) && !!other.action.chain && ['coil', 'throw', 'hold'].includes(other.action.chain.phase) && other.action.at < action.at - 1e-9;
   other.hp = Math.max(0, other.hp - damage);
   other.action = null;
+  // (hit in the middle of the Tyson shift: it is over, and his feet are put back under him, anim/shift.mjs)
+  other.shift = null;
   other.cover = false;
   other.want = null;
   other.counter = 0;

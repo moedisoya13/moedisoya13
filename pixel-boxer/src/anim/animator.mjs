@@ -49,6 +49,7 @@ import { travel as legendTravel, dash as legendDash, dashShape } from './legend.
 import { stance as showStance, crossGuard, ear, shoulderRoll, hammer, paw, PAW, collar, COLLAR, ELBOW } from './show.mjs';
 import { bodyState, struck as foldUp, give as bodyGive, coverLow, lower } from './body.mjs';
 import { createWave, waveBeat, waveLand, waveLanding, waveDrag, waveBody, createPat, patDown, pattedArm, fireBody, createShell, shellBody } from './clean.mjs';
+import { createShift, shiftHold, shiftFoot, shiftBody } from './shift.mjs';
 
 const TAU = Math.PI * 2;
 /* The feet keep time. One beat is one foot coming down; a cycle is both. Standing, the boxer rocks between his feet on that
@@ -486,6 +487,9 @@ export function createAnimator(seed) {
   // (the peek-a-boo shell he is crouched in, and how far: clean.mjs)
   const shell = createShell();
   let shelled = 0;
+  // (the Tyson shift he is in: his feet are its, shift.mjs; and where each ball of his feet was drawn last frame)
+  const shift = createShift(),
+    drawn = { L: null, R: null };
   const remember = pose => ((poses = [poses[1], pose]), pose);
   // a pose part of the way from another to it, each bone turned part of the way (what the solver said of it kept)
   const between = (from, to, w) => {
@@ -1037,7 +1041,10 @@ export function createAnimator(seed) {
          guard, whose lead forearm is across his belly already: what body.mjs reads as cv.cross is the guard he holds) */
       coverLow(bodyHits, c, view.low, lowGuard(cv, xc), cover, dt, clock);
       // (crouched behind it, the peek-a-boo shell: clean.mjs)
-      shelled = shellBody(c, shell, { view, low: bodyHits.low, winding: !!(action && action.loaded && action.loaded.from === 'shell' && action.chain && action.chain.phase === 'coil'), dt, clock });
+      shelled = shellBody(c, shell, { view, low: bodyHits.low, winding: !!(action && action.loaded && action.loaded.from === 'shell' && action.chain && action.chain.phase === 'coil'), quick: !!(view.shift && view.shift.off !== null), dt, clock });
+      // (the Tyson shift: down in it, the stance changed over, shift.mjs; out of the shell, the shell's crouch handed over to it as
+      // it lets go, the quicker once its rear foot goes)
+      shiftBody(c, shift, { view: view.shift || null, action, shelled, dt });
       if (cheer > 0.002) for (const [ch, v] of Object.entries(sampleMove(MOVES.cheer, 1, {}))) c[ch] += v * smooth(cheer);
       // (the gloves out to meet it: his grade's parry, unless his cross-arm guard does not parry so, or he is rolling, or his
       // rear glove is out to press it down: clean.mjs)
@@ -1167,6 +1174,8 @@ export function createAnimator(seed) {
           spot[0] += d[0];
           spot[2] += d[1];
         }
+      // (the Tyson shift has his feet while it lasts, and while it brings them back under him after: shift.mjs)
+      const shifting = shiftHold(shift, { view: view.shift || null, planted, swing, drawn, ball: BALL, drift, dt });
       // where a foot should come down: centred on its place, so that it is drawn back through it while it is planted
       const landing = side => {
         if (swing.back && swing.side === side) return BALL[side].slice();
@@ -1195,7 +1204,7 @@ export function createAnimator(seed) {
         if (swing.came === 'L' && (((halves - refTo) % 2) + 2) % 2 === 1) refTo += 1;
         swing.side = swing.from = swing.to = null;
         swing.back = false;
-        if (!view.still && !(action && MOVES[action.name].floor)) {
+        if (!view.still && !(action && MOVES[action.name].floor) && !shifting) {
           /* The foot that steps is the one that most needs to be somewhere else; travelling, the foot on the side he is going
              steps first (a boxer never crosses his feet or brings them together); otherwise they take turns. */
           const score = side => {
@@ -1724,7 +1733,10 @@ export function createAnimator(seed) {
         let at = planted[side],
           lift = 0,
           pitch = st.flat ? 0 : (side === 'R' ? 6 : 3) * up * feetLive; // a planted foot is on its ball, the heel riding up with the float
-        if (stepping) {
+        // (the Tyson shift's: the rear foot through the air to its spot, the lead foot round to the front again: shift.mjs)
+        const sf = shifting ? shiftFoot(shift, side, { view: view.shift || null, planted, ball: BALL }) : null;
+        if (sf) (at = sf.at), (lift = sf.lift), (pitch = sf.pitch);
+        else if (stepping) {
           // where it will come down, as a spot on the canvas: carried back with the canvas for the time still to go
           const land = landing(side),
             left = ((1 - u) * cycle) / 2,
@@ -1756,7 +1768,7 @@ export function createAnimator(seed) {
             drag = Math.max(slide ?? (action && action.name === 'dash' ? Math.max(st.drag, (action.level || LEVEL[3]).dash.drag) : action && action.name === 'duckIn' ? 0 : st.drag), smooth((swing.skid - 0.8) / 1.2));
           lift = (Math.min(0.075, length * 0.35) * (1 - drag) * (0.5 + 0.5 * going) + HOP * footSpot * st.hop) * Math.pow(Math.sin(Math.PI * u), 1.3) * dropped;
           pitch = st.flat ? 0 : (14 * Math.sin(TAU * u) * clamp(length / 0.2, 0, 1) * (1 - 0.6 * Math.max(st.drag, slide || 0)) + 8 * footSpot * Math.min(1, st.hop) * Math.sin(Math.PI * u)) * dropped;
-        } else {
+        } else if (!shifting) {
           // a foot left too far behind by a shove or a dash is dragged, not left to pull the leg straight
           const g = BALL[side],
             o = [at[0] - g[0], at[2] - g[2]],
@@ -1770,8 +1782,10 @@ export function createAnimator(seed) {
           at = [at[0] + (stomp.to[0] - at[0]) * stomp.w, at[1], at[2] + (stomp.to[2] - at[2]) * stomp.w];
           lift = Math.max(lift, stomp.to[1] * stomp.w); // (the sole under his ball on the point aimed at, and lifted over it by the knee)
         }
+        // (where its ball is, for the Tyson shift to take it from: shift.mjs)
+        drawn[side] = at.slice();
         // the hips come down a little as the feet are spread (as much as a long stride asks, and no more)
-        dip += Math.min(0.04, (at[0] - BALL[side][0]) ** 2 + (at[2] - BALL[side][2]) ** 2) * 0.3;
+        dip += (shifting ? 0 : 1) * Math.min(0.04, (at[0] - BALL[side][0]) ** 2 + (at[2] - BALL[side][2]) ** 2) * 0.3;
         // (the solver is told where the ankle would be with the foot flat, turned as it is now, over that ball)
         const yaw = gf.yaw + c[k + 'w'],
           back = M.app(M.ry(yaw), FOOT.ball);
@@ -1808,6 +1822,7 @@ export function createAnimator(seed) {
          frame it touches) */
       if (st.legend) for (const side of ['L', 'R']) legend.air[side] += (smooth((elev[side] - KNEE.air[0]) / KNEE.air[1]) - legend.air[side]) * (1 - Math.exp(-dt * 14));
       const kf = st.legend ? { L: c.lkf - legend.k.L * legend.air.L, R: c.rkf - legend.k.R * legend.air.R } : { L: c.lkf, R: c.rkf };
+      if (globalThis.__dbg) globalThis.__dbg.push({ kf: { ...kf }, hy: c.hy, lean: c.lean, yaw: c.yaw, elev: { ...elev }, sunk, hz: c.hz, sh: view.shift ? [view.shift.off, view.shift.shell, view.shift.t] : null });
       if (kf.L || kf.R) hips = bend(hips, spine, feet, kf, elev);
       /* the hands go where the head goes: a guard is held to the face, not to the room (but only so far where a blow throws
          the head, SNAP: the gloves are on the arms, which are not thrown with it, and are knocked about by it on their own) */
@@ -1962,7 +1977,7 @@ export function createAnimator(seed) {
           // (and a cross-arm guard: each elbow where it puts it, as the chest sees it: show.mjs)
           crossed = shape && crossK > 0.002 ? crossK : 0,
           // (and the peek-a-boo shell: the elbows in at his sides, under the gloves: clean.mjs)
-          tucked = shelled > 0.002 && shell.sh ? shelled * (mine ? 1 - smooth(action.t / 0.2) : 1) : 0,
+          tucked = shelled > 0.002 && shell.sh && !(mine && action.shifted) ? shelled * (mine ? 1 - smooth(action.t / 0.2) : 1) : 0,
           asked = M.app(chest.R, M.lerp(M.lerp(M.lerp(M.lerp([s * (0.5 + 0.8 * flare), -1 + 1.3 * flare, -0.2 - 0.25 * flare], [s * 0.45, -0.35, -0.85], pushing), [s * 0.15, -1, -0.2], hang), crossed ? shape.pole[side] : [0, 0, 0], crossed), tucked ? [s * shell.sh.pole[0], shell.sh.pole[1], shell.sh.pole[2]] : [0, 0, 0], tucked)),
           l = Math.hypot(asked[0], asked[1], asked[2]) || 1,
           keep = elbow[side] ? Math.exp(-dt * 16) : 0;
