@@ -13,7 +13,7 @@ layout(location=0) in vec2 a_corner;
 layout(location=1) in vec3 a_pos;
 layout(location=2) in vec3 a_covA;  // c00 c01 c02
 layout(location=3) in vec3 a_covB;  // c11 c12 c22
-layout(location=4) in vec3 a_misc;  // palette index, bone, density
+layout(location=4) in vec3 a_misc;  // palette index, bone (in a layer with no bones: 1 marks a speck of light), density
 uniform vec4 u_bones[${MAX_BONES * 3}]; // per bone three rows: a 3x3 by rows, the move in w
 uniform mat4 u_view;
 uniform vec2 u_art;    // the art grid, in pixels
@@ -21,29 +21,35 @@ uniform float u_focal; // pixels
 uniform vec2 u_shake;  // pixels
 uniform vec2 u_depth;  // near, far
 uniform vec4 u_wave;   // a ripple through what was struck: where it began (world), and how far out its front is now
-uniform vec3 u_waveK;  // its width (metres), its strength (0..1: 0 is no ripple), and how far it lifts what it passes (metres)
+uniform float u_mask;
+uniform vec3 u_waveK;  // its width (metres), its strength (0..1: 0 is no ripple), and how far it sways what it passes (metres)
 out vec2 v_d;
 out vec3 v_conic;
 flat out float v_pal;
 flat out float v_al;
-flat out float v_wave;
+flat out float v_light;
 void main() {
   int b = int(a_misc.y + 0.5) * 3;
   vec4 r0 = u_bones[b], r1 = u_bones[b + 1], r2 = u_bones[b + 2];
   mat3 R = mat3(r0.x, r1.x, r2.x, r0.y, r1.y, r2.y, r0.z, r1.z, r2.z);
   vec3 world = R * a_pos + vec3(r0.w, r1.w, r2.w);
-  // the ripple: a ring at its front, a fainter one following at a little over half the way, both lifting what they pass
-  v_wave = 0.0;
-  if (u_waveK.y > 0.0) {
-    vec3 from = world - u_wave.xyz;
-    float d = length(from), a = (d - u_wave.w) / u_waveK.x, b = (d - u_wave.w * 0.55) / u_waveK.x;
-    v_wave = max(exp(-a * a), 0.5 * exp(-b * b));
-    world += from / max(d, 1e-4) * u_waveK.z * u_waveK.y * v_wave;
-  }
   mat3 S = mat3(a_covA.x, a_covA.y, a_covA.z, a_covA.y, a_covB.x, a_covB.y, a_covA.z, a_covB.y, a_covB.z);
   mat3 M = mat3(u_view) * R;
   mat3 C = M * S * transpose(M);
   vec3 c = (u_view * vec4(world, 1.0)).xyz;
+  /* The ripple: no light, only the picture of him swaying as it passes, the way a reflection does on water a stone has
+     gone into. It is worked in the picture's own plane, so everything on one line of sight moves as one: the rows of
+     him are carried to one side and the other as a short train of waves goes out from the height the blow landed at
+     (mostly up and down him: a little rounded, as a ring would be), steep ahead of its front and trailing off behind.
+     The waves are long for how far they carry (a wave 3.2 widths long), so that neighbouring rows are never sheared
+     apart far enough to show what is under his skin, and the place the blow landed is left alone: the head has its
+     own snap. */
+  if (u_waveK.y > 0.0) {
+    vec2 from = c.xy - (u_view * vec4(u_wave.xyz, 1.0)).xy;
+    float d = length(vec2(from.x * 0.35, from.y)), x = d - u_wave.w, w = u_waveK.x;
+    float env = x > 0.0 ? exp(-(x * x) / (w * w)) : exp(-(x * x) / (6.25 * w * w));
+    c.x += u_waveK.z * u_waveK.y * env * sin(6.2832 * x / (3.2 * w)) * smoothstep(0.06, 0.3, length(from));
+  }
   float dist = -c.z;
   if (dist < u_depth.x) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
   float iz = 1.0 / dist;
@@ -54,6 +60,7 @@ void main() {
   if (det <= 0.0) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
   v_conic = vec3(D, -B, A) / det;
   v_al = a_misc.z;
+  v_light = u_mask < 0.9 && a_misc.y > 0.5 ? 1.0 : 0.0;
   v_pal = a_misc.x;
   // the ellipse ends where density * exp(-m2 / 2) falls to a half
   float m2 = 2.0 * log(max(a_misc.z, 0.51) * 2.0);
@@ -68,8 +75,7 @@ in vec2 v_d;
 in vec3 v_conic;
 flat in float v_pal;
 flat in float v_al;
-flat in float v_wave;
-uniform vec3 u_waveK;
+flat in float v_light;
 uniform vec3 u_palette[${MAX_PALETTE}];
 uniform float u_mask;  // what kind of thing this is, kept in alpha for the second pass
 uniform float u_flash; // 0..1 toward white: a struck fighter
@@ -77,10 +83,8 @@ out vec4 o;
 void main() {
   float pw = -0.5 * (v_conic.x * v_d.x * v_d.x + v_conic.z * v_d.y * v_d.y) - v_conic.y * v_d.x * v_d.y;
   if (v_al * exp(pw) < 0.5) discard;
-  /* (the ripple is a hard ring of light, not a glow, drawn in the picture's own pixels: as it weakens the ring gets
-     thinner, and the fainter ring behind it is there only while it is strong) */
-  float lit = u_waveK.y > 0.0 && v_wave > 1.12 - u_waveK.y ? 0.8 : 0.0;
-  o = vec4(mix(u_palette[int(v_pal + 0.5)], vec3(1.0), max(u_flash, lit)), u_mask);
+  // (a speck of light keeps its own mark, 0.7: the second pass must not ink it where it crosses in front of a boxer)
+  o = vec4(mix(u_palette[int(v_pal + 0.5)], vec3(1.0), u_flash), v_light > 0.5 ? 0.7 : u_mask);
 }`;
 const POST_VS = `#version 300 es
 void main() { gl_Position = vec4(vec2(gl_VertexID == 1 ? 3.0 : -1.0, gl_VertexID == 2 ? 3.0 : -1.0), 0.0, 1.0); }`;
@@ -113,7 +117,7 @@ void main() {
   if (p.x < 0 || p.y < 0 || p.x >= u_art.x || p.y >= u_art.y) { o = vec4(u_ink, 1.0); return; }
   vec4 c = texelFetch(u_tex, p, 0);
   vec3 col = c.a < 0.2 ? hall(p) : c.rgb;
-  if (c.a < 0.9) {
+  if (c.a < 0.9 && abs(c.a - 0.7) > 0.04) {
     float near = max(max(maskAt(p + ivec2(1, 0)), maskAt(p - ivec2(1, 0))), max(maskAt(p + ivec2(0, 1)), maskAt(p - ivec2(0, 1))));
     if (near > 0.9) col = u_ink;
   }
@@ -217,7 +221,7 @@ export function createRenderer(canvas, o) {
        rect:  { x, y, w, h } in art pixels from the bottom left of the grid, or none for the whole grid
        frame: { camera: { target, yaw, pitch, dist }, shake: [x, y] art pixels,
                 layers: [{ mesh, bones (vec4 rows, or none for things that stand still), palette (paletteArray), mask, flash,
-                           wave: [x, y, z, front, width, strength, lift] (a ripple through it, from a point in the world) }] }
+                           wave: [x, y, z, front, width, strength, sway] (a ripple through it, from a point in the world: it sways, with no light) }] }
        post:  { white, dim, hall: [4 colours], ink }
      draw(frame) is the three together for a picture of one cell. */
   function begin() {
