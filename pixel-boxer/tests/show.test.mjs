@@ -8,9 +8,12 @@ import { freshBout, drive, HOME } from '../src/footwork.mjs';
 import { RANGE, THROW } from '../src/defense.mjs';
 import { LEVELS, LEVEL } from '../src/anim/skill.mjs';
 import { run } from '../src/measure.mjs';
-import { STANCES, SHOWOFF } from '../src/ladder.mjs';
+import { STANCES, SHOWOFF, TAUNTING } from '../src/ladder.mjs';
 import { WINDOWS } from '../src/windows.data.mjs';
 import * as M from '../src/rig/m3.mjs';
+import { createBout, settle } from '../src/game/bout.mjs';
+import { choose } from '../src/anim/show.mjs';
+import { dice } from '../src/anim/stance.mjs';
 
 const DT = 1 / 60;
 const SHOW = ['4a', '5a'];
@@ -229,7 +232,116 @@ test('elbow: the angled cross\'s elbow lands, inside the punch\'s contact window
   }
 });
 
+/* ---- the taunts (§5.4), off their catalogue rows (src/ladder.mjs: TAUNTING) */
+const taunts = {};
+const taunted = (id, lv) => {
+  const key = `${id}@${lv}`;
+  if (taunts[key]) return taunts[key];
+  const { frames } = run(TAUNTING.find(x => x.id === key)),
+    events = frames.flatMap((f, i) => f.events.map(ev => Object.assign({ i }, ev)));
+  return (taunts[key] = { frames, events, on: frames.filter(f => f.action === id).length, said: events.filter(ev => ev.type === 'taunt' && ev.who === 0) });
+};
+test('taunts: the five are a show-off\'s alone, a great dirty fighter\'s the longer, and each has his hands off his guard', () => {
+  const LONG = { beckon: 0.6, chinOut: 0.7, shrug: 0.4, wind: 0.8, tapChin: 0.5 };
+  for (const id of Object.keys(LONG)) {
+    for (const lv of others) assert.equal(taunted(id, lv).said.length, 0, `${id}@${lv}`);
+    for (const lv of SHOW) {
+      const t = taunted(id, lv);
+      assert.equal(t.said.length, 1, `${id}@${lv}`);
+      // (as long as the plan says, times his grade's: skill.mjs stance.show.long)
+      assert.ok(Math.abs(t.on / 60 - LONG[id] * LEVEL[lv].stance.show.long) <= 2 / 60, `${id}@${lv}: ${t.on} frames`);
+      // (no guard in it: not covering, and a glove away from where his guard holds it)
+      const during = t.frames.filter(f => f.action === id);
+      assert.ok(during.every(f => !f.cover), `${id}@${lv}`);
+    }
+  }
+  // the shrug comes once the jab has missed him, the tap of the chin once one has landed
+  for (const lv of SHOW) {
+    const s = taunted('shrug', lv), c = taunted('tapChin', lv);
+    assert.ok(s.events.find(ev => ev.type === 'whiff' && ev.who === 1).i < s.said[0].i, lv);
+    assert.ok(c.events.find(ev => ev.type === 'hit' && ev.who === 1).i < c.said[0].i, lv);
+  }
+});
+
+test('taunts: anything he does puts an end to one, and the last hop moving away may be one', () => {
+  const bout = freshBout({ me: () => HOME, him: () => [HOME[0] + 1.0, HOME[1]], setup: b => (b.fighters[0].skills = { all: '4a' }) }),
+    a = bout.fighters[0];
+  let seen = [];
+  for (let i = 0; i < 40; i++) {
+    step(bout, [i === 1 ? { taunt: 'beckon' } : i === 20 ? { jab: true } : {}, {}], DT);
+    seen.push(a.action ? a.action.name : '-');
+  }
+  assert.equal(seen[5], 'beckon');
+  assert.equal(seen[20], 'jab', seen.slice(15, 25).join(' '));
+  // the hop: named while he goes
+  const b2 = freshBout({ me: () => HOME, him: () => [HOME[0] + 1.0, HOME[1]], setup: b => (b.fighters[0].skills = { all: '5a' }) }),
+    names = [];
+  for (let i = 0; i < 120; i++) {
+    step(b2, [i === 1 ? { away: 'pivot', side: 1 } : i === 10 ? { taunt: 'wind' } : {}, {}], DT);
+    for (const ev of b2.events) if (ev.type === 'taunt' || ev.type === 'hopPivot') names.push(`${i} ${ev.type}`);
+  }
+  assert.ok(names.length === 2 && names[1].endsWith('taunt') && +names[1].split(' ')[0] >= 40, names.join(', '));
+});
+
 test('flicker: the same bout goes the same way', () => {
   const once = () => run(SHOWOFF.find(x => x.id === 'flicker@5a')).frames.map(f => f.gloves.L.map(v => +v.toFixed(6)));
   assert.deepEqual(once(), once());
+});
+
+/* ---- the chances (§5.2, §5.4): a thousand throws of his dice come out as the table says, within five points */
+test('chances: a thousand throws turn up each trick and each taunt as often as the table says', () => {
+  for (const lv of SHOW)
+    for (const button of ['jab', 'power']) {
+      const table = LEVEL[lv].vary[button],
+        roll = dice(11),
+        n = 1000;
+      // (what can be done at once: a jab's two; a power press's, by the punch it is, with his guard up and without)
+      const sets = button === 'jab' ? [['thumb', 'flicker']] : [['pawUp', 'pawDown', 'elbow'], ['pawUp', 'pawDown', 'collar'], ['pawUp', 'pawDown', 'stomp'], ['elbow'], ['collar'], ['stomp']];
+      for (const set of sets) {
+        const count = {};
+        for (let i = 0; i < n; i++) {
+          const t = choose(table, x => set.includes(x), null, roll());
+          count[t] = (count[t] || 0) + 1;
+        }
+        for (const [name, p] of table) assert.ok(Math.abs((count[name] || 0) / n - (set.includes(name) ? p : 0)) <= 0.05, `${lv} ${button} ${set} ${name}: ${count[name] || 0} of ${n}, the table ${p}`);
+      }
+    }
+  for (const lv of SHOW)
+    for (const [when, p] of Object.entries(LEVEL[lv].stance.show.taunt)) {
+      const roll = dice(23);
+      let k = 0;
+      for (let i = 0; i < 1000; i++) if (roll() < p) k++;
+      assert.ok(Math.abs(k / 1000 - p) <= 0.05, `${lv} taunt ${when}: ${k}`);
+    }
+});
+
+/* In a real bout (vary) the dice throw for every press: the same seed throws the same, another seed another mix, and at the
+   clean grades and below nothing comes up at all, trick or taunt. */
+function real(seed, lv, seconds = 12) {
+  const bout = createBout(seed, { vary: true, skills: [{ all: lv }, { stance: '2' }] }),
+    [a, b] = bout.fighters,
+    out = [];
+  [a.x, b.x] = [-0.4, 0.4];
+  settle(bout);
+  for (let i = 0; i < seconds * 60; i++) {
+    const k = i % 60;
+    // (a jab and a power punch every second, from 0.8 m, his guard up half the time; and a while standing doing nothing)
+    step(bout, [i < seconds * 30 ? (k === 0 ? { jab: true } : k === 30 ? { power: true } : {}) : {}, { cover: i % 120 < 60 }], DT);
+    b.hp = 1000;
+    a.hp = 1000;
+    a.x = Math.min(a.x, b.x - 0.8);
+    for (const ev of bout.events) if (ev.who === 0 && (ev.type === 'punch' || ev.type === 'taunt')) out.push(ev.type === 'taunt' ? 'taunt ' + ev.name : (a.action && a.action.variant) || ev.name);
+  }
+  return out;
+}
+test('chances: the same seed throws the same, another seed another mix; the clean grades and below throw nothing', () => {
+  for (const lv of SHOW) {
+    const one = real(3, lv),
+      again = real(3, lv),
+      other = real(8, lv);
+    assert.deepEqual(one, again, lv);
+    assert.notDeepEqual(one, other, lv);
+    assert.ok(one.some(x => ['flicker', 'thumb', 'pawDown', 'pawUp', 'collar', 'elbow', 'stomp'].includes(x)), `${lv}: ${one.join(' ')}`);
+  }
+  for (const lv of others) assert.ok(real(3, lv, 8).every(x => ['jab', 'cross', 'hook', 'upper', 'hookIn', 'upperIn'].includes(x)), lv);
 });

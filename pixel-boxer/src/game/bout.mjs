@@ -225,13 +225,17 @@ function plan(f, other, name, dir) {
 
 function decide(bout, f, input, dt, who) {
   const pressed = pressOf(input);
+  // (a taunt is over the moment he does anything: a button, his guard, setting off: anim/show.mjs)
+  if (f.action && MOVES[f.action.name].taunt && (pressed || input.cover || Math.hypot(...(input.move || [0, 0])) > 0.3)) f.action = null;
   if (pressed) (f.want = pressed), (f.wantAge = 0), (f.wantAt = bout.t);
   else if (f.want && (f.wantAge += dt) > RULES.buffer) f.want = null;
   if (f.want) {
     const [what, dir] = f.want,
-      punch = !GOING.includes(what) && !EVADE.includes(what);
+      punch = !GOING.includes(what) && !EVADE.includes(what) && what !== 'taunt';
     // (a man whose lead foot is stood on cannot dash or sway back off it, or go in or away; he can still slip and duck)
     if (f.pinned > 0 && (GOING.includes(what) || what === 'pull')) f.want = null;
+    // (a taunt named while he is moving away is the one on the last hop)
+    else if (what === 'taunt' && f.action && (f.action.name === 'hopPivot' || f.action.name === 'hopCircle')) (f.action.taunt = dir), (f.want = null);
     // (a jab pressed in a flicker waits for the hand to be home at his waist: a flicker goes again from there, at once)
     else if (what === 'jab' && f.action && f.action.name === 'flicker' && Math.max(f.action.chain.q[3], f.action.chain.q[4]) > FLICK.home);
     else if (open(f, punch)) {
@@ -243,9 +247,14 @@ function decide(bout, f, input, dt, who) {
           coming = incoming(other) || (punching(other) && other.action.chain.phase === 'hold' && !other.action.struck ? other.action : null);
         f.defence = { kind: 'evade', start: bout.t, of: coming ? coming.id : null, from: coming ? coming.at : bout.t, margin: null, late: false, counterAt: null, event: null, said: false };
         bout.events.push({ type: what, who });
+      } else if (what === 'taunt') {
+        taunt(bout, f, who, dir);
       } else if (what === 'duckIn' || what === 'hopPivot' || what === 'hopCircle') {
         begin(f, what, plan(f, bout.fighters[1 - who], what, dir), bout);
         bout.events.push({ type: what, who });
+        // (a show-off's last hop may be a taunt: his dice, in a real bout)
+        const p = tauntChance(f, 'hop');
+        if (p && f.luck() < p) f.action.taunt = TAUNTS.hop[Math.floor(f.luck() * TAUNTS.hop.length)];
       } else if (!punch) {
         const [fx, fz] = aheadOf(f);
         let d = dir === true ? [-fx, -fz] : dir;
@@ -451,6 +460,9 @@ function advance(bout, f, dt, who) {
         const other = bout.fighters[1 - who],
           d = other.defence;
         if (d && d.kind === 'evade' && d.of === f.action.id && d.event === null) {
+          // (a show-off who has made it miss may shrug at him once he is out of it: his dice)
+          const p = tauntChance(other, 'evade');
+          if (p && other.luck() < p) other.tauntNext = 'shrug';
           d.event = e;
           d.margin = e.margin;
           d.late = !!(near && near.late);
@@ -477,7 +489,10 @@ function advance(bout, f, dt, who) {
       if (f.lastEvade && f.lastEvade.action === f.action) f.lastEvade.endedAt = bout.t;
       f.action = null;
     }
-  } else if (f.action.t >= move.dur + (f.action.name === 'dash' && f.action.level ? f.action.level.dash.extra : 0)) {
+  } else if (f.action.taunt && f.action.t >= move.dur - TAUNT.hop) {
+    // (the last hop moving away, a show-off's taunt instead of his guard coming back)
+    taunt(bout, f, who, f.action.taunt);
+  } else if (f.action.t >= move.dur * (f.action.long || 1) + (f.action.name === 'dash' && f.action.level ? f.action.level.dash.extra : 0)) {
     // (a dash ties him up as long as his grade lands it: skill.mjs, dash.extra)
     if (move.stay) f.action.t = move.dur;
     else f.action = null;
@@ -687,6 +702,37 @@ function follow(bout, f, who, dt) {
   }
 }
 
+/* A show-off's taunts (anim/show.mjs, docs/moves-plan-4.md §5.4): moves of their own, with no guard in them and over the
+   moment he does anything. In a real bout his dice throw for one (his grade's chances, skill.mjs: stance.show.taunt): standing
+   doing nothing, once every `every` half beats of his feet (one of `idle`); just after a punch has missed him (a shrug, once
+   he is out of the way); just after one under `light` newton-seconds has landed (a tap of the chin, once he has got over
+   it); and on the last hop moving away (one of `hop`, over the last `hop` seconds of it). A script names one ('taunt'). */
+const TAUNT = { every: 16, light: 30, hop: 0.2 };
+const TAUNTS = { idle: ['beckon', 'chinOut', 'wind'], hop: ['beckon', 'wind'] };
+const tauntChance = (f, when) => {
+  const show = f.vary && f.luck && levelOf(f.skills, 'stance').stance.show;
+  return show ? show.taunt[when] : 0;
+};
+function taunt(bout, f, who, name) {
+  const show = levelOf(f.skills, 'stance').stance.show;
+  if (!show || !MOVES[name] || !MOVES[name].taunt) return;
+  begin(f, name, { long: show.long, size: show.size }, bout);
+  f.tauntNext = null;
+  bout.events.push({ type: 'taunt', name, who });
+}
+// (between actions: one his dice have queued, or one standing still every so many half beats)
+function idleTaunt(bout, f, who, input) {
+  if (f.down || f.stun > 0 || f.action || f.cover || pressOf(input) || input.cover) return;
+  if (f.tauntNext) return taunt(bout, f, who, f.tauntNext);
+  const r = f.animator.rhythm,
+    k = Math.floor(r.halves / TAUNT.every);
+  if (f.tauntAt === undefined) f.tauntAt = k;
+  if (k === f.tauntAt) return;
+  f.tauntAt = k;
+  const p = tauntChance(f, 'idle');
+  if (p && Math.hypot(f.vx, f.vz) < 0.2 && f.luck() < p) taunt(bout, f, who, TAUNTS.idle[Math.floor(f.luck() * TAUNTS.idle.length)]);
+}
+
 /* A show-off's tricks (anim/show.mjs): which of his grade's the press can turn into now. The elbow is thrown from so far
    (centre to centre), the collar from closer than so far; a guard has to have been held so long to be pushed out of the way;
    a stomp needs the lead foot to reach his. FLICK: a flicker pressed again this soon after the last arrives goes again, so
@@ -888,6 +934,11 @@ function strike(bout, f, other, who, dt) {
   other.flash = 0.07;
   other.sinceHit = 0;
   other.animator.strike({ J: Math.min(worth, 110), dir: felt.dir, stun: other.stun, hp: other.hp });
+  // (a show-off hit lightly may tap his chin at him once he has got over it: his dice)
+  if (worth < TAUNT.light && other.hp > 0) {
+    const p = tauntChance(other, 'hit');
+    if (p && other.luck() < p) other.tauntNext = 'tapChin';
+  }
   bout.stop = Math.min(RULES.stop[1], stop * (counter ? 1.5 : 1));
   const down = other.hp <= 0;
   bout.events.push(Object.assign({ type: 'hit', damage: +damage.toFixed(1), counter, down }, blow));
@@ -1044,6 +1095,7 @@ export function step(bout, inputs, dt) {
     f.sinceLast += dt;
     f.sinceHit += dt;
     if (!f.down) decide(bout, f, input, dt, i);
+    if (!f.down) idleTaunt(bout, f, i, input);
     travel(f, f.down ? {} : input, dt, other);
     face(f, other, dt);
     advance(bout, f, dt, i);

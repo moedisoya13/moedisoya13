@@ -14,6 +14,8 @@ import { MOVES } from './anim/moves.mjs';
 import { arrival } from './anim/animator.mjs';
 import { createChain } from './phys/chain.mjs';
 import { fatigue } from './game/profile.mjs';
+import { WINDOWS } from './windows.data.mjs';
+const slipAt = lv => (WINDOWS.slip && WINDOWS.slip[lv] && WINDOWS.slip[lv].at !== null ? WINDOWS.slip[lv].at : 3);
 
 /* Where the other man stands for each punch. His head is held a centimetre and a half further back in an amateur's upright
    stance than a pro's is on average, so he stands that much closer than the ranges the punches are written for (1.0 m for the
@@ -163,6 +165,53 @@ export const SHOWOFF = TRICKS.flatMap(tq =>
       if (tq.second !== undefined && !(f.cues && f.cues.pressed !== undefined)) f.sinceLast = 0;
     },
     press: [AT, ...(tq.again || []).map(dt => AT + dt)].map(t => [t, tq.button, tq.id])
+  }))
+);
+
+/* The show-off's taunts (anim/show.mjs, docs/moves-plan-4.md §5.4), at every grade side by side: the script names the taunt
+   (in a real bout his dice do), and only 4암 and 5암 have them; the rest stand there. Standing ones are named at a moment of
+   the loop; the shrug once he has slipped the other man's jab and is out of it, and the tap of the chin once a jab from long
+   range has landed and he has got over it. */
+const quiet = id => (bout, t) => {
+  const f = bout.fighters[0],
+    own = (f.cues = f.cues || {});
+  if (own.taunted) return null;
+  const ready = id === 'shrug' ? f.lastEvade && f.lastEvade.endedAt !== null && !f.action : id === 'tapChin' ? f.sinceHit < 2 && f.stun <= 0 && !f.action : t >= AT;
+  if (!ready) return null;
+  own.taunted = t;
+  return ['taunt', id];
+};
+export const TAUNT_ROWS = [
+  { id: 'beckon', name: '손짓', en: 'Beckon' },
+  { id: 'chinOut', name: '턱 내밀기', en: 'Chin out' },
+  { id: 'wind', name: '풍차', en: 'Windmill' },
+  { id: 'shrug', name: '어깨 으쓱', en: 'Shrug', punch: ['jab', 0.8], slip: true },
+  { id: 'tapChin', name: '턱 두드리기', en: 'Tap the chin', punch: ['jab', 0.6], gap: 1.13 }
+];
+export const TAUNTING = TAUNT_ROWS.flatMap(tq =>
+  LEVELS.map(lv => ({
+    id: `${tq.id}@${lv}`,
+    level: lv,
+    taunt: tq.id,
+    name: `${tq.name} ${LEVEL[lv].label}`,
+    en: `${tq.en} · ${LEVEL[lv].name}`,
+    group: tq.name,
+    item: tq.id,
+    loop: 2.2,
+    hurt: !!tq.punch,
+    view: { yaw: 0.6, pitch: 0.25 },
+    // (hit, he is left where the jab puts him: walking back would put an end to the taunt)
+    me: t => (tq.punch && t > tq.punch[1] ? null : HOME),
+    him: () => [HOME[0] + (tq.gap || 1.0), HOME[1]],
+    setup: b => {
+      b.fighters[0].skills = { all: lv };
+      b.fighters[1].skills = { stance: '2' };
+    },
+    keep: b => (b.fighters[0].hp = Math.max(b.fighters[0].hp, 60)),
+    // (the shrug: the jab slipped, on the frame the slip card answers on, his grade's)
+    press: tq.slip ? [[tq.punch[1] + slipAt(lv) / 60, 'slip', -1]] : [],
+    against: tq.punch ? [[tq.punch[1], 'jab']] : [],
+    cue: quiet(tq.id)
   }))
 );
 

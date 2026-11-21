@@ -706,7 +706,8 @@ export function createAnimator(seed) {
         stun = !!view.stun,
         // (a dash, or the duck in: one burst, whoever makes it)
         dashing = !!action && (action.name === 'dash' || action.name === 'duckIn'),
-        hopping = !!action && (action.name === 'hopPivot' || action.name === 'hopCircle');
+        hopping = !!action && (action.name === 'hopPivot' || action.name === 'hopCircle'),
+        taunting = !!action && !!MOVES[action.name].taunt;
 
       // ---- what he is doing
       // what the punching hand does past where the chain puts it (a dirty jab's glove pushed on into his face)
@@ -847,7 +848,11 @@ export function createAnimator(seed) {
         if (EVASIONS.includes(action.name)) sampleEvade(action, action.level || LEVEL[3], c);
         else if (action.name === 'duckIn') duckIn(action, c);
         else if (action.name === 'hopPivot' || action.name === 'hopCircle') away(action, clock, c, st.show);
-        else if (MOVES[action.name].hand) {
+        else if (MOVES[action.name].taunt) {
+          // (a show-off's taunt: as his grade does it, longer or shorter and bigger or smaller, show.mjs)
+          const tmp = sampleMove(MOVES[action.name], action.t / (action.long || 1), {});
+          for (const ch in tmp) c[ch] += tmp[ch] * (action.size ?? 1);
+        } else if (MOVES[action.name].hand) {
           // (written for the lead hand: the rear's is the same with the hands swapped, mirrored across him)
           const tmp = sampleMove(MOVES[action.name], action.t, {});
           if (action.hand === 'R') swapHands(tmp);

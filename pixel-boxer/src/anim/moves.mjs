@@ -409,6 +409,59 @@ export const MOVES = Object.assign(
        come back up over the last hop. The rest of it, the bounce and the hands' swing, is the animator's. */
     hopPivot: { dur: 0.92, keys: [] },
     hopCircle: { dur: 0.86, keys: [] },
+    /* ---- a show-off's taunts (anim/show.mjs, docs/moves-plan-4.md §5.4): no guard while they last, and anything he does puts
+       an end to them (game/bout.mjs). Written as the plan's lengths; a grade stretches and shrinks them (skill.mjs:
+       stance.show, long and size). */
+    // the lead glove held out and beckoned twice, palm up, the chin up at him, the rear hand let down
+    beckon: {
+      taunt: true, dur: 0.6,
+      keys: [
+        { t: 0.14, lz: 0.2, ly: 0.04, lx: -0.04, le: 0.25, ry: -0.12, rz: -0.03, hp: -5 },
+        { t: 0.24, lz: 0.12, ly: 0.08, lx: -0.04, le: 0.25, ry: -0.12, rz: -0.03, hp: -5 },
+        { t: 0.33, lz: 0.2, ly: 0.04, lx: -0.04, le: 0.25, ry: -0.12, rz: -0.03, hp: -5 },
+        { t: 0.43, lz: 0.12, ly: 0.08, lx: -0.04, le: 0.25, ry: -0.12, rz: -0.03, hp: -5 },
+        { t: 0.5, lz: 0.16, ly: 0.05, lx: -0.04, le: 0.2, ry: -0.1, rz: -0.02, hp: -4 }
+      ]
+    },
+    // both hands let down, the chin pushed out at him and rocked from side to side
+    chinOut: {
+      taunt: true, dur: 0.7,
+      keys: [
+        { t: 0.15, ly: -0.26, ry: -0.24, lx: 0.05, rx: -0.05, lz: -0.04, hp: -10, hz: 0.02, side: 4, hw: 10 },
+        { t: 0.33, ly: -0.26, ry: -0.24, lx: 0.05, rx: -0.05, lz: -0.04, hp: -10, hz: 0.02, side: -4, hw: -10 },
+        { t: 0.5, ly: -0.26, ry: -0.24, lx: 0.05, rx: -0.05, lz: -0.04, hp: -10, hz: 0.02, side: 4, hw: 10 },
+        { t: 0.6, ly: -0.2, ry: -0.18, lx: 0.04, rx: -0.04, lz: -0.03, hp: -7, hz: 0.01, side: 0, hw: 0 }
+      ]
+    },
+    // the hands thrown open, palms up, the shoulders up round the ears (the head sunk between them)
+    shrug: {
+      taunt: true, dur: 0.4,
+      keys: [{ t: 0.12, e: 'out', lx: 0.14, rx: -0.14, ly: -0.12, ry: -0.12, lz: -0.06, rz: 0.03, le: 0.5, re: 0.5, hp: 7, lean: -3 }, { t: 0.28, lx: 0.14, rx: -0.14, ly: -0.12, ry: -0.12, lz: -0.06, rz: 0.03, le: 0.5, re: 0.5, hp: 7, lean: -3 }]
+    },
+    /* the windmill: the rear arm swung round once in front of his rear side, down, back, up and over, and on into the start
+       of a bolo punch (a circle kept in front of him: no shoulder swings a whole arm round behind)*/
+    wind: {
+      taunt: true, dur: 0.8,
+      keys: [
+        { t: 0.1, rx: -0.08, ry: -0.18, rz: 0.16, re: 0.2, yaw: 3 },
+        { t: 0.22, rx: -0.1, ry: -0.34, rz: 0.02, re: 0.2, yaw: 6 },
+        { t: 0.34, rx: -0.1, ry: -0.2, rz: -0.1, re: 0.2, yaw: 8 },
+        { t: 0.46, rx: -0.08, ry: -0.04, rz: 0.02, re: 0.2, yaw: 5 },
+        { t: 0.56, rx: -0.06, ry: -0.16, rz: 0.16, re: 0.2, yaw: 0 },
+        { t: 0.66, e: 'out', rx: -0.03, ry: -0.12, rz: 0.24, re: 0.15, yaw: -4, twist: 6 }
+      ]
+    },
+    // the rear glove tapped on his own chin, twice, offering it, the lead hand let down
+    tapChin: {
+      taunt: true, dur: 0.5,
+      keys: [
+        { t: 0.1, rx: 0.04, ry: -0.04, rz: -0.02, re: 0.2, hp: -6, ly: -0.14 },
+        { t: 0.18, rx: 0.06, ry: -0.06, rz: -0.05, re: 0.2, hp: -6, ly: -0.14 },
+        { t: 0.26, rx: 0.04, ry: -0.04, rz: -0.02, re: 0.2, hp: -6, ly: -0.14 },
+        { t: 0.34, rx: 0.06, ry: -0.06, rz: -0.05, re: 0.2, hp: -6, ly: -0.14 },
+        { t: 0.42, rx: 0.03, ry: -0.03, rz: -0.01, re: 0.15, hp: -4, ly: -0.1 }
+      ]
+    },
     // arms up, mixed in for the winner
     cheer: { stay: true, dur: 1, keys: [{ t: 1, e: 'lin', lx: 0.2, ly: 0.52, lz: -0.2, rx: -0.2, ry: 0.55, rz: -0.02, le: 0.7, re: 0.7, lean: -15, yaw: 24, twist: 8, hp: -10, hy: 0.04 }] }
   }).map(([name, def]) => [name, compile(Object.assign({ name }, def))])

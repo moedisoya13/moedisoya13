@@ -87,8 +87,10 @@ export function hammer(c, h, t) {
    first (the one that fits the moment better comes first). when(trick): whether it can be done now (the bout's: how far
    apart they are, whether his guard has been up a while, whether a foot will reach). forced: a trick a script names (the
    catalogue and the tests name it; it is done if the grade has it and it can be done now), or 'plain'; otherwise one throw u
-   of his dice (0..1) decides it, each trick taking its chance's share of the throw in turn, so that each comes up as often as
-   its chance says whatever else could have (the shares of tricks that cannot be done now are the plain punch's). */
+   of his dice (0..1) decides it, each trick that can be done now taking its chance's share of the throw in turn, so that each
+   comes up as often as its chance says (the rest of the throw is the plain punch's). The tricks a power press can be are
+   never all possible at once (the elbow is a cross's, the collar an uppercut's, the stomp a hook's), and those that can
+   be add up to less than the whole throw. */
 export const THROWS = { flicker: 'flicker', pawDown: 'cross', pawUp: 'upper' };
 export function choose(table, when, forced, u) {
   if (!table || forced === 'plain') return null;
@@ -96,7 +98,8 @@ export function choose(table, when, forced, u) {
   if (u === null || u === undefined) return null;
   let at = 0;
   for (const [name, p] of table) {
-    if (u >= at && u < at + p) return when(name) ? name : null;
+    if (!when(name)) continue;
+    if (u >= at && u < at + p) return name;
     at += p;
   }
   return null;
