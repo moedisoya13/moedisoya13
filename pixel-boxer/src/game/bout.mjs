@@ -15,7 +15,9 @@
                    roll: 1 | -1 (bob and weave: down under it and up on his left or right), pull: true (the head swayed
                    back out of reach); duck with a dash ahead in the same tick is the duck in (duckIn: down and in under
                    the punches, to right up close); away: 'pivot' | 'circle' with side: 1 | -1 (his left or right) is
-                   moving off out of range with the guard let go of (hopPivot, hopCircle) }
+                   moving off out of range with the guard let go of (hopPivot, hopCircle); away: 'wave' held is the wave,
+                   circling wide round him for as long as it is held (a clean great one's: anim/clean.mjs; any other grade
+                   circles out), and a jab pressed in it goes out of it, a power punch puts an end to it }
      bout.events            what happened this step, for the picture and the sound (a dirty boxer's fouls among them:
                             { type: 'foul', name: stomp | thumb, who, on, J }; nobody penalises them). A punch that misses
                             says by how much (whiff: margin, metres between the glove's and the head's surfaces at the
@@ -41,7 +43,7 @@
 const BRILLIANT = { margin: 0.03, within: 0.4 };
 import * as M from '../rig/m3.mjs';
 import { MOVES, RISE } from '../anim/moves.mjs';
-import { createAnimator } from '../anim/animator.mjs';
+import { createAnimator, arrival } from '../anim/animator.mjs';
 import { toWorld } from '../anim/pose.mjs';
 import { createChain, stepChain, effectiveMass, preload } from '../phys/chain.mjs';
 import * as P from '../anim/pose.mjs';
@@ -51,6 +53,7 @@ import { body, blank, fatigue, COST } from './profile.mjs';
 import { levelOf } from '../anim/skill.mjs';
 import { timeline, evadeTime, progress, LOADED } from '../anim/evade.mjs';
 import { choose, THROWS, PAW, COLLAR, ELBOW } from '../anim/show.mjs';
+import { waveOf, waveTravel, waveTurn, waveBlocked } from '../anim/clean.mjs';
 import { dice } from '../anim/stance.mjs';
 
 export const RULES = {
@@ -130,9 +133,11 @@ const punching = f => !!f.action && !!MOVES[f.action.name].punch;
 // the ways of getting the head out of the way, as controls name them (each a move of its own, with a side where it has one)
 const EVADE = ['slip', 'duck', 'roll', 'pull'];
 const pressOf = input =>
-  input.dash && input.duck && input.dash !== true ? ['duckIn', input.dash] : input.away ? [input.away === 'pivot' ? 'hopPivot' : 'hopCircle', input.side || 1] : input.dash ? ['dash', input.dash] : EVADE.find(n => input[n]) ? [EVADE.find(n => input[n]), input[EVADE.find(n => input[n])]] : input.jab ? ['jab', input.jab] : input.power ? ['power', input.power] : input.taunt ? ['taunt', input.taunt] : null;
-// moving off somewhere as a move of its own: the dash, the duck in, and the two ways away
-const GOING = ['dash', 'duckIn', 'hopPivot', 'hopCircle'];
+  // (a punch pressed while the wave is held is the punch: out of the wave, anim/clean.mjs)
+  input.away === 'wave' && (input.jab || input.power) ? (input.jab ? ['jab', input.jab] : ['power', input.power]) :
+  input.dash && input.duck && input.dash !== true ? ['duckIn', input.dash] : input.away ? [input.away === 'pivot' ? 'hopPivot' : input.away === 'wave' ? 'wave' : 'hopCircle', input.side || 1] : input.dash ? ['dash', input.dash] : EVADE.find(n => input[n]) ? [EVADE.find(n => input[n]), input[EVADE.find(n => input[n])]] : input.jab ? ['jab', input.jab] : input.power ? ['power', input.power] : input.taunt ? ['taunt', input.taunt] : null;
+// moving off somewhere as a move of its own: the dash, the duck in, and the two ways away (and the wave)
+const GOING = ['dash', 'duckIn', 'hopPivot', 'hopCircle', 'wave'];
 /* The duck in ends right up close (centre to centre, short of it by his grade: skill.mjs, entry.stop), and goes there at
    most this far, `wide` degrees to his right of the line to the other man; moving away, each hop is a half beat long (`beat`): `backHop` metres back after the pivot (which takes
    `turn` seconds), or `hop` metres round him and `out` away from him. */
@@ -147,7 +152,9 @@ const open = (f, punch) =>
     // (out of an evasion, from the moment his grade lets him: anim/skill.mjs, evade.cut)
     (punch && isEvasion(f.action.name) && f.action.t >= timeline(f.action.name, f.action.level).cut - 1e-9) ||
     // (and out of a duck in once he has landed)
-    (punch && f.action.name === 'duckIn' && f.action.t >= DUCK_IN.landed - 1e-9));
+    (punch && f.action.name === 'duckIn' && f.action.t >= DUCK_IN.landed - 1e-9) ||
+    // (and out of the wave at any moment: anim/clean.mjs)
+    (punch && f.action.name === 'wave'));
 // (the duck in has landed at this; the knees stay bent, the wind-up of what he throws next, `wound` seconds after it)
 const DUCK_IN = { landed: 0.4, wound: 0.15 };
 
@@ -171,6 +178,13 @@ function loadOf(f, bout, move) {
   if (p && bout.t - p.at <= RULES.counter) {
     const cv = p.level.cover;
     if ((cv.hand === 'same') === (move.hand === p.hand)) return { load: cv.load, shoulder: cv.q, from: 'parry' };
+  }
+  /* a jab out of the wave (anim/clean.mjs): the hand comes straight up from where it hangs, no wind-up shown; out of a slick
+     back, with the trunk coming forward again (a legend's the more) */
+  if (f.action && f.action.name === 'wave' && move.name === 'jab') {
+    const wv = waveOf(f.action.level),
+      a = f.animator.wave;
+    return { load: a && a.slicked ? wv.load : wv.jab, from: 'wave' };
   }
   /* a legend on the move (anim/legend.mjs): his knees bent and his trunk leant by the shape of his going are the wind-up of
      whatever he throws out of it, as far as they go; he does not wind up again */
@@ -224,14 +238,35 @@ function plan(f, other, name, dir) {
   return { side, centre: [ball[0], ball[2]], from: [f.x, f.z], dir: [0, -1] };
 }
 
+/* Who can go into the wave (anim/clean.mjs): his grade's wave, which only 4명 and 5명 have (skill.mjs: wave). The one place
+   it is decided; asked of anyone else, it is the circle out. (A loadout of techniques, docs/moves-plan-5.md §4.0, is to be
+   added here: f's list holding 'wave', and his grade's wave.) -> his grade's wave, or null */
+const wavesAt = f => waveOf(levelOf(f.skills, 'wave'));
+
+/* The wave from step to step (anim/clean.mjs): held while it is asked for; the ropes in the way he is going are the end of it,
+   and so is his lead foot stood on (at once). Gone once he is doing anything that is not the wave or a jab out of it (a
+   moment's grace, for the wave to be taken up again as a jab out of it comes home). */
+function holdWave(bout, f, input, who) {
+  const w = f.wave,
+    on = !!f.action && (f.action.name === 'wave' || !!f.action.wave);
+  if (on) w.seen = bout.t;
+  else if (bout.t - w.seen > 0.1 + 1e-9) return void (f.wave = null);
+  w.held = input.away === 'wave';
+  w.blocked = waveBlocked(f, bout.fighters[1 - who], RULES.half);
+  if (f.pinned > 0 && f.action && f.action.name === 'wave') (f.action = null), (f.wave = null);
+}
+
 function decide(bout, f, input, dt, who) {
   const pressed = pressOf(input);
   // (a taunt is over the moment he does anything: a button, his guard, setting off: anim/show.mjs)
   if (f.action && MOVES[f.action.name].taunt && (pressed || input.cover || Math.hypot(...(input.move || [0, 0])) > 0.3)) f.action = null;
   if (pressed) (f.want = pressed), (f.wantAge = 0), (f.wantAt = bout.t);
   else if (f.want && (f.wantAge += dt) > RULES.buffer) f.want = null;
+  if (f.wave) holdWave(bout, f, input, who);
   if (f.want) {
-    const [what, dir] = f.want,
+    // (the wave, asked of a grade that has none, is the circle out: anim/clean.mjs)
+    const what = f.want[0] === 'wave' && !wavesAt(f) ? 'hopCircle' : f.want[0],
+      dir = f.want[1],
       punch = !GOING.includes(what) && !EVADE.includes(what) && what !== 'taunt';
     // (a man whose lead foot is stood on cannot dash or sway back off it, or go in or away; he can still slip and duck)
     if (f.pinned > 0 && (GOING.includes(what) || what === 'pull')) f.want = null;
@@ -239,6 +274,8 @@ function decide(bout, f, input, dt, who) {
     else if (what === 'taunt' && f.action && (f.action.name === 'hopPivot' || f.action.name === 'hopCircle')) (f.action.taunt = dir), (f.want = null);
     // (a jab pressed in a flicker waits for the hand to be home at his waist: a flicker goes again from there, at once)
     else if (what === 'jab' && f.action && f.action.name === 'flicker' && Math.max(f.action.chain.q[3], f.action.chain.q[4]) > FLICK.home);
+    // (the wave held: he is in it already)
+    else if (what === 'wave' && f.action && f.action.name === 'wave') f.want = null;
     else if (open(f, punch)) {
       f.want = null;
       if (EVADE.includes(what)) {
@@ -256,6 +293,14 @@ function decide(bout, f, input, dt, who) {
         // (a show-off's last hop may be a taunt: his dice, in a real bout)
         const p = tauntChance(f, 'hop');
         if (p && f.luck() < p) f.action.taunt = TAUNTS.hop[Math.floor(f.luck() * TAUNTS.hop.length)];
+      } else if (what === 'wave') {
+        // (the wave: round the other man to the side asked, kept on, or taken up again after a jab out of it; not into the ropes)
+        const side = f.wave ? f.wave.side : dir === -1 ? -1 : 1;
+        if (f.wave || !waveBlocked(f, bout.fighters[1 - who], RULES.half, side)) {
+          f.wave = f.wave || { side, v: 0, held: true, blocked: false, seen: bout.t };
+          begin(f, 'wave', { side }, bout);
+          bout.events.push({ type: 'wave', who });
+        }
       } else if (!punch) {
         const [fx, fz] = aheadOf(f);
         let d = dir === true ? [-fx, -fz] : dir;
@@ -291,9 +336,12 @@ function decide(bout, f, input, dt, who) {
         if (trick && THROWS[trick]) name = trick === 'pawUp' && inside ? 'upperIn' : THROWS[trick];
         if (name === 'flicker') f.flicks = { n: again ? f.flicks.n + 1 : 1, at: Infinity };
         else if (what === 'jab') f.flicks = null;
-        begin(f, name, { counter: f.counter > 0, variant: trick }, bout);
+        // (a jab out of the wave goes on with it; a power punch puts an end to it)
+        const fromWave = !!f.wave && what === 'jab' && !!f.action && f.action.name === 'wave';
+        if (f.wave && !fromWave) f.wave = null;
+        begin(f, name, { counter: f.counter > 0, variant: trick, wave: fromWave || undefined }, bout);
         // a loaded punch answering a defence: what makes the defence brilliant, if it was close enough
-        if (f.action.loaded && f.action.loaded.from !== 'legend' && f.defence && f.defence.counterAt === null && bout.t - f.defence.start <= BRILLIANT.within + 1e-9) (f.defence.counterAt = bout.t), (f.defence.counter = f.action.id), judge(bout, f, who);
+        if (f.action.loaded && f.action.loaded.from !== 'legend' && f.action.loaded.from !== 'wave' && f.defence && f.defence.counterAt === null && bout.t - f.defence.start <= BRILLIANT.within + 1e-9) (f.defence.counterAt = bout.t), (f.defence.counter = f.action.id), judge(bout, f, who);
         f.lastPower = what === 'power';
         f.counter = 0;
         bout.events.push({ type: 'punch', who, name });
@@ -384,6 +432,9 @@ function travel(f, input, dt, other) {
       sx = (left[0] * a.side * GO.hop - fx * GO.out) / GO.beat;
       sz = (left[1] * a.side * GO.hop - fz * GO.out) / GO.beat;
     }
+  } else if (f.wave && other && f.stun <= 0 && (!f.action || f.action.name === 'wave' || f.action.wave)) {
+    // (the wave: round him at the pace of the wave his feet are in, kept in its band, anim/clean.mjs)
+    [sx, sz] = waveTravel(f, other, dt, !!incoming(other));
   }
   let ix = 0,
     iz = 0;
@@ -432,8 +483,10 @@ function face(f, other, dt) {
     if (!f.pivoting) want = f.yaw;
   }
   // a boxer who has thrown his weight into a punch cannot swing round with it
-  const rate = RULES.turnRate * (punching(f) ? 0.35 : f.stun > 0 ? 0.2 : 1);
-  f.turn = Math.max(-rate, Math.min(rate, wrap(want - f.yaw) * 14));
+  const rate = RULES.turnRate * (punching(f) ? 0.35 : f.stun > 0 ? 0.2 : 1),
+    // (going round him in the wave, his facing is carried round with the line to him: anim/clean.mjs)
+    round = f.wave && dt > 0 ? waveTurn(f, other, dt) : 0;
+  f.turn = Math.max(-rate, Math.min(rate, round + wrap(want - f.yaw) * 14));
   f.yaw = wrap(f.yaw + f.turn * dt);
 }
 
@@ -490,6 +543,10 @@ function advance(bout, f, dt, who) {
       if (f.lastEvade && f.lastEvade.action === f.action) f.lastEvade.endedAt = bout.t;
       f.action = null;
     }
+  } else if (f.action.name === 'wave') {
+    // (the wave is over once its last wave has come up and his hands are back: anim/clean.mjs)
+    const a = f.animator.wave;
+    if (a && a.done) (f.action = null), (f.wave = null);
   } else if (f.action.taunt && f.action.t >= move.dur - TAUNT.hop) {
     // (the last hop moving away, a show-off's taunt instead of his guard coming back)
     taunt(bout, f, who, f.action.taunt);
@@ -542,6 +599,8 @@ function viewOf(bout, i) {
       // foot is stood on
       foe: f.place && other.pose && other.points ? { foot: mine(f, at(other, 'LeftFoot', [0, -0.02, 0.07])), glove: { L: mine(f, other.points.L), R: mine(f, other.points.R) }, head: mine(f, other.points.head), nape: mine(f, napeOf(other)), right: dirIn(f, [-Math.cos(other.yaw), Math.sin(other.yaw)]) } : null,
       pinned: f.pinned > 0,
+      // the wave he is in, if he is (anim/clean.mjs): which way round, whether it is still held, his grade's
+      wave: f.wave ? { side: f.wave.side, held: f.wave.held, blocked: f.wave.blocked, level: wavesAt(f) } : null,
       // knocked down: what of the other man he cannot fall through, in his own terms
       near: f.down && f.place && other.pose ? NEAR.map(([joint, r]) => [mine(f, at(other, joint)), r]) : null
     };
@@ -558,6 +617,23 @@ function viewOf(bout, i) {
       v = (was - gap) / DT,
       [left, ahead] = local(f, g[0] - g0[0], g[2] - g0[2]);
     if (v > 0.5) view.threat = { eta: gap / v, dir: [left, ahead] };
+  }
+  /* (in the wave, a punch of his thrown from where it can reach him, and how soon it will be there as it is being thrown: what
+     a slick back goes by, anim/clean.mjs) */
+  if (view.wave && coming && Math.hypot(other.x - f.x, other.z - f.z) < MOVES[coming.name].reach + 0.6) {
+    view.wave.eta = arrival(coming.chain, MOVES[coming.name]);
+    // (and once it is committed, how clear of where it is going his head is: a slick back goes as far as that needs)
+    if (coming.aim && other.points && f.points) {
+      const hand = MOVES[coming.name].hand;
+      let to = M.add(other.place.p, M.app(other.place.R, coming.aim));
+      if (MOVES[coming.name].arm === 'straight') {
+        const S = toWorld(other.place, other.pose.at[hand === 'L' ? 'LeftArm' : 'RightArm'], other.pose.stretch),
+          d = M.sub(to, S),
+          l = Math.hypot(d[0], d[1], d[2]) || 1;
+        to = M.add(S, M.scale(d, (Math.min(l, LEN.upperArm + LEN.foreArm - 0.03) + 0.075) / l));
+      }
+      view.wave.clear = segment(f.points.head, other.points[hand], to) - RULES.glove - RULES.head;
+    }
   }
   if (punching(f) && !other.down && other.points) {
     /* Where the punch is thrown: at the head as it is now, wherever that is. The wrist is sent so that the glove's centre

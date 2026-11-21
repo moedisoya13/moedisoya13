@@ -237,6 +237,26 @@ const HAMMER_5A = { up: 0.04, rise: 0.04, down: 0.1, fall: 0.06, out: 0.12, acro
 const VARY_4A = { jab: [['thumb', 0.2], ['flicker', 0.35]], power: [['pawUp', 0.15], ['pawDown', 0.25], ['collar', 0.3], ['elbow', 0.2], ['stomp', 0.3]] };
 const VARY_5A = { jab: [['thumb', 0.15], ['flicker', 0.5]], power: [['pawUp', 0.2], ['pawDown', 0.3], ['collar', 0.3], ['elbow', 0.15], ['stomp', 0.25]] };
 
+/* the wave (anim/clean.mjs: waveBody, wavePlan; docs/moves-plan-5.md §4.1): a clean great one's and a clean legend's way of
+   circling wide at the end of the other man's reach, the hands let down, upright, the head rising and falling as the feet
+   slide apart and together. Only 4명 and 5명 have it (`wave` on their lines); any other grade asked for it circles out.
+     halves   half beats of 0.29 s a wave takes; depth: metres the head goes down at the bottom; step: metres round a wave
+     knee     degrees both knees bend through a wave, besides the drop of the spread feet; lift: degrees they are straightened
+              at the top (the head a touch over the guard's); bent: degrees they are kept bent
+     across   metres the head goes to either side of the hips; hands: [lead, rear] metres let down, wide: metres out to
+              his sides; swing: metres the lead hand swings; upright, chin: degrees; heel: degrees the sliding foot's heel
+              is up; drag: [lead, trail] how much of a slide is along the canvas
+     slick    the slick back: { eta: seconds before a punch would get there that he goes, lean: degrees back, back: metres
+              the hips go back, knee: degrees of the rear knee, go, home: seconds, just: metres clear of a committed
+              punch's way he goes, and no further }
+     jab      how much of a jab's wind-up is done already thrown out of the wave (the hand comes up from where it hangs);
+              load: and out of a slick back (the trunk coming forward again)
+     shoulder degrees of a lead shoulder feint; loose: a legend's, his own dice: { halves: [least, most] half beats, depth:
+              [least, most] metres, step: [least, most] metres, feint: [every so many waves, the first] one the other way
+              (a feint of direction), shoulder: [the chance of one in a wave], shuffle: [every, the first] a shuffle } */
+const WAVE_4M = { halves: 3, depth: 0.13, step: 0.75, knee: 40, lift: 13, bent: 10, across: 0.09, hands: [-0.28, -0.24], wide: 0.035, swing: 0, upright: 8, chin: 4, heel: 14, drag: [0.83, 0.95], slick: { eta: 0.2, lean: 18, back: 0.13, knee: 16, go: 0.1, home: 0.15, just: 0.06 }, jab: 0.5, load: 0.5, shoulder: 0, loose: null };
+const WAVE_5M = Object.assign({}, WAVE_4M, { hands: [-0.36, -0.3], wide: 0.08, swing: 0.04, slick: Object.assign({}, WAVE_4M.slick, { just: 0.03 }), load: 0.7, shoulder: 9, loose: { halves: [2, 4], depth: [0.09, 0.16], step: [0.5, 0.78], feint: [8, 7], shoulder: [0.25], shuffle: [16, 5] } });
+
 export const LEVEL = {
   1: {
     grade: 1, side: null, name: '입문', label: '1',
@@ -279,7 +299,7 @@ export const LEVEL = {
     away: TEXTBOOK_AWAY
   },
   '4m': {
-    grade: 4, side: 'm', name: '일류 · 명', label: '4명',
+    grade: 4, side: 'm', name: '일류 · 명', label: '4명', wave: WAVE_4M,
     chain: { early: [0.25, 0.25, 0, 0, 0], damp: [0.6, 0.6, 0.56, 0.6, 0.6], amp: [1.1, 1.15, 1.1, 1, 1], coil: 0.55, shown: 0.65, back: 1.12, backLag: 1, firm: 1.08, spring: { down: 0.6, wait: true } },
     form: form({ guard: -0.3, chin: -0.5, lively: 0.5, dip: -0.03, drop: true, sep: 7, off: 0.07, with: 'hips', tuck: 4, look: 1, bend: 4, exit: 'roll', beat: 'on' }),
     // strong and weak, the lead foot's landing the heavy one; the head an end on every lead foot, under in between
@@ -304,7 +324,7 @@ export const LEVEL = {
     away: away({ jitter: 0.25, drop: 1.2 })
   },
   '5m': {
-    grade: 5, side: 'm', name: '전설 · 명', label: '5명',
+    grade: 5, side: 'm', name: '전설 · 명', label: '5명', wave: WAVE_5M,
     chain: { early: [0.4, 0.4, 0, 0, 0], damp: [0.6, 0.6, 0.5, 0.6, 0.6], amp: [1.15, 1.25, 1.18, 1, 1], coil: 0.2, shown: 0.55, back: 1.15, backLag: 1, firm: 1.2, spring: { down: 0.4 } },
     form: form({ guard: -0.4, chin: -0.6, lively: 0.7, dip: -0.04, drop: true, sep: 11, off: 0.1, with: 'legs', tuck: 6, look: 1, bend: 6, exit: 'angle', beat: 'off' }),
     // the lightest feet: a swung beat, a phrase that quickens, stops dead and breaks out into something

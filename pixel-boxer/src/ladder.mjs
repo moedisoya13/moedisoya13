@@ -329,6 +329,44 @@ export const MOVING = [
   { id: 'hopPivot', name: '피봇 아웃', en: 'Pivot out', from: 1.0, press: t => [[t, 'away', 'pivot'], [t, 'side', 1]] },
   { id: 'hopCircle', name: '서클 아웃', en: 'Circle out', from: 1.0, press: t => [[t, 'away', 'circle'], [t, 'side', 1]] }
 ];
+/* The wave (anim/clean.mjs, docs/moves-plan-5.md §4.1), a clean great one's own: 4명 and 5명 only, a card each. He starts at
+   the far end of the other man's reach and is given the wave's value (`away: 'wave'`, round to his left) for WAVE_HOLD of the
+   loop, and then not; the other man stands where he is in an amateur's stance (his head still) and turns to keep him in front
+   of him. The slick back: the same, and the other man, a pro, steps in at him with a jab once he is going (straight at the man going round him for 0.3 s from
+   the moment `jabAt` of the loop, the jab 0.2 s after he sets off: the step jab of tests/clean.test.mjs), and goes back to
+   his spot. Each loop is a fresh bout. */
+export const WAVE_HOLD = [0.3, 5.0];
+const WAVE_FROM = 1.62;
+export const WAVE_ROWS = [
+  { id: 'wave', name: '파도', en: 'The wave', loop: 6 },
+  { id: 'slick', name: '파도 · 슬릭백', en: 'The wave, slick back', loop: 3.2, jabAt: 2.0 }
+];
+export const WAVING = WAVE_ROWS.flatMap(row =>
+  ['4m', '5m'].map(lv => {
+    let bout = null;
+    return {
+      id: `${row.id}@${lv}`,
+      level: lv,
+      item: row.id,
+      name: `${row.name} ${LEVEL[lv].label}`,
+      en: `${row.en} · ${LEVEL[lv].name}`,
+      group: '명의 기술',
+      fresh: true,
+      loop: row.loop,
+      view: { yaw: 0.6, pitch: 0.7 },
+      me: t => (t === 0 ? [-WAVE_FROM, 0] : null),
+      // (a step jab: straight in at him for 0.3 s, the jab 0.2 s after he sets off, and back to his spot)
+      him: t => (row.jabAt && bout && t >= row.jabAt && t < row.jabAt + 0.3 ? [bout.fighters[0].x, bout.fighters[0].z] : [0, 0]),
+      setup: b => {
+        bout = b;
+        b.fighters[0].skills = { all: lv };
+        b.fighters[1].skills = row.jabAt ? { all: '3' } : { stance: '2' };
+      },
+      cue: (b, t) => (t >= WAVE_HOLD[0] && t < Math.min(WAVE_HOLD[1], row.loop - 0.9) ? ['away', 'wave'] : null),
+      against: row.jabAt ? [[row.jabAt + 0.2, 'jab']] : []
+    };
+  })
+);
 export const ENTRY = MOVING.flatMap(m =>
   LEVELS.map(lv => ({
     id: `${m.id}@${lv}`,
