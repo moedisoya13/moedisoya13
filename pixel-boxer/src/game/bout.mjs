@@ -4,7 +4,9 @@
                                      skills: [mine, his] (anim/skill.mjs: the grade each throws each move at, by name or
                                      `all`; a pro's if left out),
                                      knockdowns: true (a boxer who runs out of health goes down and the match counts him;
-                                     left out, he is knocked out and the bout is over) })
+                                     left out, he is knocked out and the bout is over),
+                                     techniques: [mine, his] (game/techniques.mjs: the techniques each carries, by id; what
+                                     his grades give him if left out: profile.mjs loadout) -> f.techniques })
      step(bout, [mine, his], dt)
      getUp(bout, f)         a man who has beaten the count gets up, where he lies, the way that fits how he lies (anim/
                             animator.mjs: getUp); -> the rise he starts
@@ -15,7 +17,10 @@
                    roll: 1 | -1 (bob and weave: down under it and up on his left or right), pull: true (the head swayed
                    back out of reach); duck with a dash ahead in the same tick is the duck in (duckIn: down and in under
                    the punches, to right up close); away: 'pivot' | 'circle' with side: 1 | -1 (his left or right) is
-                   moving off out of range with the guard let go of (hopPivot, hopCircle) }
+                   moving off out of range with the guard let go of (hopPivot, hopCircle);
+                   tech: id, body: true (the head's: the technique a press or a guard is meant as, and a punch for the body,
+                   game/techniques.mjs; carried on the press and the move it starts as f.action.asked, read by the motion
+                   built for it, and nothing else) }
      bout.events            what happened this step, for the picture and the sound (a dirty boxer's fouls among them:
                             { type: 'foul', name: stomp | thumb, who, on, J }; nobody penalises them). A punch that misses
                             says by how much (whiff: margin, metres between the glove's and the head's surfaces at the
@@ -47,7 +52,8 @@ import { createChain, stepChain, effectiveMass, preload } from '../phys/chain.mj
 import * as P from '../anim/pose.mjs';
 import { RING } from '../world/ring.mjs';
 import { LEN } from '../rig/solve.mjs';
-import { body, blank, fatigue, COST } from './profile.mjs';
+import { body, blank, fatigue, COST, loadout } from './profile.mjs';
+import { asked } from './techniques.mjs';
 import { levelOf } from '../anim/skill.mjs';
 import { timeline, evadeTime, progress, LOADED } from '../anim/evade.mjs';
 import { choose, THROWS, PAW, COLLAR, ELBOW } from '../anim/show.mjs';
@@ -108,6 +114,8 @@ export function createBout(seed, o) {
   /* (a show-off's tricks and taunts come up by his own dice, thrown from the bout's seed, in a real bout: o.vary. Scripts and
      tests name what they want instead: anim/show.mjs) */
   bout.fighters.forEach((f, i) => ((f.vary = !!o.vary), (f.luck = dice((seed || 1) * 31 + i * 7919 + 5))));
+  // (the techniques each carries: game/techniques.mjs)
+  bout.fighters.forEach((f, i) => (f.techniques = loadout(f.skills, (o.techniques || [])[i])));
   settle(bout);
   return bout;
 }
@@ -131,6 +139,12 @@ const punching = f => !!f.action && !!MOVES[f.action.name].punch;
 const EVADE = ['slip', 'duck', 'roll', 'pull'];
 const pressOf = input =>
   input.dash && input.duck && input.dash !== true ? ['duckIn', input.dash] : input.away ? [input.away === 'pivot' ? 'hopPivot' : 'hopCircle', input.side || 1] : input.dash ? ['dash', input.dash] : EVADE.find(n => input[n]) ? [EVADE.find(n => input[n]), input[EVADE.find(n => input[n])]] : input.jab ? ['jab', input.jab] : input.power ? ['power', input.power] : input.taunt ? ['taunt', input.taunt] : null;
+/* (a press carries what the head adds to it, game/techniques.mjs asked: the technique it is meant as, if his grade opens it,
+   and whether it is for the body; a press with neither is the press it always was) */
+const signed = (f, input, p) => {
+  const a = p && asked(f, input);
+  return a ? [p[0], p[1], a] : p;
+};
 // moving off somewhere as a move of its own: the dash, the duck in, and the two ways away
 const GOING = ['dash', 'duckIn', 'hopPivot', 'hopCircle'];
 /* The duck in ends right up close (centre to centre, short of it by his grade: skill.mjs, entry.stop), and goes there at
@@ -225,13 +239,13 @@ function plan(f, other, name, dir) {
 }
 
 function decide(bout, f, input, dt, who) {
-  const pressed = pressOf(input);
+  const pressed = signed(f, input, pressOf(input));
   // (a taunt is over the moment he does anything: a button, his guard, setting off: anim/show.mjs)
   if (f.action && MOVES[f.action.name].taunt && (pressed || input.cover || Math.hypot(...(input.move || [0, 0])) > 0.3)) f.action = null;
   if (pressed) (f.want = pressed), (f.wantAge = 0), (f.wantAt = bout.t);
   else if (f.want && (f.wantAge += dt) > RULES.buffer) f.want = null;
   if (f.want) {
-    const [what, dir] = f.want,
+    const [what, dir, sign] = f.want,
       punch = !GOING.includes(what) && !EVADE.includes(what) && what !== 'taunt';
     // (a man whose lead foot is stood on cannot dash or sway back off it, or go in or away; he can still slip and duck)
     if (f.pinned > 0 && (GOING.includes(what) || what === 'pull')) f.want = null;
@@ -298,6 +312,8 @@ function decide(bout, f, input, dt, who) {
         f.counter = 0;
         bout.events.push({ type: 'punch', who, name });
       }
+      // (what the head meant the press as, on the move it started: game/techniques.mjs)
+      if (sign && f.action) f.action.asked = sign;
     }
   }
   /* A stunned boxer can still pull his hands up (it is what a hurt man does) but not in time to turn a punch aside: his guard
@@ -1088,7 +1104,7 @@ export function step(bout, inputs, dt) {
     bout.stop -= dt;
     bout.fighters.forEach((f, i) => {
       const input = inputs[i] || {},
-        pressed = pressOf(input);
+        pressed = signed(f, input, pressOf(input));
       if (pressed && bout.over === null) (f.want = pressed), (f.wantAge = 0);
     });
     return bout;
