@@ -12,6 +12,8 @@
    and a hook reaches it only while his chest is turned open by his own cross, two frames into it (no later: his rear elbow
    comes round over it). A jab aimed low meets his lead forearm, and a cross gets there with little behind it.
      BODYSHOTS      the scripts: being hit on each place, going down from the liver, and the elbow block by grade
+     shot(e)        a script of that form: e.punch [the other man's punch, when], e.zone or e.aim the place, e.gap, e.press
+                    (the boxer's own), e.before (the other man's presses before it), e.keep (more to do each step)
      aimAt(place, name)   a script's `keep` that aims the other man's punch (that punch, if named) at that place (a place's
                     name, or [k, a]: trunk.mjs middle) */
 import { HOME } from './footwork.mjs';
@@ -30,7 +32,7 @@ export const aimAt = (place, name) => bout => {
 };
 // (the other man's chain started at the punch: the hook is the second of it, the uppercut the third)
 const LINK = { cross: null, hook: 0, upper: 1 };
-function shot(e) {
+export function shot(e) {
   const [punch, at] = e.punch,
     aim = aimAt(e.aim || e.zone, punch),
     more = e.keep;

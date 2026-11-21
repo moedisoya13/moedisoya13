@@ -17,8 +17,9 @@
              curled over it, the pelvis turned only `pelvis` of that: he doubles up, he does not bow), the hips back `back`
              metres, both knees `knees` degrees more; the head comes forward and down with it (about 6 to 9 cm at 85 N·s) and
              nods; both elbows come down round his belly, the gloves `hands` metres lower (his head left open), held a while
-     side    (the liver, the ribs) bent `bend` degrees down toward it and folded `forward` degrees, the hips `across` metres the
-             other way, the knee on that side `knee` degrees more, and only the elbow on that side down over it
+     side    (the liver, the ribs) bent `bend` degrees down toward it and folded `forward` degrees, the hips pushed `across`
+             metres the other way (the knee on that side, `knee` degrees more, takes them most of half of that back toward it:
+             about 3 cm is what shows), and only the elbow on that side down over it
      breath  the chest caved in once (`cave`) and back over 0.4 s, and then for `gasp` seconds a breath `quick` times as fast as
              a man at rest takes, short and hard
    The place's own share is the trunk's (game/trunk.mjs ZONES: the pit of the stomach folds him 1.3 times as far). */
@@ -32,7 +33,7 @@ export const FOLD = {
   ref: 85, most: 110,
   after: { hips: 0.03, head: 0.045, hands: 0.06 },
   fold: 12.3, pelvis: 0.25, back: 0.04, knees: 8,
-  bend: 12, forward: 8, across: 0.03, knee: 12,
+  bend: 12, forward: 8, across: 0.07, knee: 12,
   nod: 8, tilt: 6,
   hands: 0.06, inward: 0.03, home: 0.03, side: 0.1,
   cave: 0.012, gasp: 1.5, quick: 1.6
