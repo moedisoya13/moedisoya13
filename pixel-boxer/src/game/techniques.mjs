@@ -218,7 +218,8 @@ define('parryDown', {
   name: '다운패링 카운터', section: '§4.2', open: CLEAN, ready: true,
   // a jab at his head within reach (a legend's: a straight too): the guard put up as a parry's is (60% of his parries)
   answer: { of: 'parry', share: 0.6, when: s => s.inReach && s.head && (s.punch === 'jab' || (s.punch === 'straight' && gradeOf(s.me.skills, 'parryDown').grade === 5)), control: s => ({ cover: s.soon, tech: 'parryDown' }) },
-  // (pressed down, the bout opens him as a parry does; the counter goes from the hand that pressed it: stage F)
+  /* (built: anim/clean.mjs, the bout's f.pat. Pressed down, the bout opens him as a parry does, and a power punch in that
+     opening is the down parry's counter, from the hand that pressed it: a 4명's cross, a legend's jab and the cross after it) */
   counter: () => ({ power: true, tech: 'parryDown' })
 });
 
