@@ -205,6 +205,30 @@ test('collar: the lead hand catches the back of his neck, pulls his head down in
   }
 });
 
+/* The elbow: the cross thrown past the side of his head, and what lands is the elbow coming on behind it, inside the cross's
+   contact window (before the arm starts home: the hold a punch stays out for), and harder than the fist of the same cross
+   pressed plain from there. */
+test('elbow: the angled cross\'s elbow lands, inside the punch\'s contact window', () => {
+  for (const lv of LEVELS) {
+    const t = trick('elbow', lv),
+      hit = t.hits[0];
+    assert.ok(hit && hit.name === 'cross', `elbow@${lv}`);
+    if (!SHOW.includes(lv)) {
+      assert.ok(hit.part !== 'elbow', lv);
+      continue;
+    }
+    assert.equal(hit.part, 'elbow', `elbow@${lv}: ${JSON.stringify(hit)}`);
+    const plain = Object.assign({}, t.e, { press: t.e.press.map(([at, b]) => [at, b, 'plain']) }),
+      pf = run(plain).frames.flatMap((f, i) => f.events.map(ev => Object.assign({ i }, ev))),
+      p = pf.find(ev => ev.who === 0 && ev.type === 'hit'),
+      pms = msOf(null, pf.find(ev => ev.who === 0 && ev.type === 'punch'), p),
+      ms = msOf(t, t.punches[0], hit);
+    // (no sooner than the plain cross lands, and before the arm starts home: the hold a punch stays out for after it gets there)
+    assert.ok(ms >= pms && ms <= pms + LEVEL[lv].chain.hold * 1000 + 17, `elbow@${lv}: lands ${ms} ms after the press, the fist ${pms}`);
+    assert.ok(hit.J > p.J, `elbow@${lv}: ${hit.J} N·s against the fist's ${p.J}`);
+  }
+});
+
 test('flicker: the same bout goes the same way', () => {
   const once = () => run(SHOWOFF.find(x => x.id === 'flicker@5a')).frames.map(f => f.gloves.L.map(v => +v.toFixed(6)));
   assert.deepEqual(once(), once());

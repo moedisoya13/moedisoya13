@@ -12,7 +12,8 @@
      THROWS                    the punch each trick throws in place of the one pressed (where it changes it)
      PAW, paw(trick, t, glove, tier)   the guard pushed down or up (§5.3): where the lead hand goes for his glove, and how
                                much of the way
-     COLLAR, collar(t, foe)    the collar and uppercut (§5.3): the lead hand round his head to the back of his neck */
+     COLLAR, collar(t, foe)    the collar and uppercut (§5.3): the lead hand round his head to the back of his neck
+     ELBOW                     the elbow on the angled cross (§5.3) */
 
 const TAU = Math.PI * 2;
 const clamp = (x, a, b) => (x < a ? a : x > b ? b : x);
@@ -133,3 +134,12 @@ export function collar(t, foe) {
     to = [beside[0] + (nape[0] - beside[0]) * k, beside[1] + (nape[1] - beside[1]) * k, beside[2] + (nape[2] - beside[2]) * k];
   return { to, w };
 }
+
+/* The elbow on the angled cross: the cross thrown `wide` metres to his left of the middle of the other man's head (12 cm past
+   its side, the glove going by it), the elbow straightening only `extend` of the way, and the bent elbow coming on behind it
+   onto the chin: what lands is the root of the forearm (`r` metres thick, a ball `root` of the way from the elbow to the
+   wrist), judged as a glove is (game/bout.mjs), and the weight behind it is the arm's and the body's with no wrist to give
+   (phys/chain.mjs: effectiveMass, part 'elbow'). He steps in to `close` metres from the head as he throws it (from 0.75-0.85
+   centre to centre). A great dirty fighter lifts the elbow for it in the open (`raise`, [4암, 5암], the elbow channel); a
+   legend's is hardly lifted, the fist drawn back across as if from a miss (`draw`, metres). */
+export const ELBOW = { wide: 0.21, extend: [0.55, 0.5], r: 0.05, root: 0.2, close: 0.6, raise: [0.9, 0.3], draw: [0, 0.04] };

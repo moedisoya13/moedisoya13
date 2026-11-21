@@ -50,7 +50,7 @@ import { LEN } from '../rig/solve.mjs';
 import { body, blank, fatigue, COST } from './profile.mjs';
 import { levelOf } from '../anim/skill.mjs';
 import { timeline, evadeTime, progress, LOADED } from '../anim/evade.mjs';
-import { choose, THROWS, PAW, COLLAR } from '../anim/show.mjs';
+import { choose, THROWS, PAW, COLLAR, ELBOW } from '../anim/show.mjs';
 import { dice } from '../anim/stance.mjs';
 
 export const RULES = {
@@ -384,7 +384,7 @@ function travel(f, input, dt, other) {
       ox = head[0] - f.x,
       oz = head[2] - f.z,
       far = (Math.hypot(ox, oz) || 1) + 0.09,
-      close = Math.max(0, Math.min(RULES.stepIn * (f.action.counter ? 1.5 : 1), (far - MOVES[f.action.name].close) * 9));
+      close = Math.max(0, Math.min(RULES.stepIn * (f.action.counter ? 1.5 : 1), (far - (f.action.variant === 'elbow' ? ELBOW.close : MOVES[f.action.name].close)) * 9));
     if (far < MOVES[f.action.name].reach + 0.6) (ix = (ox / far) * close), (iz = (oz / far) * close);
   }
   // (the step in is the legs driving him: it gathers speed and sheds it at most as fast as they can, and is not a jump)
@@ -435,10 +435,14 @@ function advance(bout, f, dt, who) {
   if (move.punch) {
     const was = f.action.chain.phase,
       now = stepChain(f.action.chain, move, dt);
+    // (a show-off's elbow comes on behind the fist after it has got there: it has missed only once the arm starts home)
+    const ends = f.action.variant === 'elbow' ? was === 'hold' && now !== 'hold' : was === 'throw' && now !== 'throw';
     if (was === 'throw' && now !== 'throw') {
       f.sinceLast = 0;
       // (a flicker's hand has got there: pressed again soon enough, it goes again)
       if (move.name === 'flicker' && f.flicks) f.flicks.at = bout.t;
+    }
+    if (ends) {
       if (!f.action.struck) {
         const near = f.action.near,
           e = { type: 'whiff', who, name: move.name, margin: near ? +near.gap.toFixed(4) : null };
@@ -556,6 +560,8 @@ function viewOf(bout, i) {
            not at a head that has gone down under it (that is what the uppercut is for) */
         low = move.arm === 'swing' ? Math.max(h[1] - RULES.jaw, f.points.head[1] - RULES.hookDrop) : h[1];
       view.aim = move.arm === 'swing' ? [side + from * 0.05, low, front - 0.1] : move.arm === 'lift' ? [side, h[1] - 0.1, front - 0.07] : [side, h[1], front - 0.075];
+      // (a show-off's elbow: the cross thrown past the side of his head, anim/show.mjs)
+      if (f.action.variant === 'elbow') view.aim = [side + ELBOW.wide, h[1] + 0.16, front - 0.075];
       /* Once the joint that steers it has fired the punch is committed: it goes where the head was then, and a head that has
          moved since is missed. That is what a slip is. (Up to then he is still looking, and a punch follows a head that
          drifts.) A straight punch and an uppercut are steered by the shoulder to the last; a hook is an arm locked to a
@@ -710,15 +716,20 @@ function trickOf(f, other, button, name, forced) {
 // a forearm, as the bout reckons it in the way: so many balls from the elbow to the glove, each as thick as the forearm
 const FOREARM = { n: 6, r: 0.045 };
 function strike(bout, f, other, who, dt) {
-  const action = incoming(f);
+  // (a show-off's elbow lands as it comes on behind the fist, the arm out: anim/show.mjs)
+  const action = incoming(f) || (f.action && f.action.variant === 'elbow' && !f.action.struck && f.action.chain.phase === 'hold' ? f.action : null);
   if (!action || !f.before || !other.before || other.down) return;
   const move = MOVES[action.name],
     hand = move.hand,
-    g0 = f.before[hand],
-    g1 = f.points[hand];
+    // (what lands: the glove; of a show-off's elbow, the root of the forearm, a ball as thick as it: anim/show.mjs)
+    elbow = action.variant === 'elbow' && f.before[hand + 'E'],
+    root = (p, k) => M.lerp(p[hand + 'E'], p[hand], k),
+    g0 = elbow ? root(f.before, ELBOW.root) : f.before[hand],
+    g1 = elbow ? root(f.points, ELBOW.root) : f.points[hand],
+    gr = elbow ? ELBOW.r : RULES.glove;
   // (how near it has come to his head so far: a punch that misses says by how much, and whether his head was only just clear)
   {
-    const gap = closest(g0, g1, other.before.head, other.points.head) - RULES.glove - RULES.head;
+    const gap = closest(g0, g1, other.before.head, other.points.head) - gr - RULES.head;
     if (!action.near || gap < action.near.gap) {
       /* (and whether a defence started a frame later would have met it: his head getting away from the glove less than a
          frame's worth faster than the gap it leaves, the last frame of his window) */
@@ -745,7 +756,7 @@ function strike(bout, f, other, who, dt) {
       to = M.add(S, M.scale(d, (Math.min(l, LEN.upperArm + LEN.foreArm - 0.03) + 0.075) / l));
     }
     const head = other.points.head,
-      clear = segment(head, g1, to) - RULES.glove - RULES.head,
+      clear = segment(head, g1, to) - gr - RULES.head,
       p = progress(away),
       moved = Math.hypot(head[0] - away.head0[0], head[1] - away.head0[1], head[2] - away.head0[2]);
     if (p.k >= 0.3 || !p.going) {
@@ -765,23 +776,23 @@ function strike(bout, f, other, who, dt) {
     const s = meets(g0, g1, c0, c1, r, what === 'head' ? RULES.touch * dt : -Infinity);
     if (s >= 0 && (!first || s < first.s)) first = { what, key, s, c0, c1 };
   };
-  test('head', 'head', RULES.glove + RULES.head);
+  test('head', 'head', gr + RULES.head);
   // (the gloves are in the way once they have got most of the way up: how quickly is his grade's)
   const guard = levelOf(other.skills, 'cover').cover;
   if (other.cover && other.animator.covered >= RULES.guardUp) {
     // (a fist coming down as a hammer is the hammer's, below, not a glove held in the way)
-    for (const key of ['L', 'R']) if (!(key === 'R' && guard.hammer && other.animator.hammering)) test('guard', key, RULES.glove * 2);
+    for (const key of ['L', 'R']) if (!(key === 'R' && guard.hammer && other.animator.hammering)) test('guard', key, RULES.glove + gr);
     /* (a show-off's crossed arms: the forearms are in the way too, from the elbow to the glove, a capsule as thick as the
        forearm and the glove coming at it: anim/show.mjs) */
     if (guard.cross && other.before.LE && !other.animator.hammering)
       for (const key of ['L', 'R'])
         for (let i = 0; i < FOREARM.n; i++) {
           const k = i / FOREARM.n;
-          test('guard', key, RULES.glove + FOREARM.r, M.lerp(other.before[key + 'E'], other.before[key], k), M.lerp(other.points[key + 'E'], other.points[key], k));
+          test('guard', key, gr + FOREARM.r, M.lerp(other.before[key + 'E'], other.before[key], k), M.lerp(other.points[key + 'E'], other.points[key], k));
         }
   }
   // (a show-off's guard put up fresh is a hammer of his rear fist: it turns a punch aside only if it comes down on the glove)
-  if (guard.hammer && other.cover && other.animator.hammering) test('hammer', 'R', RULES.glove * 2);
+  if (guard.hammer && other.cover && other.animator.hammering) test('hammer', 'R', RULES.glove + gr);
   if (!first) return;
 
   // ---- the blow: how fast the glove is closing on what it hit, and how much is behind it
@@ -792,7 +803,7 @@ function strike(bout, f, other, who, dt) {
     n = M.scale(line, 1 / ll),
     closing = M.scale(M.sub(M.sub(g1, g0), M.sub(first.c1, first.c0)), 1 / dt),
     speed = Math.max(0, closing[0] * n[0] + closing[1] * n[1] + closing[2] * n[2]),
-    mass = effectiveMass(action.chain, move),
+    mass = effectiveMass(action.chain, move, elbow ? 'elbow' : 'glove'),
     // (his power is how much of his body he gets behind it; a tired man gets less)
     J = mass * speed * (1 + RULES.bounce) * f.k.power * (0.85 + 0.15 * fatigue(f)),
     flat = Math.hypot(n[0], n[2]) || 1,
@@ -800,10 +811,12 @@ function strike(bout, f, other, who, dt) {
     // (vec: the way the glove was going as it met him, as he would see it coming: what a blow throws off him goes that way)
     cl = Math.hypot(closing[0], closing[1], closing[2]),
     vec = cl > 1e-6 ? M.scale(closing, 1 / cl) : n,
-    blow = { who, on: 1 - who, name: move.name, kind: move.kind, hand, J: +J.toFixed(1), speed: +speed.toFixed(2), mass: +mass.toFixed(2), dir, vec, at: M.add(at, M.scale(n, RULES.glove)) };
+    blow = { who, on: 1 - who, name: move.name, kind: move.kind, hand, J: +J.toFixed(1), speed: +speed.toFixed(2), mass: +mass.toFixed(2), dir, vec, at: M.add(at, M.scale(n, gr)), variant: action.variant || undefined, part: elbow ? 'elbow' : 'glove' };
   action.struck = true;
   action.chain.landed = true;
   action.chain.v[3] = action.chain.v[4] = 0; // the arm is stopped by what it hit
+  // (an elbow that has landed comes away off his jaw at once: the arm starts home, it does not lean on into his head)
+  if (elbow) (action.chain.phase = 'recover'), (action.chain.since = 0);
   f.sinceLast = 0;
   // (a touch on the head is nothing; on the gloves it is still met, however early and slow: turned aside or smothered)
   if (J < RULES.graze && first.what === 'head') return bout.events.push(Object.assign({ type: 'graze' }, blow));
@@ -850,7 +863,7 @@ function strike(bout, f, other, who, dt) {
     other.animator.brace({ J, hand: first.key, dir: felt.dir, level: levelOf(other.skills, 'cover') });
     bout.stop = stop * 0.4;
     // (and what of his guard it met: a glove, or a show-off's crossed forearm)
-    return bout.events.push(Object.assign({ type: 'block', part: first.c0 === other.before[first.key] ? 'glove' : 'forearm' }, blow));
+    return bout.events.push(Object.assign({ type: 'block' }, blow, { part: first.c0 === other.before[first.key] ? 'glove' : 'forearm' }));
   }
   const counter = !!action.counter,
     worth = J * (counter ? RULES.counterGain : 1),

@@ -214,7 +214,7 @@ export function stepChain(c, move, dt) {
      move.chain.locked: the arm is held bent and stiff (hook, uppercut), so it carries the body from the start */
 const MASS = { fist: 0.75, forearm: 1.2, upper: 2.0, trunk: 32, legs: 25 };
 const FRESH = 0.11; // seconds a joint's turn stays behind the punch after its peak
-export function effectiveMass(c, move) {
+export function effectiveMass(c, move, part) {
   const spec = move.chain,
     // (a beginner's wrist and elbow give at the contact, and the weight behind them leaks out; a great puncher's do not)
     stiff = (spec.locked ? 0.85 : smooth((c.q[4] - 0.25) / 0.55)) * (c.firm || 1),
@@ -223,6 +223,9 @@ export function effectiveMass(c, move) {
     hips = behind(1) * Math.min(1, (Math.abs(spec.turn[0]) * amp[1]) / 30),
     trunk = behind(2) * Math.min(1, (Math.abs(spec.turn[1]) * amp[2]) / 30),
     legs = behind(0) * Math.min(1, amp[0]);
+  /* (an elbow, a show-off's (anim/show.mjs): no wrist or forearm to give, and the lever from the shoulder short: the upper arm
+     and more of the body behind it than behind a fist) */
+  if (part === 'elbow') return MASS.forearm * 0.5 + MASS.upper * 0.8 + MASS.trunk * 0.07 * (hips + trunk) + MASS.legs * 0.04 * legs;
   return MASS.fist + MASS.forearm * (0.4 + 0.6 * stiff) + stiff * (MASS.upper * 0.5 + MASS.trunk * 0.05 * (hips + trunk) + MASS.legs * 0.03 * legs);
 }
 // where a joint comes in the order it is thrown in (0 first)

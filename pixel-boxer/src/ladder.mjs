@@ -135,7 +135,8 @@ export const TRICKS = [
   { id: 'flicker', punch: 'jab', button: 'jab', range: 0.985, name: '플리커', en: 'Flicker', again: [0.3, 0.6] },
   { id: 'pawDown', punch: 'cross', button: 'power', range: 0.985, name: '가드 내리고 치기', en: 'Paw down and cross', guarded: true },
   { id: 'pawUp', punch: 'upper', button: 'power', range: 0.835, name: '가드 올리고 치기', en: 'Lift the guard and uppercut', guarded: true, second: 1 },
-  { id: 'collar', punch: 'upper', button: 'power', range: 0.74, name: '뒷목 잡고 어퍼', en: 'Collar and uppercut', second: 1 }
+  { id: 'collar', punch: 'upper', button: 'power', range: 0.74, name: '뒷목 잡고 어퍼', en: 'Collar and uppercut', second: 1 },
+  { id: 'elbow', punch: 'cross', button: 'power', range: 0.8, name: '엘보 스트레이트', en: 'Elbow on the cross' }
 ];
 export const SHOWOFF = TRICKS.flatMap(tq =>
   LEVELS.map(lv => ({

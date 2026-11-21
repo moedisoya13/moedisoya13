@@ -36,7 +36,7 @@ import { LEVEL } from './skill.mjs';
 import { H, headAt, headTo, phraseX, PHRASE, FLOURISH, CLEAN, DIRTY, dice } from './stance.mjs';
 import { sampleEvade, EVASIONS, timeline, evadeTime } from './evade.mjs';
 import { travel as legendTravel, dash as legendDash, dashShape } from './legend.mjs';
-import { stance as showStance, crossGuard, hammer, paw, PAW, collar, COLLAR } from './show.mjs';
+import { stance as showStance, crossGuard, hammer, paw, PAW, collar, COLLAR, ELBOW } from './show.mjs';
 
 const TAU = Math.PI * 2;
 /* The feet keep time. One beat is one foot coming down; a cycle is both. Standing, the boxer rocks between his feet on that
@@ -1712,6 +1712,13 @@ export function createAnimator(seed) {
         c.le += 0.9 * collaring.w;
       }
       const reach = pawing || collaring;
+      // (the elbow lifted for it, a great dirty fighter's in the open; a legend's fist drawn back across as if from a miss)
+      if (punchMove && action.variant === 'elbow') {
+        const n = Math.max(0, (form.dirty || 1) - 1),
+          go = smooth(clamp(action.chain.q[3], 0, 1));
+        c.re += ELBOW.raise[n] * go;
+        c.rx += ELBOW.draw[n] * go;
+      }
       for (const side of ['L', 'R']) {
         const k = side === 'L' ? 'l' : 'r',
           s = side === 'L' ? 1 : -1,
@@ -1729,7 +1736,9 @@ export function createAnimator(seed) {
           const chain = action.chain,
             shoulder = M.add(chest.p, M.app(chest.R, M.sub(TPOSE[(side === 'L' ? 'Left' : 'Right') + 'Arm'], TPOSE.Chest))),
             swingQ = clamp(chain.q[3], 0, 1.06),
-            extend = clamp(chain.q[4], 0, 1.05);
+            // (a show-off's elbow: the arm only part straightened, the bent elbow coming on behind the fist: show.mjs)
+            elbowed = action.variant === 'elbow' ? Math.max(0, (form.dirty || 1) - 1) : -1,
+            extend = clamp(chain.q[4], 0, 1.05) * (elbowed >= 0 ? ELBOW.extend[elbowed] : 1);
           let thrown;
           if (mine.arm === 'straight') {
             // the shoulder turns the arm onto the line of the target; the elbow straightens it along that line
