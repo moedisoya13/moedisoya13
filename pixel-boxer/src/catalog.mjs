@@ -17,8 +17,9 @@ import { guardPose } from './anim/animator.mjs';
 import { step } from './game/bout.mjs';
 
 import { ENTRIES, freshBout, drive } from './footwork.mjs';
-import { DEFENSE, ITEMS as GUARDS } from './defense.mjs';
-import { LADDER, STANCES, DIRTY, FOOTWORK, PUNCHES, TECHNIQUES, ENTRY, MOVING, TRICKS, SHOWOFF, TAUNT_ROWS, TAUNTING } from './ladder.mjs';
+import { DEFENSE, ITEMS as GUARDS, PARRY_DOWN, CROSS_ARM, ROLLING, CROSS_LEVELS, ROLL_LEVELS } from './defense.mjs';
+import { LADDER, STANCES, DIRTY, FOOTWORK, PUNCHES, TECHNIQUES, ENTRY, MOVING, TRICKS, SHOWOFF, TAUNT_ROWS, TAUNTING, BODY_PUNCHES, BODY_LADDER, REAR, REAR_LADDER, WAVE_ROWS, WAVING } from './ladder.mjs';
+import { BODYSHOTS, LIVER_BLOCK } from './bodyshots.mjs';
 import { LEVELS, LEVEL } from './anim/skill.mjs';
 import { LINKS } from './phys/chain.mjs';
 import { MOVES } from './anim/moves.mjs';
@@ -34,12 +35,17 @@ const JOINT = { drive: '다리', hips: '엉덩이', trunk: '몸통', shoulder: '
 const SPAN = 0.3; // seconds of a punch the chain timeline under a rung shows
 // what became of the punch, as the card says it
 const SAID = { whiff: '빗나감', graze: '스침', block: '막음', parry: '패리', hit: '명중' };
+// what met it (a block's part), as the card says it
+const MET = { glove: '글러브', forearm: '팔뚝', elbow: '팔꿈치', shoulder: '어깨' };
 // a frame count as a card writes it: +4, −3 (a frame before the press: a guess)
 const signed = (n, bare) => (n < 0 ? `−${-n}` : bare ? `${n}` : `+${n}`);
+// a window of frames as a card writes it: 2–4, or 3 for one frame
+const span = w => (w[0] === w[1] ? signed(w[0], true) : `${signed(w[0], true)}–${signed(w[1], true)}`);
 const FOOTWORK_STATS = ['pendulum', 'inout', 'stalk', 'side', 'circle', 'turn', 'dash', 'stepjab', 'onetwo'];
 // (the dashes each way are dash cards)
 const STAT = { bounce: 'stance', dashIn: 'dash', dashSide: 'dash' };
-const byId = Object.fromEntries([...ENTRIES, ...DEFENSE, ...STANCES, ...LADDER, ...DIRTY, ...FOOTWORK, ...ENTRY, ...SHOWOFF, ...TAUNTING].map(e => [e.id, e]));
+// (the liver block cards have no punch of the other man's to fight round: each loop is a fresh bout all the same)
+const byId = Object.fromEntries([...ENTRIES, ...DEFENSE, ...STANCES, ...LADDER, ...DIRTY, ...FOOTWORK, ...ENTRY, ...SHOWOFF, ...TAUNTING, ...BODY_LADDER, ...REAR_LADDER, ...BODYSHOTS, ...LIVER_BLOCK.map(e => Object.assign({}, e, { fresh: true })), ...WAVING, ...PARRY_DOWN, ...CROSS_ARM, ...ROLLING].map(e => [e.id, e]));
 
 /* ---- what is in the catalogue: parts, and in each the techniques, each a row of seven grades (or, being hit, one card) */
 const FOOT_NOTE = {
@@ -49,7 +55,7 @@ const FOOT_NOTE = {
   side: '가는 쪽 발이 먼저 벌어지고 반대 발이 간격을 되찾습니다. 1은 발이 모이고, 2는 붙였다 벌리고, 3부터 폭을 지킵니다. 5명·5암은 서클링처럼 걸음마다 얕은 위빙을 합니다. 카드 아래는 가장 좁아진 폭과 두 발의 좌우가 뒤집힌 적이 있는지입니다.',
   circle: '상대를 가운데 두고 호를 그립니다. 1은 가슴이 0.3초 늦게 따라가고, 2와 암은 12°가 벌어지면 한 번에 돌아서고, 3부터 가슴이 계속 상대를 향합니다. 5명은 발이 닿을 때마다 머리가 그 발 쪽으로 얕은 U를 그리고(좌우 10 cm 남짓, 무릎으로 7 cm, 네 걸음에 한 번은 더 깊게) U의 바닥이 발 착지에 옵니다. 그 U가 들어갈 자리를 위해 옆으로 갈 때의 걸음이 느립니다. 5암은 바닥이 착지에서 어긋나고, 크기와 방향이 들쭉날쭉하고, 가끔 앞어깨 페이크가 섞입니다. 카드 아래는 가슴과 상대 사이 각의 최대값입니다.',
   turn: '상대가 옆으로 돌아 나가면 제자리에서 발을 옮겨 정면을 되찾습니다. 1은 늦게, 2와 암은 기다렸다 한 번에, 3부터 작은 피벗을 이어서 따라갑니다. 카드 아래는 정면 오차의 최대값입니다.',
-  stalk: '가드를 올린 채 짧은 걸음으로 밀고 들어갑니다. 가드의 모양은 그 등급의 가드입니다(1은 눈을 가리고, 4암은 팔뚝을 포갬). 카드 아래는 걸음 중 가장 좁아진 폭입니다.',
+  stalk: '가드를 올린 채 짧은 걸음으로 밀고 들어갑니다. 가드의 모양은 그 등급의 가드입니다(1은 눈을 가리고, 4암·5암은 고전형 크로스암으로 뒷 글러브는 턱 앞, 앞팔은 배 앞). 카드 아래는 걸음 중 가장 좁아진 폭입니다.',
   dash: '한 박자에 크게 빠집니다. 미는 다리 무릎이 두 프레임에 굽었다 펴지며 밀고, 내려서는 다리 무릎이 굽어 받습니다. 1은 가라앉지 않고 선 채로 뛰어 손이 벌어지고 내려서 비틀거리며, 2는 먼저 일어섰다 밀고 납작하게 섭니다. 4암·5암은 미끄러지듯 낮게, 5명은 돌아선 채 내려섭니다. 5명은 턱을 묻고 뒷무릎에 앉으며 상체가 뒤로 누운 채(스웨이) 빠지고, 내려서며 왼쪽으로 한 번 슬립합니다. 5명은 발이 닿는 박자에 대시합니다. 거리는 등급이 바꾸지 않습니다. 카드 아래는 골반이 가장 높이 오르거나 내려간 양과 다시 움직일 수 있기까지의 시간입니다.',
   dashIn: '한 박자에 크게 들어갑니다(상대는 닿지 않는 2.3 m에). 5명·5암은 더킹 대시의 작은 형태입니다: 무릎으로 머리가 가드보다 10 cm 남짓 내려가고 오른쪽(상대 잽의 바깥)으로 비켜서 들어가며, 내려설 때 무릎이 +15° 굽은 채 남아 그 안에 누른 주먹은 감기를 다시 하지 않고 나갑니다. 5암은 크기와 때가 들쭉날쭉합니다. 카드 아래는 골반이 가장 높이 오르거나 내려간 양과 다시 움직일 수 있기까지의 시간입니다.',
   dashSide: '한 박자에 크게 왼쪽으로 빠집니다. 5명·5암은 대시와 위빙이 한 동작입니다: 가는 쪽 반대편에서 밑으로(깊이 10 cm 남짓) 돌아 가는 쪽으로 올라옵니다. 카드 아래는 골반이 가장 높이 오르거나 내려간 양과 다시 움직일 수 있기까지의 시간입니다.',
@@ -96,8 +102,66 @@ const footRow = e => ({
   stat: STAT[e.id] || e.id,
   cards: LEVELS.map(lv => (e.id === 'bounce' ? `stance@${lv}` : `${e.id}@${lv}`))
 });
+/* the plan 5 rows (docs/moves-plan-5.md §3, §4, §4A): the body punches, the rear hook, a clean great one's own techniques,
+   the cross-arm guard and the shoulder roll */
+const BODY_NOTE = {
+  jabBody: '앞손 잽을 명치로. 두 무릎으로 내려가며 같은 잽을 낮게 뻗습니다(팔은 곧게). 상대는 아마추어 자세로 서서 가드를 들고 맞기만 합니다. 카드 아래는 충격량, 닿기까지, 닿는 순간 머리가 가드 높이에서 내려간 거리, 골반이 돈 각입니다.',
+  crossBody: '뒷손 스트레이트를 명치로. 두 무릎이 더 깊이 굽어 어깨가 과녁 높이까지 내려가고 팔은 수평으로 뻗습니다. 내려간 머리는 실제로 내려가 있어, 던지는 동안 상대의 잽이 그 위로 지나갈 수 있습니다.',
+  hookBody: '앞손 훅을 간으로. 훅은 자기 머리보다 5 cm 넘게 낮게 휘두를 수 없어, 감는 동안 앞무릎으로 내려가고 앞손 쪽 옆구리를 굽혀 같은 높이의 훅을 던집니다. 팔꿈치를 굳혀 가슴에 붙이고 몸통이 휘두르며, 휘두르는 길에서 간에 닿습니다. 1은 무릎 대신 허리를 숙이고 팔을 내려 휘두르며, 2는 내려간 자세에서 멈칫하고 치고, 3은 감는 동안 내려가고, 4명은 발 착지에 맞춰 내려가 얼굴을 보며 치고, 암은 낮은 자세에서 거의 내려가지 않습니다. 프로의 리버 훅은 80 N·s 넘게, 누른 뒤 0.17~0.22초에 닿습니다.',
+  upperBody: '초근거리(0.64 m)의 어퍼를 명치로. 숏 어퍼처럼 두 무릎으로 내려갔다가 펴며, 주먹이 허리띠에서 명치로 올라옵니다.',
+  hookR: '뒷손 훅. 강타 연타에는 없고, 풀백 뒤의 반격과 숄더 롤 뒤의 반격(다음 단계)이 이 주먹을 이름으로 누릅니다. 여기서는 0.8 m에서 머리로 칩니다. 이 훅에 다운되면 오른쪽으로 쓰러지고, 실신이면 통나무 · 훅의 거울(고개가 오른쪽으로)입니다.'
+};
+const CLEAN_NOTE = {
+  wave: '상대 사거리 끝(1.6 m 남짓)에서 크게 도는 서클링. 손을 내리고(4명은 가드보다 20 cm, 5명은 30 cm 넘게 아래) 상체를 세운 채, 두 발이 벌어졌다 모이는 한 번에 머리가 한 번 오르내립니다. 4명은 0.87초마다 고르게, 5명은 물결마다 길이가 다릅니다. 디딘 발은 미끄러질 수 없어 1 cm 든 낮은 걸음으로 끌고, 도는 빠르기는 초속 0.86 m입니다(기획은 1.9~2.2). 4명·5명이 이 기술을 가졌을 때만 타고, 그 밖에는 서클 아웃입니다. 카드 아래는 물결 하나의 길이, 깊이, 상대와의 거리입니다.',
+  slick: '파도를 타는 중에 프로가 걸어 들어오며 잽을 칩니다. 상체를 뒤로 눕혀(슬릭백) 잽을 흘려보내고 파도는 이어집니다. 걸어 들어오는 잽을 4명은 물결의 60%, 5명은 80%에서 빗나가게 하고(서 있는 그에게는 같은 잽이 맞습니다), 서 있는 자리에서 친 잽은 닿지 않습니다. 1.2 m에서 시작한 스트레이트는 머리를 따라와 맞습니다: 파도가 비워 두는 곳입니다. 카드 아래는 잽이 빗나간 거리와 그때 두 사람 사이의 거리입니다.',
+  parryDown: PARRY_DOWN[0].note
+};
+const CROSS_NOTE = {
+  crossArm: '고전형 크로스암 가드(아치 무어·켄 노턴·포먼). 가드를 올리면 뒷 글러브는 턱 앞에, 앞팔은 배 앞에 가로로 눕히고, 옆으로 서서 앞어깨를 올리고 턱을 당깁니다. 고르는 기술이라 가진 선수만 들고, 기본 로드아웃에서는 4암·5암이 갖습니다(이 줄은 3·4명·5명에게도 줌; 1·2는 가져도 안 나옴). 같은 프로의 스트레이트가 뒷 글러브에 막힙니다. 3은 4암의 모양에 앞팔이 2 cm 낮고 막기만 하며, 4명·5명은 자기 패리, 4암·5암은 해머링 패리입니다. 카드 아래는 블록 충격량과 막은 곳입니다.',
+  'crossArm-hook': '같은 가드로 스트레이트와 그 뒤의 앞손 훅을 받습니다. 훅이 출발하면(4암·4명 0.09초, 5암·5명 0.05초, 3은 0.12초 뒤) 뒷 글러브가 0.04초에 걸쳐 귀 위로 올라가 막습니다(웅크린 머리에 훅은 정수리 옆으로 옵니다). 이 움직임이 없으면 다섯 등급 모두 훅에 맞습니다. 어퍼도 이 가드의 뒷 글러브에 막힙니다(4차의 "엇갈린 팔 밑으로 올라오는 어퍼"는 뒤집혔습니다).',
+  rollCounter: '스트레이트에 가드를 숄더 롤로 올립니다. 상체를 뒤로 눕히고 오른쪽으로 꺾으며 체중을 뒷발로 싣고, 앞어깨를 더 올리고 턱을 묻고, 주먹이 닿을 때 가슴이 오른쪽으로 가장 빨리 돕니다. 어깨선이 초당 200° 넘게 돌고 있을 때 앞어깨에 닿으면 굴린 것이고(체력은 블록의 절반), 굴려진 스트레이트는 0.3초 뻗은 채 묶입니다. 구간이 1~3프레임으로 좁아, 이르면 서 있는 어깨에 맞고(블록의 2배) 늦으면 상체를 꺾은 만큼 빗나갑니다. 4명·4암·5명·5암이 이 기술을 가졌을 때만이고, 반격(뒷손 훅)은 다음 단계입니다. 카드 아래는 구간, 닿는 순간 글러브와 머리 사이의 여유, 충격량입니다.'
+};
+const graded = (e, note, stat, levels, more) => Object.assign({ id: e.id, name: e.name, en: e.en, note, stat, cards: levels.map(lv => `${e.id}@${lv}`) }, more);
+const single = e => ({ id: e.id, name: e.name, en: e.en, single: true });
+
+/* ---- what is new or changed since the catalogue was last published (commit 7302f18), by row: measured, not guessed. Every
+   script was fought there and here (node tools/events.mjs at both, then --diff): a row is changed where the events of a card
+   of it (what became of each punch, on which frame, how hard, on what) or the guard the man holds came out otherwise, and
+   cards says which of its cards; a row whose script is not there is new. The note says what changed, in a line. */
+const SINCE = {
+  // changed
+  stalk: { since: 'changed', cards: ['4a', '5a'], note: '4암·5암이 고전형 크로스암으로 밀고 들어감: 앞 글러브가 눈썹 위에서 배 앞(머리 아래 47~51 cm)으로, 뒷 글러브는 턱 앞으로' },
+  duck: { since: 'changed', cards: ['4a', '5a'], note: '4암·5암이 앞의 스트레이트를 팔뚝(4·6 N·s)이 아니라 크로스암의 뒷 글러브(16·15 N·s)로 받음, 구간 −12~0 → −11~0, −13~1 → −11~0' },
+  roll: { since: 'changed', cards: ['1', '2', '4a', '5a'], note: '1·2단계 위빙이 훅 밑으로 빠져 피함(전에는 46·41 N·s 명중, 구간 없음 → −11~−10, −11~−9), 4암·5암은 앞의 스트레이트를 뒷 글러브로' },
+  parry: { since: 'changed', cards: ['4a', '5a'], note: '4암·5암의 해머링 패리가 턱 앞에서 출발: 구간 −7~0 → 0~2, −3~−1 → 0~4, 쳐내는 충격량 8·3 → 45·39 N·s' },
+  block: { since: 'changed', cards: ['4a', '5a'], note: '4암·5암의 스트레이트가 팔뚝(13 N·s)이 아니라 고전형 크로스암의 뒷 글러브(18 N·s)에 막힘' },
+  guard: { since: 'changed', cards: ['4a', '5a'], note: '4암·5암이 잽·잽·스트레이트를 팔뚝(3·2·18, 4·0·21 N·s)이 아니라 뒷 글러브(29·3·16, 29·24·17 N·s)로 막음' },
+  'out-limp': { since: 'changed', note: '림프 실신이 훅이 아니라 4명의 어퍼에서: 들렸다가 아래에서부터 천천히 풀림(훅은 통나무 · 훅으로)' },
+  // new
+  'out-twist': { since: 'new', note: '훅 실신: 고개가 돌아간 채 굳어 앞발 바깥날로 옆으로 넘어감' },
+  jabBody: { since: 'new', note: '바디 주먹(머리가 고름): 명치로 낮게 뻗는 잽' },
+  crossBody: { since: 'new', note: '바디 주먹: 어깨까지 내려가 수평으로 뻗는 스트레이트' },
+  hookBody: { since: 'new', note: '바디 주먹: 무릎으로 내려가 간을 치는 훅' },
+  upperBody: { since: 'new', note: '바디 주먹: 초근거리에서 명치로 올리는 어퍼' },
+  'body-solar': { since: 'new', note: '몸통 판정: 명치에 맞으면 앞으로 접히고 글러브가 내려감' },
+  'body-liver': { since: 'new', note: '몸통 판정: 간에 맞으면 그쪽으로 꺾임' },
+  'body-ribs': { since: 'new', note: '몸통 판정: 갈비에 맞으면 그쪽으로 꺾임' },
+  'down-liver': { since: 'new', note: '간에 70 N·s 넘게: 0.4초 뒤 무릎으로, 의식이 있어 일어남' },
+  'block-elbow': { since: 'new', note: '간을 노린 훅을 팔꿈치·아래팔이 막음, 등급은 내리는 때' },
+  'block-liver': { since: 'new', note: '리버 훅을 내려가는 몸에서 읽고 팔꿈치를 내려 막음' },
+  hookR: { since: 'new', note: '뒷손 훅: 풀백·숄더 롤 반격이 누르는 주먹' },
+  wave: { since: 'new', note: '4명·5명 전용: 손을 내리고 크게 도는 서클링' },
+  slick: { since: 'new', note: '파도 중에 걸어 들어오는 잽을 뒤로 눕혀 흘림' },
+  parryDown: { since: 'new', note: '4명·5명 전용: 잽을 위에서 눌러 내리고 그 손으로 반격' },
+  crossArm: { since: 'new', note: '고르는 기술이 된 고전형 크로스암, 3·4명·5명도 가지면 듦' },
+  'crossArm-hook': { since: 'new', note: '앞손 훅에 뒷 글러브가 귀 위로 올라가 막음' },
+  rollCounter: { since: 'new', note: '스트레이트를 앞어깨로 굴려 흘림(반격은 다음 단계)' }
+};
+const SINCE_SAID = { new: '새', changed: '바뀜' };
+
 const PARTS = [
   {
+    id: 'footwork',
     part: '풋워크',
     note: '모든 기술은 다섯 단계이고, 4와 5에는 깔끔한 정도(명)와 더티 복싱(암) 두 갈래가 있어 일곱 장이 두 장씩 놓입니다. 일곱 장은 같은 대본을 한 시계로 돌리므로, 다른 것은 그리로 가는 몸뿐입니다. 발자국의 노란색은 앞발, 파란색은 뒷발이고, L 카드의 빨간 등불은 강박(앞발 착지)에 켜집니다.',
     groups: [
@@ -108,46 +172,105 @@ const PARTS = [
     ].map(([group, ids]) => [group, ids.map(id => footRow(ENTRIES.find(e => e.id === id)))])
   },
   {
+    id: 'defense',
     part: '수비',
     note: '상대는 일곱 장 모두 같은 프로(3단계)이고 같은 순간에 같은 주먹을 던집니다. 수비하는 쪽은 그 등급 자기 구간의 가운데에서 누르고(구간은 tools/windows.mjs로 잰 값), 피했는지 막았는지는 글러브와 머리의 실제 접촉입니다. 아슬아슬하게 피하고 0.4초 안에 장전된 카운터가 나간 수비는 그 카드에서만 1/4 속도로 다시 보여 줍니다.',
     groups: ['피하기', '막기', '카운터'].map(group => [group, GUARDS.filter(i => i.group === group).map(i => ({ id: i.id, name: i.name, en: i.en, note: i.note, stat: i.id, cards: LEVELS.map(lv => `${i.id}@${lv}`) }))])
   },
   {
+    id: 'punches',
     part: '주먹',
     note: '차이는 데미지 배율이 아니라 관절이 움직이는 순서와 협응, 리듬에서 나옵니다. 충격량은 곱해 준 값이 아니라 그렇게 던진 결과이고, 막대는 관절마다 출발에서 정점까지, 세로선은 닿은 순간, 시간은 누른 뒤부터입니다. 머리는 닿는 순간 머리가 자기 가드 자리에서 선 밖으로 벗어난 거리, 골반은 가장 많이 돈 각입니다.',
     groups: [
       ['주먹', PUNCHES.filter(p => !p.inside).map(p => ({ id: p.id, name: p.name, en: p.en, note: PUNCH_NOTE[p.id], stat: 'rung', cards: LEVELS.map(lv => `${p.id}@${lv}`) }))],
       ['초근거리', PUNCHES.filter(p => p.inside).map(p => ({ id: p.id, name: p.name, en: p.en, note: PUNCH_NOTE[p.id], stat: 'rung', knee: p.id === 'upperIn', cards: LEVELS.map(lv => `${p.id}@${lv}`) }))],
+      ['뒷손 훅', REAR.map(p => graded(p, BODY_NOTE[p.id], 'rung', LEVELS))],
       ['암의 기술', TECHNIQUES.map(t => ({ id: t.id, name: t.name, en: t.en, note: TECH_NOTE[t.id], stat: 'foul', cards: LEVELS.map(lv => `${t.id}@${lv}`) }))]
     ]
   },
   {
+    id: 'body',
+    part: '바디샷',
+    note: '몸통도 맞는 곳입니다. 허리에서 가슴까지를 공 다섯 개로 잇고, 닿은 점을 가슴이 보는 방향으로 읽어 간(그의 오른쪽), 명치(정면), 갈비(왼쪽)로 나눕니다. 몸통은 체력을 머리의 60%만 깎고 숨을 깎으며(간이 가장 많이), 실신은 없습니다. 바디 주먹은 기술이 아니라 기본 동작이고 시합에서는 머리가 콤비네이션의 주먹마다 고릅니다. 몸통은 가드 글러브가 아니라 팔꿈치와 아래팔이 막습니다. 주먹 줄의 상대는 아마추어 자세로 서서 맞기만 하고, 막기 줄의 상대는 프로입니다.',
+    groups: [
+      ['바디 주먹', BODY_PUNCHES.map(p => graded(p, BODY_NOTE[p.id], 'rung', LEVELS, { drop: true, knee: !!p.inside }))],
+      ['맞는 곳', BODYSHOTS.filter(e => !e.level && e.group === '맞기').map(single)],
+      ['팔꿈치 블록', [BODYSHOTS.find(e => e.item === 'block-elbow'), LIVER_BLOCK[0]].map(e => graded({ id: e.item, name: e.name, en: e.en }, e.note, 'met', LEVELS))],
+      ['리버 다운', BODYSHOTS.filter(e => e.liver).map(single)]
+    ]
+  },
+  {
+    id: 'clean',
+    part: 'L 전용 기술',
+    note: '4명과 5명만 여는 기술입니다. 조작이 없는 오토배틀러라 기본 동작이 아닌 것은 선수가 로드아웃에 갖고 머리가 고르는 기술이고(game/techniques.mjs), 카드는 기술을 이름으로 불러 머리의 주사위를 거치지 않습니다. 한 줄에 4명과 5명 두 장입니다.',
+    groups: [
+      ['파도', WAVE_ROWS.map(r => graded(r, CLEAN_NOTE[r.id], r.id === 'slick' ? 'slick' : 'wave', ['4m', '5m']))],
+      ['다운패링 카운터', [graded({ id: 'parryDown', name: '다운패링 카운터', en: 'Down parry and counter' }, CLEAN_NOTE.parryDown, 'parryDown', ['4m', '5m'])]]
+    ]
+  },
+  {
+    id: 'cross',
+    part: '크로스암 가드 · 숄더 롤',
+    note: '크로스암 가드와 숄더 롤은 고르는 기술입니다. 카드의 선수는 등급과 함께 그 기술을 받고, 상대는 프로입니다. 크로스암은 주사위가 없어 가진 선수의 가드가 늘 그 모양이고, 숄더 롤은 머리가 스트레이트의 다리가 발사되는 순간 고릅니다. 수비 줄의 4암·5암 카드도 이 가드입니다.',
+    groups: [
+      ['크로스암 가드', ['crossArm', 'crossArm-hook'].map(id => CROSS_ARM.find(e => e.item === id)).map(e => graded({ id: e.item, name: e.name, en: e.en }, CROSS_NOTE[e.item], 'met', CROSS_LEVELS))],
+      ['숄더 롤', [graded({ id: 'rollCounter', name: '숄더 롤', en: 'The shoulder roll' }, CROSS_NOTE.rollCounter, 'rolled', ROLL_LEVELS)]]
+    ]
+  },
+  {
+    id: 'showoff',
     part: '과시형 암',
-    note: '4암과 5암은 과시형입니다. 앞손을 허리에 내리고(진자처럼 흔들림) 상체를 뒤로 눕히고 턱을 내밀며, 가드는 팔을 엇갈리고, 막 올린 가드는 뒷손으로 내려찍는 패리입니다(수비의 4암·5암 카드). 버튼을 누르면 조건이 맞을 때 시드에서 나온 확률로 기술이 바뀌고, 동작이 없을 때와 특정 순간에 도발합니다. 카탈로그는 기술과 도발을 지정해서 돌립니다. 일곱 장 가운데 기술은 4암·5암에만 있고, 나머지 등급은 같은 자리에서 같은 버튼의 보통 동작을 합니다. 상대는 프로입니다.',
+    note: '4암과 5암은 과시형입니다. 앞손을 허리에 내리고(진자처럼 흔들림) 상체를 뒤로 눕히고 턱을 내밀며, 가드는 고전형 크로스암(뒷 글러브는 턱 앞, 앞팔은 배 앞)이고, 막 올린 가드는 턱 앞에서 출발해 뒷손으로 내려찍는 패리입니다(수비의 4암·5암 카드). 버튼을 누르면 조건이 맞을 때 시드에서 나온 확률로 기술이 바뀌고, 동작이 없을 때와 특정 순간에 도발합니다. 카탈로그는 기술과 도발을 지정해서 돌립니다. 일곱 장 가운데 기술은 4암·5암에만 있고, 나머지 등급은 같은 자리에서 같은 버튼의 보통 동작을 합니다. 상대는 프로입니다.',
     groups: [
       ['기술', TRICKS.map(t => ({ id: t.id, name: t.name, en: t.en, note: TRICK_NOTE[t.id], stat: 'trick', cards: LEVELS.map(lv => `${t.id}@${lv}`) }))],
       ['도발', TAUNT_ROWS.map(t => ({ id: t.id, name: t.name, en: t.en, note: TAUNT_NOTE[t.id], stat: 'taunt', cards: LEVELS.map(lv => `${t.id}@${lv}`) }))]
     ]
   },
   {
+    id: 'moving',
     part: '진입 · 이탈',
     note: '들어갈 때는 머리를 주먹 선 밑으로 낮춰 파고들고, 나올 때는 가드를 풀고 발목으로 튀어 사거리 밖으로 나갑니다. 어디까지 가는지는 시합이 정하고, 카드는 루프마다 새 시합에서 다시 칩니다. 상대는 프로이고 서 있기만 합니다.',
     groups: [['진입 · 이탈', MOVING.map(m => ({ id: m.id, name: m.name, en: m.en, note: MOVE_NOTE[m.id], stat: 'moving', cards: LEVELS.map(lv => `${m.id}@${lv}`) }))]]
   },
   {
+    id: 'hurt',
     part: '맞기와 다운',
-    note: '맞는 반응과 다운은 등급을 매기지 않습니다. 충격량과 그 방향이 만드는 것이고, 등급이 바꾸는 것은 맞기 직전의 자세뿐입니다. 한 장씩 놓습니다.',
-    single: true,
-    groups: ['맞기', '다운'].map(group => [group, DEFENSE.filter(e => !e.level && e.group === group).map(e => e.id)])
+    note: '맞는 반응과 다운은 등급을 매기지 않습니다. 충격량과 그 방향이 만드는 것이고, 등급이 바꾸는 것은 맞기 직전의 자세뿐입니다. 한 장씩 놓습니다. 실신은 주먹마다 다릅니다: 스트레이트는 통나무, 훅은 고개가 돌아간 통나무, 어퍼는 들렸다가 천천히 풀리는 림프입니다.',
+    groups: [
+      ['맞기', DEFENSE.filter(e => !e.level && e.group === '맞기').map(single)],
+      ['다운', DEFENSE.filter(e => !e.level && e.group === '다운' && !e.out).map(single)],
+      ['실신', DEFENSE.filter(e => !e.level && e.out).map(single)]
+    ]
   }
 ];
+for (const P of PARTS)
+  for (const [, items] of P.groups)
+    for (const item of items) {
+      const s = SINCE[item.id];
+      if (s) Object.assign(item, { since: s.since, sinceNote: s.note, sinceCards: s.cards || null });
+    }
 
-/* ---- the page, written from the parts (so the page and the bouts cannot disagree about what is in the catalogue) */
+/* ---- the page, written from the parts (so the page and the bouts cannot disagree about what is in the catalogue): the
+   contents first, a link to every part and every row (and to each row that is new or changed, with what changed), and each
+   row's heading carrying its anchor (row-<id>) and its mark */
 const main = document.getElementById('catalog'),
-  ROWS = []; // { item, cells }
+  ROWS = [], // { item, ids }
+  badge = s => (s ? `<span class="since ${s}">${SINCE_SAID[s]}</span>` : ''),
+  esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+function contents() {
+  const toc = document.getElementById('toc'),
+    marked = PARTS.flatMap(P => P.groups.flatMap(([, items]) => items.filter(i => i.since).map(i => Object.assign({ part: P.part }, i))));
+  toc.innerHTML = `<h2 class="toc-title">차례</h2>
+    <p class="legend"><span>${badge('new')} 지난 게시본(<code>7302f18</code>)에 없던 줄</span><span>${badge('changed')} 같은 대본을 그때와 지금 돌려, 주먹이 어떻게 됐는지(명중·막음·패리·빗나감, 그 프레임과 충격량)나 든 가드의 모양이 달라진 줄</span></p>
+    <details class="changes" open><summary>이번에 새로 들어오고 바뀐 것: 새 줄 <b>${marked.filter(i => i.since === 'new').length}</b> · 바뀐 줄 <b>${marked.filter(i => i.since === 'changed').length}</b></summary>
+      <ul>${marked.sort((x, y) => (x.since === y.since ? 0 : x.since === 'changed' ? -1 : 1)).map(i => `<li>${badge(i.since)}<a href="#row-${i.id}">${i.name}</a><span>${esc(i.sinceNote)}</span></li>`).join('')}</ul></details>
+    <ol class="toc-parts">${PARTS.map(P => `<li><a class="toc-part" href="#part-${P.id}">${P.part}</a><ul class="toc-rows">${P.groups.flatMap(([, items]) => items).map(i => `<li><a href="#row-${i.id}">${i.name}${badge(i.since)}</a></li>`).join('')}</ul></li>`).join('')}</ol>`;
+}
+contents();
 for (const P of PARTS) {
   const head = document.createElement('h2');
   head.className = 'part';
+  head.id = `part-${P.id}`;
   head.textContent = P.part;
   main.append(head);
   const note = document.createElement('p');
@@ -157,26 +280,31 @@ for (const P of PARTS) {
   for (const [group, items] of P.groups) {
     const section = document.createElement('section');
     section.innerHTML = `<h2>${group}</h2>`;
-    if (P.single) {
+    const singles = items.filter(i => i.single),
+      rows = items.filter(i => !i.single);
+    if (singles.length) {
       const grid = document.createElement('div');
       grid.className = 'grid';
-      for (const id of items) grid.append(singleCard(byId[id]));
+      for (const i of singles) grid.append(singleCard(byId[i.id], i));
       section.append(grid);
-      ROWS.push(...items.map(id => ({ item: { id, stat: 'single' }, ids: [id] })));
-    } else
-      for (const item of items) {
-        const block = document.createElement('div');
-        block.className = 'item';
-        block.dataset.item = item.id;
-        block.innerHTML = `<div class="item-head"><h3>${item.name} <span class="en">${item.en}</span></h3><p>${item.note}</p></div><div class="row7" role="list"></div>`;
-        for (const id of item.cards) block.lastElementChild.append(gradeCard(byId[id], item));
-        section.append(block);
-        ROWS.push({ item, ids: item.cards });
-      }
+      ROWS.push(...singles.map(i => ({ item: Object.assign({}, i, { stat: 'single' }), ids: [i.id] })));
+    }
+    for (const item of rows) {
+      const block = document.createElement('div');
+      block.className = 'item' + (item.since ? ' since-' + item.since : '');
+      block.dataset.item = item.id;
+      block.id = `row-${item.id}`;
+      block.innerHTML = `<div class="item-head"><h3>${item.name}${badge(item.since)} <span class="en">${item.en}</span></h3>${item.since ? `<p class="since-note">${esc(item.sinceNote)}</p>` : ''}<p>${item.note}</p></div><div class="row7" role="list"></div>`;
+      for (const id of item.cards) block.lastElementChild.append(gradeCard(byId[id], item));
+      section.append(block);
+      ROWS.push({ item, ids: item.cards });
+    }
     main.append(section);
   }
 }
 shownAsLD(document.body);
+// (opened at a row's address: the page is written by now, so go there; the browser's own jump came before it was)
+if (location.hash && document.getElementById(location.hash.slice(1))) document.getElementById(location.hash.slice(1)).scrollIntoView();
 
 /* On the page the two branches of grades 4 and 5 read L (명, clean) and D (암, dirty); the data keeps 명 and 암.
    A Korean particle after the letter follows how it is said: L ends in a consonant (엘), D in a vowel (디). */
@@ -265,7 +393,7 @@ function gradeCard(e, item) {
     case 'rung': {
       const skip = MOVES[e.punch].chain.skip || [];
       stats = `<div class="chain">${LINKS.map((l, i) => `<span class="row${skip.includes(l) ? ' off' : ''}"><i>${JOINT[l]}</i><span class="lane"><b data-bar="${i}"></b></span></span>`).join('')}<span class="hit-at" data-at></span></div>
-        <div class="feet result"><span><b data-blow>–</b> N·s</span><span class="pace"><b data-ms>–</b> ms</span></div>` + (item.knee ? pair('무릎 <b data-knee>–</b>°', '골반 <b data-turn>–</b>°') : pair('머리 <b data-off>–</b> cm', '골반 <b data-turn>–</b>°')) + (beat ? `<div class="feet stats">${beat}<span>닿은 박자 <b data-on>–</b></span></div>` : '');
+        <div class="feet result"><span><b data-blow>–</b> N·s</span><span class="pace"><b data-ms>–</b> ms</span></div>` + (item.knee ? pair('무릎 <b data-knee>–</b>°', '골반 <b data-turn>–</b>°') : pair('머리 <b data-off>–</b> cm', '골반 <b data-turn>–</b>°')) + (item.drop ? pair('머리 하강 <b data-drop>–</b> cm') : '') + (beat ? `<div class="feet stats">${beat}<span>닿은 박자 <b data-on>–</b></span></div>` : '');
       break;
     }
     case 'foul':
@@ -277,19 +405,39 @@ function gradeCard(e, item) {
     case 'taunt':
       stats = pair(level.stance.show ? item.name : '도발 없음', '<b data-a>–</b> 초');
       break;
+    // (plan 5: a block that says what met it; the shoulder roll; the wave and its slick back; the down parry)
+    case 'met':
+      stats = `<div class="feet result"><span class="tag" data-tag>–</span></div>` + pair('<b data-a>–</b> N·s', '<b data-b>–</b>');
+      break;
+    case 'rolled':
+      stats = `<div class="feet result"><span class="tag" data-tag>–</span></div>` + pair(`<b>${e.window ? span(e.window) : '–'}</b> f`, '여유 <b data-a>–</b> cm') + pair('<b data-b>–</b> N·s');
+      break;
+    case 'wave':
+      stats = pair('물결 <b data-a>–</b> 초', '깊이 <b data-b>–</b> cm') + pair('거리 <b data-c>–</b> m');
+      break;
+    case 'slick':
+      stats = `<div class="feet result"><span class="tag" data-tag>–</span></div>` + pair('여유 <b data-a>–</b>', '거리 <b data-b>–</b> m');
+      break;
+    case 'parryDown':
+      stats = `<div class="feet result"><span class="tag" data-tag>–</span></div>` + pair(`<b>${span(e.window)}</b> f`, '반격 <b data-a>–</b> ms') + pair('<b data-b>–</b> N·s');
+      break;
   }
-  card.innerHTML = `<div class="stage" role="img" aria-label="${item.name} ${level.label} 애니메이션"><span class="replay" hidden>리플레이 ¼</span></div>
+  // (a card of a changed row that came out otherwise than it did: its own mark)
+  const changed = item.sinceCards && item.sinceCards.includes(e.level);
+  if (changed) card.classList.add('changed');
+  card.innerHTML = `<div class="stage" role="img" aria-label="${item.name} ${level.label} 애니메이션"><span class="replay" hidden>리플레이 ¼</span>${changed ? '<span class="mark">바뀜</span>' : ''}</div>
     <div class="info"><h3>${level.label} <span class="en">${level.name}</span></h3>${stats}${beat && FOOTWORK_STATS.includes(item.stat) ? `<div class="feet">${beat}<span>강박</span></div>` : ''}</div>`;
   return card;
 }
-// a card on its own (being hit, going down)
-function singleCard(e) {
+// a card on its own (being hit, going down), its anchor and its mark with it
+function singleCard(e, item = {}) {
   const card = document.createElement('article');
-  card.className = 'card';
+  card.className = 'card' + (item.since ? ' since-' + item.since : '');
   card.dataset.entry = e.id;
+  card.id = `row-${e.id}`;
   card.innerHTML = `<div class="stage" role="img" aria-label="${e.name} 애니메이션"></div>
-    <div class="info"><h3>${e.name} <span class="en">${e.en}</span></h3><p>${e.note}</p>
-      ${e.status ? `<div class="feet result"><span class="tag">${e.status}</span></div>` : `<div class="feet result"><span class="tag" data-tag>–</span><span class="pace"><b data-blow>–</b> N·s</span></div>`}${e.out ? `<div class="feet stats"><span>머리가 닿기까지 <b data-a>–</b> s</span></div>` : ''}</div>`;
+    <div class="info"><h3>${e.name}${badge(item.since)} <span class="en">${e.en}</span></h3>${item.since ? `<p class="since-note">${esc(item.sinceNote)}</p>` : ''}<p>${e.note}</p>
+      ${e.status ? `<div class="feet result"><span class="tag">${e.status}</span></div>` : `<div class="feet result"><span class="tag" data-tag>–</span><span class="pace"><b data-blow>–</b> N·s</span></div>`}${e.out ? `<div class="feet stats"><span>머리가 닿기까지 <b data-a>–</b> s</span></div>` : ''}${e.liver ? `<div class="feet stats"><span>무릎이 닿기까지 <b data-a>–</b> s</span></div>` : ''}</div>`;
   return card;
 }
 
@@ -354,7 +502,7 @@ function start({ manifest, boxer }) {
       replayTag: q(el, '.replay'),
       lamps: { L: q(el, '[data-lamp="L"]'), R: q(el, '[data-lamp="R"]') },
       beat: q(el, '[data-beat]'),
-      out: Object.fromEntries(['a', 'b', 'pace', 'blow', 'ms', 'hips', 'head', 'on', 'fj', 'fat', 'off', 'turn', 'knee'].map(k => [k, q(el, `[data-${k}]`)])),
+      out: Object.fromEntries(['a', 'b', 'c', 'pace', 'blow', 'ms', 'hips', 'head', 'on', 'fj', 'fat', 'off', 'turn', 'knee', 'drop'].map(k => [k, q(el, `[data-${k}]`)])),
       bars: [...el.querySelectorAll('[data-bar]')],
       at: q(el, '[data-at]'),
       exchange: entry.punch !== undefined || !!entry.fresh,
@@ -405,7 +553,8 @@ function start({ manifest, boxer }) {
       newHalf = m.halves !== undefined && r.halves !== m.halves;
     for (const e of bout.events) {
       const by = e.type === 'parry' ? e.on : e.who;
-      if (by === 1 && SAID[e.type]) tell(cell, e.down ? (e.out ? '실신' : '다운') : SAID[e.type] + (e.brilliant ? '!' : ''), e.J);
+      // (rolled off the shoulder, pressed down: said as such)
+      if (by === 1 && SAID[e.type]) tell(cell, e.down && e.type !== 'parry' ? (e.out ? '실신' : '다운') : e.roll ? '굴림' : e.type === 'parry' && e.down ? '눌러 내림' : SAID[e.type] + (e.brilliant ? '!' : ''), e.J);
       // (a defence found brilliant after the event it was: the counter decides it)
       if (e.type === 'brilliant' && e.who === 0 && cell.tag) tell(cell, SAID[e.of] + '!');
       // the blow itself, as the game shows it: sparks and sweat sized by its impulse, and the picture shaken
@@ -478,6 +627,7 @@ function start({ manifest, boxer }) {
           const guard = guardOf(entry.level),
             side = MOVES[entry.punch].hand === 'R' ? 1 : -1;
           put(cell, 'off', (side * (across(a, b, a.points.head) - guard.head) * 100).toFixed(1));
+          put(cell, 'drop', ((guard.headY - a.points.head[1]) * 100).toFixed(1));
           put(cell, 'turn', String(Math.round(m.most)));
           if (cell.out.on) {
             const u = a.animator.rhythm.u,
@@ -494,8 +644,24 @@ function start({ manifest, boxer }) {
         }
         break;
       case 'single':
-        // (knocked out cold: from the blow to his head on the canvas)
-        if (entry.out && e.type === 'hit' && e.who === 1 && e.down) m.downAt = cell.t;
+        // (knocked out cold: from the blow to his head on the canvas; down from the liver: to his knee on it)
+        if ((entry.out || entry.liver) && e.type === 'hit' && e.who === 1 && (e.down || entry.liver)) m.downAt = cell.t;
+        break;
+      case 'met':
+        // (the last block of the exchange: how hard, and what met it)
+        if (e.type === 'block' && e.who === 1) put(cell, 'a', String(Math.round(e.J))), put(cell, 'b', MET[e.part] || e.part || '–');
+        if (e.type === 'hit' && e.who === 1) put(cell, 'a', String(Math.round(e.J))), put(cell, 'b', '맞음');
+        break;
+      case 'rolled':
+        if (e.type === 'block' && e.who === 1) put(cell, 'a', e.margin === undefined ? '–' : (e.margin * 100).toFixed(1)), put(cell, 'b', String(Math.round(e.J)));
+        break;
+      case 'slick':
+        if ((e.type === 'whiff' || e.type === 'hit' || e.type === 'graze') && e.who === 1) put(cell, 'a', e.type === 'whiff' && e.margin !== undefined ? `${(e.margin * 100).toFixed(1)} cm` : '맞음'), put(cell, 'b', Math.hypot(a.x - b.x, a.z - b.z).toFixed(2));
+        break;
+      case 'parryDown':
+        // (on the bout's clock, as tests/clean.test.mjs times it: the moments held at a blow are not counted)
+        if (e.type === 'parry' && e.on === 1 && e.down) m.downAt = cell.bout.t;
+        if (e.type === 'hit' && e.who === 0 && m.downAt !== undefined && !m.said) (m.said = true), put(cell, 'a', String(Math.round((cell.bout.t - m.downAt) * 1000))), put(cell, 'b', String(Math.round(e.J)));
         break;
       case 'trick':
         if (e.type === 'punch' && e.who === 0 && m.press === null) m.press = cell.t;
@@ -535,9 +701,24 @@ function start({ manifest, boxer }) {
       case 'taunt':
         if (m.tauntAt !== undefined && m.tauntLen === undefined && !(a.action && MOVES[a.action.name].taunt)) (m.tauntLen = cell.t - m.tauntAt), put(cell, 'a', m.tauntLen.toFixed(2));
         break;
-      case 'single':
-        if (m.downAt !== undefined && m.headDown === undefined && a.points.head[1] < 0.16) (m.headDown = cell.t - m.downAt), put(cell, 'a', m.headDown.toFixed(2));
+      case 'single': {
+        // (his head on the canvas; from the liver, the lower of his knees on it)
+        const low = entry.liver ? Math.min(...['LeftShin', 'RightShin'].map(k => toWorld(a.place, a.pose.at[k], 1)[1])) : a.points.head[1];
+        if (m.downAt !== undefined && m.headDown === undefined && low < (entry.liver ? 0.12 : 0.16)) (m.headDown = cell.t - m.downAt), put(cell, 'a', m.headDown.toFixed(2));
         break;
+      }
+      case 'wave': {
+        // a wave's length and depth (his head from its highest to its lowest in it), from one wave of his to the next
+        const w = a.animator.wave,
+          y = a.points.head[1];
+        if (w && w.k !== m.k) {
+          if (m.k !== undefined && m.k >= 1 && m.kAt !== undefined) (m.waves = (m.waves || []).concat([[cell.t - m.kAt, m.hi - m.lo]]).slice(-4)), put(cell, 'a', (m.waves.reduce((s, x) => s + x[0], 0) / m.waves.length).toFixed(2)), put(cell, 'b', (m.waves.reduce((s, x) => s + x[1], 0) / m.waves.length * 100).toFixed(1));
+          (m.k = w.k), (m.kAt = cell.t), (m.hi = -9), (m.lo = 9);
+        }
+        if (w) (m.hi = Math.max(m.hi, y)), (m.lo = Math.min(m.lo, y));
+        if (every && w) put(cell, 'c', Math.hypot(a.x - b.x, a.z - b.z).toFixed(2));
+        break;
+      }
       case 'stance': {
         m.track.push([a.pose.at.Hips[1] * a.pose.stretch, across(a, b, a.points.head)]);
         if (m.track.length > 240) m.track.shift();
@@ -757,8 +938,8 @@ function start({ manifest, boxer }) {
     prints = !prints;
     toggle.setAttribute('aria-pressed', String(prints));
   });
-  // (for looking at the page from a script: every row stepped on by so many seconds at once)
-  globalThis.__catalog = { cells, rows, renderer: R, advance: sec => rows.forEach(row => { for (let i = 0; i < Math.round(sec / DT); i++) stepRow(row); }) };
+  // (for looking at the page from a script: every row, or those of the items named, stepped on by so many seconds at once)
+  globalThis.__catalog = { cells, rows, renderer: R, advance: (sec, only) => rows.filter(row => !only || only.includes(row.item.id)).forEach(row => { for (let i = 0; i < Math.round(sec / DT); i++) stepRow(row); }) };
   theme();
   document.getElementById('loading').hidden = true;
   requestAnimationFrame(frame);

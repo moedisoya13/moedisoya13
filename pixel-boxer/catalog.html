@@ -11,15 +11,15 @@
      the punch) under it */
   :root {
     --bg: #e9ebf2; --card: #f7f8fb; --fg: #151826; --dim: #5a6077; --line: #c6cada;
-    --accent: #c42a30; --lead: #c98a12; --rear: #2a78c8;
+    --accent: #c42a30; --lead: #c98a12; --rear: #2a78c8; --new: #17794a; --changed: #a85200;
     --display: "Black Han Sans", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
     --body: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
     --data: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
   }
   @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) { --bg: #0d0f19; --card: #151826; --fg: #f1f2f7; --dim: #9aa1b8; --line: #2a2f45; --accent: #f05a4a; --lead: #ffc24a; --rear: #8ecbff; color-scheme: dark; }
+    :root:not([data-theme="light"]) { --bg: #0d0f19; --card: #151826; --fg: #f1f2f7; --dim: #9aa1b8; --line: #2a2f45; --accent: #f05a4a; --lead: #ffc24a; --rear: #8ecbff; --new: #5fd39a; --changed: #ffad5c; color-scheme: dark; }
   }
-  :root[data-theme="dark"] { --bg: #0d0f19; --card: #151826; --fg: #f1f2f7; --dim: #9aa1b8; --line: #2a2f45; --accent: #f05a4a; --lead: #ffc24a; --rear: #8ecbff; color-scheme: dark; }
+  :root[data-theme="dark"] { --bg: #0d0f19; --card: #151826; --fg: #f1f2f7; --dim: #9aa1b8; --line: #2a2f45; --accent: #f05a4a; --lead: #ffc24a; --rear: #8ecbff; --new: #5fd39a; --changed: #ffad5c; color-scheme: dark; }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--fg); font: 400 15px/1.55 var(--body); }
   /* one canvas behind everything: each card's stage is a window onto it */
@@ -95,10 +95,41 @@
   .item-head h3 { font-size: 24px; }
   .item-head p { margin: 0; max-width: 92ch; color: var(--dim); font-size: 14px; }
   .row7 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-  .card.rung .stage { position: relative; }
+  .card.rung .stage, .card .stage { position: relative; }
   .replay { position: absolute; left: 6px; top: 6px; font: 600 11px/1 var(--body); letter-spacing: .06em; padding: 4px 6px; background: var(--accent); color: var(--bg); }
   .replay[hidden] { display: none; }
   footer { background: var(--bg); color: var(--dim); font-size: 13px; max-width: 70ch; }
+  /* the contents: every part and every row, a jump away; what is new or changed since the last published catalogue marked */
+  .toc { background: var(--bg); border-top: 1.5px solid var(--line); border-bottom: 1.5px solid var(--line); padding: 14px 0 16px; display: flex; flex-direction: column; gap: 12px; }
+  .toc-title { margin: 0; padding: 0; border: 0; font: 400 26px/1.1 var(--display); letter-spacing: .02em; color: var(--fg); }
+  .legend { margin: 0; display: flex; flex-wrap: wrap; gap: 6px 18px; color: var(--dim); font-size: 13px; }
+  .legend span { min-width: 0; }
+  .legend code { font: 500 12px/1 var(--data); }
+  .toc-parts { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap: 14px 24px; }
+  .toc-parts > li { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+  .toc a { color: var(--fg); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  .toc a:focus-visible, .to-toc:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .toc-part { font: 400 19px/1.2 var(--display); letter-spacing: .02em; }
+  .toc-rows { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 5px; }
+  .toc-rows a { display: inline-flex; align-items: center; gap: 5px; min-height: 30px; padding: 4px 8px; border: 1.5px solid var(--line); background: var(--card); font-size: 13px; line-height: 1.25; overflow-wrap: anywhere; }
+  .changes { border: 1.5px solid var(--line); background: var(--card); }
+  .changes summary { cursor: pointer; padding: 10px 12px; font: 600 14px/1.3 var(--body); }
+  .changes summary b { font: 500 13px/1 var(--data); }
+  .changes ul { list-style: none; margin: 0; padding: 0 12px 12px; display: flex; flex-direction: column; gap: 7px; font-size: 13px; color: var(--dim); }
+  .changes li { min-width: 0; overflow-wrap: anywhere; }
+  .changes li a { font-weight: 600; margin: 0 6px 0 4px; }
+  /* the mark: new, or changed (on the row's heading, in the contents, on the card that came out otherwise) */
+  .since { display: inline-block; vertical-align: .2em; margin-left: 6px; padding: 2px 5px; font: 600 10px/1 var(--body); letter-spacing: .04em; border: 1.5px solid currentColor; white-space: nowrap; }
+  .toc-rows .since, .changes .since { margin-left: 0; vertical-align: 0; }
+  .since.new { color: var(--new); }
+  .since.changed { color: var(--changed); }
+  .item-head .since-note, .info .since-note { margin: 0; font-size: 13px; color: var(--fg); padding-left: 8px; border-left: 3px solid var(--changed); }
+  .since-new .since-note { border-left-color: var(--new); }
+  .card.changed { border-color: var(--changed); }
+  .mark { position: absolute; right: 6px; top: 6px; font: 600 11px/1 var(--body); letter-spacing: .06em; padding: 4px 6px; background: var(--changed); color: var(--bg); }
+  [id^="row-"], h2.part, #toc { scroll-margin-top: 12px; }
+  .to-toc { position: fixed; right: max(12px, env(safe-area-inset-right, 0px)); bottom: calc(14px + env(safe-area-inset-bottom, 0px)); z-index: 2; background: var(--fg); color: var(--bg); font: 600 12px/1 var(--body); letter-spacing: .04em; padding: 10px 12px; text-decoration: none; }
   #loading { position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 2; background: var(--fg); color: var(--bg); font: 500 12px/1 var(--data); padding: 9px 12px; }
   @media (prefers-reduced-motion: reduce) { .lamp.on, .result .tag.on { animation: none; } }
 </style>
@@ -108,13 +139,14 @@
 <div class="page">
   <header>
     <h1>모션 <em>카탈로그</em></h1>
-    <p class="lede">복서의 발은 박자를 탑니다. 제자리 바운스에서 스텝, 주먹까지 같은 박자가 이어지고, 그 위에서 주먹을 피하고, 막고, 맞고, 쓰러집니다. 기술마다 일곱 단계(1 입문, 2 아마추어, 3 프로, 4명·4암 일류, 5명·5암 전설)가 한 줄로 놓입니다. 아래 동작은 녹화가 아니라 지금 계산되고 있는 실제 시합입니다. 피했는지 맞았는지는 글러브가 머리에 실제로 닿았는지로 정해집니다.</p>
+    <p class="lede">복서의 발은 박자를 탑니다. 제자리 바운스에서 스텝, 주먹까지 같은 박자가 이어지고, 그 위에서 주먹을 피하고, 막고, 맞고, 쓰러집니다. 기술마다 일곱 단계(1 입문, 2 아마추어, 3 프로, 4명·4암 일류, 5명·5암 전설)가 한 줄로 놓입니다. 아래 동작은 녹화가 아니라 지금 계산되고 있는 실제 시합입니다. 피했는지 맞았는지는 글러브가 머리(바디샷은 몸통)에 실제로 닿았는지로 정해집니다. 이번 판은 5차 기획의 중간 통합입니다: 바디샷, L 전용 기술(파도, 다운패링), 크로스암 가드와 숄더 롤, 주먹마다 다른 실신이 들어왔고, 지난 게시본과 달라진 줄에는 표시가 붙습니다.</p>
     <div class="controls">
       <span>속도</span>
       <span class="seg"><button id="speed-1" data-speed="1" aria-pressed="true">1×</button><button id="speed-half" data-speed="0.5" aria-pressed="false">½×</button><button id="speed-quarter" data-speed="0.25" aria-pressed="false">¼×</button></span>
       <button id="prints" aria-pressed="true">발자국</button>
     </div>
   </header>
+  <nav id="toc" class="toc" aria-label="차례"></nav>
   <main id="catalog"></main>
   <footer>
     <p>풋워크 카드의 등불은 발이 캔버스에 닿는 순간 켜집니다. 노란색이 앞발, 파란색이 뒷발이고 바닥의 발자국도 같은 색입니다. "분당 보"는 최근 몇 걸음의 간격으로 잰 값이라, 이동이 빨라지면 박자도 빨라지는 것을 볼 수 있습니다.</p>
@@ -122,6 +154,7 @@
     <p>"!"가 붙은 결과와 "리플레이 ¼" 표시는 기막힌 수비입니다: 3 cm 안으로 아슬아슬하게 피했거나(또는 구간의 마지막 프레임에 시작했거나) 마지막 순간에 패리하고, 0.4초 안에 장전된 카운터가 나간 수비입니다. 그 카드만 상대 주먹이 출발한 순간부터 카운터가 닿을 때까지를 1/4 속도로 다시 보여 주고, 끝나면 이어서 진행합니다.</p>
   </footer>
 </div>
+<a class="to-toc" href="#toc">차례 ↑</a>
 <div id="loading">불러오는 중…</div>
 <script type="module" src="src/catalog.mjs"></script>
 </body>
