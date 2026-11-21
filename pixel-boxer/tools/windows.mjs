@@ -7,7 +7,9 @@
      node tools/windows.mjs            the table (a pro defending)
      node tools/windows.mjs --grades   each grade (anim/skill.mjs) against the punch of its card: the window, how much the
                                        punch misses by from the middle of it, how long the head takes to get clear and how
-                                       long he is tied up; and the parry's window (the frame the guard goes up)
+                                       long he is tied up; and the parry's window (the frame the guard goes up), the down
+                                       parry's (4명, 5명) and the shoulder roll's (4명, 4암, 5명, 5암; the margin is the
+                                       room between the glove and his head as it is rolled off)
      node tools/windows.mjs --write    the same, written to src/windows.data.mjs, where the catalogue's scripts read it
      node tools/windows.mjs --json
    A frame before the press (negative) is a guess: the evasion started before the punch did. */
@@ -34,8 +36,10 @@ export const AT = { jab: 0.8, cross: 0.8, hook: 1.1, upper: 1.3 };
 const EARLY = 14;
 
 /* A drill: the punch, and the boxer's answer `k` frames after it is pressed (or none). skills: the boxer's sheet. guard: the
-   answer is the guard put up on that frame and held (a parry), not an evasion. */
-export function drill(punch, move, value, k, skills, guard, counter) {
+   answer is the guard put up on that frame and held (a parry), not an evasion. tech: the guard put up meant as a technique
+   he carries ({ id, carry: his loadout, hold: how long after the punch it is kept up }: the down parry, the shoulder roll;
+   game/techniques.mjs), pressed with it on that frame as the catalogue's cards press it. */
+export function drill(punch, move, value, k, skills, guard, counter, tech) {
   const at = AT[punch];
   return {
     // (and a punch back out of it, as soon as he may: the counter card)
@@ -45,10 +49,10 @@ export function drill(punch, move, value, k, skills, guard, counter) {
     me: () => HOME,
     him: () => [HOME[0] + RANGE[punch], HOME[1]],
     against: THROW[punch].map(([dt, button]) => [at + dt, button]),
-    setup: skills ? b => (b.fighters[0].skills = skills) : undefined,
+    setup: skills || tech ? b => ((b.fighters[0].skills = skills || {}), tech && (b.fighters[0].techniques = tech.carry)) : undefined,
     // (the punches before the last are taken on a guard, put down just before it; a parry is the guard put up on frame k)
-    cover: guard ? t => k !== null && t >= at + k * F - 1e-9 && t < at + 0.4 : punch === 'hook' || punch === 'upper' ? t => t > 0.2 && t < Math.min(at - 0.05, k === null ? at - 0.05 : at + k * F - 1e-9) : undefined,
-    press: k === null || guard ? [] : [[at + k * F, move, value]]
+    cover: guard ? t => k !== null && t >= at + k * F - 1e-9 && t < at + (tech ? tech.hold : 0.4) : punch === 'hook' || punch === 'upper' ? t => t > 0.2 && t < Math.min(at - 0.05, k === null ? at - 0.05 : at + k * F - 1e-9) : undefined,
+    press: k === null ? [] : tech ? [[at + k * F, 'tech', tech.id]] : guard ? [] : [[at + k * F, move, value]]
   };
 }
 // what became of the last punch the other man threw: 'whiff', 'hit', ...; the frame (after its press) it got there; and by
@@ -61,21 +65,22 @@ export function outcome(entry) {
     bout.fighters[0].hp = Math.max(bout.fighters[0].hp, 50);
     for (const e of bout.events) {
       const by = e.type === 'parry' ? e.on : e.who;
-      if (by === 1 && ['hit', 'block', 'parry', 'whiff', 'graze'].includes(e.type)) last = { type: e.type, tick, margin: e.margin ?? null };
+      if (by === 1 && ['hit', 'block', 'parry', 'whiff', 'graze'].includes(e.type)) last = { type: e.type, tick, margin: e.margin ?? null, part: e.part, down: !!e.down, roll: !!e.roll };
     }
   }
   return last;
 }
-// the frames after the press on which the evasion works, for one move against one punch (and a sheet of skills)
-export function window(punch, move, value, skills, guard) {
+/* the frames after the press on which the evasion works, for one move against one punch (and a sheet of skills); a technique's
+   guard works where its own outcome comes of it (tech.works) */
+export function window(punch, move, value, skills, guard, tech) {
   const base = outcome(drill(punch, move, value, null, skills)),
     lands = base ? base.tick + 1 - Math.round(AT[punch] / F) : 20,
     want = guard ? 'parry' : 'whiff',
     works = [],
     margins = {};
   for (let k = -EARLY; k <= lands; k++) {
-    const o = outcome(drill(punch, move, value, k, skills, guard));
-    if (o && o.type === want) works.push(k), (margins[k] = o.margin);
+    const o = outcome(drill(punch, move, value, k, skills, guard, false, tech));
+    if (o && (tech ? tech.works(o) : o.type === want)) works.push(k), (margins[k] = o.margin);
   }
   return { lands, works, margins };
 }
@@ -109,7 +114,12 @@ export const CARDS = [
   { id: 'duck', move: 'duck', value: true, punch: 'hook' },
   { id: 'roll', move: 'roll', value: 1, punch: 'hook' },
   { id: 'parry', move: 'cover', value: true, punch: 'jab', guard: true },
-  { id: 'counter', move: 'slip', value: -1, punch: 'jab', counter: true }
+  { id: 'counter', move: 'slip', value: -1, punch: 'jab', counter: true },
+  /* the techniques' (docs/moves-plan-5.md §4.2, §4A.4), at the grades that open them: the down parry, the guard put up meant
+     as it pressing the jab down (src/defense.mjs PARRY_DOWN); the shoulder roll, the guard put up meant as it rolling the
+     cross off the lead shoulder (src/defense.mjs ROLLING; tests/show.test.mjs) */
+  { id: 'parryDown', move: 'cover', value: true, punch: 'jab', guard: true, levels: ['4m', '5m'], tech: { id: 'parryDown', carry: ['parryDown'], hold: 0.4, works: o => o.type === 'parry' && o.down } },
+  { id: 'rollCounter', move: 'cover', value: true, punch: 'cross', guard: true, levels: ['4m', '4a', '5m', '5a'], tech: { id: 'rollCounter', carry: ['crossArm', 'rollCounter'], hold: 0.5, works: o => o.type === 'block' && o.part === 'shoulder' && o.roll } }
 ];
 /* The frame a card presses on: the middle of the longest run of its window, or, where the exchange from there is not clean
    (the bout scores a glove on a head and nothing else, so an arm can pass through a glove that is in its way: tools/audit.mjs
@@ -122,7 +132,7 @@ function pick(card, lv, works) {
   run.sort((a, b) => Math.abs(a - mid.at) - Math.abs(b - mid.at) || a - b);
   const unclean = [];
   for (const k of run) {
-    const d = drill(card.punch, card.move, card.value, k, { all: lv }, card.guard, card.counter);
+    const d = drill(card.punch, card.move, card.value, k, { all: lv }, card.guard, card.counter, card.tech);
     const { found } = audit([Object.assign(d, { id: `${card.id}@${lv}+${k}` })]);
     if (!Object.values(found).some(c => c.bad)) return Object.assign({}, mid, { at: k, unclean });
     unclean.push(k);
@@ -133,8 +143,8 @@ export function grades() {
   const out = {};
   for (const card of CARDS) {
     out[card.id] = {};
-    for (const lv of LEVELS) {
-      const w = window(card.punch, card.move, card.value, { all: lv }, card.guard),
+    for (const lv of card.levels || LEVELS) {
+      const w = window(card.punch, card.move, card.value, { all: lv }, card.guard, card.tech),
         mid = pick(card, lv, w.works),
         T = card.guard ? null : timeline(card.move, LEVEL[lv]);
       out[card.id][lv] = {
@@ -160,8 +170,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     else {
       console.log('card         ' + LEVELS.map(lv => lv.padEnd(16)).join(''));
       for (const [id, row] of Object.entries(g)) {
-        console.log(id.padEnd(13) + LEVELS.map(lv => `${span(row[lv].works)} @${row[lv].at}`.padEnd(16)).join(''));
-        if (id !== 'parry') console.log(''.padEnd(13) + LEVELS.map(lv => `${row[lv].margin ?? '-'}cm ${row[lv].clear}/${row[lv].tied}`.padEnd(16)).join(''));
+        console.log(id.padEnd(13) + LEVELS.map(lv => (row[lv] ? `${span(row[lv].works)} @${row[lv].at}` : '').padEnd(16)).join(''));
+        if (id !== 'parry' && id !== 'parryDown') console.log(''.padEnd(13) + LEVELS.map(lv => (row[lv] ? `${row[lv].margin ?? '-'}cm ${row[lv].clear}/${row[lv].tied}` : '').padEnd(16)).join(''));
       }
       console.log('(frames after the press that throws the punch: the window, and @ the frame the card presses on; under it the margin at that frame, cm, and the head clear / tied up, ms)');
     }

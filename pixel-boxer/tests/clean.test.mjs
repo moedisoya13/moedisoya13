@@ -11,7 +11,7 @@ import { createBout, step, settle, RULES } from '../src/game/bout.mjs';
 import { audit } from '../src/audit.mjs';
 import { WAVE } from '../src/anim/clean.mjs';
 import { freshBout, drive, HOME } from '../src/footwork.mjs';
-import { RANGE, THROW, PARRY_DOWN, PARRY_DOWN_WINDOW } from '../src/defense.mjs';
+import { RANGE, THROW, PARRY_DOWN } from '../src/defense.mjs';
 import { LEVELS, LEVEL } from '../src/anim/skill.mjs';
 import * as M from '../src/rig/m3.mjs';
 import { WINDOWS } from '../src/windows.data.mjs';
@@ -311,7 +311,7 @@ test('down parry: only 4명 and 5명 have one, and only a man who carries it pre
 
 test('down parry: the rear glove comes down on the jab from above, on the frame it meets it, and presses it 15 cm or more under his guard', () => {
   for (const lv of ['4m', '5m']) {
-    const frames = pressDown(lv, 'jab', PARRY_DOWN_WINDOW[lv].at),
+    const frames = pressDown(lv, 'jab', WINDOWS.parryDown[lv].at),
       i = downAt(frames);
     assert.ok(i > 0, `${lv}: ${JSON.stringify(frames.flatMap(f => f.events.map(e => e.type)))}`);
     const f = frames[i],
@@ -331,7 +331,7 @@ test('down parry: the rear glove comes down on the jab from above, on the frame 
 
 test('down parry: its window is the one measured, the card on a frame inside it; a frame either side of it presses nothing down', () => {
   for (const lv of ['4m', '5m']) {
-    const w = PARRY_DOWN_WINDOW[lv];
+    const w = WINDOWS.parryDown[lv];
     assert.ok(w.at >= w.from && w.at <= w.to, lv);
     for (const k of [w.from, w.at, w.to]) assert.equal(fate(pressDown(lv, 'jab', k)), 'parryD', `${lv}: frame ${k}`);
     for (const k of [w.from - 1, w.to + 1]) assert.notEqual(fate(pressDown(lv, 'jab', k)), 'parryD', `${lv}: frame ${k}`);
@@ -340,7 +340,7 @@ test('down parry: its window is the one measured, the card on a frame inside it;
 
 test('down parry: met any other way, or on the guard put up for it, the jab is blocked, not turned aside', () => {
   for (const lv of ['4m', '5m']) {
-    const w = PARRY_DOWN_WINDOW[lv];
+    const w = WINDOWS.parryDown[lv];
     // (up too early, his guard no longer fresh; and too late for the rear glove to get out and down: the guard is in the way)
     for (const k of [w.from - 4, w.to + 1]) assert.equal(fate(pressDown(lv, 'jab', k)), 'block', `${lv}: frame ${k}`);
   }
@@ -353,7 +353,7 @@ test('down parry: a legend presses a cross down too; a 4명 blocks it', () => {
 
 test('down parry: the man pressed down is held 0.35 s, and not knocked back', () => {
   for (const lv of ['4m', '5m']) {
-    const frames = pressDown(lv, 'jab', PARRY_DOWN_WINDOW[lv].at),
+    const frames = pressDown(lv, 'jab', WINDOWS.parryDown[lv].at),
       i = downAt(frames),
       after = frames.slice(i).filter(f => !f.held);
     assert.equal(frames[i].action, 'patted');
@@ -370,7 +370,7 @@ test('down parry: the counter goes from the hand that pressed it, from where it 
       f = frames.slice(i).find(x => x.events.some(e => e.type === 'hit' && e.who === 0 && e.name === name));
     return f ? { dt: +(f.t - frames[i].t).toFixed(3), J: f.events.find(e => e.type === 'hit').J } : null;
   };
-  const four = pressDown('4m', 'jab', PARRY_DOWN_WINDOW['4m'].at, { counter: true }),
+  const four = pressDown('4m', 'jab', WINDOWS.parryDown['4m'].at, { counter: true }),
     cross4 = after(four, 'cross');
   assert.ok(cross4 && cross4.dt >= 0.18 && cross4.dt <= 0.28, `4명: ${JSON.stringify(cross4)}`);
   assert.ok(cross4.J >= 50, `4명: ${cross4.J} N·s`);
@@ -382,7 +382,7 @@ test('down parry: the counter goes from the hand that pressed it, from where it 
     before = four.slice(i + 1, thrown).filter(f => !f.held);
   assert.ok(Math.max(...before.map(f => f.R[1])) <= four[i].R[1] + 0.01, '4명: the hand went back up before the cross');
   assert.ok(four[thrown - 1].R[1] <= four[i].R[1] - 0.1, `4명: the cross goes from ${((four[i].R[1] - four[thrown - 1].R[1]) * 100).toFixed(1)} cm under where it met the jab`);
-  const five = pressDown('5m', 'jab', PARRY_DOWN_WINDOW['5m'].at, { counter: true }),
+  const five = pressDown('5m', 'jab', WINDOWS.parryDown['5m'].at, { counter: true }),
     jab5 = after(five, 'jab'),
     cross5 = after(five, 'cross');
   assert.ok(jab5 && jab5.dt >= 0.06 && jab5.dt <= 0.12, `5명 jab: ${JSON.stringify(jab5)}`);

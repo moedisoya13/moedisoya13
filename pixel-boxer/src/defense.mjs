@@ -226,18 +226,15 @@ const placed = e =>
 export const DEFENSE = [...GRADED.map(placed), ...DRILLS.map(placed)];
 
 /* The down parry and counter (anim/clean.mjs, docs/moves-plan-5.md §4.2): a clean great one's and a clean legend's own, a
-   card each, for the catalogue's technique rows (stage I puts them on the page; tests/clean.test.mjs holds them to what they
-   say). The same pro throws the same jab as the parry card, at the same moment; the boxer carries the technique (his loadout:
+   card each, for the catalogue's technique rows (tests/clean.test.mjs holds them to what they say). The same pro throws the same jab as the parry card, at the same moment; the boxer carries the technique (his loadout:
    game/techniques.mjs) and puts his guard up meant as it (tech: 'parryDown', from the frame of the card on), and takes the
    opening it makes at once (a power press as soon as the jab is pressed down: his counter, the cross of the hand that
    pressed it, a legend's jab first). The frame he puts it up on is the middle of the window measured in these same drills
-   (WINDOWS.parryDown once tools/windows.mjs measures it; until then PARRY_DOWN_WINDOW, measured the same way: frames after
-   the press that throws the jab on which the guard put up for it presses it down). The card's numbers: the window, and how
-   long after the glove was pressed down his counter lands. */
-export const PARRY_DOWN_WINDOW = { '4m': { from: -8, to: 4, at: -2 }, '5m': { from: -7, to: 4, at: -2 } };
+   (WINDOWS.parryDown, node tools/windows.mjs --write: frames after the press that throws the jab on which the guard put up
+   for it presses it down). The card's numbers: the window, and how long after the glove was pressed down his counter lands. */
 export const PARRY_DOWN = ['4m', '5m'].map(lv => {
   const item = { id: 'parryDown', punch: ['jab', 0.8] },
-    w = (WINDOWS.parryDown && WINDOWS.parryDown[lv]) || PARRY_DOWN_WINDOW[lv],
+    w = WINDOWS.parryDown[lv],
     at = item.punch[1] + w.at * F;
   return placed({
     id: `parryDown@${lv}`, item: 'parryDown', level: lv, card: 'parryDown', answer: w.at, window: [w.from, w.to],
@@ -253,5 +250,44 @@ export const PARRY_DOWN = ['4m', '5m'].map(lv => {
       if (!own.countered && f.parried && f.parried.down && f.counter > 0) return (own.countered = true), 'power';
       return t >= at - 1e-9 && t < item.punch[1] + 0.4 ? ['tech', 'parryDown'] : null;
     }
+  });
+});
+
+/* The classic cross-arm guard and the shoulder roll (anim/show.mjs, docs/moves-plan-5.md §4A), as the catalogue's technique
+   rows: techniques a man carries (game/techniques.mjs crossArm from 3 up, rollCounter from 4 up), and these cards give him
+   them, so a pro and a clean great one hold it too. The guard: held up from early on, the same pro's cross into it (the block
+   card's), or his cross and his lead hook after it (the rear glove going up over the ear as the hook starts); every one of
+   them blocked (tests/show.test.mjs). The roll: his guard put up meant as the roll (tech: 'rollCounter') on the frame in the
+   middle of his window, measured in these same drills (WINDOWS.rollCounter, node tools/windows.mjs --write), and kept up as
+   long as the arm it rolls off is held out; the cross is rolled off the lead shoulder. Its counter (the rear hook, §4A.7) is
+   the next stage's: the cards end at the roll. */
+export const CROSS_LEVELS = ['3', '4m', '4a', '5m', '5a'];
+export const ROLL_LEVELS = ['4m', '4a', '5m', '5a'];
+const CROSS_ROWS = [
+  { id: 'crossArm', name: '크로스암 가드', en: 'The cross-arm guard', punch: ['cross', 0.8], loop: 2, cover: t => t > 0.2 && t < 1.3 },
+  { id: 'crossArm-hook', name: '크로스암 가드 · 훅', en: 'The cross-arm guard against the hook', punch: ['hook', 1.1], loop: 2.4, before: 'block', cover: t => t > 0.2 && t < 1.6 }
+];
+export const CROSS_ARM = CROSS_ROWS.flatMap(row =>
+  CROSS_LEVELS.map(lv =>
+    placed({
+      id: `${row.id}@${lv}`, item: row.id, level: lv, name: row.name, en: row.en, group: '크로스암', kind: 'block',
+      loop: row.loop, punch: row.punch, cover: row.cover, outcome: 'block', before: row.before, view: { yaw: 0.4, pitch: 0.26 },
+      setup: b => ((b.fighters[0].skills = { all: lv }), (b.fighters[0].techniques = ['crossArm']))
+    })
+  )
+);
+export const ROLLING = ROLL_LEVELS.map(lv => {
+  const item = { punch: ['cross', 0.8] },
+    w = WINDOWS.rollCounter && WINDOWS.rollCounter[lv],
+    k = w ? w.at : 3,
+    at = item.punch[1] + k * F;
+  return placed({
+    id: `rollCounter@${lv}`, item: 'rollCounter', level: lv, card: 'rollCounter', answer: k, window: w ? [w.from, w.to] : null,
+    name: '숄더 롤', en: 'The shoulder roll', group: '크로스암', kind: 'roll',
+    loop: 2, punch: item.punch, outcome: 'block', view: { yaw: 0.25, pitch: 0.26 },
+    press: [[at, 'tech', 'rollCounter']],
+    // (his guard kept up as long as the arm he has rolled off his shoulder is held out there)
+    cover: t => t >= at - 1e-9 && t < item.punch[1] + 0.5,
+    setup: b => ((b.fighters[0].skills = { all: lv }), (b.fighters[0].techniques = ['crossArm', 'rollCounter']))
   });
 });

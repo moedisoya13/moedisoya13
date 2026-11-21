@@ -35,13 +35,16 @@ const back = (card, lv) => W(card, lv).to;
 
 test('grades: every grade gets out of the way of every card\'s punch, and the window written down is the bout\'s', () => {
   for (const card of CARDS) {
-    for (const lv of LEVELS) {
+    // (a technique's card, at the grades that open it: the down parry's and the shoulder roll's, worked as its own outcome)
+    for (const lv of card.levels || LEVELS) {
       const w = W(card.id, lv);
       assert.ok(w && w.from !== null && w.to >= w.from && w.at >= w.from && w.at <= w.to, `${card.id}@${lv}: ${JSON.stringify(w)}`);
       // (a frame past the back end of it is too late: the window is measured, not written)
-      const late = outcome(windowDrill(card.punch, card.move, card.value, w.to + 1, { all: lv }, card.guard));
-      assert.notEqual(late && late.type, card.guard ? 'parry' : 'whiff', `${card.id}@${lv}: frame ${w.to + 1} still works`);
+      const late = outcome(windowDrill(card.punch, card.move, card.value, w.to + 1, { all: lv }, card.guard, false, card.tech));
+      if (card.tech) assert.ok(!(late && card.tech.works(late)), `${card.id}@${lv}: frame ${w.to + 1} still works`);
+      else assert.notEqual(late && late.type, card.guard ? 'parry' : 'whiff', `${card.id}@${lv}: frame ${w.to + 1} still works`);
     }
+    if (card.levels) continue;
     // from an amateur up, two frames or more where a pro has two (the slip at the cross is a frame for the dirty great ones)
     // (the weave under a hook that lands on its sweep: two frames for an amateur and a pro, a frame for a great one and a legend)
     for (const lv of ['2', '3', '4m', '5m']) if ((card.id !== 'slip-cross' || lv !== '4a') && (card.id !== 'roll' || lv === '2' || lv === '3')) assert.ok(W(card.id, lv).to - W(card.id, lv).from >= 1, `${card.id}@${lv}: ${W(card.id, lv).from}–${W(card.id, lv).to}`);
