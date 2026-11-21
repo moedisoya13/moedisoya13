@@ -37,6 +37,7 @@ import { H, headAt, headTo, phraseX, PHRASE, FLOURISH, CLEAN, DIRTY, dice } from
 import { sampleEvade, EVASIONS, timeline, evadeTime } from './evade.mjs';
 import { travel as legendTravel, dash as legendDash, dashShape } from './legend.mjs';
 import { stance as showStance, crossGuard, hammer, paw, PAW, collar, COLLAR, ELBOW } from './show.mjs';
+import { bodyState, struck as foldUp, give as bodyGive, coverLow } from './body.mjs';
 
 const TAU = Math.PI * 2;
 /* The feet keep time. One beat is one foot coming down; a cycle is both. Standing, the boxer rocks between his feet on that
@@ -443,6 +444,8 @@ export function createAnimator(seed) {
   let pawedBy = null;
   // his neck in a show-off's hand, his head pulled forward and down (show.mjs: collar): { dir, d, time, t } | null
   let pulledBy = null;
+  // what blows to his body are still doing to him, and his elbow brought down over one coming (body.mjs)
+  const bodyHits = bodyState();
   const remember = pose => ((poses = [poses[1], pose]), pose);
   // a pose part of the way from another to it, each bone turned part of the way (what the solver said of it kept)
   const between = (from, to, w) => {
@@ -510,6 +513,8 @@ export function createAnimator(seed) {
        it after, down the body: the trunk laid back and bent the way it went, the hips pushed after it and lifted, the
        weight onto his heels. */
     strike(hit) {
+      // (a blow to his body, the trunk first and the head last: body.mjs)
+      if (hit.zone) return foldUp(bodyHits, hit, clock);
       const k = hit.J / 55, // (the head's amounts are for 55 newton-seconds, as they always were)
         K = hit.J / HIT.ref,
         [left, up, ahead] = hit.dir,
@@ -930,6 +935,8 @@ export function createAnimator(seed) {
       }
       // (and a guard he puts up fresh is a hammer of the rear fist, not the gloves put out to meet it: show.mjs)
       hammering = !!cv.hammer && view.fresh !== null && view.fresh !== undefined && hammer(c, cv.hammer, view.fresh);
+      // (and with it up, an elbow brought down over a punch coming at his body: body.mjs)
+      coverLow(bodyHits, c, view.low, cv, cover, dt);
       if (cheer > 0.002) for (const [ch, v] of Object.entries(sampleMove(MOVES.cheer, 1, {}))) c[ch] += v * smooth(cheer);
       if (meet > 0.002 && !cv.hammer) {
         for (const [ch, v] of Object.entries(sampleMove(MOVES.meet, 1, {}))) c[ch] += v * meet * cv.meet.scale;
@@ -1475,6 +1482,8 @@ export function createAnimator(seed) {
         c.lkf += settle;
         c.rkf += settle;
       }
+      // (and folded round blows to his body: body.mjs)
+      bodyGive(bodyHits, c, clock);
       const open = spring(give.open, 0, dt, 2.6, 0.6);
       c.lx += 0.09 * open;
       c.ly -= 0.05 * Math.abs(open);

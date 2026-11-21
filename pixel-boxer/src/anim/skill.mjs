@@ -237,6 +237,25 @@ const HAMMER_5A = { up: 0.04, rise: 0.04, down: 0.1, fall: 0.06, out: 0.12, acro
 const VARY_4A = { jab: [['thumb', 0.2], ['flicker', 0.35]], power: [['pawUp', 0.15], ['pawDown', 0.25], ['collar', 0.3], ['elbow', 0.2], ['stomp', 0.3]] };
 const VARY_5A = { jab: [['thumb', 0.15], ['flicker', 0.5]], power: [['pawUp', 0.2], ['pawDown', 0.3], ['collar', 0.3], ['elbow', 0.15], ['stomp', 0.25]] };
 
+/* the elbow block (cover.low, docs/moves-plan-5.md §3.4; anim/body.mjs: coverLow): his guard up and a punch coming at his
+   body, the elbow on that side is brought down over it `delay` seconds after he could have seen where it was going (from when
+   the joint that steers it fired: game/bout.mjs; null: he never does), over `time` seconds: the glove `drop` metres down and
+   `in` back toward him, so that the elbow comes down to his side, the trunk bent `side` degrees down over it and that knee
+   `knee` degrees more. both: both arms, whatever is coming (he cannot tell which side it is); turn: degrees the trunk turns off
+   it as it comes, to take it glancing; after: metres both gloves are let down once a blow has landed on his body (his head
+   left open). The textbook's is the pro's, and every guard's that does not say. Whoever holds the cross-arm guard (cover.cross
+   on) does not bring an elbow down at all: his lead forearm is across his belly already (show.mjs); a dirty great one or
+   legend without it brings it down as the clean one of his grade does, off the beat (docs/moves-plan-5.md §3.4, second
+   edition) */
+const LOW_1 = { delay: null, after: 0.12 };
+const LOW_2 = { delay: 0.17, both: true, drop: 0.12, in: 0.1, side: 0, knee: 6, time: 0.1, turn: 0, after: 0 };
+const LOW_3 = { delay: 0.1, both: false, drop: 0.12, in: 0.1, side: 8, knee: 10, time: 0.1, turn: 0, after: 0 };
+const LOW_4M = { ...LOW_3, delay: 0.07, turn: 4 };
+const LOW_5M = { ...LOW_3, delay: 0.05, drop: 0.08, side: 12, time: 0.08 };
+const LOW_4A = LOW_4M;
+const LOW_5A = LOW_5M;
+TEXTBOOK_COVER.low = LOW_3;
+
 export const LEVEL = {
   1: {
     grade: 1, side: null, name: '입문', label: '1',
@@ -246,7 +265,7 @@ export const LEVEL = {
     // (his knees locked: his hips as high as his legs will go with his feet still on the canvas)
     stance: stance({ bounce: 0, knee: 0, hop: 0, rock: 0.15, lag: 0, jitter: 0.12, flat: true, hips: 0.015, lean: -7, yaw: 10, gap: -0.04, guard: { y: -0.06, apart: 0.04, elbow: 0.25, chin: -6 }, look: 0.25, head: null, travel: { cycle: 1.35, lean: 6, lurch: 0.05, order: 0.5, width: 0.45, face: 0.3, pivot: 6 }, flourish: 'nervous' }),
     evade: evade({ knee: { share: 0.2, depth: 0.8 }, flinch: 0.07, wince: 1, out: 1.45, hold: 2, back: 1.6, move: 1.25, delay: { trunk: 0.05, hips: 0.05, feet: 0.05 }, pause: 0.12, cut: 'end', load: 0, look: 0.25, lively: 0, exit: 'stumble' }),
-    cover: cover({ arrive: 0.11, hands: { ly: 0.075, lz: 0.01, lx: 0.02, rx: -0.02, le: 0.4, re: 0.4 }, body: { lean: -6, hw: 20, yaw: 15 }, lively: 0, head: 0, look: 0.25, meet: { add: { lz: 0.13, rz: 0.1, lx: 0.06, rx: -0.06, le: 0.5, re: 0.35, lean: -8, hw: 15 } }, block: { brace: 1.5, open: 0.06, settle: 0.4 }, back: 0.45, load: 0 }),
+    cover: cover({ arrive: 0.11, hands: { ly: 0.075, lz: 0.01, lx: 0.02, rx: -0.02, le: 0.4, re: 0.4 }, body: { lean: -6, hw: 20, yaw: 15 }, lively: 0, head: 0, look: 0.25, meet: { add: { lz: 0.13, rz: 0.1, lx: 0.06, rx: -0.06, le: 0.5, re: 0.35, lean: -8, hw: 15 } }, block: { brace: 1.5, open: 0.06, settle: 0.4 }, back: 0.45, load: 0, low: LOW_1 }),
     dash: dash({ upright: true, land: 'stumble', extra: 0.35 }),
     // (a bow, the foot up high, short of where he meant to be, and up again at once; he walks back flat and upright, the
     // hands sliding down, the feet coming together)
@@ -260,7 +279,7 @@ export const LEVEL = {
     // a small, even bounce, all of a piece: the head and the gloves go up and down with the hips
     stance: stance({ bounce: 0.45, knee: 4, hop: 0.4, rock: 0.4, lag: 0.3, hips: 0.01, lean: -3, yaw: 4, guard: { y: 0.01, elbow: 0.1 }, look: 0.6, head: null, travel: { cycle: 1.15, halting: 0.7, width: 0.75, face: 0.08, pivot: 9 } }),
     evade: evade({ knee: { share: 0.55, depth: 0.85 }, flinch: 0.03, out: 1.3, hold: 1.2, back: 0.9, move: 1.15, delay: { head: 0.06, hips: 0.05, feet: 0.05 }, pause: 0.04, cut: 'end', load: 0, look: 0.6, lively: 0, exit: 'flat' }),
-    cover: cover({ arrive: 0.07, hands: { ly: 0.025, lx: -0.012, rx: 0.012, le: 0.15, re: 0.15 }, body: { lean: -3 }, lively: 0.45, head: 0, look: 0.6, meet: { add: { ry: -0.08, rz: 0.04, re: 0.2 } }, block: { brace: 1.2, settle: 0.6 }, back: 0.65, load: 0 }),
+    cover: cover({ arrive: 0.07, hands: { ly: 0.025, lx: -0.012, rx: 0.012, le: 0.15, re: 0.15 }, body: { lean: -3 }, lively: 0.45, head: 0, look: 0.6, meet: { add: { ry: -0.08, rz: 0.04, re: 0.2 } }, block: { brace: 1.2, settle: 0.6 }, back: 0.65, load: 0, low: LOW_2 }),
     dash: dash({ prep: 0.02, land: 'flat', extra: 0.32 }),
     // (down, and then in: two movements; small hops with the hands stuck at his face, and half a pivot)
     entry: entry({ waist: 0.3, seam: 0.05, step: 0.04, load: 0 }),
@@ -285,7 +304,7 @@ export const LEVEL = {
     // strong and weak, the lead foot's landing the heavy one; the head an end on every lead foot, under in between
     stance: stance({ bounce: 1.15, knee: 6.2, lag: 1.1, accent: [1.3, 0.8], guard: { chin: 4 }, look: 1, head: { A: 0.045, D: 0.025, T: 4, beat: 'locked', level: { every: 8, depth: 0.07, lean: 5 } } }),
     evade: evade({ knee: { share: 1.1, depth: 1.05 }, out: 0.7, hold: 0.8, back: 0.6, move: 0.93, delay: { feet: 0.017, trunk: 0.017, head: 0.033 }, cut: 'clear', load: 0.7, look: 1, lively: 0.5, beat: 'on', cross: 5, just: 0.006 }),
-    cover: cover({ arrive: 0.04, hands: { lx: -0.012, rx: 0.012, le: -0.08, re: -0.08 }, body: { hp: 3 }, look: 1, meet: { scale: 0.7, add: { hx: 0.03, twist: -5 } }, block: { brace: 0.8, go: [6, 0.04] }, back: 1.5, load: 0.7, hand: 'other' }),
+    cover: cover({ arrive: 0.04, hands: { lx: -0.012, rx: 0.012, le: -0.08, re: -0.08 }, body: { hp: 3 }, look: 1, meet: { scale: 0.7, add: { hx: 0.03, twist: -5 } }, block: { brace: 0.8, go: [6, 0.04] }, back: 1.5, load: 0.7, hand: 'other', low: LOW_4M }),
     dash: dash({}),
     // (in at an angle, the eyes on him; the hops on the beat, strong and weak, the hands down to the waist)
     entry: entry({ angle: 15, load: 1 }),
@@ -298,7 +317,7 @@ export const LEVEL = {
     // the beat rubbed out: low and heavy, the feet dragged and lurching, the head rolling low in its own time
     stance: stance({ bounce: 0.45, knee: 2.4, hop: 0.6, rock: 0.8, jitter: 0.25, drag: 0.6, hips: -0.03, travel: { width: 0.95, face: 0.1, pivot: 8 }, look: 1, head: { A: 0.055, D: 0.04, T: 4, beat: 'roll', level: { every: 2.6, depth: 0.08, lean: 5 } }, show: SHOW_4A }),
     evade: evade({ knee: { share: 1.1, depth: 1.05 }, out: 0.75, hold: 0.8, back: 0.8, move: 0.95, delay: { feet: 0.017, trunk: 0.017, head: 0.033 }, cut: 'clear', load: 0.7, look: 1, lively: 0.3, in: 0.04, low: 0.02, just: 0.008 }),
-    cover: cover({ arrive: 0.045, cross: CROSS_4A, hammer: HAMMER_4A, look: 1, meet: { scale: 0.7, add: { hx: 0.03, twist: -5 } }, block: { brace: 0.6, settle: 1.2 }, back: 1.5, load: 0.7, hand: 'other' }),
+    cover: cover({ arrive: 0.045, cross: CROSS_4A, hammer: HAMMER_4A, look: 1, meet: { scale: 0.7, add: { hx: 0.03, twist: -5 } }, block: { brace: 0.6, settle: 1.2 }, back: 1.5, load: 0.7, hand: 'other', low: LOW_4A }),
     dash: dash({ drag: 1, low: 0.02, extra: 0.16 }),
     entry: entry({ angle: 15, load: 1 }),
     away: away({ jitter: 0.25, drop: 1.2 })
@@ -311,7 +330,7 @@ export const LEVEL = {
     // (and going anywhere, the head and the knees are the shape of it, on his beat: a slower travelling beat, room for a U)
     stance: stance({ bounce: 1.1, knee: 7.7, hop: 1.3, rock: 1.1, lag: 1.25, swing: 0.58, tempo: 'phrase', guard: { y: -0.02, loose: 1 }, look: 1, head: { A: 0.045, D: 0.025, T: 4, beat: 'phrase', level: { depth: 0.07, lean: 5 } }, flourish: 'clean', travel: { cycle: 1.9 }, legend: LEGEND_CLEAN }),
     evade: evade({ knee: { share: 1.15, depth: 1.1 }, out: 0.55, hold: 0, back: 0.6, move: 0.9, delay: { trunk: 0.017, head: 0.033 }, cut: 'clear', load: 1, look: 1, lively: 0.7, follow: 0.3, exit: 'angle', just: -0.008 }),
-    cover: cover({ arrive: 0.03, hands: { ly: -0.02, lx: 0.015, rx: -0.015 }, look: 1, meet: { scale: 0.45, add: { hx: 0.04, twist: -8 } }, block: { brace: 0.7, settle: 1.5, meet: [0.04, 12] }, back: 1.8, load: 1, hand: 'same', q: 0.3 }),
+    cover: cover({ arrive: 0.03, hands: { ly: -0.02, lx: 0.015, rx: -0.015 }, look: 1, meet: { scale: 0.45, add: { hx: 0.04, twist: -8 } }, block: { brace: 0.7, settle: 1.5, meet: [0.04, 12] }, back: 1.8, load: 1, hand: 'same', q: 0.3, low: LOW_5M }),
     dash: dash({ land: 'angle', turn: 9, bend: 0.04 }),
     // (round on the ball of the lead foot at the end, at his side, wound up; a shuffle in the middle hop, the pivot one with
     // the hop)
@@ -325,7 +344,7 @@ export const LEVEL = {
     // lower still and always rolling, the lead shoulder up and the lead hand in his eyes, the beat nowhere
     stance: stance({ bounce: 0.35, knee: 1.9, hop: 0.5, rock: 0.8, lag: 1.1, jitter: 0.25, drag: 0.7, hips: -0.04, show: SHOW_5A, travel: { width: 0.95, face: 0.1, pivot: 8, cycle: 1.9 }, look: 1, head: { A: 0.06, D: 0.05, T: 4, beat: 'roll', level: { every: 1.9, depth: 0.08, lean: 5 } }, flourish: 'dirty', legend: LEGEND_DIRTY }),
     evade: evade({ knee: { share: 1.15, depth: 1.1 }, out: 0.62, hold: 0, back: 0.73, move: 0.92, delay: { trunk: 0.017, head: 0.033 }, cut: 'clear', load: 1, look: 1, lively: 0.3, follow: 0.3, in: 0.06, low: 0.02, just: 0.015 }),
-    cover: cover({ arrive: 0.035, cross: CROSS_5A, hammer: HAMMER_5A, look: 1, meet: { scale: 0.45, add: { hx: 0.04, twist: -8 } }, block: { brace: 0.6, lean: 4, settle: 1.2, push: 0.04 }, back: 1.8, load: 1, hand: 'other' }),
+    cover: cover({ arrive: 0.035, cross: CROSS_5A, hammer: HAMMER_5A, look: 1, meet: { scale: 0.45, add: { hx: 0.04, twist: -8 } }, block: { brace: 0.6, lean: 4, settle: 1.2, push: 0.04 }, back: 1.8, load: 1, hand: 'other', low: LOW_5A }),
     dash: dash({ drag: 1, low: 0.02 }),
     entry: entry({ pivot: [30, 0.12], load: 1 }),
     away: away({ jitter: 0.25, drop: 1.2 })
