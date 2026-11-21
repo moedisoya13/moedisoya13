@@ -414,6 +414,8 @@ export const MOVES = Object.assign(
        come back up over the last hop. The rest of it, the bounce and the hands' swing, is the animator's. */
     hopPivot: { dur: 0.92, keys: [] },
     hopCircle: { dur: 0.86, keys: [] },
+    // (the wave, a clean great one's circling at the end of his reach: held as long as its button is, anim/clean.mjs)
+    wave: { dur: 1, keys: [] },
     /* ---- a show-off's taunts (anim/show.mjs, docs/moves-plan-4.md §5.4): no guard while they last, and anything he does puts
        an end to them (game/bout.mjs). Written as the plan's lengths; a grade stretches and shrinks them (skill.mjs:
        stance.show, long and size). */
