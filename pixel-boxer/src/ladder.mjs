@@ -40,7 +40,8 @@ export const AT = 0.5; // when in the loop he is told to throw it (and, if he ke
    him (f.cues.pressed, or under `key`), for the card. from: the moment of the loop he is told to throw it. */
 export function cue(punch, level, from, key) {
   const move = MOVES[punch],
-    button = punch === 'jab' ? 'jab' : 'power',
+    // (the lead hand's straight punch is the jab button's, the body jab with it; the rest are the power button's)
+    button = move.kind === 'straight' && move.hand === 'L' && !move.low ? 'jab' : 'power',
     foot = move.hand,
     at = from ?? AT,
     k = key || 'pressed';
@@ -94,6 +95,52 @@ export const LADDER = PUNCHES.flatMap(p =>
     cue: cue(p.id, LEVEL[lv])
   }))
 );
+
+/* The punches to the body (moves.mjs, docs/moves-plan-5.md §3.3, §3.7), each at its seven grades, as the head punches are: from
+   the range each is thrown from (the plan's), at the same man, his head kept still in an amateur's stance and his guard where
+   a guard is. The press names the punch (game/bout.mjs: a press that names a punch is that punch), at the moment his grade
+   presses at (cue). The rear hook (§3.8, §4A.7) is not in the power chain and has no row of its own in the catalogue; its
+   rungs are here for the review sheets, the audit and the tests. */
+export const BODY_RANGE = { jabBody: 1.0, crossBody: 0.98, hookBody: 0.74, upperBody: 0.64, hookR: 0.8 };
+export const BODY_PUNCHES = [
+  { id: 'jabBody', name: '바디 잽', en: 'Body jab' },
+  { id: 'crossBody', name: '바디 스트레이트', en: 'Body cross' },
+  { id: 'hookBody', name: '리버 훅', en: 'Liver hook' },
+  { id: 'upperBody', name: '바디 어퍼', en: 'Body uppercut', inside: true }
+];
+export const REAR = [{ id: 'hookR', name: '뒷손 훅', en: 'Rear hook' }];
+// (a cue that presses the punch by name: [button, its name])
+const named = (punch, level) => {
+  const c = cue(punch, level);
+  return (bout, t) => {
+    const b = c(bout, t);
+    return b ? [b, punch] : null;
+  };
+};
+const rungsOf = rows =>
+  rows.flatMap(p =>
+    LEVELS.map(lv => ({
+      id: `${p.id}@${lv}`,
+      punch: p.id,
+      level: lv,
+      name: `${p.name} ${LEVEL[lv].label}`,
+      en: `${p.en} · ${LEVEL[lv].name}`,
+      group: p.name,
+      loop: 2,
+      view: { yaw: 0.6, pitch: 0.2 },
+      me: p.inside ? t => (t < AT + 0.7 ? HOME : [HOME[0] - 0.3, HOME[1]]) : () => HOME,
+      him: () => [HOME[0] + BODY_RANGE[p.id], HOME[1]],
+      // (and the man in front of him only takes it: a liver hook does not put him down here, game/bout.mjs f.stands)
+      setup: b => {
+        b.fighters[0].skills = { all: lv };
+        b.fighters[1].skills = { stance: '2' };
+        b.fighters[1].stands = true;
+      },
+      cue: named(p.id, LEVEL[lv])
+    }))
+  );
+export const BODY_LADDER = rungsOf(BODY_PUNCHES);
+export const REAR_LADDER = rungsOf(REAR);
 
 /* The dirty fighter's techniques (moves.mjs: foul), at every grade side by side: thrown from where the foul can reach (a foot
    on his instep, from closer than the punch alone is thrown from), at a man who stands in his own guard, a pro's. Only a

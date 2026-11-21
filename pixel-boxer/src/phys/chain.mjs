@@ -34,7 +34,8 @@ export function createChain(move, quick, skill, variant) {
        0.9 if the move does not say; and a punch that comes up out of the knees goes down into them as the grade's spring
        says: chain.spring) */
     spring = move.chain.spring ? Object.assign({ down: 1, pause: 0, wait: false }, k.spring) : null,
-    coil = Math.max(move.chain.coil * (spring ? spring.down : move.chain.locked ? Math.max(move.chain.set ?? 0.9, k.coil ?? 1) : k.coil ?? 1), k.least || 0);
+    // (and a punch to the body goes down to it in its wind-up: `set` of that, too, is the way down, and no grade leaves it out)
+    coil = Math.max(move.chain.coil * (spring ? spring.down : move.chain.locked || move.chain.set !== undefined ? Math.max(move.chain.set ?? 0.9, k.coil ?? 1) : k.coil ?? 1), k.least || 0);
   return {
     quick: quick || 1,
     // how he throws it (the textbook if nothing is said)

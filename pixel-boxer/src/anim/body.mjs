@@ -137,3 +137,43 @@ export function coverLow(s, c, seen, cv, cover, dt, clock) {
   c.side += toward * low.side * e;
   if (low.turn) c.yaw += (toward ? -toward : 1) * low.turn * e;
 }
+
+/* The way down to a punch to the body (docs/moves-plan-5.md §3.3, §3.7), from the side of the man who throws it: the punch's
+   written level change (moves.mjs: level, the pro's: degrees more of each knee, of the waist and of a bend to the side) as his
+   grade goes down to it (skill.mjs: form.level). It starts to show `show` seconds after the press, is down over `down`
+   seconds (the punch's wind-up, if his grade does not say), is held while the punch goes and is out, and he comes up out of it
+   over `up` seconds as the hand starts home.
+     depth   how far down, times the written
+     knee    how much of it is the knees, times the written; what the knees do not do the waist does instead (level.bow: the
+             degrees of waist that put the head as far down as the written knees do), so a man who will not bend his knees
+             bows to it
+     look    degrees the eyes go down to the target (a beginner looks at it; a great one keeps them on the face: negative)
+     seam    seconds he waits down there before the punch starts (an amateur's two movements: game/bout.mjs puts it on the
+             chain's wait)
+     lower(c, action, move, lv)   this frame's share, added to the channels; -> how far down he is meant to be, 0..1
+     shown(action, move)          seconds since the way down started to show, or null (before it has, or a punch with
+                                  none): what a man covering up reads a punch to his body off (coverLow, game/bout.mjs) */
+export const LEVEL3 = { depth: 1, knee: 1, look: 0, show: 0, down: null, seam: 0, up: 0.2 };
+const wayDown = lv => Object.assign({}, LEVEL3, lv && lv.form && lv.form.level);
+const downOf = (L, action) => L.down ?? Math.max(0.06, (action.chain && action.chain.coilTime) || 0.1);
+export function lower(c, action, move, lv) {
+  const w = move.level;
+  if (!w || !action.chain) return 0;
+  const L = wayDown(lv),
+    chain = action.chain,
+    go = smooth((action.t - L.show) / downOf(L, action)),
+    back = chain.phase === 'recover' ? 1 - smooth(chain.since / L.up) : chain.phase === 'done' ? 0 : 1,
+    x = go * back * L.depth;
+  if (x <= 0) return 0;
+  for (const ch in w) if (ch !== 'bow') c[ch] += w[ch] * (ch === 'lkf' || ch === 'rkf' ? L.knee : 1) * x;
+  c.lean += (w.bow || 0) * (1 - L.knee) * x;
+  c.hp += L.look * x;
+  return x;
+}
+export function shown(action, move) {
+  if (!move.level || !action.chain) return null;
+  // (a punch that comes up out of the knees shows them as its wind-up starts, after any wait for a foot)
+  const at = move.chain.spring ? action.chain.wait || 0 : wayDown(action.level).show,
+    t = action.t - at;
+  return t >= 0 ? t : null;
+}

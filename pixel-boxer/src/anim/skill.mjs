@@ -65,6 +65,7 @@
               other side), 'angle' (that, and a step off to the side, turned back in)
      beat     where on his beat the punch lands: 'on' (the contact on a foot coming down), 'off' (halfway between two), or
               null (wherever it lands)
+     level    the way down to a punch to the body (anim/body.mjs: lower; the table is above LEVEL, DOWN_*)
    vary: the tricks a press may turn into (a show-off's, 4암 and 5암 only: anim/show.mjs, choose): { jab, power: [[trick,
          chance], ...] }; the fouls (thumb, stomp) are two of them, and a dirty grade's punch is clean unless one comes up
    stance: how he stands and moves when he is not doing anything else (each 1, or 0, in the textbook unless said)
@@ -177,6 +178,7 @@
      shuffle  his feet change over once in the air in the middle hop (a legend's)
      jitter   the hops keep no beat, each this much longer or shorter (a dirty one's)
      upright  degrees further back the trunk is held than the textbook's; together: how far the feet come together, 0..1 */
+import { LEVEL3 } from './body.mjs';
 export const LEVELS = ['1', '2', '3', '4m', '4a', '5m', '5a'];
 
 // the legs set the hips and the arm off together, and each goes its own way: the arm does not wait for the trunk, so it gets
@@ -300,6 +302,24 @@ const LOW_4A = LOW_4M;
 const LOW_5A = LOW_5M;
 TEXTBOOK_COVER.low = LOW_3;
 
+/* the way down to a punch to the body (form.level, docs/moves-plan-5.md §3.7; anim/body.mjs: lower, LEVEL3 the pro's): how far
+   down (`depth`, times the punch's written level change, moves.mjs level), how much of it is the knees (`knee`, times; the
+   waist bows for the rest), where the eyes go (`look`, degrees down), when it starts to show (`show`, seconds after the press),
+   over how long (`down`, seconds; the punch's wind-up if not said), a stop at the bottom before the punch (`seam`), and how
+   quickly he comes up out of it (`up`). A beginner bows to it, the knees stiff, his eyes on the belly he is going to hit (his
+   other hand falls away as it does on every punch of his: form.guard); an amateur goes down, stops, and then throws (two
+   movements); a pro goes down in his wind-up; a clean great one starts it as the punch at the head with the same hand would
+   start (the first `show` of it is the same: the glove at head height) and keeps his eyes on the face, and so does a legend;
+   a dirty one stands low already and goes down less. The way down is read by the man it is coming at from the moment it shows
+   (game/bout.mjs: seen; anim/body.mjs: coverLow) */
+const DOWN_1 = { depth: 0.65, knee: 0.4, look: 10, up: 0.35 };
+const DOWN_2 = { depth: 0.87, knee: 0.6, seam: 0.05, up: 0.25 };
+const DOWN_4M = { depth: 1.15, look: -3, show: 0.05 };
+const DOWN_4A = { depth: 0.85 };
+const DOWN_5M = { look: -3, show: 0.05 };
+const DOWN_5A = { depth: 0.85, look: -3, show: 0.05 };
+TEXTBOOK_FORM.level = LEVEL3;
+
 /* the wave (anim/clean.mjs: waveBody, wavePlan; docs/moves-plan-5.md §4.1): a clean great one's and a clean legend's way of
    circling wide at the end of the other man's reach, the hands let down, upright, the head rising and falling as the feet
    slide apart and together. Only 4명 and 5명 have it (`wave` on their lines); any other grade asked for it circles out.
@@ -349,7 +369,7 @@ export const LEVEL = {
   1: {
     grade: 1, side: null, name: '입문', label: '1',
     chain: { order: ARM_FIRST, lag: [0.03, 0.03, 0, 0, 0], damp: 0.95, amp: [0.3, 0.45, 0.4, 1, 1], coil: 1.8, least: 0.08, back: 0.6, backLag: 2.4, firm: 0.75, spring: { down: 1.3 } },
-    form: form({ guard: 1, chin: 1, over: 2.5, tell: 1, lively: 0, dip: 0.015, sep: 0, off: -0.02, with: 'trunk', look: 0.25, exit: 'stumble' }),
+    form: form({ guard: 1, chin: 1, over: 2.5, tell: 1, lively: 0, dip: 0.015, sep: 0, off: -0.02, with: 'trunk', look: 0.25, exit: 'stumble', level: DOWN_1 }),
     // stiff and square on, flat on his feet, the hands low and the chin up, his weight shifting about off the beat
     // (his knees locked: his hips as high as his legs will go with his feet still on the canvas)
     stance: stance({ bounce: 0, knee: 0, hop: 0, rock: 0.15, lag: 0, jitter: 0.12, flat: true, hips: 0.015, lean: -7, yaw: 10, gap: -0.04, guard: { y: -0.06, apart: 0.04, elbow: 0.25, chin: -6 }, look: 0.25, head: null, travel: { cycle: 1.35, lean: 6, lurch: 0.05, order: 0.5, width: 0.45, face: 0.3, pivot: 6 }, flourish: 'nervous' }),
@@ -364,7 +384,7 @@ export const LEVEL = {
   2: {
     grade: 2, side: null, name: '아마추어', label: '2',
     chain: { lag: [0.01, 0, 0, 0, 0], damp: 0.66, amp: [0.8, 0.8, 0.8, 1, 1], coil: 1.3, least: 0.035, back: 0.8, backLag: 1.5, firm: 0.86, spring: { down: 1.22, pause: 0.05 } },
-    form: form({ guard: 0.4, chin: 0.35, over: 0.35, tell: 0.4, lively: 0.15, dip: -0.005, late: 0.05, sep: 0, off: 0, look: 0.6, exit: 'flat' }),
+    form: form({ guard: 0.4, chin: 0.35, over: 0.35, tell: 0.4, lively: 0.15, dip: -0.005, late: 0.05, sep: 0, off: 0, look: 0.6, exit: 'flat', level: DOWN_2 }),
     // a small, even bounce, all of a piece: the head and the gloves go up and down with the hips
     stance: stance({ bounce: 0.45, knee: 4, hop: 0.4, rock: 0.4, lag: 0.3, hips: 0.01, lean: -3, yaw: 4, guard: { y: 0.01, elbow: 0.1 }, look: 0.6, head: null, travel: { cycle: 1.15, halting: 0.7, width: 0.75, face: 0.08, pivot: 9 } }),
     evade: evade({ knee: { share: 0.55, depth: 0.85 }, flinch: 0.03, out: 1.3, hold: 1.2, back: 0.9, move: 1.15, delay: { head: 0.06, hips: 0.05, feet: 0.05 }, pause: 0.04, cut: 'end', load: 0, look: 0.6, lively: 0, exit: 'flat' }),
@@ -389,7 +409,7 @@ export const LEVEL = {
   '4m': {
     grade: 4, side: 'm', name: '일류 · 명', label: '4명', wave: WAVE_4M, pat: PAT_4M,
     chain: { early: [0.25, 0.25, 0, 0, 0], damp: [0.6, 0.6, 0.56, 0.6, 0.6], amp: [1.1, 1.15, 1.1, 1, 1], coil: 0.55, shown: 0.65, back: 1.12, backLag: 1, firm: 1.08, spring: { down: 0.6, wait: true } },
-    form: form({ guard: -0.3, chin: -0.5, lively: 0.5, dip: -0.03, drop: true, sep: 7, off: 0.07, with: 'hips', tuck: 4, look: 1, bend: 4, exit: 'roll', beat: 'on' }),
+    form: form({ guard: -0.3, chin: -0.5, lively: 0.5, dip: -0.03, drop: true, sep: 7, off: 0.07, with: 'hips', tuck: 4, look: 1, bend: 4, exit: 'roll', beat: 'on', level: DOWN_4M }),
     // strong and weak, the lead foot's landing the heavy one; the head an end on every lead foot, under in between
     stance: stance({ bounce: 1.15, knee: 6.2, lag: 1.1, accent: [1.3, 0.8], guard: { chin: 4 }, look: 1, head: { A: 0.045, D: 0.025, T: 4, beat: 'locked', level: { every: 8, depth: 0.07, lean: 5 } } }),
     evade: evade({ knee: { share: 1.1, depth: 1.05 }, out: 0.7, hold: 0.8, back: 0.6, move: 0.93, delay: { feet: 0.017, trunk: 0.017, head: 0.033 }, cut: 'clear', load: 0.7, look: 1, lively: 0.5, beat: 'on', cross: 5, just: 0.006 }),
@@ -402,7 +422,7 @@ export const LEVEL = {
   '4a': {
     grade: 4, side: 'a', name: '일류 · 암', label: '4암', vary: VARY_4A,
     chain: { early: [0.25, 0.25, 0, 0, 0], damp: [0.6, 0.6, 0.56, 0.6, 0.6], amp: [1.1, 1.15, 1.1, 1, 1], coil: 0.55, shown: 0.65, back: 1.05, backLag: 1, firm: 1.08, hold: 0.1, spring: { down: 0.6, wait: true } },
-    form: form({ guard: -0.2, chin: -0.4, over: 0.15, dirty: 1, lively: 0.5, dip: -0.03, drop: true, sep: 7, off: 0.07, with: 'hips', tuck: 4, look: 1, bend: 4, exit: 'roll' }),
+    form: form({ guard: -0.2, chin: -0.4, over: 0.15, dirty: 1, lively: 0.5, dip: -0.03, drop: true, sep: 7, off: 0.07, with: 'hips', tuck: 4, look: 1, bend: 4, exit: 'roll', level: DOWN_4A }),
     // the beat rubbed out: low and heavy, the feet dragged and lurching, the head rolling low in its own time
     stance: stance({ bounce: 0.45, knee: 2.4, hop: 0.6, rock: 0.8, jitter: 0.25, drag: 0.6, hips: -0.03, travel: { width: 0.95, face: 0.1, pivot: 8 }, look: 1, head: { A: 0.055, D: 0.04, T: 4, beat: 'roll', level: { every: 2.6, depth: 0.08, lean: 5 } }, show: SHOW_4A }),
     evade: evade({ knee: { share: 1.1, depth: 1.05 }, out: 0.75, hold: 0.8, back: 0.8, move: 0.95, delay: { feet: 0.017, trunk: 0.017, head: 0.033 }, cut: 'clear', load: 0.7, look: 1, lively: 0.3, in: 0.04, low: 0.02, just: 0.008 }),
@@ -414,7 +434,7 @@ export const LEVEL = {
   '5m': {
     grade: 5, side: 'm', name: '전설 · 명', label: '5명', wave: WAVE_5M, pat: PAT_5M,
     chain: { early: [0.4, 0.4, 0, 0, 0], damp: [0.6, 0.6, 0.5, 0.6, 0.6], amp: [1.15, 1.25, 1.18, 1, 1], coil: 0.2, shown: 0.55, back: 1.15, backLag: 1, firm: 1.2, spring: { down: 0.4 } },
-    form: form({ guard: -0.4, chin: -0.6, lively: 0.7, dip: -0.04, drop: true, sep: 11, off: 0.1, with: 'legs', tuck: 6, look: 1, bend: 6, exit: 'angle', beat: 'off' }),
+    form: form({ guard: -0.4, chin: -0.6, lively: 0.7, dip: -0.04, drop: true, sep: 11, off: 0.1, with: 'legs', tuck: 6, look: 1, bend: 6, exit: 'angle', beat: 'off', level: DOWN_5M }),
     // the lightest feet: a swung beat, a phrase that quickens, stops dead and breaks out into something
     // (and going anywhere, the head and the knees are the shape of it, on his beat: a slower travelling beat, room for a U)
     stance: stance({ bounce: 1.1, knee: 7.7, hop: 1.3, rock: 1.1, lag: 1.25, swing: 0.58, tempo: 'phrase', guard: { y: -0.02, loose: 1 }, look: 1, head: { A: 0.045, D: 0.025, T: 4, beat: 'phrase', level: { depth: 0.07, lean: 5 } }, flourish: 'clean', travel: { cycle: 1.9 }, legend: LEGEND_CLEAN }),
@@ -429,7 +449,7 @@ export const LEVEL = {
   '5a': {
     grade: 5, side: 'a', name: '전설 · 암', label: '5암', vary: VARY_5A,
     chain: { early: [0.4, 0.4, 0, 0, 0], damp: [0.6, 0.6, 0.5, 0.6, 0.6], amp: [1.15, 1.25, 1.18, 1, 1], coil: 0.25, shown: 0.55, back: 1.12, backLag: 1, firm: 1.2, hold: 0.08, spring: { down: 0.4 } },
-    form: form({ guard: -0.3, chin: -0.5, over: 0.1, dirty: 2, lively: 0.7, dip: -0.04, drop: true, sep: 11, off: 0.1, with: 'legs', tuck: 6, look: 1, bend: 6, exit: 'angle' }),
+    form: form({ guard: -0.3, chin: -0.5, over: 0.1, dirty: 2, lively: 0.7, dip: -0.04, drop: true, sep: 11, off: 0.1, with: 'legs', tuck: 6, look: 1, bend: 6, exit: 'angle', level: DOWN_5A }),
     // lower still and always rolling, the lead shoulder up and the lead hand in his eyes, the beat nowhere
     stance: stance({ bounce: 0.35, knee: 1.9, hop: 0.5, rock: 0.8, lag: 1.1, jitter: 0.25, drag: 0.7, hips: -0.04, show: SHOW_5A, travel: { width: 0.95, face: 0.1, pivot: 8, cycle: 1.9 }, look: 1, head: { A: 0.06, D: 0.05, T: 4, beat: 'roll', level: { every: 1.9, depth: 0.08, lean: 5 } }, flourish: 'dirty', legend: LEGEND_DIRTY }),
     evade: evade({ knee: { share: 1.15, depth: 1.1 }, out: 0.62, hold: 0, back: 0.73, move: 0.92, delay: { trunk: 0.017, head: 0.033 }, cut: 'clear', load: 1, look: 1, lively: 0.3, follow: 0.3, in: 0.06, low: 0.02, just: 0.015 }),

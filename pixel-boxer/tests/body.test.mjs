@@ -17,7 +17,19 @@
                    hit), the other glove at his head; each grade brings the elbow down the sooner the better he is, a
                    beginner never, a man holding the cross-arm guard never; an amateur brings both down and his head is
                    open to a jab after it that a pro's guard stops
-     the body      every body-shot script within the physics audit; the same script, the same result */
+     the body      every body-shot script within the physics audit; the same script, the same result
+   And the punches to the body themselves (stage two, §3.3, §3.7, src/ladder.mjs BODY_LADDER) and the rear hook (§3.8, §4A.7):
+     landed        each body punch at every grade from its range on his trunk between his hips and his chest, the liver hook
+                   on the liver; the same press lands on his head, and asked for the body, on his trunk
+     harder        grade by grade (a great one's straight body punch as hard as a pro's give or take a tenth); the pro's liver
+                   hook 80 N·s and more, 0.17 to 0.22 s after the press
+     the way down  his head at the liver hook's contact as far down as his grade's table says (±3 cm), the knees' share 1 < 2 < 3
+     decide        a press for the body is the body punch of the one it would have been; a press naming a punch is that punch
+     the elbow     read off the way down: against the pro's liver hook a pro and better get it there, an amateur is late, a
+                   beginner never, the cross-arm guard meets it; a pro who waited 0.2 s would be hit
+     the rear hook every grade lands it on the head from 0.80 m, and one that puts him down lays him to his right; the shoulder
+                   roll's counter presses it
+     audited       every rung and card of them within the physics audit */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { step, settle, RULES } from '../src/game/bout.mjs';
@@ -31,6 +43,11 @@ import { LEVEL, LEVELS, CROSS } from '../src/anim/skill.mjs';
 import { MOVES } from '../src/anim/moves.mjs';
 import { fk } from '../src/rig/skeleton.mjs';
 import { where, middle, aimed, balls, TRUNK } from '../src/game/trunk.mjs';
+import { BODY_LADDER, REAR_LADDER } from '../src/ladder.mjs';
+import { LIVER_BLOCK } from '../src/bodyshots.mjs';
+import { guardOf } from '../src/measure.mjs';
+import { createBout, local } from '../src/game/bout.mjs';
+import { TECHNIQUES } from '../src/game/techniques.mjs';
 
 const DT = 1 / 60,
   DEG = 180 / Math.PI,
@@ -324,4 +341,185 @@ test('the body: every body-shot script within the physics audit', () => {
 test('the body: the same script is the same blow and the same fall', () => {
   const once = () => run(card('down-liver')).events.map(e => `${e.tick} ${e.type} ${e.J ?? ''} ${e.zone ?? ''}`);
   assert.deepEqual(once(), once());
+});
+
+/* ---- the punches to the body (stage two: docs/moves-plan-5.md §3.3, §3.7) and the rear hook (§3.8, §4A.7), on the body
+   ladder (src/ladder.mjs: BODY_LADDER, REAR_LADDER): each punch at each grade from its range, at a man standing in his guard. */
+// a rung: the blow (and when after the press), where on his trunk it met him, and his own head and hips against his guard's
+const rungs = {};
+function rungOf(id) {
+  if (rungs[id]) return rungs[id];
+  const entry = [...BODY_LADDER, ...REAR_LADDER].find(e => e.id === id),
+    bout = freshBout(entry),
+    [a, b] = bout.fighters,
+    guard = guardOf(entry.level),
+    out = { blow: null, spot: null, head: null, hips: null };
+  let press = -1;
+  for (let tick = 0; tick < Math.round(entry.loop / DT) && !out.blow; tick++) {
+    step(bout, drive(entry, bout, tick * DT, DT), DT);
+    b.hp = 1000;
+    for (const e of bout.events) {
+      if (e.type === 'punch' && e.who === 0 && press < 0) press = tick;
+      if (e.who === 0 && ['hit', 'block', 'graze', 'whiff'].includes(e.type) && !out.blow) {
+        out.blow = Object.assign({ s: (tick - press) * DT }, e);
+        out.spot = e.at ? where(b.points, e.at) : null;
+        out.head = guard.headY - a.points.head[1];
+        out.hips = guard.hipsY - a.pose.at.Hips[1] * a.pose.stretch;
+      }
+    }
+  }
+  return (rungs[id] = out);
+}
+const LOWS = ['jabBody', 'crossBody', 'hookBody', 'upperBody'];
+
+test('body punches: every grade lands each from its range on his trunk, between his hips and the top of his chest; the liver hook on his liver', () => {
+  for (const p of LOWS)
+    for (const lv of LEVELS) {
+      const { blow, spot } = rungOf(`${p}@${lv}`);
+      assert.ok(blow && blow.type === 'hit' && blow.part === 'body' && blow.name === p, `${p}@${lv}: ${JSON.stringify(blow)}`);
+      assert.ok(spot && spot.k >= 0 && spot.k <= 3.25, `${p}@${lv}: met him at ${JSON.stringify(spot)}`);
+      // (the liver hook on the liver at every grade; the rest where his guard leaves his trunk open: measured, README)
+      if (p === 'hookBody') assert.equal(blow.zone, 'liver', `${p}@${lv}`);
+      else assert.ok(['solar', 'body', 'ribs'].includes(blow.zone), `${p}@${lv}: ${blow.zone}`);
+    }
+});
+
+test('body punches: the same press from the same place lands on his head, and asked for the body, on his trunk', () => {
+  for (const [press, gap, name] of [[{ jab: true }, 1.0, 'jabBody'], [{ power: true }, 0.98, 'crossBody']]) {
+    const blow = body => {
+      const bout = createBout(5, { skills: [{}, { stance: '2' }] });
+      bout.fighters[0].x = -gap / 2;
+      bout.fighters[1].x = gap / 2;
+      bout.fighters[1].hp = 1000;
+      settle(bout);
+      for (let i = 0; i < 60; i++) {
+        step(bout, [i === 0 ? Object.assign({ body }, press) : {}, {}], DT);
+        const e = bout.events.find(e => e.who === 0 && ['hit', 'block', 'graze', 'whiff'].includes(e.type));
+        if (e) return e;
+      }
+      return null;
+    };
+    const head = blow(false),
+      body = blow(true);
+    assert.ok(head && head.type === 'hit' && head.part === 'glove' && !head.zone, `${JSON.stringify(press)}: ${JSON.stringify(head)}`);
+    assert.ok(body && body.type === 'hit' && body.part === 'body' && body.name === name, `${JSON.stringify(press)} for the body: ${JSON.stringify(body)}`);
+  }
+});
+
+test("body punches: harder grade by grade; the pro's liver hook 80 N·s and more, landing 0.17 to 0.22 s after the press", () => {
+  for (const p of [...LOWS, 'hookR']) {
+    const J = lv => rungOf(`${p}@${lv}`).blow.J;
+    for (const [lo, hi] of [['1', '2'], ['2', '3']]) assert.ok(J(hi) > J(lo), `${p}: ${lo} ${J(lo)} < ${hi} ${J(hi)}`);
+    /* (a great one's swung or lifted punch to the body is harder again; his straight one, thrown down at a trunk a little
+       closer than a head, comes out as hard as a pro's give or take a tenth: README, known limits) */
+    if (p === 'jabBody' || p === 'crossBody') for (const lv of ['4m', '4a', '5m', '5a']) assert.ok(J(lv) >= 0.9 * J('3'), `${p}: ${lv} ${J(lv)} against a pro's ${J('3')}`);
+    else for (const [lo, hi] of [['3', '4m'], ['4m', '5m'], ['3', '4a'], ['4a', '5a']]) assert.ok(J(hi) > J(lo), `${p}: ${lo} ${J(lo)} < ${hi} ${J(hi)}`);
+  }
+  const pro = rungOf('hookBody@3').blow;
+  assert.ok(pro.J >= 80, `${pro.J} N·s`);
+  assert.ok(pro.s >= 0.17 - 1e-9 && pro.s <= 0.22 + 1e-9, `${pro.s.toFixed(3)} s`);
+});
+
+test("the way down: at the contact of the liver hook his head is as far down as his grade goes (±3 cm), and the knees' share 1 < 2 < 3", () => {
+  // (docs/moves-plan-5.md §3.7: the head's way down at the liver hook, centimetres, from his own guard)
+  const TABLE = { 1: 12, 2: 13, 3: 15, '4m': 15, '4a': 9, '5m': 15, '5a': 9 },
+    share = lv => rungOf(`hookBody@${lv}`).hips / rungOf(`hookBody@${lv}`).head;
+  for (const lv of LEVELS) {
+    const head = rungOf(`hookBody@${lv}`).head * 100;
+    assert.ok(Math.abs(head - TABLE[lv]) <= 3, `${lv}: the head ${head.toFixed(1)} cm down, the table ${TABLE[lv]}`);
+  }
+  assert.ok(share('1') < share('2') && share('2') < share('3'), ['1', '2', '3'].map(lv => `${lv} ${(share(lv) * 100).toFixed(0)}%`).join(', '));
+  // (a pro's is most of it his knees: the plan's 65%)
+  assert.ok(share('3') >= 0.55, `${(share('3') * 100).toFixed(0)}%`);
+});
+
+test('decide: a press for the body is the body punch of the one it would have been; a press that names a punch is that punch', () => {
+  const thrown = (gap, presses) => {
+    const bout = createBout(5);
+    bout.fighters[0].x = -gap / 2;
+    bout.fighters[1].x = gap / 2;
+    // (he only takes it: a liver hook does not put him down and end the bout, bout.mjs f.stands)
+    Object.assign(bout.fighters[1], { hp: 1000, stands: true });
+    settle(bout);
+    const names = [];
+    for (let i = 0; i < 200 && names.length < presses.length; i++) {
+      // (each press as soon as the last punch has been thrown: the power chain runs on)
+      const f = bout.fighters[0],
+        ready = !f.action || (!!f.action.chain && ['hold', 'recover', 'done'].includes(f.action.chain.phase));
+      step(bout, [ready ? presses[names.length] : {}, {}], DT);
+      for (const e of bout.events) if (e.type === 'punch' && e.who === 0) names.push(e.name);
+    }
+    return names;
+  };
+  assert.deepEqual(thrown(1.0, [{ jab: true, body: true }]), ['jabBody']);
+  const B = { power: true, body: true };
+  assert.deepEqual(thrown(0.98, [B, B, B]), ['crossBody', 'hookBody', 'upperBody']);
+  // (right up close the power chain is the inside hook and the inside uppercut: to the body, the liver hook and the body uppercut)
+  assert.deepEqual(thrown(0.66, [B, B]), ['hookBody', 'upperBody']);
+  // (a press that is not for the body is the press it always was)
+  assert.deepEqual(thrown(0.98, [{ power: true }, { power: true }]), ['cross', 'hook']);
+  assert.deepEqual(thrown(0.8, [{ power: 'hookR' }]), ['hookR']);
+});
+
+test('the elbow block against the liver hook: read off the way down to it; a pro and better get the elbow there, an amateur is late, a beginner never', () => {
+  for (const lv of LEVELS) {
+    let gap = null;
+    const r = run(LIVER_BLOCK.find(e => e.level === lv), bout => {
+        const f = bout.fighters[0];
+        if (bout.events.some(e => e.type === 'block' && e.who === 1)) gap = Math.hypot(...M_sub(f.points.L, f.points.head)) - RULES.glove - RULES.head;
+      }),
+      e = blows(r)[0];
+    assert.ok(e && e.name === 'hookBody', `${lv}: ${JSON.stringify(e)}`);
+    if (['3', '4m', '5m'].includes(lv)) {
+      assert.ok(e.type === 'block' && (e.part === 'elbow' || e.part === 'forearm') && e.zone === 'liver', `${lv}: ${JSON.stringify(e)}`);
+      assert.ok(gap <= 0.04, `${lv}: the other glove ${(gap * 100).toFixed(1)} cm off his head`);
+      // (a dirty great one holds the cross-arm guard, the lead glove across his belly: the hook meets it, docs/moves-plan-5.md §4A.3)
+    } else if (lv === '4a' || lv === '5a') assert.ok(e.type === 'block' && ['elbow', 'forearm', 'glove'].includes(e.part), `${lv}: ${JSON.stringify(e)}`);
+    else assert.ok(e.type === 'hit' && e.part === 'body' && e.zone === 'liver', `${lv}: ${JSON.stringify(e)}`);
+  }
+  // (read off the way down, not off the hips firing: a pro whose elbow waited as long as that would be hit)
+  const late = Object.assign({}, LEVEL['3'], { cover: Object.assign({}, LEVEL['3'].cover, { low: Object.assign({}, LEVEL['3'].cover.low, { delay: 0.2 }) }) }),
+    base = LIVER_BLOCK.find(e => e.level === '3'),
+    e = blows(run(Object.assign({}, base, { setup: b => (b.fighters[0].skills = { all: late }) })))[0];
+  assert.ok(e.type === 'hit', `a pro's elbow 0.2 s after the way down shows: ${JSON.stringify(e)}`);
+});
+
+test('the rear hook: every grade lands it on his head from 0.80 m; down, he falls to his right', () => {
+  for (const lv of LEVELS) {
+    const { blow } = rungOf(`hookR@${lv}`);
+    assert.ok(blow && blow.type === 'hit' && blow.part === 'glove' && blow.name === 'hookR' && blow.hand === 'R' && !blow.zone, `hookR@${lv}: ${JSON.stringify(blow)}`);
+  }
+  const pro = rungOf('hookR@3').blow;
+  assert.ok(pro.J >= 85 && pro.s <= 0.22 + 1e-9, `${pro.J} N·s, ${pro.s.toFixed(3)} s`);
+  // (his health all but gone as it lands: laid out, he goes the way the glove goes on through him, to his right)
+  const entry = { id: 'down-rear', loop: 3, hurt: true, me: () => HOME, him: () => [HOME[0] + 0.8, HOME[1]], against: [[0.6, 'power', 'hookR']], setup: b => (b.knockdowns = true), keep: (b, t) => (b.fighters[0].hp = t < 0.7 ? 100 : Math.min(b.fighters[0].hp, 1.5)) },
+    bout = freshBout(entry),
+    f = bout.fighters[0];
+  let hit = null,
+    from = null,
+    rest = null;
+  for (let tick = 0; tick < Math.round(entry.loop / DT); tick++) {
+    step(bout, drive(entry, bout, tick * DT, DT), DT);
+    bout.fighters[1].hp = 1000;
+    const e = bout.events.find(e => e.type === 'hit' && e.on === 0 && e.down);
+    if (e && !hit) (hit = { e, yaw: f.yaw }), (from = measure(f).com);
+    if (hit && f.action && MOVES[f.action.name].fall) rest = measure(f).com;
+  }
+  assert.ok(hit && hit.e.name === 'hookR' && rest, JSON.stringify(hit && hit.e));
+  const moved = local({ yaw: hit.yaw }, rest[0] - from[0], rest[2] - from[2]);
+  assert.ok(moved[0] < -0.3 && Math.abs(moved[0]) > Math.abs(moved[1]), `moved [${moved.map(x => x.toFixed(2))}] (+ his left, + ahead)`);
+});
+
+test('the rear hook is what a shoulder roll winds up: the roll counter presses it by name, the rear uppercut right up close', () => {
+  assert.deepEqual(TECHNIQUES.rollCounter.counter({ far: 0.9 }), { power: 'hookR', tech: 'rollCounter' });
+  assert.deepEqual(TECHNIQUES.rollCounter.counter({ far: 0.7 }), { power: 'upperIn', tech: 'rollCounter' });
+});
+
+test("body punches: every rung of them, the rear hook's and the elbow block against the liver hook, within the physics audit", () => {
+  const { found, seen } = audit([...BODY_LADDER, ...REAR_LADDER, ...LIVER_BLOCK]);
+  assert.ok(seen > 4000, `only ${seen} frames`);
+  const broken = Object.entries(found)
+    .filter(([, c]) => c.bad)
+    .map(([check, c]) => `${check}: ${c.bad} (${JSON.stringify(c.cases.slice(0, 3))})`);
+  assert.deepEqual(broken, []);
 });

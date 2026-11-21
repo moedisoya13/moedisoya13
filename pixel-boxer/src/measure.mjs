@@ -14,7 +14,7 @@
                            having left the canvas and come back down at */
 import { step } from './game/bout.mjs';
 import { freshBout, drive } from './footwork.mjs';
-import { LADDER, STANCES } from './ladder.mjs';
+import { LADDER, STANCES, BODY_LADDER, REAR_LADDER } from './ladder.mjs';
 import { LEVELS, LEVEL } from './anim/skill.mjs';
 import { MOVES } from './anim/moves.mjs';
 import { NAMES } from './rig/skeleton.mjs';
@@ -145,7 +145,7 @@ export function guardOf(level) {
 
 // one rung: the blow and how the body was used to throw it
 export function rung(id) {
-  const entry = LADDER.find(e => e.id === id),
+  const entry = [...LADDER, ...BODY_LADDER, ...REAR_LADDER].find(e => e.id === id),
     move = MOVES[entry.punch],
     { frames, chain } = run(entry),
     guard = guardOf(entry.level),
