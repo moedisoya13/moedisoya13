@@ -231,11 +231,14 @@ define('parryDown', {
 });
 
 define('blockFire', {
-  name: '블록 & 파이어', section: '§4.3', open: CLEAN,
-  // a hook to his body met by his elbow with his guard up (§3.4): the arm that blocked it fires, within 0.25 s
+  name: '블록 & 파이어', section: '§4.3', open: CLEAN, ready: true,
+  /* (built, stage G1: game/bout.mjs fired, anim/clean.mjs fireBody, skill.mjs fire) a hook to his body met by his elbow or
+     forearm with his guard up (§3.4): the arm that blocked it fires, within 0.25 s (his grade's fire.within), as a counter:
+     off the rear elbow the uppercut (the inside one inside 0.74 m), off the lead elbow the lead hook; a legend's other hand's
+     hook follows it, the bout's */
   opening: s => {
     const k = s.mem.kept;
-    return k && LOW[k.name] === 'hook' && s.t - k.at <= 0.25 ? 'blockFire:' + k.at : null;
+    return k && LOW[k.name] === 'hook' && (k.part === 'elbow' || k.part === 'forearm') && s.t - k.at <= 0.25 ? 'blockFire:' + k.at : null;
   },
   counter: () => ({ power: true, tech: 'blockFire' })
 });
@@ -251,7 +254,10 @@ define('shift', {
 });
 
 define('shell', {
-  name: '피커부 셸', section: '§4.5', open: CLEAN,
+  name: '피커부 셸', section: '§4.5', open: CLEAN, ready: true,
+  /* (built, stage G1: game/bout.mjs f.shell, anim/clean.mjs shellBody, skill.mjs shell. Crouched behind it his gloves and
+     forearms are in the way of every punch but the uppercut; the counter is the lead hook out of the crouch and the rear body
+     uppercut after it, the bout's) */
   // a jab or a straight at his head, his breath at half or more: crouched behind his guard (30% of his guards), 0.6-1.2 s
   answer: {
     of: 'guard', share: 0.3, when: s => straight(s) && s.breath >= 0.5,
@@ -263,7 +269,7 @@ define('shell', {
     const e = [s.mem.by, s.mem.kept].find(e => since(s, e, 0.25));
     return e ? 'shell:' + e.at : null;
   },
-  // the hook and the body uppercut out of the crouch (stage G1); or, carrying it, the shift by its own chance
+  // the hook and the body uppercut out of the crouch; or, carrying it, the shift by its own chance (stage G2's)
   counter: s => (offered(s, 'shift') && s.roll() < TECHNIQUES.shift.combination.weight(s) ? { power: true, tech: 'shift' } : { power: true, tech: 'shell' })
 });
 

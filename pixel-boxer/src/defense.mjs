@@ -330,3 +330,70 @@ export const PULL_COUNTER = PULL_WAYS.flatMap(way =>
     });
   })
 );
+
+/* Block and fire (docs/moves-plan-5.md §4.3; game/techniques.mjs blockFire, anim/clean.mjs, game/bout.mjs fired), a clean great
+   one's and a clean legend's own, a card each: the same pro throws the same liver hook as the elbow block's card (from 0.85 m,
+   at a man holding his guard up), the boxer carries the technique, brings his rear elbow down over it, and presses his power
+   punch meant as it once, as his head does: on the step after the hook has been met by his elbow or forearm. The bout makes it
+   the uppercut of the arm that blocked it (a legend's lead hook follows it on its own). The other man only takes it. The
+   card's numbers: how long after the block the uppercut lands (on the bout's clock), and how hard. */
+export const FIRE_LEVELS = ['4m', '5m'];
+export const firedCue = press => bout => {
+  const f = bout.fighters[0],
+    own = (f.cues = f.cues || {});
+  if (own.pressed || !bout.events.some(e => e.type === 'block' && e.on === 0 && (e.part === 'elbow' || e.part === 'forearm'))) return null;
+  own.pressed = true;
+  return press;
+};
+export const BLOCK_FIRE = FIRE_LEVELS.map(lv =>
+  Object.assign(placed({
+    id: `blockFire@${lv}`, item: 'blockFire', level: lv, name: `블록 & 파이어 ${lv === '4m' ? '4명' : '5명'}`, en: 'Block and fire', group: '명의 기술', kind: 'fire',
+    loop: 2.4, gap: 0.85, outcome: 'block', view: { yaw: 1.0, pitch: 0.2 },
+    throws: [[0.6, 'power', 'hookBody']],
+    cover: t => t > 0.1 && t < 1.3,
+    cue: firedCue({ power: true, tech: 'blockFire' }),
+    // (he only takes it: no blow of the boxer's puts him down on a knee, and the loop goes on round the exchange)
+    setup: b => ((b.fighters[0].skills = { all: lv }), (b.fighters[0].techniques = ['blockFire']), (b.fighters[1].stands = true))
+  }), {
+    // (once it has landed, both are left where the exchange puts them: it is the end of it)
+    me: t => (t > 0.9 ? null : HOME),
+    him: t => (t > 0.9 ? null : [HOME[0] + 0.85, HOME[1]])
+  })
+);
+
+/* The peek-a-boo shell (docs/moves-plan-5.md §4.5; game/techniques.mjs shell, anim/clean.mjs shellBody, game/bout.mjs f.shell), a
+   clean great one's and a clean legend's own, three rows of two: the boxer carries it and crouches into it meant as it (tech:
+   'shell', his guard put up on that frame and held), as his head does: against the jab the moment it is thrown (the frame after
+   its press, inside WINDOWS.shell: the last frame he can put it up and still have it in the jab's way), and he takes the
+   opening it makes once, as his head does: a power press meant as it on the step after the jab is met (the lead hook, the
+   body uppercut after it, the bout's); against a hook and an uppercut thrown on their own from 0.85 m he is in it already, and
+   only takes them (the hook is blocked; the uppercut comes up between his forearms to his chin: what the shell leaves open).
+   The card's numbers: how far down his head is 0.2 s in (from his guard), and the counter's hook and body uppercut, how long
+   after the jab was met each lands. */
+export const SHELL_ROWS = [
+  { id: 'shell', name: '피커부 셸', en: 'The peek-a-boo shell', punch: 'jab', gap: 1.0, at: 0.5, until: 1.6, outcome: 'block', counter: true, loop: 2.4 },
+  { id: 'shell-hook', name: '피커부 셸 · 훅', en: 'The shell against the hook', punch: 'hook', gap: 0.9, at: 0.4, until: 1.2, outcome: 'block', loop: 2 },
+  { id: 'shell-upper', name: '피커부 셸 · 어퍼', en: 'The shell against the uppercut', punch: 'upper', gap: 0.85, at: 0.4, until: 1.2, outcome: 'hit', loop: 2 }
+];
+export const SHELL_LEVELS = ['4m', '5m'];
+export const shellCue = row => bout => {
+  const f = bout.fighters[0],
+    own = (f.cues = f.cues || {});
+  if (row.counter && !own.pressed && f.shellOpen) return (own.pressed = true), { power: true, tech: 'shell' };
+  return own.pressed ? null : ['tech', 'shell'];
+};
+export const SHELL = SHELL_ROWS.flatMap(row =>
+  SHELL_LEVELS.map(lv =>
+    Object.assign(
+      placed({
+        id: `${row.id}@${lv}`, item: row.id, level: lv, name: row.name, en: row.en, group: '명의 기술', kind: 'shell',
+        loop: row.loop, gap: row.gap, outcome: row.outcome, view: { yaw: 0.5, pitch: 0.22 },
+        throws: row.punch === 'jab' ? [[0.8, 'jab']] : [[0.6, 'power', row.punch]],
+        cover: t => t >= row.at - 1e-9 && t < row.until,
+        cue: (bout, t) => (t >= row.at - 1e-9 && t < row.until ? shellCue(row)(bout, t) : null),
+        setup: b => ((b.fighters[0].skills = { all: lv }), (b.fighters[0].techniques = ['shell']), (b.fighters[1].stands = true))
+      }),
+      { me: t => (t > 1.0 ? null : HOME), him: t => (t > 1.0 ? null : [HOME[0] + row.gap, HOME[1]]) }
+    )
+  )
+);

@@ -150,8 +150,13 @@ test('techniques: a punch coming is answered by a technique at its share of the 
     const built = facing(1.0, { skills: [{ all: '4m' }, {}], techniques: [['parryDown', 'pullCounter', 'shell']] });
     thrown(built, { jab: true });
     const b = answers(built, head(built, false), N);
-    // (the down parry and the pull counter are built, stages F and D: picked without rehearsal; the shell is not yet)
-    assert.ok(b.parryDown > 0 && b.pullCounter > 0 && !b.shell, 'built and not, not rehearsed: ' + JSON.stringify(b));
+    // (the down parry, the pull counter and the shell are built, stages F, D and G1: picked without rehearsal)
+    assert.ok(b.parryDown > 0 && b.pullCounter > 0 && b.shell > 0, 'built, not rehearsed: ' + JSON.stringify(b));
+    // (and one not built is not: a stand-in answer, put back as it was)
+    define('unbuilt', { open: ['4m'], answer: { of: 'parry', share: 0.5, when: s => s.punch === 'jab', control: () => ({ cover: true, tech: 'unbuilt' }) } });
+    built.fighters[0].techniques = ['unbuilt'];
+    assert.equal(answers(built, head(built, false), N).unbuilt, undefined, 'not built, not rehearsed');
+    delete TECHNIQUES.unbuilt;
   }
 });
 
@@ -377,19 +382,20 @@ test('techniques: not built, they change nothing; rehearsed, only what he carrie
   assert.equal(c.events, d.events, 'the loadouts their grades give them, against only the built ones of those');
   // (the body punches are built and are no technique: everyone throws them, stage C2)
   assert.deepEqual(a.techs.map(l => l.filter(t => t !== 'body' && !(TECHNIQUES[t] && TECHNIQUES[t].ready))), [[], []], 'nothing not built comes out');
-  // rehearsed: a 4명 who carries three (the shell not built yet), against a pro who asked for three his grade does not open
-  const LOAD = [['parryDown', 'pullCounter', 'shell'], ['shift', 'parryDown', 'shell']];
-  const r = fight(33, { sheets, skills: [{ all: '4m' }, { all: '3' }], techniques: LOAD, plans: [PLANS.counter, PLANS.pressure], rehearse: true }, 2000),
+  /* rehearsed: a 4명 who carries three (the shift not built yet; pressing a pro who keeps his guard up, where it comes out),
+     against a pro who asked for three his grade does not open */
+  const LOAD = [['parryDown', 'pullCounter', 'shift'], ['shift', 'parryDown', 'shell']];
+  const r = fight(33, { sheets, skills: [{ all: '4m' }, { all: '3' }], techniques: LOAD, plans: [PLANS.pressure, PLANS.defend], rehearse: true }, 2000),
     carried = new Set(r.techs[0]);
   assert.deepEqual(r.match.bout.fighters[1].techniques, []);
   assert.deepEqual(r.techs[1].filter(t => t !== 'body'), [], 'nothing his grade does not open');
   /* (one he carries whose motion is not built came out: the rehearsal is what let it. Which one depends on the course of the
      match, and the body punches, built since, change that course: stage C2) */
   assert.ok([...carried].some(t => TECHNIQUES[t] && !TECHNIQUES[t].ready), 'he did use one: ' + [...carried]);
-  for (const t of carried) assert.ok(['parryDown', 'pullCounter', 'shell', 'body'].includes(t), t);
+  for (const t of carried) assert.ok(['parryDown', 'pullCounter', 'shift', 'body'].includes(t), t);
   // (the same seed: the same match; another seed: another)
-  const again = fight(33, { sheets, skills: [{ all: '4m' }, { all: '3' }], techniques: LOAD, plans: [PLANS.counter, PLANS.pressure], rehearse: true }, 2000),
-    other = fight(34, { sheets, skills: [{ all: '4m' }, { all: '3' }], techniques: LOAD, plans: [PLANS.counter, PLANS.pressure], rehearse: true }, 2000);
+  const again = fight(33, { sheets, skills: [{ all: '4m' }, { all: '3' }], techniques: LOAD, plans: [PLANS.pressure, PLANS.defend], rehearse: true }, 2000),
+    other = fight(34, { sheets, skills: [{ all: '4m' }, { all: '3' }], techniques: LOAD, plans: [PLANS.pressure, PLANS.defend], rehearse: true }, 2000);
   assert.equal(again.events, r.events);
   assert.deepEqual(again.techs, r.techs);
   assert.notEqual(other.events, r.events);

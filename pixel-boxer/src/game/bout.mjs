@@ -39,7 +39,8 @@
                             and a man doubled up by one goes down a moment later: { type: 'buckle', who }. A guard put up
                             meant as a shoulder roll says so ({ type: 'roll', who }), and a punch met by the lead shoulder (a
                             cross-arm guard's, or a roll's) is { type: 'block', part: 'shoulder', roll: true (rolled off it as
-                            his chest turned away) | false, margin (metres between the glove and his head as it met it) }
+                            his chest turned away) | false, margin (metres between the glove and his head as it met it) };
+                            a guard put up meant as the peek-a-boo shell says so too ({ type: 'shell', who })
      bout.fighters[i].pose  his solved pose this step (and .place: where on the canvas, .points: gloves and head in the world)
      bout.fighters[i].stands   a man who only stands there and takes it (a ladder rung's or a card's target): no blow to his
                             liver puts him down (anything else does as it would; a script keeps his health up besides)
@@ -75,7 +76,7 @@ import { asked, has, gradeOf } from './techniques.mjs';
 import { levelOf, CROSS, ROLL } from '../anim/skill.mjs';
 import { timeline, evadeTime, progress, LOADED, pullWait, pullTo } from '../anim/evade.mjs';
 import { choose, THROWS, PAW, COLLAR, ELBOW } from '../anim/show.mjs';
-import { waveOf, waveTravel, waveTurn, waveBlocked, patOf, presses } from '../anim/clean.mjs';
+import { waveOf, waveTravel, waveTurn, waveBlocked, patOf, presses, fireOf, shellOf } from '../anim/clean.mjs';
 import { dice } from '../anim/stance.mjs';
 import { trunk, balls, where, aimed, aimFor, spray, ZONES } from './trunk.mjs';
 import { shown } from '../anim/body.mjs';
@@ -217,6 +218,13 @@ function loadOf(f, bout, move, more) {
     if (more && more.pulled && e.name === 'pull') return { load: ev.load, from: e.id, pulled: true, grade: e.level.id, wait: pullWait(e, move.name) };
     return LOADED(e.name, e.side) === move.hand ? { load: ev.load, from: e.id } : null;
   }
+  // (block and fire: the crunch of the elbow block is the wind-up of the punch the blocking arm fires, anim/clean.mjs)
+  if (more && more.fired) return { load: more.fired.fire.load, from: 'block', fired: more.fired, wait: more.fired.fire.wait };
+  // (and out of the peek-a-boo shell: the crouch is the wind-up of the lead hook, and of the body uppercut after it)
+  if (more && more.shelled) {
+    const sh = more.shelled.sh || (f.lastShell && f.lastShell.sh);
+    return sh ? { load: more.shelled.follow ? sh.loadBody : sh.load, from: 'shell', shell: sh, wait: more.shelled.follow ? 0 : sh.wait } : null;
+  }
   const p = f.parried;
   /* (out of a down parry, anim/clean.mjs: the hand that pressed it, from where it is, waiting out the press first; a legend's
      lead hand goes at once, a little wound up already) */
@@ -270,10 +278,10 @@ function begin(f, name, more, bout) {
   // (the counter out of a down parry waits for the pressing hand to have kept the glove down: anim/clean.mjs)
   if (chain && loaded && loaded.wait > 0) chain.wait = loaded.wait;
   // (out of a sway back he comes back in first, a punch all wound up waiting wound up: anim/evade.mjs PULLED)
-  if (chain && loaded && loaded.pulled && chain.wait > 0 && chain.phase === 'throw') (chain.phase = 'coil'), (chain.coilTime = Math.max(chain.coilTime, 1e-3));
+  if (chain && loaded && (loaded.pulled || loaded.fired || loaded.shell) && chain.wait > 0 && chain.phase === 'throw') (chain.phase = 'coil'), (chain.coilTime = Math.max(chain.coilTime, 1e-3));
   if (before && isEvasion(before.name) && f.lastEvade && f.lastEvade.action === before) f.lastEvade.endedAt = bout ? bout.t : 0;
   if (before && before.name === 'duckIn') f.lastIn = { action: before, endedAt: bout ? bout.t : 0 };
-  f.action = Object.assign({ name, t: 0, id: name + ++f.serial, struck: false, chain, level, at: bout ? bout.t : 0, loaded: loaded && (loaded.load > 0 || loaded.pulled) ? loaded : null }, more);
+  f.action = Object.assign({ name, t: 0, id: name + ++f.serial, struck: false, chain, level, at: bout ? bout.t : 0, loaded: loaded && (loaded.load > 0 || loaded.pulled || loaded.fired) ? loaded : null }, more);
   if (isEvasion(name)) (f.lastEvade = { action: f.action, name, start: bout ? bout.t : 0, endedAt: null }), (f.action.head0 = f.points ? f.points.head.slice() : null);
   f.cover = false;
   f.roll = null;
@@ -348,6 +356,55 @@ function patCounter(bout, f, inside) {
   }
   return inside ? 'upperIn' : 'cross';
 }
+/* ---- Block and fire (anim/clean.mjs, docs/moves-plan-5.md §4.3): a hook to his body met by his elbow or forearm (strike:
+   f.elbowed, kept for anyone) is, for a man who carries blockFire at a grade that has it (skill.mjs: fire, 4명 and 5명), the
+   wind-up of a punch from the arm that blocked it. A power press meant as it (tech: 'blockFire') within his grade's `within`
+   of the block, and not since hit, is that punch: off the rear elbow (the liver) the uppercut, the inside one right up close;
+   off the lead elbow (the ribs) the lead hook. It goes as a counter (the other man's arm is still coming home off his body:
+   a counter's gain in it), wound up as far as the crunch winds it, and a legend's other hand's hook follows it, pressed by the
+   bout on its own (f.fireFollow), as a legend's cross after his down parry's jab. -> { fire, hand, zone } or null */
+const firesAt = f => (has(f, 'blockFire') ? fireOf(gradeOf(f.skills, 'blockFire')) : null);
+function firedOf(bout, f, sign) {
+  const fire = sign && sign.tech === 'blockFire' ? firesAt(f) : null,
+    b = f.elbowed;
+  if (!fire || !b || bout.t - b.at > fire.within + 1e-9 || f.sinceHit < bout.t - b.at - 1e-9) return null;
+  return { fire, hand: b.zone === 'ribs' ? 'L' : 'R', zone: b.zone, at: b.at };
+}
+// (the punch a legend's block and fire is followed by: the other hand's hook, `follow` seconds after the first got there)
+function fireNext(bout, f) {
+  const L = f.action && f.action.loaded && f.action.loaded.fired;
+  if (L && L.fire.follow !== null && !f.action.followed) (f.action.followed = true), (f.fireFollow = { at: bout.t + L.fire.follow, hand: L.hand === 'R' ? 'L' : 'R', inside: L.fire.inside });
+}
+// (the body uppercut after the hook out of the shell, `follow` seconds after the hook got there)
+function shellNext(bout, f) {
+  const sh = f.action && f.action.shellOut;
+  if (sh && !f.action.followed) (f.action.followed = true), (f.lastShell = { sh }), (f.shellFollow = { at: bout.t + sh.follow });
+}
+const fireName = (hand, inside) => (hand === 'R' ? (inside ? 'upperIn' : 'upper') : inside ? 'hookIn' : 'hook');
+/* ---- The peek-a-boo shell (anim/clean.mjs, docs/moves-plan-5.md §4.5): a guard put up meant as one (tech: 'shell') by a man
+   who carries it at a grade that has one (skill.mjs: shell, 4명 and 5명). Kept as f.shell = { at, sh (his grade's) } for as
+   long as that guard stays up, and never past a blow; it costs breath while it is held. Crouched behind it, his gloves and
+   his forearms are in the way of every punch (strike), and a fresh one turns nothing aside. A punch that goes over him or
+   into it opens him (f.shellOpen: when), and a power press meant as it within his grade's `within` is his counter out of the
+   crouch: the lead hook, wound up as far as the crouch winds it, and the rear body uppercut after it, pressed by the bout on
+   its own (f.shellFollow). */
+const shellsAt = f => (has(f, 'shell') ? shellOf(gradeOf(f.skills, 'shell')) : null);
+function shellGuard(bout, f, input, covering, dt, who) {
+  const a = covering && f.stun <= 0 ? asked(f, input) : null,
+    sh = a && a.tech === 'shell' ? shellsAt(f) : null;
+  if (sh && !f.shell) {
+    f.shell = { at: bout.t, sh };
+    bout.events.push({ type: 'shell', who });
+  } else if (f.shell && (!covering || f.sinceHit <= dt + 1e-9)) f.shell = null;
+  if (f.shell) f.stamina = Math.max(0, f.stamina - f.k.staminaMax * f.shell.sh.cost * dt);
+}
+// (gone over him or into his gloves: the shell's opening)
+const shellOpens = (bout, other) => other.shell && (other.shellOpen = { at: bout.t, sh: other.shell.sh });
+function shellCounter(bout, f, sign) {
+  const o = f.shellOpen;
+  if (!sign || sign.tech !== 'shell' || !o || !has(f, 'shell') || bout.t - o.at > o.sh.within + 1e-9 || f.sinceHit < bout.t - o.at - 1e-9) return null;
+  return o;
+}
 /* The cross-arm guard (anim/show.mjs, docs/moves-plan-5.md §4A): a man who carries it (game/techniques.mjs: crossArm, by default
    the dirty great ones) holds his grade's whenever his guard is up (skill.mjs: CROSS, his grade at it being his guard's
    unless his skills name it). The one place it is decided. -> the shape, or null */
@@ -378,7 +435,7 @@ function rollFor(bout, f, input, dt) {
    cross-arm guard that takes a jab rather than meeting it) */
 const guardOf = other => {
   const cross = crossOf(other);
-  return { cross, hammer: cross && cross.hammer, parries: !other.roll && (!cross || cross.parry === 'meet') };
+  return { cross, hammer: cross && cross.hammer, parries: !other.roll && !other.shell && (!cross || cross.parry === 'meet') };
 };
 /* The lead shoulder (§4A.4): a ball of `r` round the shoulder joint, in the way of a punch while a cross-arm guard is up or a
    roll is on. A punch that meets it while his chest is turning away to his right at `rolling` degrees a second or more, in a
@@ -429,6 +486,18 @@ function decide(bout, f, input, dt, who) {
   if (f.patFollow !== undefined && f.patFollow !== null && bout.t >= f.patFollow - 1e-9) {
     f.patFollow = null;
     if (!f.want) (f.want = ['power', true]), (f.wantAge = 0), (f.wantAt = bout.t);
+  }
+  // (a legend's other hand's hook after his block and fire, pressed on its own when its moment comes: anim/clean.mjs)
+  if (f.fireFollow && bout.t >= f.fireFollow.at - 1e-9) {
+    const other = bout.fighters[1 - who],
+      inside = Math.hypot(other.x - f.x, other.z - f.z) < f.fireFollow.inside;
+    if (!f.want) (f.want = ['power', f.fireFollow.hand === 'L' ? (inside ? 'hookIn' : 'hook') : 'hookR']), (f.wantAge = 0), (f.wantAt = bout.t);
+    f.fireFollow = null;
+  }
+  // (and the rear body uppercut after the hook out of the shell, pressed on its own when its moment comes)
+  if (f.shellFollow && bout.t >= f.shellFollow.at - 1e-9) {
+    if (!f.want) (f.want = ['power', 'upperBody', { tech: 'shell', body: true }]), (f.wantAge = 0), (f.wantAt = bout.t);
+    f.shellFollow = null;
   }
   const pressed = signed(f, input, pressOf(input));
   // (a taunt is over the moment he does anything: a button, his guard, setting off: anim/show.mjs)
@@ -495,7 +564,18 @@ function decide(bout, f, input, dt, who) {
         /* (out of a sway back, the pull counter, game/techniques.mjs, at every grade: the straight, or the liver hook asked for
            the body, or the rear hook it names; anim/evade.mjs PULLED) */
         const pulled = what === 'power' && !!out && out.name === 'pull' && !!sign && sign.tech === 'pullCounter';
+        // (off an elbow block, block and fire: the arm that blocked it, game/techniques.mjs, anim/clean.mjs)
+        const fired = what === 'power' && !pulled && typeof dir !== 'string' ? firedOf(bout, f, sign) : null,
+          // (out of the peek-a-boo shell: the lead hook, the inside one right up close; the body uppercut after it by name)
+          shelled = what === 'power' && !pulled && !fired ? (typeof dir === 'string' ? (dir === 'upperBody' && sign && sign.tech === 'shell' ? { follow: true } : null) : shellCounter(bout, f, sign)) : null;
         if (pulled) (name = sign.body ? 'hookBody' : 'cross'), (f.link = 0);
+        else if (fired) {
+          name = fireName(fired.hand, Math.hypot(other.x - f.x, other.z - f.z) < fired.fire.inside);
+          f.link = Math.max(0, chain.indexOf(name));
+        } else if (shelled && !shelled.follow) {
+          name = Math.hypot(other.x - f.x, other.z - f.z) < shelled.sh.inside ? 'hookIn' : 'hook';
+          f.link = Math.max(0, chain.indexOf(name));
+        }
         else if (what === 'power' && out && out.level.evade.load > 0) {
           name = LOADED(out.name, out.side) === 'L' ? 'hook' : out.name === 'duck' ? 'upper' : 'cross';
           if (inside) name = name === 'hook' ? 'hookIn' : 'upperIn';
@@ -528,7 +608,9 @@ function decide(bout, f, input, dt, who) {
         // (a jab out of the wave goes on with it; a power punch puts an end to it)
         const fromWave = !!f.wave && what === 'jab' && !!f.action && f.action.name === 'wave';
         if (f.wave && !fromWave) f.wave = null;
-        begin(f, name, { counter: f.counter > 0, variant: trick, wave: fromWave || undefined, pulled: pulled || undefined }, bout);
+        begin(f, name, { counter: f.counter > 0 || !!fired, variant: trick, wave: fromWave || undefined, pulled: pulled || undefined, fired: fired || undefined, shelled: shelled || undefined }, bout);
+        if (fired) (f.elbowed = null), (f.fireFollow = null);
+        if (shelled && !shelled.follow) (f.shellOpen = null), (f.shellFollow = null), (f.action.shellOut = shelled.sh);
         // a loaded punch answering a defence: what makes the defence brilliant, if it was close enough
         if (f.action.loaded && f.action.loaded.load > 0 && f.action.loaded.from !== 'legend' && f.action.loaded.from !== 'wave' && f.defence && f.defence.counterAt === null && bout.t - f.defence.start <= BRILLIANT.within + 1e-9) (f.defence.counterAt = bout.t), (f.defence.counter = f.action.id), judge(bout, f, who);
         f.lastPower = what === 'power';
@@ -549,6 +631,8 @@ function decide(bout, f, input, dt, who) {
   if (covering && !f.cover) bout.events.push({ type: 'cover', who });
   // (a guard meant as a down parry: anim/clean.mjs)
   patGuard(bout, f, input, covering, dt);
+  // (a guard meant as the peek-a-boo shell: anim/clean.mjs)
+  shellGuard(bout, f, input, covering, dt, who);
   f.cover = covering;
 }
 
@@ -706,7 +790,11 @@ function advance(bout, f, dt, who) {
       if (move.name === 'flicker' && f.flicks) f.flicks.at = bout.t;
     }
     if (ends) {
+      // (a legend's block and fire, out at the end of its reach without meeting him: the other hand's hook after it all the same)
+      if (!f.action.struck) fireNext(bout, f), shellNext(bout, f);
       if (!f.action.struck) {
+        // (gone over a man crouched in his shell: his opening)
+        shellOpens(bout, bout.fighters[1 - who]);
         const near = f.action.near,
           e = { type: 'whiff', who, name: move.name, margin: near ? +near.gap.toFixed(4) : null };
         bout.events.push(e);
@@ -778,7 +866,7 @@ function viewOf(bout, i) {
       turn: f.turn,
       cover: f.cover ? 1 : 0,
       // a guard still young enough to turn a punch aside: the gloves are out meeting it, not yet pulled in to the face
-      meet: f.cover && f.coverAge < f.k.parry ? 1 - f.coverAge / f.k.parry : 0,
+      meet: f.cover && f.coverAge < f.k.parry && !f.shell ? 1 - f.coverAge / f.k.parry : 0,
       // (and how long it has been up: a show-off's hammer is timed from it; a guard up for a shoulder roll is not one)
       fresh: f.cover && !f.roll ? f.coverAge : null,
       // what the fight has taken out of him, for his body to show: hurt from his health, tired from his breath
@@ -805,6 +893,9 @@ function viewOf(bout, i) {
       pinned: f.pinned > 0,
       // the down parry his guard is put up for, if it is (anim/clean.mjs): how soon the glove coming in will be on his rear glove
       pat: f.pat ? patView(bout, f, other) : null,
+      // the peek-a-boo shell he is in, if he is (anim/clean.mjs): his grade's, how long, and the hand of a straight punch on its way
+      // at him
+      shell: f.shell ? { sh: f.shell.sh, t: bout.t - f.shell.at, from: incoming(other) && incoming(other).chain.on[1] && MOVES[incoming(other).name].arm === 'straight' ? MOVES[incoming(other).name].hand : null } : null,
       // the wave he is in, if he is (anim/clean.mjs): which way round, whether it is still held, his grade's
       wave: f.wave ? { side: f.wave.side, held: f.wave.held, blocked: f.wave.blocked, level: wavesAt(f) } : null,
       // knocked down: what of the other man he cannot fall through, in his own terms
@@ -1181,12 +1272,16 @@ function strike(bout, f, other, who, dt) {
   const guard = guardOf(other),
     // (a rear glove coming down to press a punch down is the down parry's, below)
     patting = patNow(other, move);
-  if (other.cover && other.animator.covered >= RULES.guardUp) {
+  /* (crouched in his shell, his gloves are up at his cheekbones and his forearms up and down in front of him: an uppercut comes
+     up between them to his chin, under the gloves. The bout reckons a glove as a ball 10.5 cm round, which at his cheekbone
+     would cover his chin too, so it does not reckon them in the way of one: anim/clean.mjs, docs/moves-plan-5.md §4.5, §8) */
+  const under = !!other.shell && move.arm === 'lift' && !low;
+  if (other.cover && other.animator.covered >= RULES.guardUp && !under) {
     // (a fist coming down as a hammer is the hammer's, below, not a glove held in the way)
     for (const key of ['L', 'R']) if (!(key === 'R' && ((guard.hammer && other.animator.hammering) || patting))) test('guard', key, RULES.glove + gr);
-    /* (a show-off's crossed arms: the forearms are in the way too, from the elbow to the glove, a capsule as thick as the
-       forearm and the glove coming at it: anim/show.mjs) */
-    if (guard.cross && other.before.LE && !other.animator.hammering)
+    /* (a show-off's crossed arms, or the forearms up and down in front of a man in his shell: the forearms are in the way too,
+       from the elbow to the glove, a capsule as thick as the forearm and the glove coming at it: anim/show.mjs, clean.mjs) */
+    if ((guard.cross || other.shell) && other.before.LE && !other.animator.hammering)
       for (const key of ['L', 'R'])
         for (let i = 0; i < FOREARM.n; i++) {
           const k = i / FOREARM.n;
@@ -1228,6 +1323,10 @@ function strike(bout, f, other, who, dt) {
     blow = { who, on: 1 - who, name: move.name, kind: move.kind, hand, J: +J.toFixed(1), speed: +speed.toFixed(2), mass: +mass.toFixed(2), dir, vec, at: M.add(at, M.scale(n, gr)), variant: action.variant || undefined, part: elbow ? 'elbow' : 'glove' };
   action.struck = true;
   action.chain.landed = true;
+  // (a legend's block and fire: the other hand's hook follows it, his grade's moment after it got there; and the body uppercut
+  // after the hook out of the shell)
+  fireNext(bout, f);
+  shellNext(bout, f);
   action.chain.v[3] = action.chain.v[4] = 0; // the arm is stopped by what it hit
   // (an elbow that has landed comes away off his jaw at once: the arm starts home, it does not lean on into his head; and so
   // does a punch to the body, his trunk folding round where it was: anim/body.mjs)
@@ -1268,6 +1367,8 @@ function strike(bout, f, other, who, dt) {
     other.kz += ((dir[1] * J) / RULES.mass) * RULES.shove * 0.6 * RULES.body.shove;
     other.animator.strike(Object.assign({ J: J * 0.25, dir: felt.dir }, fold || { zone: low }));
     bout.stop = stop * 0.4;
+    // (a hook kept off his body so: what block and fire goes off, above)
+    if (move.kind === 'hook') other.elbowed = { at: bout.t, zone: low };
     return bout.events.push(Object.assign({ type: 'block' }, blow, { part: first.what, zone: low }));
   }
 
@@ -1310,6 +1411,8 @@ function strike(bout, f, other, who, dt) {
     other.animator.strike({ J: J * 0.25, dir: felt.dir });
     other.animator.brace({ J, hand: first.key, dir: felt.dir, level: levelOf(other.skills, 'cover') });
     bout.stop = stop * 0.4;
+    // (into the gloves of a man crouched in his shell: his opening)
+    shellOpens(bout, other);
     // (and what of his guard it met: a glove, or a show-off's crossed forearm)
     return bout.events.push(Object.assign({ type: 'block' }, blow, { part: first.c0 === other.before[first.key] ? 'glove' : 'forearm' }));
   }
@@ -1329,7 +1432,10 @@ function strike(bout, f, other, who, dt) {
   /* A dirty boxer does not let a man he has hit get away: he goes in after him (skill.mjs: dirty); from right up close he is
      in already, and does not walk into him. */
   const dirty = (action.level && action.level.form.dirty) || 0,
-    after = dirty && move.close >= RULES.inside ? 0.75 : 0,
+    // (and so does a legend after his block and fire, his other hand's hook to follow, and a man who hooks out of his shell, his
+    // body uppercut to follow: anim/clean.mjs)
+    chase = !!(action.loaded && action.loaded.fired && action.loaded.fired.fire.follow !== null),
+    after = move.close >= RULES.inside ? (dirty || chase ? 0.75 : action.shellOut ? action.shellOut.chase : 0) : 0,
     // (and a man whose foot is stood on can hardly be moved off it)
     push = (worth / RULES.mass) * RULES.shove * (other.pinned > 0 ? 0.3 : 1) * (spot ? RULES.body.shove : 1);
   other.kx += dir[0] * push;

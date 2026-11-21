@@ -3,6 +3,12 @@
 // off a punch coming in the middle of it. Only 4명 and 5명 have it: asked of anyone else it is the circle out.
 // The down parry and counter (§4.2): his guard put up fresh, meant as it, presses the jab down from above with the rear glove,
 // and the counter goes from the hand that pressed it. Only 4명 and 5명 who carry it; it does not take the place of the parry.
+// Block and fire (§4.3): the liver hook met by the rear elbow, the uppercut of that arm wound up by the block lands as a counter
+// (4명 0.22-0.32 s, 5명 0.16-0.24 s after the block, a legend's lead hook after it), 60 ms and more sooner than not wound up,
+// the other glove at his temple; out of its quarter second, or with nothing blocked, the chain.
+// The peek-a-boo shell (§4.5): crouched 14 cm and more in 0.2 s behind the gloves at his cheekbones; the jab, the cross, the
+// hook and the liver hook kept off, the uppercut and the straight to the body let in; the lead hook and the body uppercut out
+// of it; it costs breath; the window he can go into it in against the jab (it never goes over him).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { run } from '../src/measure.mjs';
@@ -11,10 +17,11 @@ import { createBout, step, settle, RULES } from '../src/game/bout.mjs';
 import { audit } from '../src/audit.mjs';
 import { WAVE } from '../src/anim/clean.mjs';
 import { freshBout, drive, HOME } from '../src/footwork.mjs';
-import { RANGE, THROW, PARRY_DOWN } from '../src/defense.mjs';
+import { RANGE, THROW, PARRY_DOWN, BLOCK_FIRE, FIRE_LEVELS, SHELL, SHELL_ROWS, SHELL_LEVELS } from '../src/defense.mjs';
 import { LEVELS, LEVEL } from '../src/anim/skill.mjs';
 import * as M from '../src/rig/m3.mjs';
 import { WINDOWS } from '../src/windows.data.mjs';
+import { drill as windowDrill, outcome as windowOutcome } from '../tools/windows.mjs';
 
 const DT = 1 / 60;
 const card = id => WAVING.find(e => e.id === id);
@@ -415,6 +422,215 @@ test('down parry: the cards press the jab down and the counter lands, the same e
   }
   const { found, seen } = audit(PARRY_DOWN);
   assert.ok(seen > 500, `${seen} frames`);
+  const broken = Object.entries(found)
+    .filter(([, c]) => c.bad)
+    .flatMap(([check, c]) => c.cases.map(k => `${check}: ${k.value} at ${k.script} @ ${k.t}, ${k.who}, ${k.doing}`));
+  assert.deepEqual(broken, []);
+});
+
+/* ---- Block and fire (§4.3, src/defense.mjs BLOCK_FIRE; game/bout.mjs fired, anim/clean.mjs fireBody, skill.mjs fire): a pro's
+   liver hook met by the rear elbow of a 4명 or a 5명 holding his guard up, and a power press meant as it on the next step. */
+// (one loop of a card or a drill: every event with the bout's clock, and his gloves and head each step)
+function loop(e, more) {
+  const bout = freshBout(e),
+    frames = [];
+  for (let tick = 0; tick < Math.round(e.loop / DT); tick++) {
+    step(bout, drive(e, bout, tick * DT, DT), DT);
+    const [a, b] = bout.fighters;
+    b.hp = 1000;
+    a.hp = Math.max(a.hp, 50);
+    frames.push({ t: bout.t, head: a.points.head.slice(), L: a.points.L.slice(), R: a.points.R.slice(), LE: a.points.LE.slice(), RE: a.points.RE.slice(), points: a.points, action: a.action ? a.action.name : null, shell: !!a.shell, stamina: a.stamina, events: bout.events.map(x => ({ ...x })), ...(more ? more(bout) : {}) });
+  }
+  return frames;
+}
+const events = frames => frames.flatMap(f => f.events.map(e => Object.assign({ t: f.t }, e)));
+// (the block on his elbow, and his first punch to land or be met after it)
+function fired(frames) {
+  const ev = events(frames),
+    block = ev.find(e => e.type === 'block' && e.on === 0 && (e.part === 'elbow' || e.part === 'forearm')),
+    lands = block && ev.filter(e => e.who === 0 && e.t > block.t && ['hit', 'block', 'whiff', 'graze'].includes(e.type)),
+    thrown = block && ev.filter(e => e.who === 0 && e.type === 'punch' && e.t > block.t);
+  return { block, first: lands && lands[0], second: lands && lands[1], thrown: thrown ? thrown.map(e => e.name) : [], dt: lands && lands[0] ? +(lands[0].t - block.t).toFixed(3) : null };
+}
+// a block and fire card's drill, at a grade made of another (his skills a sheet of its own: the same grade, its fire otherwise)
+const fireCard = (lv, o = {}) => {
+  const base = BLOCK_FIRE.find(e => e.level === lv),
+    level = o.fire ? Object.assign({}, LEVEL[lv], { fire: Object.assign({}, LEVEL[lv].fire, o.fire) }) : lv;
+  return Object.assign({}, base, {
+    setup: b => ((b.fighters[0].skills = { all: level }), (b.fighters[0].techniques = o.carry || ['blockFire']), (b.fighters[1].stands = true)),
+    cue: o.cue || base.cue
+  });
+};
+
+test('block and fire: only 4명 and 5명 have it, and only a man who carries it fires off the block; anyone else throws his chain', () => {
+  for (const lv of LEVELS) assert.equal(!!LEVEL[lv].fire, lv === '4m' || lv === '5m', lv);
+  for (const lv of FIRE_LEVELS) {
+    const f = fired(loop(fireCard(lv)));
+    assert.equal(f.block.part, 'elbow', lv);
+    assert.equal(f.thrown[0], 'upper', `${lv}: ${f.thrown}`);
+    // (not carried: the power press is his chain's first, the cross)
+    assert.equal(fired(loop(fireCard(lv, { carry: [] }))).thrown[0], 'cross', lv);
+  }
+  // (a pro asked for it: the cross)
+  const pro = Object.assign({}, BLOCK_FIRE[0], { setup: b => ((b.fighters[0].skills = { all: '3' }), (b.fighters[0].techniques = ['blockFire']), (b.fighters[1].stands = true)) });
+  assert.equal(fired(loop(pro)).thrown[0], 'cross');
+});
+
+test('block and fire: the uppercut of the arm that blocked lands on his head as a counter, 4명 0.22–0.32 s and 5명 0.16–0.24 s after the block; a legend\'s lead hook follows it', () => {
+  const got = {};
+  for (const lv of FIRE_LEVELS) {
+    const f = fired(loop(fireCard(lv)));
+    got[lv] = f;
+    assert.equal(f.first.type, 'hit', `${lv}: ${JSON.stringify(f.first)}`);
+    assert.equal(f.first.name, 'upper', lv);
+    assert.ok(!f.first.part || f.first.part === 'glove', lv);
+    assert.ok(f.first.counter, `${lv}: a counter`);
+  }
+  assert.ok(got['4m'].dt >= 0.22 && got['4m'].dt <= 0.32, `4명 ${got['4m'].dt}`);
+  assert.ok(got['5m'].dt >= 0.16 && got['5m'].dt <= 0.24, `5명 ${got['5m'].dt}`);
+  // (a legend's lead hook after it, by itself: 0.18 to 0.26 s after the uppercut; a 4명's none)
+  const five = got['5m'];
+  assert.equal(five.second && five.second.name, 'hook', JSON.stringify(five.second));
+  assert.equal(five.second.type, 'hit');
+  const gap = five.second.t - five.first.t;
+  assert.ok(gap >= 0.18 && gap <= 0.26, `5명 hook ${gap.toFixed(3)} s after`);
+  assert.ok(!got['4m'].thrown.includes('hook'), `4명: ${got['4m'].thrown}`);
+});
+
+test('block and fire: 60 ms and more sooner than the same uppercut not wound up by the block; the other glove at his temple all the way', () => {
+  for (const lv of FIRE_LEVELS) {
+    const frames = loop(fireCard(lv)),
+      f = fired(frames),
+      cold = fired(loop(fireCard(lv, { fire: { load: 0 } })));
+    assert.equal(cold.first.name, 'upper', lv);
+    assert.ok(cold.dt - f.dt >= 0.06, `${lv}: ${f.dt} against ${cold.dt}`);
+    // (from the press to the landing, the lead glove within 4 cm of his head, surface to surface)
+    const from = frames.findIndex(x => x.t > f.block.t),
+      to = frames.findIndex(x => x.t >= f.first.t),
+      off = Math.max(...frames.slice(from, to + 1).map(x => dist(x.L, x.head) - RULES.glove - RULES.head));
+    assert.ok(off <= 0.04, `${lv}: the lead glove ${(off * 100).toFixed(1)} cm off his head`);
+  }
+});
+
+test('block and fire: no block, or pressed after his grade\'s quarter of a second, and it is his chain', () => {
+  for (const lv of FIRE_LEVELS) {
+    // (pressed 0.3 s after the block)
+    const late = fireCard(lv, {
+      cue: bout => {
+        const f = bout.fighters[0],
+          own = (f.cues = f.cues || {});
+        if (own.at === undefined && bout.events.some(e => e.type === 'block' && e.on === 0)) own.at = bout.t;
+        if (own.pressed || own.at === undefined || bout.t < own.at + 0.3 - 1e-9) return null;
+        return (own.pressed = true), { power: true, tech: 'blockFire' };
+      }
+    });
+    assert.equal(fired(loop(late)).thrown[0], 'cross', lv);
+    // (nothing blocked: a press meant as it at the same moment, his guard up, no hook thrown)
+    const none = Object.assign(fireCard(lv), { against: [], cue: (bout, t) => (t >= 0.8 && t < 0.8 + DT ? { power: true, tech: 'blockFire' } : null) });
+    const thrown = events(loop(none)).filter(e => e.type === 'punch' && e.who === 0).map(e => e.name);
+    assert.equal(thrown[0], 'cross', lv);
+  }
+});
+
+test('block and fire: the cards, the same every time, and nothing in them breaks anything a body can do', () => {
+  for (const e of BLOCK_FIRE) assert.deepEqual(fired(loop(e)), fired(loop(e)), e.id);
+  const { found, seen } = audit(BLOCK_FIRE);
+  assert.ok(seen > 500, `${seen} frames`);
+  const broken = Object.entries(found)
+    .filter(([, c]) => c.bad)
+    .flatMap(([check, c]) => c.cases.map(k => `${check}: ${k.value} at ${k.script} @ ${k.t}, ${k.who}, ${k.doing}`));
+  assert.deepEqual(broken, []);
+});
+
+/* ---- The peek-a-boo shell (§4.5, src/defense.mjs SHELL; game/bout.mjs f.shell, anim/clean.mjs shellBody, skill.mjs shell): his
+   guard put up crouched, meant as it, by a 4명 or a 5명 who carries it. */
+// (a drill: crouched into it at 0.3 s and held, the pro at `gap` throwing `punch` at 0.6 s by name, or a jab; nothing, if none)
+const shellDrill = (lv, punch, gap, o = {}) => ({
+  id: `shell-drill-${punch}`, loop: o.loop || 1.6, me: () => HOME, him: () => [HOME[0] + gap, HOME[1]],
+  against: !punch ? [] : punch === 'jab' ? [[0.6, 'jab']] : [[0.6, 'power', punch]],
+  cover: t => t >= 0.3 && t < 1.2,
+  cue: (b, t) => (t >= 0.3 && o.tech !== null ? ['tech', 'shell'] : null),
+  setup: b => ((b.fighters[0].skills = { all: lv }), (b.fighters[0].techniques = o.carry || ['shell']), (b.fighters[1].stands = true), o.breath && (b.fighters[0].stamina = o.breath * b.fighters[0].k.staminaMax))
+});
+const theirs = frames => events(frames).find(e => e.who === 1 && ['hit', 'block', 'whiff', 'graze'].includes(e.type));
+
+test('shell: only 4명 and 5명 have it, and only a man who carries it crouches into it', () => {
+  for (const lv of LEVELS) assert.equal(!!LEVEL[lv].shell, lv === '4m' || lv === '5m', lv);
+  for (const lv of SHELL_LEVELS) {
+    assert.ok(loop(shellDrill(lv, null, 1.0)).some(f => f.shell), lv);
+    assert.ok(!loop(shellDrill(lv, null, 1.0, { carry: [] })).some(f => f.shell), `${lv}, not carried`);
+  }
+  assert.ok(!loop(shellDrill('3', null, 1.0)).some(f => f.shell), 'a pro');
+});
+
+test('shell: down 14 cm and more in 0.2 s, the gloves at his cheekbones (23 cm from the middle of his head), the rear forearm up and down and the elbows apart', () => {
+  for (const lv of SHELL_LEVELS) {
+    const frames = loop(shellDrill(lv, null, 1.0)),
+      before = mean(frames.slice(0, 17).map(f => f.head[1])),
+      at = frames.findIndex(f => f.shell),
+      t0 = frames[at].t,
+      by = frames.find(f => f.t >= t0 + 0.2 - 1e-9),
+      held = frames.filter(f => f.shell && f.t >= t0 + 0.25);
+    assert.ok(before - by.head[1] >= 0.14, `${lv}: ${((before - by.head[1]) * 100).toFixed(1)} cm down at 0.2 s`);
+    for (const f of held) for (const k of ['L', 'R']) assert.ok(dist(f[k], f.head) <= 0.23, `${lv}: the ${k} glove ${(dist(f[k], f.head) * 100).toFixed(1)} cm from his head at ${f.t.toFixed(2)}`);
+    // (the elbows wider apart than a fist: what the uppercut and the straight to the pit of his stomach come in between)
+    assert.ok(Math.min(...held.map(f => dist(f.LE, f.RE))) >= 0.14, lv);
+    const up = Math.max(...held.map(f => deg(Math.atan2(Math.hypot(f.R[0] - f.RE[0], f.R[2] - f.RE[2]), f.R[1] - f.RE[1]))));
+    assert.ok(up <= 25, `${lv}: the rear forearm ${up.toFixed(0)}° off upright`);
+  }
+});
+
+test('shell: a pro\'s jab, cross, hook and liver hook do not land; the uppercut and the straight to the body do', () => {
+  for (const lv of SHELL_LEVELS) {
+    for (const [punch, gap] of [['jab', 1.0], ['cross', 1.0], ['hook', 0.85], ['hookBody', 0.8]]) {
+      const e = theirs(loop(shellDrill(lv, punch, gap)));
+      assert.ok(e && (e.type === 'block' || e.type === 'whiff'), `${lv} ${punch}: ${JSON.stringify(e && [e.type, e.part, e.J])}`);
+    }
+    for (const [punch, gap] of [['upper', 0.85], ['crossBody', 0.95]]) {
+      const e = theirs(loop(shellDrill(lv, punch, gap)));
+      assert.equal(e && e.type, 'hit', `${lv} ${punch}: ${JSON.stringify(e && [e.type, e.part])}`);
+    }
+    // (the same uppercut into his plain guard is blocked)
+    assert.equal(theirs(loop(shellDrill(lv, 'upper', 0.85, { tech: null }))).type, 'block', `${lv}: the uppercut into his guard`);
+  }
+});
+
+test('shell: how late he can crouch into it and still meet the jab is the window measured; the jab never goes over him', () => {
+  for (const lv of SHELL_LEVELS) {
+    const w = WINDOWS.shell[lv],
+      tech = { id: 'shell', carry: ['shell'], hold: 0.6 };
+    assert.equal(windowOutcome(windowDrill('jab', 'cover', true, w.to, { all: lv }, true, false, tech)).type, 'block', lv);
+    assert.equal(windowOutcome(windowDrill('jab', 'cover', true, w.to + 1, { all: lv }, true, false, tech)).type, 'hit', lv);
+    for (let k = -6; k <= w.to + 4; k += 2) assert.notEqual(windowOutcome(windowDrill('jab', 'cover', true, k, { all: lv }, true, false, tech)).type, 'whiff', `${lv}: frame ${k}`);
+  }
+});
+
+test('shell: out of it, the lead hook 0.10–0.17 s after the jab is met and the rear body uppercut 0.12–0.19 s after that; it costs breath', () => {
+  for (const lv of SHELL_LEVELS) {
+    const ev = events(loop(SHELL.find(e => e.id === `shell@${lv}`))),
+      met = ev.find(e => e.who === 1 && e.type === 'block'),
+      mine = ev.filter(e => e.who === 0 && ['hit', 'block', 'whiff', 'graze'].includes(e.type));
+    assert.ok(met, lv);
+    assert.deepEqual(mine.map(e => [e.name, e.type]), [['hook', 'hit'], ['upperBody', 'hit']], lv);
+    const hook = mine[0].t - met.t,
+      body = mine[1].t - mine[0].t;
+    assert.ok(hook >= 0.1 && hook <= 0.17, `${lv}: the hook ${hook.toFixed(3)} s after`);
+    assert.ok(body >= 0.12 && body <= 0.19, `${lv}: the body uppercut ${body.toFixed(3)} s after the hook`);
+    assert.equal(mine[1].part, 'body', lv);
+    // (held a second, 1.5% of all his breath more than his plain guard held as long; at 60% of it, getting it back as he stands)
+    const spent = frames => frames[0].stamina - frames.find(f => f.t >= 1.3).stamina,
+      shell = loop(shellDrill(lv, null, 1.0, { breath: 0.6 })),
+      plain = loop(shellDrill(lv, null, 1.0, { tech: null, breath: 0.6 })),
+      max = freshBout(shellDrill(lv, null, 1.0)).fighters[0].k.staminaMax,
+      k = (spent(shell) - spent(plain)) / max / 0.9;
+    assert.ok(Math.abs(k - LEVEL[lv].shell.cost) < 0.003, `${lv}: ${(k * 100).toFixed(2)}% a second`);
+  }
+});
+
+test('shell: the cards, the same every time, and nothing in them breaks anything a body can do', () => {
+  for (const e of SHELL) assert.deepEqual(events(loop(e)).map(x => `${x.type} ${x.who} ${x.name} ${x.J}`), events(loop(e)).map(x => `${x.type} ${x.who} ${x.name} ${x.J}`), e.id);
+  const { found, seen } = audit(SHELL);
+  assert.ok(seen > 1000, `${seen} frames`);
   const broken = Object.entries(found)
     .filter(([, c]) => c.bad)
     .flatMap(([check, c]) => c.cases.map(k => `${check}: ${k.value} at ${k.script} @ ${k.t}, ${k.who}, ${k.doing}`));

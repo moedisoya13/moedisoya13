@@ -365,6 +365,50 @@ const WAVE_5M = Object.assign({}, WAVE_4M, { hands: [-0.36, -0.3], wide: 0.08, s
 const PAT_4M = { set: 0.04, at: [-0.005, 0.175, 0.15], elbow: 0.38, lead: [0.1, 0.04, -0.03], go: 0.06, down: 0.16, fall: 0.07, out: -0.12, hold: 0.14, back: 0.15, presses: ['jab'], counter: 'cross', load: 0.7, jab: 0, follow: 0, stun: 0.35 };
 const PAT_5M = Object.assign({}, PAT_4M, { set: 0.035, lead: [0.06, 0.03, -0.05], down: 0.09, fall: 0.07, out: -0.06, hold: 0.18, presses: ['jab', 'cross'], counter: 'jab', load: 1, jab: 0, follow: 0.16 });
 
+/* block and fire (anim/clean.mjs: fireBody; docs/moves-plan-5.md §4.3; game/techniques.mjs blockFire, his head's to pick): a
+   clean great one's and a clean legend's counter off the elbow block. A hook to his body met by his elbow (or forearm) with
+   his guard up, and a power press meant as it within `within` seconds of that: the arm that blocked it fires, from where the
+   block left it (game/bout.mjs: fired).
+     within   seconds after the block that the press is the technique's (after that, or with nothing blocked, the chain)
+     inside   metres centre to centre inside which the rear hand's is the inside uppercut, the lead hand's the inside hook
+     load     how much of the punch's wind-up and leg drive the crunch of the block has done already (phys/chain.mjs preload)
+     wait     seconds the hand takes off his side before it goes: the blocked elbow brushing past his ribs, the fist turning
+              over at his belt, the bend at his side starting to come out (on top of what is left of the wind-up)
+     up, knee the knee on that side driven `knee` degrees straighter than his guard's over `up` seconds once it goes (the
+              punch's own hips and trunk turn it through: moves.mjs upper); low: metres the fist is down at his belt as it
+              waits
+     other    the other glove kept to his temple all through ([x, y, z] metres from where his guard holds it)
+     follow   seconds after the first lands that a legend's other hand's hook goes (null: it does not; the bout presses it,
+              as a legend's cross after his down parry's jab) */
+const FIRE_4M = { within: 0.25, inside: 0.74, load: 0.7, wait: 0.16, up: 0.2, knee: -4, low: 0.08, other: [0, 0.04, -0.08], follow: null };
+const FIRE_5M = Object.assign({}, FIRE_4M, { load: 1, wait: 0.13, up: 0.15, follow: 0.07 });
+
+/* the peek-a-boo shell (anim/clean.mjs: shellBody; docs/moves-plan-5.md §4.5; game/techniques.mjs shell, his head's to pick): a
+   clean great one's and a clean legend's guard put up crouched. Down on both knees and over at the waist behind the gloves at
+   his face, the forearms up and down: the jab, the cross and the hook go into his gloves, the liver hook onto his rear elbow,
+   and the crouch is the wind-up of what he throws out of it. Only 4명 and 5명 have it (`shell` on their lines).
+     down     seconds to get down into it (a sine's ease); up: to come up out of it once it is over (held while the punch he
+              throws out of it is still wound up)
+     knees    [lead, rear] degrees more of each knee; waist: degrees over at the waist; chin: degrees tucked; square: degrees
+              turned to face him square (the lead shoulder drawn back)
+     lead, rear   [x, y, z] metres on each glove's channels (x to his left), as far as he is in it: to his cheekbones
+     elbow    how far out the elbows are lifted; pole: [out, down, back] where the elbows point (the chest's terms, out mirrored
+              for the rear arm): down, under the gloves
+     low      [x, y, z] metres more on the glove over a punch coming at his body (the rear for the liver, the lead for the
+              ribs: his elbow block, anim/body.mjs coverLow, brought down to where they are now he is crouched); open: metres
+              the hands are kept further apart than a guard's brings them together over the pit of his stomach (the gap
+              there: a straight to it comes in between his elbows)
+     cost     share of all his breath a second it takes to hold
+     within   seconds after a punch has gone over him or into his gloves that a power press meant as it is his counter: the
+              lead hook (the inside one inside `inside` metres), `load` of its wind-up done, waiting `wait` seconds; and the
+              rear body uppercut pressed `follow` seconds after the hook has got there, `loadBody` of its wind-up done. chase:
+              how far he goes in after the man his hook moves (as a dirty one goes in after anything that lands), for the body
+              uppercut to reach him
+     u        a legend's: metres his hips go down and back up in a shallow U while he holds it, once every `period` seconds;
+              away: metres his head goes the other way from the hand of a punch thrown at him (null: neither) */
+const SHELL_4M = { down: 0.18, up: 0.2, knees: [12, 15], waist: 14, chin: 0, square: 20, lead: [0.04, 0.04, -0.12], rear: [-0.05, 0.05, -0.08], elbow: 0, pole: [0.3, -1, 0], low: [-0.02, -0.14, -0.02], open: 0.3, chase: 0.7, cost: 0.015, within: 0.25, inside: 0.74, load: 0.7, wait: 0.05, follow: 0.03, loadBody: 0.7, u: null, period: 0.8, away: null };
+const SHELL_5M = Object.assign({}, SHELL_4M, { down: 0.14, knees: [14, 17], load: 1, loadBody: 0.7, follow: 0.03, chase: 0.5, rear: [-0.08, 0.07, -0.1], u: null, away: 0.04 });
+
 export const LEVEL = {
   1: {
     grade: 1, side: null, name: '입문', label: '1',
@@ -407,7 +451,7 @@ export const LEVEL = {
     away: TEXTBOOK_AWAY
   },
   '4m': {
-    grade: 4, side: 'm', name: '일류 · 명', label: '4명', wave: WAVE_4M, pat: PAT_4M,
+    grade: 4, side: 'm', name: '일류 · 명', label: '4명', wave: WAVE_4M, pat: PAT_4M, fire: FIRE_4M, shell: SHELL_4M,
     chain: { early: [0.25, 0.25, 0, 0, 0], damp: [0.6, 0.6, 0.56, 0.6, 0.6], amp: [1.1, 1.15, 1.1, 1, 1], coil: 0.55, shown: 0.65, back: 1.12, backLag: 1, firm: 1.08, spring: { down: 0.6, wait: true } },
     form: form({ guard: -0.3, chin: -0.5, lively: 0.5, dip: -0.03, drop: true, sep: 7, off: 0.07, with: 'hips', tuck: 4, look: 1, bend: 4, exit: 'roll', beat: 'on', level: DOWN_4M }),
     // strong and weak, the lead foot's landing the heavy one; the head an end on every lead foot, under in between
@@ -432,7 +476,7 @@ export const LEVEL = {
     away: away({ jitter: 0.25, drop: 1.2 })
   },
   '5m': {
-    grade: 5, side: 'm', name: '전설 · 명', label: '5명', wave: WAVE_5M, pat: PAT_5M,
+    grade: 5, side: 'm', name: '전설 · 명', label: '5명', wave: WAVE_5M, pat: PAT_5M, fire: FIRE_5M, shell: SHELL_5M,
     chain: { early: [0.4, 0.4, 0, 0, 0], damp: [0.6, 0.6, 0.5, 0.6, 0.6], amp: [1.15, 1.25, 1.18, 1, 1], coil: 0.2, shown: 0.55, back: 1.15, backLag: 1, firm: 1.2, spring: { down: 0.4 } },
     form: form({ guard: -0.4, chin: -0.6, lively: 0.7, dip: -0.04, drop: true, sep: 11, off: 0.1, with: 'legs', tuck: 6, look: 1, bend: 6, exit: 'angle', beat: 'off', level: DOWN_5M }),
     // the lightest feet: a swung beat, a phrase that quickens, stops dead and breaks out into something

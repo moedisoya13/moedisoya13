@@ -48,7 +48,7 @@ import { sampleEvade, EVASIONS, timeline, evadeTime, pullBack, pullIn } from './
 import { travel as legendTravel, dash as legendDash, dashShape } from './legend.mjs';
 import { stance as showStance, crossGuard, ear, shoulderRoll, hammer, paw, PAW, collar, COLLAR, ELBOW } from './show.mjs';
 import { bodyState, struck as foldUp, give as bodyGive, coverLow, lower } from './body.mjs';
-import { createWave, waveBeat, waveLand, waveLanding, waveDrag, waveBody, createPat, patDown, pattedArm } from './clean.mjs';
+import { createWave, waveBeat, waveLand, waveLanding, waveDrag, waveBody, createPat, patDown, pattedArm, fireBody, createShell, shellBody } from './clean.mjs';
 
 const TAU = Math.PI * 2;
 /* The feet keep time. One beat is one foot coming down; a cycle is both. Standing, the boxer rocks between his feet on that
@@ -483,6 +483,9 @@ export function createAnimator(seed) {
   let pulledBy = null;
   // what blows to his body are still doing to him, and his elbow brought down over one coming (body.mjs)
   const bodyHits = bodyState();
+  // (the peek-a-boo shell he is crouched in, and how far: clean.mjs)
+  const shell = createShell();
+  let shelled = 0;
   const remember = pose => ((poses = [poses[1], pose]), pose);
   // a pose part of the way from another to it, each bone turned part of the way (what the solver said of it kept)
   const between = (from, to, w) => {
@@ -676,6 +679,10 @@ export function createAnimator(seed) {
     get covered() {
       return cover;
     },
+    // how far he is crouched in his peek-a-boo shell (clean.mjs), 0..1
+    get shelled() {
+      return shelled;
+    },
     // a show-off's rear fist coming down on a punch as his guard goes up (show.mjs: hammer): what the bout judges his parry by
     get hammering() {
       return hammering;
@@ -799,6 +806,8 @@ export function createAnimator(seed) {
         if (move.level) lower(c, action, move, action.level || LEVEL[3]);
         // (out of a sway back, the pull counter: coming back in is its wind-up, anim/evade.mjs)
         if (action.loaded && action.loaded.pulled) pullBack(c, action, move);
+        // (off an elbow block, block and fire: the crunch is its wind-up, anim/clean.mjs)
+        if (action.loaded && action.loaded.fired) fireBody(c, action, move);
         /* How the rest of him is held while it goes, by how good he is (skill.mjs): all of it grows with the arm, so it is
            there as the punch is and gone as it comes home. */
         const me = move.hand,
@@ -824,7 +833,7 @@ export function createAnimator(seed) {
         else if (form.guard < 0) (c[o + 'y'] += 0.02 * -form.guard * out), (c[o + 'z'] -= 0.025 * -form.guard * out), (c[o + 'x'] += s * 0.015 * -form.guard * out);
         /* (a punch thrown out of the end of an evasion: the other glove is still on his cheek where the evasion put it, out of
            the way of the arm that has just gone past his head, and comes off it as the punch goes) */
-        if (action.loaded && action.loaded.load > 0 && action.loaded.from !== 'parry' && action.loaded.from !== 'legend' && action.loaded.from !== 'wave') (c[o + 'z'] -= 0.12 * (1 - smooth(action.t / 0.2))), (c[o + 'y'] -= 0.01 * (1 - smooth(action.t / 0.2)));
+        if (action.loaded && action.loaded.load > 0 && action.loaded.from !== 'parry' && action.loaded.from !== 'legend' && action.loaded.from !== 'wave' && action.loaded.from !== 'block') (c[o + 'z'] -= 0.12 * (1 - smooth(action.t / 0.2))), (c[o + 'y'] -= 0.01 * (1 - smooth(action.t / 0.2)));
         c.hp -= 11 * form.chin * out; // the chin up and out after it (tucked, the better he is)
         c.lean += 9 * form.over * share.over * out; // and the weight thrown in after it, over the front foot (right up close there is no room)
         c.hz += 0.05 * form.over * share.over * out;
@@ -1027,6 +1036,8 @@ export function createAnimator(seed) {
       /* (and with it up, an elbow brought down over a punch coming at his body, body.mjs; not by a man who holds the cross-arm
          guard, whose lead forearm is across his belly already: what body.mjs reads as cv.cross is the guard he holds) */
       coverLow(bodyHits, c, view.low, lowGuard(cv, xc), cover, dt, clock);
+      // (crouched behind it, the peek-a-boo shell: clean.mjs)
+      shelled = shellBody(c, shell, { view, low: bodyHits.low, winding: !!(action && action.loaded && action.loaded.from === 'shell' && action.chain && action.chain.phase === 'coil'), dt, clock });
       if (cheer > 0.002) for (const [ch, v] of Object.entries(sampleMove(MOVES.cheer, 1, {}))) c[ch] += v * smooth(cheer);
       // (the gloves out to meet it: his grade's parry, unless his cross-arm guard does not parry so, or he is rolling, or his
       // rear glove is out to press it down: clean.mjs)
@@ -1950,7 +1961,9 @@ export function createAnimator(seed) {
           hang = side === 'L' && st.show ? showDown : 0,
           // (and a cross-arm guard: each elbow where it puts it, as the chest sees it: show.mjs)
           crossed = shape && crossK > 0.002 ? crossK : 0,
-          asked = M.app(chest.R, M.lerp(M.lerp(M.lerp([s * (0.5 + 0.8 * flare), -1 + 1.3 * flare, -0.2 - 0.25 * flare], [s * 0.45, -0.35, -0.85], pushing), [s * 0.15, -1, -0.2], hang), crossed ? shape.pole[side] : [0, 0, 0], crossed)),
+          // (and the peek-a-boo shell: the elbows in at his sides, under the gloves: clean.mjs)
+          tucked = shelled > 0.002 && shell.sh ? shelled * (mine ? 1 - smooth(action.t / 0.2) : 1) : 0,
+          asked = M.app(chest.R, M.lerp(M.lerp(M.lerp(M.lerp([s * (0.5 + 0.8 * flare), -1 + 1.3 * flare, -0.2 - 0.25 * flare], [s * 0.45, -0.35, -0.85], pushing), [s * 0.15, -1, -0.2], hang), crossed ? shape.pole[side] : [0, 0, 0], crossed), tucked ? [s * shell.sh.pole[0], shell.sh.pole[1], shell.sh.pole[2]] : [0, 0, 0], tucked)),
           l = Math.hypot(asked[0], asked[1], asked[2]) || 1,
           keep = elbow[side] ? Math.exp(-dt * 16) : 0;
         /* One punch handing over to the next (a double jab, a jab into a cross) starts the new chain from the guard while the

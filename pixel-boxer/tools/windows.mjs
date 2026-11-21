@@ -10,7 +10,8 @@
                                        long he is tied up; and the parry's window (the frame the guard goes up), the down
                                        parry's (4명, 5명) and the shoulder roll's (4명, 4암, 5명, 5암; the margin is the
                                        room between the glove and his head as it is rolled off), and the pull counter's
-                                       rear hook's sway back (the pull's, from 0.9 m)
+                                       rear hook's sway back (the pull's, from 0.9 m), and the peek-a-boo shell's (4명, 5명:
+                                       how late he can crouch into it and still meet the jab)
      node tools/windows.mjs --write    the same, written to src/windows.data.mjs, where the catalogue's scripts read it
      node tools/windows.mjs --json
    A frame before the press (negative) is a guess: the evasion started before the punch did. */
@@ -124,7 +125,11 @@ export const CARDS = [
   /* the pull counter's rear hook (docs/moves-plan-5.md §3.8, src/defense.mjs PULL_COUNTER): the same sway back from the same
      jab thrown from closer, 0.9 m, where the head picks the rear hook (the other two ways are fought from the pull card's 1 m,
      and sway back in its window) */
-  { id: 'pullHook', move: 'pull', value: true, punch: 'jab', gap: 0.9 }
+  { id: 'pullHook', move: 'pull', value: true, punch: 'jab', gap: 0.9 },
+  /* the peek-a-boo shell (docs/moves-plan-5.md §4.5, src/defense.mjs SHELL): crouched into meant as it on that frame and held,
+     against the jab; it works where the jab meets his gloves or goes over him (it never goes over: the crouch is too slow for a
+     jab that has set its aim, so this is how late he can go into it and still have it in the way) */
+  { id: 'shell', move: 'cover', value: true, punch: 'jab', guard: true, levels: ['4m', '5m'], tech: { id: 'shell', carry: ['shell'], hold: 0.6, works: o => o.type === 'block' || o.type === 'whiff' } }
 ];
 /* The frame a card presses on: the middle of the longest run of its window, or, where the exchange from there is not clean
    (the bout scores a glove on a head and nothing else, so an arm can pass through a glove that is in its way: tools/audit.mjs

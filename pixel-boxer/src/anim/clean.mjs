@@ -354,3 +354,107 @@ export function pattedArm(c, action, drop) {
   c[k + 'g'] += (1 - c[k + 'g']) * w;
   return w;
 }
+
+// ---------------------------------------------------------------------------------------------------- block and fire
+/* ---- Block and fire (블록 & 파이어, §4.3): a clean great one's and a clean legend's counter off the elbow block (game/techniques.mjs
+   blockFire, his head's to pick; skill.mjs: fire, 4명 and 5명 only). The hook to his body met by his elbow, the crunch of the
+   block (anim/body.mjs coverLow: the elbow down at his side, the trunk bent down over it on that knee) is the wind-up of the
+   punch the blocking arm fires (game/bout.mjs: fired, preloaded as far as the grade's `load`): off the rear elbow the
+   uppercut, off the lead elbow the lead hook. The fist comes off his side at his belt, waits there the grade's `wait` as the
+   elbow brushes past his ribs, and goes up between them; the knee on that side drives straight through it; the other glove
+   stays at his temple all the way. A legend's other hand's hook follows (the bout presses it).
+     fireOf(level)               a grade's block and fire (skill.mjs: fire), or null
+     fireBody(c, action, move)   the punch fired off the block, this frame, on top of its own chain: the fist low at his belt
+                                 while it waits, the knee on that side driven straight, the other glove kept at his temple */
+export const fireOf = level => (level && level.fire) || null;
+export function fireBody(c, action, move) {
+  const L = action.loaded,
+    F = L && L.fired && L.fired.fire,
+    chain = action.chain;
+  if (!F || !chain) return 0;
+  const k = move.hand === 'L' ? 'l' : 'r',
+    o = move.hand === 'L' ? 'r' : 'l',
+    s = move.hand === 'L' ? 1 : -1,
+    // (on the chain's own clock: seconds since it went, negative while it waits)
+    go = (chain.wait || 0) + chain.coilTime + (chain.pause || 0),
+    since = chain.t - go,
+    low = since < 0 ? smooth(chain.t / Math.max(0.03, go)) : 1 - smooth(since / 0.08),
+    drive = since < 0 ? 0 : smooth(since / F.up),
+    home = chain.phase === 'recover' ? 1 - smooth(chain.since / 0.2) : chain.phase === 'done' ? 0 : 1,
+    keep = smooth(chain.t / 0.05) * home;
+  // the fist down at his belt, in at his side, as the elbow comes off it
+  c[k + 'y'] -= F.low * low;
+  c[k + 'x'] += s * 0.02 * low;
+  // the knee on that side driven straight under it
+  c[k + 'kf'] += F.knee * drive * home;
+  // the other glove at his temple
+  c[o + 'x'] += -s * F.other[0] * keep;
+  c[o + 'y'] += F.other[1] * keep;
+  c[o + 'z'] += F.other[2] * keep;
+  return keep;
+}
+
+// ---------------------------------------------------------------------------------------------------- the peek-a-boo shell
+/* ---- The peek-a-boo shell (피커부 셸, §4.5): a clean great one's and a clean legend's guard put up crouched (game/techniques.mjs
+   shell, his head's to pick; skill.mjs: shell, 4명 and 5명 only; game/bout.mjs: f.shell, what it stops and what it opens).
+   Down on both knees and over at the waist, the chin tucked, the gloves drawn in to his cheekbones and the elbows in at his
+   sides, the forearms up and down in front of his ribs: he goes down into it over `down` seconds (a sine's ease: it starts
+   and stops at rest, as a weight let down onto bent knees does) and comes up over `up` once it is over; what he throws out of
+   it is thrown from the crouch as he comes up. A legend's head goes down and up in a shallow U while he holds it, and away
+   from the hand of a punch thrown at him.
+     shellOf(level)              a grade's shell (skill.mjs: shell), or null
+     createShell()               his shell as his body keeps it
+     shellBody(c, st, s)         s = { view (view.shell, the bout's: { sh, t, from } | null), low (his elbow block's state:
+                                 anim/body.mjs bodyState().low), winding (a punch out of it still wound up, not yet
+                                 thrown), dt, clock }; -> how far in it */
+export const shellOf = level => (level && level.shell) || null;
+export const createShell = () => ({ sh: null, x: 0, away: 0 });
+export function shellBody(c, st, s) {
+  const v = s.view.shell;
+  if (v) st.sh = v.sh;
+  const sh = st.sh;
+  if (!sh) return 0;
+  // (and held, not let go of, while what he throws out of it is still being wound up: the crouch is its wind-up)
+  st.x = v ? Math.min(1, st.x + s.dt / sh.down) : s.winding ? st.x : Math.max(0, st.x - s.dt / sh.up);
+  if (st.x <= 0) return void (st.sh = null), 0;
+  const w = (1 - Math.cos(Math.PI * st.x)) / 2;
+  // the crouch: both knees, over at the waist, the chin in
+  c.lkf += sh.knees[0] * w;
+  c.rkf += sh.knees[1] * w;
+  c.lean += sh.waist * w;
+  c.hp += sh.chin * w;
+  // (and squared up to him, the lead shoulder drawn back over his hips)
+  c.yaw += sh.square * w;
+  // the gloves in to his cheekbones, the elbows in at his sides
+  c.lx += sh.lead[0] * w;
+  c.ly += sh.lead[1] * w;
+  c.lz += sh.lead[2] * w;
+  c.rx += sh.rear[0] * w;
+  c.ry += sh.rear[1] * w;
+  c.rz += sh.rear[2] * w;
+  c.le += sh.elbow * w;
+  c.re += sh.elbow * w;
+  /* (and a punch coming at his body: his elbow brought down over it as his guard's is (anim/body.mjs coverLow, s.low: its
+     state), further, down to where his liver and ribs are now he is crouched; the rear one for the liver, the lead for the
+     ribs) */
+  const lw = s.low && s.low.w > 0 ? smooth(s.low.w) * w : 0;
+  if (lw) {
+    const z = s.low.zone;
+    if (z === 'liver') (c.rx += sh.low[0] * lw), (c.ry += sh.low[1] * lw), (c.rz += sh.low[2] * lw);
+    else if (z === 'ribs') (c.lx -= sh.low[0] * lw), (c.ly += sh.low[1] * lw), (c.lz += sh.low[2] * lw);
+    /* (at the pit of his stomach the elbows stay out at his sides, `open` metres of the hands' further apart than a guard's
+       brings them in together in front of it: the gap he leaves there, the two elbows wide enough apart for a fist to come in
+       between them, as the bout reckons them: a ball 6 cm round each, the glove 10.5) */
+    else (c.lx += sh.open * lw), (c.rx -= sh.open * lw);
+  }
+  // (a legend's: the shallow U, on both knees, and the head away from a punch coming at him)
+  if (sh.u && v) {
+    c.hy -= ((sh.u * (1 - Math.cos((2 * Math.PI * v.t) / sh.period))) / 2) * w;
+  }
+  if (sh.away) {
+    const want = v && v.from ? (v.from === 'L' ? -1 : 1) : 0;
+    st.away += clamp(want - st.away, -s.dt / 0.08, s.dt / 0.08);
+    if (st.away) headTo(c, sh.away * st.away * w, 0);
+  }
+  return w;
+}
