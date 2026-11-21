@@ -3,7 +3,9 @@
      limp (out)        every joint's hold is gone 0.05 s in, and his head is on the canvas sooner than an ordinary
                        knockdown's from the same blow
      log (outStiff)    his knees and hips (and spine) within 10 degrees of how they were until 0.5 s, let go once he is down
-                       on the canvas, and the back of his head comes up off it once, a little
+                       on the canvas; he goes over like a tree, the foot he turns on on the canvas until his trunk is 45
+                       degrees over; his head on the canvas sooner than an ordinary knockdown's, and the back of it comes
+                       up off the canvas once, a little
      lying             for 3 s nothing of him but the raised forearm (and his breathing, left out here) moves more than a
                        centimetre; the forearm is up for 1.5 s and comes down slowly
      never up          no way up starts, getUp does nothing, and a match counts him out
@@ -118,32 +120,66 @@ test('log: the back of his head meets the canvas and comes up off it once, a lit
     hit = r.body.bounced;
   assert.ok(hit !== undefined, 'his head met the canvas hard enough to come up off it');
   // (its height, measured from the physics without his breathing, from the moment it met the canvas)
-  const heads = r.frames.filter(k => k.body && k.body.t >= hit - 1e-9 && k.body.t < hit + 0.4).map(k => k.at.head[1]),
+  const heads = r.frames.filter(k => k.body && k.body.t >= hit - 1e-9 && k.body.t < hit + 0.6).map(k => k.at.head[1]),
     low = heads[0],
     top = Math.max(...heads);
-  assert.ok(top - low > 0.005 && top - low < 0.04, `up ${((top - low) * 100).toFixed(1)} cm off the canvas`);
+  assert.ok(top - low > 0.005 && top - low < 0.06, `up ${((top - low) * 100).toFixed(1)} cm off the canvas`);
   // (once: after it, his head comes down onto the canvas and stays)
-  const later = r.frames.filter(k => k.body && k.body.t >= hit + 0.4 && k.body.t < hit + 1.5).map(k => k.at.head[1]);
+  const later = r.frames.filter(k => k.body && k.body.t >= hit + 0.6 && k.body.t < hit + 1.5).map(k => k.at.head[1]);
   assert.ok(Math.max(...later) - Math.min(...later) < 0.01, `still moving ${((Math.max(...later) - Math.min(...later)) * 100).toFixed(1)} cm`);
 });
 
-test('out cold: the head reaches the canvas sooner than an ordinary knockdown from the same blow (limp)', () => {
-  // (the very pose and blow he went down from, let go of the ordinary way and the limp way)
-  const made = ran(LIMP).body.made,
-    downAt = out => {
-      const body = createFall(made.pose, made.before, made.dt, made.blow, out);
-      for (let i = 1; i <= 180; i++) {
-        stepFall(body, DT);
-        const F = fk(poseOf(body, 0, 0));
-        if (M.add(F.p.Head, M.app(F.R.Head, HEAD))[1] < 0.16) return i * DT;
-      }
-      return Infinity;
-    };
-  assert.ok(downAt('limp') < downAt(null), `limp ${downAt('limp').toFixed(3)} s, ordinary ${downAt(null).toFixed(3)} s`);
-  // and in the catalogue: the limp man's head is down before the ordinary hook knockdown's, the same hook
-  const limp = headDown(ran(LIMP)),
-    ordinary = headDown(ran(card('down-side')));
-  assert.ok(limp < ordinary, `card: limp ${limp.toFixed(3)} s, down-side ${ordinary.toFixed(3)} s`);
+for (const [entry, kind, ordinary] of [[LIMP, 'limp', 'down-side'], [LOG, 'log', 'down-back']])
+  test(`${entry.id}: the head reaches the canvas sooner than an ordinary knockdown from the same blow`, () => {
+    // (the very pose and blow he went down from, let go of the ordinary way and his way)
+    const made = ran(entry).body.made,
+      downAt = out => {
+        const body = createFall(made.pose, made.before, made.dt, made.blow, out);
+        for (let i = 1; i <= 180; i++) {
+          stepFall(body, DT);
+          const F = fk(poseOf(body, 0, 0));
+          if (M.add(F.p.Head, M.app(F.R.Head, HEAD))[1] < 0.16) return i * DT;
+        }
+        return Infinity;
+      };
+    assert.ok(downAt(kind) < downAt(null), `${kind} ${downAt(kind).toFixed(3)} s, ordinary ${downAt(null).toFixed(3)} s`);
+    // and in the catalogue: before the ordinary knockdown card's with the same punch
+    const mine = headDown(ran(entry)),
+      theirs = headDown(ran(card(ordinary)));
+    assert.ok(mine < theirs, `card: ${entry.id} ${mine.toFixed(3)} s, ${ordinary} ${theirs.toFixed(3)} s`);
+  });
+
+// (a point of a piece of the fallen body, from its own frame)
+const pointOf = (b, l) => {
+  const q = b.q,
+    v = l.map((x, i) => x - b.com[i]),
+    t = [q[1] * v[2] - q[2] * v[1], q[2] * v[0] - q[0] * v[2], q[0] * v[1] - q[1] * v[0]].map(x => 2 * x),
+    u = [q[1] * t[2] - q[2] * t[1], q[2] * t[0] - q[0] * t[2], q[0] * t[1] - q[1] * t[0]];
+  return [0, 1, 2].map(i => b.x[i] + v[i] + q[3] * t[i] + u[i]);
+};
+test('log: he goes over like a tree, on his planted heel: the foot he turns on stays on the canvas until his trunk is 45 degrees over', () => {
+  const entry = LOG,
+    bout = freshBout(entry),
+    f = bout.fighters[0];
+  let most = 0,
+    over = false;
+  for (let tick = 0; tick < Math.round(2 / DT); tick++) {
+    step(bout, drive(entry, bout, tick * DT, DT), DT);
+    const body = f.animator.fallen;
+    if (!body) continue;
+    const lo = pointOf(piece(body, 'pelvis'), [0, 0, 0]),
+      hi = pointOf(piece(body, 'chest'), [0, 0, 0]),
+      d = hi.map((x, i) => x - lo[i]),
+      tilt = Math.acos(d[1] / Math.hypot(...d)) * DEG,
+      feet = ['L', 'R'].map(s => {
+        const b = piece(body, s + 'foot');
+        return Math.min(...b.balls.map(([l, r]) => pointOf(b, l)[1] - r));
+      });
+    if (tilt >= 45) over = true;
+    if (!over) most = Math.max(most, Math.min(...feet));
+  }
+  assert.ok(over, 'he went over');
+  assert.ok(most <= 0.03, `the lower foot ${(most * 100).toFixed(1)} cm off the canvas before he was 45 degrees over`);
 });
 
 for (const entry of FAINT)

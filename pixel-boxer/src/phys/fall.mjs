@@ -154,6 +154,7 @@ const LIM = {
 };
 const MU = 0.9; // how the canvas grips
 const HEAD_SHARE = 0.4; // of a blow's impulse, what his head takes (the rest reaches his chest through the neck)
+const LOG_AT = [0, 0.07, 0]; // where a log, out cold and stiff, takes the shove: his chest (its own frame, from the chest joint)
 // how fast a limp body's moving and turning die away (1/s): a little, and each joint's turning toward its parent's (soft tissue)
 // (an arm's joints more: a limp arm is not whipped about; and an upper arm's turn about itself most of all, as the cuff of
 // muscle round the shoulder holds it)
@@ -243,11 +244,34 @@ export function createFall(pose, before, dt, blow, out) {
   if (blow) {
     /* The shove the bout gave him is the speed of all of him; the blow itself lands on his head, and turns him: its
        momentum is taken out of the shove so that he goes, all told, as far as the shove says. */
-    const M_all = PIECES.reduce((s, p) => s + p.mass, 0),
-      push = !blow.push ? [0, 0, 0] : blow.push.length === 3 ? blow.push.slice() : [blow.push[0], 0, blow.push[1]],
-      J = M.scale(blow.dir, blow.J || 0),
+    /* (A man out cold and locked stiff is one rigid piece standing on his feet: the shove reaches him where it lands, at
+       his chest, and the canvas holds his feet, so it turns him over them like a tree rather than carrying all of him,
+       feet and all, off them; and nothing of it lifts him: its upward part, and the blow's, are left out.) */
+    const log = out === 'log',
+      flat = v => (log ? [v[0], Math.min(0, v[1]), v[2]] : v),
+      M_all = PIECES.reduce((s, p) => s + p.mass, 0),
+      push = flat(!blow.push ? [0, 0, 0] : blow.push.length === 3 ? blow.push.slice() : [blow.push[0], 0, blow.push[1]]),
+      J = flat(M.scale(blow.dir, blow.J || 0)),
       base = M.sub(push, M.scale(J, 1 / M_all));
-    for (const b of bodies) b.v = M.add(b.v, base);
+    if (!log) for (const b of bodies) b.v = M.add(b.v, base);
+    else {
+      /* (the shove, all of his weight times its speed along the canvas, lands high on his chest and turns him over the
+         heel it goes toward, the one that stays down, about the line on the canvas across that heel: as a body hinged
+         there takes a blow so high, by its moment about that line) */
+      const flatBase = [base[0], 0, base[2]],
+        d = unit(flatBase, [0, 0, -1]),
+        heel = ['Lfoot', 'Rfoot'].map(n => bodies[INDEX[n]]).reduce((a, b) => (dot(b.x, d) > dot(a.x, d) ? b : a)),
+        pivot = [heel.x[0], 0, heel.x[2]],
+        axis = unit(cross([0, 1, 0], d)),
+        moment = bodies.reduce((s, b) => {
+          const r = M.sub(b.x, pivot),
+            off = M.sub(r, M.scale(axis, dot(r, axis)));
+          return s + dot(off, off) / b.im;
+        }, 0),
+        high = at(bodies[INDEX.chest], LOG_AT)[1],
+        w = M.scale(axis, (len(flatBase) * M_all * high) / moment);
+      for (const b of bodies) (b.v = M.add(b.v, cross(w, M.sub(b.x, pivot)))), (b.w = M.add(b.w, w));
+    }
     /* (it is put through the middle of his head and of his chest: the neck gives, so his head takes some of it and the
        rest reaches his trunk at once; how it turns him is how far those are off his body's line, ahead of his spine and
        above his hips, and not how it glanced off the head itself, which would spin the head alone) */
@@ -443,12 +467,12 @@ const tone = (j, t) => 1 - smooth((t - j.tone[0]) / (j.tone[1] - j.tone[0]));
    OUT.down seconds (the canvas, or his own body, stopping it where it meets them), and the hold goes out of it in OUT.fade. */
 const OUT = { limp: 0.04, hold: 0.5, most: 1.5, let: 0.04, lock: 30000, lay: { speed: 0.1, arm: 0.2, for: 0.25, most: 4 }, rise: 0.3, raised: 1.5, down: 1.6, open: 10, fade: 0.3, stiff: 400 };
 const LOCKED = ['spine', 'hip', 'knee', 'shoulder', 'elbow'];
-// (the back of a log's head off the canvas: so much of the speed it lands at, and no faster than this, m/s)
-// (the back of a log's head off the canvas: so much of the speed it lands at, and no faster than this, m/s; for so long, s)
-const BOUNCE = { e: 0.2, most: 0.8, for: 0.05 };
+// (the back of a log's head coming up off the canvas as it first meets it: how fast, m/s, held for so long, s, while the rest of
+// him comes down behind it; it is set down by a body turned over its heel, not thrown at the canvas, so the speed is its own)
+const BOUNCE = { speed: 1.2, for: 0.06 };
 // the forearm put up: how far the elbow is bent (degrees, tried in turn), where the glove is along the forearm, and what it
 // is kept clear of the canvas, his trunk and his head by, past what the fall keeps them apart by (KEEP)
-const POST = { bend: [95, 75, 115], glove: 0.325, clear: 0.04 };
+const POST = { bend: [95, 75, 115], glove: 0.325, clear: 0.04, up: 0.25 };
 const ARM = Object.fromEntries(['L', 'R'].map(s => [s, ['shoulder', 'elbow'].map(kind => JOINTS.findIndex(j => j.kind === kind && j.s === s))]));
 // (how far an elbow is bent, degrees, in a turn of the forearm on the upper arm; and the turn that bends it so far)
 const bendOf = (q, sOf) => -sOf * qvec(q)[1] * DEG;
@@ -586,7 +610,8 @@ function free(body) {
    lies still. */
 function lie(body) {
   body.lay = body.t;
-  if (body.out === 'limp') {
+  // (a log whose locked arm has been pressed down onto the canvas as he landed has it put up as a limp man's is)
+  if (body.out === 'limp' || (body.post && gloveOf(body.bodies, body.post.s)[1] < POST.up)) {
     const pick = ['L', 'R'].map(s => [s, raise(body, s)]).filter(([, r]) => r).sort((a, b) => b[1].y - a[1].y)[0];
     if (pick) body.post = { s: pick[0], sOf: pick[0] === 'L' ? 1 : -1, k: ARM[pick[0]], shoulder: pick[1].shoulder, bend: pick[1].bend, rise: OUT.rise, from: body.t };
   }
@@ -746,11 +771,11 @@ export function stepFall(body, dt, obstacles) {
       const r = off(b, local),
         vp = M.add(b.v, cross(b.w, r)),
         vn = dot(vp, n),
-        /* (but the back of a log's head comes up off it, once, a little: so much of the speed it met it at, for as long as it
+        /* (but the back of a log's head comes up off it, once, a little: as fast as BOUNCE says, for as long as it
            is pressed to it in the moment after, while the rest of him comes down behind it) */
         skull = canvas && body.out === 'log' && b.name === 'head' && local === b.balls[0][0],
-        first = skull && body.bounced === undefined && before < -1;
-      if (first) (body.bounced = body.t), (body.rebound = Math.min(BOUNCE.most, -BOUNCE.e * before));
+        first = skull && body.bounced === undefined && before < -0.2;
+      if (first) (body.bounced = body.t), (body.rebound = BOUNCE.speed);
       const bounce = skull && body.bounced !== undefined && body.t < body.bounced + BOUNCE.for,
         want = bounce ? body.rebound : 0,
         dvn = want - vn;

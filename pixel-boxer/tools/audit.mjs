@@ -29,6 +29,15 @@ for (const [check, c] of rows) {
     by = Object.entries(c.by).sort((x, y) => y[1] - x[1]).slice(0, flag('all') ? 99 : 5).map(([k, n]) => `${k} ${n} (${c.most[k]})`).join(', ');
   console.log(check.padEnd(70) + String(c.bad).padStart(7) + ('  ' + (+w.value.toFixed(1))).padEnd(10) + `  ${w.script} @ ${w.t}, ${w.who}, ${w.doing}`.padEnd(48) + ' | ' + by);
 }
+/* (a landing on the canvas is held to so many frames a script, not in all: tests/audit.test.mjs allows a knockdown's fall at
+   most 4 frames thrown upward in any one script, none past 14 g; the total is the table's) */
+for (const check of ['thrown upward (g)', 'falling faster than gravity (g)']) {
+  const c = found[check];
+  if (!c || !c.bad) continue;
+  const each = {};
+  for (const k of c.cases) (each[k.script] = each[k.script] || { n: 0, most: 0 }), each[k.script].n++, (each[k.script].most = Math.max(each[k.script].most, Math.abs(k.value)));
+  console.log(`\n${check}, script by script (${c.bad} in all): ` + Object.entries(each).sort((x, y) => y[1].n - x[1].n).map(([s, e]) => `${s} ${e.n} (${e.most.toFixed(1)})`).join(', '));
+}
 console.log('\nclean: ' + Object.entries(found).filter(([, c]) => !c.bad).map(([k]) => k).join('; '));
 if (!rows.length) console.log('\nnothing broken');
 

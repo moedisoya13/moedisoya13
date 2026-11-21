@@ -13,9 +13,11 @@ const EXCEPTIONS = [
   {
     check: 'thrown upward (g)',
     when: falling,
-    frames: 8,
+    // (a landing is a few frames however many cards fall: so many to a script, not so many in all)
+    frames: 4,
+    each: true,
     most: 14,
-    why: 'the canvas stopping a man who has fallen onto it: a real impact (a body hitting the floor is stopped in a few hundredths of a second, which is 5 to 15 g), and the physics does it, not a key'
+    why: 'the canvas stopping a man who has fallen onto it: a real impact (a body hitting the floor is stopped in a few hundredths of a second, which is 5 to 15 g, and sampled sixty times a second a landing is about two frames of it), and the physics does it, not a key'
   },
   {
     check: 'falling faster than gravity (g)',
@@ -51,7 +53,9 @@ test('audit: no scripted bout breaks anything a body can do, beyond the listed e
     for (const k of left) broken.push(`${check}: ${k.value} at ${k.script} @ ${k.t}, ${k.who}, ${k.doing}`);
     for (const e of EXCEPTIONS.filter(e => e.check === check)) {
       const mine = c.cases.filter(k => e.when(k));
-      if (mine.length > e.frames) broken.push(`${check}: ${mine.length} frames under its exception, more than the ${e.frames} allowed (${e.why})`);
+      // (counted over every script, or, for an exception that says so, script by script)
+      const counts = e.each ? Object.entries(mine.reduce((n, k) => ((n[k.script] = (n[k.script] || 0) + 1), n), {})) : [['all scripts', mine.length]];
+      for (const [where, n] of counts) if (n > e.frames) broken.push(`${check}: ${n} frames under its exception in ${where}, more than the ${e.frames} allowed (${e.why})`);
       for (const k of mine) if (Math.abs(k.value) > e.most) broken.push(`${check}: ${k.value} at ${k.script} @ ${k.t}, past the ${e.most} its exception allows`);
     }
   }
