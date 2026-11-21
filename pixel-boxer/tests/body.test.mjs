@@ -17,7 +17,19 @@
                    hit), the other glove at his head; each grade brings the elbow down the sooner the better he is, a
                    beginner never, a man holding the cross-arm guard never; an amateur brings both down and his head is
                    open to a jab after it that a pro's guard stops
-     the body      every body-shot script within the physics audit; the same script, the same result */
+     the body      every body-shot script within the physics audit; the same script, the same result
+   And the punches to the body themselves (stage two, §3.3, §3.7, src/ladder.mjs BODY_LADDER) and the rear hook (§3.8, §4A.7):
+     landed        each body punch at every grade from its range on his trunk between his hips and his chest, the liver hook
+                   on the liver; the same press lands on his head, and asked for the body, on his trunk
+     harder        grade by grade (a great one's straight body punch as hard as a pro's give or take a tenth); the pro's liver
+                   hook 80 N·s and more, 0.17 to 0.22 s after the press
+     the way down  his head at the liver hook's contact as far down as his grade's table says (±3 cm), the knees' share 1 < 2 < 3
+     decide        a press for the body is the body punch of the one it would have been; a press naming a punch is that punch
+     the elbow     read off the way down: against the pro's liver hook a pro and better get it there, an amateur is late, a
+                   beginner never, the cross-arm guard meets it; a pro who waited 0.2 s would be hit
+     the rear hook every grade lands it on the head from 0.80 m, and one that puts him down lays him to his right; the shoulder
+                   roll's counter presses it
+     audited       every rung and card of them within the physics audit */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { step, settle, RULES } from '../src/game/bout.mjs';

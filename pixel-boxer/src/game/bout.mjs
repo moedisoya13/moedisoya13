@@ -10,7 +10,9 @@
      step(bout, [mine, his], dt)
      getUp(bout, f)         a man who has beaten the count gets up, where he lies, the way that fits how he lies (anim/
                             animator.mjs: getUp); -> the rise he starts
-       controls: { move: [x, z] (a direction on the canvas, up to 1 long), jab, power (true on the tick pressed),
+       controls: { move: [x, z] (a direction on the canvas, up to 1 long), jab, power (true on the tick pressed; or the
+                   name of a punch, which is then that punch: a script's, or a technique's answer, 'hookR' the rear hook,
+                   'hookBody' the liver hook; a show-off's trick named there is still the trick),
                    cover (true while held), dash: [x, z] | true (on the tick flicked; true is straight back),
                    slip: 1 | -1 (the head off the line, to his left or right), duck: true | 1 | -1 (down under a punch in a
                    shallow U, coming up on his left, or with -1 his right),
@@ -39,6 +41,8 @@
                             cross-arm guard's, or a roll's) is { type: 'block', part: 'shoulder', roll: true (rolled off it as
                             his chest turned away) | false, margin (metres between the glove and his head as it met it) }
      bout.fighters[i].pose  his solved pose this step (and .place: where on the canvas, .points: gloves and head in the world)
+     bout.fighters[i].stands   a man who only stands there and takes it (a ladder rung's or a card's target): no blow to his
+                            liver puts him down (anything else does as it would; a script keeps his health up besides)
 
    A punch is physics from the feet to the glove. Pressing a button only starts a kinetic chain (phys/chain.mjs); the joints
    fire in turn, the body is solved every step, and a punch lands when, and only when, the glove meets the other man's head.
