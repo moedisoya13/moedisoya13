@@ -89,6 +89,7 @@ export const RULES = {
   lunge: 60, // metres a second a second: how quickly a step in gathers speed and sheds it
   hookDrop: 0.05, // how far below his own head a hook can be swung
   drop: 1, // health a finishing blow had to spare at most to put him down on a knee rather than flat
+  out: 2.5, // and at least to knock him out cold (about 70 N·s past what he had left); or one that catches him throwing
   jaw: 0.08, // how far below the middle of the head a hook is aimed
   startGap: 2.4
 };
@@ -758,7 +759,10 @@ function strike(bout, f, other, who, dt) {
   const counter = !!action.counter,
     worth = J * (counter ? RULES.counterGain : 1),
     damage = worth * RULES.damage * other.k.chin,
-    had = other.hp;
+    had = other.hp,
+    /* (caught as he throws: his own punch still on its way or out, and this one thrown at it, after it, a counter; a man
+       who walks onto a punch already coming has not been countered) */
+    caught = punching(other) && !!other.action.chain && ['coil', 'throw', 'hold'].includes(other.action.chain.phase) && other.action.at < action.at - 1e-9;
   other.hp = Math.max(0, other.hp - damage);
   other.action = null;
   other.cover = false;
@@ -779,15 +783,19 @@ function strike(bout, f, other, who, dt) {
   other.sinceHit = 0;
   other.animator.strike({ J: Math.min(worth, 110), dir: felt.dir, stun: other.stun, hp: other.hp });
   bout.stop = Math.min(RULES.stop[1], stop * (counter ? 1.5 : 1));
-  const down = other.hp <= 0;
-  bout.events.push(Object.assign({ type: 'hit', damage: +damage.toFixed(1), counter, down }, blow));
+  const down = other.hp <= 0,
+    /* (out cold: a finishing blow with RULES.out of health or more to spare, or one that caught him throwing; limp from a
+       hook or an uppercut, stiff as a log from a jab or a cross) */
+    out = down && (damage - had >= RULES.out || caught) ? (move.kind === 'straight' ? 'outStiff' : 'out') : null;
+  bout.events.push(Object.assign({ type: 'hit', damage: +damage.toFixed(1), counter, down }, blow, out ? { out } : null));
   if (down) {
     /* How he goes: a blow that only just finished him puts him down on a knee; one with plenty to spare lays him out, a
        body falling the way the blow went and the way he was going (phys/fall.mjs: it is handed the blow, the way the glove
        was going as it met him, and the shove that goes with it, the same way, up or down as well as along the canvas; on
        top of what was still pushing him and all he was moving at, his walking and his stepping in. These are his body's
-       now, not his place's to carry). */
-    const knee = damage - had < RULES.drop;
+       now, not his place's to carry). Out cold, he is laid out the same way, and his body let go of as an unconscious
+       man's is (out, outStiff: phys/fall.mjs), and he does not get up. */
+    const knee = !out && damage - had < RULES.drop;
     let laid = null;
     if (!knee) {
       const way = M.app(M.tr(other.place.R), vec), // (in his own terms)
@@ -802,7 +810,7 @@ function strike(bout, f, other, who, dt) {
       action.chain.landed = false;
       f.follow = { on: 1 - who, hand, from: f.points[hand].slice(), back: f.before[hand].slice(), t: 0, shove: swung ? push : 0, up: way[1], given: 0, first: FOLLOW.first };
     }
-    begin(other, knee ? 'drop' : move.kind === 'hook' ? 'slump' : 'ko', knee ? {} : { blow: laid });
+    begin(other, out || (knee ? 'drop' : move.kind === 'hook' ? 'slump' : 'ko'), knee ? {} : { blow: laid });
     // (laid out, the shove is his body's now; dropped to a knee, he sags where he stands, his feet under him)
     other.kx = other.kz = 0;
     other.down = 1;
@@ -858,8 +866,9 @@ function fouls(bout, f, other, who, dt) {
 }
 
 /* Up off the canvas, where he lies (his place turned and moved under him: anim/animator.mjs getUp), the way that fits how
-   he lies; or, off a knee, the way up off a knee. */
+   he lies; or, off a knee, the way up off a knee. A man out cold does not get up: nothing is done, -> null. */
 export function getUp(bout, f) {
+  if (f.down && f.action && MOVES[f.action.name].faint) return null;
   const up = f.animator.getUp(),
     name = up ? up.name : RISE[f.action && f.action.name] || 'riseKnee';
   if (up) {

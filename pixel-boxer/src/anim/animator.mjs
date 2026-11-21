@@ -22,7 +22,7 @@
      a.getUp()                                        knocked down and lying still: the way up that fits how he lies, and
                                                       how to turn and move his place so that he gets up where he lies:
                                                       { name, on, down, move: [x, z] (his space), turn (radians) } | null
-   Knocked down (a move that is a fall: ko, slump), his body is a body (phys/fall.mjs) from the pose he was in, and the next
+   Knocked down (a move that is a fall: ko, slump, and out cold: out, outStiff), his body is a body (phys/fall.mjs) from the pose he was in, and the next
    rise is blended out of the pose he comes to rest in (view.near: what of the other man he cannot fall through). */
 import * as M from '../rig/m3.mjs';
 import { TPOSE, fk } from '../rig/skeleton.mjs';
@@ -608,11 +608,16 @@ export function createAnimator(seed) {
       const lengthNow = (cycle / 2) * stretch;
       return { beat: ((((halves - 1) % 2) + 2) % 2 + u) / 2, cycle, halves, stepping: swing.side, landed: swing.came, lead: halves + u - ref, u, half: lengthNow, left: stop > 0 ? stop + lengthNow * (1 - u) : (lengthNow * (1 - u)) / Math.max(0.05, rate), flourish: flourish && flourish.k > 0.5 ? flourish.name : null, stopped: stop > 0 };
     },
+    // his body as he was last knocked down (phys/fall.mjs), or null
+    get fallen() {
+      return fall;
+    },
     /* Lying still after a fall: which way up fits how he lies (moves.mjs: LIE), and the turn and move of his place that put
        that rise's start where he lies (moves.mjs: UP), so that he gets up there; the body is carried into that place, and
        the pose he lies in kept for the rise to come out of. */
     getUp() {
-      if (!fall) return null;
+      // (out cold, there is no way up)
+      if (!fall || fall.out) return null;
       const lying = lyingOf(fall),
         name = LIE[lying.on],
         want = UP[name],
@@ -650,7 +655,7 @@ export function createAnimator(seed) {
       // ---- knocked down: his body is the fall's until he gets up (breathing as it settles)
       if (view.action && MOVES[view.action.name].fall) {
         const act = view.action;
-        if (!fall || fall.id !== act.id) (fall = createFall(poses[1] || guardPose(), poses[0], dt, act.blow)), (fall.id = act.id), (rising = null), (later = []), (lift.y = lift.v = lift.push = 0);
+        if (!fall || fall.id !== act.id) (fall = createFall(poses[1] || guardPose(), poses[0], dt, act.blow, MOVES[act.name].faint)), (fall.id = act.id), (rising = null), (later = []), (lift.y = lift.v = lift.push = 0);
         stepFall(fall, dt, view.near);
         /* (his place on the canvas goes with him as he is thrown and slides: the body is moved back under it, and the bout
            told how far it has to move his place for it: pose.drift, metres in his own terms) */

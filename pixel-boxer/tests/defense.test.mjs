@@ -39,8 +39,22 @@ for (const entry of DEFENSE.filter(e => e.punch))
   });
 
 /* Going down: laid out, he is a body that comes to rest however it lands, and gets up the way that fits how it lies (off his
-   back, front or side: moves.mjs LIE); dropped to a knee, he gets up off the knee. */
-for (const entry of DEFENSE.filter(e => e.fall))
+   back, front or side: moves.mjs LIE); dropped to a knee, he gets up off the knee; knocked out cold, he stays down, though
+   the script tries to get him up as it does the others. */
+for (const entry of DEFENSE.filter(e => e.fall && MOVES[e.fall].faint))
+  test(`defence catalogue: ${entry.id} is knocked out cold (${entry.fall}) and stays down`, () => {
+    const bout = freshBout(entry),
+      done = [];
+    for (let tick = 0; tick < Math.round(entry.loop / DT); tick++) {
+      step(bout, drive(entry, bout, tick * DT, DT), DT);
+      const a = bout.fighters[0].action,
+        name = a ? a.name : 'guard';
+      if (done[done.length - 1] !== name) done.push(name);
+    }
+    assert.deepEqual(done.filter(n => n !== 'guard' && !MOVES[n].punch), [entry.fall], JSON.stringify(done));
+    assert.equal(bout.fighters[0].down, 1);
+  });
+for (const entry of DEFENSE.filter(e => e.fall && !MOVES[e.fall].faint))
   test(`defence catalogue: ${entry.id} goes down as ${entry.fall}, gets up the way that goes with how he lies, and is back in his guard`, () => {
     const bout = freshBout(entry),
       done = [];

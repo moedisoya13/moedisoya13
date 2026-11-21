@@ -234,7 +234,9 @@ export function mirrorKnees(c) {
 
 /* How a man goes down, and the way up. Laid out, he is a body (phys/fall.mjs: ko from a straight punch or an uppercut,
    slump from a hook, the same body either way, the blow's direction is what differs), and the way up is chosen by how he
-   came to rest: off his back, off his front, off his side. Dropped to a knee, he means it, and gets up off the knee. */
+   came to rest: off his back, off his front, off his side. Dropped to a knee, he means it, and gets up off the knee.
+   Knocked out cold (out from a hook or an uppercut, limp; outStiff from a jab or a cross, stiff as a log) there is no way
+   up: he lies there. */
 export const RISE = { drop: 'riseKnee' };
 export const LIE = { back: 'rise', front: 'riseFront', side: 'riseSide' };
 /* Where each way up has his hips at the end of its first part, and which way his body lies along the canvas there (from
@@ -286,6 +288,9 @@ export const MOVES = Object.assign(
     // knocked down and out: a body (phys/fall.mjs); these only say so, and how long before he is lying still
     ko: { floor: true, stay: true, fall: true, dur: 1.2, keys: [] },
     slump: { floor: true, stay: true, fall: true, dur: 1.2, keys: [] },
+    // knocked out cold (docs/moves-plan-4.md §6): the same body let go of another way, and he does not get up
+    out: { floor: true, stay: true, fall: true, faint: 'limp', dur: 1.2, keys: [] },
+    outStiff: { floor: true, stay: true, fall: true, faint: 'log', dur: 1.2, keys: [] },
     /* a slip: the head taken off the line of a punch, bent and dipped to one side and straight back (which side is the
        action's: see the animator): the knee on that side bends and takes the weight, the other straightens, and the bend
        at the side is the less for it */
