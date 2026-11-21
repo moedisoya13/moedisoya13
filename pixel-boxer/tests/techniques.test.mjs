@@ -147,11 +147,11 @@ test('techniques: a punch coming is answered by a technique at its share of the 
     pro.fighters[0].techniques = ['parryDown'];
     thrown(pro, { jab: true });
     assert.equal(answers(pro, head(pro, true), N).parryDown, undefined, 'at 3');
-    const built = facing(1.0, { skills: [{ all: '4m' }, {}], techniques: [['parryDown', 'pullCounter']] });
+    const built = facing(1.0, { skills: [{ all: '4m' }, {}], techniques: [['parryDown', 'pullCounter', 'shell']] });
     thrown(built, { jab: true });
     const b = answers(built, head(built, false), N);
-    // (the down parry is built, stage F: picked without rehearsal; the pull counter is not yet)
-    assert.ok(b.parryDown > 0 && !b.pullCounter, 'built and not, not rehearsed: ' + JSON.stringify(b));
+    // (the down parry and the pull counter are built, stages F and D: picked without rehearsal; the shell is not yet)
+    assert.ok(b.parryDown > 0 && b.pullCounter > 0 && !b.shell, 'built and not, not rehearsed: ' + JSON.stringify(b));
   }
 });
 
@@ -191,10 +191,15 @@ test('techniques: the counter out of a technique, once for each opening', () => 
     return { rate: n / N, last };
   };
   const t = () => bout.t;
-  // the pull: the jab gone by him in the sway
+  // the pull: the jab gone by him in the sway (he has just come out of it); and not once he is out of it
+  bout.fighters[0].lastEvade = { name: 'pull', endedAt: t() };
   let r = counters(() => ((brain.used = { id: 'pullCounter', at: t() - 0.2 }), (brain.mem.by = { at: t() - 0.05, name: 'jab' })), true);
   near(r.rate, chance, 0.05, 'pull counter');
   assert.equal(r.last.tech, 'pullCounter');
+  bout.fighters[0].lastEvade = { name: 'pull', endedAt: t() - 0.2 };
+  r = counters(() => ((brain.used = { id: 'pullCounter', at: t() - 0.2 }), (brain.mem.by = { at: t() - 0.05, name: 'jab' })), true);
+  assert.equal(r.rate, 0, 'out of the sway');
+  bout.fighters[0].lastEvade = { name: 'pull', endedAt: t() };
   r = counters(() => ((brain.used = { id: 'pullCounter', at: t() - 0.2 }), (brain.mem.by = { at: t() - 0.05, name: 'jab' })), false);
   assert.ok(r.rate <= 1 / N, 'rolled for once: ' + r.rate);
   r = counters(() => ((brain.used = { id: 'pullCounter', at: t() - 0.6 }), (brain.mem.by = { at: t() - 0.5, name: 'jab' })), true);
@@ -372,18 +377,19 @@ test('techniques: not built, they change nothing; rehearsed, only what he carrie
   assert.equal(c.events, d.events, 'the loadouts their grades give them, against only the built ones of those');
   // (the body punches are built and are no technique: everyone throws them, stage C2)
   assert.deepEqual(a.techs.map(l => l.filter(t => t !== 'body' && !(TECHNIQUES[t] && TECHNIQUES[t].ready))), [[], []], 'nothing not built comes out');
-  // rehearsed: a 4명 who carries three, against a pro who asked for three his grade does not open
-  const r = fight(33, { sheets, skills: [{ all: '4m' }, { all: '3' }], techniques: [['parryDown', 'pullCounter', 'wave'], ['shift', 'parryDown', 'shell']], plans: [PLANS.counter, PLANS.pressure], rehearse: true }, 2000),
+  // rehearsed: a 4명 who carries three (the shell not built yet), against a pro who asked for three his grade does not open
+  const LOAD = [['parryDown', 'pullCounter', 'shell'], ['shift', 'parryDown', 'shell']];
+  const r = fight(33, { sheets, skills: [{ all: '4m' }, { all: '3' }], techniques: LOAD, plans: [PLANS.counter, PLANS.pressure], rehearse: true }, 2000),
     carried = new Set(r.techs[0]);
   assert.deepEqual(r.match.bout.fighters[1].techniques, []);
   assert.deepEqual(r.techs[1].filter(t => t !== 'body'), [], 'nothing his grade does not open');
   /* (one he carries whose motion is not built came out: the rehearsal is what let it. Which one depends on the course of the
      match, and the body punches, built since, change that course: stage C2) */
   assert.ok([...carried].some(t => TECHNIQUES[t] && !TECHNIQUES[t].ready), 'he did use one: ' + [...carried]);
-  for (const t of carried) assert.ok(['parryDown', 'pullCounter', 'wave', 'body'].includes(t), t);
+  for (const t of carried) assert.ok(['parryDown', 'pullCounter', 'shell', 'body'].includes(t), t);
   // (the same seed: the same match; another seed: another)
-  const again = fight(33, { sheets, skills: [{ all: '4m' }, { all: '3' }], techniques: [['parryDown', 'pullCounter', 'wave'], ['shift', 'parryDown', 'shell']], plans: [PLANS.counter, PLANS.pressure], rehearse: true }, 2000),
-    other = fight(34, { sheets, skills: [{ all: '4m' }, { all: '3' }], techniques: [['parryDown', 'pullCounter', 'wave'], ['shift', 'parryDown', 'shell']], plans: [PLANS.counter, PLANS.pressure], rehearse: true }, 2000);
+  const again = fight(33, { sheets, skills: [{ all: '4m' }, { all: '3' }], techniques: LOAD, plans: [PLANS.counter, PLANS.pressure], rehearse: true }, 2000),
+    other = fight(34, { sheets, skills: [{ all: '4m' }, { all: '3' }], techniques: LOAD, plans: [PLANS.counter, PLANS.pressure], rehearse: true }, 2000);
   assert.equal(again.events, r.events);
   assert.deepEqual(again.techs, r.techs);
   assert.notEqual(other.events, r.events);

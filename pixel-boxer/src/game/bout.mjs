@@ -55,7 +55,10 @@
    a punch may start out of it (a great one's from the moment his head is off the line, a pro's from most of the way back, the
    rest once it is over). A punch started out of the end of an evasion has its wind-up and leg drive done already, as far as
    the evasion's end is that punch's coil (the hand it leaves wound up: evade.mjs LOADED): it gets there sooner, not harder.
-   A parry leaves a punch wound up the same way, by the grade of his guard. A defence is brilliant when the punch missed by
+   A parry leaves a punch wound up the same way, by the grade of his guard. A power press meant as the pull counter (game/
+   techniques.mjs) out of a sway back is kept until the sway lets it go, and is the straight, the liver hook (asked for the
+   body) or the rear hook (named), at every grade, wound up whichever hand it is and waiting for him to come back in first
+   (anim/evade.mjs PULLED). A defence is brilliant when the punch missed by
    three centimetres or less (or his head was clear of it by less than a frame), or the guard went up as late as it could and
    still turned it aside, and a loaded punch went back within 0.4 s of the defence starting. */
 const BRILLIANT = { margin: 0.03, within: 0.4 };
@@ -70,7 +73,7 @@ import { LEN } from '../rig/solve.mjs';
 import { body, blank, fatigue, COST, loadout } from './profile.mjs';
 import { asked, has, gradeOf } from './techniques.mjs';
 import { levelOf, CROSS, ROLL } from '../anim/skill.mjs';
-import { timeline, evadeTime, progress, LOADED } from '../anim/evade.mjs';
+import { timeline, evadeTime, progress, LOADED, pullWait, pullTo } from '../anim/evade.mjs';
 import { choose, THROWS, PAW, COLLAR, ELBOW } from '../anim/show.mjs';
 import { waveOf, waveTravel, waveTurn, waveBlocked, patOf, presses } from '../anim/clean.mjs';
 import { dice } from '../anim/stance.mjs';
@@ -195,9 +198,12 @@ const open = (f, punch) =>
 const DUCK_IN = { landed: 0.4, wound: 0.15 };
 
 const isEvasion = name => EVADE.includes(name);
+// (a power press meant as the pull counter, while he is still in the sway back it is to come out of, or has just come out)
+const pullKept = (f, t) =>
+  f.want[0] === 'power' && !!f.want[2] && f.want[2].tech === 'pullCounter' && (f.action ? f.action.name === 'pull' : !!f.lastEvade && f.lastEvade.name === 'pull' && f.lastEvade.endedAt !== null && t - f.lastEvade.endedAt <= GRACE);
 // the evasion a man is in (or came out of a moment ago), and how far into it: what a punch started now is thrown out of
 const GRACE = 0.1; // seconds after an evasion is over that its end is still the coil of the next punch
-function loadOf(f, bout, move) {
+function loadOf(f, bout, move, more) {
   // (out of a duck in, landed and still bent: an inside punch, as much of its wind-up done as his grade leaves wound)
   const din = f.action && f.action.name === 'duckIn' ? f.action : f.lastIn && bout.t - f.lastIn.endedAt <= DUCK_IN.wound + 1e-9 - Math.max(0, MOVES.duckIn.dur - DUCK_IN.landed - DUCK_IN.wound) ? f.lastIn.action : null;
   if (din && (move.name === 'hookIn' || move.name === 'upperIn')) {
@@ -207,6 +213,8 @@ function loadOf(f, bout, move) {
   const e = f.action && isEvasion(f.action.name) ? f.action : f.lastEvade && f.lastEvade.endedAt !== null && bout.t - f.lastEvade.endedAt <= GRACE ? f.lastEvade.action : null;
   if (e) {
     const ev = e.level.evade;
+    // (the pull counter: the way back out of the sway is the wind-up of whichever of the three it is, anim/evade.mjs PULLED)
+    if (more && more.pulled && e.name === 'pull') return { load: ev.load, from: e.id, pulled: true, grade: e.level.id, wait: pullWait(e, move.name) };
     return LOADED(e.name, e.side) === move.hand ? { load: ev.load, from: e.id } : null;
   }
   const p = f.parried;
@@ -246,7 +254,7 @@ function begin(f, name, more, bout) {
   // a punch thrown with the hand that has just punched starts from where that arm's joints still are (a double jab)
   if (chain && before && before.chain && MOVES[before.name].hand === move.hand) (chain.q = before.chain.q.slice()), (chain.v = before.chain.v.slice());
   // out of the end of an evasion or a parry: wound up already
-  let loaded = chain && bout ? loadOf(f, bout, move) : null;
+  let loaded = chain && bout ? loadOf(f, bout, move, more) : null;
   // (but not by a legend's going: a punch to the body has to go down to it first, anim/body.mjs)
   if (loaded && loaded.from === 'legend' && move.level) loaded = null;
   if (loaded) preload(chain, move, loaded.load, loaded.shoulder);
@@ -261,9 +269,11 @@ function begin(f, name, more, bout) {
   }
   // (the counter out of a down parry waits for the pressing hand to have kept the glove down: anim/clean.mjs)
   if (chain && loaded && loaded.wait > 0) chain.wait = loaded.wait;
+  // (out of a sway back he comes back in first, a punch all wound up waiting wound up: anim/evade.mjs PULLED)
+  if (chain && loaded && loaded.pulled && chain.wait > 0 && chain.phase === 'throw') (chain.phase = 'coil'), (chain.coilTime = Math.max(chain.coilTime, 1e-3));
   if (before && isEvasion(before.name) && f.lastEvade && f.lastEvade.action === before) f.lastEvade.endedAt = bout ? bout.t : 0;
   if (before && before.name === 'duckIn') f.lastIn = { action: before, endedAt: bout ? bout.t : 0 };
-  f.action = Object.assign({ name, t: 0, id: name + ++f.serial, struck: false, chain, level, at: bout ? bout.t : 0, loaded: loaded && loaded.load > 0 ? loaded : null }, more);
+  f.action = Object.assign({ name, t: 0, id: name + ++f.serial, struck: false, chain, level, at: bout ? bout.t : 0, loaded: loaded && (loaded.load > 0 || loaded.pulled) ? loaded : null }, more);
   if (isEvasion(name)) (f.lastEvade = { action: f.action, name, start: bout ? bout.t : 0, endedAt: null }), (f.action.head0 = f.points ? f.points.head.slice() : null);
   f.cover = false;
   f.roll = null;
@@ -424,7 +434,8 @@ function decide(bout, f, input, dt, who) {
   // (a taunt is over the moment he does anything: a button, his guard, setting off: anim/show.mjs)
   if (f.action && MOVES[f.action.name].taunt && (pressed || input.cover || Math.hypot(...(input.move || [0, 0])) > 0.3)) f.action = null;
   if (pressed) (f.want = pressed), (f.wantAge = 0), (f.wantAt = bout.t);
-  else if (f.want && (f.wantAge += dt) > RULES.buffer) f.want = null;
+  // (the pull counter's press is kept for as long as he is still in the sway it is to come out of: anim/evade.mjs PULLED)
+  else if (f.want && (f.wantAge += dt) > RULES.buffer && !pullKept(f, bout.t)) f.want = null;
   if (f.wave) holdWave(bout, f, input, who);
   if (f.want) {
     // (the wave, asked of a man who does not carry it or whose grade has none, is the circle out: anim/clean.mjs)
@@ -481,7 +492,11 @@ function decide(bout, f, input, dt, who) {
         const other = bout.fighters[1 - who],
           inside = Math.hypot(other.x - f.x, other.z - f.z) < RULES.inside,
           chain = inside ? RULES.chainIn : RULES.chain;
-        if (what === 'power' && out && out.level.evade.load > 0) {
+        /* (out of a sway back, the pull counter, game/techniques.mjs, at every grade: the straight, or the liver hook asked for
+           the body, or the rear hook it names; anim/evade.mjs PULLED) */
+        const pulled = what === 'power' && !!out && out.name === 'pull' && !!sign && sign.tech === 'pullCounter';
+        if (pulled) (name = sign.body ? 'hookBody' : 'cross'), (f.link = 0);
+        else if (what === 'power' && out && out.level.evade.load > 0) {
           name = LOADED(out.name, out.side) === 'L' ? 'hook' : out.name === 'duck' ? 'upper' : 'cross';
           if (inside) name = name === 'hook' ? 'hookIn' : 'upperIn';
           f.link = Math.max(0, chain.indexOf(name));
@@ -513,9 +528,9 @@ function decide(bout, f, input, dt, who) {
         // (a jab out of the wave goes on with it; a power punch puts an end to it)
         const fromWave = !!f.wave && what === 'jab' && !!f.action && f.action.name === 'wave';
         if (f.wave && !fromWave) f.wave = null;
-        begin(f, name, { counter: f.counter > 0, variant: trick, wave: fromWave || undefined }, bout);
+        begin(f, name, { counter: f.counter > 0, variant: trick, wave: fromWave || undefined, pulled: pulled || undefined }, bout);
         // a loaded punch answering a defence: what makes the defence brilliant, if it was close enough
-        if (f.action.loaded && f.action.loaded.from !== 'legend' && f.action.loaded.from !== 'wave' && f.defence && f.defence.counterAt === null && bout.t - f.defence.start <= BRILLIANT.within + 1e-9) (f.defence.counterAt = bout.t), (f.defence.counter = f.action.id), judge(bout, f, who);
+        if (f.action.loaded && f.action.loaded.load > 0 && f.action.loaded.from !== 'legend' && f.action.loaded.from !== 'wave' && f.defence && f.defence.counterAt === null && bout.t - f.defence.start <= BRILLIANT.within + 1e-9) (f.defence.counterAt = bout.t), (f.defence.counter = f.action.id), judge(bout, f, who);
         f.lastPower = what === 'power';
         f.counter = 0;
         bout.events.push({ type: 'punch', who, name });
@@ -627,7 +642,8 @@ function travel(f, input, dt, other) {
       ox = head[0] - f.x,
       oz = head[2] - f.z,
       far = (Math.hypot(ox, oz) || 1) + (low ? 0 : 0.09),
-      close = Math.max(0, Math.min(RULES.stepIn * (f.action.counter ? 1.5 : 1), (far - (f.action.variant === 'elbow' ? ELBOW.close : MOVES[f.action.name].close)) * 9));
+      // (and the pull counter's liver hook, the weight driven forward out of the sway, to its own distance: anim/evade.mjs)
+      close = Math.max(0, Math.min(RULES.stepIn * (f.action.counter ? 1.5 : 1), (far - (f.action.variant === 'elbow' ? ELBOW.close : pullTo(f.action) ?? MOVES[f.action.name].close)) * 9));
     if (far < MOVES[f.action.name].reach + 0.6) (ix = (ox / far) * close), (iz = (oz / far) * close);
   }
   // (the step in is the legs driving him: it gathers speed and sheds it at most as fast as they can, and is not a jump)
@@ -1219,6 +1235,10 @@ function strike(bout, f, other, who, dt) {
   // (and the body turning behind a punch to the body is stopped with it, and all of it starts home at once: the fist is in him,
   // and he is folding round it)
   if (move.level) action.chain.v.fill(0), (action.chain.since = 0.06), (action.chain.back *= 1.8);
+  /* (and the pull counter's rear hook comes away off his jaw as it lands, the body that swung it stopped with it: it lands
+     beside the lead glove he is bringing home from his jab, and run on round it would go through that glove, which nothing
+     here stops: anim/evade.mjs PULLED) */
+  else if (move.name === 'hookR' && action.loaded && action.loaded.pulled) action.chain.v.fill(0), (action.chain.phase = 'recover'), (action.chain.since = 0);
   f.sinceLast = 0;
   /* (on his trunk: where, game/trunk.mjs, and the part of him the effects throw sweat off; below his hips, nothing that
      counts has happened, and the glove is stopped there) */

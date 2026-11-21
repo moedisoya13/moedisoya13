@@ -44,7 +44,7 @@ import { LINKS, stepChain } from '../phys/chain.mjs';
 import { CHANNELS, GUARD, MOVES, LEFT_BEND, LIE, UP, sampleMove, mirrorKnees } from './moves.mjs';
 import { LEVEL } from './skill.mjs';
 import { H, headAt, headTo, phraseX, PHRASE, FLOURISH, CLEAN, DIRTY, dice } from './stance.mjs';
-import { sampleEvade, EVASIONS, timeline, evadeTime } from './evade.mjs';
+import { sampleEvade, EVASIONS, timeline, evadeTime, pullBack, pullIn } from './evade.mjs';
 import { travel as legendTravel, dash as legendDash, dashShape } from './legend.mjs';
 import { stance as showStance, crossGuard, ear, shoulderRoll, hammer, paw, PAW, collar, COLLAR, ELBOW } from './show.mjs';
 import { bodyState, struck as foldUp, give as bodyGive, coverLow, lower } from './body.mjs';
@@ -797,6 +797,8 @@ export function createAnimator(seed) {
         });
         // (a punch to the body: the way down to it, his grade's, body.mjs)
         if (move.level) lower(c, action, move, action.level || LEVEL[3]);
+        // (out of a sway back, the pull counter: coming back in is its wind-up, anim/evade.mjs)
+        if (action.loaded && action.loaded.pulled) pullBack(c, action, move);
         /* How the rest of him is held while it goes, by how good he is (skill.mjs): all of it grows with the arm, so it is
            there as the punch is and gone as it comes home. */
         const me = move.hand,
@@ -822,7 +824,7 @@ export function createAnimator(seed) {
         else if (form.guard < 0) (c[o + 'y'] += 0.02 * -form.guard * out), (c[o + 'z'] -= 0.025 * -form.guard * out), (c[o + 'x'] += s * 0.015 * -form.guard * out);
         /* (a punch thrown out of the end of an evasion: the other glove is still on his cheek where the evasion put it, out of
            the way of the arm that has just gone past his head, and comes off it as the punch goes) */
-        if (action.loaded && action.loaded.from !== 'parry' && action.loaded.from !== 'legend' && action.loaded.from !== 'wave') (c[o + 'z'] -= 0.12 * (1 - smooth(action.t / 0.2))), (c[o + 'y'] -= 0.01 * (1 - smooth(action.t / 0.2)));
+        if (action.loaded && action.loaded.load > 0 && action.loaded.from !== 'parry' && action.loaded.from !== 'legend' && action.loaded.from !== 'wave') (c[o + 'z'] -= 0.12 * (1 - smooth(action.t / 0.2))), (c[o + 'y'] -= 0.01 * (1 - smooth(action.t / 0.2)));
         c.hp -= 11 * form.chin * out; // the chin up and out after it (tucked, the better he is)
         c.lean += 9 * form.over * share.over * out; // and the weight thrown in after it, over the front foot (right up close there is no room)
         c.hz += 0.05 * form.over * share.over * out;
@@ -1971,7 +1973,7 @@ export function createAnimator(seed) {
         hand[side] = at;
         // (and it goes round the arm no faster than an elbow can, 1200 degrees a second, and the shoulder swings it no faster
         // than 900)
-        hands[side] = { at, toward: M.lerp(M.scale(asked, 1 / l), elbow[side] || [0, 0, 0], keep), round: { was: round[side], most: 1200 * dt }, shoulder: { was: arm[side], most: 900 * dt }, last: wrist[side], punch: !!mine && (action.chain.phase === 'coil' || action.chain.phase === 'throw'), locked: !!mine && mine.arm === 'swing' };
+        hands[side] = { at, toward: M.lerp(M.scale(asked, 1 / l), elbow[side] || [0, 0, 0], keep), round: { was: round[side], most: 1200 * dt }, shoulder: { was: arm[side], most: 900 * dt }, last: wrist[side], punch: !!mine && (action.chain.phase === 'coil' || action.chain.phase === 'throw') && !(pullIn(action) > 0 && action.chain.t < action.chain.wait), locked: !!mine && mine.arm === 'swing' };
       }
       let stance = { hips, spine, feet, hands, stretch: 1 + c.st };
       if (rising && action && rising.id === id) {

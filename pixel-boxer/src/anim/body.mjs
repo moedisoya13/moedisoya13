@@ -155,7 +155,8 @@ export function coverLow(s, c, seen, cv, cover, dt, clock) {
                                   none): what a man covering up reads a punch to his body off (coverLow, game/bout.mjs) */
 export const LEVEL3 = { depth: 1, knee: 1, look: 0, show: 0, down: null, seam: 0, up: 0.2 };
 const wayDown = lv => Object.assign({}, LEVEL3, lv && lv.form && lv.form.level);
-const downOf = (L, action) => L.down ?? Math.max(0.06, (action.chain && action.chain.coilTime) || 0.1);
+// (a punch that waits before it goes, the pull counter coming back in first: anim/evade.mjs PULLED, goes down while it waits)
+const downOf = (L, action) => L.down ?? Math.max(0.06, (action.chain && action.chain.coilTime + (action.loaded && action.loaded.pulled ? action.chain.wait || 0 : 0)) || 0.1);
 export function lower(c, action, move, lv) {
   const w = move.level;
   if (!w || !action.chain) return 0;

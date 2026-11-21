@@ -11,6 +11,8 @@
                                   great one stops at once his head is clear of the punch by his grade's margin (action.cap)
      sampleEvade(action, level, c)   the channels it adds this frame, into c (sided, and made up for the turned stance)
      LOADED                       which hand an evasion leaves wound up, by move and side ('L' lead, 'R' rear)
+     PULLED, pullWait, pullTo, pullBack, pullIn   the pull counter out of a sway back (docs/moves-plan-5.md §3.8): how long
+                                  he takes to come back in, how close the liver hook goes, his way back into each of the three
    The pro's (grade 3) is the curve exactly as written: the same numbers at the same moments. */
 import { MOVES, LEFT_BEND, mirrorKnees } from './moves.mjs';
 
@@ -44,6 +46,71 @@ export const EVASIONS = Object.keys(WRITTEN);
 export function LOADED(name, side) {
   if (name === 'slip' || name === 'roll') return side > 0 ? 'L' : 'R';
   return 'R';
+}
+
+/* The pull counter (docs/moves-plan-5.md §3.8; game/techniques.mjs pullCounter): out of a sway back, the straight, the liver hook
+   or the rear hook. The sway leaves whichever of them it is wound up, as far as his grade's evade.load says (game/bout.mjs
+   loadOf), and he comes back out of it into the punch: the way back is its wind-up.
+     back     seconds he takes to come back in from all the way out, where his grade lets the punch go before the sway has come
+              back (4 and 5: from the moment his head is off the line); the punch waits that long times how far out he still
+              is (game/bout.mjs: the chain's wait), and goes as he gets there. The more the sway has wound the punch up, the
+              more of coming back is its wind-up already (one movement): `over` of it for all of it wound up (the wait times
+              1 − over × load). The rest come back with the sway itself (a pro from four fifths of the way back, a beginner and
+              an amateur once it is over), and wait for nothing more
+     duck     how much of each way's own coming back he does (RETURN): a beginner stands up out of it and only then throws,
+              the rear hook with the arm alone
+     in       metres he comes in further as he comes back (a dirty man's, who sat down on his rear leg instead of going back)
+   RETURN, each way's coming back, at its full, as he lets the punch go (in his channels: moves.mjs), on top of the punch's own
+   wind-up (a liver hook's way down is the punch's own: anim/body.mjs lower), and `back`, its share of his grade's time to come
+   back in (the straight goes straight back in off the rear leg; the other two go down on the way):
+     hookR     the weight onto the lead foot and the head down to the lead side under the line, the hips wound back: the rear
+               hand loaded (about 10 cm down, 8 across, as it goes)
+     cross     sat on the rear leg, as the sway left him: the straight's own wind-up (it does not go down)
+     hookBody  the weight driven forward off the rear leg onto the lead foot (the way down is the liver hook's own), and so in
+               to the liver hook's own distance (`to`, centre to his waist: game/bout.mjs travel), not only as far as it can
+               reach from: from the edge of its reach it comes in high and meets his rear elbow */
+export const PULLED = {
+  1: { back: 0, duck: 0, in: 0 },
+  2: { back: 0, duck: 1, in: 0 },
+  3: { back: 0, duck: 1, in: 0 },
+  '4m': { back: 0.19, duck: 1, in: 0 },
+  '4a': { back: 0.19, duck: 1, in: 0.04 },
+  '5m': { back: 0.19, duck: 1, in: 0 },
+  '5a': { back: 0.19, duck: 1, in: 0.06 }
+};
+const OVER = 0.3;
+const RETURN = {
+  hookR: { back: 1.1, at: { lkf: 18, rkf: 6, side: 22, lean: 8, yaw: -8, hz: 0.02 } },
+  cross: { back: 0.8, at: { rkf: 12 } },
+  hookBody: { back: 1.2, at: { hz: 0.03 }, to: 0.74 }
+};
+// (how close a punch out of a pull steps in to, if its way back takes him further in than the punch itself would: or null)
+export const pullTo = action => (action.loaded && action.loaded.pulled && RETURN[action.name] && RETURN[action.name].to) || null;
+// (the wait, for this punch out of this pull: game/bout.mjs loadOf)
+export const pullWait = (pull, name) => (PULLED[pull.level.id] ? PULLED[pull.level.id].back * ((RETURN[name] || {}).back ?? 1) * (1 - OVER * pull.level.evade.load) * progress(pull).k : 0);
+/* (how far he has come back in, 0..1, for a punch out of a pull; 0 for any other. While the punch waits for him to come back,
+   its hand is not yet thrown: it goes where his arm can put it, as a guard's does, and not through a flip of the elbow round
+   the arm (anim/animator.mjs, rig/solve.mjs: a show-off's lead hand let down at his waist would turn over at once)) */
+export function pullIn(action) {
+  const chain = action.chain;
+  if (!(action.loaded && action.loaded.pulled && PULLED[action.loaded.grade]) || !chain) return 0;
+  return clamp(chain.t / Math.max(0.05, (chain.wait || 0) + chain.coilTime + (chain.pause || 0)), 0, 1);
+}
+/* The coming back, this frame, into c: up to its full by the time the punch goes (its wait and its wind-up), and let go of as
+   it is thrown; the dirty man's further in kept until the arm starts home. action.loaded: { pulled, grade } (game/bout.mjs). */
+export function pullBack(c, action, move) {
+  const L = action.loaded,
+    P = L && L.pulled && PULLED[L.grade],
+    chain = action.chain;
+  if (!P || !chain) return;
+  // (on the chain's own clock, which runs on through every phase of it: seconds since it went, negative while it waits)
+  const fire = (chain.wait || 0) + chain.coilTime + (chain.pause || 0),
+    since = chain.t - fire,
+    w = since < 0 ? smooth(chain.t / Math.max(0.05, fire)) : 1 - smooth(since / 0.12),
+    held = since < 0 ? smooth(chain.t / Math.max(0.05, fire)) : 1 - smooth((since - 0.15) / 0.25),
+    shape = (RETURN[move.name] || {}).at || {};
+  for (const ch in shape) c[ch] += shape[ch] * P.duck * w;
+  c.hz += P.in * held;
 }
 
 /* What each grade adds to the written shape at the far point of each evasion, sided as the move is (x to the side he goes),

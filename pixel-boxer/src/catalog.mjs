@@ -17,7 +17,7 @@ import { guardPose } from './anim/animator.mjs';
 import { step } from './game/bout.mjs';
 
 import { ENTRIES, freshBout, drive } from './footwork.mjs';
-import { DEFENSE, ITEMS as GUARDS, PARRY_DOWN, CROSS_ARM, ROLLING, CROSS_LEVELS, ROLL_LEVELS } from './defense.mjs';
+import { DEFENSE, ITEMS as GUARDS, PARRY_DOWN, CROSS_ARM, ROLLING, CROSS_LEVELS, ROLL_LEVELS, PULL_WAYS, PULL_COUNTER } from './defense.mjs';
 import { LADDER, STANCES, DIRTY, FOOTWORK, PUNCHES, TECHNIQUES, ENTRY, MOVING, TRICKS, SHOWOFF, TAUNT_ROWS, TAUNTING, BODY_PUNCHES, BODY_LADDER, REAR, REAR_LADDER, WAVE_ROWS, WAVING } from './ladder.mjs';
 import { BODYSHOTS, LIVER_BLOCK } from './bodyshots.mjs';
 import { LEVELS, LEVEL } from './anim/skill.mjs';
@@ -45,7 +45,7 @@ const FOOTWORK_STATS = ['pendulum', 'inout', 'stalk', 'side', 'circle', 'turn', 
 // (the dashes each way are dash cards)
 const STAT = { bounce: 'stance', dashIn: 'dash', dashSide: 'dash' };
 // (the liver block cards have no punch of the other man's to fight round: each loop is a fresh bout all the same)
-const byId = Object.fromEntries([...ENTRIES, ...DEFENSE, ...STANCES, ...LADDER, ...DIRTY, ...FOOTWORK, ...ENTRY, ...SHOWOFF, ...TAUNTING, ...BODY_LADDER, ...REAR_LADDER, ...BODYSHOTS, ...LIVER_BLOCK.map(e => Object.assign({}, e, { fresh: true })), ...WAVING, ...PARRY_DOWN, ...CROSS_ARM, ...ROLLING].map(e => [e.id, e]));
+const byId = Object.fromEntries([...ENTRIES, ...DEFENSE, ...STANCES, ...LADDER, ...DIRTY, ...FOOTWORK, ...ENTRY, ...SHOWOFF, ...TAUNTING, ...BODY_LADDER, ...REAR_LADDER, ...BODYSHOTS, ...LIVER_BLOCK.map(e => Object.assign({}, e, { fresh: true })), ...WAVING, ...PARRY_DOWN, ...CROSS_ARM, ...ROLLING, ...PULL_COUNTER].map(e => [e.id, e]));
 
 /* ---- what is in the catalogue: parts, and in each the techniques, each a row of seven grades (or, being hit, one card) */
 const FOOT_NOTE = {
@@ -121,6 +121,12 @@ const CROSS_NOTE = {
   'crossArm-hook': '같은 가드로 스트레이트와 그 뒤의 앞손 훅을 받습니다. 훅이 출발하면(4암·4명 0.09초, 5암·5명 0.05초, 3은 0.12초 뒤) 뒷 글러브가 0.04초에 걸쳐 귀 위로 올라가 막습니다(웅크린 머리에 훅은 정수리 옆으로 옵니다). 이 움직임이 없으면 다섯 등급 모두 훅에 맞습니다. 어퍼도 이 가드의 뒷 글러브에 막힙니다(4차의 "엇갈린 팔 밑으로 올라오는 어퍼"는 뒤집혔습니다).',
   rollCounter: '스트레이트에 가드를 숄더 롤로 올립니다. 상체를 뒤로 눕히고 오른쪽으로 꺾으며 체중을 뒷발로 싣고, 앞어깨를 더 올리고 턱을 묻고, 주먹이 닿을 때 가슴이 오른쪽으로 가장 빨리 돕니다. 어깨선이 초당 200° 넘게 돌고 있을 때 앞어깨에 닿으면 굴린 것이고(체력은 블록의 절반), 굴려진 스트레이트는 0.3초 뻗은 채 묶입니다. 구간이 1~3프레임으로 좁아, 이르면 서 있는 어깨에 맞고(블록의 2배) 늦으면 상체를 꺾은 만큼 빗나갑니다. 4명·4암·5명·5암이 이 기술을 가졌을 때만이고, 반격(뒷손 훅)은 다음 단계입니다. 카드 아래는 구간, 닿는 순간 글러브와 머리 사이의 여유, 충격량입니다.'
 };
+/* the pull counter (docs/moves-plan-5.md §3.8): the three ways out of a sway back, as the head picks them */
+const PULL_NOTE = {
+  pullBody: '풀백 3형제는 고르는 기술입니다(3단계 이상의 기본 로드아웃, 일곱 등급 모두 엶). 스웨이 백으로 잽을 흘리고, 잽이 다 뻗어 빗나가는 순간 머리가 반격을 고릅니다: 상대가 0.85 m 안으로 들어와 있으면 뒷손 훅, 아니면 바디를 섞는 확률로 리버 훅, 그 밖에는 스트레이트(가장 흔함). 스웨이가 감아 둔 만큼(1·2는 0, 3은 0.3, 4는 0.7, 5는 1) 감기와 다리 구동을 건너뛰고, 돌아오는 몸이 그 주먹의 감기입니다. 1·2는 스웨이가 끝나고 선 뒤에, 3은 복귀의 80%부터, 4·5는 머리가 선을 벗어난 순간부터 나갈 수 있지만 몸이 돌아오는 만큼(4는 0.12~0.18초, 5는 0.11~0.16초) 기다렸다 나갑니다. ①은 뒷다리가 밀어 체중이 앞발로 넘어가며 앞무릎으로 내려앉고(리버 훅의 감기), 리버 훅의 던지는 거리(0.74 m)까지 들어가 간을 칩니다. 그보다 멀리서는 높게 들어가 뒷팔꿈치에 막힙니다. 카드 아래는 잽이 다 뻗은 뒤 반격이 닿기까지와 그 충격량입니다.',
+  pullHook: '② 상대가 0.9 m에서 잽을 치며 들어와 있어(빗나갈 때 중심 간 0.72~0.86 m) 뒷손 훅입니다. 체중이 앞발로 가며 머리가 앞손 쪽 아래로(가드보다 9~10 cm 아래, 낮게 서는 4암·5암은 4~7 cm; 7~11 cm 옆) 들어가고 골반이 감겨 뒷손이 장전됩니다. 1은 숙이지 않고 선 채 팔만 휘두릅니다.',
+  pullCross: '③ 뒷다리에 앉은 자세가 그대로 스트레이트의 장전이고 내려가지 않습니다. 4·5는 다른 둘보다 돌아오는 시간이 짧아(0.8배) 가장 빨리 닿습니다. 5는 잽 팔이 돌아가는 것과 같이 들어갑니다.'
+};
 const graded = (e, note, stat, levels, more) => Object.assign({ id: e.id, name: e.name, en: e.en, note, stat, cards: levels.map(lv => `${e.id}@${lv}`) }, more);
 const single = e => ({ id: e.id, name: e.name, en: e.en, single: true });
 
@@ -155,7 +161,10 @@ const SINCE = {
   parryDown: { since: 'new', note: '4명·5명 전용: 잽을 위에서 눌러 내리고 그 손으로 반격' },
   crossArm: { since: 'new', note: '고르는 기술이 된 고전형 크로스암, 3·4명·5명도 가지면 듦' },
   'crossArm-hook': { since: 'new', note: '앞손 훅에 뒷 글러브가 귀 위로 올라가 막음' },
-  rollCounter: { since: 'new', note: '스트레이트를 앞어깨로 굴려 흘림(반격은 다음 단계)' }
+  rollCounter: { since: 'new', note: '스트레이트를 앞어깨로 굴려 흘림(반격은 다음 단계)' },
+  pullBody: { since: 'new', note: '풀백 3형제 ①: 스웨이 백에서 돌아오며 리버 훅' },
+  pullHook: { since: 'new', note: '풀백 3형제 ②: 0.9 m에서, 앞손 쪽으로 숙이며 뒷손 훅' },
+  pullCross: { since: 'new', note: '풀백 3형제 ③: 뒷다리에 앉은 채 스트레이트' }
 };
 const SINCE_SAID = { new: '새', changed: '바뀜' };
 
@@ -175,7 +184,11 @@ const PARTS = [
     id: 'defense',
     part: '수비',
     note: '상대는 일곱 장 모두 같은 프로(3단계)이고 같은 순간에 같은 주먹을 던집니다. 수비하는 쪽은 그 등급 자기 구간의 가운데에서 누르고(구간은 tools/windows.mjs로 잰 값), 피했는지 막았는지는 글러브와 머리의 실제 접촉입니다. 아슬아슬하게 피하고 0.4초 안에 장전된 카운터가 나간 수비는 그 카드에서만 1/4 속도로 다시 보여 줍니다.',
-    groups: ['피하기', '막기', '카운터'].map(group => [group, GUARDS.filter(i => i.group === group).map(i => ({ id: i.id, name: i.name, en: i.en, note: i.note, stat: i.id, cards: LEVELS.map(lv => `${i.id}@${lv}`) }))])
+    groups: [
+      ...['피하기', '막기', '카운터'].map(group => [group, GUARDS.filter(i => i.group === group).map(i => ({ id: i.id, name: i.name, en: i.en, note: i.note, stat: i.id, cards: LEVELS.map(lv => `${i.id}@${lv}`) }))]),
+      // (the pull counter: a technique, game/techniques.mjs, every grade's; the cards name the way, no dice)
+      ['풀백 3형제', PULL_WAYS.map(w => graded(w, PULL_NOTE[w.id], 'pulled', LEVELS))]
+    ]
   },
   {
     id: 'punches',
@@ -421,6 +434,9 @@ function gradeCard(e, item) {
     case 'parryDown':
       stats = `<div class="feet result"><span class="tag" data-tag>–</span></div>` + pair(`<b>${span(e.window)}</b> f`, '반격 <b data-a>–</b> ms') + pair('<b data-b>–</b> N·s');
       break;
+    case 'pulled':
+      stats = `<div class="feet result"><span class="tag" data-tag>–</span></div>` + pair('<b data-a>–</b> ms', '<b data-b>–</b> N·s');
+      break;
   }
   // (a card of a changed row that came out otherwise than it did: its own mark)
   const changed = item.sinceCards && item.sinceCards.includes(e.level);
@@ -662,6 +678,11 @@ function start({ manifest, boxer }) {
         // (on the bout's clock, as tests/clean.test.mjs times it: the moments held at a blow are not counted)
         if (e.type === 'parry' && e.on === 1 && e.down) m.downAt = cell.bout.t;
         if (e.type === 'hit' && e.who === 0 && m.downAt !== undefined && !m.said) (m.said = true), put(cell, 'a', String(Math.round((cell.bout.t - m.downAt) * 1000))), put(cell, 'b', String(Math.round(e.J)));
+        break;
+      case 'pulled':
+        // (from the jab all the way out, as it goes by him, to his counter landing: on the bout's clock, as tests/body.test.mjs)
+        if (e.type === 'whiff' && e.who === 1 && m.extAt === undefined) m.extAt = cell.bout.t;
+        if (e.who === 0 && ['hit', 'block', 'whiff', 'graze'].includes(e.type) && m.extAt !== undefined && !m.said) (m.said = true), put(cell, 'a', String(Math.round((cell.bout.t - m.extAt) * 1000))), put(cell, 'b', e.J === undefined ? '–' : String(Math.round(e.J))), tell(cell, SAID[e.type] + (e.part === 'elbow' || e.part === 'forearm' ? ` (${MET[e.part]})` : ''));
         break;
       case 'trick':
         if (e.type === 'punch' && e.who === 0 && m.press === null) m.press = cell.t;

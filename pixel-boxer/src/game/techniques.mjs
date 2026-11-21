@@ -196,14 +196,21 @@ const straight = s => s.head && (s.punch === 'jab' || s.punch === 'straight');
 const since = (s, e, within) => !!e && !!s.used && e.at >= s.used.at && s.t - e.at <= within;
 
 define('pullCounter', {
-  name: '풀백 3형제', section: '§3.8', open: LEVELS, as: 'pull', standard: lv => lv.grade >= 3,
+  name: '풀백 3형제', section: '§3.8', open: LEVELS, as: 'pull', standard: lv => lv.grade >= 3, ready: true,
   // a jab or a straight at his head from 0.9 m or further: swayed back (half of his slips), as its trunk turns
   answer: { of: 'slip', share: 0.5, once: true, when: s => straight(s) && s.far >= 0.9, control: s => (s.soon ? { pull: true, tech: 'pullCounter' } : {}) },
-  // the punch gone by him in the sway
-  opening: s => (s.used && s.used.id === 'pullCounter' && since(s, s.mem.by, 0.3) ? 'pullCounter:' + s.mem.by.at : null),
-  /* ① to the body by his body dice; out of that, the bout's (stage D): ② the rear hook if he is inside 0.85 m, ③ the
-     straight (the commonest) */
-  counter: s => Object.assign({ power: true, tech: 'pullCounter' }, s.far >= 0.85 && s.roll() < bodyChance(s) ? { body: true } : {})
+  /* the punch gone by him in the sway, while he is still in it or has only just come out of it (the bout's grace: 0.1 s): out of
+     anything else, a power punch is not the pull counter */
+  opening: s =>
+    s.used && s.used.id === 'pullCounter' && since(s, s.mem.by, 0.3) && (s.me.action ? s.me.action.name === 'pull' : !!s.me.lastEvade && s.me.lastEvade.name === 'pull' && s.me.lastEvade.endedAt !== null && s.t - s.me.lastEvade.endedAt <= 0.1)
+      ? 'pullCounter:' + s.mem.by.at
+      : null,
+  /* (built, stage D: anim/evade.mjs PULLED, game/bout.mjs: out of the sway the press is the straight, the liver hook for the
+     body, or the rear hook by name, at every grade, wound up as far as the grade's sway winds it and waiting for him to come
+     back in) ② the rear hook if the other man has come in inside 0.85 m; ① else to the body by his body dice (a guard held
+     up, the pressure plan: bodyChance); ③ else the straight (the commonest) */
+  counter: s =>
+    s.far < 0.85 ? { power: 'hookR', tech: 'pullCounter' } : Object.assign({ power: true, tech: 'pullCounter' }, s.roll() < bodyChance(s) ? { body: true } : {})
 });
 
 define('wave', {

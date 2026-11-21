@@ -40,7 +40,7 @@ test('grades: every grade gets out of the way of every card\'s punch, and the wi
       const w = W(card.id, lv);
       assert.ok(w && w.from !== null && w.to >= w.from && w.at >= w.from && w.at <= w.to, `${card.id}@${lv}: ${JSON.stringify(w)}`);
       // (a frame past the back end of it is too late: the window is measured, not written)
-      const late = outcome(windowDrill(card.punch, card.move, card.value, w.to + 1, { all: lv }, card.guard, false, card.tech));
+      const late = outcome(windowDrill(card.punch, card.move, card.value, w.to + 1, { all: lv }, card.guard, false, card.tech, card.gap));
       if (card.tech) assert.ok(!(late && card.tech.works(late)), `${card.id}@${lv}: frame ${w.to + 1} still works`);
       else assert.notEqual(late && late.type, card.guard ? 'parry' : 'whiff', `${card.id}@${lv}: frame ${w.to + 1} still works`);
     }

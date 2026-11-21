@@ -291,3 +291,42 @@ export const ROLLING = ROLL_LEVELS.map(lv => {
     setup: b => ((b.fighters[0].skills = { all: lv }), (b.fighters[0].techniques = ['crossArm', 'rollCounter']))
   });
 });
+
+/* The pull counter (docs/moves-plan-5.md §3.8; game/techniques.mjs pullCounter, anim/evade.mjs PULLED), the three ways out of a
+   sway back, each a row of seven: the same pro throws the same jab as the pull card, at the same moment; the boxer carries
+   the technique and sways back meant as it on the frame in the middle of his window (WINDOWS.pull, the pull card's: the rear
+   hook's row is fought closer, 0.9 m, where the head picks it, and has its own, WINDOWS.pullHook), and presses the counter
+   once, as his head does: on the step after the jab has gone by him at full stretch (its whiff), the way named, and the bout
+   keeps the press while he is still in the sway. The other man only takes it (a liver hook does not put him down: f.stands).
+   tests/body.test.mjs holds them to what they say. The card's numbers: how
+   long after the jab was all the way out the counter lands (on the bout's clock: the moments held at a blow are not counted),
+   and how hard. */
+export const PULL_WAYS = [
+  { id: 'pullBody', name: '풀백 → 바디', en: 'Pull, and to the body', press: { power: true, tech: 'pullCounter', body: true }, gap: 1.0, card: 'pull' },
+  { id: 'pullHook', name: '풀백 → 뒷손 훅', en: 'Pull, and the rear hook', press: { power: 'hookR', tech: 'pullCounter' }, gap: 0.9, card: 'pullHook' },
+  { id: 'pullCross', name: '풀백 → 스트레이트', en: 'Pull, and the straight', press: { power: true, tech: 'pullCounter' }, gap: 1.0, card: 'pull' }
+];
+// the counter pressed once, the step after the jab has gone by him: the bout keeps it until the sway lets him go
+export const pulledCue = (when, press) => (bout, t) => {
+  const f = bout.fighters[0],
+    own = (f.cues = f.cues || {});
+  if (own.pressed || t < when + F - 1e-9 || !bout.events.some(e => e.type === 'whiff' && e.who === 1)) return null;
+  own.pressed = true;
+  return press;
+};
+export const PULL_COUNTER = PULL_WAYS.flatMap(way =>
+  LEVELS.map(lv => {
+    const item = { punch: ['jab', 0.8] },
+      w = WINDOWS[way.card] && WINDOWS[way.card][lv],
+      k = w && w.at !== null ? w.at : 0,
+      when = item.punch[1] + k * F;
+    return placed({
+      id: `${way.id}@${lv}`, item: way.id, level: lv, card: way.card, answer: k, way: way.id, name: way.name, en: way.en, group: '풀백 3형제', kind: 'counter',
+      loop: 2.4, gap: way.gap, punch: item.punch, outcome: 'whiff', view: { yaw: 0.6, pitch: 0.26 },
+      press: [[when, 'pull', true], [when, 'tech', 'pullCounter']],
+      cue: pulledCue(when, way.press),
+      // (he only takes it: no liver hook of the boxer's puts him down, and the loop goes on round the exchange)
+      setup: b => ((b.fighters[0].skills = { all: lv }), (b.fighters[0].techniques = ['pullCounter']), (b.fighters[1].stands = true))
+    });
+  })
+);

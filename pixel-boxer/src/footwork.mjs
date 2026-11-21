@@ -154,9 +154,10 @@ export function drive(entry, bout, at, dt) {
     // (a drill that is not started afresh each loop goes on from where it was, but a cue that has pressed in one loop
     // presses again in the next: what it keeps of having pressed is forgotten as each loop starts)
     if (tick % loop === 1 % loop) a.cues = {};
-    // (a cue names a button, or a button and what is pressed with it: [button, value])
+    // (a cue names a button, or a button and what is pressed with it: [button, value], or a set of controls: { power, tech, body })
     const button = entry.cue(bout, t);
     if (Array.isArray(button)) mine[button[0]] = button[1];
+    else if (button && typeof button === 'object') Object.assign(mine, button);
     else if (button) mine[button] = true;
   }
   return [mine, his];

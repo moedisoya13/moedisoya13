@@ -29,13 +29,21 @@
                    beginner never, the cross-arm guard meets it; a pro who waited 0.2 s would be hit
      the rear hook every grade lands it on the head from 0.80 m, and one that puts him down lays him to his right; the shoulder
                    roll's counter presses it
-     audited       every rung and card of them within the physics audit */
+     audited       every rung and card of them within the physics audit
+   And the pull counter (stage D, §3.8, src/defense.mjs PULL_COUNTER, anim/evade.mjs PULLED):
+     three ways    out of a sway back, the liver hook, the rear hook (from 0.9 m) and the straight land at every grade, the
+                   counter pressed once as the jab goes by at full stretch and kept by the bout while he is in the sway
+     sooner        from the jab all the way out to the counter landing: shorter grade by grade, a great one's 0.22 to 0.36 s;
+                   the sway's load gets it there 20 ms and more sooner than the same counter not wound up (4 and 5)
+     coming back   into the rear hook his head goes down to the lead side (a beginner stands up and swings the arm)
+     the head      the rear hook when the other man is in inside 0.85 m, else the body by his body dice, else the straight;
+                   and in a match of default loadouts he sways back meant as one, and counters out of it */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { step, settle, RULES } from '../src/game/bout.mjs';
 import { createMatch, stepMatch } from '../src/game/match.mjs';
 import { freshBout, drive, HOME } from '../src/footwork.mjs';
-import { DEFENSE } from '../src/defense.mjs';
+import { DEFENSE, PULL_COUNTER, PULL_WAYS } from '../src/defense.mjs';
 import { BODYSHOTS, shot, aimAt } from '../src/bodyshots.mjs';
 import { audit, measure } from '../src/audit.mjs';
 import { createAnimator } from '../src/anim/animator.mjs';
@@ -45,9 +53,11 @@ import { fk } from '../src/rig/skeleton.mjs';
 import { where, middle, aimed, balls, TRUNK } from '../src/game/trunk.mjs';
 import { BODY_LADDER, REAR_LADDER } from '../src/ladder.mjs';
 import { LIVER_BLOCK } from '../src/bodyshots.mjs';
-import { guardOf } from '../src/measure.mjs';
+import { guardOf, across } from '../src/measure.mjs';
 import { createBout, local } from '../src/game/bout.mjs';
 import { TECHNIQUES } from '../src/game/techniques.mjs';
+import { PLANS } from '../src/game/brain.mjs';
+import { blank } from '../src/game/profile.mjs';
 
 const DT = 1 / 60,
   DEG = 180 / Math.PI,
@@ -518,6 +528,126 @@ test('the rear hook is what a shoulder roll winds up: the roll counter presses i
 test("body punches: every rung of them, the rear hook's and the elbow block against the liver hook, within the physics audit", () => {
   const { found, seen } = audit([...BODY_LADDER, ...REAR_LADDER, ...LIVER_BLOCK]);
   assert.ok(seen > 4000, `only ${seen} frames`);
+  const broken = Object.entries(found)
+    .filter(([, c]) => c.bad)
+    .map(([check, c]) => `${check}: ${c.bad} (${JSON.stringify(c.cases.slice(0, 3))})`);
+  assert.deepEqual(broken, []);
+});
+
+/* ---- the pull counter (stage D) */
+// one card of it: the jab's going by at full stretch (its whiff), his counter (pressed, its name, how it ended) and where his
+// head was as the counter went (the chain leaving its wind-up), against his guard's
+function pulled(e) {
+  const bout = freshBout(e),
+    guard = guardOf(e.level),
+    r = { ext: null, punch: null, blow: null, fire: null };
+  for (let tick = 0; tick < Math.round(e.loop / DT); tick++) {
+    step(bout, drive(e, bout, tick * DT, DT), DT);
+    const [a, b] = bout.fighters;
+    b.hp = 1000;
+    for (const ev of bout.events) {
+      if (ev.type === 'whiff' && ev.who === 1 && r.ext === null) r.ext = bout.t;
+      if (ev.type === 'punch' && ev.who === 0 && !r.punch) r.punch = { name: ev.name, at: bout.t, asked: a.action.asked, loaded: a.action.loaded };
+      if (ev.who === 0 && ['hit', 'block', 'whiff', 'graze'].includes(ev.type) && !r.blow) r.blow = Object.assign({}, ev, { when: bout.t });
+    }
+    if (r.punch && !r.fire && a.action && a.action.chain && a.action.chain.phase !== 'coil') r.fire = { drop: guard.headY - a.points.head[1], lead: across(a, b, a.points.head) - guard.head };
+  }
+  r.s = r.ext !== null && r.blow ? r.blow.when - r.ext : null;
+  return r;
+}
+const pulls = {};
+const pullOf = id => pulls[id] || (pulls[id] = pulled(PULL_COUNTER.find(e => e.id === id)));
+const WAY = { pullBody: 'hookBody', pullHook: 'hookR', pullCross: 'cross' };
+
+test('the pull counter: out of a sway back, each of the three ways lands at every grade, pressed once as the jab goes by', () => {
+  assert.equal(PULL_COUNTER.length, 21);
+  for (const way of PULL_WAYS)
+    for (const lv of LEVELS) {
+      const r = pullOf(`${way.id}@${lv}`);
+      assert.ok(r.ext !== null, `${way.id}@${lv}: the jab went by`);
+      assert.ok(r.punch && r.punch.name === WAY[way.id] && r.punch.asked && r.punch.asked.tech === 'pullCounter', `${way.id}@${lv}: ${JSON.stringify(r.punch)}`);
+      assert.ok(r.punch.loaded && r.punch.loaded.pulled, `${way.id}@${lv}: out of the sway`);
+      assert.ok(r.blow && r.blow.type === 'hit' && r.blow.name === WAY[way.id], `${way.id}@${lv}: ${JSON.stringify(r.blow && { type: r.blow.type, part: r.blow.part, zone: r.blow.zone, J: r.blow.J })}`);
+      if (way.id === 'pullBody') assert.ok(r.blow.part === 'body' && r.blow.zone === 'liver', `${lv}: on his liver, ${r.blow.zone}`);
+      else assert.ok(!r.blow.zone, `${way.id}@${lv}: on his head`);
+    }
+});
+
+test('the pull counter: sooner grade by grade, a great one 0.22 to 0.36 s after the jab is all the way out; wound up, 20 ms and more sooner', () => {
+  for (const way of PULL_WAYS) {
+    const s = lv => pullOf(`${way.id}@${lv}`).s,
+      line = LEVELS.map(lv => `${lv} ${Math.round(s(lv) * 1000)}`).join(', ');
+    for (const [a, b] of [['1', '2'], ['2', '3'], ['3', '4m'], ['4m', '5m'], ['3', '4a'], ['4a', '5a']]) assert.ok(s(a) > s(b) - 1e-9 && (a[0] === b[0] || s(a) > s(b)), `${way.id}: ${line}`);
+    assert.ok(s('4m') >= 0.22 - 1e-9 && s('4m') <= 0.36 + 1e-9, `${way.id}: ${line}`);
+    // (the same counter, the sway leaving nothing wound up: his grade's evade.load at 0)
+    for (const lv of ['4m', '4a', '5m', '5a']) {
+      const flat = Object.assign({}, LEVEL[lv], { evade: Object.assign({}, LEVEL[lv].evade, { load: 0 }) }),
+        e = PULL_COUNTER.find(e => e.id === `${way.id}@${lv}`),
+        r = pulled(Object.assign({}, e, { setup: b => ((b.fighters[0].skills = { all: flat }), (b.fighters[0].techniques = ['pullCounter'])) }));
+      // (it gets there, on him or on his arm, the later)
+      assert.ok(r.blow && (r.blow.type === 'hit' || r.blow.type === 'block') && r.s - s(lv) >= 0.02 - 1e-9, `${way.id}@${lv}: ${Math.round(s(lv) * 1000)} ms wound up, ${r.s && Math.round(r.s * 1000)} not`);
+    }
+  }
+});
+
+test('the pull counter: into the rear hook his head goes down to the lead side; a beginner stands up and swings the arm', () => {
+  for (const lv of ['2', '3', '4m', '4a', '5m', '5a']) {
+    const f = pullOf(`pullHook@${lv}`).fire;
+    assert.ok(f.lead >= 0.05 && (lv[1] === 'a' || f.drop >= 0.07), `${lv}: ${(f.drop * 100).toFixed(1)} cm down, ${(f.lead * 100).toFixed(1)} to the lead side`);
+  }
+  const one = pullOf('pullHook@1').fire;
+  assert.ok(one.drop < 0.04 && one.lead < 0.02, `1: ${(one.drop * 100).toFixed(1)} cm down, ${(one.lead * 100).toFixed(1)} across`);
+  // (the straight stays on the rear leg: it does not go down to the lead side)
+  for (const lv of LEVELS) assert.ok(pullOf(`pullCross@${lv}`).fire.lead < 0.04, `pullCross@${lv}`);
+});
+
+test("the pull counter: the head's pick, the rear hook inside 0.85 m, the body by his body dice, the straight the commonest", () => {
+  const counter = TECHNIQUES.pullCounter.counter,
+    s = (far, iq, guarded, rolls) => ({ far, iq, guarded, plan: 'steady', t: 10, mem: { bodyAt: -9, blocked: null }, roll: () => rolls() });
+  assert.deepEqual(counter(s(0.8, 0.5, false, Math.random)), { power: 'hookR', tech: 'pullCounter' });
+  const tally = (iq, guarded) => {
+    let body = 0,
+      i = 0;
+    const N = 2000;
+    for (; i < N; i++) {
+      const c = counter(s(1.0, iq, guarded, () => (i + 0.5) / N));
+      assert.equal(c.power, true);
+      if (c.body) body++;
+    }
+    return body / N;
+  };
+  assert.ok(Math.abs(tally(0.5, false) - 0.25) < 0.01, 'the body: 0.10 + 0.30 × iq');
+  assert.ok(Math.abs(tally(0.5, true) - 0.5) < 0.01, 'twice, at a guard held up');
+  assert.equal(tally(0.2, true), 0, 'not under iq 30');
+  assert.ok(TECHNIQUES.pullCounter.ready);
+});
+
+test('the pull counter: in a match of default loadouts he sways back meant as one and counters out of it; the same seed, the same match', () => {
+  const fight = () => {
+    const match = createMatch({ seed: 4, sheets: [Object.assign(blank(), { iq: 80, defense: 85 }), Object.assign(blank(), { iq: 70 })], skills: [{ all: '4m' }, { all: '3' }], plans: [PLANS.counter, PLANS.pressure], rounds: 1, roundTime: 60 }),
+      seen = { pulls: 0, counters: {}, landed: 0, events: 0 };
+    for (let i = 0; i < 60 * 60 && match.phase !== 'over'; i++) {
+      stepMatch(match, DT);
+      for (const e of match.events) {
+        seen.events++;
+        const f = match.bout.fighters[e.who],
+          a = f && f.action && f.action.asked;
+        if (e.type === 'pull' && a && a.tech === 'pullCounter') seen.pulls++;
+        // (out of the sway: the bout's pull counter, wound up by it)
+        if (e.type === 'punch' && a && a.tech === 'pullCounter' && f.action.loaded && f.action.loaded.pulled) (seen.counters[e.name] = (seen.counters[e.name] || 0) + 1), (f.action.pc = true);
+        if (e.type === 'hit' && f && f.action && f.action.pc) seen.landed++;
+      }
+    }
+    return seen;
+  };
+  const a = fight();
+  assert.ok(a.pulls >= 3 && Object.values(a.counters).reduce((x, y) => x + y, 0) >= 1 && a.landed >= 1, JSON.stringify(a));
+  assert.deepEqual(fight(), a);
+});
+
+test('the pull counter: every card within the physics audit', () => {
+  const { found, seen } = audit(PULL_COUNTER);
+  assert.ok(seen > 2000, `only ${seen} frames`);
   const broken = Object.entries(found)
     .filter(([, c]) => c.bad)
     .map(([check, c]) => `${check}: ${c.bad} (${JSON.stringify(c.cases.slice(0, 3))})`);
