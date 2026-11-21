@@ -10,10 +10,12 @@
                reach: metres between the punching glove and the head it is going for (their surfaces) | null,
                stance: his grade of footwork (skill.mjs) | null, guard: his grade of covering up | null,
                threat: { eta (seconds until the punch coming at him gets there), dir } | null, stun: bool (stopped by a blow),
+               low: { zone, t, id } | null (a punch coming at his body: where, and seconds since he could see it: body.mjs),
                shoved: metres a second he is being knocked back at,
                cheer: bool, still: bool (lying on the canvas) }
      a.strike({ J, dir: [left, up, ahead] })         he has just been hit: the impulse in newton-seconds, and the way the glove
-                                                      was going as it met him
+                                                      was going as it met him (on his body: zone, a, k, the place it met
+                                                      him, game/trunk.mjs; and his grade's cover.low: body.mjs)
      a.rhythm                                         his beat: { beat, cycle, halves, stepping, landed, lead, flourish }
      a.covered                                        how far his gloves are up into his guard, 0..1
      a.legend                                         a legend on the move (legend.mjs): how much of the wind-up of a

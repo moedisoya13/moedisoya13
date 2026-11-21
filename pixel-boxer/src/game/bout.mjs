@@ -21,7 +21,12 @@
                             says by how much (whiff: margin, metres between the glove's and the head's surfaces at the
                             closest), and a defence that was brilliant says so: { type: 'brilliant', who (the defender),
                             on, of: 'whiff' | 'parry', margin, late, from (bout time the punch was pressed), counter (the
-                            id of the punch he answered with) }, and its whiff or parry event is marked brilliant: true
+                            id of the punch he answered with) }, and its whiff or parry event is marked brilliant: true.
+                            A punch that lands on his trunk says where (game/trunk.mjs): { type: 'hit', part: 'body', zone:
+                            liver | solar | ribs | body, trunk: { at: waist, to: chest, r } (what to throw sweat off), breath
+                            (the share of all his breath it took), liver: true (it puts him down) }; one met by an elbow or a
+                            forearm on its way there is { type: 'block', part: 'elbow' | 'forearm', zone (where it was aimed) };
+                            and a man doubled up by one goes down a moment later: { type: 'buckle', who }
      bout.fighters[i].pose  his solved pose this step (and .place: where on the canvas, .points: gloves and head in the world)
 
    A punch is physics from the feet to the glove. Pressing a button only starts a kinetic chain (phys/chain.mjs); the joints
@@ -935,7 +940,7 @@ function strike(bout, f, other, who, dt) {
     other.stamina = Math.max(0, other.stamina - breathOf(other, J, { zone: low }) * RULES.body.blocked);
     other.kx += ((dir[0] * J) / RULES.mass) * RULES.shove * 0.6 * RULES.body.shove;
     other.kz += ((dir[1] * J) / RULES.mass) * RULES.shove * 0.6 * RULES.body.shove;
-    other.animator.strike(Object.assign({ J: J * 0.25, dir: felt.dir }, fold));
+    other.animator.strike(Object.assign({ J: J * 0.25, dir: felt.dir }, fold || { zone: low }));
     bout.stop = stop * 0.4;
     return bout.events.push(Object.assign({ type: 'block' }, blow, { part: first.what, zone: low }));
   }
