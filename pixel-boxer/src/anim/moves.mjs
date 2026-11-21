@@ -274,10 +274,12 @@ const TUCK = { hy: -0.62, hz: -0.18, lean: 8, side: -8, hp: 8, lx: 0.08, ly: -1.
 // its way, low in front of him and the elbow out)
 const KNEEL_UP = { ...KNEEL, lx: 0.1, ly: -0.72, lz: 0.16, le: 0.35 };
 /* (down from a blow to the liver, docs/moves-plan-5.md §3.5: the same kneel, bent further over to his right, the rear elbow
-   clamped to his side over the liver and its glove at his belly, and the lead glove put down on the canvas instead; and
-   on the way down, folded over it, the rear knee going) */
+   clamped to his side over the liver and its glove at his belly, and the lead glove put down on the canvas instead; on the
+   way down, folded over it, the rear knee going; and before that, still up, his lead glove drawn in and down off the guard, a
+   hurt man's, out of the way of the arm that has just hit him going home) */
 const KNEEL_LIVER = { ...KNEEL, lean: 62, side: -22, hp: 16, lx: 0.2, ly: -1.29, lz: -0.02, lg: 1, le: 0.3, rx: -0.02, ry: -0.34, rz: -0.06, re: 0, rc: 1, rg: 0 };
-const FOLD_LIVER = { lean: 30, side: -10, hy: -0.08, hp: 12, rkf: 26, lkf: 10, rx: -0.02, ry: -0.3, rz: -0.06, rc: 1, ly: -0.1 };
+const FOLD_LIVER = { hy: -0.2, lean: 30, side: -10, hp: 14, hr: -4, rx: -0.02, ry: -0.3, rz: -0.06, rc: 1, lx: 0.04, ly: -0.2 };
+const HURT_LIVER = { ly: -0.06, lz: -0.08 };
 const AT_REST = pose => Object.fromEntries(Object.keys(pose).map(ch => [ch, 0]));
 const STEP = { hy: -0.4, hz: -0.04, tip: 30, lean: 34, yaw: 20, twist: 8, hp: 8, lx: 0.1, ly: -1.3, lz: 0.15, lg: 1, rx: -0.1, ry: -1.285, rz: 0.3, rg: 1, le: 0.3, re: 0.3, lfz: -0.22, lfy: 0.05, lfp: 15, rfz: -0.2, rfp: 55, rk: 1 };
 const UP_HALF = { hy: -0.34, hz: -0.04, lean: 28, hp: 16, lx: 0.06, ly: -0.3, rx: -0.04, ry: -0.6, rz: 0.18, rg: 0.3, side: 3, yaw: 4, rfz: -0.16, rfp: 36, rk: 0.2, lfz: 0.06 };
@@ -391,8 +393,9 @@ export const MOVES = Object.assign(
        clamped to the liver and the rear knee buckling, down onto the rear knee and the lead glove. He means to get up, and
        does, off the knee, the rear hand leaving his side last. */
     dropLiver: {
-      floor: true, stay: true, dur: 0.95,
-      keys: [{ t: 0.4, ...AT_REST({ ...KNEEL_LIVER, ...FOLD_LIVER }) }, { t: 0.56, ...FOLD_LIVER }, { t: 0.78, e: 'in', ...KNEEL_LIVER }, { t: 0.95, ...KNEEL_LIVER }]
+      floor: true, stay: true, dur: 1.05,
+      // (the hips let down all the way from the moment the legs go, as fast as he can fall and stop on the knee: animator.mjs FALL)
+      keys: [{ t: 0.15, ...HURT_LIVER }, { t: 0.4, ...AT_REST({ ...KNEEL_LIVER, ...FOLD_LIVER }), ...HURT_LIVER }, { t: 0.52, e: 'out', ...FOLD_LIVER }, { t: 0.85, ...KNEEL_LIVER }, { t: 1.05, ...KNEEL_LIVER }]
     },
     riseLiver: {
       floor: true, dur: 1.15,

@@ -936,7 +936,7 @@ export function createAnimator(seed) {
       // (and a guard he puts up fresh is a hammer of the rear fist, not the gloves put out to meet it: show.mjs)
       hammering = !!cv.hammer && view.fresh !== null && view.fresh !== undefined && hammer(c, cv.hammer, view.fresh);
       // (and with it up, an elbow brought down over a punch coming at his body: body.mjs)
-      coverLow(bodyHits, c, view.low, cv, cover, dt);
+      coverLow(bodyHits, c, view.low, cv, cover, dt, clock);
       if (cheer > 0.002) for (const [ch, v] of Object.entries(sampleMove(MOVES.cheer, 1, {}))) c[ch] += v * smooth(cheer);
       if (meet > 0.002 && !cv.hammer) {
         for (const [ch, v] of Object.entries(sampleMove(MOVES.meet, 1, {}))) c[ch] += v * meet * cv.meet.scale;

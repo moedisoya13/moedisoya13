@@ -248,9 +248,9 @@ const VARY_5A = { jab: [['thumb', 0.15], ['flicker', 0.5]], power: [['pawUp', 0.
    legend without it brings it down as the clean one of his grade does, off the beat (docs/moves-plan-5.md §3.4, second
    edition) */
 const LOW_1 = { delay: null, after: 0.12 };
-const LOW_2 = { delay: 0.17, both: true, drop: 0.12, in: 0.1, side: 0, knee: 6, time: 0.1, turn: 0, after: 0 };
+const LOW_2 = { delay: 0.17, both: true, drop: 0.22, in: 0.1, side: 0, knee: 6, time: 0.1, turn: 0, after: 0 };
 const LOW_3 = { delay: 0.1, both: false, drop: 0.12, in: 0.1, side: 8, knee: 10, time: 0.1, turn: 0, after: 0 };
-const LOW_4M = { ...LOW_3, delay: 0.07, turn: 4 };
+const LOW_4M = { ...LOW_3, delay: 0.07, drop: 0.06, turn: 4 };
 const LOW_5M = { ...LOW_3, delay: 0.05, drop: 0.08, side: 12, time: 0.08 };
 const LOW_4A = LOW_4M;
 const LOW_5A = LOW_5M;

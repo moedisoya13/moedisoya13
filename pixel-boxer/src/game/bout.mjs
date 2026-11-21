@@ -573,7 +573,7 @@ function viewOf(bout, i) {
   if (coming && f.points) {
     const zone = lowOf(other, f, coming),
       t = zone ? seen(coming) : null;
-    if (t !== null) view.low = { zone, t };
+    if (t !== null) view.low = { zone, t, id: coming.id };
   }
   if (punching(f) && !other.down && other.points) {
     /* Where the punch is thrown: at the head as it is now, wherever that is. The wrist is sent so that the glove's centre
@@ -852,7 +852,8 @@ function strike(bout, f, other, who, dt) {
     // (a glove already against his guard is met by it however it moves: it is in the way)
     c0 = c0 || other.before[key];
     c1 = c1 || other.points[key];
-    const s = meets(g0, g1, c0, c1, r, what === 'head' || what === 'trunk' ? RULES.touch * dt : -Infinity);
+    // (on his head, his trunk or an arm in the way of a punch to the body, right up close, it has to be going on into it)
+    const s = meets(g0, g1, c0, c1, r, what === 'head' || what === 'trunk' || what === 'elbow' || what === 'forearm' ? RULES.touch * dt : -Infinity);
     if (s >= 0 && (!first || s < first.s)) first = { what, key, s, c0, c1 };
   };
   test('head', 'head', gr + RULES.head);
@@ -1065,6 +1066,7 @@ function livered(bout, f, J) {
   return J >= B.liver - 1e-9 || f.livers.reduce((s, l) => s + l.J, 0) > B.heap;
 }
 function doubled(bout, f, who) {
+  // (on his feet a moment longer, but his feet are done with: he sags where he stands, as a man dropped to a knee does)
   begin(f, 'dropLiver', {});
   f.kx = f.kz = 0;
   f.down = 1;

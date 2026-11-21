@@ -34,7 +34,7 @@ export const FOLD = {
   fold: 12.3, pelvis: 0.25, back: 0.04, knees: 8,
   bend: 12, forward: 8, across: 0.03, knee: 12,
   nod: 8, tilt: 6,
-  hands: 0.06, inward: 0.03, side: 0.1,
+  hands: 0.06, inward: 0.03, home: 0.03, side: 0.1,
   cave: 0.012, gasp: 1.5, quick: 1.6
 };
 /* (how each part comes and goes: so many seconds to get there, held so long, and let go of over so long, the harder the blow
@@ -47,7 +47,9 @@ function envelope(t, [up, hold, tau], K) {
   return x <= 0 ? 1 : (1 + x) * Math.exp(-x);
 }
 
-export const bodyState = () => ({ hits: [], low: { w: 0, zone: null } });
+export const bodyState = () => ({ hits: [], low: { w: 0, zone: null, id: null, from: null } });
+// (seconds an elbow brought down is held there once it has got there)
+const HOLD = 0.35;
 
 export function struck(s, hit, clock) {
   const K = Math.min(hit.J, FOLD.most) / FOLD.ref,
@@ -94,8 +96,8 @@ export function give(s, c, clock) {
     c.ry -= both + (h.sign > 0 ? one : 0) + open;
     c.lx -= FOLD.inward * K * front * e.hands - 0.04 * open;
     c.rx += FOLD.inward * K * front * e.hands - 0.04 * open;
-    c.lz -= FOLD.inward * K * e.hands;
-    c.rz -= FOLD.inward * K * e.hands;
+    c.lz -= FOLD.home * K * e.hands;
+    c.rz -= FOLD.home * K * e.hands;
     // the breath knocked out of him, and then gasped back
     c.st -= FOLD.cave * K * e.cave;
     c.lean += 3 * K * e.cave;
@@ -110,13 +112,18 @@ export function give(s, c, clock) {
    down over it on the knee on that side; let go of once nothing is coming. The other glove stays at his head. A man holding
    the cross-arm guard (cv.cross on) has his lead forearm in front of his belly already (show.mjs) and brings nothing down,
    whatever his grade; a beginner's elbows never come down. */
-export function coverLow(s, c, seen, cv, cover, dt) {
+export function coverLow(s, c, seen, cv, cover, dt, clock) {
   const low = cv && cv.low,
     L = s.low,
-    want = !!(low && low.delay !== null && low.delay !== undefined && !cv.cross && seen && cover > 0.5 && seen.t >= low.delay - 1e-9);
-  if (want) L.zone = seen.zone;
+    able = !!(low && low.delay !== null && low.delay !== undefined && !cv.cross);
+  /* (what he has seen he answers, his grade's moment later, whether or not it has landed by then: the moment he could first
+     see where it was going is kept, and the elbow held down HOLD after he has got there) */
+  if (seen && (L.id !== seen.id || L.from === null)) (L.id = seen.id), (L.from = clock - seen.t), (L.zone = seen.zone);
+  const since = L.from === null ? -1 : clock - L.from - (able ? low.delay : 0),
+    want = able && cover > 0.5 && since >= -1e-9 && since < low.time + HOLD;
+  if (L.from !== null && since >= low.time + HOLD + 0.25) L.from = null;
   L.w = want ? Math.min(1, L.w + dt / low.time) : Math.max(0, L.w - dt / 0.25);
-  if (L.w <= 0 || !low || low.delay === null || low.delay === undefined) return;
+  if (L.w <= 0 || !able) return;
   const e = smooth(L.w),
     both = low.both || L.zone === 'solar' || L.zone === 'body',
     rear = both || L.zone === 'liver',
@@ -125,7 +132,7 @@ export function coverLow(s, c, seen, cv, cover, dt) {
   if (rear) (c.ry -= low.drop * e), (c.rz -= low.in * e), (c.rx -= 0.02 * e), (c.rkf += low.knee * e * (both ? 0.6 : 1));
   if (lead) (c.ly -= low.drop * e), (c.lz -= low.in * e), (c.lx += 0.02 * e), (c.lkf += low.knee * e * (both ? 0.6 : 1));
   // (the pit of the stomach: the two elbows brought in together in front of it)
-  if (both) (c.lx -= 0.05 * e), (c.rx += 0.05 * e);
+  if (both) (c.lx -= 0.1 * e), (c.rx += 0.1 * e);
   c.side += toward * low.side * e;
   if (low.turn) c.yaw += (toward ? -toward : 1) * low.turn * e;
 }
