@@ -154,6 +154,32 @@ test('the last of his health puts a boxer down and ends the bout', () => {
   assert.equal(bout.fighters[1].action.name, fell, 'and stays down');
 });
 
+/* What the head adds to a press (game/techniques.mjs: the technique it means it as, a punch for the body) goes with the press
+   onto the move it starts, for the motion built for it to read; until one is, the press is the one it always was. */
+test('a press carries what the head means by it, and is otherwise the press it always was', () => {
+  const press = (extra, skills) => {
+    const bout = createBout(3, { skills: [skills, {}] });
+    bout.fighters[0].x = -0.5;
+    bout.fighters[1].x = 0.5;
+    bout.fighters[1].hp = 1000;
+    settle(bout);
+    step(bout, [Object.assign({ power: true }, extra), idle], DT);
+    const asked = bout.fighters[0].action.asked,
+      seen = run(bout, 0.8);
+    return { asked, seen, at: bout.fighters.map(f => [f.x, f.z, f.points.head]) };
+  };
+  const plain = press({}, { all: '4m' }),
+    meant = press({ tech: 'shift', body: true }, { all: '4m' });
+  assert.equal(plain.asked, undefined);
+  assert.deepEqual(meant.asked, { tech: 'shift', body: true });
+  assert.deepEqual(meant.seen, plain.seen);
+  assert.deepEqual(meant.at, plain.at);
+  // (a technique his grade does not open is not carried; nor one nobody has heard of)
+  assert.deepEqual(press({ tech: 'shift', body: true }, { all: '3' }).asked, { tech: null, body: true });
+  assert.equal(press({ tech: 'shift' }, { all: '3' }).asked, undefined);
+  assert.equal(press({ tech: 'nonsense' }, { all: '4m' }).asked, undefined);
+});
+
 test('a bout against the rival ends, whoever is at the controls', () => {
   for (const [name, play] of [['nobody', () => idle], ['a brawler', (i, b) => ({ move: [b.fighters[1].x - b.fighters[0].x, b.fighters[1].z - b.fighters[0].z], jab: i % 23 === 0, power: i % 37 === 0 })]]) {
     const bout = createBout(11),

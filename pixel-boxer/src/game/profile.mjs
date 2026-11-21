@@ -4,7 +4,11 @@
    how his punches actually travel, how his feet actually move and how his body takes a blow, not a hidden dice roll.
      body(sheet)        -> what the rules and the physics use (see FIELDS below)
      fatigue(f)         -> 0..1: how much of his freshness is left, from his stamina
-     rate(sheet)        -> one number for how good he is, for matching opponents and for the career's display */
+     rate(sheet)        -> one number for how good he is, for matching opponents and for the career's display
+     loadout(skills, asked?) -> the techniques he carries (game/techniques.mjs): those asked for that his grades open and his
+                           slots hold, or, asked for none, the ones his grades give him (SLOTS: how many, by his best grade) */
+import { TECHNIQUES, gradeOf, opens } from './techniques.mjs';
+import { LEVEL } from '../anim/skill.mjs';
 
 export const ATTRS = [
   { id: 'power', name: '힘', short: '힘', what: '주먹 뒤에 실리는 몸무게. 충격량이 커집니다.' },
@@ -63,6 +67,26 @@ export const COST = { jab: 4, cross: 7, hook: 8, upper: 9, dash: 6, slip: 3 };
 /* How fresh he is, 0..1. Above a third of his stamina he is fresh; below it he slows down toward a floor, never to a stop. */
 export function fatigue(f) {
   return clamp(f.stamina / (0.35 * f.k.staminaMax), 0, 1);
+}
+
+/* The techniques he carries (docs/moves-plan-5.md §4.0): the third thing a boxer is, after his sheet and his grades. SLOTS:
+   how many slots his best grade gives him (each technique takes its cost of them; the career may change this). Asked for a
+   list, he carries what of it his grades open, in its order, as long as it fits; asked for none, what his grades give him
+   (each technique's `standard`: the pull counter from a pro up, the cross-arm guard for a dirty fighter of 4 and 5). */
+export const SLOTS = { 1: 1, 2: 1, 3: 2, 4: 4, 5: 6 };
+// his best grade at anything: the grades his skills name, and a pro's for what they leave to the default
+export function best(skills) {
+  const grades = Object.values(skills || {}).map(v => (typeof v === 'object' ? v && v.grade : LEVEL[v] && LEVEL[v].grade)).filter(g => g),
+    rest = skills && skills.all ? [] : [LEVEL[3].grade];
+  return Math.max(...grades, ...rest);
+}
+export function loadout(skills, asked) {
+  const room = SLOTS[best(skills)] ?? SLOTS[3],
+    ids = asked ? [...new Set(asked)] : Object.keys(TECHNIQUES).filter(id => TECHNIQUES[id].standard && TECHNIQUES[id].standard(gradeOf(skills, id))),
+    out = [];
+  let used = 0;
+  for (const id of ids) if (TECHNIQUES[id] && opens(skills, id) && used + TECHNIQUES[id].cost <= room) out.push(id), (used += TECHNIQUES[id].cost);
+  return out;
 }
 
 // one number for how good a sheet is (1..100): the attributes are not equally decisive, and this says by how much

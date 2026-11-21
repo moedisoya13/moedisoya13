@@ -1,15 +1,20 @@
 /* A boxer's head: what he decides to do, from what he can see. Either corner can have one; it reads the same state the
    picture is drawn from and works the same controls a player would.
-     const brain = createBrain(sheet, plan)     sheet: profile.mjs; plan: one of PLANS (his corner's instruction)
+     const brain = createBrain(sheet, plan, o?) sheet: profile.mjs; plan: one of PLANS (his corner's instruction);
+                                                 o.rehearse: he picks techniques whose motion is not built yet, too
      brain.plan = PLANS.pressure                 the corner changes it between rounds
      think(brain, bout, who, dt) -> controls     for boxer `who`
    Two things shape every decision. Who he is: his defence and his ring sense decide how often he reads a punch coming,
    his ring sense how he strings punches together and whether he takes the openings he is given, and how well he paces
    himself. And what he has been told: the plan sets where he wants to stand, how eager he is, what he throws, and how much
-   he gives to defence. A tired boxer with good sense backs off and breathes whatever he has been told. */
+   he gives to defence. A tired boxer with good sense backs off and breathes whatever he has been told.
+   The techniques he carries (game/techniques.mjs, his bout's f.techniques) come in at the same places: a punch seen coming,
+   an opening, the start of a combination, his feet; and he turns a punch of a combination to the body by his sense. Each
+   adds to his controls (tech, body, away: 'wave'), and each rolls the bout's dice only when it is in its situation. */
 import { MOVES } from '../anim/moves.mjs';
 import { random, incoming } from './bout.mjs';
 import { body, fatigue } from './profile.mjs';
+import { TECHNIQUES, memory, observe, situation, answerOf, counterOf, openingOf, comboOf, goingOf, bodyOf } from './techniques.mjs';
 
 /* The corner's instructions. range: metres, centre to centre, he wants to be at. eager: how often, given a chance, he
    starts throwing. rest: seconds he waits between his combinations. mix: how he likes to start them (jab, or power).
@@ -49,18 +54,22 @@ export const PLANS = {
 const ANSWER = { parry: 0.2, guard: 0.32, slip: 0.12 };
 
 /* The combinations a boxer knows, by how much sense he has. A novice throws one punch at a time; a clever boxer doubles his
-   jab, follows it with the cross, and runs the whole chain. */
-function combination(brain, bout) {
+   jab, follows it with the cross, and runs the whole chain. One he would start with a power punch may be a technique's
+   instead (techniques.mjs: combination). */
+function combination(brain, bout, s) {
   const iq = (brain.sheet.iq ?? 50) / 100,
     jabFirst = random(bout) < brain.plan.jab,
     long = random(bout) < 0.2 + 0.7 * iq,
     longer = random(bout) < 0.1 + 0.55 * iq * iq;
   if (jabFirst) return long ? (longer ? ['jab', 'jab', 'power'] : random(bout) < 0.5 ? ['jab', 'power'] : ['jab', 'jab']) : ['jab'];
-  return long ? (longer ? ['power', 'power', 'power'] : ['power', 'power']) : ['power'];
+  return comboOf(s) || (long ? (longer ? ['power', 'power', 'power'] : ['power', 'power']) : ['power']);
 }
 
-export function createBrain(sheet, plan) {
-  return { sheet, k: body(sheet), plan: plan || PLANS.steady, rest: 1, burst: [], next: 0, circle: 1, circleFor: 1.5, answer: null, seen: null, hold: 0 };
+/* (for the techniques, techniques.mjs: mem, what his head keeps of what has happened; used, the technique he answered the last
+   punch with ({ id, of, at, hold }); holding, the one he keeps at after the punch has gone by; tried, the last opening he
+   rolled for; rests, the rests between combinations he has had; going, how he goes round in this one) */
+export function createBrain(sheet, plan, o) {
+  return { sheet, k: body(sheet), plan: plan || PLANS.steady, rest: 1, burst: [], next: 0, circle: 1, circleFor: 1.5, answer: null, seen: null, hold: 0, mem: memory(), used: null, holding: null, tried: null, rests: 0, going: null, rehearse: !!(o && o.rehearse) };
 }
 
 export function think(brain, bout, who, dt) {
@@ -69,6 +78,7 @@ export function think(brain, bout, who, dt) {
     plan = brain.plan,
     k = brain.k,
     input = { move: [0, 0] };
+  observe(brain.mem, bout, who);
   if (bout.over !== null || me.down || him.down) return input;
   const dx = him.x - me.x,
     dz = him.z - me.z,
@@ -89,7 +99,8 @@ export function think(brain, bout, who, dt) {
   }
 
   // ---- a punch is on its way: decide once what to do about it
-  const coming = incoming(him);
+  const coming = incoming(him),
+    s = situation(bout, who, brain, { coming, range, side: brain.circle, iq: (brain.sheet.iq ?? 50) / 100, plan: plan.id, roll: () => random(bout) });
   if (coming && brain.seen !== coming.id) {
     brain.seen = coming.id;
     const roll = random(bout),
@@ -97,13 +108,21 @@ export function think(brain, bout, who, dt) {
       parry = ANSWER.parry * k.read * plan.parry,
       guard = ANSWER.guard * k.read * plan.guard,
       slip = ANSWER.slip * k.read * plan.slip;
-    brain.answer = !inReach ? null : roll < parry ? 'parry' : roll < parry + guard ? 'guard' : roll < parry + guard + slip ? 'slip' : null;
+    // (a technique he carries for it takes its part of one of these, by the same roll: techniques.mjs, answer)
+    brain.answer = !inReach ? null : answerOf(s, roll, [['parry', parry], ['guard', guard], ['slip', slip]]);
+    const t = TECHNIQUES[brain.answer];
+    if (t) brain.used = { id: t.id, of: coming.id, at: bout.t, hold: t.answer.hold ? t.answer.hold(s) : 0.12 };
   }
   if (!coming) brain.answer = null;
   if (coming && brain.answer) {
     // he reads the punch off the body: once the trunk has started to turn, the fist is a few hundredths of a second away
-    const soon = coming.chain.on[2];
-    if (brain.answer === 'guard') input.cover = true;
+    const soon = coming.chain.on[2],
+      t = TECHNIQUES[brain.answer];
+    if (t) {
+      // (the technique's own way with it)
+      Object.assign(input, t.answer.control(s));
+      if (t.answer.once && soon) brain.answer = null;
+    } else if (brain.answer === 'guard') input.cover = true;
     else if (brain.answer === 'parry') input.cover = soon;
     else if (brain.answer === 'slip' && soon) {
       /* the head goes off the line, to the outside of the punching hand: a straight from his left is slipped to his own
@@ -112,27 +131,46 @@ export function think(brain, bout, who, dt) {
       input.slip = MOVES[coming.name].kind === 'hook' ? (left ? 1 : -1) : left ? -1 : 1;
       brain.answer = null;
     }
-    brain.hold = 0.12;
+    brain.hold = t ? brain.used.hold : 0.12;
+    brain.holding = t ? t.id : null;
     return input;
   }
   if (brain.hold > 0) {
-    // keep the guard up a moment after the punch has gone by
+    // keep the guard up a moment after the punch has gone by (or keep at the technique he answered it with, its own way)
     brain.hold -= dt;
     input.cover = !me.action;
+    const t = brain.holding && TECHNIQUES[brain.holding];
+    if (t && t.answer.held) Object.assign(input, t.answer.held(s));
   }
 
-  // ---- an opening: take it
+  // ---- an opening: take it (with the technique that made it, if one did)
   if (me.counter > 0 && far < MOVES.cross.reach) {
-    if (random(bout) < k.counter * plan.counter) input.power = true;
+    if (random(bout) < k.counter * plan.counter) (input.power = true), Object.assign(input, counterOf(s));
     else me.counter = 0;
     return input;
   }
-  // ---- in the middle of a combination: the next punch as soon as the last allows
+  // (an opening a technique of his has made that the bout does not mark as one: once for each)
+  const made = openingOf(s);
+  if (made && made.key !== brain.tried) {
+    brain.tried = made.key;
+    if (random(bout) < k.counter * plan.counter) {
+      if (brain.holding) (brain.hold = 0), (brain.holding = null);
+      return Object.assign(input, TECHNIQUES[made.id].counter(s));
+    }
+  }
+  // ---- in the middle of a combination: the next punch as soon as the last allows (to the body, by his sense)
   if (brain.burst.length && brain.next <= 0 && far < MOVES.jab.reach + 0.1) {
     const what = brain.burst.shift();
-    input[what] = true;
-    brain.next = what === 'jab' ? 0.2 : 0.3;
-    if (!brain.burst.length) brain.rest = (plan.rest[0] + random(bout) * (plan.rest[1] - plan.rest[0])) * (1 + (1 - fresh) * sense);
+    if (typeof what === 'string') {
+      input[what] = true;
+      if (bodyOf(s)) input.body = true;
+      brain.next = what === 'jab' ? 0.2 : 0.3;
+    } else {
+      const { next, ...press } = what;
+      Object.assign(input, press);
+      brain.next = next ?? 0.3;
+    }
+    if (!brain.burst.length) (brain.rest = (plan.rest[0] + random(bout) * (plan.rest[1] - plan.rest[0])) * (1 + (1 - fresh) * sense)), brain.rests++;
     return input;
   }
   // ---- footwork: to his range, and round
@@ -140,9 +178,12 @@ export function think(brain, bout, who, dt) {
   input.move = [to[0] * drift + across[0] * brain.circle * plan.circle, to[1] * drift + across[1] * brain.circle * plan.circle];
   // a boxer who has been told to defend, or is getting his breath, keeps his hands up while he waits
   if (plan.guard > 1.25 && !brain.burst.length && random(bout) < 0.5) input.cover = true;
+  // (or goes round the way a technique of his does it, the hands let down: techniques.mjs, move)
+  const going = brain.burst.length ? null : goingOf(s);
+  if (going) Object.assign(input, going, { cover: false });
   if (!brain.burst.length && brain.rest <= 0 && far < MOVES.jab.reach - 0.05 && !me.action && me.stun <= 0) {
     if (random(bout) < eager) {
-      brain.burst = combination(brain, bout);
+      brain.burst = combination(brain, bout, s);
       brain.next = 0;
     } else brain.rest = 0.3 + random(bout) * 0.5;
   }
