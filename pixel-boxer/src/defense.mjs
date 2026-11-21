@@ -224,7 +224,7 @@ export const DEFENSE = [...GRADED.map(placed), ...DRILLS.map(placed)];
    (WINDOWS.parryDown once tools/windows.mjs measures it; until then PARRY_DOWN_WINDOW, measured the same way: frames after
    the press that throws the jab on which the guard put up for it presses it down). The card's numbers: the window, and how
    long after the glove was pressed down his counter lands. */
-export const PARRY_DOWN_WINDOW = { '4m': { from: -8, to: 3, at: -3 }, '5m': { from: -7, to: 3, at: -2 } };
+export const PARRY_DOWN_WINDOW = { '4m': { from: -8, to: 4, at: -2 }, '5m': { from: -7, to: 4, at: -2 } };
 export const PARRY_DOWN = ['4m', '5m'].map(lv => {
   const item = { id: 'parryDown', punch: ['jab', 0.8] },
     w = (WINDOWS.parryDown && WINDOWS.parryDown[lv]) || PARRY_DOWN_WINDOW[lv],

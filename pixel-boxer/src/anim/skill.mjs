@@ -282,20 +282,24 @@ const WAVE_5M = Object.assign({}, WAVE_4M, { hands: [-0.36, -0.3], wide: 0.08, s
    in; only a glove it comes down on is pressed down (game/bout.mjs), and the counter goes from the hand that pressed it, from
    where it is. Only 4명 and 5명 have it (`pat` on their lines).
      set      seconds the rear glove takes out to where it waits; at: [x, y, z] where that is (the rear hand's channels, from
-              the open guard's: in front of his chin, above the line a glove comes in on); elbow: its elbow lifted out so
-     lead     [x, y, z] metres the lead glove is put back to the temple, out of the way
-     go       seconds before the glove coming in would be on it that it starts down (timed to the glove, as a great one's
-              block is: animator.mjs riding)
-     down     metres it comes down, over `fall` seconds, `out` metres on as it does (a legend's the wrist only)
+              the open guard's: in front of his chin, above the line a glove comes in on); elbow: its elbow lifted out so (and
+              so the elbow is up behind the cross thrown from there, over the jab he has pressed down)
+     lead     [x, y, z] metres the lead glove is put back toward the temple, out of the way, as the guard comes up (a legend's
+              less: his counter is that hand's jab, and a jab is not thrown from behind his ear)
+     go       seconds before the glove coming in would be on it that it starts down (timed to the glove, and to the arm
+              throwing it: game/bout.mjs patView)
+     down     metres it comes down, over `fall` seconds, `out` metres on as it does (drawn in toward his chest, the elbow
+              the pivot; a legend's the wrist only)
      hold     seconds it keeps the glove pressed down after it met it; back: seconds it takes home (after that, or once the
               punch it is thrown into is out)
      presses  the punches it presses down: a jab (4명), a jab or a cross (5명); anything else, a guard asked for it blocks
      counter  the punch it opens (bout.mjs: what a power punch is in the opening): 'cross' (the hand that pressed it, `load` of
-              its wind-up done, waiting out `hold` first) or 'jab' (5명: the lead hand's jab at once, `jab` of its wind-up done,
-              and the pressing hand's cross, `load` of it done, pressed `follow` seconds after the contact)
+              its wind-up done, waiting out `hold` first) or 'jab' (5명: the lead hand's jab at once, `jab` of its wind-up done
+              (none: a legend's jab has none to do), and the pressing hand's cross, `load` of it done, pressed `follow`
+              seconds after the contact)
      stun     seconds the man pressed down is tied up (moves.mjs: patted; he is not knocked back) */
-const PAT_4M = { set: 0.04, at: [-0.005, 0.175, 0.15], elbow: 0.38, lead: [0.02, 0.025, -0.03], go: 0.05, down: 0.16, fall: 0.07, out: -0.12, hold: 0.14, back: 0.15, presses: ['jab'], counter: 'cross', load: 0.7, jab: 0, follow: 0, stun: 0.35 };
-const PAT_5M = Object.assign({}, PAT_4M, { set: 0.035, down: 0.09, fall: 0.07, out: -0.06, hold: 0.18, presses: ['jab', 'cross'], counter: 'jab', load: 1, jab: 0, follow: 0.16 });
+const PAT_4M = { set: 0.04, at: [-0.005, 0.175, 0.15], elbow: 0.38, lead: [0.1, 0.04, -0.03], go: 0.06, down: 0.16, fall: 0.07, out: -0.12, hold: 0.14, back: 0.15, presses: ['jab'], counter: 'cross', load: 0.7, jab: 0, follow: 0, stun: 0.35 };
+const PAT_5M = Object.assign({}, PAT_4M, { set: 0.035, lead: [0.06, 0.03, -0.05], down: 0.09, fall: 0.07, out: -0.06, hold: 0.18, presses: ['jab', 'cross'], counter: 'jab', load: 1, jab: 0, follow: 0.16 });
 
 export const LEVEL = {
   1: {

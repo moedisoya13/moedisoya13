@@ -296,7 +296,9 @@ function patGuard(bout, f, input, covering, dt) {
   } else if (f.pat && (f.sinceHit <= dt + 1e-9 || (f.pat.met === null && !covering) || bout.t - (f.pat.met ?? f.pat.at) > PAT.life)) f.pat = null;
 }
 /* What his body is told of it (view.pat): how soon the glove coming in, if it is one his grade presses down, will be on his
-   rear glove at the speed it is closing on it; whether his guard is still fresh enough (a parry's: RULES.parry, his own) */
+   rear glove: at the speed it is closing on it, or, sooner, when the punch's chain will have it all the way out (a glove
+   only starting out gathers speed faster than the step before says: he reads the arm, as a slick back does: animator.mjs
+   arrival); whether his guard is still fresh enough (a parry's: RULES.parry, his own) */
 function patView(bout, f, other) {
   const p = f.pat,
     coming = incoming(other);
@@ -307,7 +309,7 @@ function patView(bout, f, other) {
       gap = Math.hypot(...M.sub(other.points[hand], r)) - 2 * RULES.glove,
       was = Math.hypot(...M.sub(other.before[hand], r)) - 2 * RULES.glove,
       v = (was - gap) / DT;
-    if (v > 0.3) eta = Math.max(0, gap) / v;
+    eta = Math.min(v > 0.3 ? Math.max(0, gap) / v : Infinity, arrival(coming.chain, MOVES[coming.name]));
   }
   return { id: p.id, pat: p.pat, met: p.met === null ? null : bout.t - p.met, fresh: f.cover && f.coverAge <= f.k.parry * (0.7 + 0.3 * fatigue(f)), eta };
 }

@@ -328,8 +328,10 @@ export function patDown(c, p, s) {
     T = { rx: pat.at[0], ry: pat.at[1] - pat.down * d, rz: pat.at[2] + pat.out * d, re: pat.elbow };
   p.w = w;
   for (const ch in T) c[ch] += (T[ch] - c[ch]) * w;
-  // (the lead glove back to his temple, out of the way of the glove coming in, while it is not punching)
-  if (s.hand !== 'L') (c.lx += pat.lead[0] * w), (c.ly += pat.lead[1] * w), (c.lz += pat.lead[2] * w);
+  /* (the lead glove back to his temple, out of the way of the glove coming in, while it is not punching: the first thing he
+     does, as the guard comes up under it, in half the time the rear glove takes to get out) */
+  const lead = (p.home === null ? smooth((p.t * 2) / pat.set) : w) * (s.hand === 'L' ? 0 : 1);
+  (c.lx += pat.lead[0] * lead), (c.ly += pat.lead[1] * lead), (c.lz += pat.lead[2] * lead);
   return p.t0 !== null && p.met === null && p.home === null && p.t >= pat.set - 1 / 120 && p.t - p.t0 <= pat.fall + 1 / 60;
 }
 
