@@ -1,7 +1,10 @@
 /* A match: rounds of a bout, a referee who counts a man who goes down, a break between rounds when the corners talk to
    their boxers, and three judges. The fighting itself is the bout (bout.mjs); both corners are boxed by brains
    (brain.mjs) unless a player's controls are handed in. Nothing here draws.
-     const match = createMatch({ seed, sheets: [a, b], plans: [planA, planB], rounds, roundTime })
+     const match = createMatch({ seed, sheets: [a, b], plans: [planA, planB], rounds, roundTime,
+                                 skills: [a, b] (anim/skill.mjs: each one's grades; a pro's if left out),
+                                 techniques: [a, b] (game/techniques.mjs: what each carries; what his grades give him if
+                                 left out: profile.mjs loadout), rehearse (the brains pick techniques not built yet, too) })
      stepMatch(match, dt, inputs?)     advance; inputs[i] (controls) replaces boxer i's brain for this step
      match.phase                       'fight' | 'count' | 'break' (waiting for the corners) | 'over'
      nextRound(match, plans?)          after a break: the plans the corners chose (each may be left as it was)
@@ -28,11 +31,11 @@ const tally = () => ({ thrown: 0, landed: 0, power: 0, J: 0, blocked: 0, downs: 
 
 export function createMatch(o) {
   o = o || {};
-  const bout = createBout(o.seed || 1, { sheets: o.sheets, knockdowns: true, vary: true }),
+  const bout = createBout(o.seed || 1, { sheets: o.sheets, skills: o.skills, techniques: o.techniques, knockdowns: true, vary: true }),
     plans = o.plans || [PLANS.steady, PLANS.steady];
   return {
     bout,
-    brains: [0, 1].map(i => createBrain(bout.fighters[i].sheet, plans[i])),
+    brains: [0, 1].map(i => createBrain(bout.fighters[i].sheet, plans[i], { rehearse: o.rehearse })),
     rounds: o.rounds || MATCH.rounds,
     roundTime: o.roundTime || MATCH.roundTime,
     round: 1,
@@ -116,8 +119,8 @@ export function stepMatch(match, dt, inputs) {
     const n = Math.min(10, Math.floor(c.t / MATCH.count) + 1);
     if (n !== c.n) (c.n = n), match.events.push({ type: 'count', who: c.who, n });
     if (c.up && n >= c.up && f.down) {
-      // up, at the count he had in him
-      f.hp = c.health;
+      // up, at the count he had in him (a man doubled up by a body shot keeps what health he still had)
+      f.hp = Math.max(f.hp, c.health);
       getUp(bout, f);
       match.events.push({ type: 'up', who: c.who, n });
     }
@@ -142,10 +145,10 @@ export function stepMatch(match, dt, inputs) {
       t[who].downs++;
       if (t[who].downs >= MATCH.tko) return end(match, 1 - who, 'TKO'), match;
       // whether he beats the count is settled now, by how much he has in him: less each time he has been down
-      // (and a man knocked out cold does not: the count goes to ten)
+      // (and a man knocked out cold does not: the count goes to ten; one doubled up by a body shot is awake, and does, by eight)
       const will = f.k.will * Math.pow(0.8, (f.downs || 1) - 1) * (0.6 + 0.4 * fatigue(f)),
         rises = random(bout) < will ? 4 + Math.floor(random(bout) * 5) : null,
-        up = e.out ? null : rises;
+        up = e.out ? null : e.part === 'body' ? rises || 8 : rises;
       match.count = { who, n: 0, t: 0, up, health: MATCH.rise.health[0] + (MATCH.rise.health[1] - MATCH.rise.health[0]) * will };
       match.phase = 'count';
       match.events.push({ type: 'down', who, round: match.round });

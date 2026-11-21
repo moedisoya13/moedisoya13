@@ -59,6 +59,9 @@ export function createFx(random) {
        off the far cheek the way the hook was going. How far they get, and how many there are, is the blow's impulse.
        It is a mist: motes far too small to fall, stopped by the air within a metre, so it is out in a tenth of a second,
        dense at the part and thin at its tip, and then hangs where it stopped and thins away.
+       None of it is to be seen over the man it came off, in front of him or behind: kept in an fx of its own for each man
+       and drawn as a layer with the renderer's `outside` set to his silhouette, it shows first at his outline, as if it came
+       from behind him, and scatters from there.
          part     what was struck: { at: its middle (world), r: its radius } (a head), or { at, to, r } for a part with
                   length (a trunk: the motes come off all along it)
          vec      the way the glove was going as it met him (unit, world)

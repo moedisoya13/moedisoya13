@@ -4,7 +4,9 @@
                                      skills: [mine, his] (anim/skill.mjs: the grade each throws each move at, by name or
                                      `all`; a pro's if left out),
                                      knockdowns: true (a boxer who runs out of health goes down and the match counts him;
-                                     left out, he is knocked out and the bout is over) })
+                                     left out, he is knocked out and the bout is over),
+                                     techniques: [mine, his] (game/techniques.mjs: the techniques each carries, by id; what
+                                     his grades give him if left out: profile.mjs loadout) -> f.techniques })
      step(bout, [mine, his], dt)
      getUp(bout, f)         a man who has beaten the count gets up, where he lies, the way that fits how he lies (anim/
                             animator.mjs: getUp); -> the rise he starts
@@ -15,13 +17,24 @@
                    roll: 1 | -1 (bob and weave: down under it and up on his left or right), pull: true (the head swayed
                    back out of reach); duck with a dash ahead in the same tick is the duck in (duckIn: down and in under
                    the punches, to right up close); away: 'pivot' | 'circle' with side: 1 | -1 (his left or right) is
-                   moving off out of range with the guard let go of (hopPivot, hopCircle) }
+                   moving off out of range with the guard let go of (hopPivot, hopCircle); away: 'wave' held is the wave,
+                   circling wide round him for as long as it is held (a clean great one's who carries it: anim/clean.mjs,
+                   game/techniques.mjs; anyone else circles out), and a jab pressed in it goes out of it, a power punch
+                   puts an end to it;
+                   tech: id, body: true (the head's: the technique a press or a guard is meant as, and a punch for the body,
+                   game/techniques.mjs; carried on the press and the move it starts as f.action.asked, read by the motion
+                   built for it, and nothing else) }
      bout.events            what happened this step, for the picture and the sound (a dirty boxer's fouls among them:
                             { type: 'foul', name: stomp | thumb, who, on, J }; nobody penalises them). A punch that misses
                             says by how much (whiff: margin, metres between the glove's and the head's surfaces at the
                             closest), and a defence that was brilliant says so: { type: 'brilliant', who (the defender),
                             on, of: 'whiff' | 'parry', margin, late, from (bout time the punch was pressed), counter (the
-                            id of the punch he answered with) }, and its whiff or parry event is marked brilliant: true
+                            id of the punch he answered with) }, and its whiff or parry event is marked brilliant: true.
+                            A punch that lands on his trunk says where (game/trunk.mjs): { type: 'hit', part: 'body', zone:
+                            liver | solar | ribs | body, trunk: { at: waist, to: chest, r } (what to throw sweat off), breath
+                            (the share of all his breath it took), liver: true (it puts him down) }; one met by an elbow or a
+                            forearm on its way there is { type: 'block', part: 'elbow' | 'forearm', zone (where it was aimed) };
+                            and a man doubled up by one goes down a moment later: { type: 'buckle', who }
      bout.fighters[i].pose  his solved pose this step (and .place: where on the canvas, .points: gloves and head in the world)
 
    A punch is physics from the feet to the glove. Pressing a button only starts a kinetic chain (phys/chain.mjs); the joints
@@ -41,17 +54,20 @@
 const BRILLIANT = { margin: 0.03, within: 0.4 };
 import * as M from '../rig/m3.mjs';
 import { MOVES, RISE } from '../anim/moves.mjs';
-import { createAnimator } from '../anim/animator.mjs';
+import { createAnimator, arrival } from '../anim/animator.mjs';
 import { toWorld } from '../anim/pose.mjs';
 import { createChain, stepChain, effectiveMass, preload } from '../phys/chain.mjs';
 import * as P from '../anim/pose.mjs';
 import { RING } from '../world/ring.mjs';
 import { LEN } from '../rig/solve.mjs';
-import { body, blank, fatigue, COST } from './profile.mjs';
+import { body, blank, fatigue, COST, loadout } from './profile.mjs';
+import { asked, has } from './techniques.mjs';
 import { levelOf } from '../anim/skill.mjs';
 import { timeline, evadeTime, progress, LOADED } from '../anim/evade.mjs';
 import { choose, THROWS, PAW, COLLAR, ELBOW } from '../anim/show.mjs';
+import { waveOf, waveTravel, waveTurn, waveBlocked } from '../anim/clean.mjs';
 import { dice } from '../anim/stance.mjs';
+import { trunk, balls, where, aimed, spray, ZONES } from './trunk.mjs';
 
 export const RULES = {
   hp: 100,
@@ -93,7 +109,14 @@ export const RULES = {
   drop: 1, // health a finishing blow had to spare at most to put him down on a knee rather than flat
   out: 2.5, // and at least to knock him out cold (about 70 N·s past what he had left); or one that catches him throwing
   jaw: 0.08, // how far below the middle of the head a hook is aimed
-  startGap: 2.4
+  startGap: 2.4,
+  /* ---- the body (docs/moves-plan-5.md §3.2; where on it: game/trunk.mjs). A blow to the trunk takes `damage` health a
+     newton-second (the head's 0.6) and `breath` of all his breath for `ref` newton-seconds (times the place's: trunk.mjs
+     ZONES); it stops him `stun` as long as one to the head would and moves him `shove` as far (the trunk folds round it).
+     Taken on an elbow or a forearm, it takes `blocked` of that breath. A blow of `liver` newton-seconds or more on the liver
+     (a counter's gain in it), or `heap` on it in `within` seconds, puts him down on a knee `late` seconds after (moves.mjs:
+     dropLiver), his breath cut to `spent` of all he has. Nothing to the body knocks a man out cold. */
+  body: { damage: 0.021, breath: 0.12, ref: 85, stun: 0.5, shove: 0.5, blocked: 0.25, liver: 70, heap: 150, within: 10, late: 0.4, spent: 0.3 }
 };
 const DT = 1 / 60;
 
@@ -108,6 +131,8 @@ export function createBout(seed, o) {
   /* (a show-off's tricks and taunts come up by his own dice, thrown from the bout's seed, in a real bout: o.vary. Scripts and
      tests name what they want instead: anim/show.mjs) */
   bout.fighters.forEach((f, i) => ((f.vary = !!o.vary), (f.luck = dice((seed || 1) * 31 + i * 7919 + 5))));
+  // (the techniques each carries: game/techniques.mjs)
+  bout.fighters.forEach((f, i) => (f.techniques = loadout(f.skills, (o.techniques || [])[i])));
   settle(bout);
   return bout;
 }
@@ -130,9 +155,17 @@ const punching = f => !!f.action && !!MOVES[f.action.name].punch;
 // the ways of getting the head out of the way, as controls name them (each a move of its own, with a side where it has one)
 const EVADE = ['slip', 'duck', 'roll', 'pull'];
 const pressOf = input =>
-  input.dash && input.duck && input.dash !== true ? ['duckIn', input.dash] : input.away ? [input.away === 'pivot' ? 'hopPivot' : 'hopCircle', input.side || 1] : input.dash ? ['dash', input.dash] : EVADE.find(n => input[n]) ? [EVADE.find(n => input[n]), input[EVADE.find(n => input[n])]] : input.jab ? ['jab', input.jab] : input.power ? ['power', input.power] : input.taunt ? ['taunt', input.taunt] : null;
-// moving off somewhere as a move of its own: the dash, the duck in, and the two ways away
-const GOING = ['dash', 'duckIn', 'hopPivot', 'hopCircle'];
+  // (a punch pressed while the wave is held is the punch: out of the wave, anim/clean.mjs)
+  input.away === 'wave' && (input.jab || input.power) ? (input.jab ? ['jab', input.jab] : ['power', input.power]) :
+  input.dash && input.duck && input.dash !== true ? ['duckIn', input.dash] : input.away ? [input.away === 'pivot' ? 'hopPivot' : input.away === 'wave' ? 'wave' : 'hopCircle', input.side || 1] : input.dash ? ['dash', input.dash] : EVADE.find(n => input[n]) ? [EVADE.find(n => input[n]), input[EVADE.find(n => input[n])]] : input.jab ? ['jab', input.jab] : input.power ? ['power', input.power] : input.taunt ? ['taunt', input.taunt] : null;
+/* (a press carries what the head adds to it, game/techniques.mjs asked: the technique it is meant as, if his grade opens it,
+   and whether it is for the body; a press with neither is the press it always was) */
+const signed = (f, input, p) => {
+  const a = p && asked(f, input);
+  return a ? [p[0], p[1], a] : p;
+};
+// moving off somewhere as a move of its own: the dash, the duck in, and the two ways away (and the wave)
+const GOING = ['dash', 'duckIn', 'hopPivot', 'hopCircle', 'wave'];
 /* The duck in ends right up close (centre to centre, short of it by his grade: skill.mjs, entry.stop), and goes there at
    most this far, `wide` degrees to his right of the line to the other man; moving away, each hop is a half beat long (`beat`): `backHop` metres back after the pivot (which takes
    `turn` seconds), or `hop` metres round him and `out` away from him. */
@@ -147,7 +180,9 @@ const open = (f, punch) =>
     // (out of an evasion, from the moment his grade lets him: anim/skill.mjs, evade.cut)
     (punch && isEvasion(f.action.name) && f.action.t >= timeline(f.action.name, f.action.level).cut - 1e-9) ||
     // (and out of a duck in once he has landed)
-    (punch && f.action.name === 'duckIn' && f.action.t >= DUCK_IN.landed - 1e-9));
+    (punch && f.action.name === 'duckIn' && f.action.t >= DUCK_IN.landed - 1e-9) ||
+    // (and out of the wave at any moment: anim/clean.mjs)
+    (punch && f.action.name === 'wave'));
 // (the duck in has landed at this; the knees stay bent, the wind-up of what he throws next, `wound` seconds after it)
 const DUCK_IN = { landed: 0.4, wound: 0.15 };
 
@@ -171,6 +206,13 @@ function loadOf(f, bout, move) {
   if (p && bout.t - p.at <= RULES.counter) {
     const cv = p.level.cover;
     if ((cv.hand === 'same') === (move.hand === p.hand)) return { load: cv.load, shoulder: cv.q, from: 'parry' };
+  }
+  /* a jab out of the wave (anim/clean.mjs): the hand comes straight up from where it hangs, no wind-up shown; out of a slick
+     back, with the trunk coming forward again (a legend's the more) */
+  if (f.action && f.action.name === 'wave' && move.name === 'jab') {
+    const wv = waveOf(f.action.level),
+      a = f.animator.wave;
+    return { load: a && a.slicked ? wv.load : wv.jab, from: 'wave' };
   }
   /* a legend on the move (anim/legend.mjs): his knees bent and his trunk leant by the shape of his going are the wind-up of
      whatever he throws out of it, as far as they go; he does not wind up again */
@@ -224,14 +266,36 @@ function plan(f, other, name, dir) {
   return { side, centre: [ball[0], ball[2]], from: [f.x, f.z], dir: [0, -1] };
 }
 
+/* Who can go into the wave (anim/clean.mjs): a man who carries it (game/techniques.mjs: his loadout holds 'wave' and his grade
+   opens it), at his grade's wave, which only 4명 and 5명 have (skill.mjs: wave). The one place it is decided; asked of anyone
+   else, it is the circle out. -> his grade's wave, or null */
+const wavesAt = f => (has(f, 'wave') ? waveOf(levelOf(f.skills, 'wave')) : null);
+
+/* The wave from step to step (anim/clean.mjs): held while it is asked for; the ropes in the way he is going are the end of it,
+   and so is his lead foot stood on (at once). Gone once he is doing anything that is not the wave or a jab out of it (a
+   moment's grace, for the wave to be taken up again as a jab out of it comes home). */
+function holdWave(bout, f, input, who) {
+  const w = f.wave,
+    on = !!f.action && (f.action.name === 'wave' || !!f.action.wave);
+  if (on) w.seen = bout.t;
+  else if (bout.t - w.seen > 0.1 + 1e-9) return void (f.wave = null);
+  w.held = input.away === 'wave';
+  w.blocked = waveBlocked(f, bout.fighters[1 - who], RULES.half);
+  if (f.pinned > 0 && f.action && f.action.name === 'wave') (f.action = null), (f.wave = null);
+}
+
 function decide(bout, f, input, dt, who) {
-  const pressed = pressOf(input);
+  const pressed = signed(f, input, pressOf(input));
   // (a taunt is over the moment he does anything: a button, his guard, setting off: anim/show.mjs)
   if (f.action && MOVES[f.action.name].taunt && (pressed || input.cover || Math.hypot(...(input.move || [0, 0])) > 0.3)) f.action = null;
   if (pressed) (f.want = pressed), (f.wantAge = 0), (f.wantAt = bout.t);
   else if (f.want && (f.wantAge += dt) > RULES.buffer) f.want = null;
+  if (f.wave) holdWave(bout, f, input, who);
   if (f.want) {
-    const [what, dir] = f.want,
+    // (the wave, asked of a man who does not carry it or whose grade has none, is the circle out: anim/clean.mjs)
+    const what = f.want[0] === 'wave' && !wavesAt(f) ? 'hopCircle' : f.want[0],
+      dir = f.want[1],
+      sign = f.want[2],
       punch = !GOING.includes(what) && !EVADE.includes(what) && what !== 'taunt';
     // (a man whose lead foot is stood on cannot dash or sway back off it, or go in or away; he can still slip and duck)
     if (f.pinned > 0 && (GOING.includes(what) || what === 'pull')) f.want = null;
@@ -239,6 +303,8 @@ function decide(bout, f, input, dt, who) {
     else if (what === 'taunt' && f.action && (f.action.name === 'hopPivot' || f.action.name === 'hopCircle')) (f.action.taunt = dir), (f.want = null);
     // (a jab pressed in a flicker waits for the hand to be home at his waist: a flicker goes again from there, at once)
     else if (what === 'jab' && f.action && f.action.name === 'flicker' && Math.max(f.action.chain.q[3], f.action.chain.q[4]) > FLICK.home);
+    // (the wave held: he is in it already)
+    else if (what === 'wave' && f.action && f.action.name === 'wave') f.want = null;
     else if (open(f, punch)) {
       f.want = null;
       if (EVADE.includes(what)) {
@@ -256,6 +322,14 @@ function decide(bout, f, input, dt, who) {
         // (a show-off's last hop may be a taunt: his dice, in a real bout)
         const p = tauntChance(f, 'hop');
         if (p && f.luck() < p) f.action.taunt = TAUNTS.hop[Math.floor(f.luck() * TAUNTS.hop.length)];
+      } else if (what === 'wave') {
+        // (the wave: round the other man to the side asked, kept on, or taken up again after a jab out of it; not into the ropes)
+        const side = f.wave ? f.wave.side : dir === -1 ? -1 : 1;
+        if (f.wave || !waveBlocked(f, bout.fighters[1 - who], RULES.half, side)) {
+          f.wave = f.wave || { side, v: 0, held: true, blocked: false, seen: bout.t };
+          begin(f, 'wave', { side }, bout);
+          bout.events.push({ type: 'wave', who });
+        }
       } else if (!punch) {
         const [fx, fz] = aheadOf(f);
         let d = dir === true ? [-fx, -fz] : dir;
@@ -291,13 +365,18 @@ function decide(bout, f, input, dt, who) {
         if (trick && THROWS[trick]) name = trick === 'pawUp' && inside ? 'upperIn' : THROWS[trick];
         if (name === 'flicker') f.flicks = { n: again ? f.flicks.n + 1 : 1, at: Infinity };
         else if (what === 'jab') f.flicks = null;
-        begin(f, name, { counter: f.counter > 0, variant: trick }, bout);
+        // (a jab out of the wave goes on with it; a power punch puts an end to it)
+        const fromWave = !!f.wave && what === 'jab' && !!f.action && f.action.name === 'wave';
+        if (f.wave && !fromWave) f.wave = null;
+        begin(f, name, { counter: f.counter > 0, variant: trick, wave: fromWave || undefined }, bout);
         // a loaded punch answering a defence: what makes the defence brilliant, if it was close enough
-        if (f.action.loaded && f.action.loaded.from !== 'legend' && f.defence && f.defence.counterAt === null && bout.t - f.defence.start <= BRILLIANT.within + 1e-9) (f.defence.counterAt = bout.t), (f.defence.counter = f.action.id), judge(bout, f, who);
+        if (f.action.loaded && f.action.loaded.from !== 'legend' && f.action.loaded.from !== 'wave' && f.defence && f.defence.counterAt === null && bout.t - f.defence.start <= BRILLIANT.within + 1e-9) (f.defence.counterAt = bout.t), (f.defence.counter = f.action.id), judge(bout, f, who);
         f.lastPower = what === 'power';
         f.counter = 0;
         bout.events.push({ type: 'punch', who, name });
       }
+      // (what the head meant the press as, on the move it started: game/techniques.mjs)
+      if (sign && f.action) f.action.asked = sign;
     }
   }
   /* A stunned boxer can still pull his hands up (it is what a hurt man does) but not in time to turn a punch aside: his guard
@@ -384,6 +463,9 @@ function travel(f, input, dt, other) {
       sx = (left[0] * a.side * GO.hop - fx * GO.out) / GO.beat;
       sz = (left[1] * a.side * GO.hop - fz * GO.out) / GO.beat;
     }
+  } else if (f.wave && other && f.stun <= 0 && (!f.action || f.action.name === 'wave' || f.action.wave)) {
+    // (the wave: round him at the pace of the wave his feet are in, kept in its band, anim/clean.mjs)
+    [sx, sz] = waveTravel(f, other, dt, !!incoming(other));
   }
   let ix = 0,
     iz = 0;
@@ -432,8 +514,10 @@ function face(f, other, dt) {
     if (!f.pivoting) want = f.yaw;
   }
   // a boxer who has thrown his weight into a punch cannot swing round with it
-  const rate = RULES.turnRate * (punching(f) ? 0.35 : f.stun > 0 ? 0.2 : 1);
-  f.turn = Math.max(-rate, Math.min(rate, wrap(want - f.yaw) * 14));
+  const rate = RULES.turnRate * (punching(f) ? 0.35 : f.stun > 0 ? 0.2 : 1),
+    // (going round him in the wave, his facing is carried round with the line to him: anim/clean.mjs)
+    round = f.wave && dt > 0 ? waveTurn(f, other, dt) : 0;
+  f.turn = Math.max(-rate, Math.min(rate, round + wrap(want - f.yaw) * 14));
   f.yaw = wrap(f.yaw + f.turn * dt);
 }
 
@@ -442,6 +526,8 @@ function advance(bout, f, dt, who) {
   if (!f.action) return;
   const move = MOVES[f.action.name];
   f.action.t += dt;
+  // (doubled up by a blow to the body, his legs go only now: { type: 'buckle', who })
+  if (f.action.name === 'dropLiver' && f.action.t >= RULES.body.late - 1e-9 && f.action.t - dt < RULES.body.late - 1e-9) bout.events.push({ type: 'buckle', who });
   if (move.punch) {
     const was = f.action.chain.phase,
       now = stepChain(f.action.chain, move, dt);
@@ -490,6 +576,10 @@ function advance(bout, f, dt, who) {
       if (f.lastEvade && f.lastEvade.action === f.action) f.lastEvade.endedAt = bout.t;
       f.action = null;
     }
+  } else if (f.action.name === 'wave') {
+    // (the wave is over once its last wave has come up and his hands are back: anim/clean.mjs)
+    const a = f.animator.wave;
+    if (a && a.done) (f.action = null), (f.wave = null);
   } else if (f.action.taunt && f.action.t >= move.dur - TAUNT.hop) {
     // (the last hop moving away, a show-off's taunt instead of his guard coming back)
     taunt(bout, f, who, f.action.taunt);
@@ -542,6 +632,8 @@ function viewOf(bout, i) {
       // foot is stood on
       foe: f.place && other.pose && other.points ? { foot: mine(f, at(other, 'LeftFoot', [0, -0.02, 0.07])), glove: { L: mine(f, other.points.L), R: mine(f, other.points.R) }, head: mine(f, other.points.head), nape: mine(f, napeOf(other)), right: dirIn(f, [-Math.cos(other.yaw), Math.sin(other.yaw)]) } : null,
       pinned: f.pinned > 0,
+      // the wave he is in, if he is (anim/clean.mjs): which way round, whether it is still held, his grade's
+      wave: f.wave ? { side: f.wave.side, held: f.wave.held, blocked: f.wave.blocked, level: wavesAt(f) } : null,
       // knocked down: what of the other man he cannot fall through, in his own terms
       near: f.down && f.place && other.pose ? NEAR.map(([joint, r]) => [mine(f, at(other, joint)), r]) : null
     };
@@ -558,6 +650,29 @@ function viewOf(bout, i) {
       v = (was - gap) / DT,
       [left, ahead] = local(f, g[0] - g0[0], g[2] - g0[2]);
     if (v > 0.5) view.threat = { eta: gap / v, dir: [left, ahead] };
+  }
+  // (and one on its way to his body: where on it, and how long since he could have seen that it was: anim/body.mjs, coverLow)
+  if (coming && f.points) {
+    const zone = lowOf(other, f, coming),
+      t = zone ? seen(coming) : null;
+    if (t !== null) view.low = { zone, t, id: coming.id };
+  }
+  /* (in the wave, a punch of his thrown from where it can reach him, and how soon it will be there as it is being thrown: what
+     a slick back goes by, anim/clean.mjs) */
+  if (view.wave && coming && Math.hypot(other.x - f.x, other.z - f.z) < MOVES[coming.name].reach + 0.6) {
+    view.wave.eta = arrival(coming.chain, MOVES[coming.name]);
+    // (and once it is committed, how clear of where it is going his head is: a slick back goes as far as that needs)
+    if (coming.aim && other.points && f.points) {
+      const hand = MOVES[coming.name].hand;
+      let to = M.add(other.place.p, M.app(other.place.R, coming.aim));
+      if (MOVES[coming.name].arm === 'straight') {
+        const S = toWorld(other.place, other.pose.at[hand === 'L' ? 'LeftArm' : 'RightArm'], other.pose.stretch),
+          d = M.sub(to, S),
+          l = Math.hypot(d[0], d[1], d[2]) || 1;
+        to = M.add(S, M.scale(d, (Math.min(l, LEN.upperArm + LEN.foreArm - 0.03) + 0.075) / l));
+      }
+      view.wave.clear = segment(f.points.head, other.points[hand], to) - RULES.glove - RULES.head;
+    }
   }
   if (punching(f) && !other.down && other.points) {
     /* Where the punch is thrown: at the head as it is now, wherever that is. The wrist is sent so that the glove's centre
@@ -633,7 +748,9 @@ function solvePose(bout, f, i, dt) {
     head: beyond(at('Neck1'), at('Head'), 0.1),
     // (and the elbows: a show-off's crossed forearms are in the way, and his elbow is what lands of an elbow strike)
     LE: at('LeftForeArm'),
-    RE: at('RightForeArm')
+    RE: at('RightForeArm'),
+    // (and his trunk: the spine from his hips to his chest, and which way his shoulders lie: game/trunk.mjs)
+    ...trunk(at)
   };
 }
 
@@ -762,6 +879,20 @@ function trickOf(f, other, button, name, forced) {
 }
 // a forearm, as the bout reckons it in the way: so many balls from the elbow to the glove, each as thick as the forearm
 const FOREARM = { n: 6, r: 0.045 };
+/* A punch to the body (docs/moves-plan-5.md §3): the place on his trunk it is aimed at, named by the punch (action.zone) or
+   where its aim is (game/trunk.mjs: aimed); null for a punch at his head. Coming at his body, it is met by his elbows (a ball
+   `elbow` metres thick) and forearms, whatever his guard is doing: they are in the way where they are. And how long since the
+   man it is coming at could have seen where it was going: from when the joint that steers it fired (the hips of an arm swung
+   by the body, the shoulder of anything else), or null before. */
+const ARMS = { elbow: 0.06 };
+function lowOf(f, other, action) {
+  if (action.zone) return action.zone;
+  return action.aim && f.place && other.points && other.points.waist ? aimed(other.points, M.add(f.place.p, M.app(f.place.R, action.aim))) : null;
+}
+function seen(action) {
+  const at = action.chain.fired[MOVES[action.name].arm === 'swing' ? 1 : 3];
+  return at >= 0 ? action.chain.t - at : null;
+}
 function strike(bout, f, other, who, dt) {
   // (a show-off's elbow lands as it comes on behind the fist, the arm out: anim/show.mjs)
   const action = incoming(f) || (f.action && f.action.variant === 'elbow' && !f.action.struck && f.action.chain.phase === 'hold' ? f.action : null);
@@ -820,10 +951,18 @@ function strike(bout, f, other, who, dt) {
     // (a glove already against his guard is met by it however it moves: it is in the way)
     c0 = c0 || other.before[key];
     c1 = c1 || other.points[key];
-    const s = meets(g0, g1, c0, c1, r, what === 'head' ? RULES.touch * dt : -Infinity);
+    // (on his head, his trunk or an arm in the way of a punch to the body, right up close, it has to be going on into it)
+    const s = meets(g0, g1, c0, c1, r, what === 'head' || what === 'trunk' || what === 'elbow' || what === 'forearm' ? RULES.touch * dt : -Infinity);
     if (s >= 0 && (!first || s < first.s)) first = { what, key, s, c0, c1 };
   };
   test('head', 'head', gr + RULES.head);
+  /* (and, for a punch at his body, his trunk, the waist to the chest: game/trunk.mjs; a punch at his head goes on past it to his
+     head, as it always has, an uppercut close in brushing up the front of his chest on its way) */
+  const low = lowOf(f, other, action);
+  if (low && other.before.waist) {
+    const was = balls(other.before);
+    balls(other.points).forEach(([c, r], i) => test('trunk', 'trunk', gr + r, was[i][0], c));
+  }
   // (the gloves are in the way once they have got most of the way up: how quickly is his grade's)
   const guard = levelOf(other.skills, 'cover').cover;
   if (other.cover && other.animator.covered >= RULES.guardUp) {
@@ -840,6 +979,15 @@ function strike(bout, f, other, who, dt) {
   }
   // (a show-off's guard put up fresh is a hammer of his rear fist: it turns a punch aside only if it comes down on the glove)
   if (guard.hammer && other.cover && other.animator.hammering) test('hammer', 'R', RULES.glove + gr);
+  // (a punch to his body: his elbows and forearms are in the way, where they are, his guard up or not)
+  if (low && other.before.LE)
+    for (const key of ['L', 'R']) {
+      test('elbow', key + 'E', gr + ARMS.elbow);
+      for (let i = 0; i < FOREARM.n; i++) {
+        const k = (i + 0.5) / FOREARM.n;
+        test('forearm', key, gr + FOREARM.r, M.lerp(other.before[key + 'E'], other.before[key], k), M.lerp(other.points[key + 'E'], other.points[key], k));
+      }
+    }
   if (!first) return;
 
   // ---- the blow: how fast the glove is closing on what it hit, and how much is behind it
@@ -865,12 +1013,31 @@ function strike(bout, f, other, who, dt) {
   // (an elbow that has landed comes away off his jaw at once: the arm starts home, it does not lean on into his head)
   if (elbow) (action.chain.phase = 'recover'), (action.chain.since = 0);
   f.sinceLast = 0;
+  /* (on his trunk: where, game/trunk.mjs, and the part of him the effects throw sweat off; below his hips, nothing that
+     counts has happened, and the glove is stopped there) */
+  const spot = first.what === 'trunk' || first.what === 'elbow' || first.what === 'forearm' ? where(other.points, blow.at) : null;
+  if (first.what === 'trunk' && !spot) return;
+  if (first.what === 'trunk') Object.assign(blow, { part: 'body', zone: spot.zone, trunk: spray(other.points) });
   // (a touch on the head is nothing; on the gloves it is still met, however early and slow: turned aside or smothered)
-  if (J < RULES.graze && first.what === 'head') return bout.events.push(Object.assign({ type: 'graze' }, blow));
+  if (J < RULES.graze && (first.what === 'head' || first.what === 'trunk')) return bout.events.push(Object.assign({ type: 'graze' }, blow));
   // the way the blow went (the glove's way as it met him), as the man who took it would say: what his body takes it by
   const [side, front] = local(other, vec[0], vec[2]),
     felt = { J, dir: [side, vec[1], front] };
   const stop = Math.max(RULES.stop[0], Math.min(RULES.stop[1], J * RULES.stop[2]));
+  // (and where on his trunk, for his body to fold round it: anim/body.mjs)
+  const fold = spot && { zone: spot.zone, a: spot.a, k: spot.k, high: spot.high };
+
+  if (first.what === 'elbow' || first.what === 'forearm') {
+    /* a punch to the body met by an elbow or a forearm (docs/moves-plan-5.md §3.4): smothered as a held guard smothers one,
+       a quarter of the breath it would have taken, and his body giving a quarter as much, as to a blow on his guard */
+    other.hp = Math.max(1, other.hp - J * RULES.damage * other.k.smother * other.k.chin);
+    other.stamina = Math.max(0, other.stamina - breathOf(other, J, { zone: low }) * RULES.body.blocked);
+    other.kx += ((dir[0] * J) / RULES.mass) * RULES.shove * 0.6 * RULES.body.shove;
+    other.kz += ((dir[1] * J) / RULES.mass) * RULES.shove * 0.6 * RULES.body.shove;
+    other.animator.strike(Object.assign({ J: J * 0.25, dir: felt.dir }, fold || { zone: low }));
+    bout.stop = stop * 0.4;
+    return bout.events.push(Object.assign({ type: 'block' }, blow, { part: first.what, zone: low }));
+  }
 
   if (first.what === 'hammer') {
     /* hammered down: the arm that threw it is knocked down and falls away, his head left open in front, and the defender has
@@ -914,7 +1081,7 @@ function strike(bout, f, other, who, dt) {
   }
   const counter = !!action.counter,
     worth = J * (counter ? RULES.counterGain : 1),
-    damage = worth * RULES.damage * other.k.chin,
+    damage = worth * (spot ? RULES.body.damage : RULES.damage) * other.k.chin,
     had = other.hp,
     /* (caught as he throws: his own punch still on its way or out, and this one thrown at it, after it, a counter; a man
        who walks onto a punch already coming has not been countered) */
@@ -924,32 +1091,37 @@ function strike(bout, f, other, who, dt) {
   other.cover = false;
   other.want = null;
   other.counter = 0;
-  other.stun = (RULES.stun[0] + worth * RULES.stun[1]) * other.k.stunTaken;
+  other.stun = (RULES.stun[0] + worth * RULES.stun[1]) * other.k.stunTaken * (spot ? RULES.body.stun : 1);
   /* A dirty boxer does not let a man he has hit get away: he goes in after him (skill.mjs: dirty); from right up close he is
      in already, and does not walk into him. */
   const dirty = (action.level && action.level.form.dirty) || 0,
     after = dirty && move.close >= RULES.inside ? 0.75 : 0,
     // (and a man whose foot is stood on can hardly be moved off it)
-    push = (worth / RULES.mass) * RULES.shove * (other.pinned > 0 ? 0.3 : 1);
+    push = (worth / RULES.mass) * RULES.shove * (other.pinned > 0 ? 0.3 : 1) * (spot ? RULES.body.shove : 1);
   other.kx += dir[0] * push;
   other.kz += dir[1] * push;
   f.kx += dir[0] * push * after;
   f.kz += dir[1] * push * after;
   other.flash = 0.07;
   other.sinceHit = 0;
-  other.animator.strike({ J: Math.min(worth, 110), dir: felt.dir, stun: other.stun, hp: other.hp });
+  other.animator.strike(Object.assign({ J: Math.min(worth, 110), dir: felt.dir, stun: other.stun, hp: other.hp }, fold && Object.assign(fold, { low: guard.low })));
   // (a show-off hit lightly may tap his chin at him once he has got over it: his dice)
   if (worth < TAUNT.light && other.hp > 0) {
     const p = tauntChance(other, 'hit');
     if (p && other.luck() < p) other.tauntNext = 'tapChin';
   }
   bout.stop = Math.min(RULES.stop[1], stop * (counter ? 1.5 : 1));
-  const down = other.hp <= 0,
+  // (to the body: his breath, and on the liver, his legs, a moment late)
+  const winded = spot ? breathOf(other, worth, spot) : 0,
+    liver = !!spot && spot.zone === 'liver' && livered(bout, other, worth);
+  if (spot) other.stamina = Math.max(0, other.stamina - winded);
+  const down = other.hp <= 0 || liver,
     /* (out cold: a finishing blow with RULES.out of health or more to spare, or one that caught him throwing; stiff as a log
        from a jab or a cross, a log with his neck wrenched round from a hook, lifted and let go of slowly from an uppercut:
-       docs/moves-plan-5.md §1) */
-    out = down && (damage - had >= RULES.out || caught) ? { straight: 'outStiff', hook: 'outTwist', upper: 'outLift' }[move.kind] || 'out' : null;
-  bout.events.push(Object.assign({ type: 'hit', damage: +damage.toFixed(1), counter, down }, blow, out ? { out } : null));
+       docs/moves-plan-5.md §1; never from a blow to the body) */
+    out = down && !spot && (damage - had >= RULES.out || caught) ? { straight: 'outStiff', hook: 'outTwist', upper: 'outLift' }[move.kind] || 'out' : null;
+  bout.events.push(Object.assign({ type: 'hit', damage: +damage.toFixed(1), counter, down }, blow, spot ? { breath: +(winded / other.k.staminaMax).toFixed(3), liver: liver || undefined } : null, out ? { out } : null));
+  if (down && spot) return doubled(bout, other, who);
   if (down) {
     /* How he goes: a blow that only just finished him puts him down on a knee; one with plenty to spare lays him out, a
        body falling the way the blow went and the way he was going (phys/fall.mjs: it is handed the blow, the way the glove
@@ -981,6 +1153,27 @@ function strike(bout, f, other, who, dt) {
     // in a match the referee counts him; in a bare bout he is out
     if (!bout.knockdowns) (bout.over = who), (bout.overAt = bout.t);
   }
+}
+
+/* A blow to the body (docs/moves-plan-5.md §3.2, §3.5): the breath it takes out of him, by where it landed (game/trunk.mjs:
+   ZONES, the top of his chest half as much again); whether it is one too many on his liver (hard enough at once, or enough
+   of them lately); and down on a knee from it: doubled over a moment late (moves.mjs: dropLiver), his breath cut, and a
+   knockdown he gets up from (match.mjs) whatever health he has left. */
+const breathOf = (f, J, at) => f.k.staminaMax * RULES.body.breath * (J / RULES.body.ref) * (ZONES[at.zone] || ZONES.body).breath * (at.high ? ZONES.body.high : 1);
+function livered(bout, f, J) {
+  const B = RULES.body;
+  f.livers = (f.livers || []).filter(l => bout.t - l.at <= B.within + 1e-9).concat([{ at: bout.t, J }]);
+  return J >= B.liver - 1e-9 || f.livers.reduce((s, l) => s + l.J, 0) > B.heap;
+}
+function doubled(bout, f, who) {
+  // (on his feet a moment longer, but his feet are done with: he sags where he stands, as a man dropped to a knee does)
+  begin(f, 'dropLiver', {});
+  f.kx = f.kz = 0;
+  f.down = 1;
+  f.stun = 0;
+  f.downs = (f.downs || 0) + 1;
+  f.stamina = Math.min(f.stamina, RULES.body.spent * f.k.staminaMax);
+  if (!bout.knockdowns) (bout.over = who), (bout.overAt = bout.t);
 }
 
 /* A dirty boxer's foul (moves.mjs: foul), judged the way a punch is: the part of him it is done with has to meet the part of
@@ -1089,7 +1282,7 @@ export function step(bout, inputs, dt) {
     bout.stop -= dt;
     bout.fighters.forEach((f, i) => {
       const input = inputs[i] || {},
-        pressed = pressOf(input);
+        pressed = signed(f, input, pressOf(input));
       if (pressed && bout.over === null) (f.want = pressed), (f.wantAge = 0);
     });
     return bout;

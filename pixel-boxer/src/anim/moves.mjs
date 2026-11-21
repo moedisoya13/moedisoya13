@@ -251,7 +251,7 @@ export function mirrorKnees(c) {
    Knocked out cold (outStiff from a jab or a cross, stiff as a log; outTwist from a hook, a log with his neck wrenched round;
    outLift from an uppercut, lifted and let go of slowly; out, limp all at once, from nothing now) there is no way up: he
    lies there. */
-export const RISE = { drop: 'riseKnee' };
+export const RISE = { drop: 'riseKnee', dropLiver: 'riseLiver' };
 export const LIE = { back: 'rise', front: 'riseFront', side: 'riseSide' };
 /* Where each way up has his hips at the end of its first part, and which way his body lies along the canvas there (from
    his hips to his head, radians from straight ahead): a man getting up where he lies is turned and moved so that his hips
@@ -274,6 +274,14 @@ const TUCK = { hy: -0.62, hz: -0.18, lean: 8, side: -8, hp: 8, lx: 0.08, ly: -1.
 // (getting up, the lead hand is brought up off the canvas round the front of him, the elbow first: on the knee it is still on
 // its way, low in front of him and the elbow out)
 const KNEEL_UP = { ...KNEEL, lx: 0.1, ly: -0.72, lz: 0.16, le: 0.35 };
+/* (down from a blow to the liver, docs/moves-plan-5.md §3.5: the same kneel, bent further over to his right, the rear elbow
+   clamped to his side over the liver and its glove at his belly, and the lead glove put down on the canvas instead; on the
+   way down, folded over it, the rear knee going; and before that, still up, his lead glove drawn in and down off the guard, a
+   hurt man's, out of the way of the arm that has just hit him going home) */
+const KNEEL_LIVER = { ...KNEEL, lean: 62, side: -22, hp: 16, lx: 0.2, ly: -1.29, lz: -0.02, lg: 1, le: 0.3, rx: -0.02, ry: -0.34, rz: -0.06, re: 0, rc: 1, rg: 0 };
+const FOLD_LIVER = { hy: -0.2, lean: 30, side: -10, hp: 14, hr: -4, rx: -0.02, ry: -0.3, rz: -0.06, rc: 1, lx: 0.04, ly: -0.2 };
+const HURT_LIVER = { ly: -0.06, lz: -0.08 };
+const AT_REST = pose => Object.fromEntries(Object.keys(pose).map(ch => [ch, 0]));
 const STEP = { hy: -0.4, hz: -0.04, tip: 30, lean: 34, yaw: 20, twist: 8, hp: 8, lx: 0.1, ly: -1.3, lz: 0.15, lg: 1, rx: -0.1, ry: -1.285, rz: 0.3, rg: 1, le: 0.3, re: 0.3, lfz: -0.22, lfy: 0.05, lfp: 15, rfz: -0.2, rfp: 55, rk: 1 };
 const UP_HALF = { hy: -0.34, hz: -0.04, lean: 28, hp: 16, lx: 0.06, ly: -0.3, rx: -0.04, ry: -0.6, rz: 0.18, rg: 0.3, side: 3, yaw: 4, rfz: -0.16, rfp: 36, rk: 0.2, lfz: 0.06 };
 const UP_NEAR = { hy: -0.08, lean: 10, hp: 4, hw: 10, ly: -0.08, ry: -0.1 };
@@ -384,6 +392,19 @@ export const MOVES = Object.assign(
       floor: true, dur: 1.15,
       keys: [{ t: 0.02, e: 'lin', ...KNEEL }, { t: 0.4, ...UP_HALF }, { t: 0.75, ...UP_NEAR }, { t: 0.95, ...UP_DONE }]
     },
+    /* doubled up by a blow to the body (docs/moves-plan-5.md §3.5; game/bout.mjs: RULES.body): nothing of his own for a
+       moment (`late`: the blow's give is all there is, anim/body.mjs), and then the legs go: folded over it, the rear elbow
+       clamped to the liver and the rear knee buckling, down onto the rear knee and the lead glove. He means to get up, and
+       does, off the knee, the rear hand leaving his side last. */
+    dropLiver: {
+      floor: true, stay: true, dur: 1.05,
+      // (the hips let down all the way from the moment the legs go, as fast as he can fall and stop on the knee: animator.mjs FALL)
+      keys: [{ t: 0.15, ...HURT_LIVER }, { t: 0.4, ...AT_REST({ ...KNEEL_LIVER, ...FOLD_LIVER }), ...HURT_LIVER }, { t: 0.52, e: 'out', ...FOLD_LIVER }, { t: 0.85, ...KNEEL_LIVER }, { t: 1.05, ...KNEEL_LIVER }]
+    },
+    riseLiver: {
+      floor: true, dur: 1.15,
+      keys: [{ t: 0.02, e: 'lin', ...KNEEL_LIVER }, { t: 0.4, ...UP_HALF }, { t: 0.75, ...UP_NEAR }, { t: 0.95, ...UP_DONE }]
+    },
     // up off his front: pushed up onto his hands and knees, onto the rear knee, and up
     riseFront: {
       floor: true, dur: 2.3, blend: 1,
@@ -418,6 +439,8 @@ export const MOVES = Object.assign(
        come back up over the last hop. The rest of it, the bounce and the hands' swing, is the animator's. */
     hopPivot: { dur: 0.92, keys: [] },
     hopCircle: { dur: 0.86, keys: [] },
+    // (the wave, a clean great one's circling at the end of his reach: held as long as its button is, anim/clean.mjs)
+    wave: { dur: 1, keys: [] },
     /* ---- a show-off's taunts (anim/show.mjs, docs/moves-plan-4.md §5.4): no guard while they last, and anything he does puts
        an end to them (game/bout.mjs). Written as the plan's lengths; a grade stretches and shrinks them (skill.mjs:
        stance.show, long and size). */
