@@ -261,8 +261,8 @@ define('shell', {
 
 define('crossArm', {
   name: '크로스암 가드', section: '§4A.8', open: ['3', '4m', '4a', '5m', '5a'], as: 'cover', standard: lv => lv.grade >= 4 && lv.side === 'a', ready: true
-  /* no dice: carried, his guard is this shape whenever it is up. (Today the guard reads the shape off his grade, skill.mjs
-     cover.cross; stage H1 makes it read has(f, 'crossArm') and the grade's CROSS.) */
+  /* no dice: carried, his guard is this shape whenever it is up (game/bout.mjs crossOf: has(f, 'crossArm') and his grade's
+     skill.mjs CROSS; the shape, anim/show.mjs crossGuard) */
 });
 
 define('rollCounter', {
