@@ -52,6 +52,7 @@ function run(entry, each) {
   return { bout, events };
 }
 const blows = r => r.events.filter(e => e.who === 1 && ['hit', 'block', 'graze', 'whiff'].includes(e.type));
+const M_sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 
 /* ---- the trunk */
 test('trunk: each place\'s middle reads as that place, standing or bent over; below the hips is nothing, the head is not on it', () => {
@@ -71,7 +72,6 @@ test('trunk: each place\'s middle reads as that place, standing or bent over; be
     assert.equal(balls(p).length, TRUNK.balls);
   }
 });
-const M_sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 
 /* ---- judged */
 test('judged: the same hook from the same place lands on his head aimed at it, and on his trunk aimed at the pit of his stomach', () => {
@@ -133,8 +133,10 @@ function folded(hit) {
     out.hipsAcross = Math.max(out.hipsAcross, (pa.at.Hips[0] - pb.at.Hips[0]) * 100 * Math.sign(hit.a || 1));
     first('trunk', t, Math.abs(fold) + Math.abs(side), 0.3);
     first('hips', t, Math.hypot(pa.at.Hips[0] - pb.at.Hips[0], pa.at.Hips[2] - pb.at.Hips[2]) * 100, 0.2);
-    // (the head's own nod, chin down: what the trunk's lean does to the neck tips it back, not down)
-    first('head', t, -nod, 0.3);
+    /* (the head's own nod, chin down: the trunk's fold tips the neck back at first, to keep his eyes level, and the head
+       going on down after it is the head's own: from the furthest back it has been) */
+    out.back = Math.min(out.back ?? 0, -nod);
+    first('head', t, -nod - out.back, 0.3);
   }
   return out;
 }
