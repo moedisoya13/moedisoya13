@@ -10,10 +10,12 @@
                reach: metres between the punching glove and the head it is going for (their surfaces) | null,
                stance: his grade of footwork (skill.mjs) | null, guard: his grade of covering up | null,
                threat: { eta (seconds until the punch coming at him gets there), dir } | null, stun: bool (stopped by a blow),
+               low: { zone, t, id } | null (a punch coming at his body: where, and seconds since he could see it: body.mjs),
                shoved: metres a second he is being knocked back at,
                cheer: bool, still: bool (lying on the canvas) }
      a.strike({ J, dir: [left, up, ahead] })         he has just been hit: the impulse in newton-seconds, and the way the glove
-                                                      was going as it met him
+                                                      was going as it met him (on his body: zone, a, k, the place it met
+                                                      him, game/trunk.mjs; and his grade's cover.low: body.mjs)
      a.rhythm                                         his beat: { beat, cycle, halves, stepping, landed, lead, flourish }
      a.covered                                        how far his gloves are up into his guard, 0..1
      a.legend                                         a legend on the move (legend.mjs): how much of the wind-up of a
@@ -41,6 +43,7 @@ import { H, headAt, headTo, phraseX, PHRASE, FLOURISH, CLEAN, DIRTY, dice } from
 import { sampleEvade, EVASIONS, timeline, evadeTime } from './evade.mjs';
 import { travel as legendTravel, dash as legendDash, dashShape } from './legend.mjs';
 import { stance as showStance, crossGuard, hammer, paw, PAW, collar, COLLAR, ELBOW } from './show.mjs';
+import { bodyState, struck as foldUp, give as bodyGive, coverLow } from './body.mjs';
 import { createWave, waveBeat, waveLand, waveLanding, waveDrag, waveBody, createPat, patDown, pattedArm } from './clean.mjs';
 
 const TAU = Math.PI * 2;
@@ -453,6 +456,8 @@ export function createAnimator(seed) {
   let pawedBy = null;
   // his neck in a show-off's hand, his head pulled forward and down (show.mjs: collar): { dir, d, time, t } | null
   let pulledBy = null;
+  // what blows to his body are still doing to him, and his elbow brought down over one coming (body.mjs)
+  const bodyHits = bodyState();
   const remember = pose => ((poses = [poses[1], pose]), pose);
   // a pose part of the way from another to it, each bone turned part of the way (what the solver said of it kept)
   const between = (from, to, w) => {
@@ -520,6 +525,8 @@ export function createAnimator(seed) {
        it after, down the body: the trunk laid back and bent the way it went, the hips pushed after it and lifted, the
        weight onto his heels. */
     strike(hit) {
+      // (a blow to his body, the trunk first and the head last: body.mjs)
+      if (hit.zone) return foldUp(bodyHits, hit, clock);
       const k = hit.J / 55, // (the head's amounts are for 55 newton-seconds, as they always were)
         K = hit.J / HIT.ref,
         [left, up, ahead] = hit.dir,
@@ -952,6 +959,8 @@ export function createAnimator(seed) {
       }
       // (and a guard he puts up fresh is a hammer of the rear fist, not the gloves put out to meet it: show.mjs)
       hammering = !!cv.hammer && view.fresh !== null && view.fresh !== undefined && hammer(c, cv.hammer, view.fresh);
+      // (and with it up, an elbow brought down over a punch coming at his body: body.mjs)
+      coverLow(bodyHits, c, view.low, cv, cover, dt, clock);
       if (cheer > 0.002) for (const [ch, v] of Object.entries(sampleMove(MOVES.cheer, 1, {}))) c[ch] += v * smooth(cheer);
       if (meet > 0.002 && !cv.hammer && !view.pat) {
         for (const [ch, v] of Object.entries(sampleMove(MOVES.meet, 1, {}))) c[ch] += v * meet * cv.meet.scale;
@@ -1510,6 +1519,8 @@ export function createAnimator(seed) {
         c.lkf += settle;
         c.rkf += settle;
       }
+      // (and folded round blows to his body: body.mjs)
+      bodyGive(bodyHits, c, clock);
       const open = spring(give.open, 0, dt, 2.6, 0.6);
       c.lx += 0.09 * open;
       c.ly -= 0.05 * Math.abs(open);

@@ -150,7 +150,8 @@ test('techniques: a punch coming is answered by a technique at its share of the 
     const built = facing(1.0, { skills: [{ all: '4m' }, {}], techniques: [['parryDown', 'pullCounter']] });
     thrown(built, { jab: true });
     const b = answers(built, head(built, false), N);
-    assert.ok(!b.parryDown && !b.pullCounter, 'not built, not rehearsed: ' + JSON.stringify(b));
+    // (the down parry is built, stage F: picked without rehearsal; the pull counter is not yet)
+    assert.ok(b.parryDown > 0 && !b.pullCounter, 'built and not, not rehearsed: ' + JSON.stringify(b));
   }
 });
 

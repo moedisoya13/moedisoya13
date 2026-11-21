@@ -119,8 +119,8 @@ export function stepMatch(match, dt, inputs) {
     const n = Math.min(10, Math.floor(c.t / MATCH.count) + 1);
     if (n !== c.n) (c.n = n), match.events.push({ type: 'count', who: c.who, n });
     if (c.up && n >= c.up && f.down) {
-      // up, at the count he had in him
-      f.hp = c.health;
+      // up, at the count he had in him (a man doubled up by a body shot keeps what health he still had)
+      f.hp = Math.max(f.hp, c.health);
       getUp(bout, f);
       match.events.push({ type: 'up', who: c.who, n });
     }
@@ -145,10 +145,10 @@ export function stepMatch(match, dt, inputs) {
       t[who].downs++;
       if (t[who].downs >= MATCH.tko) return end(match, 1 - who, 'TKO'), match;
       // whether he beats the count is settled now, by how much he has in him: less each time he has been down
-      // (and a man knocked out cold does not: the count goes to ten)
+      // (and a man knocked out cold does not: the count goes to ten; one doubled up by a body shot is awake, and does, by eight)
       const will = f.k.will * Math.pow(0.8, (f.downs || 1) - 1) * (0.6 + 0.4 * fatigue(f)),
         rises = random(bout) < will ? 4 + Math.floor(random(bout) * 5) : null,
-        up = e.out ? null : rises;
+        up = e.out ? null : e.part === 'body' ? rises || 8 : rises;
       match.count = { who, n: 0, t: 0, up, health: MATCH.rise.health[0] + (MATCH.rise.health[1] - MATCH.rise.health[0]) * will };
       match.phase = 'count';
       match.events.push({ type: 'down', who, round: match.round });
