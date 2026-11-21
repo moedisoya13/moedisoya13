@@ -224,10 +224,100 @@ const PUNCHES = {
       shoulder: {},
       elbow: {}
     }
+  },
+  /* ---- to the body (docs/moves-plan-5.md §3.3). A punch to the body is thrown from lower down: he goes down into his
+     knees as he winds it up, and throws the punch it is from there (the hook cannot be swung lower than his own head lets it:
+     game/bout.mjs RULES.hookDrop; so the liver hook is a hook thrown from a man who has gone down to it). The way down is
+     `level`: the channels it adds (the pro's: knees, waist, a bend to the side), held from the wind-up until the hand starts
+     home, and each grade's way of going down (skill.mjs: form.level; anim/body.mjs: lower). `zone`: the place on his trunk it
+     is thrown at (game/trunk.mjs), aimed at the middle of it until the joint that steers it fires (game/bout.mjs: viewOf).
+     `of`: the punch it is a form of, whose grade it is thrown at if his skills do not name it.
+     The head's dice turn a punch of a combination into one of these (game/techniques.mjs: body), a jab into the body jab and
+     the power chain into the body cross, the liver hook and the body uppercut (right up close, the last two). */
+  // the body jab: down into both knees and a little at the waist, the lead arm straight out level into the pit of his stomach
+  jabBody: {
+    hand: 'L', arm: 'straight', kind: 'straight', zone: 'solar', of: 'jab', reach: 1.12, close: 1.0,
+    chain: { coil: 0.07, rate: [58, 50, 56, 46, 44], turn: [9, 14], set: 0.8 },
+    body: { off: 0.6, dip: 0.5 },
+    level: { lkf: 22, rkf: 20, lean: 14, bow: 8 },
+    spot: [2.3, -30],
+    coil: { ly: -0.13, lz: -0.04, lx: -0.02 },
+    links: { drive: { hz: 0.06, lfz: 0.07 }, hips: { yaw: -9, rx: 0.02, ry: 0.03 }, trunk: { twist: -14, lean: 4, hp: 3 }, shoulder: {}, elbow: {} }
+  },
+  // the body cross: down further, the shoulder brought down to the height of the target so that the arm goes out level
+  crossBody: {
+    hand: 'R', arm: 'straight', kind: 'straight', zone: 'solar', of: 'cross', reach: 1.1, close: 0.98,
+    chain: { coil: 0.1, rate: [58, 36, 50, 54, 54], turn: [41, 38], set: 0.8 },
+    level: { lkf: 32, rkf: 36, lean: 16, bow: 14 },
+    spot: [2.1, -20],
+    coil: { yaw: -7, hz: -0.025, rz: -0.04, ry: -0.1 },
+    links: {
+      drive: { rfw: 40, rfp: 24, rfz: 0.05, rkx: -22, hz: 0.11, st: 0.02 },
+      hips: { yaw: 34, hx: 0.03 },
+      trunk: { twist: 38, lean: 5, side: 3, lx: -0.04, ly: 0.03, lz: -0.1 },
+      shoulder: {},
+      elbow: {}
+    }
+  },
+  /* The liver hook: down onto the bent lead knee (the rear one less), bent over to the lead side and a little at the waist,
+     the head off outside his lead hand, the lead arm set at a right angle and a little more, the elbow down at his side a
+     fist off it (low: the elbow lifted out only so far), locked to the chest, and swung round by the body into his right
+     side under the elbow, on its sweep, as the hook lands (anim/animator.mjs: sweep; bent, the furthest the bent arm reaches
+     from the shoulder). It turns a little further than the hook. */
+  hookBody: {
+    hand: 'L', arm: 'swing', kind: 'hook', zone: 'liver', of: 'hook', reach: 0.84, close: 0.74, land: 0.7, bent: 0.46,
+    chain: { coil: 0.13, rate: [58, 42, 52, 60, 0], skip: ['elbow'], turn: [41, 34], locked: true },
+    body: { turn: 0.4, off: 0, bend: 0, tuck: 0, sep: 0.5, dip: 0, lively: 0 },
+    level: { lkf: 30, rkf: 20, side: 14, lean: 25, bow: 14 },
+    spot: [1.2, 60],
+    coil: { yaw: 15, twist: 6, lean: 2, lx: 0.1, ly: -0.1, lz: 0.08, le: 0.3, lc: 1 },
+    links: {
+      drive: { lfw: -38, lfp: 20, lkx: -26, hz: 0.05, lx: 0.02, lz: 0.04, le: 0.35, lc: 1 },
+      hips: { yaw: -34, hx: -0.02 },
+      trunk: { twist: -30, side: -2, rz: -0.02, ry: 0.03 },
+      shoulder: {},
+      elbow: {}
+    }
+  },
+  // the body uppercut: the inside uppercut (the knees the spring), come up into the pit of his stomach from under it
+  upperBody: {
+    hand: 'R', arm: 'lift', kind: 'upper', zone: 'solar', of: 'upper', reach: 0.76, close: 0.64, under: 0, into: 0.2, bent: 0.5, spot: [2.4, -15],
+    chain: { coil: 0.18, rate: [40, 36, 52, 52, 0], skip: ['elbow'], turn: [20, 22], locked: true, set: 0, spring: true },
+    body: { dip: 0.5, turn: 0.3, off: 0.5, lively: 0, over: 0.2 },
+    level: {},
+    coil: { lkf: 30, rkf: 34, lean: 9, yaw: -6, side: -4, rx: 0.06, ry: -0.3, rz: 0.1, re: -0.2, hp: 4, st: -0.01 },
+    links: {
+      drive: { lkf: -22, rkf: -24, st: 0.01, rfw: 30, rfp: 26, lfp: 10, ry: -0.6 },
+      hips: { yaw: 20, hz: 0.08 },
+      trunk: { twist: 22, lean: -4, side: 3, lz: -0.06 },
+      shoulder: {},
+      elbow: {}
+    }
+  },
+  /* ---- the rear hook (docs/moves-plan-5.md §3.8, §4A.7): not the hook in a mirror. The rear shoulder starts further back, so
+     the body turns further, as far as a cross does: the weight onto the rear leg in the wind-up and the chest turned back to
+     his right, then the rear foot turning out on its ball, the heel up, the rear knee in over it, the hips and the chest round
+     to his left, the arm set at a right angle and locked to the chest and swung round on its sweep onto the jaw (the
+     animator's sweep, from his right). Not in the power chain: it comes out of a sway back (the pull counter) and a shoulder
+     roll (the roll counter), which press it by name (game/bout.mjs: a power press that names a punch). */
+  hookR: {
+    hand: 'R', arm: 'swing', kind: 'hook', of: 'hook', reach: 0.92, close: 0.8, land: 0.7,
+    chain: { coil: 0.14, rate: [58, 42, 52, 60, 0], skip: ['elbow'], turn: [44, 40], locked: true },
+    body: { turn: 1, off: 0, bend: 0, tuck: 0, sep: 0.5, dip: 1.5, lively: 0 },
+    coil: { yaw: -10, twist: -6, rkf: 12, lean: 2, rx: -0.1, ry: 0, rz: 0.12, re: 0.9, rc: 1 },
+    links: {
+      drive: { rfw: 44, rfp: 26, rkx: -24, rkf: -6, hz: 0.05, rx: -0.02, ry: 0.02, rz: 0.06, re: 1, rc: 1 },
+      hips: { yaw: 38, hx: 0.02, hy: -0.02 },
+      trunk: { twist: 40, side: 4, lz: -0.02, ly: 0.03 },
+      shoulder: {},
+      elbow: {}
+    }
   }
 };
+// (the body punch each punch of the chains becomes, thrown to the body: game/bout.mjs decide)
+export const TO_BODY = { jab: 'jabBody', cross: 'crossBody', hook: 'hookBody', upper: 'upperBody', hookIn: 'hookBody', upperIn: 'upperBody' };
 for (const [name, punch] of Object.entries(PUNCHES)) {
-  for (const amounts of [punch.coil, ...Object.values(punch.links)]) for (const ch of Object.keys(amounts)) if (!CHANNELS.includes(ch)) throw new Error(`${name}: unknown channel ${ch}`);
+  for (const amounts of [punch.coil, ...Object.values(punch.links), punch.level || {}]) for (const ch of Object.keys(amounts)) if (!CHANNELS.includes(ch) && !(amounts === punch.level && ch === 'bow')) throw new Error(`${name}: unknown channel ${ch}`);
   Object.assign(punch, { name, punch: true });
 }
 

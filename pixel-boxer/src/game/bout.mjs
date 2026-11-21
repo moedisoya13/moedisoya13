@@ -53,7 +53,7 @@
    still turned it aside, and a loaded punch went back within 0.4 s of the defence starting. */
 const BRILLIANT = { margin: 0.03, within: 0.4 };
 import * as M from '../rig/m3.mjs';
-import { MOVES, RISE } from '../anim/moves.mjs';
+import { MOVES, RISE, TO_BODY } from '../anim/moves.mjs';
 import { createAnimator, arrival } from '../anim/animator.mjs';
 import { toWorld } from '../anim/pose.mjs';
 import { createChain, stepChain, effectiveMass, preload } from '../phys/chain.mjs';
@@ -67,7 +67,8 @@ import { timeline, evadeTime, progress, LOADED } from '../anim/evade.mjs';
 import { choose, THROWS, PAW, COLLAR, ELBOW } from '../anim/show.mjs';
 import { waveOf, waveTravel, waveTurn, waveBlocked } from '../anim/clean.mjs';
 import { dice } from '../anim/stance.mjs';
-import { trunk, balls, where, aimed, spray, ZONES } from './trunk.mjs';
+import { trunk, balls, where, aimed, aimFor, spray, ZONES } from './trunk.mjs';
+import { shown } from '../anim/body.mjs';
 
 export const RULES = {
   hp: 100,
@@ -223,17 +224,22 @@ function loadOf(f, bout, move) {
 function begin(f, name, more, bout) {
   const move = MOVES[name],
     before = f.action,
-    level = levelOf(f.skills, name),
+    // (a punch to the body, or the rear hook, at the grade of the punch it is a form of, unless his skills name it: moves.mjs of)
+    level = levelOf(f.skills, move.of && !(f.skills && f.skills[name]) ? move.of : name),
     // his muscles: as quick as his speed, and slower as he tires (never below three quarters of it); his skill: how he uses them
     chain = move.punch ? createChain(move, f.k.rate * (0.75 + 0.25 * fatigue(f)), level, more && more.variant) : null;
   if (COST[name]) f.stamina = Math.max(0, f.stamina - COST[name]);
   // a punch thrown with the hand that has just punched starts from where that arm's joints still are (a double jab)
   if (chain && before && before.chain && MOVES[before.name].hand === move.hand) (chain.q = before.chain.q.slice()), (chain.v = before.chain.v.slice());
   // out of the end of an evasion or a parry: wound up already
-  const loaded = chain && bout ? loadOf(f, bout, move) : null;
+  let loaded = chain && bout ? loadOf(f, bout, move) : null;
+  // (but not by a legend's going: a punch to the body has to go down to it first, anim/body.mjs)
+  if (loaded && loaded.from === 'legend' && move.level) loaded = null;
   if (loaded) preload(chain, move, loaded.load, loaded.shoulder);
   // (a guard pushed out of the way first: the punch waits for the lead hand to get it there, anim/show.mjs)
   if (chain && more && (more.variant === 'pawDown' || more.variant === 'pawUp')) chain.wait = PAW.wait[name] || PAW.wait.cross;
+  // (a punch to the body thrown in two movements: down in the wind-up, a moment's stop at the bottom, and then the punch, anim/body.mjs: seam)
+  if (chain && move.level && level.form.level && level.form.level.seam && !(loaded && loaded.load > 0)) chain.pause += level.form.level.seam;
   // (a great one's spring waits for his next foot to come down, half a beat at most, and goes down with it)
   if (chain && chain.springWait && !(loaded && loaded.load > 0)) {
     const r = f.animator.rhythm;
@@ -360,8 +366,14 @@ function decide(bout, f, input, dt, who) {
         }
         /* a show-off's trick (anim/show.mjs, docs/moves-plan-4.md §5.2): the one the press names, or one his dice turn up; a
            flicker pressed again within FLICK.again of the last one arriving is another, with no wind-up, up to FLICK.most */
-        const again = what === 'jab' && f.flicks && f.flicks.n < FLICK.most && f.wantAt - f.flicks.at <= FLICK.again + 1e-9,
-          trick = again ? 'flicker' : trickOf(f, other, what, name, dir);
+        /* (a press that names a punch is that punch: a script's, or a technique's answer, the rear hook out of a sway back or a
+           shoulder roll; and a press for the body is the body punch of the one it would have been: moves.mjs TO_BODY) */
+        const named = typeof dir === 'string' && MOVES[dir] && MOVES[dir].punch ? dir : null,
+          low = !named && !!sign && !!sign.body && !!TO_BODY[name];
+        if (named) name = named;
+        else if (low) name = TO_BODY[name];
+        const again = !named && !low && what === 'jab' && f.flicks && f.flicks.n < FLICK.most && f.wantAt - f.flicks.at <= FLICK.again + 1e-9,
+          trick = again ? 'flicker' : named || low ? null : trickOf(f, other, what, name, dir);
         if (trick && THROWS[trick]) name = trick === 'pawUp' && inside ? 'upperIn' : THROWS[trick];
         if (name === 'flicker') f.flicks = { n: again ? f.flicks.n + 1 : 1, at: Infinity };
         else if (what === 'jab') f.flicks = null;
@@ -685,7 +697,13 @@ function viewOf(bout, i) {
     // (how far the glove still has to go to meet it: a boxer who times his punches to his feet times them by this)
     if (glove) view.reach = Math.hypot(h[0] - glove[0], h[1] - glove[1], h[2] - glove[2]) - RULES.glove - RULES.head;
     if (f.action.aim) view.aim = f.action.aim;
-    else if (Math.hypot(side, front) < 1.7 && front > 0.2) {
+    else if (move.zone && other.points.waist && Math.hypot(side, front) < 1.7 && front > 0.2) {
+      // (a punch to the body: at the middle of its place on his trunk, game/trunk.mjs; committed as a punch at the head is)
+      view.aim = aimFor(f, other.points, f.action.zone || move.spot || move.zone, move.arm, move.hand);
+      // (and a punch that comes up into it is aimed on in, `into` metres past where it would stop at his skin: moves.mjs)
+      if (move.into) view.aim[2] += move.into;
+      if (f.action.chain.on[move.arm === 'swing' ? 1 : 3]) f.action.aim = view.aim;
+    } else if (Math.hypot(side, front) < 1.7 && front > 0.2) {
       const from = move.hand === 'L' ? 1 : -1,
         /* a hook is an arm locked at the shoulder and swung flat by the body, at the jaw: it can be thrown a little low, but
            not at a head that has gone down under it (that is what the uppercut is for) */
@@ -887,10 +905,16 @@ const FOREARM = { n: 6, r: 0.045 };
 const ARMS = { elbow: 0.06 };
 function lowOf(f, other, action) {
   if (action.zone) return action.zone;
-  return action.aim && f.place && other.points && other.points.waist ? aimed(other.points, M.add(f.place.p, M.app(f.place.R, action.aim))) : null;
+  const aim = action.aim && f.place && other.points && other.points.waist ? aimed(other.points, M.add(f.place.p, M.app(f.place.R, action.aim))) : null;
+  return aim || (!action.aim && MOVES[action.name].zone) || null;
 }
+/* (a punch to the body thrown from lower down shows where it is going from the moment he starts down to it: anim/body.mjs,
+   shown; anything else from when the joint that steers it fired) */
 function seen(action) {
-  const at = action.chain.fired[MOVES[action.name].arm === 'swing' ? 1 : 3];
+  const move = MOVES[action.name],
+    down = move.level ? shown(action, move) : null;
+  if (down !== null) return down;
+  const at = action.chain.fired[move.arm === 'swing' ? 1 : 3];
   return at >= 0 ? action.chain.t - at : null;
 }
 function strike(bout, f, other, who, dt) {

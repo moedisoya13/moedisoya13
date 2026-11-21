@@ -41,7 +41,7 @@ import { H, headAt, headTo, phraseX, PHRASE, FLOURISH, CLEAN, DIRTY, dice } from
 import { sampleEvade, EVASIONS, timeline, evadeTime } from './evade.mjs';
 import { travel as legendTravel, dash as legendDash, dashShape } from './legend.mjs';
 import { stance as showStance, crossGuard, hammer, paw, PAW, collar, COLLAR, ELBOW } from './show.mjs';
-import { bodyState, struck as foldUp, give as bodyGive, coverLow } from './body.mjs';
+import { bodyState, struck as foldUp, give as bodyGive, coverLow, lower } from './body.mjs';
 import { createWave, waveBeat, waveLand, waveLanding, waveDrag, waveBody } from './clean.mjs';
 
 const TAU = Math.PI * 2;
@@ -752,12 +752,15 @@ export function createAnimator(seed) {
         // (and a beginner does not use his knees at all: what the wind-up and the chain do to his height is not done)
         const knees = form.dip > 0 ? 0 : 1,
           height = ch => (ch === 'hy' || ch === 'lkf' || ch === 'rkf' ? knees : 1);
-        for (const ch in move.coil) c[ch === 'twist' && !form.sep ? 'yaw' : ch] += move.coil[ch] * chain.coil.q * (ch === 'lc' || ch === 'le' || ch === 'rc' || ch === 're' || (ch === 'twist' && move.chain.locked) || (ch === 'yaw' && move.arm === 'swing') ? 1 : chain.shown ?? 1) * height(ch);
+        // (a punch to the body's wind-up is the way down to it, and all of that shows: moves.mjs level)
+        for (const ch in move.coil) c[ch === 'twist' && !form.sep ? 'yaw' : ch] += move.coil[ch] * chain.coil.q * (ch === 'lc' || ch === 'le' || ch === 'rc' || ch === 're' || (ch === 'twist' && move.chain.locked) || (ch === 'yaw' && move.arm === 'swing') || move.level ? 1 : chain.shown ?? 1) * height(ch);
         // (a flicker's body: a great dirty fighter's swing, a legend's wrist: moves.mjs)
         const flick = move.flick ? move.flick[Math.max(0, (form.dirty || 1) - 1)] : 1;
         LINKS.forEach((link, i) => {
           for (const ch in move.links[link]) c[ch] += move.links[link][ch] * chain.q[i] * amp[i] * height(ch) * flick;
         });
+        // (a punch to the body: the way down to it, his grade's, body.mjs)
+        if (move.level) lower(c, action, move, action.level || LEVEL[3]);
         /* How the rest of him is held while it goes, by how good he is (skill.mjs): all of it grows with the arm, so it is
            there as the punch is and gone as it comes home. */
         const me = move.hand,
@@ -1919,10 +1922,13 @@ export function createAnimator(seed) {
              turns out to be, the second time) */
           const off = height.y - want;
           if (Math.abs(off) > 2e-4) {
-            const shifted = h => {
+            /* (but not the fist of a punch to the body on its way: it goes where it is thrown, low, and the arm reaches down
+               to it from wherever the shoulder is, as the way down to it lags: body.mjs, lower) */
+            const low = punchMove && punchMove.level && (action.chain.phase === 'coil' || action.chain.phase === 'throw') ? punchMove.hand : null,
+              shifted = h => {
               const by = [0, h / (1 + c.st), 0],
                 moved = {};
-              for (const side of ['L', 'R']) moved[side] = Object.assign({}, stance.hands[side], { at: M.add(stance.hands[side].at, by) });
+              for (const side of ['L', 'R']) moved[side] = side === low ? stance.hands[side] : Object.assign({}, stance.hands[side], { at: M.add(stance.hands[side].at, by) });
               return solve(Object.assign({}, stance, { hips: M.add(stance.hips, by), hands: moved }));
             };
             let h = off / 0.85;
