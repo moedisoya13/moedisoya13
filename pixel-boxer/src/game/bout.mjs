@@ -945,9 +945,10 @@ function strike(bout, f, other, who, dt) {
   }
   bout.stop = Math.min(RULES.stop[1], stop * (counter ? 1.5 : 1));
   const down = other.hp <= 0,
-    /* (out cold: a finishing blow with RULES.out of health or more to spare, or one that caught him throwing; limp from a
-       hook or an uppercut, stiff as a log from a jab or a cross) */
-    out = down && (damage - had >= RULES.out || caught) ? (move.kind === 'straight' ? 'outStiff' : 'out') : null;
+    /* (out cold: a finishing blow with RULES.out of health or more to spare, or one that caught him throwing; stiff as a log
+       from a jab or a cross, a log with his neck wrenched round from a hook, lifted and let go of slowly from an uppercut:
+       docs/moves-plan-5.md §1) */
+    out = down && (damage - had >= RULES.out || caught) ? { straight: 'outStiff', hook: 'outTwist', upper: 'outLift' }[move.kind] || 'out' : null;
   bout.events.push(Object.assign({ type: 'hit', damage: +damage.toFixed(1), counter, down }, blow, out ? { out } : null));
   if (down) {
     /* How he goes: a blow that only just finished him puts him down on a knee; one with plenty to spare lays him out, a
@@ -955,7 +956,7 @@ function strike(bout, f, other, who, dt) {
        was going as it met him, and the shove that goes with it, the same way, up or down as well as along the canvas; on
        top of what was still pushing him and all he was moving at, his walking and his stepping in. These are his body's
        now, not his place's to carry). Out cold, he is laid out the same way, and his body let go of as an unconscious
-       man's is (out, outStiff: phys/fall.mjs), and he does not get up. */
+       man's is (outStiff, outTwist, outLift: phys/fall.mjs), and he does not get up. */
     const knee = !out && damage - had < RULES.drop;
     let laid = null;
     if (!knee) {

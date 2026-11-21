@@ -22,12 +22,12 @@
      a.getUp()                                        knocked down and lying still: the way up that fits how he lies, and
                                                       how to turn and move his place so that he gets up where he lies:
                                                       { name, on, down, move: [x, z] (his space), turn (radians) } | null
-   Knocked down (a move that is a fall: ko, slump, and out cold: out, outStiff), his body is a body (phys/fall.mjs) from the pose he was in, and the next
+   Knocked down (a move that is a fall: ko, slump, and out cold: out, outStiff, outTwist, outLift), his body is a body (phys/fall.mjs) from the pose he was in, and the next
    rise is blended out of the pose he comes to rest in (view.near: what of the other man he cannot fall through). */
 import * as M from '../rig/m3.mjs';
 import { TPOSE, fk } from '../rig/skeleton.mjs';
 import { solve, centre, footPose, LEN } from '../rig/solve.mjs';
-import { createFall, stepFall, poseOf, lyingOf, moveFall } from '../phys/fall.mjs';
+import { createFall, stepFall, shoveFall, poseOf, lyingOf, moveFall } from '../phys/fall.mjs';
 import * as Q from './quat.mjs';
 import { FOOT, HEAD, RADIUS, shoulderOf } from '../rig/body.mjs';
 import { LINKS, stepChain } from '../phys/chain.mjs';
@@ -563,9 +563,10 @@ export function createAnimator(seed) {
       }
     },
     /* Knocked down, shoved on by the glove going on through him (game/bout.mjs: follow): all of his falling body given this
-       velocity, his own terms (none before the fall has started: the bout gives it from the step after the blow) */
+       velocity, his own terms, or, out cold and stiff, turned over his foot by it (phys/fall.mjs: shoveFall; none before the
+       fall has started: the bout gives it from the step after the blow) */
     shove(v) {
-      if (fall) for (const b of fall.bodies) b.v = M.add(b.v, v);
+      if (fall) shoveFall(fall, v);
     },
     /* A parry: the glove that met the punch sweeps it off the line, across his body and down, and comes back; his
        shoulders turn a little with it. (The puncher's side of it is the reel.) */
