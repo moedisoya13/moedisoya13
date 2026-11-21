@@ -21,6 +21,8 @@
                                                       already, { load: 0..1 } | null
      a.wave                                           the wave his feet are in (clean.mjs): { plan, k, phi, ending, done,
                                                       slicked } | null (view.wave: the bout's, while he is in one)
+     a.patting                                        his rear glove coming down on a punch, a down parry (clean.mjs:
+                                                      patDown; view.pat: the bout's, while his guard is put up for one)
      a.getUp()                                        knocked down and lying still: the way up that fits how he lies, and
                                                       how to turn and move his place so that he gets up where he lies:
                                                       { name, on, down, move: [x, z] (his space), turn (radians) } | null
@@ -39,7 +41,7 @@ import { H, headAt, headTo, phraseX, PHRASE, FLOURISH, CLEAN, DIRTY, dice } from
 import { sampleEvade, EVASIONS, timeline, evadeTime } from './evade.mjs';
 import { travel as legendTravel, dash as legendDash, dashShape } from './legend.mjs';
 import { stance as showStance, crossGuard, hammer, paw, PAW, collar, COLLAR, ELBOW } from './show.mjs';
-import { createWave, waveBeat, waveLand, waveLanding, waveDrag, waveBody } from './clean.mjs';
+import { createWave, waveBeat, waveLand, waveLanding, waveDrag, waveBody, createPat, patDown, pattedArm } from './clean.mjs';
 
 const TAU = Math.PI * 2;
 /* The feet keep time. One beat is one foot coming down; a cycle is both. Standing, the boxer rocks between his feet on that
@@ -396,6 +398,9 @@ export function createAnimator(seed) {
   const legend = { feet: {}, sides: {}, w: 0, across: 0, bent: 0, dash: null, load: 0, k: { L: 0, R: 0 }, air: { L: 0, R: 0 } };
   // a clean great one's wave (clean.mjs): its own beat for his feet, and its body
   const wave = createWave();
+  // and his down parry (clean.mjs): the rear glove out, down on a glove coming in, and on into his counter
+  const pat = createPat();
+  let patting = false;
   // a beginner's feet, shifted about the canvas a few centimetres at a time: where each is now, and the one moving
   const fidget = { L: 0, R: 0, move: null, next: 1.8 + 1.4 * roll(), side: 'R' };
   // how far a beginner's body goes on past his feet when he stops, sprung back
@@ -640,6 +645,10 @@ export function createAnimator(seed) {
     get hammering() {
       return hammering;
     },
+    // a clean great one's rear glove coming down on a punch (clean.mjs: patDown): what the bout judges his down parry by
+    get patting() {
+      return patting;
+    },
     get legend() {
       return legend.load > 0.05 ? { load: legend.load } : null;
     },
@@ -870,6 +879,11 @@ export function createAnimator(seed) {
           const tmp = sampleMove(MOVES[action.name], action.t, {});
           if (action.hand === 'R') swapHands(tmp);
           for (const ch in tmp) c[ch] += tmp[ch];
+          // (pressed down: the arm held where it was met, as it was drawn then, and let down: clean.mjs)
+          if (action.name === 'patted') {
+            if (!action.held && hand[action.hand === 'R' ? 'R' : 'L']) action.held = hand[action.hand === 'R' ? 'R' : 'L'].slice();
+            pattedArm(c, action, MOVES.patted.drop);
+          }
         } else {
           sampleMove(MOVES[action.name], action.t, c);
           if (MOVES[action.name].sided) {
@@ -939,7 +953,7 @@ export function createAnimator(seed) {
       // (and a guard he puts up fresh is a hammer of the rear fist, not the gloves put out to meet it: show.mjs)
       hammering = !!cv.hammer && view.fresh !== null && view.fresh !== undefined && hammer(c, cv.hammer, view.fresh);
       if (cheer > 0.002) for (const [ch, v] of Object.entries(sampleMove(MOVES.cheer, 1, {}))) c[ch] += v * smooth(cheer);
-      if (meet > 0.002 && !cv.hammer) {
+      if (meet > 0.002 && !cv.hammer && !view.pat) {
         for (const [ch, v] of Object.entries(sampleMove(MOVES.meet, 1, {}))) c[ch] += v * meet * cv.meet.scale;
         for (const ch in cv.meet.add) c[ch] += cv.meet.add[ch] * meet;
       }
@@ -954,6 +968,8 @@ export function createAnimator(seed) {
           if (cv.block.meet) (c.lz += cv.block.meet[0] * riding.x), (c.rz += cv.block.meet[0] * riding.x);
         }
       }
+      // (and a guard put up to press a punch down is the rear glove out and coming down on it, and on into his counter: clean.mjs)
+      patting = patDown(c, pat, { view, hand: punchMove ? punchMove.hand : null, phase: punchMove ? action.chain.phase : null, dt });
       const floored = !!(action && MOVES[action.name].floor),
         rocked = floored ? 0 : wobble.amount * Math.exp(-(wobble.t + dt) / WOBBLE.last) * smooth(clamp((wobble.t + dt) / WOBBLE.onset, 0, 1)),
         // what is left of his rhythm: a rocked man's and a spent man's grade comes apart
@@ -1840,6 +1856,8 @@ export function createAnimator(seed) {
           // a hand whose punch has been cut short by the next one is let back to its guard, not dropped there
           const k = Math.exp(-dt * 18);
           steer[side] = M.scale(steer[side], k);
+          // (but an arm pressed down is held where it was met, not where its punch was going: clean.mjs pattedArm)
+          if (action && action.name === 'patted' && (action.hand === 'R' ? 'R' : 'L') === side) steer[side] = [0, 0, 0];
         }
         /* Where the elbow points is asked for, not ordered: it leans toward where the move wants it from where it was, so an
            arm passing through a pose with no good answer (a wrist crossing its own shoulder) cannot flip over in a frame. */

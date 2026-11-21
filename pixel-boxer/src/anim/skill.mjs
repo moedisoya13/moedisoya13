@@ -257,6 +257,27 @@ const VARY_5A = { jab: [['thumb', 0.15], ['flicker', 0.5]], power: [['pawUp', 0.
 const WAVE_4M = { halves: 3, depth: 0.13, step: 0.75, knee: 40, lift: 13, bent: 10, across: 0.09, hands: [-0.28, -0.24], wide: 0.035, swing: 0, upright: 8, chin: 4, heel: 14, drag: [0.83, 0.95], slick: { eta: 0.2, lean: 18, back: 0.13, knee: 16, go: 0.1, home: 0.15, just: 0.06 }, jab: 0.5, load: 0.5, shoulder: 0, loose: null };
 const WAVE_5M = Object.assign({}, WAVE_4M, { hands: [-0.36, -0.3], wide: 0.08, swing: 0.04, slick: Object.assign({}, WAVE_4M.slick, { just: 0.03 }), load: 0.7, shoulder: 9, loose: { halves: [2, 4], depth: [0.09, 0.16], step: [0.5, 0.78], feint: [8, 7], shoulder: [0.25], shuffle: [16, 5] } });
 
+/* the down parry and counter (anim/clean.mjs: patDown; docs/moves-plan-5.md §4.2): a clean great one's and a clean legend's
+   guard put up fresh as a technique of its own (game/techniques.mjs: parryDown, his head's to pick; it does not take the
+   place of the parry he puts up otherwise). The rear glove goes out in front of his chin and comes down on the glove coming
+   in; only a glove it comes down on is pressed down (game/bout.mjs), and the counter goes from the hand that pressed it, from
+   where it is. Only 4명 and 5명 have it (`pat` on their lines).
+     set      seconds the rear glove takes out to where it waits; at: [x, y, z] where that is (the rear hand's channels, from
+              the open guard's: in front of his chin, above the line a glove comes in on); elbow: its elbow lifted out so
+     lead     [x, y, z] metres the lead glove is put back to the temple, out of the way
+     go       seconds before the glove coming in would be on it that it starts down (timed to the glove, as a great one's
+              block is: animator.mjs riding)
+     down     metres it comes down, over `fall` seconds, `out` metres on as it does (a legend's the wrist only)
+     hold     seconds it keeps the glove pressed down after it met it; back: seconds it takes home (after that, or once the
+              punch it is thrown into is out)
+     presses  the punches it presses down: a jab (4명), a jab or a cross (5명); anything else, a guard asked for it blocks
+     counter  the punch it opens (bout.mjs: what a power punch is in the opening): 'cross' (the hand that pressed it, `load` of
+              its wind-up done, waiting out `hold` first) or 'jab' (5명: the lead hand's jab at once, `jab` of its wind-up done,
+              and the pressing hand's cross, `load` of it done, pressed `follow` seconds after the contact)
+     stun     seconds the man pressed down is tied up (moves.mjs: patted; he is not knocked back) */
+const PAT_4M = { set: 0.04, at: [-0.005, 0.175, 0.15], elbow: 0.2, lead: [0.02, 0.025, -0.03], go: 0.05, down: 0.16, fall: 0.07, out: 0.03, hold: 0.1, back: 0.15, presses: ['jab'], counter: 'cross', load: 0.7, jab: 0, follow: 0, stun: 0.35 };
+const PAT_5M = Object.assign({}, PAT_4M, { set: 0.035, down: 0.09, fall: 0.05, out: 0.015, hold: 0.18, presses: ['jab', 'cross'], counter: 'jab', load: 1, jab: 0.5, follow: 0.16 });
+
 export const LEVEL = {
   1: {
     grade: 1, side: null, name: '입문', label: '1',
@@ -299,7 +320,7 @@ export const LEVEL = {
     away: TEXTBOOK_AWAY
   },
   '4m': {
-    grade: 4, side: 'm', name: '일류 · 명', label: '4명', wave: WAVE_4M,
+    grade: 4, side: 'm', name: '일류 · 명', label: '4명', wave: WAVE_4M, pat: PAT_4M,
     chain: { early: [0.25, 0.25, 0, 0, 0], damp: [0.6, 0.6, 0.56, 0.6, 0.6], amp: [1.1, 1.15, 1.1, 1, 1], coil: 0.55, shown: 0.65, back: 1.12, backLag: 1, firm: 1.08, spring: { down: 0.6, wait: true } },
     form: form({ guard: -0.3, chin: -0.5, lively: 0.5, dip: -0.03, drop: true, sep: 7, off: 0.07, with: 'hips', tuck: 4, look: 1, bend: 4, exit: 'roll', beat: 'on' }),
     // strong and weak, the lead foot's landing the heavy one; the head an end on every lead foot, under in between
@@ -324,7 +345,7 @@ export const LEVEL = {
     away: away({ jitter: 0.25, drop: 1.2 })
   },
   '5m': {
-    grade: 5, side: 'm', name: '전설 · 명', label: '5명', wave: WAVE_5M,
+    grade: 5, side: 'm', name: '전설 · 명', label: '5명', wave: WAVE_5M, pat: PAT_5M,
     chain: { early: [0.4, 0.4, 0, 0, 0], damp: [0.6, 0.6, 0.5, 0.6, 0.6], amp: [1.15, 1.25, 1.18, 1, 1], coil: 0.2, shown: 0.55, back: 1.15, backLag: 1, firm: 1.2, spring: { down: 0.4 } },
     form: form({ guard: -0.4, chin: -0.6, lively: 0.7, dip: -0.04, drop: true, sep: 11, off: 0.1, with: 'legs', tuck: 6, look: 1, bend: 6, exit: 'angle', beat: 'off' }),
     // the lightest feet: a swung beat, a phrase that quickens, stops dead and breaks out into something

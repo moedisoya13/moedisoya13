@@ -306,6 +306,16 @@ export const MOVES = Object.assign(
       dur: 0.6,
       keys: [{ t: 0.08, e: 'out', ly: -0.34, lz: -0.1, lx: -0.03, le: -0.2, side: 4, lean: 5, hp: 5, twist: -5 }, { t: 0.32, e: 'lin', ly: -0.28, lz: -0.08, lx: -0.02, le: -0.15, side: 3, lean: 4, hp: 3, twist: -4 }]
     },
+    /* a punch pressed down (a clean great one's down parry, anim/clean.mjs: patDown): the arm that threw it pressed down where
+       it was met, `drop` metres (the animator holds the glove there and lets it down: clean.mjs pattedArm), the shoulder
+       dragged down after it and the head brought forward, open; not knocked back. Shorter than a parry's reel or a hammer's,
+       and the counter comes the sooner. Written for the lead hand; the rear's is the mirror (`hand`) */
+    patted: {
+      hand: true,
+      dur: 0.4,
+      drop: 0.2,
+      keys: [{ t: 0.07, e: 'out', side: 5, lean: 6, hz: 0.03, hp: 5, twist: -5 }, { t: 0.28, e: 'lin', side: 4, lean: 5, hz: 0.025, hp: 4, twist: -4 }]
+    },
     // knocked down and out: a body (phys/fall.mjs); these only say so, and how long before he is lying still
     ko: { floor: true, stay: true, fall: true, dur: 1.2, keys: [] },
     slump: { floor: true, stay: true, fall: true, dur: 1.2, keys: [] },

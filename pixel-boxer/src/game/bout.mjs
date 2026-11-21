@@ -60,7 +60,7 @@ import { asked, has } from './techniques.mjs';
 import { levelOf } from '../anim/skill.mjs';
 import { timeline, evadeTime, progress, LOADED } from '../anim/evade.mjs';
 import { choose, THROWS, PAW, COLLAR, ELBOW } from '../anim/show.mjs';
-import { waveOf, waveTravel, waveTurn, waveBlocked } from '../anim/clean.mjs';
+import { waveOf, waveTravel, waveTurn, waveBlocked, patOf, presses } from '../anim/clean.mjs';
 import { dice } from '../anim/stance.mjs';
 
 export const RULES = {
@@ -188,8 +188,15 @@ function loadOf(f, bout, move) {
     const ev = e.level.evade;
     return LOADED(e.name, e.side) === move.hand ? { load: ev.load, from: e.id } : null;
   }
-  // a parry: the other hand, or the one that turned it aside, by the grade of his guard
   const p = f.parried;
+  /* (out of a down parry, anim/clean.mjs: the hand that pressed it, from where it is, waiting out the press first; a legend's
+     lead hand goes at once, a little wound up already) */
+  if (p && p.down && bout.t - p.at <= RULES.counter) {
+    const pat = p.pat;
+    if (move.hand === 'R') return { load: pat.load, from: 'parry', down: true, wait: pat.counter === 'cross' ? Math.max(0, pat.hold - (bout.t - p.at)) : 0 };
+    return pat.counter === 'jab' && pat.jab > 0 ? { load: pat.jab, from: 'parry', down: true } : null;
+  }
+  // a parry: the other hand, or the one that turned it aside, by the grade of his guard
   if (p && bout.t - p.at <= RULES.counter) {
     const cv = p.level.cover;
     if ((cv.hand === 'same') === (move.hand === p.hand)) return { load: cv.load, shoulder: cv.q, from: 'parry' };
@@ -226,6 +233,8 @@ function begin(f, name, more, bout) {
     const r = f.animator.rhythm;
     chain.wait = Math.max(0, Math.min(r.left, r.half));
   }
+  // (the counter out of a down parry waits for the pressing hand to have kept the glove down: anim/clean.mjs)
+  if (chain && loaded && loaded.wait > 0) chain.wait = loaded.wait;
   if (before && isEvasion(before.name) && f.lastEvade && f.lastEvade.action === before) f.lastEvade.endedAt = bout ? bout.t : 0;
   if (before && before.name === 'duckIn') f.lastIn = { action: before, endedAt: bout ? bout.t : 0 };
   f.action = Object.assign({ name, t: 0, id: name + ++f.serial, struck: false, chain, level, at: bout ? bout.t : 0, loaded: loaded && loaded.load > 0 ? loaded : null }, more);
@@ -258,6 +267,49 @@ function plan(f, other, name, dir) {
    else, it is the circle out. -> his grade's wave, or null */
 const wavesAt = f => (has(f, 'wave') ? waveOf(levelOf(f.skills, 'wave')) : null);
 
+/* ---- The down parry (anim/clean.mjs, docs/moves-plan-5.md §4.2): a guard put up meant as one (the head's tech: 'parryDown',
+   game/techniques.mjs) by a man who carries it at a grade that has one (skill.mjs: pat, 4명 and 5명). The guard is his, as
+   any guard is; his rear glove goes out of it to press the punch down (the animator's), and the bout judges what it comes
+   down on (strike). Kept as f.pat = { id, at (when the guard went up), pat (his grade's), met (when it met the glove) }:
+   while his guard is up, or after it has met a glove until his counter is done with it, and never past a blow. */
+const patsAt = f => (has(f, 'parryDown') ? patOf(levelOf(f.skills, 'parryDown')) : null);
+const PAT = { life: 0.8, above: 0 };
+function patGuard(bout, f, input, covering, dt) {
+  // (put up fresh, meant as one: a stunned man's guard is never fresh, and is no down parry)
+  if (covering && !f.cover) {
+    const a = asked(f, input),
+      pat = a && a.tech === 'parryDown' && f.stun <= 0 ? patsAt(f) : null;
+    f.pat = pat ? { id: 'pat' + ++f.serial, at: bout.t, pat, met: null } : null;
+  } else if (f.pat && (f.sinceHit <= dt + 1e-9 || (f.pat.met === null && !covering) || bout.t - (f.pat.met ?? f.pat.at) > PAT.life)) f.pat = null;
+}
+/* What his body is told of it (view.pat): how soon the glove coming in, if it is one his grade presses down, will be on his
+   rear glove at the speed it is closing on it; whether his guard is still fresh enough (a parry's: RULES.parry, his own) */
+function patView(bout, f, other) {
+  const p = f.pat,
+    coming = incoming(other);
+  let eta = null;
+  if (coming && p.met === null && presses(p.pat, coming.name) && other.points && other.before && f.points) {
+    const hand = MOVES[coming.name].hand,
+      r = f.points.R,
+      gap = Math.hypot(...M.sub(other.points[hand], r)) - 2 * RULES.glove,
+      was = Math.hypot(...M.sub(other.before[hand], r)) - 2 * RULES.glove,
+      v = (was - gap) / DT;
+    if (v > 0.3) eta = Math.max(0, gap) / v;
+  }
+  return { id: p.id, pat: p.pat, met: p.met === null ? null : bout.t - p.met, fresh: f.cover && f.coverAge <= f.k.parry * (0.7 + 0.3 * fatigue(f)), eta };
+}
+// (and his counter out of it, a power punch in the opening it made: the pressing hand's cross, or a legend's jab first, the
+// cross pressed after it on its own: f.patFollow)
+function patCounter(bout, f, inside) {
+  const p = f.parried;
+  if (p.pat.counter === 'jab' && !p.jabbed) {
+    p.jabbed = true;
+    f.patFollow = p.at + p.pat.follow;
+    return 'jab';
+  }
+  return inside ? 'upperIn' : 'cross';
+}
+
 /* The wave from step to step (anim/clean.mjs): held while it is asked for; the ropes in the way he is going are the end of it,
    and so is his lead foot stood on (at once). Gone once he is doing anything that is not the wave or a jab out of it (a
    moment's grace, for the wave to be taken up again as a jab out of it comes home). */
@@ -272,6 +324,11 @@ function holdWave(bout, f, input, who) {
 }
 
 function decide(bout, f, input, dt, who) {
+  // (a legend's cross after the jab out of his down parry, pressed on its own when its moment comes: anim/clean.mjs)
+  if (f.patFollow !== undefined && f.patFollow !== null && bout.t >= f.patFollow - 1e-9) {
+    f.patFollow = null;
+    if (!f.want) (f.want = ['power', true]), (f.wantAge = 0), (f.wantAt = bout.t);
+  }
   const pressed = signed(f, input, pressOf(input));
   // (a taunt is over the moment he does anything: a button, his guard, setting off: anim/show.mjs)
   if (f.action && MOVES[f.action.name].taunt && (pressed || input.cover || Math.hypot(...(input.move || [0, 0])) > 0.3)) f.action = null;
@@ -341,6 +398,10 @@ function decide(bout, f, input, dt, who) {
           // (out of a hammering parry, the rear fist down: the power punch is the lead hook it has wound up, anim/show.mjs)
           name = inside ? 'hookIn' : 'hook';
           f.link = Math.max(0, chain.indexOf(name));
+        } else if (what === 'power' && f.parried && f.parried.down && bout.t - f.parried.at <= RULES.counter) {
+          // (out of a down parry: the counter it opens, anim/clean.mjs)
+          name = patCounter(bout, f, inside);
+          f.link = Math.max(0, chain.indexOf(name));
         } else if (what === 'power') {
           f.link = f.sinceLast < RULES.combo && f.lastPower ? (f.link + 1) % chain.length : 0;
           name = chain[f.link];
@@ -372,6 +433,8 @@ function decide(bout, f, input, dt, who) {
     covering = !!input.cover && !f.action;
   f.coverAge = covering ? (f.cover ? f.coverAge + dt : dazed ? 9 : 0) : 0;
   if (covering && !f.cover) bout.events.push({ type: 'cover', who });
+  // (a guard meant as a down parry: anim/clean.mjs)
+  patGuard(bout, f, input, covering, dt);
   f.cover = covering;
 }
 
@@ -617,6 +680,8 @@ function viewOf(bout, i) {
       // foot is stood on
       foe: f.place && other.pose && other.points ? { foot: mine(f, at(other, 'LeftFoot', [0, -0.02, 0.07])), glove: { L: mine(f, other.points.L), R: mine(f, other.points.R) }, head: mine(f, other.points.head), nape: mine(f, napeOf(other)), right: dirIn(f, [-Math.cos(other.yaw), Math.sin(other.yaw)]) } : null,
       pinned: f.pinned > 0,
+      // the down parry his guard is put up for, if it is (anim/clean.mjs): how soon the glove coming in will be on his rear glove
+      pat: f.pat ? patView(bout, f, other) : null,
       // the wave he is in, if he is (anim/clean.mjs): which way round, whether it is still held, his grade's
       wave: f.wave ? { side: f.wave.side, held: f.wave.held, blocked: f.wave.blocked, level: wavesAt(f) } : null,
       // knocked down: what of the other man he cannot fall through, in his own terms
@@ -856,6 +921,27 @@ function trickOf(f, other, button, name, forced) {
 }
 // a forearm, as the bout reckons it in the way: so many balls from the elbow to the glove, each as thick as the forearm
 const FOREARM = { n: 6, r: 0.045 };
+/* ---- The down parry, as a blow judges it (anim/clean.mjs, docs/moves-plan-5.md §4.2): his rear glove coming down (the
+   animator's patting, a guard put up for it: f.pat) on a punch his grade presses down is the down parry's, not a glove held in
+   the way. It presses down a glove it meets from above (the middle of his glove higher than the middle of the one coming in, as
+   they meet, less `above`): the arm that threw it is held down where it was met (moves.mjs: patted), not knocked back, and the
+   defender has his opening, the counter wound up in the hand that pressed it. Met any other way, by it or by the guard put up
+   for it, the punch is blocked (as a hammer's: a guard put up for it turns nothing aside). */
+const patNow = (other, move) => !!other.pat && other.pat.met === null && other.animator.patting && presses(other.pat.pat, move.name);
+const patAbove = (first, g0, g1) => M.lerp(first.c0, first.c1, first.s)[1] >= M.lerp(g0, g1, first.s)[1] - PAT.above;
+function patted(bout, f, other, who, action, blow) {
+  const pat = other.pat.pat,
+    cover = levelOf(other.skills, 'cover');
+  begin(f, 'patted', { hand: blow.hand });
+  f.stun = pat.stun;
+  other.pat.met = bout.t;
+  other.counter = RULES.counter;
+  bout.stop = 0.1;
+  other.parried = { hand: 'R', at: bout.t, level: cover, down: true, pat };
+  const e = Object.assign({ type: 'parry', down: true }, blow, { who: 1 - who, on: who });
+  other.defence = { kind: 'parry', start: bout.t - other.coverAge, of: action.id, from: action.at, margin: null, late: other.coverAge <= cover.cover.arrive + 1 / 60 + 1e-9, counterAt: null, event: e, said: false };
+  return bout.events.push(e);
+}
 function strike(bout, f, other, who, dt) {
   // (a show-off's elbow lands as it comes on behind the fist, the arm out: anim/show.mjs)
   const action = incoming(f) || (f.action && f.action.variant === 'elbow' && !f.action.struck && f.action.chain.phase === 'hold' ? f.action : null);
@@ -919,10 +1005,12 @@ function strike(bout, f, other, who, dt) {
   };
   test('head', 'head', gr + RULES.head);
   // (the gloves are in the way once they have got most of the way up: how quickly is his grade's)
-  const guard = levelOf(other.skills, 'cover').cover;
+  const guard = levelOf(other.skills, 'cover').cover,
+    // (a rear glove coming down to press a punch down is the down parry's, below)
+    patting = patNow(other, move);
   if (other.cover && other.animator.covered >= RULES.guardUp) {
     // (a fist coming down as a hammer is the hammer's, below, not a glove held in the way)
-    for (const key of ['L', 'R']) if (!(key === 'R' && guard.hammer && other.animator.hammering)) test('guard', key, RULES.glove + gr);
+    for (const key of ['L', 'R']) if (!(key === 'R' && ((guard.hammer && other.animator.hammering) || patting))) test('guard', key, RULES.glove + gr);
     /* (a show-off's crossed arms: the forearms are in the way too, from the elbow to the glove, a capsule as thick as the
        forearm and the glove coming at it: anim/show.mjs) */
     if (guard.cross && other.before.LE && !other.animator.hammering)
@@ -934,6 +1022,7 @@ function strike(bout, f, other, who, dt) {
   }
   // (a show-off's guard put up fresh is a hammer of his rear fist: it turns a punch aside only if it comes down on the glove)
   if (guard.hammer && other.cover && other.animator.hammering) test('hammer', 'R', RULES.glove + gr);
+  if (patting) test('pat', 'R', RULES.glove + gr);
   if (!first) return;
 
   // ---- the blow: how fast the glove is closing on what it hit, and how much is behind it
@@ -965,6 +1054,11 @@ function strike(bout, f, other, who, dt) {
   const [side, front] = local(other, vec[0], vec[2]),
     felt = { J, dir: [side, vec[1], front] };
   const stop = Math.max(RULES.stop[0], Math.min(RULES.stop[1], J * RULES.stop[2]));
+  // (pressed down from above, by the rear glove coming down; met any other way by it, blocked)
+  if (first.what === 'pat') {
+    if (patAbove(first, g0, g1)) return patted(bout, f, other, who, action, blow);
+    first.what = 'guard';
+  }
 
   if (first.what === 'hammer') {
     /* hammered down: the arm that threw it is knocked down and falls away, his head left open in front, and the defender has
@@ -980,8 +1074,8 @@ function strike(bout, f, other, who, dt) {
     return bout.events.push(e);
   }
   if (first.what === 'guard') {
-    // (a show-off's guard turns nothing aside but by its hammer: met fresh anywhere else, it is a block)
-    if (!guard.hammer && other.coverAge <= other.k.parry * (0.7 + 0.3 * fatigue(other))) {
+    // (a show-off's guard turns nothing aside but by its hammer, nor one put up to press it down but by that: met fresh anywhere else, it is a block)
+    if (!guard.hammer && !other.pat && other.coverAge <= other.k.parry * (0.7 + 0.3 * fatigue(other))) {
       // turned aside: the puncher is thrown open, the defender has his opening
       begin(f, 'reel');
       f.stun = 0.6;

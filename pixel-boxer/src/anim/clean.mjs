@@ -277,3 +277,77 @@ export function waveBody(c, w, s) {
   c.hp += 4 * sl;
   return on;
 }
+
+// ---------------------------------------------------------------------------------------------------- the down parry
+/* ---- The down parry and counter (다운패링 카운터, §4.2): his guard put up fresh to press the punch down, not to turn it aside.
+   A technique of its own (game/techniques.mjs: parryDown, his head's to pick; the parry he puts up otherwise is as it was),
+   at 4명 and 5명 only (skill.mjs: pat). The rear glove goes out in front of his chin, above the line the glove comes in on,
+   waits there for it, and comes down on it as it comes; the bout judges the glove it comes down on as pressed down (game/
+   bout.mjs: only while it is coming down, and only from above), and the man who threw it is held there, the arm down where
+   it was met (moves.mjs: patted). The counter goes from the hand that pressed it, from where it is: it does not go back to
+   the guard first.
+     patOf(level)                a grade's down parry (skill.mjs: pat), or null
+     presses(pat, name)          whether it presses down a punch of this name (a jab; a legend's, a cross too)
+     -- the animator's side --
+     createPat()                 his down parry as his body keeps it
+     patDown(c, p, s)            the rear glove out, down on the glove coming in, held, and home (or on into his counter);
+                                 -> whether it is coming down now (animator.patting: what the bout judges it by)
+     pattedArm(c, action, drop)  the man pressed down: his arm held where it was met and let down, and given back */
+export const patOf = level => (level && level.pat) || null;
+export const presses = (pat, name) => !!pat && pat.presses.includes(name);
+
+export function createPat() {
+  return { id: null, pat: null, t: 0, t0: null, met: null, home: null, w: 0 };
+}
+
+/* s = { view (view.pat, the bout's: { id (the guard it is), pat (his grade's), met (seconds since it met the glove, or null),
+   fresh (his guard is still young enough to do it: as a parry's), eta (seconds until the glove coming in, if it is one it
+   presses down, would be on his rear glove, or null) } | null), hand (the hand of a punch he is throwing, or null), phase (its
+   chain's), dt }. The rear glove is put where the pat says, over what the guard has it doing (its channels taken there by
+   how far the pat is on), so that it is where it means to be however far up the guard is. */
+export function patDown(c, p, s) {
+  const v = s.view.pat;
+  if (v && v.id !== p.id) Object.assign(p, createPat(), { id: v.id, pat: v.pat });
+  const pat = p.pat;
+  if (!pat || (p.home !== null && p.t - p.home >= pat.back)) return false;
+  p.t += s.dt;
+  if (v && v.met !== null && p.met === null) p.met = p.t - v.met;
+  // (down as the glove comes: once it will be on it within `go`, his guard still fresh; once a guard)
+  if (p.t0 === null && p.home === null && v && v.fresh && v.eta !== null && v.eta <= pat.go) p.t0 = p.t;
+  const d = p.t0 === null ? 0 : smooth((p.t - p.t0) / pat.fall),
+    // (his counter, thrown from it: the pressing hand's punch, on its way)
+    going = s.hand === 'R' && (s.phase === 'coil' || s.phase === 'throw');
+  /* home: once it has kept the glove down long enough (or the punch it went on into is out), once it has come down on
+     nothing, or his guard has grown old with nothing come down on, or the bout has let go of it (a blow, the guard down) */
+  if (p.home === null) {
+    const missed = p.met === null && ((p.t0 !== null && p.t - p.t0 >= pat.fall + 0.05) || (p.t0 === null && !(v && v.fresh))),
+      kept = p.met !== null && (s.hand === 'R' ? !going : p.t - p.met >= pat.hold);
+    if (!v || missed || kept) p.home = p.t;
+  }
+  const w = smooth(p.t / pat.set) * (p.home === null ? 1 : 1 - smooth((p.t - p.home) / pat.back)),
+    T = { rx: pat.at[0], ry: pat.at[1] - pat.down * d, rz: pat.at[2] + pat.out * d, re: pat.elbow };
+  p.w = w;
+  for (const ch in T) c[ch] += (T[ch] - c[ch]) * w;
+  // (the lead glove back to his temple, out of the way of the glove coming in, while it is not punching)
+  if (s.hand !== 'L') (c.lx += pat.lead[0] * w), (c.ly += pat.lead[1] * w), (c.lz += pat.lead[2] * w);
+  return p.t0 !== null && p.met === null && p.home === null && p.t >= pat.set - 1 / 120 && p.t - p.t0 <= pat.fall + 1 / 60;
+}
+
+/* The man pressed down: the glove that was met held where it was met (action.held: the wrist, in his own space, as it was
+   drawn then: the animator keeps it) and pressed down `drop` metres in 0.06 s, his own carriage of it let go of (its channels
+   are where it is in the room), and given back over the end of the move. -> how much of it is held */
+export function pattedArm(c, action, drop) {
+  if (!action.held) return 0;
+  const side = action.hand === 'R' ? 'R' : 'L',
+    k = side === 'L' ? 'l' : 'r',
+    g = GUARD.hands[side],
+    down = smooth(action.t / 0.06),
+    w = 1 - smooth((action.t - 0.24) / 0.16),
+    T = [action.held[0] - g[0], action.held[1] - drop * down - g[1], action.held[2] - g[2]];
+  c[k + 'x'] += (T[0] - c[k + 'x']) * w;
+  c[k + 'y'] += (T[1] - c[k + 'y']) * w;
+  c[k + 'z'] += (T[2] - c[k + 'z']) * w;
+  c[k + 'c'] *= 1 - w;
+  c[k + 'g'] += (1 - c[k + 'g']) * w;
+  return w;
+}
