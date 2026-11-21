@@ -243,11 +243,14 @@ const SHOW_5A = { drop: [0.02, -0.31, 0.01], swing: [0.012, 0.8, 2.6, 4], lean: 
               metres: back, up, out to his right: up past the temple, where a hook thrown down at a crouched man comes)
      sag      metres the lead forearm gives each time a blow lands on it, and is back in 0.3 s; lively, head: the bounce and the
               head's own movement under it, times (a clean great one's head keeps his beat, smaller: his chin stays down)
+     counter  a punch to his body taken on his arms with it up (§4A.6): the counter it opens, the rear uppercut (right up
+              close the inside one; further off, the short overhand: the rear glove goes straight over from his chin, the
+              cross), `load` of its wind-up done already (the rear hand is at his chin, set); a pro's opens none
    A great dirty fighter's is the bigger and higher (the lead forearm the higher: less room under the rear glove), a legend's
    tighter and lower; a pro's is a great one's, the lead forearm a little lower, slower up, and nothing done with it but
    taking punches; the clean great ones hold the dirty ones' shapes and parry as they always do. */
-const CROSS_4A = { L: [-0.2, -0.39, -0.1, 0], R: [0.05, -0.065, -0.005, -0.3], lock: 1, pole: { L: [1, -0.7, 0.4], R: [0.2, -1, 0.2] }, lean: 6, chin: 10, turn: -6, close: [-8, -6], knee: 6, shoulder: 0.05, arrive: 0.045, parry: 'hammer', ear: 0.09, to: [-0.1, 0.13, -0.07], sag: 0.02, lively: 1, head: 1 };
-const CROSS_5A = Object.assign({}, CROSS_4A, { L: [-0.2, -0.425, -0.11, 0], R: [0.055, -0.05, -0.03, -0.3], lean: 7, chin: 12, close: [-6, -4], knee: 7, shoulder: 0.04, arrive: 0.035, ear: 0.05, sag: 0.01, head: 0.3 });
+const CROSS_4A = { L: [-0.2, -0.39, -0.1, 0], R: [0.05, -0.065, -0.005, -0.3], lock: 1, pole: { L: [1, -0.7, 0.4], R: [0.2, -1, 0.2] }, lean: 6, chin: 10, turn: -6, close: [-8, -6], knee: 6, shoulder: 0.05, arrive: 0.045, parry: 'hammer', ear: 0.09, to: [-0.1, 0.13, -0.07], sag: 0.02, lively: 1, head: 1, counter: { load: 0.3 } };
+const CROSS_5A = Object.assign({}, CROSS_4A, { L: [-0.2, -0.425, -0.11, 0], R: [0.055, -0.05, -0.03, -0.3], lean: 7, chin: 12, close: [-6, -4], knee: 7, shoulder: 0.04, arrive: 0.035, ear: 0.05, sag: 0.01, head: 0.3, counter: { load: 0.7 } });
 /* (the hammer: up to the cheekbone from the chin, and down onto the jab's line, a great dirty fighter's swung, a legend's the
    wrist let fall: { up, rise: metres up and seconds, down, fall: metres down and seconds, out: metres out in front as it
    comes down, across: to his left, back: seconds into the guard }) */
@@ -256,7 +259,7 @@ const HAMMER_5A = { up: 0.04, rise: 0.04, down: 0.1, fall: 0.06, out: 0.12, acro
 CROSS_4A.hammer = HAMMER_4A;
 CROSS_5A.hammer = HAMMER_5A;
 export const CROSS = {
-  3: Object.assign({}, CROSS_4A, { L: [CROSS_4A.L[0], CROSS_4A.L[1] - 0.02, CROSS_4A.L[2], 0], arrive: 0.06, parry: 'block', hammer: null, ear: 0.12, sag: 0.04, lively: 0.5 }),
+  3: Object.assign({}, CROSS_4A, { L: [CROSS_4A.L[0], CROSS_4A.L[1] - 0.02, CROSS_4A.L[2], 0], arrive: 0.06, parry: 'block', hammer: null, ear: 0.12, sag: 0.04, lively: 0.5, counter: null }),
   '4m': Object.assign({}, CROSS_4A, { arrive: 0.04, parry: 'meet', hammer: null, head: 0.4 }),
   '4a': CROSS_4A,
   // (a legend's guard is held 2 cm lower all the time, skill.mjs stance.guard.y: his lead forearm is held up the more, level)
@@ -271,12 +274,18 @@ export const CROSS = {
    great one's is the big roll, the lead forearm lifted `lift` metres off his belly as he goes (his left ribs open); a
    legend's turns less and quicker, as far as it has to. Only 4 and 5 have it, meaning it (game/techniques.mjs: rollCounter).
    (The plan's roll starts as the cross's shoulder fires; here that is about 25 ms before it lands, too late for anything, so
-   the head has it start four frames or so before, as a slip does.) */
-const ROLL_4 = { turn: [-10, -10], set: 0.05, lag: 0.03, go: 0.1, hold: 0.04, home: 0.16, lean: 6, side: -20, knee: [-8, 10], back: 0.02, shoulder: 0.05, chin: 6, lift: 0.06, tuck: [-0.05, -0.06] };
-const ROLL_5A = Object.assign({}, ROLL_4, { turn: [-6, -7], go: 0.07, hold: 0.06, side: -18, lift: 0, tuck: [-0.02, -0.06] });
+   the head has it start four frames or so before, as a slip does.)
+   counter: the roll & counter (§4A.7), a power press meant as rollCounter once a punch has been rolled off the shoulder: the
+   rear hook (right up close, the rear uppercut), the chest turned away behind the shoulder its wind-up, `load` of it done
+   already (a great one's 0.7, a legend's all of it), and `wait` seconds of the weight coming forward off the rear leg before it
+   goes (the rear foot onto its ball, the rear elbow up, the arm set): it lands 0.22 s (4) and 0.16 s (5) after the shoulder
+   met the punch. The roll is let go of over `unwind` seconds as it does, and a dirty one goes in after it `in` metres. */
+const ROLL_4 = { turn: [-10, -10], set: 0.05, lag: 0.03, go: 0.1, hold: 0.04, home: 0.16, lean: 6, side: -20, knee: [-8, 10], back: 0.02, shoulder: 0.05, chin: 6, lift: 0.06, tuck: [-0.05, -0.06], counter: { load: 0.7, wait: 0.135, unwind: 0.14, in: 0 } };
+const ROLL_4A = Object.assign({}, ROLL_4, { counter: Object.assign({}, ROLL_4.counter, { in: 0.04 }) });
+const ROLL_5A = Object.assign({}, ROLL_4, { turn: [-6, -7], go: 0.07, hold: 0.06, side: -18, lift: 0, tuck: [-0.02, -0.06], counter: { load: 1, wait: 0.1, unwind: 0.12, in: 0.06 } });
 // (a clean legend stands taller in it, his head over his feet: he bends the further away to get his head behind the shoulder)
-const ROLL_5M = Object.assign({}, ROLL_5A, { side: -22, tuck: [-0.05, -0.06] });
-export const ROLL = { '4m': ROLL_4, '4a': ROLL_4, '5m': ROLL_5M, '5a': ROLL_5A };
+const ROLL_5M = Object.assign({}, ROLL_5A, { side: -22, tuck: [-0.05, -0.06], counter: Object.assign({}, ROLL_5A.counter, { in: 0 }) });
+export const ROLL = { '4m': ROLL_4, '4a': ROLL_4A, '5m': ROLL_5M, '5a': ROLL_5A };
 
 /* the tricks a show-off's press may turn into (anim/show.mjs: choose, docs/moves-plan-4.md §5.2), each button's, the table's
    bottom row first: [trick, chance] */

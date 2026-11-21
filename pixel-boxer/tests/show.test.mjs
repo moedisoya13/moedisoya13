@@ -2,13 +2,16 @@
    Each technique is held to showing at the right grades, to being the same for the same seed, and to doing what the plan
    says it does, measured on the bout. The cross-arm guard and the shoulder roll (docs/moves-plan-5.md §4A) are techniques a
    man carries (game/techniques.mjs: crossArm from 3 up, by default the dirty great ones'; rollCounter from 4 up), held to
-   the plan's §4A.10. */
+   the plan's §4A.10, and the roll & counter to §4A.7. */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { step, crossOf } from '../src/game/bout.mjs';
 import { freshBout, drive, HOME } from '../src/footwork.mjs';
-import { RANGE, THROW } from '../src/defense.mjs';
-import { LEVELS, LEVEL, CROSS } from '../src/anim/skill.mjs';
+import { RANGE, THROW, CROSS_BODY, CROSS_BODY_ROWS, ROLLING } from '../src/defense.mjs';
+import { LEVELS, LEVEL, CROSS, ROLL } from '../src/anim/skill.mjs';
+import { aimAt } from '../src/bodyshots.mjs';
+import { where } from '../src/game/trunk.mjs';
+import { local } from '../src/game/bout.mjs';
 import { audit, measure } from '../src/audit.mjs';
 import { fk } from '../src/rig/skeleton.mjs';
 import { run } from '../src/measure.mjs';
@@ -253,6 +256,180 @@ test('shoulder roll: a shoulder standing still takes it unrolled; and the rolls 
 test('cross-arm guard and roll: the same script goes the same way', () => {
   const once = () => fight(into('5a', 'cross', { roll: rollWindow('5a')[0], tech: ['crossArm', 'rollCounter'] })).map(e => `${e.tick} ${e.type} ${e.J ?? ''} ${e.part ?? ''}`);
   assert.deepEqual(once(), once());
+});
+
+/* ---- the roll & counter (§4A.7, stage H2): out of a roll that has rolled the cross off his shoulder, a power press meant as
+   rollCounter (the head presses it on the step after: game/techniques.mjs) is the rear hook, the roll its wind-up (skill.mjs
+   ROLL counter: 4 0.7, 5 all of it, after the weight has come forward off the rear leg); it lands on his head as a counter
+   while the arm he rolled is still held out there, 0.18-0.26 s (4) and 0.13-0.20 s (5) after the shoulder met the cross (on
+   the bout's clock), with the cross-arm guard or without it, and 40 ms and more sooner than the same counter with nothing of
+   it wound up. Out of a roll that rolled nothing, the same press is the plain rear hook. */
+const COUNTER_TIME = { 4: [0.18, 0.26], 5: [0.13, 0.2] };
+function rollCounter(lv, k, tech, o = {}) {
+  const e = into(lv, 'cross', { roll: k, tech });
+  e.loop = 2;
+  // (the counter, once, on the step after the cross has met him: as the head presses it, or o.press in its place)
+  e.cue = bout => {
+    const f = bout.fighters[0],
+      own = (f.cues = f.cues || {});
+    if (own.pressed) return null;
+    if (own.seen) return (own.pressed = true), o.press || { power: true, tech: 'rollCounter' };
+    if (bout.events.some(x => x.who === 1 && x.name === 'cross' && ['block', 'hit', 'whiff', 'graze'].includes(x.type))) own.seen = true;
+    return null;
+  };
+  let met = null,
+    landed = null,
+    action = null,
+    far = null;
+  const ev = fight(e, bout => {
+    const [a, b] = bout.fighters;
+    for (const x of bout.events) {
+      if (x.who === 1 && x.name === 'cross' && !met && ['block', 'hit', 'whiff', 'graze'].includes(x.type)) met = Object.assign({ t: bout.t }, x);
+      if (x.type === 'punch' && x.who === 0 && !action) (action = a.action), (far = Math.hypot(b.x - a.x, b.z - a.z));
+      if (x.who === 0 && ['hit', 'block', 'whiff', 'graze'].includes(x.type) && !landed) landed = Object.assign({ t: bout.t }, x);
+    }
+  });
+  return { ev, met, landed, action, far, dt: met && landed ? landed.t - met.t : null };
+}
+test('roll & counter: the rear hook out of the roll lands as a counter, as soon after the roll as the plan has it, the cross-arm guard held or not', () => {
+  for (const lv of ROLLERS)
+    for (const tech of [['crossArm', 'rollCounter'], ['rollCounter']]) {
+      const k = WINDOWS.rollCounter[lv].at,
+        r = rollCounter(lv, k, tech),
+        [lo, hi] = COUNTER_TIME[lv[0]],
+        say = `${lv} ${tech}: ${JSON.stringify({ met: r.met && [r.met.part, r.met.roll], landed: r.landed && [r.landed.type, r.landed.name, r.landed.J, r.landed.counter], dt: r.dt })}`;
+      assert.ok(r.met && r.met.part === 'shoulder' && r.met.roll === true, say);
+      // (wound up by the roll, his grade's share of it)
+      assert.equal(r.action.name, 'hookR', say);
+      assert.ok(r.action.loaded && r.action.loaded.from === 'roll' && r.action.loaded.load === ROLL[lv].counter.load, say);
+      // (on his head, as a counter, in the plan's time)
+      assert.ok(r.landed && r.landed.type === 'hit' && r.landed.name === 'hookR' && r.landed.counter === true && !r.landed.zone, say);
+      assert.ok(r.dt >= lo - 1e-9 && r.dt <= hi + 1e-9, say);
+    }
+  // (the same counter, waiting as long for his weight, with nothing of it wound up by the roll: 40 ms and more later)
+  for (const lv of ROLLERS) {
+    const k = WINDOWS.rollCounter[lv].at,
+      wound = rollCounter(lv, k, ['crossArm', 'rollCounter']),
+      c = ROLL[lv].counter,
+      load = c.load;
+    let bare;
+    try {
+      c.load = 0;
+      bare = rollCounter(lv, k, ['crossArm', 'rollCounter']);
+    } finally {
+      c.load = load;
+    }
+    assert.ok(bare.landed && bare.landed.type === 'hit' && bare.dt - wound.dt >= 0.04 - 1e-9, `${lv}: wound up ${wound.dt}, not ${bare.dt}`);
+  }
+});
+test('roll & counter: no roll, no counter wound up; the press (the head names the rear hook) is the plain rear hook', () => {
+  for (const lv of ROLLERS) {
+    const w = WINDOWS.rollCounter[lv];
+    // (rolled too early: the cross is not rolled off the shoulder: it meets one that has stopped turning, or goes by)
+    const early = rollCounter(lv, w.from - 1, ['crossArm', 'rollCounter'], { press: { power: 'hookR', tech: 'rollCounter' } });
+    assert.ok(early.met && !(early.met.part === 'shoulder' && early.met.roll), `${lv}: ${JSON.stringify(early.met)}`);
+    assert.ok(early.action && early.action.name === 'hookR' && !early.action.loaded, `${lv}: ${early.action && JSON.stringify(early.action.loaded)}`);
+    // (and with no roll at all, his guard held: the same)
+    const held = rollCounter(lv, undefined, ['crossArm', 'rollCounter'], { press: { power: 'hookR', tech: 'rollCounter' } });
+    assert.ok(held.action && held.action.name === 'hookR' && !held.action.loaded && !(held.landed && held.landed.counter), `${lv}: ${JSON.stringify(held.landed)}`);
+  }
+  // (the catalogue's cards are the roll & counter: rolled, and the hook on his head as a counter)
+  for (const e of ROLLING) {
+    const ev = fight(e),
+      hook = ev.find(x => x.who === 0 && x.type === 'hit');
+    assert.ok(ev.some(x => x.type === 'block' && x.part === 'shoulder' && x.roll) && hook && hook.name === 'hookR' && hook.counter, e.id);
+  }
+});
+test('roll & counter: a counter that puts him down puts him down to his own right, the way the rear hook goes on', () => {
+  for (const lv of ['4a', '5a']) {
+    const e = Object.assign({}, ROLLING.find(x => x.level === lv), { loop: 3.5 }),
+      bout = freshBout(e);
+    let from = null,
+      fell = null;
+    for (let t = 0; t < Math.round(e.loop / DT); t++) {
+      const b = bout.fighters[1];
+      // (one blow from going down: the counter finishes him)
+      if (!from) b.hp = 2;
+      step(bout, drive(e, bout, t * DT, DT), DT);
+      bout.fighters[0].hp = 100;
+      if (!from && bout.events.some(x => x.type === 'hit' && x.who === 0 && x.down)) from = b.points.hips.slice();
+      if (from) fell = b.points.hips.slice();
+    }
+    assert.ok(from, `${lv}: not put down`);
+    // (where his hips went, in his own terms as he stood: [to his left, ahead])
+    const [left] = local(bout.fighters[1], fell[0] - from[0], fell[2] - from[2]);
+    assert.ok(left <= -0.3, `${lv}: his hips went ${(left * 100).toFixed(0)} cm to his left`);
+  }
+});
+
+/* ---- the cross-arm guard against the punches to the body (§4A.3, stage H2): the four from their own ranges into it held up,
+   the catalogue's cards (src/defense.mjs CROSS_BODY). The liver hook and the body uppercut are met by his arms (§4A.10's
+   fifth); so, in this engine, are the body jab and the body cross: the gap the plan finds at the pit of his stomach is shut
+   (a glove 21 cm across, the lead elbow out in front and the rear one under the chin; README, known limits). A punch met on
+   his arms opens the rear hand set at his chin (§4A.6): the rear uppercut, the short overhand from further off, wound up by
+   his grade (skill.mjs CROSS counter: 4 0.3, 5 0.7), and a pro's guard opens nothing. */
+test('cross-arm guard: the punches to the body are met by his arms, and open the rear hand at his chin from 4 up', () => {
+  for (const e of CROSS_BODY) {
+    let counter = null;
+    const ev = fight(e, bout => {
+        const a = bout.fighters[0].action;
+        if (a && MOVES[a.name].punch && !counter) counter = a;
+      }),
+      met = ev.find(x => x.who === 1 && x.name === e.punch[0] && ['hit', 'block', 'whiff', 'graze'].includes(x.type));
+    assert.ok(met && met.type === 'block' && ['elbow', 'forearm', 'glove'].includes(met.part), `${e.id}: ${JSON.stringify(met)}`);
+    const c = CROSS[e.level].counter;
+    if (!c) assert.equal(counter, null, e.id);
+    else {
+      assert.ok(counter && ['upper', 'upperIn', 'cross'].includes(counter.name) && counter.loaded && counter.loaded.from === 'cross' && counter.loaded.load === c.load, `${e.id}: ${counter && counter.name} ${counter && JSON.stringify(counter.loaded)}`);
+      assert.ok(ev.some(x => x.who === 0 && x.type === 'hit' && x.name === counter.name), `${e.id}: the counter did not land`);
+    }
+  }
+  // (and the body uppercut, from right up close, on his arms: not a card, the two men's arms are in each other before it starts)
+  for (const lv of GUARDS) {
+    const e = what(lv, 'upperBody', { gap: 0.64 });
+    assert.ok(e.type === 'block' && ['elbow', 'forearm', 'glove'].includes(e.part), `upperBody@${lv}: ${JSON.stringify(e)}`);
+  }
+});
+/* §4A.10's fourth, its weak places: (a) the rear hook, at a cross-arm guard held up and not rolling, lands on his head (there
+   is no glove on that side: only the shoulder, and it has to be rolling); (c) a great dirty fighter rolling lifts his lead
+   forearm, and a rear hook aimed low at his left side lands on his trunk there (in this engine on the side of his belly, not
+   the ribs under it: README), where the same hook at him standing, or at a legend rolling (his forearm stays down), is met by
+   the elbow. */
+const aimed = (lv, name, o = {}) => {
+  const e = into(lv, 'cross', { tech: ['crossArm', 'rollCounter'], roll: o.roll });
+  return Object.assign(e, {
+    id: `${name}@${lv}`,
+    loop: 1.8,
+    him: () => [HOME[0] + (o.gap || 0.85), HOME[1]],
+    against: [[0.8, 'power', name]],
+    press: o.roll !== undefined ? [[0.8 + o.roll * DT, 'tech', 'rollCounter']] : [],
+    cover: o.roll !== undefined ? t => (t > 0.2 && t < 0.8 + o.roll * DT - 0.15) || (t >= 0.8 + o.roll * DT - 1e-9 && t < 1.3) : t => t > 0.2 && t < 1.4,
+    keep: o.aim ? aimAt(o.aim, name) : undefined
+  });
+};
+const what = (lv, name, o) => {
+  let side = null;
+  const ev = fight(aimed(lv, name, o), bout => {
+      const x = bout.events.find(x => x.who === 1 && x.name === name && x.type === 'hit');
+      if (x && x.part === 'body') side = where(bout.fighters[0].points, x.at).a;
+    }),
+    e = ev.find(x => x.who === 1 && x.name === name && ['hit', 'block', 'whiff', 'graze'].includes(x.type));
+  return Object.assign({ side }, e);
+};
+test('cross-arm guard: its weak places, the rear hook to his head, and a rear hook to his left side while a great one rolls', () => {
+  for (const lv of ['4m', '4a', '5m', '5a']) {
+    const e = what(lv, 'hookR');
+    assert.ok(e.type === 'hit' && e.part === 'glove' && e.J > 60, `${lv}: ${JSON.stringify(e)}`);
+  }
+  const LEFT = [1.2, -60],
+    standing = what('4a', 'hookR', { aim: LEFT });
+  assert.ok(standing.type === 'block' && standing.part === 'elbow', `4a standing: ${JSON.stringify(standing)}`);
+  const rolling = [-4, -2, 0].map(k => what('4a', 'hookR', { aim: LEFT, roll: k }));
+  for (const e of rolling) assert.ok(e.type === 'hit' && e.part === 'body' && e.side <= -60 && e.J > 50, `4a rolling: ${JSON.stringify(e)}`);
+  for (const k of [-4, -2, 0]) {
+    const e = what('5a', 'hookR', { aim: LEFT, roll: k });
+    assert.ok(e.type === 'block' && e.part === 'elbow', `5a rolling ${k}: ${JSON.stringify(e)}`);
+  }
 });
 
 /* The hammering parry: the guard put up fresh is the rear fist brought down on the jab coming in, and it turns it aside only

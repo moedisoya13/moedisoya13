@@ -214,6 +214,13 @@ function loadOf(f, bout, move, more) {
     const since = din === f.action ? din.t - DUCK_IN.landed : DUCK_IN.landed + DUCK_IN.wound;
     if (since >= -1e-9 && since <= DUCK_IN.wound + 1e-9 && din.level.entry.load > 0) return { load: din.level.entry.load, from: din.id };
   }
+  /* (out of a shoulder roll that has rolled a punch off his shoulder, the roll & counter: the chest turned away behind the
+     shoulder is the rear hand's wind-up, his grade's share of it done, waiting for his weight to come forward first: skill.mjs
+     ROLL counter, docs/moves-plan-5.md §4A.7) */
+  if (more && more.rollOut) {
+    const c = more.rollOut.roll.counter;
+    return c ? { load: c.load, from: 'roll', rolled: true, wait: c.wait } : null;
+  }
   const e = f.action && isEvasion(f.action.name) ? f.action : f.lastEvade && f.lastEvade.endedAt !== null && bout.t - f.lastEvade.endedAt <= GRACE ? f.lastEvade.action : null;
   if (e) {
     const ev = e.level.evade;
@@ -221,6 +228,8 @@ function loadOf(f, bout, move, more) {
     if (more && more.pulled && e.name === 'pull') return { load: ev.load, from: e.id, pulled: true, grade: e.level.id, wait: pullWait(e, move.name) };
     return LOADED(e.name, e.side) === move.hand ? { load: ev.load, from: e.id } : null;
   }
+  // (a punch to his body taken on the arms of his cross-arm guard: the rear hand at his chin is set already, §4A.6)
+  if (more && more.crossed) return { load: more.crossed.load, from: 'cross' };
   // (the Tyson shift: the crouch is the wind-up of the uppercut out of it, anim/shift.mjs)
   if (more && more.shifted && move.name === 'upperIn' && f.shift) return { load: f.shift.sv.load, from: 'shift' };
   // (block and fire: the crunch of the elbow block is the wind-up of the punch the blocking arm fires, anim/clean.mjs)
@@ -283,10 +292,10 @@ function begin(f, name, more, bout) {
   // (the counter out of a down parry waits for the pressing hand to have kept the glove down: anim/clean.mjs)
   if (chain && loaded && loaded.wait > 0) chain.wait = loaded.wait;
   // (out of a sway back he comes back in first, a punch all wound up waiting wound up: anim/evade.mjs PULLED)
-  if (chain && loaded && (loaded.pulled || loaded.fired || loaded.shell) && chain.wait > 0 && chain.phase === 'throw') (chain.phase = 'coil'), (chain.coilTime = Math.max(chain.coilTime, 1e-3));
+  if (chain && loaded && (loaded.pulled || loaded.fired || loaded.shell || loaded.rolled) && chain.wait > 0 && chain.phase === 'throw') (chain.phase = 'coil'), (chain.coilTime = Math.max(chain.coilTime, 1e-3));
   if (before && isEvasion(before.name) && f.lastEvade && f.lastEvade.action === before) f.lastEvade.endedAt = bout ? bout.t : 0;
   if (before && before.name === 'duckIn') f.lastIn = { action: before, endedAt: bout ? bout.t : 0 };
-  f.action = Object.assign({ name, t: 0, id: name + ++f.serial, struck: false, chain, level, at: bout ? bout.t : 0, loaded: loaded && (loaded.load > 0 || loaded.pulled || loaded.fired) ? loaded : null }, more);
+  f.action = Object.assign({ name, t: 0, id: name + ++f.serial, struck: false, chain, level, at: bout ? bout.t : 0, loaded: loaded && (loaded.load > 0 || loaded.pulled || loaded.fired || loaded.rolled) ? loaded : null }, more);
   if (isEvasion(name)) (f.lastEvade = { action: f.action, name, start: bout ? bout.t : 0, endedAt: null }), (f.action.head0 = f.points ? f.points.head.slice() : null);
   f.cover = false;
   f.roll = null;
@@ -577,6 +586,21 @@ export const crossOf = f => (has(f, 'crossArm') ? CROSS[gradeOf(f.skills, 'cross
    holds, a roll taking the cross-arm shape on for its moment if he holds none. f.roll: { t, roll, rolled (a punch rolled off
    it: { at, J }) } */
 const rollOf = f => ROLL[gradeOf(f.skills, 'rollCounter').id] || null;
+/* (the roll he is in, if it has rolled a punch off his shoulder and the arm that threw it is still held out there: what the
+   roll & counter goes out of; ROLL_IN: centre to centre, closer than this it is the rear uppercut, §4A.7) */
+const rolledOf = (f, bout) => (f.roll && f.roll.rolled && bout.t - f.roll.rolled.at <= SHOULDER.tied + 1e-9 ? f.roll : null);
+const ROLL_IN = 0.74;
+/* A punch to his body taken on the arms (or the lead glove) of his cross-arm guard, held up, is an opening for the rear hand
+   set at his chin (§4A.6: f.crossed { at, part }, kept for anyone, the guard's grade opening one: skill.mjs CROSS counter): a
+   power press meant as crossArm within `within` s, not hit in between, is the rear uppercut, the inside one right up close,
+   and from `upper` metres or further the short overhand (the cross), its wind-up so far done. */
+const CROSSED = { within: 0.3, upper: 0.9 };
+function crossedOf(bout, f) {
+  const c = crossOf(f),
+    b = f.crossed;
+  if (!c || !c.counter || !b || bout.t - b.at > CROSSED.within + 1e-9 || f.sinceHit < bout.t - b.at - 1e-9) return null;
+  return { load: c.counter.load, at: b.at, part: b.part };
+}
 function rollFor(bout, f, input, dt) {
   if (f.roll) {
     f.roll.t += dt;
@@ -731,6 +755,11 @@ function decide(bout, f, input, dt, who) {
         /* (out of a sway back, the pull counter, game/techniques.mjs, at every grade: the straight, or the liver hook asked for
            the body, or the rear hook it names; anim/evade.mjs PULLED) */
         const pulled = what === 'power' && !!out && out.name === 'pull' && !!sign && sign.tech === 'pullCounter';
+        /* (out of a shoulder roll that has rolled a punch off his shoulder, the roll & counter, game/techniques.mjs: the rear
+           hook, the rear uppercut right up close, or the one it names; a counter, the arm he rolled still held out there) */
+        const rollOut = what === 'power' && !pulled && !!sign && sign.tech === 'rollCounter' ? rolledOf(f, bout) : null;
+        // (and off a punch to his body taken on the arms of his cross-arm guard, its counter: §4A.6, game/techniques.mjs)
+        const crossed = what === 'power' && !pulled && !rollOut && !!sign && sign.tech === 'crossArm' ? crossedOf(bout, f) : null;
         // (off an elbow block, block and fire: the arm that blocked it, game/techniques.mjs, anim/clean.mjs)
         /* (the Tyson shift, anim/shift.mjs: its first punch, the rear hand's straight; and the two after it, pressed by the bout
            by name) */
@@ -739,6 +768,12 @@ function decide(bout, f, input, dt, who) {
           // (out of the peek-a-boo shell: the lead hook, the inside one right up close; the body uppercut after it by name)
           shelled = what === 'power' && !pulled && !fired && !shifted ? (typeof dir === 'string' ? (dir === 'upperBody' && sign && sign.tech === 'shell' ? { follow: true } : null) : shellCounter(bout, f, sign)) : null;
         if (pulled) (name = sign.body ? 'hookBody' : 'cross'), (f.link = 0);
+        else if (rollOut) (name = Math.hypot(other.x - f.x, other.z - f.z) < ROLL_IN ? 'upperIn' : 'hookR'), (f.link = 0);
+        else if (crossed) {
+          const far = Math.hypot(other.x - f.x, other.z - f.z);
+          name = far < ROLL_IN ? 'upperIn' : far < CROSSED.upper ? 'upper' : 'cross';
+          f.link = Math.max(0, chain.indexOf(name));
+        }
         else if (shifted && !f.shift) (name = 'cross'), (f.link = 0);
         else if (fired) {
           name = fireName(fired.hand, Math.hypot(other.x - f.x, other.z - f.z) < fired.fire.inside);
@@ -780,7 +815,8 @@ function decide(bout, f, input, dt, who) {
         const fromWave = !!f.wave && what === 'jab' && !!f.action && f.action.name === 'wave';
         if (f.wave && !fromWave) f.wave = null;
         if (shifted && !f.shift) f.shift = shiftBegin(bout, f, other, shifted);
-        begin(f, name, { counter: f.counter > 0 || !!fired, variant: trick, wave: fromWave || undefined, pulled: pulled || undefined, fired: fired || undefined, shelled: shelled || undefined, shifted: shifted ? true : undefined }, bout);
+        begin(f, name, { counter: f.counter > 0 || !!fired || !!rollOut, variant: trick, wave: fromWave || undefined, pulled: pulled || undefined, fired: fired || undefined, shelled: shelled || undefined, shifted: shifted ? true : undefined, rollOut: rollOut ? { t: rollOut.t, roll: rollOut.roll, at: bout.t } : undefined, crossed: crossed || undefined }, bout);
+        if (crossed) f.crossed = null;
         if (fired) (f.elbowed = null), (f.fireFollow = null);
         if (shelled && !shelled.follow) (f.shellOpen = null), (f.shellFollow = null), (f.action.shellOut = shelled.sh);
         // a loaded punch answering a defence: what makes the defence brilliant, if it was close enough
@@ -1058,7 +1094,8 @@ function viewOf(bout, i) {
       guard: levelOf(f.skills, 'cover'),
       cross: crossOf(f),
       // (a shoulder roll he is in, and the cross-arm shape it takes on if he holds none: anim/show.mjs)
-      roll: f.roll ? { t: f.roll.t, roll: f.roll.roll, shape: crossOf(f) ? null : CROSS[gradeOf(f.skills, 'rollCounter').id] || null } : null,
+      // (and, out of it into the roll & counter, the roll let go of as the counter goes: out, seconds since it started)
+      roll: f.roll || (f.action && f.action.rollOut) ? Object.assign({ shape: crossOf(f) ? null : CROSS[gradeOf(f.skills, 'rollCounter').id] || null }, f.roll ? { t: f.roll.t, roll: f.roll.roll } : { t: f.action.rollOut.t, roll: f.action.rollOut.roll, out: f.action.t }) : null,
       hook: null,
       stun: f.stun > 0,
       shoved: Math.hypot(f.kx, f.kz),
@@ -1469,8 +1506,9 @@ function strike(bout, f, other, who, dt) {
   // (a show-off's guard put up fresh is a hammer of his rear fist: it turns a punch aside only if it comes down on the glove)
   if (guard.hammer && other.cover && other.animator.hammering) test('hammer', 'R', RULES.glove + gr);
   if (patting) test('pat', 'R', RULES.glove + gr);
-  // (and his lead shoulder, in a cross-arm guard or a roll: rolled off it, or taken on it, shouldered)
-  if (shoulderUp(other)) test('shoulder', 'LS', SHOULDER.r + gr);
+  /* (and his lead shoulder, in a cross-arm guard or a roll: rolled off it, or taken on it, shouldered; it keeps his head, and a
+     punch to his body is his arms' to meet, docs/moves-plan-5.md §4A.3) */
+  if (shoulderUp(other) && !low) test('shoulder', 'LS', SHOULDER.r + gr);
   // (a punch to his body: his elbows and forearms are in the way, where they are, his guard up or not)
   if (low && other.before.LE)
     for (const key of ['L', 'R']) {
@@ -1547,6 +1585,8 @@ function strike(bout, f, other, who, dt) {
     bout.stop = stop * 0.4;
     // (a hook kept off his body so: what block and fire goes off, above)
     if (move.kind === 'hook') other.elbowed = { at: bout.t, zone: low };
+    // (and on the arms of his cross-arm guard, held up: its counter, above)
+    if (guard.cross && guard.cross.counter && other.cover) other.crossed = { at: bout.t, part: first.what };
     return bout.events.push(Object.assign({ type: 'block' }, blow, { part: first.what, zone: low }));
   }
 
@@ -1591,6 +1631,8 @@ function strike(bout, f, other, who, dt) {
     bout.stop = stop * 0.4;
     // (into the gloves of a man crouched in his shell: his opening)
     shellOpens(bout, other);
+    // (a punch to his body on the lead glove of his cross-arm guard, across his belly: its counter, above)
+    if (low && guard.cross && guard.cross.counter) other.crossed = { at: bout.t, part: 'glove' };
     // (and what of his guard it met: a glove, or a show-off's crossed forearm)
     return bout.events.push(Object.assign({ type: 'block' }, blow, { part: first.c0 === other.before[first.key] ? 'glove' : 'forearm' }));
   }
@@ -1642,6 +1684,10 @@ function strike(bout, f, other, who, dt) {
        docs/moves-plan-5.md §1; never from a blow to the body) */
     out = down && !spot && (damage - had >= RULES.out || caught) ? { straight: 'outStiff', hook: 'outTwist', upper: 'outLift' }[move.kind] || 'out' : null;
   bout.events.push(Object.assign({ type: 'hit', damage: +damage.toFixed(1), counter, down }, blow, spot ? { breath: +(winded / other.k.staminaMax).toFixed(3), liver: liver || undefined } : null, out ? { out } : null));
+  /* (and the roll & counter's rear hook comes away off his jaw as it lands, the body that swung it stopped with it, unless it
+     puts him down: run on round, it goes through the lead glove he holds up beside his jaw, which nothing here stops; as the
+     pull counter's, above) */
+  if (!down && move.name === 'hookR' && action.loaded && action.loaded.rolled) action.chain.v.fill(0), (action.chain.phase = 'recover'), (action.chain.since = 0);
   if (down && spot) return doubled(bout, other, who);
   if (down) {
     /* How he goes: a blow that only just finished him puts him down on a knee; one with plenty to spare lays him out, a

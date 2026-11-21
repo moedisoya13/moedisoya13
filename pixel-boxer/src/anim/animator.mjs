@@ -11,7 +11,8 @@
                stance: his grade of footwork (skill.mjs) | null, guard: his grade of covering up | null,
                cross: the cross-arm guard he holds when his guard is up (skill.mjs CROSS[grade], show.mjs) | null,
                roll: a shoulder roll he is in, { t (seconds into it), roll (skill.mjs ROLL[grade]), shape (the cross-arm
-               guard it takes on, if he holds none) } | null (show.mjs),
+               guard it takes on, if he holds none), out (seconds since the roll & counter went out of it) } | null
+               (show.mjs),
                hook: seconds since a lead hook coming at him started | null,
                threat: { eta (seconds until the punch coming at him gets there), dir } | null, stun: bool (stopped by a blow),
                low: { zone, t, id } | null (a punch coming at his body: where, and seconds since he could see it: body.mjs),
@@ -1020,7 +1021,7 @@ export function createAnimator(seed) {
       let crossK = 0;
       const shape = xc || (rolling && rolling.shape) || null;
       {
-        const r = rolling ? shoulderRoll(c, rolling.roll, rolling.t) : null;
+        const r = rolling ? shoulderRoll(c, rolling.roll, rolling.t, rolling.out) : null;
         crossK = shape ? Math.max(xc ? cover : 0, r && !xc ? r.w : 0) : 0;
         if (crossK > 0.002) shrug += crossGuard(c, shape, crossK);
         if (r) shrug += r.shrug;

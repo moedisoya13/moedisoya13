@@ -94,11 +94,16 @@ export function ear(c, cross, k) {
    forearm lifted `lift` off his belly; and from `lag` seconds in, over `go`, the chest is turned further away from him, to his
    right (the hips `turn[0]` degrees and the chest `turn[1]` more), turning hardest as the punch gets there. Held `hold`, and
    unwound over `home`. -> { shrug: metres more the lead shoulder is up, w: how much of the roll there is (0..1), done }. The
-   bout judges it: a punch that meets the lead shoulder while the chest is turning away is rolled off it (game/bout.mjs). */
-export function shoulderRoll(c, roll, t) {
-  const home = smooth((t - roll.lag - roll.go - roll.hold) / roll.home),
-    turn = smooth((t - roll.lag) / roll.go) * (1 - home),
-    w = smooth(t / roll.set) * (1 - home);
+   bout judges it: a punch that meets the lead shoulder while the chest is turning away is rolled off it (game/bout.mjs).
+   out: seconds since the roll & counter went out of it (§4A.7; the roll held where it was, t): the roll let go of over
+   roll.counter.unwind as the rear hand's wind-up (the punch's own, loaded: moves.mjs hookR) takes over from it, the weight
+   coming forward off the rear leg, and a dirty one going in after it (roll.counter.in, metres, kept while he throws it). */
+export function shoulderRoll(c, roll, t, out) {
+  const going = out === undefined || out === null ? 1 : 1 - smooth(out / roll.counter.unwind),
+    home = smooth((t - roll.lag - roll.go - roll.hold) / roll.home),
+    turn = smooth((t - roll.lag) / roll.go) * (1 - home) * going,
+    w = smooth(t / roll.set) * (1 - home) * going;
+  if (going < 1 && roll.counter.in) c.hz += roll.counter.in * smooth(out / (roll.counter.wait + 0.1));
   c.yaw += roll.turn[0] * turn;
   c.twist += roll.turn[1] * turn;
   c.lean -= roll.lean * w;

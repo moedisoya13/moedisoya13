@@ -277,18 +277,25 @@ define('shell', {
 });
 
 define('crossArm', {
-  name: '크로스암 가드', section: '§4A.8', open: ['3', '4m', '4a', '5m', '5a'], as: 'cover', standard: lv => lv.grade >= 4 && lv.side === 'a', ready: true
+  name: '크로스암 가드', section: '§4A.8', open: ['3', '4m', '4a', '5m', '5a'], as: 'cover', standard: lv => lv.grade >= 4 && lv.side === 'a', ready: true,
   /* no dice: carried, his guard is this shape whenever it is up (game/bout.mjs crossOf: has(f, 'crossArm') and his grade's
      skill.mjs CROSS; the shape, anim/show.mjs crossGuard) */
+  /* (stage H2, §4A.6) a punch to his body taken on its arms (or its lead glove, across his belly) with it up, within 0.3 s and
+     not hit since: the bout marks it (f.crossed) only where his grade's guard opens a counter (skill.mjs CROSS counter: from 4) */
+  opening: s => (s.me.crossed && s.t - s.me.crossed.at <= 0.3 ? 'crossArm:' + s.me.crossed.at : null),
+  // the rear hand set at his chin: the rear uppercut (the inside one right up close), or from further off the short overhand
+  counter: () => ({ power: true, tech: 'crossArm' })
 });
 
 // (the rear hook out of a roll, or right up close, centre to centre, the rear uppercut: §4A.7)
 const ROLLED = { inside: 0.74 };
 define('rollCounter', {
   name: '숄더 롤 & 카운터', section: '§4A.7', open: ['4m', '4a', '5m', '5a'], ready: true,
-  /* (the roll is built, stage H1: the guard put up meant as rollCounter rolls, game/bout.mjs rollFor, anim/show.mjs
-     shoulderRoll; the counter is the rear hook, stage C2 (moves.mjs hookR, pressed by name), the rear uppercut right up close
-     (§4A.7: inside 0.74 m); how much of it the roll has wound up already is stage H2's) */
+  /* (the roll, stage H1: the guard put up meant as rollCounter rolls, game/bout.mjs rollFor, anim/show.mjs shoulderRoll; the
+     counter, stage H2: a power press meant as rollCounter while the arm he rolled off his shoulder is held out there is the
+     rear hook (moves.mjs hookR; the rear uppercut right up close, §4A.7: inside 0.74 m), wound up by the roll as far as his
+     grade's (skill.mjs ROLL counter: 4 0.7, 5 all of it), waiting for his weight to come forward first, and a counter; out of
+     a roll that rolled nothing, the press is the plain punch it names) */
   /* a straight at his head within reach: the guard up as a parry's, and rolled (60% of his parries). Rolled as its legs drive:
      its trunk fires too late for a roll to be turning as it lands (it makes the punch miss instead), stage H1's measure */
   answer: { of: 'parry', share: 0.6, when: s => s.inReach && s.head && s.punch === 'straight', control: s => (s.coming.chain.on[0] ? { cover: true, tech: 'rollCounter' } : {}) },

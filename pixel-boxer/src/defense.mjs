@@ -9,7 +9,7 @@
    same drills: the boxer is a pro, whose head moves of its own accord, so the windows are his). */
 import { HOME } from './footwork.mjs';
 import { getUp } from './game/bout.mjs';
-import { LEVELS } from './anim/skill.mjs';
+import { LEVELS, CROSS } from './anim/skill.mjs';
 import { MOVES } from './anim/moves.mjs';
 import { WINDOWS } from './windows.data.mjs';
 
@@ -257,10 +257,15 @@ export const PARRY_DOWN = ['4m', '5m'].map(lv => {
    rows: techniques a man carries (game/techniques.mjs crossArm from 3 up, rollCounter from 4 up), and these cards give him
    them, so a pro and a clean great one hold it too. The guard: held up from early on, the same pro's cross into it (the block
    card's), or his cross and his lead hook after it (the rear glove going up over the ear as the hook starts); every one of
-   them blocked (tests/show.test.mjs). The roll: his guard put up meant as the roll (tech: 'rollCounter') on the frame in the
-   middle of his window, measured in these same drills (WINDOWS.rollCounter, node tools/windows.mjs --write), and kept up as
-   long as the arm it rolls off is held out; the cross is rolled off the lead shoulder. Its counter (the rear hook, §4A.7) is
-   the next stage's: the cards end at the roll. */
+   them blocked (tests/show.test.mjs). The guard against the punches to the body (§4A.3, stage H2): the same pro throws the body jab,
+   the body cross and the liver hook, each from its own range, by name, into it held up (not the body uppercut: from right up
+   close the two men's arms are in each other before it starts; tests/show.test.mjs measures it), and a grade whose guard
+   opens a counter off it (skill.mjs CROSS counter: from 4) takes it once the punch has been met, as his head would (a power press meant as crossArm: the rear
+   uppercut, or the short overhand from further off, §4A.6). The roll & counter (§4A.7): his guard put up meant as the roll
+   (tech: 'rollCounter') on the frame in the middle of his window, measured in these same drills (WINDOWS.rollCounter, node
+   tools/windows.mjs --write), and kept up as long as the arm it rolls off is held out; the cross is rolled off the lead
+   shoulder, and on the step after it, as his head would, the counter (a power press meant as rollCounter: the rear hook,
+   wound up by the roll, a counter: tests/show.test.mjs). */
 export const CROSS_LEVELS = ['3', '4m', '4a', '5m', '5a'];
 export const ROLL_LEVELS = ['4m', '4a', '5m', '5a'];
 const CROSS_ROWS = [
@@ -276,6 +281,34 @@ export const CROSS_ARM = CROSS_ROWS.flatMap(row =>
     })
   )
 );
+// (a press the head would make, once, on the step after an event of the other man's punch the boxer has met: `met(e)`)
+const after = (met, press) => bout => {
+  const f = bout.fighters[0],
+    own = (f.cues = f.cues || {});
+  if (own.pressed) return null;
+  if (own.seen) return (own.pressed = true), press;
+  if (bout.events.some(e => e.who === 1 && met(e))) own.seen = true;
+  return null;
+};
+export const CROSS_BODY_ROWS = [
+  { id: 'crossBody-jab', name: '크로스암 · 바디 잽', en: 'The cross-arm guard against the body jab', punch: 'jabBody', gap: 1.0 },
+  { id: 'crossBody-cross', name: '크로스암 · 바디 스트레이트', en: 'The cross-arm guard against the body cross', punch: 'crossBody', gap: 0.98 },
+  { id: 'crossBody-liver', name: '크로스암 · 바디 블록 (리버 훅)', en: 'The cross-arm guard against the liver hook', punch: 'hookBody', gap: 0.85 }
+];
+export const CROSS_BODY = CROSS_BODY_ROWS.flatMap(row =>
+  CROSS_LEVELS.map(lv => ({
+    id: `${row.id}@${lv}`, item: row.id, level: lv, name: row.name, en: row.en, group: '크로스암', kind: 'block', loop: 2, outcome: 'block', view: { yaw: 0.6, pitch: 0.22 },
+    me: () => HOME,
+    him: () => [HOME[0] + row.gap, HOME[1]],
+    against: [[0.8, 'power', row.punch]],
+    punch: [row.punch, 0.8],
+    cover: t => t > 0.1 && t < 1.4,
+    // (his counter off it, a grade whose guard opens one: the step after the punch has been met on his arms)
+    cue: CROSS[lv] && CROSS[lv].counter ? after(e => e.type === 'block' && e.name === row.punch, { power: true, tech: 'crossArm' }) : undefined,
+    // (the other man only takes it: no liver hook puts anyone down here)
+    setup: b => ((b.fighters[0].skills = { all: lv }), (b.fighters[0].techniques = ['crossArm']), (b.fighters[0].stands = true), (b.fighters[1].stands = true))
+  }))
+);
 export const ROLLING = ROLL_LEVELS.map(lv => {
   const item = { punch: ['cross', 0.8] },
     w = WINDOWS.rollCounter && WINDOWS.rollCounter[lv],
@@ -283,11 +316,13 @@ export const ROLLING = ROLL_LEVELS.map(lv => {
     at = item.punch[1] + k * F;
   return placed({
     id: `rollCounter@${lv}`, item: 'rollCounter', level: lv, card: 'rollCounter', answer: k, window: w ? [w.from, w.to] : null,
-    name: '숄더 롤', en: 'The shoulder roll', group: '크로스암', kind: 'roll',
+    name: '숄더 롤 & 카운터', en: 'The shoulder roll and counter', group: '크로스암', kind: 'roll',
     loop: 2, punch: item.punch, outcome: 'block', view: { yaw: 0.25, pitch: 0.26 },
     press: [[at, 'tech', 'rollCounter']],
     // (his guard kept up as long as the arm he has rolled off his shoulder is held out there)
     cover: t => t >= at - 1e-9 && t < item.punch[1] + 0.5,
+    // (and the counter, on the step after the cross is rolled off his shoulder)
+    cue: after(e => e.type === 'block' && e.part === 'shoulder' && e.roll, { power: true, tech: 'rollCounter' }),
     setup: b => ((b.fighters[0].skills = { all: lv }), (b.fighters[0].techniques = ['crossArm', 'rollCounter']))
   });
 });

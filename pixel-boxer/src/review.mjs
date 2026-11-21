@@ -15,14 +15,14 @@ import { boneMatrices } from './anim/pose.mjs';
 import { guardPose } from './anim/animator.mjs';
 import { step } from './game/bout.mjs';
 import { ENTRIES, freshBout, drive } from './footwork.mjs';
-import { DEFENSE, PARRY_DOWN, CROSS_ARM, ROLLING, PULL_COUNTER, BLOCK_FIRE, SHELL } from './defense.mjs';
+import { DEFENSE, PARRY_DOWN, CROSS_ARM, CROSS_BODY, ROLLING, PULL_COUNTER, BLOCK_FIRE, SHELL } from './defense.mjs';
 import { LADDER, STANCES, DIRTY, FOOTWORK, ENTRY, SHOWOFF, TAUNTING, BODY_LADDER, REAR_LADDER, WAVING, SHIFTING } from './ladder.mjs';
 import { BODYSHOTS, LIVER_BLOCK } from './bodyshots.mjs';
 
 const DT = 1 / 60,
   q = new URLSearchParams(location.search),
   num = (name, d) => (q.has(name) ? Number(q.get(name)) : d),
-  all = [...ENTRIES, ...DEFENSE, ...STANCES, ...LADDER, ...DIRTY, ...FOOTWORK, ...ENTRY, ...SHOWOFF, ...TAUNTING, ...BODYSHOTS, ...LIVER_BLOCK, ...BODY_LADDER, ...REAR_LADDER, ...PARRY_DOWN, ...WAVING, ...CROSS_ARM, ...ROLLING, ...PULL_COUNTER, ...BLOCK_FIRE, ...SHELL, ...SHIFTING],
+  all = [...ENTRIES, ...DEFENSE, ...STANCES, ...LADDER, ...DIRTY, ...FOOTWORK, ...ENTRY, ...SHOWOFF, ...TAUNTING, ...BODYSHOTS, ...LIVER_BLOCK, ...BODY_LADDER, ...REAR_LADDER, ...PARRY_DOWN, ...WAVING, ...CROSS_ARM, ...CROSS_BODY, ...ROLLING, ...PULL_COUNTER, ...BLOCK_FIRE, ...SHELL, ...SHIFTING],
   entry = all.find(e => e.id === q.get('entry')) || all[0],
   n = num('n', 12),
   from = num('from', 0),
