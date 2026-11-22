@@ -98,7 +98,7 @@ export const FLOURISH = {
     len: 1, clean: true,
     at(c, p, t, k) {
       const w = (t < 0.08 ? smooth(t / 0.08) : 1 - smooth((t - 0.08) / 0.06)) * k;
-      c.twist -= 7 * w;
+      c.waist -= 7 * w;
       c.lz += 0.09 * w;
       c.ly += 0.01 * w;
       c.hy -= 0.015 * w;
@@ -147,7 +147,7 @@ export const FLOURISH = {
       const w = (p < 1.2 ? smooth(p / 1.2) : 1 - smooth((p - 1.2) / 0.8)) * k;
       c.lfz += 0.1 * w;
       c.lfy += 0.025 * bump(p / 1.2) * k;
-      c.twist -= 6 * w;
+      c.waist -= 6 * w;
       c.hz += 0.04 * w;
     }
   }

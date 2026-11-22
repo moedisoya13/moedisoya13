@@ -4,7 +4,7 @@
      node tools/feel.mjs      (--json for the raw values; exits 1 when a rule is broken) */
 import { createBout, step, settle, RULES as BOUT } from '../src/game/bout.mjs';
 import { MOVES } from '../src/anim/moves.mjs';
-import { createChain, stepChain, effectiveMass, LINKS } from '../src/phys/chain.mjs';
+import { createChain, stepChain, effectiveMass, LINKS, skipped } from '../src/phys/chain.mjs';
 import { NAMES } from '../src/rig/skeleton.mjs';
 import { toWorld } from '../src/anim/pose.mjs';
 import * as M from '../src/rig/m3.mjs';
@@ -131,7 +131,7 @@ for (const [name, [seconds, controls, o]] of Object.entries(SCENES)) {
 for (const name of ['jab', 'cross', 'hook', 'upper']) {
   const move = MOVES[name],
     chain = createChain(move),
-    used = LINKS.map((l, i) => i).filter(i => !(move.chain.skip || []).includes(LINKS[i]));
+    used = LINKS.map((l, i) => i).filter(i => !skipped(move.chain).includes(LINKS[i]));
   let mass = 0,
     start = 0;
   for (let i = 0; i < 480 && chain.phase !== 'done'; i++) {

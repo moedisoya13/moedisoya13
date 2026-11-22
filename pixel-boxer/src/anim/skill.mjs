@@ -24,13 +24,15 @@
 
    chain: what it does to the kinetic chain (see chain.mjs)
      order    which joints the throw starts with, and which each one hands on to: [start, next] (left out: the legs first,
-              each joint to the one above)
+              each joint to the one above), written for the five joints of the chain: the waist of a punch that turns it is
+              put in by chain.mjs, set off with the trunk (or with the hips: the punch's chain.waist.from)
      early    a joint hands on once its push has dropped to this share of what it started with (0 is at its peak speed; more
               is sooner, so the next joint's push overlaps its own), a number for each joint, legs first
      lag      and then waits this many seconds more (a joint that hands on late), the same
      damp     how much each joint runs past its end and back: under the written 0.62 it snaps, over it it sags (one number
               for all of them, or one each: the trunk's is the recoil of the body, how it springs back off the turn)
-     amp      how far each joint turns, times what is written: legs, hips, trunk, shoulder, elbow
+     amp      how far each joint turns, times what is written: legs, hips, trunk, shoulder, elbow (and the waist as the trunk,
+              unless a sixth number says; early, lag and damp the same)
      coil     the wind-up, times what is written (a wind-up that sets the arm, a hook's or an uppercut's, never under 0.9 of
               it: that much is mechanics, not a tell); least: seconds of wind-up even a punch written with none has
      hold     seconds the punch stays out once it has got there (a dirty one stays for its foul)

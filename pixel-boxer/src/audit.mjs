@@ -5,9 +5,10 @@
                 between frames
      contact    anything under the canvas; a man's own glove inside his trunk or head; one man inside the other
      dynamics   the centre of mass: falling faster than gravity, thrown upward, standing where he would topple; how fast the
-                joints of a punch turn
+                waist turns on the pelvis (rig/body.mjs: RATE), and how fast the joints of a punch turn
    Nothing here fixes anything. tools/audit.mjs prints what it finds; tests/audit.test.mjs holds it to nothing.
-     audit(scripts, { only })   -> { found: { check: { frames, bad, worst, by, most, cases } }, seen, falls, turning }
+     audit(scripts, { only })   -> { found: { check: { frames, bad, worst, largest, by, most, cases } }, seen, falls, turning }
+                                    largest: the largest value the check was taken at, broken or not
                                     seen: how many frames of a man were checked
                                     cases: every frame that broke the check (up to a few hundred of them), with where it was
      measure(f)                 one man in one frame: where everything is on the canvas, and every angle the checks need
@@ -18,7 +19,7 @@
    its ankle is low or its ball is on the canvas (a heel raised off a ball that is down is still a foot on the canvas). */
 import * as M from './rig/m3.mjs';
 import { fk, TPOSE } from './rig/skeleton.mjs';
-import { RANGE as LIMIT, RADIUS, SEGMENTS, HEAD, GLOVE, shoulderOf } from './rig/body.mjs';
+import { RANGE as LIMIT, RATE, RADIUS, SEGMENTS, HEAD, GLOVE, shoulderOf } from './rig/body.mjs';
 import { step } from './game/bout.mjs';
 import { ENTRIES, freshBout, drive } from './footwork.mjs';
 import { DEFENSE, PARRY_DOWN, CROSS_ARM, CROSS_BODY, ROLLING, PULL_COUNTER, BLOCK_FIRE, SHELL } from './defense.mjs';
@@ -113,8 +114,9 @@ export function measure(f) {
     a[S + 'Ankle'] = Math.atan2(dot(shin, ff), dot(shin, fu)) * DEG; // + the shin over the toes (toes up), - pointed
     a[S + 'AnkleRoll'] = Math.abs(Math.asin(Math.max(-1, Math.min(1, dot(shin, fx)))) * DEG);
   }
-  // ---- spine (the chest as the pelvis sees it) and neck (the head as the chest sees it)
-  for (const [name, lo, hi] of [['Spine', 'Hips', 'Chest'], ['Neck', 'Chest', 'Head']]) {
+  // ---- spine (the chest as the pelvis sees it), waist (the waist, Spine1, as the pelvis sees it) and neck (the head as the
+  // chest sees it)
+  for (const [name, lo, hi] of [['Spine', 'Hips', 'Chest'], ['Waist', 'Hips', 'Spine1'], ['Neck', 'Chest', 'Head']]) {
     const up = into(R[lo], axis(R[hi], 1)),
       fwd = into(R[lo], axis(R[hi], 2));
     a[name + 'Forward'] = Math.atan2(up[2], up[1]) * DEG;
@@ -201,8 +203,9 @@ export function audit(scripts, o) {
     turning = {}; // punch -> grade -> joint -> fastest it turned, degrees a second
   let seen = 0;
   const note = (check, value, where, bad) => {
-    const c = (found[check] = found[check] || { frames: 0, bad: 0, worst: null, by: {}, most: {}, cases: [] });
+    const c = (found[check] = found[check] || { frames: 0, bad: 0, worst: null, largest: 0, by: {}, most: {}, cases: [] });
     c.frames++;
+    c.largest = Math.max(c.largest, Math.abs(value));
     if (!bad) return;
     c.bad++;
     c.by[where.doing] = (c.by[where.doing] || 0) + 1;
@@ -253,6 +256,7 @@ export function audit(scripts, o) {
         note('spine bent back past its limit', a.SpineForward, where, a.SpineForward < -LIMIT.spineBack);
         note('spine bent sideways past its limit', a.SpineSide, where, Math.abs(a.SpineSide) > LIMIT.spineSide);
         note('spine twisted past its limit', a.SpineTwist, where, Math.abs(a.SpineTwist) > LIMIT.spineTwist);
+        note('waist twisted past its limit', a.WaistTwist, where, Math.abs(a.WaistTwist) > LIMIT.waistTwist);
         note('neck: chin down past its limit', a.NeckForward, where, a.NeckForward > LIMIT.neckDown);
         note('neck: head back past its limit', a.NeckForward, where, a.NeckForward < -LIMIT.neckUp);
         note('neck turned past its limit', a.NeckTwist, where, Math.abs(a.NeckTwist) > LIMIT.neckTurn);
@@ -272,6 +276,12 @@ export function audit(scripts, o) {
               d = ((d + 540) % 360) - 180;
               note(what + ' (degrees a frame)', d, where, Math.abs(d) > 40);
             }
+          }
+          /* (how fast the waist is turned on the pelvis: by his muscles, so not in a knockdown's fall, where his body is passive
+             (phys/fall.mjs) and what turns it, as the canvas stops his hips, is the canvas; getting up is his own again) */
+          if (!(move && move.fall)) {
+            const waist = Math.abs(a.WaistTwist - before.angles.WaistTwist) / DT;
+            note('waist turning faster than it can (degrees a second)', waist, where, waist > RATE.waist);
           }
           if (before2) {
             // the centre of mass: how hard it is being accelerated downward (nothing falls faster than it falls)
@@ -293,7 +303,7 @@ export function audit(scripts, o) {
         if (i === 0 && entry.level && before && !held && f.action && MOVES[f.action.name].punch && f.action.chain.phase === 'throw') {
           const S = MOVES[f.action.name].hand === 'L' ? 'Left' : 'Right',
             turn = (x, y) => ((x - y + 540) % 360) - 180,
-            rates = { hips: Math.abs(turn(a.PelvisYaw, before.angles.PelvisYaw)) / DT, chest: Math.abs(turn(a.ChestYaw, before.angles.ChestYaw)) / DT, trunk: Math.abs(a.SpineTwist - before.angles.SpineTwist) / DT, elbow: Math.abs(a[S + 'Elbow'] - before.angles[S + 'Elbow']) / DT, glove: dist(m.at['glove' + S], before.at['glove' + S]) / DT },
+            rates = { hips: Math.abs(turn(a.PelvisYaw, before.angles.PelvisYaw)) / DT, chest: Math.abs(turn(a.ChestYaw, before.angles.ChestYaw)) / DT, trunk: Math.abs(a.SpineTwist - before.angles.SpineTwist) / DT, waist: Math.abs(a.WaistTwist - before.angles.WaistTwist) / DT, elbow: Math.abs(a[S + 'Elbow'] - before.angles[S + 'Elbow']) / DT, glove: dist(m.at['glove' + S], before.at['glove' + S]) / DT },
             slot = ((turning[entry.punch] = turning[entry.punch] || {})[entry.level] = turning[entry.punch][entry.level] || {});
           for (const k in rates) slot[k] = Math.max(slot[k] || 0, rates[k]);
         }

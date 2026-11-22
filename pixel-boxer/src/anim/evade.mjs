@@ -23,7 +23,7 @@ const bump = x => (x <= 0 || x >= 1 ? 0 : Math.sin(Math.PI * x) ** 2);
 // which group of joints each channel belongs to
 const GROUP = {};
 for (const ch of ['hp', 'hw', 'hr']) GROUP[ch] = 'head';
-for (const ch of ['lean', 'side', 'twist', 'yaw', 'tip']) GROUP[ch] = 'trunk';
+for (const ch of ['lean', 'side', 'twist', 'waist', 'yaw', 'tip']) GROUP[ch] = 'trunk';
 for (const ch of ['hx', 'hy', 'hz', 'st', 'lkf', 'rkf', 'lkx', 'rkx']) GROUP[ch] = 'hips'; // (the hips and the knees under them)
 for (const ch of ['lfx', 'lfy', 'lfz', 'lfw', 'lfp', 'lk', 'rfx', 'rfy', 'rfz', 'rfw', 'rfp', 'rk']) GROUP[ch] = 'feet';
 for (const ch of ['lx', 'ly', 'lz', 'le', 'lc', 'lg', 'rx', 'ry', 'rz', 're', 'rc', 'rg', 'aim']) GROUP[ch] = 'hands';
@@ -177,7 +177,7 @@ export const SHAPE = {
     '5a': { size: { hz: 1.0 }, add: { rkf: 14, rfz: -0.06, hp: 12, ly: -0.04 } }
   }
 };
-const SIDED = ['side', 'hx', 'hw', 'hr', 'lx', 'rx', 'twist'];
+const SIDED = ['side', 'hx', 'hw', 'hr', 'lx', 'rx', 'twist', 'waist'];
 const KNEES = ['lkf', 'rkf'];
 
 /* Where each written stretch falls in his time. A beginner's flinch comes first, with nothing of the curve in it; the going

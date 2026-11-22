@@ -6,7 +6,10 @@
      hx hy hz          hips, metres (x to the boxer's left, z ahead)
      lean yaw side     the whole trunk, degrees: curling forward, turning left, bending left
      tip               the whole body tipped forward from the hips, stiff as a board (a fall)
-     twist             the chest turned further than the hips
+     waist             the waist turned on the hips (the belt and the belly, Spine1: a disc between the pelvis and the
+                       chest), degrees, left +
+     twist             the chest turned further than the waist (yaw is the pelvis, waist the waist on it, twist the chest
+                       on that: the chest faces GUARD.yaw + yaw + waist + GUARD.twist + twist)
      hp hw hr          head: nod down, turn left, tilt left
      lx ly lz le       left hand, metres, and how far its elbow is lifted out (0 down .. 1 level with the shoulder)
      rx ry rz re       right hand
@@ -24,7 +27,7 @@
      st                taller and thinner by this share
      aim               how much the punching hand is steered onto the target (0..1) */
 
-export const CHANNELS = ['hx', 'hy', 'hz', 'lean', 'tip', 'yaw', 'side', 'twist', 'hp', 'hw', 'hr', 'lx', 'ly', 'lz', 'le', 'lc', 'lg', 'rx', 'ry', 'rz', 're', 'rc', 'rg',
+export const CHANNELS = ['hx', 'hy', 'hz', 'lean', 'tip', 'yaw', 'side', 'twist', 'waist', 'hp', 'hw', 'hr', 'lx', 'ly', 'lz', 'le', 'lc', 'lg', 'rx', 'ry', 'rz', 're', 'rc', 'rg',
   'lfx', 'lfy', 'lfz', 'lfw', 'lfp', 'lk', 'rfx', 'rfy', 'rfz', 'rfw', 'rfp', 'rk', 'lkf', 'rkf', 'lkx', 'rkx', 'st', 'aim'];
 
 // Orthodox guard: left foot and hand lead, chin down, weight on the balls of the feet.
@@ -78,9 +81,10 @@ export function sampleMove(move, t, out) {
   return out;
 }
 
-/* A punch is not keyed. It is a kinetic chain (phys/chain.mjs): five joints that fire one after another, and what each one
-   contributes to the pose as it turns. `coil` is the wind-up, let go as the chain fires; `links` says what each joint adds as
-   it goes from 0 to 1. The shoulder and elbow need no amounts: they are the arm itself, worked out by how it is thrown.
+/* A punch is not keyed. It is a kinetic chain (phys/chain.mjs): five joints that fire one after another (and a sixth, the
+   waist, that a punch may turn as a branch off the hips), and what each one contributes to the pose as it turns. `coil` is
+   the wind-up, let go as the chain fires; `links` says what each joint adds as it goes from 0 to 1. The shoulder and elbow
+   need no amounts: they are the arm itself, worked out by how it is thrown.
      arm: 'straight'  the shoulder swings the upper arm onto the line of the target and the elbow straightens along it
           'swing'     the arm is held bent and locked to the chest, the body carries it round, the shoulder closes the last of it
                       (land: the share of the trunk's turn at which the turn brings the locked fist onto the head; most: the
@@ -88,7 +92,12 @@ export function sampleMove(move, t, out) {
                       tight: the fist is kept in at the chest through the wind-up and raised to the target only with the drive)
           'lift'      the arm is held bent, the legs and trunk drive it up, the shoulder closes the last of it
      chain: { coil: seconds of wind-up, rate: how fast each joint's muscle is (rad/s natural frequency), skip: joints held
-              still, turn: degrees the hips and trunk turn through, locked: the arm is stiff from the start }
+              still, turn: degrees the hips and trunk turn through (the trunk's: the waist's and the chest's together),
+              locked: the arm is stiff from the start,
+              waist: { rate (rad/s), from: 'hips' | 'drive' (which joint's handing on sets it off, together with the one
+              that joint sets off), damp } : the waist as a sixth joint, a branch off the chain (phys/chain.mjs). A punch
+              without it holds the waist still, as if it were in skip; with it, links.waist: { waist: degrees } is what it
+              adds, taken out of the trunk's twist and not on top of it, and coil.waist its wind-up }
      reach: about how far away, centre to centre, it can land (the rival's judgment and the step in; the hit itself is
             the glove meeting the head); close: the distance he steps in to
      body: how much of a grade's way of using the body (anim/skill.mjs: form) this punch takes, times: turn (of the extra
@@ -341,6 +350,8 @@ const PUNCHES = {
 export const TO_BODY = { jab: 'jabBody', cross: 'crossBody', hook: 'hookBody', upper: 'upperBody', hookIn: 'hookBody', upperIn: 'upperBody' };
 for (const [name, punch] of Object.entries(PUNCHES)) {
   for (const amounts of [punch.coil, ...Object.values(punch.links), punch.level || {}]) for (const ch of Object.keys(amounts)) if (!CHANNELS.includes(ch) && !(amounts === punch.level && ch === 'bow')) throw new Error(`${name}: unknown channel ${ch}`);
+  // (a waist that turns is a joint of the chain: it has its amounts and its muscle together, or neither)
+  if (!!punch.links.waist !== !!punch.chain.waist) throw new Error(`${name}: links.waist and chain.waist go together`);
   Object.assign(punch, { name, punch: true });
 }
 

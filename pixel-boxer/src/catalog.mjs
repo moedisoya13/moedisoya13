@@ -22,7 +22,7 @@ import { DEFENSE, ITEMS as GUARDS, PARRY_DOWN, CROSS_ARM, CROSS_BODY, CROSS_BODY
 import { LADDER, STANCES, DIRTY, FOOTWORK, PUNCHES, TECHNIQUES, ENTRY, MOVING, TRICKS, SHOWOFF, TAUNT_ROWS, TAUNTING, BODY_PUNCHES, BODY_LADDER, REAR, REAR_LADDER, WAVE_ROWS, WAVING, SHIFT_ROWS, SHIFT_LEVELS, SHIFTING } from './ladder.mjs';
 import { BODYSHOTS, LIVER_BLOCK } from './bodyshots.mjs';
 import { LEVELS, LEVEL, CROSS } from './anim/skill.mjs';
-import { LINKS } from './phys/chain.mjs';
+import { LINKS, ORDER, skipped } from './phys/chain.mjs';
 import { MOVES } from './anim/moves.mjs';
 import { H } from './anim/stance.mjs';
 import { WINDOWS } from './windows.data.mjs';
@@ -33,7 +33,7 @@ import { attachMemos } from './memo.mjs';
 const DT = 1 / 60;
 // the fouls, as a card names them
 const FOUL = { stomp: '발등 밟기', thumb: '안면 잽' };
-const JOINT = { drive: '다리', hips: '엉덩이', trunk: '몸통', shoulder: '어깨', elbow: '팔꿈치' };
+const JOINT = { drive: '다리', hips: '엉덩이', waist: '허리', trunk: '몸통', shoulder: '어깨', elbow: '팔꿈치' };
 const SPAN = 0.3; // seconds of a punch the chain timeline under a rung shows
 // what became of the punch, as the card says it
 const SAID = { whiff: '빗나감', graze: '스침', block: '막음', parry: '패리', hit: '명중' };
@@ -438,8 +438,9 @@ function gradeCard(e, item) {
       stats = pair('끝 거리 <b data-a>–</b> m', e.move === 'duckIn' ? '머리 <b data-b>–</b> cm' : '각도 <b data-b>–</b>°');
       break;
     case 'rung': {
-      const skip = MOVES[e.punch].chain.skip || [];
-      stats = `<div class="chain">${LINKS.map((l, i) => `<span class="row${skip.includes(l) ? ' off' : ''}"><i>${JOINT[l]}</i><span class="lane"><b data-bar="${i}"></b></span></span>`).join('')}<span class="hit-at" data-at></span></div>
+      // (the joints from the canvas up, a joint it holds still greyed; a waist it does not turn is not shown)
+      const skip = skipped(MOVES[e.punch].chain);
+      stats = `<div class="chain">${ORDER.filter(l => l !== 'waist' || !skip.includes(l)).map(l => `<span class="row${skip.includes(l) ? ' off' : ''}"><i>${JOINT[l]}</i><span class="lane"><b data-bar="${LINKS.indexOf(l)}"></b></span></span>`).join('')}<span class="hit-at" data-at></span></div>
         <div class="feet result"><span><b data-blow>–</b> N·s</span><span class="pace"><b data-ms>–</b> ms</span></div>` + (item.knee ? pair('무릎 <b data-knee>–</b>°', '골반 <b data-turn>–</b>°') : pair('머리 <b data-off>–</b> cm', '골반 <b data-turn>–</b>°')) + (item.drop ? pair('머리 하강 <b data-drop>–</b> cm') : '') + (beat ? `<div class="feet stats">${beat}<span>닿은 박자 <b data-on>–</b></span></div>` : '');
       break;
     }
@@ -708,8 +709,9 @@ function start({ manifest, boxer }) {
               from = Math.min(u, 1 - u);
             put(cell, 'on', from <= 0.12 ? '정박' : from >= 0.3 ? '엇박' : '–');
           }
-          cell.bars.forEach((bar, i) => {
-            const on = c.fired[i] >= 0;
+          cell.bars.forEach(bar => {
+            const i = +bar.dataset.bar,
+              on = c.fired[i] >= 0;
             bar.style.left = on ? pct(c.fired[i]) : '0';
             bar.style.width = on ? `max(3px, ${pct(Math.max(0, c.peakAt[i] - c.fired[i]))})` : '0';
           });

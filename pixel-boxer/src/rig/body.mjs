@@ -2,6 +2,8 @@
    physics is built from them, and tools/audit.mjs holds every frame of every move against them.
      RANGE     joint ranges, degrees. Generous: a supple athlete's, not the average man's, so what is outside is wrong and not
                merely unusual (AAOS / Kapandji ranges of motion, rounded up).
+     RATE      how fast a joint can turn, degrees a second (the waist: the solver turns a knee round its leg and an upper arm
+               about itself no faster)
      RADIUS    how thick he is at each joint, metres: what cannot go into the canvas, into himself or into another man
      SEGMENTS  Dempster's shares of a body's mass, and where along each segment its middle is
      FOOT      the sole, as balls in the foot's own frame from the ankle: [centre, radius]. Flat, each just touches the canvas
@@ -23,12 +25,14 @@ export const RANGE = {
   spineForward: 75,
   spineBack: 30,
   spineSide: 35,
-  spineTwist: 45,
+  spineTwist: 45, // the chest on the pelvis, the waist's turn and the chest's together
+  waistTwist: 25, // the waist (Spine1) on the pelvis: the animator keeps it inside 22 (anim/animator.mjs: WAIST)
   neckDown: 60,
   neckUp: 65,
   neckTurn: 80,
   neckTilt: 45
 };
+export const RATE = { waist: 900 };
 export const RADIUS = { head: 0.11, glove: 0.1, Chest: 0.13, Hips: 0.12, Arm: 0.06, ForeArm: 0.04, Shin: 0.055, Foot: 0.05, ToeBase: 0.03 };
 export const SEGMENTS = [
   ['Hips', 'Neck1', 0.497, 0.5],

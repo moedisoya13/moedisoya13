@@ -3,29 +3,58 @@
    pulled toward its end position by its own muscle, and each is switched on by the one below it passing its peak speed, so
    the order and the timing are what the dynamics make them. The fist's speed is the sum of what every joint is doing at that
    moment, and what a punch does when it lands is worked out from that state (see impulse()).
+   A sixth joint, the waist (the belt and the belly turning on the pelvis, under the chest), is a branch off the chain, not a
+   link in it: the joint that sets the trunk off sets the waist off with it ('hips'; or 'drive': the legs set it off with
+   the hips), and the waist hands on to nothing. Its muscle is quicker than the trunk's, so it peaks between the hips and the
+   trunk, and the five joints of the chain fire when they did without it (a waist put in line would hand on once more, and
+   every punch would land later). It is number 5, at the end, so that the numbers of the other five are what they were;
+   ORDER is the six as they are shown, from the canvas up. A punch whose move has no chain.waist holds the waist still (as if
+   it were in skip).
 
      const chain = createChain(move, quick, skill)
-                                              move.chain: { coil (seconds), rate: [5] natural frequencies in rad/s, skip }
+                                              move.chain: { coil (seconds), rate: [5] natural frequencies in rad/s, skip,
+                                              waist: { rate (rad/s), from: 'hips' | 'drive', damp } }
                                               quick: his muscles' speed; skill: how well he throws it (anim/skill.mjs:
                                               the order the joints go in, when each hands on, how far each turns, how
                                               each springs)
      stepChain(chain, move, dt)               -> the phase it is in: coil, throw, hold, recover, done
-     chain.q[i], chain.v[i]                   each link's position 0..1 toward its end, and speed (1/s)
+     chain.q[i], chain.v[i]                   each link's position 0..1 toward its end, and speed (1/s) (i: LINKS)
                                               (a punch thrown by the same hand as the one before starts from that one's: bout.mjs)
      chain.coil.q                             the wind-up before it: 0..1, let go as the chain fires (after chain.wait seconds
                                               of waiting for a foot to come down, and held chain.pause seconds at the bottom)
      preload(chain, move, load, shoulder)     a punch thrown out of the end of an evasion (or a parry), whose wind-up and
                                               leg drive that end has already done (load 0..1), and whose shoulder is
                                               already part of the way out (a parrying hand going straight on) */
-export const LINKS = ['drive', 'hips', 'trunk', 'shoulder', 'elbow'];
+export const LINKS = ['drive', 'hips', 'trunk', 'shoulder', 'elbow', 'waist'];
+export const ORDER = ['drive', 'hips', 'waist', 'trunk', 'shoulder', 'elbow']; // (the same, as they are shown: from the canvas up)
 const N = LINKS.length;
+const WAIST = LINKS.indexOf('waist');
 const DAMP = 0.62; // a little under critical: each joint runs a few percent past its end and comes back, which is the snap
-const RECOVER = [22, 23, 25, 30, 34]; // rad/s: coming back, the hand leads and the legs follow
-const RECOVER_LAG = [0.06, 0.045, 0.03, 0.01, 0]; // seconds each link waits before it starts back
+const RECOVER = [22, 23, 25, 30, 34, 24]; // rad/s: coming back, the hand leads and the legs follow
+const RECOVER_LAG = [0.06, 0.045, 0.03, 0.01, 0, 0.04]; // seconds each link waits before it starts back (the waist after the trunk)
 const HOLD = 0.03;
 
-const NATURAL = [[0], { 0: [1], 1: [2], 2: [3], 3: [4], 4: [] }]; // the legs first, each joint handing on to the one above
-const each = x => (Array.isArray(x) ? x : new Array(N).fill(x || 0)); // a number for every joint, or one for all of them
+// the legs first, each joint handing on to the one above; the hips set the waist off with the trunk, and it hands on to nothing
+const NATURAL = [[0], { 0: [1], 1: [5, 2], 2: [3], 3: [4], 4: [], 5: [] }];
+// a number for every joint, or one for all of them (a list of the five of the chain: the waist's is the trunk's)
+const each = x => (Array.isArray(x) ? (x.length < N ? [...x, x[2]] : x) : new Array(N).fill(x || 0));
+/* The order a punch's joints go in, with its waist put where it goes off: with the trunk (whoever sets the trunk off sets the
+   waist off too), or, from the legs ('drive'), with the hips. A grade's own order (anim/skill.mjs: ARM_FIRST) is written for
+   the five; this is where the waist is put into it. */
+function branch(order, from) {
+  const by = from === 'drive' ? 1 : 2,
+    put = list => list.filter(j => j !== WAIST).flatMap(j => (j === by ? [WAIST, j] : [j])),
+    next = {};
+  for (let i = 0; i < N; i++) next[i] = i === WAIST ? [] : put(order[1][i] || []);
+  return [put(order[0]), next];
+}
+// the joints a punch holds still: its skip, and the waist, if it does not turn it
+const held = new WeakMap();
+export function skipped(spec) {
+  if (!held.has(spec)) held.set(spec, spec.waist ? spec.skip || [] : [...(spec.skip || []), 'waist']);
+  return held.get(spec);
+}
+const rateOf = (spec, i) => (i === WAIST ? spec.waist.rate : spec.rate[i]);
 
 export function createChain(move, quick, skill, variant) {
   // quick: how much faster than written this boxer's muscles are (his speed, and how tired he is): every rate, times this
@@ -36,16 +65,20 @@ export function createChain(move, quick, skill, variant) {
     spring = move.chain.spring ? Object.assign({ down: 1, pause: 0, wait: false }, k.spring) : null,
     // (and a punch to the body goes down to it in its wind-up: `set` of that, too, is the way down, and no grade leaves it out)
     coil = Math.max(move.chain.coil * (spring ? spring.down : move.chain.locked || move.chain.set !== undefined ? Math.max(move.chain.set ?? 0.9, k.coil ?? 1) : k.coil ?? 1), k.least || 0);
+  const waist = move.chain.waist,
+    damp = each(k.damp || DAMP).slice();
+  if (waist && waist.damp) damp[WAIST] = waist.damp;
   return {
     quick: quick || 1,
-    // how he throws it (the textbook if nothing is said)
-    order: k.order || NATURAL,
+    // how he throws it (the textbook if nothing is said), the waist put in where this punch sets it off
+    order: (k.order || (waist && waist.from === 'drive')) ? branch(k.order || NATURAL, waist && waist.from) : NATURAL,
+    natural: !k.order,
     early: each(k.early),
     lag: each(k.lag),
     thrownAt: -1, // when the throw ended (it arrived, or it landed)
-    damp: each(k.damp || DAMP), // (a joint each: the trunk's is how the body springs back off its turn)
+    damp, // (a joint each: the trunk's is how the body springs back off its turn; the waist's is the trunk's unless it says)
     // (a punch swung by the body, a hook, can use only so much of a better man's turn: past the target is past the target)
-    amp: (k.amp || [1, 1, 1, 1, 1]).map(a => (a > 1 ? 1 + (a - 1) * ((move.body && move.body.turn) ?? 1) : a)),
+    amp: each((k.amp || [1, 1, 1, 1, 1]).map(a => (a > 1 ? 1 + (a - 1) * ((move.body && move.body.turn) ?? 1) : a))),
     back: k.back || 1,
     firm: (k.firm || 1) * (move.chain.firm ?? 1), // how solid the arm and wrist are at the instant it lands (a whip's, loose)
     // how long it stays out once it has got there (a dirty one stays for its foul, a thumb in his eye as long as it takes)
@@ -132,7 +165,7 @@ const cell = (c, i) => ({ get q() { return c.q[i]; }, set q(x) { c.q[i] = x; }, 
 
 export function stepChain(c, move, dt) {
   const spec = move.chain,
-    skip = spec.skip || [],
+    skip = skipped(spec),
     k = c.quick || 1,
     coil = c.coilTime / k,
     [start, next] = c.order,
@@ -157,7 +190,8 @@ export function stepChain(c, move, dt) {
     start.forEach(fire);
     // the joint that goes last: when it has arrived, the punch has been thrown
     let last = -1;
-    for (let i = 0; i < N; i++) if (!skip.includes(LINKS[i]) && (last < 0 || order(c, i) > order(c, last))) last = i;
+    // (the waist is a branch: it is not what the punch waits for)
+    for (let i = 0; i < N; i++) if (i !== WAIST && !skip.includes(LINKS[i]) && (last < 0 || order(c, i) > order(c, last))) last = i;
     for (let i = 0; i < N; i++) {
       if (skip.includes(LINKS[i])) continue;
       if (!c.on[i]) {
@@ -165,7 +199,7 @@ export function stepChain(c, move, dt) {
         if (c.q[i] || c.v[i]) pull(cell(c, i), 0, 0, RECOVER[i] * k, 1, dt);
         continue;
       }
-      const a = pull(cell(c, i), 0, 1, spec.rate[i] * k, c.damp[i], dt);
+      const a = pull(cell(c, i), 0, 1, rateOf(spec, i) * k, c.damp[i], dt);
       if (!c.push[i]) c.push[i] = Math.max(1e-6, a);
       c.a[i] = a;
       if (c.v[i] > c.peak[i]) (c.peak[i] = c.v[i]), (c.peakAt[i] = c.t);
@@ -183,9 +217,9 @@ export function stepChain(c, move, dt) {
     // a punch that missed finishes its reach; one that landed has been stopped, and stays where it was stopped
     for (let i = 0; i < N; i++) {
       if (skip.includes(LINKS[i])) continue;
-      if (c.on[i]) pull(cell(c, i), 0, c.landed ? c.q[i] : 1, spec.rate[i] * 0.6 * k, 1, dt);
+      if (c.on[i]) pull(cell(c, i), 0, c.landed ? c.q[i] : 1, rateOf(spec, i) * 0.6 * k, 1, dt);
       // (thrown arm first, the body is still to come when the fist gets there: it turns after it, for nothing)
-      else if (c.order !== NATURAL) pull(cell(c, i), 0, 1, spec.rate[i] * 0.6 * k, 1, dt);
+      else if (!c.natural) pull(cell(c, i), 0, 1, rateOf(spec, i) * 0.6 * k, 1, dt);
     }
     pull(c.coil, 0, 0, 30, 1, dt);
     if (c.since >= c.hold) (c.phase = 'recover'), (c.since = 0);
@@ -211,7 +245,9 @@ export function stepChain(c, move, dt) {
    whole of a punch's weight is there only in the moment the chain arrives together: land early and the body has not come
    yet, land late and it has gone, and either way it is an arm punch.
      move.chain.turn: degrees the hips and trunk each turn through (a small turn carries less of the body: each carries all
-                      it can from 30 degrees)
+                      it can from 30 degrees); a punch that turns its waist turns links.waist.waist of the trunk's with the
+                      waist, and that share of the trunk's weight is behind the glove for as long as the waist's turn is fresh
+                      (the rest for as long as the chest's is): the same weight as without it, gone sooner
      move.chain.locked: the arm is held bent and stiff (hook, uppercut), so it carries the body from the start */
 const MASS = { fist: 0.75, forearm: 1.2, upper: 2.0, trunk: 32, legs: 25 };
 const FRESH = 0.11; // seconds a joint's turn stays behind the punch after its peak
@@ -220,9 +256,10 @@ export function effectiveMass(c, move, part) {
     // (a beginner's wrist and elbow give at the contact, and the weight behind them leaks out; a great puncher's do not)
     stiff = (spec.locked ? 0.85 : smooth((c.q[4] - 0.25) / 0.55)) * (c.firm || 1),
     behind = i => (c.peakAt[i] < 0 ? 0 : Math.min(1, Math.max(0, c.q[i])) * Math.exp(-Math.max(0, c.t - c.peakAt[i] - 0.04) / FRESH)),
-    amp = c.amp || [1, 1, 1, 1, 1],
+    amp = c.amp || [1, 1, 1, 1, 1, 1],
     hips = behind(1) * Math.min(1, (Math.abs(spec.turn[0]) * amp[1]) / 30),
-    trunk = behind(2) * Math.min(1, (Math.abs(spec.turn[1]) * amp[2]) / 30),
+    share = spec.waist && move.links.waist ? Math.min(1, Math.abs(move.links.waist.waist || 0) / (Math.abs(spec.turn[1]) || 1)) : 0,
+    trunk = (share > 0 ? behind(2) * (1 - share) + behind(WAIST) * share : behind(2)) * Math.min(1, (Math.abs(spec.turn[1]) * amp[2]) / 30),
     legs = behind(0) * Math.min(1, amp[0]);
   /* (an elbow, a show-off's (anim/show.mjs): no wrist or forearm to give, and the lever from the shoulder short: the upper arm
      and more of the body behind it than behind a fist) */

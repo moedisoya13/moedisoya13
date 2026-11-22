@@ -5,7 +5,8 @@
                            stand and how far his facing is off the line between them, his gloves and head
      guardOf(level)        his own guard, as his grade holds it with his head still: where the head and the lines are
      rung(id)              a rung of the skill ladder: the blow, when it landed after the press, how far the head was off the
-                           line then, the most the hips turned and the shoulders were held back behind them, where the hips were
+                           line then, the most the hips turned and the shoulders were held back behind them, where the hips were,
+                           and the fastest the waist turned on the hips (degrees a second)
      stance(level, s)      a grade's footwork standing: hips and head travel, feet a minute, the beat, the flourishes
      across(f, other, p)   where a point is across the line from boxer f to the other man (+ to his left), metres
      lineAngle(pose, a, b) the line through two joints as an angle about the vertical, in his own space
@@ -26,6 +27,8 @@ export const sole = (at, Side) => Math.min(at[Side + 'ToeBase'][1] - 0.03, at[Si
 export const UP = 0.009,
   DOWN = 0.004;
 const wrap = a => Math.atan2(Math.sin(a), Math.cos(a));
+// how far the waist (Spine1) is turned on the hips, degrees, left + (its own turn: the hips' frame is its parent's)
+const waistOf = pose => (pose.rot && pose.rot.Spine1 && pose.rot.Spine1.length === 9 ? deg(Math.atan2(pose.rot.Spine1[2], pose.rot.Spine1[8])) : 0);
 
 /* Where a point of him is across the line to the other man (+ to his left), and the line of a pair of joints (hips, shoulders)
    as an angle about the vertical, in his own space. */
@@ -68,6 +71,7 @@ export function run(entry, seconds) {
       hipsY: a.pose.at.Hips[1] * a.pose.stretch,
       hips: lineAngle(a.pose, 'LeftLeg', 'RightLeg'),
       shoulders: lineAngle(a.pose, 'LeftArm', 'RightArm'),
+      waist: waistOf(a.pose),
       halves: r.halves,
       landed: r.landed,
       flourish: r.flourish,
@@ -157,12 +161,15 @@ export function rung(id) {
     side = move.hand === 'R' ? 1 : -1,
     during = frames.slice(press, (hit >= 0 ? hit : frames.length - 1) + 1);
   let hips = 0,
-    sep = 0;
+    sep = 0,
+    waist = 0;
   // (the lines' angles are taken with his left as +x and ahead as +z, so a turn to his left is a fall in the angle)
   for (const f of during) {
     hips = Math.max(hips, deg(-turn * wrap(f.hips - guard.hips)));
     sep = Math.max(sep, deg(sg * wrap(f.shoulders - f.hips - (guard.shoulders - guard.hips))));
   }
+  // (between frames that were stepped: a held one is the one before it again)
+  for (let i = 1; i < during.length; i++) if (!during[i].held) waist = Math.max(waist, Math.abs(during[i].waist - during[i - 1].waist) / DT);
   return {
     id,
     punch: entry.punch,
@@ -178,6 +185,7 @@ export function rung(id) {
     off: hit >= 0 ? +((side * (frames[hit].head - guard.head)) * 100).toFixed(1) : null,
     hipTurn: +hips.toFixed(1),
     sep: +sep.toFixed(1),
+    waist: Math.round(waist),
     rise: hit >= 0 && press >= 0 ? +((frames[hit].hipsY - frames[press].hipsY) * 100).toFixed(1) : null,
     fired: chain ? chain.fired.slice() : null, // when each joint of it fired, seconds after the press
     // (and from where he carries them, standing in his own guard)

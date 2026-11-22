@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createBout, step, settle, RULES } from '../src/game/bout.mjs';
 import { MOVES } from '../src/anim/moves.mjs';
-import { createChain, stepChain, effectiveMass, LINKS } from '../src/phys/chain.mjs';
+import { createChain, stepChain, effectiveMass, LINKS, skipped } from '../src/phys/chain.mjs';
 import { createRival, think } from '../src/game/ai.mjs';
 
 const DT = 1 / 60;
@@ -32,7 +32,8 @@ test('the joints of a punch fire and peak in order, from the legs to the elbow',
     const move = MOVES[name],
       chain = createChain(move);
     for (let i = 0; i < 400 && chain.phase !== 'done'; i++) stepChain(chain, move, 1 / 240);
-    const used = LINKS.map((l, i) => i).filter(i => !(move.chain.skip || []).includes(LINKS[i]));
+    // (the joints it turns: not those it holds still, nor a waist it does not turn)
+    const used = LINKS.map((l, i) => i).filter(i => !skipped(move.chain).includes(LINKS[i]));
     for (let k = 1; k < used.length; k++) {
       assert.ok(chain.fired[used[k]] > chain.fired[used[k - 1]], `${name}: ${LINKS[used[k]]} fires after ${LINKS[used[k - 1]]}`);
       assert.ok(chain.peakAt[used[k]] > chain.peakAt[used[k - 1]], `${name}: ${LINKS[used[k]]} peaks after ${LINKS[used[k - 1]]}`);

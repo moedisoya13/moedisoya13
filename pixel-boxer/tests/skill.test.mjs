@@ -4,8 +4,10 @@ import assert from 'node:assert/strict';
 import { createBout, step, settle } from '../src/game/bout.mjs';
 import { rung, run } from '../src/measure.mjs';
 import { DIRTY } from '../src/ladder.mjs';
-import { LEVELS } from '../src/anim/skill.mjs';
+import { LEVELS, LEVEL } from '../src/anim/skill.mjs';
 import { NAMES } from '../src/rig/skeleton.mjs';
+import { MOVES } from '../src/anim/moves.mjs';
+import { createChain, stepChain, effectiveMass, LINKS } from '../src/phys/chain.mjs';
 
 const DT = 1 / 60;
 const PUNCHES = ['jab', 'cross', 'hook', 'upper'];
@@ -137,4 +139,57 @@ test('skill: a dirty jab leaves the glove over his face after it lands', () => {
 });
 test('skill: the cross and the uppercut have no foul at any grade', () => {
   for (const id of Object.keys(ladder).filter(id => /^(cross|upper)@/.test(id))) assert.ok(!ladder[id].frames.some(f => f.events.some(e => e.type === 'foul')), id);
+});
+
+/* The waist (phys/chain.mjs): a sixth joint, a branch off the hips. No punch turns it yet (plan 6, stage K); one that does is
+   tried here as the four punches with a waist given them, the trunk's twist split between the waist and the chest as plan 6
+   §1.4 has it (degrees of the twist, rad/s of the waist's muscle). */
+const SPLIT = { jab: [-4, 70], cross: [10, 64], hook: [-10, 66], upper: [6, 60] };
+const waisted = (name, from) => {
+  const m = MOVES[name],
+    [waist, rate] = SPLIT[name];
+  return Object.assign({}, m, {
+    chain: Object.assign({}, m.chain, { waist: { rate, from } }),
+    links: Object.assign({}, m.links, { trunk: Object.assign({}, m.links.trunk, { twist: m.links.trunk.twist - waist }), waist: { waist } })
+  });
+};
+// one punch thrown on its own, at 240 steps a second, at a grade: its chain, and the most weight behind the glove on the way
+const thrown = (move, lv, each) => {
+  const c = createChain(move, 1, LEVEL[lv]);
+  c.mass = 0;
+  for (let i = 0; i < 480 && c.phase !== 'done'; i++) {
+    stepChain(c, move, 1 / 240);
+    if (c.phase === 'throw') c.mass = Math.max(c.mass, effectiveMass(c, move));
+    if (each) each(c);
+  }
+  return c;
+};
+test('skill: the waist goes off with the trunk and peaks between the hips and the trunk; the other five go when they did', () => {
+  for (const name of Object.keys(SPLIT))
+    for (const lv of LEVELS) {
+      const plain = thrown(MOVES[name], lv);
+      for (const from of ['hips', 'drive']) {
+        const c = thrown(waisted(name, from), lv);
+        // (a branch: whatever the waist does, the legs, hips, trunk, shoulder and elbow fire and peak at the same instants)
+        for (let i = 0; i < 5; i++) {
+          assert.equal(c.fired[i], plain.fired[i], `${name}@${lv} (${from}): ${LINKS[i]} fires when it did`);
+          assert.equal(c.peakAt[i], plain.peakAt[i], `${name}@${lv} (${from}): ${LINKS[i]} peaks when it did`);
+        }
+        assert.equal(c.fired[5], c.fired[from === 'drive' ? 1 : 2], `${name}@${lv}: the waist goes off with the ${from === 'drive' ? 'hips' : 'trunk'}`);
+        assert.ok(c.peak[5] > 1, `${name}@${lv} (${from}): the waist turns`);
+        // (the same weight behind the glove: the trunk's share split between the waist and the chest, not added to)
+        assert.ok(Math.abs(c.mass / plain.mass - 1) < 0.03, `${name}@${lv} (${from}): ${c.mass.toFixed(2)} kg behind it, ${plain.mass.toFixed(2)} without the waist`);
+      }
+      // from a pro up the order of the peaks is the hips, the waist, the chest (an uppercut's waist, as quick as its chest
+      // is at a legend's springing, can reach its peak in the same step: no later)
+      if (['3', '4m', '4a', '5m', '5a'].includes(lv)) {
+        const c = thrown(waisted(name, 'hips'), lv);
+        assert.ok(c.peakAt[1] < c.peakAt[5] && c.peakAt[5] <= c.peakAt[2], `${name}@${lv}: hips ${c.peakAt[1]}, waist ${c.peakAt[5]}, trunk ${c.peakAt[2]}`);
+        if (lv === '3') assert.ok(c.peakAt[5] < c.peakAt[2], `${name}@3: the waist peaks before the trunk`);
+      }
+    }
+});
+test('skill: a punch that does not turn its waist holds it still all the way through', () => {
+  for (const [name, move] of Object.entries(MOVES).filter(([, m]) => m.punch && !m.chain.waist))
+    for (const lv of LEVELS) thrown(move, lv, c => assert.ok(c.q[5] === 0 && c.v[5] === 0, `${name}@${lv}: the waist moved`));
 });

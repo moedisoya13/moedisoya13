@@ -6,7 +6,7 @@
      node tools/audit.mjs --script a,b          only these scripts (by id)
      node tools/audit.mjs --only ko,slump       only frames in these actions
      node tools/audit.mjs --falls               the knockdowns frame by frame
-     node tools/audit.mjs --turning             how fast and how far the pelvis and the chest turn in each punch
+     node tools/audit.mjs --turning             how fast and how far the pelvis, the waist and the chest turn in each punch
      node tools/audit.mjs --json out.json       everything, for another tool */
 import { audit, SCRIPTS } from '../src/audit.mjs';
 
@@ -55,6 +55,6 @@ if (flag('falls'))
     }
   }
 if (flag('turning')) {
-  console.log('\nfastest each joint turned while a punch was thrown (degrees a second: the pelvis and the chest on the canvas, the chest on the pelvis, the elbow; the glove in m/s)');
-  for (const [punch, grades] of Object.entries(turning)) for (const [lv, r] of Object.entries(grades)) console.log(`${punch.padEnd(6)} ${lv.padEnd(3)} pelvis ${r.hips.toFixed(0).padStart(5)}  chest ${r.chest.toFixed(0).padStart(5)}  chest on pelvis ${r.trunk.toFixed(0).padStart(5)}  elbow ${r.elbow.toFixed(0).padStart(5)}  glove ${r.glove.toFixed(1).padStart(5)}`);
+  console.log('\nfastest each joint turned while a punch was thrown (degrees a second: the pelvis and the chest on the canvas, the waist and the chest on the pelvis, the elbow; the glove in m/s)');
+  for (const [punch, grades] of Object.entries(turning)) for (const [lv, r] of Object.entries(grades)) console.log(`${punch.padEnd(6)} ${lv.padEnd(3)} pelvis ${r.hips.toFixed(0).padStart(5)}  chest ${r.chest.toFixed(0).padStart(5)}  waist on pelvis ${r.waist.toFixed(0).padStart(5)}  chest on pelvis ${r.trunk.toFixed(0).padStart(5)}  elbow ${r.elbow.toFixed(0).padStart(5)}  glove ${r.glove.toFixed(1).padStart(5)}`);
 }

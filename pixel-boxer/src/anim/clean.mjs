@@ -258,13 +258,13 @@ export function waveBody(c, w, s) {
   // (across his hips, not with them: the bend at the waist alone, as headTo makes it, less the hips' share)
   headTo(c, wv.across * X * 1.5, 0);
   c.hx -= (wv.across * X * 1.5) / 3;
-  c.twist += 4 * X;
+  c.waist += 4 * X;
   // (the sliding foot's heel up as it goes)
   if (w.anchor !== null && w.end === null && phi < 0.5) c[lead + 'fp'] += wv.heel * Math.sin(Math.PI * phi * 2) * on;
   // (a legend's lead shoulder feinted at him in the middle of a wave, now and then)
   if (plan.shoulder && wv.shoulder) {
     const k = bump((phi - 0.3) / 0.4) * on * still;
-    c.twist -= wv.shoulder * k;
+    c.waist -= wv.shoulder * k;
     c.side -= 3 * k;
     c.lz += 0.04 * k;
   }

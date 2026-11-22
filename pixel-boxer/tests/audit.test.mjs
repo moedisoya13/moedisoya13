@@ -42,8 +42,12 @@ const EXCEPTIONS = [
   }
 ];
 
+// (every script is fought once, for all the tests below)
+let done = null;
+const audited = () => done || (done = audit(SCRIPTS));
+
 test('audit: no scripted bout breaks anything a body can do, beyond the listed exceptions', () => {
-  const { found, seen } = audit(SCRIPTS);
+  const { found, seen } = audited();
   assert.ok(seen > 10000, `only ${seen} frames were checked`);
   const broken = [];
   for (const [check, c] of Object.entries(found)) {
@@ -60,4 +64,16 @@ test('audit: no scripted bout breaks anything a body can do, beyond the listed e
     }
   }
   assert.deepEqual(broken, []);
+});
+
+/* The waist (plan 6 §1.3): turned on the pelvis no further than 25 degrees and no faster than 900 a second, with no exception;
+   and the animator keeps it inside its own 22 (anim/animator.mjs: WAIST), which no frame of any script goes past by more
+   than a measuring hair. */
+test('audit: the waist is never turned past its range or faster than it can turn, and never past the animator\'s 22 degrees', () => {
+  const { found } = audited();
+  for (const check of ['waist twisted past its limit', 'waist turning faster than it can (degrees a second)']) {
+    assert.ok(found[check] && found[check].frames > 10000, `${check}: checked in ${found[check] ? found[check].frames : 0} frames`);
+    assert.equal(found[check].bad, 0, `${check}: ${JSON.stringify(found[check].cases.slice(0, 5))}`);
+  }
+  assert.ok(found['waist twisted past its limit'].largest <= 22.5, `the waist turned ${found['waist twisted past its limit'].largest.toFixed(1)} degrees`);
 });

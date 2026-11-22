@@ -93,7 +93,7 @@ export function travel(c, s) {
     D = lg.weave[1] * w * s.side;
   // the weave: across from the hips and the waist, and down on the knees (a deep one, a little at the waist too)
   headTo(c, X * A, 0);
-  c.twist += 4 * X * w * s.side;
+  c.waist += 4 * X * w * s.side;
   let knees = (Y * D) / SLOPE;
   c.lean += lg.deepLean * deep * w * s.side;
   // stepping in: outside (to his right) off the lead foot, onto the right knee, and the knees left bent as he goes
@@ -116,7 +116,7 @@ export function travel(c, s) {
   // a dirty one's lead shoulder, now and then: turned in and dropped at him, the knees giving, and back
   if (feint > 0) {
     const k = feint * w;
-    c.twist -= lg.loose.shoulder * k;
+    c.waist -= lg.loose.shoulder * k;
     c.side -= 3 * k;
     c.lz += 0.05 * k;
     c.ly -= 0.01 * k;
@@ -189,12 +189,12 @@ export function dash(c, d, T) {
     headTo(c, s * L.side[2] * (2 * across(u) - 1) * k - s * 0.01 * k, 0);
     knees += (dip(u) * L.side[0] * k) / SLOPE;
     c.lean += 5 * dip(u) * k;
-    c.twist += 6 * s * (2 * across(u) - 1) * k;
+    c.waist += 6 * s * (2 * across(u) - 1) * k;
   }
   // (a dirty one's lead shoulder feinted as he sets off)
   if (d.feint) {
     const k = pulse((T - 0.12) / 0.24);
-    c.twist -= lg.loose.shoulder * k;
+    c.waist -= lg.loose.shoulder * k;
     c.side -= 3 * k;
     c.lz += 0.05 * k;
     knees += 4 * k;

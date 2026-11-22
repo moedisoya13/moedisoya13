@@ -9,7 +9,8 @@ import { step } from '../src/game/bout.mjs';
 import { freshBout, drive } from '../src/footwork.mjs';
 import { DEFENSE } from '../src/defense.mjs';
 import { measure } from '../src/audit.mjs';
-import { createFall, stepFall, lyingOf } from '../src/phys/fall.mjs';
+import { createFall, stepFall, lyingOf, poseOf } from '../src/phys/fall.mjs';
+import { NAMES } from '../src/rig/skeleton.mjs';
 import { guardPose } from '../src/anim/animator.mjs';
 import { MOVES, LIE, UP } from '../src/anim/moves.mjs';
 import { RADIUS, GLOVE } from '../src/rig/body.mjs';
@@ -92,4 +93,29 @@ test('knockdown: from the guard, a blow from any side lays him down still, on hi
     assert.ok(MOVES[LIE[lying.on]] && UP[LIE[lying.on]], `blow ${k}: no way up from his ${lying.on}`);
   }
   assert.ok(seen.size >= 2, `every fall ended on his ${[...seen]}`);
+});
+
+/* The waist (Spine1) is part of the pose a fall starts from: the belly, one piece from the waist to the chest, is set from
+   where the lower spine and the chest are, so a man knocked down with his waist turned is not snapped straight as the physics
+   takes him (the pose it starts from is his, to the half centimetre the one-piece belly always takes), and his first frame
+   of falling goes where the same fall from his guard goes, give or take what the turn itself changes. */
+test('knockdown: knocked down with his waist turned 15 degrees, no joint of him jumps in the first frame', () => {
+  const most = (a, b) => Math.max(...NAMES.map(n => Math.hypot(a[n][0] - b[n][0], a[n][1] - b[n][1], a[n][2] - b[n][2]))),
+    fell = waist => {
+      const pose = guardPose({ waist }),
+        body = createFall(pose, pose, DT, null),
+        start = poseOf(body, 0, 0).at;
+      stepFall(body, DT);
+      const next = poseOf(body, DT, 0).at;
+      return { pose, start, moved: Object.fromEntries(NAMES.map(n => [n, next[n].map((v, i) => v - start[n][i])])) };
+    },
+    straight = fell(0);
+  for (const waist of [15, -15]) {
+    const { pose, start, moved } = fell(waist),
+      R = pose.rot.Spine1,
+      turned = (Math.atan2(R[2], R[8]) * 180) / Math.PI;
+    assert.ok(Math.abs(turned - waist) < 0.01, `the guard's waist is turned ${turned.toFixed(2)} degrees`);
+    assert.ok(most(start, pose.at) < 0.01, `waist ${waist}: the fall starts ${(most(start, pose.at) * 100).toFixed(1)} cm from his pose`);
+    assert.ok(most(moved, straight.moved) < 0.03, `waist ${waist}: the first frame of the fall goes ${(most(moved, straight.moved) * 100).toFixed(1)} cm from where it goes from the guard`);
+  }
 });

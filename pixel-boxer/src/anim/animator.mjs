@@ -153,14 +153,20 @@ const NECK = { knee: 60, most: 75 };
 /* (and the spine twists only so far: the chest on the pelvis, past 34 degrees less and less, never past 42; the guard holds
    it 10 degrees to his right already, so a lead hook has the less of it to use) */
 const TWIST = { knee: 34, most: 42 };
+/* (the waist, the disc between the pelvis and the chest (Spine1), turns on the pelvis past 16 degrees less and less, never
+   past 22; and the spine's whole twist above is the waist's and the chest's together: where the two would go past it, the
+   chest gives first) */
+const WAIST = { knee: 16, most: 22 };
 const soft = (x, { knee, most }) => (Math.abs(x) <= knee ? x : Math.sign(x) * (knee + (most - knee) * Math.tanh((Math.abs(x) - knee) / (most - knee))));
 function trunk(c, gaze) {
   const lean = GUARD.lean + c.lean,
     yaw = GUARD.yaw + c.yaw,
-    twist = soft(GUARD.twist + c.twist, TWIST),
-    look = soft(2 * (-(GUARD.yaw + GUARD.twist) * 0.45 - (c.yaw + twist - GUARD.twist) * (gaze ?? 0.9) * 0.5 + c.hw * 0.5), NECK) / 2;
+    waist = soft(c.waist || 0, WAIST),
+    twist = soft(GUARD.twist + c.twist + waist, TWIST) - waist,
+    look = soft(2 * (-(GUARD.yaw + GUARD.twist) * 0.45 - (c.yaw + waist + twist - GUARD.twist) * (gaze ?? 0.9) * 0.5 + c.hw * 0.5), NECK) / 2;
   return {
     Hips: [lean * 0.4 + c.tip, yaw, -c.side * 0.4],
+    Spine1: [0, waist, 0],
     Spine2: [lean * 0.3, twist * 0.4, -c.side * 0.3],
     Chest: [lean * 0.3, twist * 0.6, -c.side * 0.3],
     Neck1: [GUARD.chin * 0.5 - lean * 0.2 + c.hp * 0.5, look, -c.hr * 0.5],
@@ -278,11 +284,11 @@ function sweep(p, to, axis, out, up, back) {
   return [axis[0] + rx * k, p[1] + (to[1] - p[1]) * up, axis[2] + rz * k];
 }
 
-// the guard itself, standing still: the pose the boxer is sculpted and lit in
-export const guardPose = () => {
+// the guard itself, standing still: the pose the boxer is sculpted and lit in (or the guard with these channels' trunk)
+export const guardPose = ch => {
   return solve({
     hips: GUARD.hips,
-    spine: trunk(ZERO),
+    spine: trunk(ch ? Object.assign({}, ZERO, ch) : ZERO),
     feet: GUARD.feet,
     hands: { L: { at: GUARD.hands.L, pole: [0.5, -1, -0.2] }, R: { at: GUARD.hands.R, pole: [-0.5, -1, -0.2] } }
   });
@@ -372,7 +378,7 @@ function swapHands(c) {
     c[a] = c[b] || 0;
     c[b] = x;
   }
-  for (const ch of ['lx', 'rx', 'side', 'twist', 'yaw', 'hw', 'hr', 'hx']) if (c[ch]) c[ch] = -c[ch];
+  for (const ch of ['lx', 'rx', 'side', 'twist', 'waist', 'yaw', 'hw', 'hr', 'hx']) if (c[ch]) c[ch] = -c[ch];
 }
 export function createAnimator(seed) {
   const c = {}, // this frame's channels
@@ -788,7 +794,7 @@ export function createAnimator(seed) {
         // a punch: what its wind-up and each joint of its chain add, by how far each has turned (as far as he turns it)
         const move = punchMove,
           chain = action.chain,
-          amp = chain.amp || [1, 1, 1, 1, 1];
+          amp = chain.amp || [1, 1, 1, 1, 1, 1];
         form = (action.level || LEVEL[3]).form;
         // (only when the press turned into it: game/bout.mjs, anim/show.mjs)
         foul = form.dirty && move.foul && action.variant === move.foul.name ? move.foul : null;
@@ -801,7 +807,7 @@ export function createAnimator(seed) {
         // (and a beginner does not use his knees at all: what the wind-up and the chain do to his height is not done)
         const knees = form.dip > 0 ? 0 : 1,
           height = ch => (ch === 'hy' || ch === 'lkf' || ch === 'rkf' ? knees : 1);
-        for (const ch in move.coil) c[ch === 'twist' && !form.sep ? 'yaw' : ch] += move.coil[ch] * chain.coil.q * (ch === 'lc' || ch === 'le' || ch === 'rc' || ch === 're' || (ch === 'twist' && move.chain.locked) || (ch === 'yaw' && move.arm === 'swing') ? 1 : chain.shown ?? 1) * height(ch);
+        for (const ch in move.coil) c[(ch === 'twist' || ch === 'waist') && !form.sep ? 'yaw' : ch] += move.coil[ch] * chain.coil.q * (ch === 'lc' || ch === 'le' || ch === 'rc' || ch === 're' || ((ch === 'twist' || ch === 'waist') && move.chain.locked) || (ch === 'yaw' && move.arm === 'swing') ? 1 : chain.shown ?? 1) * height(ch);
         // (a flicker's body: a great dirty fighter's swing, a legend's wrist: moves.mjs)
         const flick = move.flick ? move.flick[Math.max(0, (form.dirty || 1) - 1)] : 1;
         LINKS.forEach((link, i) => {
@@ -845,9 +851,10 @@ export function createAnimator(seed) {
         /* The stretch across the trunk: as the hips go the shoulders are held back behind them, most of all halfway through
            the hips' turn, and let go as the hips finish it (the more of it a man can hold, the more the trunk has to give
            back). It is the hips' turn that pulls it, so a man whose trunk goes early holds it as long as one whose trunk
-           waits; and only on the way out (by the time the hips have got there it is gone, and they come back without it). */
+           waits; and only on the way out (by the time the hips have got there it is gone, and they come back without it). In a
+           punch that turns the waist it is the waist that is held back, the belt left behind the hips and catching up. */
         const hipsQ = clamp(chain.q[1], 0, 1);
-        if (chain.phase !== 'recover' && chain.phase !== 'done') c.twist -= sg * form.sep * share.sep * 4 * hipsQ * (1 - hipsQ);
+        if (chain.phase !== 'recover' && chain.phase !== 'done') c[move.chain.waist ? 'waist' : 'twist'] -= sg * form.sep * share.sep * 4 * hipsQ * (1 - hipsQ);
         /* The punching shoulder turned in and up to the chin as the arm goes, the head tilted down onto it. */
         const tuck = smooth(clamp(move.arm === 'straight' ? chain.q[4] : chain.q[3], 0, 1)) * form.tuck * share.tuck;
         c.twist += sg * tuck;
@@ -1407,6 +1414,9 @@ export function createAnimator(seed) {
         const at = headAt(head, X);
         headTo(c, at.x * hw, at.y * hw);
         if (head.level) (c.hy -= head.level.depth * level * hw), (c.lean += head.level.lean * level * hw);
+        /* (with the chest: turned at the waist instead, which is where it belongs, the gloves of a guard held through it move
+           a few millimetres, enough to change what some blocks take by a newton-second, so it stays the chest's until the
+           punches' waist is in) */
         if (head.beat !== 'free') c.twist += 4 * X * hw;
       }
       if (st.head && st.head.beat === 'roll') loose += (dt / (st.head.T * H)) * (1 + 0.35 * Math.sin(TAU * 0.11 * clock + (seed || 0) * 2.1));
@@ -1923,9 +1933,10 @@ export function createAnimator(seed) {
                 // his face, and one raised high before the body turns under it takes the upper arm up past where it can go)
                 set = mine.tight ? drove * drove : smooth(clamp(Math.max(chain.coil.q, chain.q[0]), 0, 1)),
                 ring = [to[0] - s * 0.05, to[1] + 0.03, to[2] + 0.1],
-                amp = chain.amp || [1, 1, 1, 1, 1],
-                wound = ((mine.coil.yaw || 0) + (mine.coil.twist || 0)) * chain.coil.q,
-                still = mine.links.hips.yaw * amp[1] * (1 - chain.q[1]) + mine.links.trunk.twist * amp[2] * ((mine.land ?? 1) - chain.q[2]) - wound,
+                amp = chain.amp || [1, 1, 1, 1, 1, 1],
+                wound = ((mine.coil.yaw || 0) + (mine.coil.twist || 0) + (mine.coil.waist || 0)) * chain.coil.q,
+                // (and the waist's, where the punch turns it: all of it, the waist being quick)
+                still = mine.links.hips.yaw * amp[1] * (1 - chain.q[1]) + mine.links.trunk.twist * amp[2] * ((mine.land ?? 1) - chain.q[2]) + (mine.links.waist ? mine.links.waist.waist * amp[5] * (1 - chain.q[5]) : 0) - wound,
                 round = p => (Math.atan2(p[0] - chest.p[0], p[2] - chest.p[2]) * 180) / Math.PI,
                 wrap = a => ((((a + 180) % 360) + 360) % 360) - 180,
                 // (and never further round than a shoulder can hold it: `most` degrees, and, close in, `ahead` degrees off the
