@@ -3,7 +3,9 @@
    supplies it), and the list of files the page loads, with the media type the host cannot guess from `.mjs`.
      node tools/artifact.mjs <out.html>                                  the game
      node tools/artifact.mjs catalog.html src/catalog.mjs <out.html>     the footwork catalogue
-   Either way the files map is printed as JSON. */
+     node tools/artifact.mjs pending.html src/pending.mjs <out.html>     the pending catalogue (or fxlab.html src/fxlab.mjs)
+   Either way the files map is printed as JSON: the modules, the assets (a page of boxers alone, without the ring: the
+   catalogues and the effect study), and the reference sheets (docs/ref) the modules name. */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -26,13 +28,18 @@ const page = [
 writeFileSync(outFile, page + '\n');
 
 // every module the page reaches from src/main.mjs, found by following its imports
-const seen = new Set();
+const seen = new Set(),
+  sheets = new Set();
 (function follow(file) {
   if (seen.has(file)) return;
   seen.add(file);
-  for (const m of readFileSync(path.join(root, file), 'utf8').matchAll(/from '(\.[^']+)'/g)) follow(path.posix.join(path.posix.dirname(file), m[1]));
+  const text = readFileSync(path.join(root, file), 'utf8');
+  // (a reference sheet a module names is loaded by the page from the same path)
+  for (const m of text.matchAll(/docs\/ref\/[\w-]+\.jpg/g)) sheets.add(m[0]);
+  for (const m of text.matchAll(/from '(\.[^']+)'/g)) follow(path.posix.join(path.posix.dirname(file), m[1]));
 })(entry);
 const files = Object.fromEntries([...seen].sort().map(f => [f, { from: f, contentType: 'text/javascript' }]));
 files['assets/manifest.json'] = 'assets/manifest.json';
-for (const part of entry.includes('catalog') ? ['boxer'] : ['boxer', 'ring']) files[`assets/${part}.splats.txt`] = `assets/${part}.splats.txt`;
+for (const part of /catalog|pending|fxlab/.test(entry) ? ['boxer'] : ['boxer', 'ring']) files[`assets/${part}.splats.txt`] = `assets/${part}.splats.txt`;
+for (const sheet of [...sheets].sort()) files[sheet] = sheet;
 console.log(JSON.stringify(files, null, 1));
