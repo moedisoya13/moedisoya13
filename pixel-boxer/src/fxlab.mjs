@@ -141,9 +141,9 @@ function start({ manifest, boxer }) {
           cell.ripples[e.on] = rippleOf(e, struck);
           cell.head.textContent = cell.ripples[e.on].last.toFixed(2);
           const r = cell.ripples[e.on];
-          el.querySelector('[data-thick]').textContent = (Math.max(FX.motes.thin, FX.motes.width * scaleOf(e)) * 100).toFixed(1);
-          el.querySelector('[data-sway]').textContent = (r.strength * r.sway * 100).toFixed(1);
-          el.querySelector('[data-wide]').textContent = (r.width * 100).toFixed(0);
+          cell.el.querySelector('[data-thick]').textContent = (Math.max(FX.motes.thin, FX.motes.width * scaleOf(e)) * 100).toFixed(1);
+          cell.el.querySelector('[data-sway]').textContent = (r.strength * r.sway * 100).toFixed(1);
+          cell.el.querySelector('[data-wide]').textContent = (r.width * 100).toFixed(0);
         } else {
           // as it was drawn before: the sparks where the glove met him, and he goes white
           cell.fx.sparks(e.at, Math.round(5 + 12 * k), [38, 39, 40, 41], 2.5 + 3 * k, e.dir);
@@ -154,7 +154,7 @@ function start({ manifest, boxer }) {
         }
         cell.shake = e.down ? 5 : 1 + 2.5 * k;
         cell.blow.textContent = String(Math.round(e.J));
-        el.querySelector('[data-dmg]').textContent = (e.damage ?? e.J * 0.035).toFixed(1);
+        cell.el.querySelector('[data-dmg]').textContent = (e.damage ?? e.J * 0.035).toFixed(1);
         cell.beads.textContent = String(n);
       } else if (e.type === 'block' || e.type === 'parry') (met(cell.fx, e), (cell.shake = e.type === 'parry' ? 2 : 1));
     }
