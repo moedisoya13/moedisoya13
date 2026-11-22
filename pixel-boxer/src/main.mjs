@@ -2,6 +2,7 @@
    part of its physics), and draws it at whatever rate the screen runs, each boxer placed between his last two steps. */
 import { createRenderer, paletteArray, rgb } from './render/renderer.mjs';
 import { createFx } from './render/fx.mjs';
+import { blow, met, rippleOf, rippleRow } from './render/blow.mjs';
 import { unpack, fromBase64 } from './render/splats.mjs';
 import * as M from './rig/m3.mjs';
 import { fk, NAMES } from './rig/skeleton.mjs';
@@ -41,9 +42,11 @@ function start({ manifest, boxer, ring }) {
     audio = createAudio(),
     input = createInput($('controls')),
     bind = fk(guardPose());
-  // three sets of loose splats: sparks and shadows in the ring's colours, and each boxer's glove streaks in his own
-  const fx = [createFx(), createFx(), createFx()];
-  const meshes = { ring: R.mesh(ring, manifest.ring.count), boxer: R.mesh(boxer, manifest.boxer.count), fx: fx.map(f => R.mesh(f.rows, 0, true)) };
+  /* three sets of loose splats: sparks and shadows in the ring's colours, and each boxer's glove streaks in his own; and what
+     a blow throws off each of them, apart from the rest, to be kept off his own silhouette (render/blow.mjs) */
+  const fx = [createFx(), createFx(), createFx()],
+    motes = [createFx(), createFx()];
+  const meshes = { ring: R.mesh(ring, manifest.ring.count), boxer: R.mesh(boxer, manifest.boxer.count), fx: fx.map(f => R.mesh(f.rows, 0, true)), motes: motes.map(f => R.mesh(f.rows, 0, true)) };
   const palettes = [paletteArray(manifest.palette), paletteArray(manifest.palette.map((hex, i) => RIVAL[i] ?? hex))];
   const hall = new Float32Array(HALL.flatMap(rgb)),
     ink = new Float32Array(rgb(manifest.palette[0]));
@@ -62,7 +65,8 @@ function start({ manifest, boxer, ring }) {
     stopped = 0,
     spar = query.has('spar'), // the other corner only stands there: for looking at the motion
     white = 0,
-    dim = 0;
+    dim = 0,
+    ripples = [null, null]; // the ripple going through each man, if one is (render/blow.mjs)
   const cam = { target: [0, 0.8, 0], yaw: 0, pitch: 0.5, dist: 8 },
     shake = { amp: 0 },
     stats = { frames: 0, ms: 0, drawn: 0 };
@@ -72,6 +76,7 @@ function start({ manifest, boxer, ring }) {
     rival = createRival(STAGES[stage].level);
     pose(true);
     dim = 0;
+    ripples = [null, null];
     $('stage').textContent = STAGES[stage].name;
     hud();
   }
@@ -123,10 +128,10 @@ function start({ manifest, boxer, ring }) {
       const k = Math.min(1.6, (e.J * (e.counter ? RULES.counterGain : 1)) / 85),
         heavy = k > 0.75 || e.down;
       audio.play(heavy ? 'heavy' : 'hit');
-      fx[0].sparks(e.at, Math.round(5 + 12 * k), [38, 39, 40, 41], 2.5 + 3 * k, e.dir);
-      fx[0].sparks(e.at, Math.round(3 + 8 * k), [41, 41, 25], 2.5 + 2 * k, e.dir); // sweat
+      // (sparks off the far side of what it struck, never seen over him, and a ripple through him from where it landed)
+      blow(motes[e.on], e, f[e.on], e.counter ? RULES.counterGain : 1);
+      ripples[e.on] = rippleOf(e, f[e.on]);
       shake.amp = e.down ? 7 : 1.5 + 3.5 * k;
-      if (e.counter || e.down) white = 0.5;
       try {
         if (navigator.vibrate && e.on === 0) navigator.vibrate(Math.round(15 + 40 * k));
       } catch {
@@ -139,11 +144,11 @@ function start({ manifest, boxer, ring }) {
       if (e.down) phase = 'over';
     } else if (e.type === 'block') {
       audio.play('whiff');
-      fx[0].sparks(e.at, 4, [38, 25, 24], 2.5, e.dir);
+      met(fx[0], e);
       shake.amp = 1.2;
     } else if (e.type === 'parry') {
       audio.play('deflect');
-      fx[0].sparks(e.at, 14, [38, 38, 39, 40], 5);
+      met(fx[0], e);
       shake.amp = 2.5;
       white = 0.25;
       if (e.who === 0) setTimeout(() => audio.play('chance'), 100);
@@ -209,13 +214,18 @@ function start({ manifest, boxer, ring }) {
         for (let k = 0; k < NAMES.length; k++) (mats[k * 12 + 9] += shudder * Math.cos(f.yaw)), (mats[k * 12 + 11] -= shudder * Math.sin(f.yaw));
       }
       R.packBones(mats, bones[i]);
-      layers.push({ mesh: meshes.boxer, bones: bones[i], palette: palettes[i], mask: 1, flash: f.flash > 0 ? 1 : 0 });
+      layers.push({ mesh: meshes.boxer, bones: bones[i], palette: palettes[i], mask: 1, wave: rippleRow(ripples[i], f), silhouette: i + 1 });
       shadows.push({ x: f.x + f.pose.at.Hips[2] * Math.sin(f.yaw), z: f.z + f.pose.at.Hips[2] * Math.cos(f.yaw), yaw: f.yaw, long: f.down ? 0.5 : 0.3, wide: f.down ? 0.32 : 0.24 });
     });
     meshes.fx[0].update(fx[0].rows, fx[0].update(held ? elapsed * 0.2 : elapsed, shadows, 22));
     for (const i of [1, 2]) meshes.fx[i].update(fx[i].rows, fx[i].update(held ? elapsed * 0.2 : elapsed));
+    motes.forEach((m, i) => meshes.motes[i].update(m.rows, m.update(held ? elapsed * 0.2 : elapsed)));
+    // (a ripple goes on in the same time as the sparks)
+    for (const r of ripples) if (r) r.age += held ? elapsed * 0.2 : elapsed;
     layers.splice(1, 0, { mesh: meshes.fx[0], palette: palettes[0], mask: 0.6 });
     layers.push({ mesh: meshes.fx[1], palette: palettes[0], mask: 0.6 }, { mesh: meshes.fx[2], palette: palettes[1], mask: 0.6 });
+    // (what a blow threw off each man is never seen over him, in front of him or behind: it shows first at his outline)
+    layers.push(...meshes.motes.map((mesh, i) => ({ mesh, palette: palettes[0], mask: 0.6, outside: i + 1 })));
 
     // ---- camera: above and to one side of the line between them, swinging round slowly as they circle
     const [a, b] = bout.fighters,

@@ -13,7 +13,7 @@
      r.progress          0..1 through it */
 export const captureBout = bout => ({
   t: bout.t,
-  men: bout.fighters.map(f => ({ pose: f.pose, place: f.place, x: f.x, z: f.z, yaw: f.yaw, flash: f.flash, points: f.points }))
+  men: bout.fighters.map(f => ({ pose: f.pose, place: f.place, x: f.x, z: f.z, yaw: f.yaw, points: f.points }))
 });
 
 export function createReplay(o) {

@@ -6,8 +6,8 @@
      PARTS      the four parts, in order
      ITEMS      the 28 items, in order; part: the part's n
      TUNES      the variants' overrides (src/tune.mjs), as the cards and tools/pending.mjs both use them
-     VERSIONS   the hit effect's versions, and MIST, the colours of its spray: the same values as src/fxlab.mjs (which draws
-                its page when imported, so they cannot be imported from it; if fxlab is cleared away these are the originals)
+     VERSIONS   the hit effect's versions, and MIST, the colours of its spray, as they were compared (the item is decided:
+                the game draws the blow by render/blow.mjs, and src/fxlab.mjs no longer has them: these are the originals)
      FX_SCENES  the three scenes the versions are compared in
    A card: { entry (a catalogue script id), say (a line: what it is), kind (what its numbers are: tag, liver, cross, pd, fx,
    wave), key (its expected numbers in src/pending.numbers.mjs: NUMBERS.cards), tune, guard and gap (the down parry's frame
@@ -113,7 +113,7 @@ export const ITEMS = [
   },
   {
     id: 'impl-fx-attach', part: 1, title: '타격 이펙트를 본편과 카탈로그에 붙이기',
-    state: '시안은 `fxlab.html`에만 있습니다. 실루엣 가림은 렌더러에 들어가 있습니다(`silhouette`/`outside` 층, `fx.spray`; 바디샷은 사건의 `e.trunk`로 뿌리고 양은 0.6배). 버전 결정(타격 이펙트 버전)을 기다립니다.',
+    state: '정해짐 · 단계 J에서 붙였습니다(6차 기획 §2, `src/render/blow.mjs`): 본편·모션 카탈로그·이 페이지의 기본 카드·리뷰 시트가 같은 함수로 그립니다. 색 입자는 그대로, 시작점은 타격선이 맞은 몸을 빠져나가는 반대쪽 면, 맞은 선수의 윤곽 밖에서만 보임. 흰 번쩍임 대신 파문. 아래 표는 결정 전의 기록입니다.',
     tables: [{ head: ['', '기획', '현재'], rows: [
       ['본편(`index.html`)의 타격', '땀 분사 + 파문', '색 입자 + 흰 번쩍임'],
       ['카탈로그의 타격', '같음', '색 입자 + 흰 번쩍임'],
@@ -130,7 +130,7 @@ export const ITEMS = [
   // ===== 2. waiting on a decision
   {
     id: 'fx-version', part: 2, title: '타격 이펙트 버전', pairNo: 1,
-    state: '네 가지가 있습니다. 네 장은 같은 대본, 같은 시드, 한 시계라 프레임까지 같고, 다른 것은 그리는 법뿐입니다. 카메라는 시안의 것(맞는 사람 쪽으로 당긴 구도)입니다.',
+    state: '정해짐 · 사용자 지시(6차 기획 D3·D4): A/B/C가 아니라 지금의 색 입자를 반대쪽 면에서, 흰 번쩍임 대신 시안 A의 파문으로. 단계 J에서 붙였습니다. 아래 네 장은 결정 전 비교 그대로입니다(같은 대본, 같은 시드, 한 시계; 카메라는 맞는 사람 쪽으로 당긴 구도).',
     tables: [{ head: ['85 N·s의 타격', '지금', 'A 기본', 'B 크고 느리게', 'C 잘고 빠르게'], rows: [
       ['입자 수', '17 + 11 불꽃', ...VERSIONS.slice(1).map(v => String(v.spray.n))],
       ['뻗는 거리', '–', ...VERSIONS.slice(1).map(v => `${v.spray.range.toFixed(2)} m`)],

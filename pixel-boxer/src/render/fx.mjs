@@ -1,5 +1,6 @@
-/* Short-lived splats over the match: the streak a glove leaves along the path it really took, sparks off a blow, the sweat
-   that leaves the far side of a head when it is hit, dust from a foot, and the shadows that pin the boxers to the canvas. Each is a stretched gaussian from a to b; every frame
+/* Short-lived splats over the match: the streak a glove leaves along the path it really took, sparks off a blow (where they
+   start and which way they go: render/blow.mjs), the sweat that leaves the far side of a head when it is hit (a study, not drawn
+   in the game), dust from a foot, and the shadows that pin the boxers to the canvas. Each is a stretched gaussian from a to b; every frame
    the live ones are written into one array of rows for the renderer. */
 import * as M from '../rig/m3.mjs';
 
@@ -42,11 +43,13 @@ export function createFx(random) {
     trail(a, b, width, colours, life) {
       add({ a: a.slice(), b: b.slice(), width, pal: colours, life: life || 0.1, shrink: 0.75 });
     },
+    /* sparks thrown out round `at`, a fan with a little lift in it, carried on `dir` if there is one: [x, z] the way across,
+       and [x, z, y] up or down as well (render/blow.mjs: the way the glove was going), each at 0.7 of the speed */
     sparks(at, n, colours, speed, dir) {
       for (let i = 0; i < n; i++) {
         const a = rnd() * Math.PI * 2,
           s = speed * (0.35 + rnd() * 0.9),
-          v = [Math.cos(a) * s * 0.8 + (dir ? dir[0] * speed * 0.7 : 0), Math.sin(a) * s * 0.7 + 1.4, (rnd() - 0.5) * s + (dir ? dir[1] * speed * 0.7 : 0)];
+          v = [Math.cos(a) * s * 0.8 + (dir ? dir[0] * speed * 0.7 : 0), Math.sin(a) * s * 0.7 + 1.4 + (dir && dir[2] ? dir[2] * speed * 0.7 : 0), (rnd() - 0.5) * s + (dir ? dir[1] * speed * 0.7 : 0)];
         add({ a: at.slice(), b: at.slice(), v, g: -13, drag: 3, width: 0.024, pal: colours, life: 0.16 + rnd() * 0.22, tail: 0.03, shrink: 0.6 });
       }
     },

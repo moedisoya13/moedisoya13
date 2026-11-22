@@ -1,10 +1,13 @@
-/* A study of how a blow is drawn: the spray of sweat off the shadowed side of what was struck (render/fx.mjs: spray) in
-   place of the blow's sparks, never seen over the man it came off (a layer of its own drawn `outside` his silhouette:
-   render/renderer.mjs), and a ripple through the struck man from where it landed (render/renderer.mjs: a layer's
-   wave: he sways as it passes, with no light) in place of his flash of white. Every card is a real bout from the catalogue (src/defense.mjs, src/ladder.mjs),
-   looped; the cards of a row are the same exchange, frame for frame, and differ only in how the blow is drawn. */
+/* How a blow is drawn, before and as decided (docs/moves-plan-6.md §2.6): two columns, the same exchange frame for frame.
+   "전" is the blow as it was drawn before, kept on this page alone: its sparks thrown from where the glove met him, and the
+   struck man white for 0.07 s (his palette made white for so long: the renderer has no flash any more). "확정" is the blow as
+   the game now draws it (render/blow.mjs): the same sparks from where the line of the blow comes out of his far side, along
+   the way the glove was going, never seen over him (an fx of his own drawn `outside` his silhouette), and a ripple through
+   him from where it landed in place of the white. Every card is a real bout from the catalogue (src/defense.mjs,
+   src/ladder.mjs, src/bodyshots.mjs), looped; the two cards of a row are the same exchange, frame for frame. */
 import { createRenderer, paletteArray, rgb } from './render/renderer.mjs';
 import { createFx } from './render/fx.mjs';
+import { blow, met, rippleOf, rippleRow, FX } from './render/blow.mjs';
 import { unpack, fromBase64 } from './render/splats.mjs';
 import { fk, NAMES } from './rig/skeleton.mjs';
 import { RIVAL } from './rig/boxer.mjs';
@@ -14,34 +17,26 @@ import { step } from './game/bout.mjs';
 import { freshBout, drive } from './footwork.mjs';
 import { DEFENSE } from './defense.mjs';
 import { LADDER } from './ladder.mjs';
+import { BODYSHOTS } from './bodyshots.mjs';
 
 const DT = 1 / 60;
-/* What a mote goes through as it hangs, one run taken for each: the colours of the blow's sparks as they are now (white,
-   the pale yellow, the gold, the pale blue), staying light as the mist thins: a mote gone grey over his face would read as a speck of dirt on it. Palette indices (assets/manifest.json). */
-const MIST = [[39, 39, 40, 40], [40, 40, 39, 41], [41, 41, 41, 25], [38, 39, 40, 40], [41, 38, 41, 41]];
-/* The versions. spray is fx.spray's o (n motes and range metres for a blow of 85 N s, both in proportion to the impulse;
-   size is a mote's, metres). wave: the ripple: speed (m/s its front travels), last (seconds), width (metres of the train
-   of waves riding the front), sway (metres it carries what it passes to either side, at the start of a blow of 60 N s
-   or more: a weaker one sways less). There is no light in it. */
 const VERSIONS = [
-  { id: 'now', name: '지금', note: '지금의 색 입자와 흰 번쩍임. 비교 기준입니다.' },
-  { id: 'base', name: 'A · 기본', note: '입자는 타격이 가는 쪽, 맞은 부위의 그늘진 면 전체에서 나옵니다. 파문은 빛 없이 몸이 일렁이며 초속 3 m로 0.4초 동안 퍼집니다.', spray: { n: 130, range: 0.8, flare: 0.5 }, wave: { speed: 3, last: 0.4, width: 0.14, sway: 0.034 } },
-  { id: 'wide', name: 'B · 크고 느리게', note: '입자가 더 많고 굵으며 가장자리에서 더 벌어집니다. 파문은 느리고 크게 일렁입니다.', spray: { n: 180, range: 0.65, flare: 0.9, life: 0.5, size: 0.018 }, wave: { speed: 2.2, last: 0.55, width: 0.2, sway: 0.05 } },
-  { id: 'long', name: 'C · 잘고 빠르게', note: '입자가 덜 벌어지고 1 m 넘게 뻗어 타격의 선이 남습니다. 파문은 잘게 떨며 빠르게 지나갑니다.', spray: { n: 120, range: 1.05, flare: 0.28 }, wave: { speed: 4.2, last: 0.3, width: 0.1, sway: 0.024 } }
+  { id: 'before', name: '전', note: '접촉점에서 튀는 색 입자와, 맞은 선수의 흰 번쩍임(0.07초).' },
+  { id: 'final', name: '확정', note: '같은 색 입자(수·색·속도·수명 그대로)가 타격선이 맞은 몸을 빠져나가는 반대쪽 면에서 시작해, 주먹이 가던 방향(위아래 포함)으로 날아갑니다. 맞은 선수의 윤곽 안에서는 보이지 않아 윤곽에서 처음 나타납니다. 흰 번쩍임 대신 닿은 점에서 파문이 빛 없이 몸(머리 포함)에 퍼집니다: 초속 3 m, 0.4초(다운은 0.55초, 흔들림 1.3배). 막음과 패리의 불꽃은 닿은 점 그대로입니다.' }
 ];
 /* The rows: a light blow, the two hard ones, an uppercut under the chin (the inside uppercut of the skill ladder, the one
-   that comes straight up: there it is the other man who is struck), and a knockdown. */
+   that comes straight up: there it is the other man who is struck), a hook to the liver, and a knockdown. */
 const ROWS = [
   ['hit-jab', '잽 · 가벼운 타격'],
   ['hit-cross', '스트레이트'],
   ['hit-hook', '훅', -1.05], // (seen from behind the man it lands on, so that the way it goes is across the picture)
   ['upperIn@3', '어퍼컷 · 턱'],
+  ['body-liver', '리버 훅 · 몸통', 2.4], // (from his open side: from the catalogue's 1.3, close on him, the other man's back is in the way of what comes off him)
   ['down-back', '다운']
 ].map(([id, name, yaw]) => {
-  const entry = [...DEFENSE, ...LADDER].find(e => e.id === id);
+  const entry = [...DEFENSE, ...LADDER, ...BODYSHOTS].find(e => e.id === id);
   return Object.assign({}, entry, { name, view: { yaw: yaw ?? entry.view.yaw, pitch: entry.view.pitch } });
 });
-const HEAD = 0.115; // the head, as a ball, for the spray: metres
 
 // ---- the page, written from the rows and the versions
 {
@@ -54,7 +49,7 @@ const HEAD = 0.115; // the head, as a ball, for the spray: metres
     for (const v of VERSIONS)
       section.lastChild.insertAdjacentHTML(
         'beforeend',
-        `<article class="card" data-entry="${entry.id}" data-version="${v.id}"><div class="stage"></div><div class="info"><h3>${v.name}</h3><div class="stats">충격량 <b data-blow>–</b> N·s · 입자 <b data-beads>–</b></div><div class="stats">뻗는 거리 <b data-head>–</b> cm</div></div></article>`
+        `<article class="card" data-entry="${entry.id}" data-version="${v.id}"><div class="stage"></div><div class="info"><h3>${v.name}</h3><div class="stats">충격량 <b data-blow>–</b> N·s · 입자 <b data-beads>–</b></div><div class="stats">${v.id === 'final' ? '파문 <b data-head>–</b> s' : '흰 번쩍임 <b data-head>–</b> s'}</div></div></article>`
       );
     lab.append(section);
   }
@@ -101,57 +96,62 @@ function start({ manifest, boxer }) {
     tiles = floor(3.2, [0.6, 0]),
     meshes = { boxer: R.mesh(boxer, manifest.boxer.count), floor: R.mesh(tiles.rows, tiles.count) },
     palettes = [paletteArray(manifest.palette), paletteArray(manifest.palette.map((hex, i) => RIVAL[i] ?? hex))],
+    // (the struck man in white, as the blow was drawn before)
+    white = paletteArray(manifest.palette.map(() => 0xffffff)),
     mats = new Float32Array(NAMES.length * 12),
     ink = new Float32Array(rgb(manifest.palette[0]));
   let speed = 1,
     last = 0,
     ground = new Float32Array(12);
 
-  const cells = [...document.querySelectorAll('.card')].map((el, i) => {
+  const cells = [...document.querySelectorAll('.card')].map(el => {
     const entry = ROWS.find(e => e.id === el.dataset.entry),
-      version = VERSIONS.find(v => v.id === el.dataset.version),
+      version = el.dataset.version,
       seed = 7 + ROWS.indexOf(entry),
       fx = createFx(() => cell.rnd()),
-      // (the spray off each man apart from the rest: it is kept off his own silhouette, and only his)
-      sprays = [0, 1].map(() => {
-        const spray = createFx(() => cell.rnd());
-        return { fx: spray, mesh: R.mesh(spray.rows, 0, true) };
+      // (what a blow throws off each man, apart from the rest: it is kept off his own silhouette, and only his)
+      motes = [0, 1].map(() => {
+        const m = createFx(() => cell.rnd());
+        return { fx: m, mesh: R.mesh(m.rows, 0, true) };
       }),
-      cell = { entry, version, el, stage: el.querySelector('.stage'), blow: el.querySelector('[data-blow]'), beads: el.querySelector('[data-beads]'), head: el.querySelector('[data-head]'), fx, mesh: R.mesh(fx.rows, 0, true), sprays, bones: [new Float32Array(R.maxBones * 12), new Float32Array(R.maxBones * 12)], seed, rnd: dice(seed), bout: null, t: 0, acc: 0, shake: 0, waves: [null, null], struck: entry.id.includes('@') ? 1 : 0, cam: { target: [entry.id.includes('@') ? 1.2 : -0.45, 1.3, 0], yaw: entry.view.yaw, pitch: 0.14, dist: 2.9 } };
+      cell = { entry, version, el, stage: el.querySelector('.stage'), blow: el.querySelector('[data-blow]'), beads: el.querySelector('[data-beads]'), head: el.querySelector('[data-head]'), fx, mesh: R.mesh(fx.rows, 0, true), motes, bones: [new Float32Array(R.maxBones * 12), new Float32Array(R.maxBones * 12)], seed, rnd: dice(seed), bout: null, t: 0, acc: 0, shake: 0, ripples: [null, null], whites: [0, 0], struck: entry.id.includes('@') ? 1 : 0, cam: { target: [entry.id.includes('@') ? 1.2 : -0.45, 1.3, 0], yaw: entry.view.yaw, pitch: 0.14, dist: 2.9 } };
     cell.bout = freshBout(entry);
     return cell;
   });
 
   function tick(cell) {
     const { entry, version } = cell;
-    if (cell.t > 0 && Math.round(cell.t / DT) % Math.round(entry.loop / DT) === 0) (cell.bout = freshBout(entry)), (cell.t = 0), (cell.rnd = dice(cell.seed));
+    if (cell.t > 0 && Math.round(cell.t / DT) % Math.round(entry.loop / DT) === 0) (cell.bout = freshBout(entry)), (cell.t = 0), (cell.rnd = dice(cell.seed)), (cell.ripples = [null, null]), (cell.whites = [0, 0]);
     const bout = cell.bout,
       [a, b] = bout.fighters;
     step(bout, drive(entry, bout, cell.t, DT), DT);
     cell.t += DT;
     b.hp = 1000;
     if (!entry.hurt) a.hp = 1000;
+    // (the white of before went off on the bout's own clock, as the bout kept it)
+    cell.whites = cell.whites.map(w => Math.max(0, w - DT));
     for (const e of bout.events) {
       if (e.type === 'hit') {
         const k = Math.min(1.6, e.J / 85),
           struck = bout.fighters[e.on];
         let n;
-        if (version.spray) {
-          // the sweat off the shadowed side of his head, and a ripple through him from where the glove met it
-          n = cell.sprays[e.on].fx.spray({ at: struck.points.head, r: HEAD }, e.vec, e.J, MIST, version.spray);
-          cell.waves[e.on] = { off: [e.at[0] - struck.points.head[0], e.at[1] - struck.points.head[1], e.at[2] - struck.points.head[2]], age: 0, strength: Math.min(1, e.J / 60) };
-          cell.head.textContent = String(Math.round(version.spray.range * Math.min(1.7, e.J / 85) * 100));
+        if (version === 'final') {
+          // as the game draws it: from the far side of what it struck, and a ripple through him from where it landed
+          n = blow(cell.motes[e.on].fx, e, struck);
+          cell.ripples[e.on] = rippleOf(e, struck);
+          cell.head.textContent = cell.ripples[e.on].last.toFixed(2);
         } else {
-          // the blow as the game draws it now
+          // as it was drawn before: the sparks where the glove met him, and he goes white
           cell.fx.sparks(e.at, Math.round(5 + 12 * k), [38, 39, 40, 41], 2.5 + 3 * k, e.dir);
           cell.fx.sparks(e.at, Math.round(3 + 8 * k), [41, 41, 25], 2.5 + 2 * k, e.dir);
           n = Math.round(5 + 12 * k) + Math.round(3 + 8 * k);
-          cell.head.textContent = '–';
+          cell.whites[e.on] = 0.07;
+          cell.head.textContent = '0.07';
         }
         cell.shake = e.down ? 5 : 1 + 2.5 * k;
         cell.blow.textContent = String(Math.round(e.J));
         cell.beads.textContent = String(n);
-      } else if (e.type === 'block') (cell.fx.sparks(e.at, 4, [38, 25, 24], 2.5, e.dir), (cell.shake = 1));
+      } else if (e.type === 'block' || e.type === 'parry') (met(cell.fx, e), (cell.shake = e.type === 'parry' ? 2 : 1));
     }
     cell.shake *= 0.82;
   }
@@ -170,28 +170,25 @@ function start({ manifest, boxer }) {
       shadows.push({ x: f.x + f.pose.at.Hips[2] * Math.sin(f.yaw), z: f.z + f.pose.at.Hips[2] * Math.cos(f.yaw), yaw: f.yaw, long: 0.3, wide: 0.24 });
     });
     cell.mesh.update(cell.fx.rows, cell.fx.update(elapsed, shadows, 22));
-    for (const s of cell.sprays) s.mesh.update(s.fx.rows, s.fx.update(elapsed));
-    // each man's ripple, if one is going through him: from where the glove met his head, wherever his head is now
+    for (const m of cell.motes) m.mesh.update(m.fx.rows, m.fx.update(elapsed));
+    // each man's ripple, if one is going through him: held to the part it landed on, wherever that is now
     const waves = [a, b].map((f, i) => {
-      const w = cell.waves[i],
-        set = cell.version.wave;
-      if (!w || !set) return null;
-      w.age += elapsed;
-      if (w.age >= set.last) return (cell.waves[i] = null);
-      const h = f.points.head;
-      return [h[0] + w.off[0], h[1] + w.off[1], h[2] + w.off[2], set.speed * w.age, set.width, w.strength * (1 - w.age / set.last) ** 1.2, set.sway];
+      const r = cell.ripples[i];
+      if (!r) return null;
+      r.age += elapsed;
+      return rippleRow(r, f) || (cell.ripples[i] = null);
     });
     layers.push(
       { mesh: cell.mesh, palette: palettes[0], mask: 0.6 },
-      { mesh: meshes.boxer, bones: cell.bones[0], palette: palettes[0], mask: 1, wave: waves[0], flash: !cell.version.wave && a.flash > 0 ? 1 : 0, silhouette: 1 },
-      { mesh: meshes.boxer, bones: cell.bones[1], palette: palettes[1], mask: 1, wave: waves[1], flash: !cell.version.wave && b.flash > 0 ? 1 : 0, silhouette: 2 },
-      /* the spray off each man is never seen over him, in front of him or behind: where it crosses his own outline it is
-         not there, so the first of it to be seen is at his edge, as if it came out from behind him */
-      ...cell.sprays.map((s, i) => ({ mesh: s.mesh, palette: palettes[0], mask: 0.6, outside: i + 1 }))
+      { mesh: meshes.boxer, bones: cell.bones[0], palette: cell.whites[0] > 0 ? white : palettes[0], mask: 1, wave: waves[0], silhouette: 1 },
+      { mesh: meshes.boxer, bones: cell.bones[1], palette: cell.whites[1] > 0 ? white : palettes[1], mask: 1, wave: waves[1], silhouette: 2 },
+      /* what a blow throws off each man is never seen over him, in front of him or behind: where it crosses his own outline
+         it is not there, so the first of it to be seen is at his edge, as if it came out from behind him */
+      ...cell.motes.map((m, i) => ({ mesh: m.mesh, palette: palettes[0], mask: 0.6, outside: i + 1 }))
     );
     const ease = 1 - Math.exp(-elapsed * 4),
       [hit, other] = cell.struck ? [b, a] : [a, b];
-    // framed on the man who is hit, a little behind him: the room is on the far side of his head, for what the blow throws off it
+    // framed on the man who is hit, a little behind him: the room is on the far side of him, for what the blow throws off
     cell.cam.target[0] += (hit.x * 1.45 - other.x * 0.45 - cell.cam.target[0]) * ease;
     cell.cam.target[2] += (hit.z * 1.45 - other.z * 0.45 - cell.cam.target[2]) * ease;
     const jolt = cell.shake > 0.3 ? [Math.sin(cell.t * 97) * cell.shake, Math.cos(cell.t * 83) * cell.shake * 0.6] : null;
@@ -231,10 +228,11 @@ function start({ manifest, boxer }) {
   globalThis.__lab = {
     cells,
     hold: false,
-    reset: () => cells.forEach(cell => ((cell.bout = freshBout(cell.entry)), (cell.t = 0), (cell.acc = 0), (cell.waves = [null, null]), (cell.rnd = dice(cell.seed)))),
-    advance: sec => cells.forEach(cell => { for (let i = 0; i < Math.round(sec / DT); i++) (tick(cell), cell.fx.update(DT, [], 22), cell.sprays.forEach(s => s.fx.update(DT)), cell.waves.forEach(w => w && (w.age += DT))); }),
+    reset: () => cells.forEach(cell => ((cell.bout = freshBout(cell.entry)), (cell.t = 0), (cell.acc = 0), (cell.ripples = [null, null]), (cell.whites = [0, 0]), (cell.rnd = dice(cell.seed)))),
+    advance: sec => cells.forEach(cell => { for (let i = 0; i < Math.round(sec / DT); i++) (tick(cell), cell.fx.update(DT, [], 22), cell.motes.forEach(m => m.fx.update(DT)), cell.ripples.forEach(r => r && (r.age += DT))); }),
     renderer: R,
-    scene
+    scene,
+    FX
   };
   theme();
   document.getElementById('loading').hidden = true;

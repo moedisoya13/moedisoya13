@@ -1,8 +1,11 @@
 /* The pending catalogue (docs/pending-catalog.md): every question still open, each with where it stands, its numbers
    against the plan, the bouts that show it, and the choice, saved as it is made. The bouts are the motion catalogue's
    (src/catalog.mjs): one canvas behind the page, each card's stage a window onto its own looped bout, the cards of a clock
-   stepped together while any of them is on screen; the hit effect's cards draw the blow as the effect study does
-   (src/fxlab.mjs: the spray kept outside the struck man's silhouette, the ripple through him). A variant card is the same
+   stepped together while any of them is on screen, and a blow drawn as the game draws it (render/blow.mjs). The hit
+   effect's cards (an item decided: the versions it was decided among, kept as they were compared) draw the blow each its
+   own way: a version's spray kept outside the struck man's silhouette and its ripple through him, or the blow as it was
+   drawn before, its sparks where it landed and the struck man white for 0.07 s (his palette made white: the renderer has
+   no flash any more). A variant card is the same
    engine with a value or two of the game's tables replaced while its own code runs (src/tune.mjs), so the card beside it
    runs on the defaults. What a variant card should show was measured by tools/pending.mjs (src/pending.numbers.mjs), and is
    written beside what it does show.
@@ -11,6 +14,7 @@
    localStorage (`pending:<id>`) in the same shape. */
 import { createRenderer, paletteArray, rgb } from './render/renderer.mjs';
 import { createFx } from './render/fx.mjs';
+import { blow, met, rippleOf, rippleRow } from './render/blow.mjs';
 import { unpack, fromBase64 } from './render/splats.mjs';
 import { fk, NAMES } from './rig/skeleton.mjs';
 import { RIVAL } from './rig/boxer.mjs';
@@ -461,6 +465,8 @@ function start({ manifest, boxer }) {
     tiles = floor(3.2, [0.6, 0]),
     meshes = { boxer: R.mesh(boxer, manifest.boxer.count), floor: R.mesh(tiles.rows, tiles.count) },
     palettes = [paletteArray(manifest.palette), paletteArray(manifest.palette.map((hex, i) => RIVAL[i] ?? hex))],
+    // (a struck man in white, as the blow was drawn before: only the effect cards' "now" draws it)
+    white = paletteArray(manifest.palette.map(() => 0xffffff)),
     mats = new Float32Array(NAMES.length * 12),
     ink = new Float32Array(rgb(manifest.palette[0]));
   let speed = 1,
@@ -489,6 +495,8 @@ function start({ manifest, boxer }) {
         seed: scene ? 7 + card.scene : 0,
         rnd: Math.random,
         waves: [null, null],
+        ripples: [null, null],
+        whites: [0, 0],
         cam: scene ? { target: [scene.struck ? 1.2 : -0.45, 1.3, 0], yaw: view.yaw, pitch: view.pitch, dist: 2.9 } : { target: [0.45, entry.level ? 0.95 : entry.punch !== undefined ? 0.85 : 0.52, 0], yaw: view.yaw, pitch: view.pitch, dist: 5.4 },
         shake: 0,
         t: 0
@@ -500,6 +508,11 @@ function start({ manifest, boxer }) {
       const spray = createFx(() => cell.rnd());
       return { fx: spray, mesh: R.mesh(spray.rows, 0, true) };
     }) : [];
+    // (and on any other card, what a blow throws off each man as the game draws it, kept off his own silhouette)
+    cell.motes = scene ? [] : [0, 1].map(() => {
+      const m = createFx();
+      return { fx: m, mesh: R.mesh(m.rows, 0, true) };
+    });
     return cell;
   }
   const clocks = CLOCKS.map(cards => ({ cells: cards.map(makeCell), acc: 0 }));
@@ -512,6 +525,8 @@ function start({ manifest, boxer }) {
     cell.t = 0;
     cell.m = { own: [], tilt: [], held: 0, path: [] };
     cell.waves = [null, null];
+    cell.ripples = [null, null];
+    cell.whites = [0, 0];
     if (cell.scene) cell.rnd = dice(cell.seed);
   }
   const put = (cell, k, v) => cell.out[k] && (cell.out[k].textContent = v);
@@ -536,19 +551,20 @@ function start({ manifest, boxer }) {
       step(bout, controls, DT);
       b.hp = 1000; // he is here to be stood in front of, not beaten
       if (!entry.hurt) a.hp = 1000;
+      cell.whites = cell.whites.map(w => Math.max(0, w - DT));
       for (const e of bout.events) {
         const by = e.type === 'parry' ? e.on : e.who;
         if (by === 1 && SAID[e.type]) tell(cell, e.down && e.type !== 'parry' ? (e.out ? '실신' : '다운') : e.roll ? '굴림' : e.type === 'parry' && e.down ? '눌러 내림' : SAID[e.type], e.J);
         if (e.who === 0 && ['hit', 'block', 'whiff', 'graze'].includes(e.type) && e.J !== undefined) (m.own = m.own.concat(Math.round(e.J)).slice(-3)), put(cell, 'own', m.own.join(' · '));
         if (cell.scene) blowFx(cell, e);
         else if (e.type === 'hit') {
-          // the blow, as the catalogue draws it: sparks sized by its impulse, and the picture shaken
+          // the blow, as the game draws it (render/blow.mjs): sparks off the far side of what it struck, a ripple, the picture shaken
           const k = Math.min(1.6, e.J / 85);
-          cell.fx.sparks(e.at, Math.round(5 + 12 * k), [38, 39, 40, 41], 2.5 + 3 * k, e.dir);
-          cell.fx.sparks(e.at, Math.round(3 + 8 * k), [41, 41, 25], 2.5 + 2 * k, e.dir);
+          blow(cell.motes[e.on].fx, e, bout.fighters[e.on]);
+          cell.ripples[e.on] = rippleOf(e, bout.fighters[e.on]);
           cell.shake = e.down ? 5 : 1 + 2.5 * k;
-        } else if (e.type === 'block') (cell.fx.sparks(e.at, 4, [38, 25, 24], 2.5, e.dir), (cell.shake = 1));
-        else if (e.type === 'parry') (cell.fx.sparks(e.at, 14, [38, 38, 39, 40], 5), (cell.shake = 2));
+        } else if (e.type === 'block') (met(cell.fx, e), (cell.shake = 1));
+        else if (e.type === 'parry') (met(cell.fx, e), (cell.shake = 2));
         switch (card.kind) {
           case 'liver':
             if (e.type === 'hit' && e.who === 0) {
@@ -608,6 +624,7 @@ function start({ manifest, boxer }) {
         cell.fx.sparks(e.at, Math.round(5 + 12 * k), [38, 39, 40, 41], 2.5 + 3 * k, e.dir);
         cell.fx.sparks(e.at, Math.round(3 + 8 * k), [41, 41, 25], 2.5 + 2 * k, e.dir);
         n = Math.round(5 + 12 * k) + Math.round(3 + 8 * k);
+        cell.whites[e.on] = 0.07;
         put(cell, 'reach', '–');
       }
       cell.shake = e.down ? scene.shake || 5 : 1 + 2.5 * k;
@@ -678,8 +695,8 @@ function start({ manifest, boxer }) {
       });
       layers.push(
         { mesh: cell.mesh, palette: palettes[0], mask: 0.6 },
-        { mesh: meshes.boxer, bones: cell.bones[0], palette: palettes[0], mask: 1, wave: waves[0], flash: !cell.version.wave && a.flash > 0 ? 1 : 0, silhouette: 1 },
-        { mesh: meshes.boxer, bones: cell.bones[1], palette: palettes[1], mask: 1, wave: waves[1], flash: !cell.version.wave && b.flash > 0 ? 1 : 0, silhouette: 2 },
+        { mesh: meshes.boxer, bones: cell.bones[0], palette: cell.whites[0] > 0 ? white : palettes[0], mask: 1, wave: waves[0], silhouette: 1 },
+        { mesh: meshes.boxer, bones: cell.bones[1], palette: cell.whites[1] > 0 ? white : palettes[1], mask: 1, wave: waves[1], silhouette: 2 },
         // (the spray off each man is never seen over him: where it crosses his own outline it is not there)
         ...cell.sprays.map((s, i) => ({ mesh: s.mesh, palette: palettes[0], mask: 0.6, outside: i + 1 }))
       );
@@ -688,7 +705,19 @@ function start({ manifest, boxer }) {
       cell.cam.target[0] += (hit.x * 1.45 - other.x * 0.45 - cell.cam.target[0]) * ease;
       cell.cam.target[2] += (hit.z * 1.45 - other.z * 0.45 - cell.cam.target[2]) * ease;
     } else {
-      layers.push({ mesh: cell.mesh, palette: palettes[0], mask: 0.6 }, { mesh: meshes.boxer, bones: cell.bones[0], palette: palettes[0], mask: 1 }, { mesh: meshes.boxer, bones: cell.bones[1], palette: palettes[1], mask: 1, flash: b.flash > 0 ? 1 : 0 });
+      for (const m of cell.motes) m.mesh.update(m.fx.rows, m.fx.update(elapsed));
+      const ripples = [a, b].map((f, i) => {
+        const r = cell.ripples[i];
+        if (!r) return null;
+        r.age += elapsed;
+        return rippleRow(r, f) || (cell.ripples[i] = null);
+      });
+      layers.push(
+        { mesh: cell.mesh, palette: palettes[0], mask: 0.6 },
+        { mesh: meshes.boxer, bones: cell.bones[0], palette: palettes[0], mask: 1, wave: ripples[0], silhouette: 1 },
+        { mesh: meshes.boxer, bones: cell.bones[1], palette: palettes[1], mask: 1, wave: ripples[1], silhouette: 2 },
+        ...cell.motes.map((m, i) => ({ mesh: m.mesh, palette: palettes[0], mask: 0.6, outside: i + 1 }))
+      );
       // (an exchange is framed on the two of them, close; footwork on the boxer whose feet these are)
       const mine = cell.exchange ? 0.5 : 0.6;
       cell.cam.target[0] += (a.x * mine + b.x * (1 - mine) - cell.cam.target[0]) * ease;
@@ -718,7 +747,7 @@ function start({ manifest, boxer }) {
         .forEach(clock => {
           for (let i = 0; i < Math.round(sec / DT); i++) {
             stepClock(clock);
-            for (const cell of clock.cells) (cell.fx.update(DT, [], 22), cell.sprays.forEach(sp => sp.fx.update(DT)), cell.waves.forEach(wv => wv && (wv.age += DT)));
+            for (const cell of clock.cells) (cell.fx.update(DT, [], 22), cell.sprays.forEach(sp => sp.fx.update(DT)), cell.motes.forEach(m => m.fx.update(DT)), cell.waves.forEach(wv => wv && (wv.age += DT)), cell.ripples.forEach(r => r && (r.age += DT)));
           }
         })
   };

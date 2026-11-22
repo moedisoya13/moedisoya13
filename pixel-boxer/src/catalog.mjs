@@ -9,6 +9,7 @@
    stands still meanwhile, and the row waits for it at the end of the loop. */
 import { createRenderer, paletteArray, rgb } from './render/renderer.mjs';
 import { createFx } from './render/fx.mjs';
+import { blow, met, rippleOf, rippleRow } from './render/blow.mjs';
 import { unpack, fromBase64 } from './render/splats.mjs';
 import { fk, NAMES } from './rig/skeleton.mjs';
 import { RIVAL } from './rig/boxer.mjs';
@@ -573,6 +574,12 @@ function start({ manifest, boxer }) {
       exchange: entry.punch !== undefined || !!entry.fresh,
       fx,
       mesh: R.mesh(fx.rows, 0, true),
+      // (what a blow throws off each man, apart from the rest: kept off his own silhouette, render/blow.mjs)
+      motes: [0, 1].map(() => {
+        const m = createFx();
+        return { fx: m, mesh: R.mesh(m.rows, 0, true) };
+      }),
+      ripples: [null, null],
       bones: [new Float32Array(R.maxBones * 12), new Float32Array(R.maxBones * 12)],
       replay: createReplay(),
       shown: null, // the step being drawn, while a replay plays
@@ -591,6 +598,7 @@ function start({ manifest, boxer }) {
     cell.m = { track: [], plants: [], up: { L: false, R: false }, halves: undefined, press: null, most: 0, landedAt: undefined };
     cell.replay.reset();
     cell.shown = null;
+    cell.ripples = [null, null];
   }
   function tell(cell, text, blow) {
     if (!cell.tag) return;
@@ -622,14 +630,15 @@ function start({ manifest, boxer }) {
       if (by === 1 && SAID[e.type]) tell(cell, e.down && e.type !== 'parry' ? (e.out ? '실신' : '다운') : e.roll ? '굴림' : e.type === 'parry' && e.down ? '눌러 내림' : SAID[e.type] + (e.brilliant ? '!' : ''), e.J);
       // (a defence found brilliant after the event it was: the counter decides it)
       if (e.type === 'brilliant' && e.who === 0 && cell.tag) tell(cell, SAID[e.of] + '!');
-      // the blow itself, as the game shows it: sparks and sweat sized by its impulse, and the picture shaken
+      /* the blow itself, as the game shows it (render/blow.mjs): sparks sized by its impulse off the far side of what it
+         struck, a ripple through him from where it landed, and the picture shaken */
       if (e.type === 'hit') {
         const k = Math.min(1.6, e.J / 85);
-        cell.fx.sparks(e.at, Math.round(5 + 12 * k), [38, 39, 40, 41], 2.5 + 3 * k, e.dir);
-        cell.fx.sparks(e.at, Math.round(3 + 8 * k), [41, 41, 25], 2.5 + 2 * k, e.dir);
+        blow(cell.motes[e.on].fx, e, bout.fighters[e.on]);
+        cell.ripples[e.on] = rippleOf(e, bout.fighters[e.on]);
         cell.shake = e.down ? 5 : 1 + 2.5 * k;
-      } else if (e.type === 'block') (cell.fx.sparks(e.at, 4, [38, 25, 24], 2.5, e.dir), (cell.shake = 1));
-      else if (e.type === 'parry') (cell.fx.sparks(e.at, 14, [38, 38, 39, 40], 5), (cell.shake = 2));
+      } else if (e.type === 'block') (met(cell.fx, e), (cell.shake = 1));
+      else if (e.type === 'parry') (met(cell.fx, e), (cell.shake = 2));
       measureEvent(cell, e, a, b);
     }
     cell.shake *= 0.82;
@@ -1026,7 +1035,21 @@ function start({ manifest, boxer }) {
       shadows.push({ x: f.x + f.pose.at.Hips[2] * Math.sin(f.yaw), z: f.z + f.pose.at.Hips[2] * Math.cos(f.yaw), yaw: f.yaw, long: 0.3, wide: 0.24 });
     });
     cell.mesh.update(cell.fx.rows, cell.fx.update(cell.shown ? 0 : elapsed, shadows, 22));
-    layers.push({ mesh: cell.mesh, palette: palettes[0], mask: 0.6 }, { mesh: meshes.boxer, bones: cell.bones[0], palette: palettes[0], mask: 1 }, { mesh: meshes.boxer, bones: cell.bones[1], palette: palettes[1], mask: 1, flash: men[1].flash > 0 ? 1 : 0 });
+    for (const m of cell.motes) m.mesh.update(m.fx.rows, m.fx.update(cell.shown ? 0 : elapsed));
+    // (each man's ripple, on the live bout only: a replay is drawn as it was, still)
+    const waves = men.map((f, i) => {
+      const r = cell.ripples[i];
+      if (!r || cell.shown) return null;
+      r.age += elapsed;
+      return rippleRow(r, f) || (cell.ripples[i] = null);
+    });
+    layers.push(
+      { mesh: cell.mesh, palette: palettes[0], mask: 0.6 },
+      { mesh: meshes.boxer, bones: cell.bones[0], palette: palettes[0], mask: 1, wave: waves[0], silhouette: 1 },
+      { mesh: meshes.boxer, bones: cell.bones[1], palette: palettes[1], mask: 1, wave: waves[1], silhouette: 2 },
+      // (what a blow threw off each man is never seen over him: it shows first at his outline)
+      ...cell.motes.map((m, i) => ({ mesh: m.mesh, palette: palettes[0], mask: 0.6, outside: i + 1 }))
+    );
     const ease = 1 - Math.exp(-elapsed * 4),
       rect = { x: Math.round((box.left * dpr) / grid.scale), y: Math.round(((innerHeight - box.bottom) * dpr) / grid.scale), w: Math.round((box.width * dpr) / grid.scale), h: Math.round((box.height * dpr) / grid.scale) },
       [a, b] = men,

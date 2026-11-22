@@ -137,7 +137,7 @@ const DT = 1 / 60;
 
 function boxer(x, yaw, seed, sheet, skills) {
   const k = body(sheet);
-  return { vary: false, luck: null, sheet: sheet || blank(), skills: skills || {}, k, stamina: k.staminaMax, x, z: 0, vx: 0, vz: 0, kx: 0, kz: 0, ix: 0, iz: 0, gx: 0, gz: 0, yaw, turn: 0, hp: RULES.hp, action: null, cover: false, coverAge: 0, stun: 0, counter: 0, flash: 0, want: null, wantAge: 0, link: 0, sinceHit: 9, sinceLast: 9, serial: 0, down: 0, pinned: 0, animator: createAnimator(seed), pose: null, place: null, points: null, before: null };
+  return { vary: false, luck: null, sheet: sheet || blank(), skills: skills || {}, k, stamina: k.staminaMax, x, z: 0, vx: 0, vz: 0, kx: 0, kz: 0, ix: 0, iz: 0, gx: 0, gz: 0, yaw, turn: 0, hp: RULES.hp, action: null, cover: false, coverAge: 0, stun: 0, counter: 0, want: null, wantAge: 0, link: 0, sinceHit: 9, sinceLast: 9, serial: 0, down: 0, pinned: 0, animator: createAnimator(seed), pose: null, place: null, points: null, before: null };
 }
 export function createBout(seed, o) {
   o = o || {};
@@ -1664,7 +1664,6 @@ function strike(bout, f, other, who, dt) {
   other.kz += dir[1] * push;
   f.kx += dir[0] * push * after;
   f.kz += dir[1] * push * after;
-  other.flash = 0.07;
   other.sinceHit = 0;
   other.animator.strike(Object.assign({ J: Math.min(worth, 110), dir: felt.dir, stun: other.stun, hp: other.hp }, fold && Object.assign(fold, { low: guard.low })));
   // (a show-off hit lightly may tap his chin at him once he has got over it: his dice)
@@ -1843,7 +1842,6 @@ export function step(bout, inputs, dt) {
   dt = dt || DT;
   bout.events.length = 0;
   const [a, b] = bout.fighters;
-  for (const f of bout.fighters) f.flash = Math.max(0, f.flash - dt);
   if (bout.stop > 0) {
     // the moment of a blow is held; presses made in it are kept
     bout.stop -= dt;

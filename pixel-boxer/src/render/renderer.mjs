@@ -42,13 +42,13 @@ void main() {
      him are carried to one side and the other as a short train of waves goes out from the height the blow landed at
      (mostly up and down him: a little rounded, as a ring would be), steep ahead of its front and trailing off behind.
      The waves are long for how far they carry (a wave 3.2 widths long), so that neighbouring rows are never sheared
-     apart far enough to show what is under his skin, and the place the blow landed is left alone: the head has its
-     own snap. */
+     apart far enough to show what is under his skin. Only a few centimetres round the place the blow landed are left
+     alone (2 to 10 cm), so that a blow to the head ripples the head too. */
   if (u_waveK.y > 0.0) {
     vec2 from = c.xy - (u_view * vec4(u_wave.xyz, 1.0)).xy;
     float d = length(vec2(from.x * 0.35, from.y)), x = d - u_wave.w, w = u_waveK.x;
     float env = x > 0.0 ? exp(-(x * x) / (w * w)) : exp(-(x * x) / (6.25 * w * w));
-    c.x += u_waveK.z * u_waveK.y * env * sin(6.2832 * x / (3.2 * w)) * smoothstep(0.06, 0.3, length(from));
+    c.x += u_waveK.z * u_waveK.y * env * sin(6.2832 * x / (3.2 * w)) * smoothstep(0.02, 0.10, length(from));
   }
   float dist = -c.z;
   if (dist < u_depth.x) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
@@ -78,13 +78,12 @@ flat in float v_al;
 flat in float v_light;
 uniform vec3 u_palette[${MAX_PALETTE}];
 uniform float u_mask;  // what kind of thing this is, kept in alpha for the second pass
-uniform float u_flash; // 0..1 toward white: a struck fighter
 out vec4 o;
 void main() {
   float pw = -0.5 * (v_conic.x * v_d.x * v_d.x + v_conic.z * v_d.y * v_d.y) - v_conic.y * v_d.x * v_d.y;
   if (v_al * exp(pw) < 0.5) discard;
   // (a speck of light keeps its own mark, 0.7: the second pass must not ink it where it crosses in front of a boxer)
-  o = vec4(mix(u_palette[int(v_pal + 0.5)], vec3(1.0), u_flash), v_light > 0.5 ? 0.7 : u_mask);
+  o = vec4(u_palette[int(v_pal + 0.5)], v_light > 0.5 ? 0.7 : u_mask);
 }`;
 const POST_VS = `#version 300 es
 void main() { gl_Position = vec4(vec2(gl_VertexID == 1 ? 3.0 : -1.0, gl_VertexID == 2 ? 3.0 : -1.0), 0.0, 1.0); }`;
@@ -94,7 +93,7 @@ uniform sampler2D u_tex;
 uniform ivec2 u_art;
 uniform float u_scale;
 uniform vec2 u_origin;
-uniform float u_white; // a flash over everything
+uniform float u_white; // a flash over everything (a parry's: a blow that lands has none, render/blow.mjs)
 uniform float u_dim;   // 0..1 toward the ink colour
 uniform vec3 u_hall[4]; // the dark beyond the ropes, from under the lamp outward
 uniform vec3 u_ink;
@@ -221,7 +220,7 @@ export function createRenderer(canvas, o) {
   /* A picture is one or more cells: begin(), then cell(rect, frame) for each, then end(post).
        rect:  { x, y, w, h } in art pixels from the bottom left of the grid, or none for the whole grid
        frame: { camera: { target, yaw, pitch, dist }, shake: [x, y] art pixels,
-                layers: [{ mesh, bones (vec4 rows, or none for things that stand still), palette (paletteArray), mask, flash,
+                layers: [{ mesh, bones (vec4 rows, or none for things that stand still), palette (paletteArray), mask,
                            wave: [x, y, z, front, width, strength, sway] (a ripple through it, from a point in the world: it sways, with no light),
                            silhouette: k, 1 to 8 (every pixel of the cell this layer covers is kept as silhouette k, whether or not
                              something nearer hides it there: its whole outline in the picture, not only what shows of it),
@@ -285,7 +284,6 @@ export function createRenderer(canvas, o) {
       gl.uniform4fv(splat.u.u_bones, layer.bones || still);
       gl.uniform3fv(splat.u.u_palette, layer.palette);
       gl.uniform1f(splat.u.u_mask, layer.mask === undefined ? 0.5 : layer.mask);
-      gl.uniform1f(splat.u.u_flash, layer.flash || 0);
       const wv = layer.wave;
       gl.uniform4f(splat.u.u_wave, wv ? wv[0] : 0, wv ? wv[1] : 0, wv ? wv[2] : 0, wv ? wv[3] : 0);
       gl.uniform3f(splat.u.u_waveK, wv ? wv[4] : 1, wv ? wv[5] : 0, wv ? wv[6] : 0);
