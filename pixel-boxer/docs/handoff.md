@@ -32,7 +32,7 @@
 |---|---|---|
 | 모션 카탈로그 | https://claude.ai/artifact/GGHUZQ9rFWLoRojwCzaK3N | 현행 v23(2026-11-22, H2 반영, 줄마다 메모, J의 이펙트). 메모는 아티팩트 `db`의 `feedback` 컬렉션, 메모 하나가 문서 하나 `{item: 줄 id, text, at, by}`(`src/memo.mjs`): `ArtifactData`의 `list`로 읽는다. 재게시 때 `capabilities`는 생략(저장된 `db`·`user` 유지). 재게시: `node tools/artifact.mjs catalog.html src/catalog.mjs <out.html> > <files.json>` 후 `root`를 `pixel-boxer`로, files 맵 그대로 publish |
 | 미결 카탈로그 | https://claude.ai/artifact/UEM19aKseUxnixVYkrnAzd | v2(2026-11-22, J 반영). `pending.html`/`src/pending.mjs`, 기획 `docs/pending-catalog.md`. 결정은 아티팩트 `db`의 `decisions/<항목 id>` `{choice, note, at}`: `ArtifactData`의 `list`로 읽는다. 재게시: `node tools/artifact.mjs pending.html src/pending.mjs <out.html> > <files.json>`, `root`는 `pixel-boxer`, `capabilities`는 생략(저장된 `db`·`user` 유지) |
-| 타격 이펙트 시안 | (없음) | 2026-11-22에 이미 지워져 있었다(사용자). 이펙트는 J에서 확정됐고 `fxlab.html`은 저장소에만 남는다(전/확정 두 열, 로컬에서 본다) |
+| 타격 이펙트 시안 | https://claude.ai/artifact/5tZd5Xyp7iiRxCuftpNwL6 | 새 주소 v1(2026-11-22; 이전 것은 지워져 있었다). `fxlab.html`/`src/fxlab.mjs`: "전"(접촉점 입자 + 흰 번쩍임)과 "확정"(반대쪽 면 입자 + 파문) 두 열, 장면 여섯. 재게시: `node tools/artifact.mjs fxlab.html src/fxlab.mjs <out.html> > <files.json>`, `root`는 `pixel-boxer`, `url`에 이 주소 |
 | 한밤의 링 | (없음) | 정리 승인 뒤 확인하니 이미 지워져 있었다 |
 | 달빛 결투 | (없음) | 정리 승인 뒤 확인하니 이미 지워져 있었다 |
 
