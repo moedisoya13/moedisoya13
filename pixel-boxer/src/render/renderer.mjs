@@ -22,7 +22,7 @@ uniform vec2 u_shake;  // pixels
 uniform vec2 u_depth;  // near, far
 uniform vec4 u_wave;   // a ripple through what was struck: where it began (world), and how far out its front is now
 uniform float u_mask;
-uniform vec3 u_waveK;  // its width (metres), its strength (0..1: 0 is no ripple), and how far it sways what it passes (metres)
+uniform vec3 u_waveK;  // its width (metres), its strength (0 is no ripple; by the damage, render/blow.mjs), and how far it sways what it passes (metres)
 out vec2 v_d;
 out vec3 v_conic;
 flat out float v_pal;

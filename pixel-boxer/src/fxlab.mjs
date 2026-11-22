@@ -7,7 +7,7 @@
    src/ladder.mjs, src/bodyshots.mjs), looped; the two cards of a row are the same exchange, frame for frame. */
 import { createRenderer, paletteArray, rgb } from './render/renderer.mjs';
 import { createFx } from './render/fx.mjs';
-import { blow, met, rippleOf, rippleRow, FX } from './render/blow.mjs';
+import { blow, met, rippleOf, rippleRow, scaleOf, FX } from './render/blow.mjs';
 import { unpack, fromBase64 } from './render/splats.mjs';
 import { fk, NAMES } from './rig/skeleton.mjs';
 import { RIVAL } from './rig/boxer.mjs';
@@ -22,7 +22,7 @@ import { BODYSHOTS } from './bodyshots.mjs';
 const DT = 1 / 60;
 const VERSIONS = [
   { id: 'before', name: '전', note: '접촉점에서 튀는 색 입자와, 맞은 선수의 흰 번쩍임(0.07초).' },
-  { id: 'final', name: '확정', note: '같은 색 입자(수·색·속도·수명 그대로)가 타격선이 맞은 몸을 빠져나가는 반대쪽 면에서 시작해, 주먹이 가던 방향(위아래 포함)으로 날아갑니다. 맞은 선수의 윤곽 안에서는 보이지 않아 윤곽에서 처음 나타납니다. 흰 번쩍임 대신 닿은 점에서 파문이 빛 없이 몸(머리 포함)에 퍼집니다: 초속 3 m, 0.4초(다운은 0.55초, 흔들림 1.3배). 막음과 패리의 불꽃은 닿은 점 그대로입니다.' }
+  { id: 'final', name: '확정', note: '같은 색 입자(색·속도·수명 그대로, 수와 굵기는 데미지에 비례)가 타격선이 맞은 몸을 빠져나가는 반대쪽 면에서 시작해, 주먹이 가던 방향(위아래 포함)으로 날아갑니다. 맞은 선수의 윤곽 안에서는 보이지 않아 윤곽에서 처음 나타납니다. 흰 번쩍임 대신 닿은 점에서 파문이 빛 없이 몸(머리 포함)에 퍼집니다: 초속 3 m, 0.4초(다운은 0.55초, 흔들림 1.3배), 흔들림과 폭은 데미지에 비례. 막음과 패리의 불꽃은 닿은 점 그대로입니다.' }
 ];
 /* The rows: a light blow, the two hard ones, an uppercut under the chin (the inside uppercut of the skill ladder, the one
    that comes straight up: there it is the other man who is struck), a hook to the liver, and a knockdown. */
@@ -49,7 +49,7 @@ const ROWS = [
     for (const v of VERSIONS)
       section.lastChild.insertAdjacentHTML(
         'beforeend',
-        `<article class="card" data-entry="${entry.id}" data-version="${v.id}"><div class="stage"></div><div class="info"><h3>${v.name}</h3><div class="stats">충격량 <b data-blow>–</b> N·s · 입자 <b data-beads>–</b></div><div class="stats">${v.id === 'final' ? '파문 <b data-head>–</b> s' : '흰 번쩍임 <b data-head>–</b> s'}</div></div></article>`
+        `<article class="card" data-entry="${entry.id}" data-version="${v.id}"><div class="stage"></div><div class="info"><h3>${v.name}</h3><div class="stats">충격량 <b data-blow>–</b> N·s · 데미지 <b data-dmg>–</b></div><div class="stats">입자 <b data-beads>–</b>${v.id === 'final' ? '개 · 굵기 <b data-thick>–</b> cm' : '개 · 굵기 <b>2.4</b> cm'}</div><div class="stats">${v.id === 'final' ? '파문 <b data-head>–</b> s · 흔들림 <b data-sway>–</b> cm · 폭 <b data-wide>–</b> cm' : '흰 번쩍임 <b data-head>–</b> s'}</div></div></article>`
       );
     lab.append(section);
   }
@@ -140,6 +140,10 @@ function start({ manifest, boxer }) {
           n = blow(cell.motes[e.on].fx, e, struck);
           cell.ripples[e.on] = rippleOf(e, struck);
           cell.head.textContent = cell.ripples[e.on].last.toFixed(2);
+          const r = cell.ripples[e.on];
+          el.querySelector('[data-thick]').textContent = (Math.max(FX.motes.thin, FX.motes.width * scaleOf(e)) * 100).toFixed(1);
+          el.querySelector('[data-sway]').textContent = (r.strength * r.sway * 100).toFixed(1);
+          el.querySelector('[data-wide]').textContent = (r.width * 100).toFixed(0);
         } else {
           // as it was drawn before: the sparks where the glove met him, and he goes white
           cell.fx.sparks(e.at, Math.round(5 + 12 * k), [38, 39, 40, 41], 2.5 + 3 * k, e.dir);
@@ -150,6 +154,7 @@ function start({ manifest, boxer }) {
         }
         cell.shake = e.down ? 5 : 1 + 2.5 * k;
         cell.blow.textContent = String(Math.round(e.J));
+        el.querySelector('[data-dmg]').textContent = (e.damage ?? e.J * 0.035).toFixed(1);
         cell.beads.textContent = String(n);
       } else if (e.type === 'block' || e.type === 'parry') (met(cell.fx, e), (cell.shake = e.type === 'parry' ? 2 : 1));
     }

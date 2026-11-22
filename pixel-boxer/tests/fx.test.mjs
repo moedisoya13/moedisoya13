@@ -2,15 +2,16 @@
      the motes start 1 cm off the surface of what was struck, on the side the blow goes out of it: a line through the
      middle of the head comes out straight behind it, one off the middle or only grazing it comes out on its way, and a
      liver hook comes out of the far side of the trunk (the capsule from the waist to the chest);
-     a hit throws as many sparks as it always has (0.6 of them off the trunk), and they go the way the glove was going:
-     an uppercut's up;
-     the ripple is the plan's (stronger with the impulse up to 60 N s, longer for a knockdown, over when it is over) and
-     goes where the part it landed on goes;
+     a hit throws sparks in proportion to the damage it did, as many and as thick (28 of them 2.4 cm thick for a pro's
+     straight to the head, twice the damage twice of both), in the colours and at the speeds they always had, and they
+     go the way the glove was going: an uppercut's up;
+     the ripple carries him and is wide in proportion to the damage too (longer for a knockdown, over when it is over)
+     and goes where the part it landed on goes;
      and the flash of white is gone: from the bout and from the renderer. */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { exitOf, blow, rippleOf, rippleRow, FX } from '../src/render/blow.mjs';
+import { exitOf, blow, rippleOf, rippleRow, scaleOf, FX } from '../src/render/blow.mjs';
 import { createFx } from '../src/render/fx.mjs';
 import { step } from '../src/game/bout.mjs';
 import { freshBout, drive } from '../src/footwork.mjs';
@@ -95,10 +96,11 @@ test('exitOf: through the middle of the head, off it, grazing it, and out of the
   assert.ok(dot(sub(t, e.at), e.vec) > 0.15, `the liver hook's motes start across his trunk from where it landed: ${dot(sub(t, e.at), e.vec).toFixed(3)} m on`);
 });
 
-/* The sparks of a hit as they were drawn before render/blow.mjs: [count, speed] of its two kinds. */
-const before = (J, body) => {
-  const k = Math.min(1.6, J / 85);
-  return [[Math.round((5 + 12 * k) * (body ? FX.body : 1)), 2.5 + 3 * k], [Math.round((3 + 8 * k) * (body ? FX.body : 1)), 2.5 + 2 * k]];
+/* The sparks of a hit of q times the reference damage and J newton-seconds: [count, speed] of its two kinds (how many by
+   the damage, how fast by the impulse as before), and how thick. */
+const sparksOf = (q, J) => {
+  const k = Math.min(1.6, Math.max(q, J / 85));
+  return { kinds: [[Math.max(1, Math.round(17 * q)), 2.5 + 3 * k], [Math.max(1, Math.round(11 * q)), 2.5 + 2 * k]], width: Math.max(0.01, 0.024 * q) };
 };
 /* The motes' mean velocity as they leave: thrown many times over from the same start, and read off where each is drawn a
    moment later (a spark is drawn as the stretch it flew in its last 0.03 s: its middle is 0.015 s behind where it is). */
@@ -115,15 +117,33 @@ function meanWay(e, struck) {
   return sum.map(x => x / k);
 }
 
-test('blow: as many sparks as before (0.6 off the trunk), in its colours and speeds, from the far side, the way the glove went', () => {
+test('blow: sparks by the damage (how many, how thick), in their colours and speeds, from the far side, the way the glove went', () => {
+  // (the rule itself: a pro's straight to the head is the measure; half the damage, half of each; twice, twice; a cap)
+  const at = { points: { head: [0, 1.5, 0] } },
+    made = damage => {
+      const calls = [];
+      blow({ sparks: (p, n, colours, speed, dir, width) => calls.push({ n, width }) }, { type: 'hit', damage, J: 0, at: [0.1, 1.5, 0], vec: [-1, 0, 0] }, at);
+      return { n: calls.reduce((s, c) => s + c.n, 0), width: calls[0].width };
+    };
+  assert.deepEqual(made(3), { n: 28, width: 0.024 }, 'the reference: 28 sparks, 2.4 cm');
+  assert.ok(Math.abs(made(1.5).n - 14) <= 1 && Math.abs(made(1.5).width - 0.012) < 1e-12, 'half the damage: half as many (to a spark of each kind), half as thick');
+  assert.deepEqual([made(6).n, +made(6).width.toFixed(6)], [56, 0.048], 'twice the damage: twice as many, twice as thick');
+  assert.equal(made(30).n, made(3 * FX.most).n, 'no more than FX.most times the reference');
+  assert.ok(made(0.2).n >= 2 && made(0.2).width === FX.motes.thin, 'the lightest touch still shows: one of each kind, at the thinnest');
+  assert.equal(scaleOf({ J: 85 }), scaleOf({ damage: 2.975 }), 'a hit with no damage on it is read off its impulse');
+  const seen = {};
   for (const id of ['hit-jab', 'hit-cross', 'hit-hook', 'upperIn@3', 'body-liver', 'down-back']) {
     const { e, struck } = firstHit(id),
       calls = [],
-      fake = { sparks: (at, n, colours, speed, dir) => calls.push({ at, n, colours, speed, dir }) },
+      fake = { sparks: (at, n, colours, speed, dir, width) => calls.push({ at, n, colours, speed, dir, width }) },
       n = blow(fake, e, struck),
-      was = before(e.J, !!e.trunk);
-    assert.equal(n, was[0][0] + was[1][0], `${id}: ${n} sparks, as before ${was[0][0] + was[1][0]}`);
-    assert.deepEqual(calls.map(c => [c.n, +c.speed.toFixed(6)]), was.map(([m, s]) => [m, +s.toFixed(6)]), `${id}: counts and speeds`);
+      q = scaleOf(e),
+      was = sparksOf(q, e.J);
+    seen[id] = { n, q };
+    assert.ok(Math.abs(q - e.damage / FX.ref) < 1e-12 || q === FX.most, `${id}: measured by its damage (${e.damage})`);
+    assert.equal(n, was.kinds[0][0] + was.kinds[1][0], `${id}: ${n} sparks for ${e.damage} of damage`);
+    assert.deepEqual(calls.map(c => [c.n, +c.speed.toFixed(6)]), was.kinds.map(([m, s]) => [m, +s.toFixed(6)]), `${id}: counts and speeds`);
+    assert.ok(calls.every(c => Math.abs(c.width - was.width) < 1e-12), `${id}: ${(was.width * 100).toFixed(1)} cm thick`);
     assert.deepEqual(calls.map(c => c.colours), [[38, 39, 40, 41], [41, 41, 25]], `${id}: colours`);
     assert.deepEqual(calls.map(c => c.dir), [0, 1].map(() => [e.vec[0], e.vec[2], e.vec[1]]), `${id}: carried the way the glove went, up and down too`);
     const way = meanWay(e, struck),
@@ -134,26 +154,29 @@ test('blow: as many sparks as before (0.6 off the trunk), in its colours and spe
     assert.ok(angle(way, e.vec) <= 30, `${id}: ${angle(way, e.vec).toFixed(1)} degrees off the blow's line`);
     if (id === 'upperIn@3') assert.ok(way[1] > 1.4 + 2, `the uppercut's sparks go up, well over the fan's own lift: ${way[1].toFixed(2)} m/s`);
   }
+  // (the light blow throws fewer than the heavy one, and a body shot of the same impulse fewer than one to the head)
+  assert.ok(seen['hit-jab'].n < seen['hit-cross'].n, `a jab ${seen['hit-jab'].n} < a cross ${seen['hit-cross'].n}`);
 });
 
 test('rippleOf, rippleRow: the plan\'s ripple, over when it is over, a knockdown\'s longer, and held to the part it landed on', () => {
   const head = [0.2, 1.55, 0.1],
     struck = { points: { head: head.slice(), belly: [0.2, 1.2, 0.1] } },
-    e = { type: 'hit', J: 30, at: [0.31, 1.56, 0.12], vec: [1, 0, 0] },
+    e = { type: 'hit', J: 43, damage: 1.5, at: [0.31, 1.56, 0.12], vec: [1, 0, 0] },
     r = rippleOf(e, struck);
   assert.deepEqual([r.joint, r.age, r.last, r.sway], ['head', 0, FX.ripple.last, FX.ripple.sway]);
   for (const age of [0, 0.1, 0.25]) {
     r.age = age;
     const row = rippleRow(r, struck);
-    assert.ok(Math.abs(row[5] - 0.5 * (1 - age / 0.4) ** 1.2) < 1e-12, `J 30 at ${age} s: half of a full ripple, decayed`);
-    assert.ok(Math.abs(row[3] - 3 * age) < 1e-12 && row[4] === 0.14 && row[6] === 0.034, 'its front at 3 m/s, 14 cm wide, 3.4 cm of sway');
+    assert.ok(Math.abs(row[5] - 0.5 * (1 - age / 0.4) ** 1.2) < 1e-12, `half the reference damage at ${age} s: half the reference ripple, decayed`);
+    assert.ok(Math.abs(row[3] - 3 * age) < 1e-12 && Math.abs(row[4] - 0.07) < 1e-12 && row[6] === 0.034, 'its front at 3 m/s, half of 14 cm wide, 3.4 cm of sway at the reference');
   }
   r.age = 0.4;
   assert.equal(rippleRow(r, struck), null, 'over at 0.4 s');
   assert.equal(rippleOf({ type: 'block', J: 30, at: e.at }, struck), null, 'a block has none');
   // (a knockdown: 0.55 s, 1.3 times the sway, still going at 0.5 s)
-  const d = rippleOf(Object.assign({}, e, { J: 120, down: true }), struck);
-  assert.deepEqual([d.last, +d.sway.toFixed(6), d.strength], [0.55, +(0.034 * 1.3).toFixed(6), 1]);
+  const d = rippleOf(Object.assign({}, e, { J: 120, damage: 6, down: true }), struck);
+  assert.deepEqual([d.last, +d.sway.toFixed(6), d.strength, +d.width.toFixed(6)], [0.55, +(0.034 * 1.3).toFixed(6), 2, 0.28], 'twice the damage: twice the sway and twice as wide');
+  assert.equal(rippleOf(Object.assign({}, e, { damage: 0.2 }), struck).width, FX.ripple.thin, 'the lightest still has a train of waves');
   d.age = 0.5;
   assert.ok(rippleRow(d, struck), 'a knockdown\'s ripple is still going at 0.5 s');
   // (held to his head: moved 10 cm, its middle goes 10 cm)

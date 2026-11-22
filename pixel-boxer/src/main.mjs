@@ -129,7 +129,7 @@ function start({ manifest, boxer, ring }) {
         heavy = k > 0.75 || e.down;
       audio.play(heavy ? 'heavy' : 'hit');
       // (sparks off the far side of what it struck, never seen over him, and a ripple through him from where it landed)
-      blow(motes[e.on], e, f[e.on], e.counter ? RULES.counterGain : 1);
+      blow(motes[e.on], e, f[e.on]);
       ripples[e.on] = rippleOf(e, f[e.on]);
       shake.amp = e.down ? 7 : 1.5 + 3.5 * k;
       try {
