@@ -141,50 +141,42 @@ const PULL_NOTE = {
 const graded = (e, note, stat, levels, more) => Object.assign({ id: e.id, name: e.name, en: e.en, note, stat, cards: levels.map(lv => `${e.id}@${lv}`) }, more);
 const single = e => ({ id: e.id, name: e.name, en: e.en, single: true });
 
-/* ---- what is new or changed since the catalogue was last published (commit 7302f18), by row: measured, not guessed. Every
-   script was fought there and here (node tools/events.mjs at both, then --diff): a row is changed where the events of a card
-   of it (what became of each punch, on which frame, how hard, on what) or the guard the man holds came out otherwise, and
-   cards says which of its cards; a row whose script is not there is new. The note says what changed, in a line. */
+const FX_NOTE = '이펙트: 입자가 맞은 몸의 반대쪽 면에서 타격 방향으로 나가고, 흰 번쩍임 대신 닿은 점에서 파문이 퍼짐';
+/* ---- what is new or changed since the catalogue was last published as the user reviewed it (version 22, commit 14594d1),
+   by row: measured, not guessed. A row is changed where a card of it moved (every joint of both men compared frame by frame
+   with the scripts at 14594d1: the cards listed moved more than 1 mm, the waist of plan 6 stage K turning what the chest used
+   to) or where what it exists to show is drawn otherwise (the being-hit and knockdown cards: the blow's effect of stage J).
+   No punch's events changed (node tools/events.mjs --diff is empty), and no row is new. The note says what changed. */
 const SINCE = {
-  // changed
-  stalk: { since: 'changed', cards: ['4a', '5a'], note: '4암·5암이 고전형 크로스암으로 밀고 들어감: 앞 글러브가 눈썹 위에서 배 앞(머리 아래 47~51 cm)으로, 뒷 글러브는 턱 앞으로' },
-  duck: { since: 'changed', cards: ['4a', '5a'], note: '4암·5암이 앞의 스트레이트를 팔뚝(4·6 N·s)이 아니라 크로스암의 뒷 글러브(16·15 N·s)로 받음, 구간 −12~0 → −11~0, −13~1 → −11~0' },
-  roll: { since: 'changed', cards: ['1', '2', '4a', '5a'], note: '1·2단계 위빙이 훅 밑으로 빠져 피함(전에는 46·41 N·s 명중, 구간 없음 → −11~−10, −11~−9), 4암·5암은 앞의 스트레이트를 뒷 글러브로' },
-  parry: { since: 'changed', cards: ['4a', '5a'], note: '4암·5암의 해머링 패리가 턱 앞에서 출발: 구간 −7~0 → 0~2, −3~−1 → 0~4, 쳐내는 충격량 8·3 → 45·39 N·s' },
-  block: { since: 'changed', cards: ['4a', '5a'], note: '4암·5암의 스트레이트가 팔뚝(13 N·s)이 아니라 고전형 크로스암의 뒷 글러브(18 N·s)에 막힘' },
-  guard: { since: 'changed', cards: ['4a', '5a'], note: '4암·5암이 잽·잽·스트레이트를 팔뚝(3·2·18, 4·0·21 N·s)이 아니라 뒷 글러브(29·3·16, 29·24·17 N·s)로 막음' },
-  'out-limp': { since: 'changed', note: '림프 실신이 훅이 아니라 4명의 어퍼에서: 들렸다가 아래에서부터 천천히 풀림(훅은 통나무 · 훅으로)' },
-  // new
-  'out-twist': { since: 'new', note: '훅 실신: 고개가 돌아간 채 굳어 앞발 바깥날로 옆으로 넘어감' },
-  jabBody: { since: 'new', note: '바디 주먹(머리가 고름): 명치로 낮게 뻗는 잽' },
-  crossBody: { since: 'new', note: '바디 주먹: 어깨까지 내려가 수평으로 뻗는 스트레이트' },
-  hookBody: { since: 'new', note: '바디 주먹: 무릎으로 내려가 간을 치는 훅' },
-  upperBody: { since: 'new', note: '바디 주먹: 초근거리에서 명치로 올리는 어퍼' },
-  'body-solar': { since: 'new', note: '몸통 판정: 명치에 맞으면 앞으로 접히고 글러브가 내려감' },
-  'body-liver': { since: 'new', note: '몸통 판정: 간에 맞으면 그쪽으로 꺾임' },
-  'body-ribs': { since: 'new', note: '몸통 판정: 갈비에 맞으면 그쪽으로 꺾임' },
-  'down-liver': { since: 'new', note: '간에 70 N·s 넘게: 0.4초 뒤 무릎으로, 의식이 있어 일어남' },
-  'block-elbow': { since: 'new', note: '간을 노린 훅을 팔꿈치·아래팔이 막음, 등급은 내리는 때' },
-  'block-liver': { since: 'new', note: '리버 훅을 내려가는 몸에서 읽고 팔꿈치를 내려 막음' },
-  hookR: { since: 'new', note: '뒷손 훅: 풀백·숄더 롤 반격이 누르는 주먹' },
-  wave: { since: 'new', note: '4명·5명 전용: 손을 내리고 크게 도는 서클링' },
-  slick: { since: 'new', note: '파도 중에 걸어 들어오는 잽을 뒤로 눕혀 흘림' },
-  parryDown: { since: 'new', note: '4명·5명 전용: 잽을 위에서 눌러 내리고 그 손으로 반격' },
-  crossArm: { since: 'new', note: '고르는 기술이 된 고전형 크로스암, 3·4명·5명도 가지면 듦' },
-  'crossArm-hook': { since: 'new', note: '앞손 훅에 뒷 글러브가 귀 위로 올라가 막음' },
-  rollCounter: { since: 'new', note: '스트레이트를 앞어깨로 굴려 흘리고, 감긴 가슴으로 뒷손 훅 카운터(4 0.22초, 5 0.17초 뒤)' },
-  'crossBody-jab': { since: 'new', note: '크로스암이 바디 잽을 앞팔꿈치로 받고 4 이상은 뒷손으로 반격' },
-  'crossBody-cross': { since: 'new', note: '크로스암이 바디 스트레이트를 뒷팔로 받음(앞어깨는 머리만)' },
-  'crossBody-liver': { since: 'new', note: '크로스암이 리버 훅을 앞 글러브로 받고 4 이상은 뒷손 어퍼로 반격' },
-  pullBody: { since: 'new', note: '풀백 3형제 ①: 스웨이 백에서 돌아오며 리버 훅' },
-  pullHook: { since: 'new', note: '풀백 3형제 ②: 0.9 m에서, 앞손 쪽으로 숙이며 뒷손 훅' },
-  pullCross: { since: 'new', note: '풀백 3형제 ③: 뒷다리에 앉은 채 스트레이트' },
-  blockFire: { since: 'new', note: '4명·5명 전용: 리버 훅을 팔꿈치로 막고 그 팔로 어퍼' },
-  shell: { since: 'new', note: '4명·5명 전용: 웅크린 가드로 잽을 막고 앞손 훅 → 바디 어퍼' },
-  'shell-hook': { since: 'new', note: '피커부 셸: 훅은 글러브와 세운 아래팔이 막음' },
-  'shell-upper': { since: 'new', note: '피커부 셸의 빈 곳: 어퍼가 두 팔 사이로 들어옴' },
-  shift: { since: 'new', note: '4명·5명 전용: 스트레이트 뒤 뒷발이 넘어가 스탠스가 바뀌고, 내려앉아 왼손 바디 훅 → 오른손 어퍼' },
-  'shift-shell': { since: 'new', note: '타이슨 시프트를 피커부 셸에서: 내려앉음을 건너뛰어 바디 훅이 빨라짐' }
+  // changed: the waist (stage K)
+  dashSide: { since: 'changed', cards: ['5m', '5a'], note: '5명·5암의 대시 중 U자 위빙을 허리가 돌림(머리·글러브 최대 0.42·0.71 cm, 허리 6.2°·8.4°)' },
+  circle: { since: 'changed', cards: ['5m', '5a'], note: '5명·5암의 걸음마다 위빙을 허리가 돌림(최대 0.64·0.42 cm, 허리 6.8°·6.0°)' },
+  side: { since: 'changed', cards: ['5m', '5a'], note: '5명·5암의 걸음마다 위빙을 허리가 돌림(최대 0.48·0.20 cm)' },
+  dash: { since: 'changed', cards: ['5a'], note: '5암의 어깨 페인트를 허리가 돌림(최대 0.63 cm, 허리 7.7°)' },
+  dashIn: { since: 'changed', cards: ['5a'], note: '5암의 어깨 페인트를 허리가 돌림(최대 0.42 cm, 허리 7.5°)' },
+  inout: { since: 'changed', cards: ['5a'], note: '5암의 어깨 페인트를 허리가 돌림(최대 0.48 cm, 허리 7.9°)' },
+  turn: { since: 'changed', cards: ['5a'], note: '5암의 어깨 페인트를 허리가 돌림(최대 0.24 cm, 허리 6.0°)' },
+  bounce: { since: 'changed', cards: ['5a'], note: '5암의 어깨 페인트를 허리가 돌림(최대 0.22 cm, 허리 6.0°)' },
+  onetwo: { since: 'changed', cards: ['5a'], note: '5암의 어깨 페인트를 허리가 돌림(최대 0.11 cm)' },
+  wave: { since: 'changed', cards: ['4m', '5m'], note: '파도의 흔들림과 어깨 페인트를 허리가 돌림(최대 0.37·0.54 cm, 허리 4.0°·9.3°)' },
+  slick: { since: 'changed', cards: ['4m', '5m'], note: '파도의 흔들림을 허리가 돌림(최대 0.37·0.54 cm)' },
+  // changed: the blow's effect (stage J)
+  'hit-jab': { since: 'changed', note: FX_NOTE },
+  'hit-cross': { since: 'changed', note: FX_NOTE },
+  'hit-hook': { since: 'changed', note: FX_NOTE },
+  'hit-upper': { since: 'changed', note: FX_NOTE },
+  'stagger': { since: 'changed', note: FX_NOTE },
+  'down-back': { since: 'changed', note: FX_NOTE },
+  'down-knee': { since: 'changed', note: FX_NOTE },
+  'down-side': { since: 'changed', note: FX_NOTE },
+  'down-front': { since: 'changed', note: FX_NOTE },
+  'out-twist': { since: 'changed', note: FX_NOTE },
+  'out-log': { since: 'changed', note: FX_NOTE },
+  'out-limp': { since: 'changed', note: FX_NOTE },
+  'body-solar': { since: 'changed', note: FX_NOTE },
+  'body-liver': { since: 'changed', note: FX_NOTE },
+  'body-ribs': { since: 'changed', note: FX_NOTE },
+  'down-liver': { since: 'changed', note: FX_NOTE }
 };
 const SINCE_SAID = { new: '새', changed: '바뀜' };
 
@@ -298,7 +290,7 @@ function contents() {
   const toc = document.getElementById('toc'),
     marked = PARTS.flatMap(P => P.groups.flatMap(([, items]) => items.filter(i => i.since).map(i => Object.assign({ part: P.part }, i))));
   toc.innerHTML = `<h2 class="toc-title">차례</h2>
-    <p class="legend"><span>${badge('new')} 지난 게시본(<code>7302f18</code>)에 없던 줄</span><span>${badge('changed')} 같은 대본을 그때와 지금 돌려, 주먹이 어떻게 됐는지(명중·막음·패리·빗나감, 그 프레임과 충격량)나 든 가드의 모양이 달라진 줄</span></p>
+    <p class="legend"><span>${badge('new')} 지난 게시본(v22, <code>14594d1</code>)에 없던 줄</span><span>${badge('changed')} 같은 대본을 그때와 지금 돌려 몸이 1 mm 넘게 움직인 줄(허리), 또는 맞는 그림이 달라진 줄(이펙트)</span></p>
     <details class="changes" open><summary>이번에 새로 들어오고 바뀐 것: 새 줄 <b>${marked.filter(i => i.since === 'new').length}</b> · 바뀐 줄 <b>${marked.filter(i => i.since === 'changed').length}</b></summary>
       <ul>${marked.sort((x, y) => (x.since === y.since ? 0 : x.since === 'changed' ? -1 : 1)).map(i => `<li>${badge(i.since)}<a href="#row-${i.id}">${i.name}</a><span>${esc(i.sinceNote)}</span></li>`).join('')}</ul></details>
     <ol class="toc-parts">${PARTS.map(P => `<li><a class="toc-part" href="#part-${P.id}">${P.part}</a><ul class="toc-rows">${P.groups.flatMap(([, items]) => items).map(i => `<li><a href="#row-${i.id}">${i.name}${badge(i.since)}</a></li>`).join('')}</ul></li>`).join('')}</ol>`;
