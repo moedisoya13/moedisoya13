@@ -27,6 +27,7 @@ import { H } from './anim/stance.mjs';
 import { WINDOWS } from './windows.data.mjs';
 import { createReplay } from './replay.mjs';
 import { across, lineAngle, guardOf } from './measure.mjs';
+import { attachMemos } from './memo.mjs';
 
 const DT = 1 / 60;
 // the fouls, as a card names them
@@ -337,6 +338,16 @@ for (const P of PARTS) {
     main.append(section);
   }
 }
+// (a thread of notes under every row and every card on its own: src/memo.mjs)
+attachMemos({
+  items: ROWS.map(({ item }) => ({
+    id: item.id,
+    name: item.name || byId[item.id].name,
+    host: item.single ? document.getElementById(`row-${item.id}`).querySelector('.info') : document.getElementById(`row-${item.id}`)
+  })),
+  line: document.getElementById('memo-store'),
+  toc: id => document.querySelector(`#toc .toc-rows a[href="#row-${id}"]`)
+});
 shownAsLD(document.body);
 // (opened at a row's address: the page is written by now, so go there; the browser's own jump came before it was)
 if (location.hash && document.getElementById(location.hash.slice(1))) document.getElementById(location.hash.slice(1)).scrollIntoView();

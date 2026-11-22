@@ -131,6 +131,32 @@
   [id^="row-"], h2.part, #toc { scroll-margin-top: 12px; }
   .to-toc { position: fixed; right: max(12px, env(safe-area-inset-right, 0px)); bottom: calc(14px + env(safe-area-inset-bottom, 0px)); z-index: 2; background: var(--fg); color: var(--bg); font: 600 12px/1 var(--body); letter-spacing: .04em; padding: 10px 12px; text-decoration: none; }
   #loading { position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 2; background: var(--fg); color: var(--bg); font: 500 12px/1 var(--data); padding: 9px 12px; }
+  /* a row's notes: the feedback left on it, a thread under the cards (src/memo.mjs) */
+  .store { padding: 7px 10px; border: 1.5px dashed var(--line); color: var(--dim); }
+  .store.ok { border-style: solid; border-color: var(--new); color: var(--new); }
+  .store.warn { border-color: var(--changed); color: var(--changed); }
+  .memo { background: var(--card); border: 1.5px solid var(--line); min-width: 0; }
+  .info .memo { margin-top: 4px; }
+  .memo summary { cursor: pointer; padding: 8px 10px; min-height: 36px; display: flex; align-items: center; gap: 6px; font: 600 13px/1.2 var(--body); color: var(--dim); }
+  .memo summary b { font: 500 12px/1 var(--data); color: var(--dim); }
+  .memo.has summary, .memo.has summary b { color: var(--fg); }
+  .memo.has { border-color: var(--rear); }
+  .memo summary:focus-visible, .memo button:focus-visible, .memo textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .memo-list { list-style: none; margin: 0; padding: 0 10px; display: flex; flex-direction: column; gap: 8px; }
+  .memo-list:empty { display: none; }
+  .memo-list li { min-width: 0; padding: 8px 0; border-top: 1.5px solid var(--line); display: flex; flex-direction: column; gap: 4px; }
+  .memo-list p { margin: 0; font-size: 14px; color: var(--fg); white-space: pre-wrap; overflow-wrap: anywhere; }
+  .memo-meta { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; font: 500 11px/1.2 var(--data); color: var(--dim); }
+  .memo-meta button { font: 600 11px/1 var(--body); color: var(--changed); background: none; border: 0; padding: 4px 0; cursor: pointer; }
+  .memo-form { padding: 8px 10px 10px; display: flex; flex-direction: column; gap: 6px; }
+  .memo-hint { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .memo-form textarea { width: 100%; min-width: 0; resize: vertical; font: 400 14px/1.45 var(--body); color: var(--fg); background: var(--bg); border: 1.5px solid var(--line); padding: 7px 8px; }
+  .memo-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px; }
+  .memo-row button { font: 600 13px/1 var(--body); color: var(--bg); background: var(--fg); border: 0; padding: 10px 14px; min-height: 36px; cursor: pointer; }
+  .memo-row button:disabled { opacity: .45; cursor: default; }
+  .memo-state { font-size: 12px; color: var(--dim); min-width: 0; }
+  .memo-state.warn { color: var(--changed); }
+  .toc-rows .memo-n { font: 600 10px/1 var(--body); color: var(--rear); border: 1.5px solid currentColor; padding: 2px 4px; white-space: nowrap; }
   @media (prefers-reduced-motion: reduce) { .lamp.on, .result .tag.on { animation: none; } }
 </style>
 </head>
@@ -144,6 +170,7 @@
       <span>속도</span>
       <span class="seg"><button id="speed-1" data-speed="1" aria-pressed="true">1×</button><button id="speed-half" data-speed="0.5" aria-pressed="false">½×</button><button id="speed-quarter" data-speed="0.25" aria-pressed="false">¼×</button></span>
       <button id="prints" aria-pressed="true">발자국</button>
+      <span id="memo-store" class="store" role="status">메모를 불러오는 중…</span>
     </div>
   </header>
   <nav id="toc" class="toc" aria-label="차례"></nav>
