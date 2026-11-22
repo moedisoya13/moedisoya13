@@ -25,7 +25,7 @@
 
 | 이름 | 주소 | 상태 |
 |---|---|---|
-| 모션 카탈로그 | https://claude.ai/artifact/GGHUZQ9rFWLoRojwCzaK3N | 현행(v20 이후 H2 반영 전). 재게시: `node tools/artifact.mjs catalog.html src/catalog.mjs <out.html> > <files.json>` 후 `root`를 `pixel-boxer`로, files 맵 그대로 publish |
+| 모션 카탈로그 | https://claude.ai/artifact/GGHUZQ9rFWLoRojwCzaK3N | 현행 v21(2026-11-22, `c36bdfe`, H2 반영). 재게시: `node tools/artifact.mjs catalog.html src/catalog.mjs <out.html> > <files.json>` 후 `root`를 `pixel-boxer`로, files 맵 그대로 publish |
 | 타격 이펙트 시안 | https://claude.ai/artifact/3WGBvgr1Mb7wtZAXDMHmHi | v5. `fxlab.html`/`src/fxlab.mjs`. 재게시 때 files 맵에서 `assets/ring.splats.txt`는 뺀다 |
 | 한밤의 링 | https://claude.ai/artifact/4SrAbr1KRuRD21nbBf7GsF | 초기 게임 화면. 정리 후보 |
 | 달빛 결투 | https://claude.ai/artifact/KMgvrXqKkbkLKbSgSzcRcb | 초기 화면. 정리 후보 |
