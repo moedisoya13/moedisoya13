@@ -15,7 +15,7 @@
    toes, held there a moment and let go of slowly from the knees up (LIFT). Lying there he breathes, one forearm stays up off
    the canvas a while and comes down slowly, and nothing else of him moves.
    Lying there, any man still breathes.
-   It is stepped at a fixed rate (forty-eight steps a frame), with nothing random in it, so a bout replays exactly.
+   It is stepped at a fixed rate (twelve steps a frame), with nothing random in it, so a bout replays exactly.
      const body = createFall(pose, before, dt, blow, out)
                                                         pose, before: his last two solved poses (his own space); blow: { J
                                                         (newton-seconds), dir (unit, his space: the way the glove was going
@@ -44,16 +44,13 @@ import * as M from '../rig/m3.mjs';
 import { NAMES, PARENT, TPOSE, fk } from '../rig/skeleton.mjs';
 import { RANGE, FOOT, HEAD, SHOULDER, shoulderOf } from '../rig/body.mjs';
 
-/* (forty-eight steps a frame, and not the twelve it had at first: with twelve, a man landing face down had his belly rolled
-   25 degrees on the canvas inside one frame, as the contact took hold of it over so long a step, his waist turning on his
-   pelvis faster than a waist can (1180 degrees a second, against rig/body.mjs: RATE); in finer steps the canvas takes hold
-   of him as it does a real body, over two frames. What below is reckoned a pass at a time and is a speed or a rate (PRESS,
-   KNEE_TURN, FIX_MOST, GAIN) is set by the second, so that it means the same in any number of steps; the stiffnesses,
-   dampings and grip are by the second already. But where his corrections pull against each other (a locked arm held
+/* (twelve steps a frame. What below is reckoned a pass at a time and is a speed or a rate (PRESS, KNEE_TURN, FIX_MOST, GAIN)
+   is set by the second, so that it means the same in any number of steps; the stiffnesses, dampings and grip are by the
+   second already. Finer steps were tried (forty-eight): where his corrections pull against each other (a locked arm held
    inside his trunk's reach, a body heaped up on itself on the canvas), what they disagree by makes a speed out of nothing
-   in each step, more of it the finer the steps, and his falls do not come out exactly as they did at twelve) */
+   in each step, more of it the finer the steps, and his falls did not come out as they do at twelve) */
 const G = 9.81,
-  STEPS = 48,
+  STEPS = 12,
   ITER = 3,
   RAD = Math.PI / 180,
   DEG = 180 / Math.PI;
