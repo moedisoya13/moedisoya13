@@ -27,9 +27,11 @@
      blow(fx, e, struck)   a hit's motes into fx (the struck man's own), from the far side of what it struck (e.trunk if
                            it is a body shot, else his head): their number and their thickness by the damage (a counter's
                            gain and a body shot's smaller share are in the damage already); a knockdown's lava in their
-                           place. -> how many motes (or globs and embers) it threw
-     lavaOf(e)             a knockdown's lava, as blow throws it: { globs, embers (how many of each), width (a glob's,
-                           metres) }, or null for any other event
+                           place, thrown twice (the second volley left with fx to throw on its own clock). -> how many
+                           motes (or globs and embers, both volleys) it throws
+     lavaOf(e)             a knockdown's lava, as blow throws it: { globs, embers (how many of each, in all), width (a
+                           glob's, metres), volleys: [{ globs, embers }, ...] (each throw, the first at once and the
+                           next FX.lava.twice.gap seconds later), gap }, or null for any other event
      met(fx, e)            a block's or a parry's sparks, where the gloves met
      rippleOf(e, struck)   the ripple a hit starts: { joint, off, age: 0, strength, width, last, sway } (strength and
                            width by the damage; age to be moved on by the caller, in the same time as the motes), or null
@@ -48,7 +50,13 @@
    it is heavy, and where it comes down on the canvas it does not bounce but lies there as a flat spot, a glowing core over
    a charcoal rim going dark, and is gone. As it flies it sheds embers. An ember is a speck, thrown faster and wider, caught
    by the air within half a metre, then drifting and wandering, flickering between two steps of its glow as it cools (by its
-   own age and seed, so a slow motion and a replay show it the same), and going out from orange by winking.
+   own age and seed, so a slow motion and a replay show it the same), and going out from orange by winking. The lava is
+   thrown twice in quick succession (§2.4C 7, the user's: "빠르게 2연속 발사"): the first volley as the blow lands, a second
+   as many again (or a share of it) a moment later on the motes' own clock, from where the line of the blow comes out of him
+   then: from the part it struck as he is at that moment if the fx is handed him as he goes on (the game, a live card, the
+   effect study, the review sheet), or from where it was if he is a step kept for a replay; the same way, scattered by the
+   fx's own dice when it is thrown, drawn in his own layer like the first so that it too shows first at his outline. The
+   ripple, the slow motion and what happens where he comes down are each once.
      fallOf(e)             a knockdown blow's watch for where he comes down: { on, q, out, landed: null }, or null for any
                            other event
      landingOf(man)        the part of him nearest the canvas, if it is within FX.land.near of it: { joint, clear (metres
@@ -86,12 +94,14 @@ export const FX = {
      velocity, at most so many. embers: how many at ref; times the speed and the spread of the globs' fan; times the motes'
      gravity, the air's hold and their life; how much more the air holds one for every m/s it goes (the faster, the harder:
      so that, a fifth faster than the globs, they are still stopped within half a metre); how fast it wanders (m/s, least
-     and most); how often it flickers (s); and the speed over which it has a tail (m/s) */
+     and most); how often it flickers (s); and the speed over which it has a tail (m/s). twice: the second volley, `gap`
+     seconds of the motes' own time after the first, `share` times its size (1: as many again; null: thrown once) */
   lava: {
     glow: [39, 40, 18],
     crust: [7, 6, 5],
     globs: { n: 11, width: 1.7, least: 0.024, most: 0.06, fall: 0.8, drag: 0.8, life: 1.6, cool: 2.5, land: 0, spot: 0.35, shed: { every: 0.05, pace: 0.3, most: 4 } },
-    embers: { n: 18, pace: 1.2, wide: 1.2, fall: 0.2, drag: 1.6, life: 2, brake: 4, wander: [0.1, 0.2], flicker: 0.04, trail: 1.5 }
+    embers: { n: 18, pace: 1.2, wide: 1.2, fall: 0.2, drag: 1.6, life: 2, brake: 4, wander: [0.1, 0.2], flicker: 0.04, trail: 1.5 },
+    twice: { gap: 0.05, share: 1 }
   },
   // (land: the second ripple of a knockdown, from where he comes down: its strength times the blow's, and how long it goes)
   ripple: { speed: 3, last: 0.4, width: 0.14, sway: 0.034, thin: 0.06, down: { last: 0.55, sway: 1.3 }, land: { strength: 0.8, last: 0.45 } },
@@ -176,12 +186,21 @@ export function exitOf(part, at, vec) {
   return M.add(p, M.scale(fl > 1e-9 ? M.scale(facing, 1 / fl) : d, FX.out));
 }
 
-// (how many globs and embers a knockdown's blow of q throws, and how thick a glob is)
+/* (how many globs and embers each volley of a knockdown's blow of q throws, the first and, if there is one, the second;
+   and how thick a glob is) */
 const lavaFor = q => {
-  const G = FX.lava.globs;
-  return { globs: Math.max(1, Math.round(G.n * q)), embers: Math.max(1, Math.round(FX.lava.embers.n * q)), width: Math.min(G.most, Math.max(G.least, Math.max(FX.motes.thin, FX.motes.width * q) * G.width)) };
+  const G = FX.lava.globs,
+    T = FX.lava.twice,
+    first = { globs: Math.max(1, Math.round(G.n * q)), embers: Math.max(1, Math.round(FX.lava.embers.n * q)) },
+    volleys = [first];
+  if (T && T.share > 0) volleys.push({ globs: Math.max(1, Math.round(first.globs * T.share)), embers: Math.max(1, Math.round(first.embers * T.share)) });
+  return { volleys, width: Math.min(G.most, Math.max(G.least, Math.max(FX.motes.thin, FX.motes.width * q) * G.width)) };
 };
-export const lavaOf = e => (e.type === 'hit' && (e.down || e.out) ? lavaFor(scaleOf(e)) : null);
+export const lavaOf = e => {
+  if (e.type !== 'hit' || !(e.down || e.out)) return null;
+  const { volleys, width } = lavaFor(scaleOf(e));
+  return { globs: volleys.reduce((n, v) => n + v.globs, 0), embers: volleys.reduce((n, v) => n + v.embers, 0), width, volleys, gap: volleys.length > 1 ? FX.lava.twice.gap : 0 };
+};
 
 export function blow(fx, e, struck) {
   const q = scaleOf(e),
@@ -201,12 +220,28 @@ export function blow(fx, e, struck) {
     const L = FX.lava,
       G = L.globs,
       E = L.embers,
-      { globs, embers, width: thick } = lavaFor(q),
+      { volleys, width: thick } = lavaFor(q),
       speed = SPARKS[0](k)[1],
-      ember = { glow: L.glow, width: FX.motes.thin, life: o.life * E.life, fall: E.fall, drag: E.drag, brake: E.brake, wander: E.wander, flicker: E.flicker, trail: E.trail };
-    fx.globs(from, globs, speed, way, thick, { glow: L.glow, crust: L.crust, life: o.life * G.life, pace: o.pace, fall: G.fall, drag: G.drag, cool: G.cool, land: G.land, spot: G.spot, shed: Object.assign({ ember }, G.shed) });
-    fx.embers(from, embers, speed * E.pace, way, FX.motes.thin, Object.assign({ pace: o.pace, wide: E.wide }, ember));
-    return globs + embers;
+      ember = { glow: L.glow, width: FX.motes.thin, life: o.life * E.life, fall: E.fall, drag: E.drag, brake: E.brake, wander: E.wander, flicker: E.flicker, trail: E.trail },
+      // (one volley from `at`, gone `late` seconds on its way already)
+      volley = (at, { globs, embers }, late) => {
+        fx.globs(at, globs, speed, way, thick, { glow: L.glow, crust: L.crust, life: o.life * G.life, pace: o.pace, fall: G.fall, drag: G.drag, cool: G.cool, land: G.land, spot: G.spot, shed: Object.assign({ ember }, G.shed), age: late });
+        fx.embers(at, embers, speed * E.pace, way, FX.motes.thin, Object.assign({ pace: o.pace, wide: E.wide, age: late }, ember));
+      };
+    volley(from, volleys[0], 0);
+    if (volleys[1]) {
+      /* the second: from where the line of the blow comes out of him then, the line held to the part it struck (his head, or
+         his trunk at Spine2) as the ripple is, the part as he is then (as it was, for a man kept as a step) */
+      const key = e.trunk ? 'belly' : 'head',
+        was = struck.points[key].slice();
+      fx.after(L.twice.gap, late => {
+        const p = struck.points,
+          moved = M.sub(p[key], was),
+          now = e.trunk ? { at: p.waist, to: p.chest, r: e.trunk.r } : { at: p.head, r: FX.head };
+        volley(exitOf(now, M.add(e.at, moved), e.vec), volleys[1], late);
+      });
+    }
+    return volleys.reduce((n, v) => n + v.globs + v.embers, 0);
   }
   let n = 0;
   SPARKS.forEach((sparks, i) => {

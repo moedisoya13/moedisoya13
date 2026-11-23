@@ -19,8 +19,9 @@
    a hot glob shows two colours or three, its head the hottest, from whichever side it is seen; cooling, it crusts over,
    its glow then inside its crust, never red, and a cold one is a cinder with at most a small glow; it is at its hottest while it
    rises and only ever cools; it does not bounce off the canvas but lies there going dark; an ember flickers the same at the
-   same moment however often it is drawn, and goes out from orange by winking, never red; and the most that is ever thrown
-   stays within what an fx can draw. */
+   same moment however often it is drawn, and goes out from orange by winking, never red; it is thrown twice in quick
+   succession (§2.4C 7), the second volley 0.05 s on the motes' own clock after the first, from his far side as he is then;
+   and the most that is ever thrown stays within what an fx can draw. */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -241,17 +242,22 @@ function fight(id, each) {
   }
 }
 
-test('a knockdown\'s blow throws lava in place of the motes: globs and embers as many as the damage says (11 and 18 at the measure), as fast, thick and long-lived as the plan says', () => {
+test('a knockdown\'s blow throws lava in place of the motes, in two volleys: globs and embers as many as the damage says in each (11 and 18 at the measure), as fast, thick and long-lived as the plan says', () => {
   const struck = { points: { head: [0, 1.5, 0] } },
     made = more => {
-      const calls = { sparks: [], globs: [], embers: [] },
+      const calls = { sparks: [], globs: [], embers: [], after: [] },
         fake = {
           sparks: (...a) => calls.sparks.push(a),
           globs: (at, n, speed, dir, width, o) => calls.globs.push({ at, n, speed, dir, width, o }),
-          embers: (at, n, speed, dir, width, o) => calls.embers.push({ at, n, speed, dir, width, o })
+          embers: (at, n, speed, dir, width, o) => calls.embers.push({ at, n, speed, dir, width, o }),
+          after: (gap, throwIt) => calls.after.push({ gap, throwIt })
         },
         e = Object.assign({ type: 'hit', damage: 3, J: 85, at: [0.1, 1.5, 0], vec: [-1, 0, 0] }, more),
         n = blow(fake, e, struck);
+      // (the first volley at once; the second when the fx's clock comes to it: here, as soon as asked)
+      assert.deepEqual([calls.globs.length, calls.embers.length, calls.after.length], [1, 1, 1], 'one volley at once, one to come');
+      assert.equal(calls.after[0].gap, 0.05, 'the second 0.05 s later');
+      calls.after[0].throwIt(0);
       return { n, calls, e };
     },
     G = FX.lava.globs,
@@ -267,8 +273,11 @@ test('a knockdown\'s blow throws lava in place of the motes: globs and embers as
         [g, b] = [calls.globs[0], calls.embers[0]];
       assert.equal(calls.sparks.length, 0, 'none of the ordinary motes');
       assert.deepEqual([g.n, b.n], [Math.max(1, Math.round(11 * m)), Math.max(1, Math.round(18 * m))], `q ${q}: ${g.n} globs and ${b.n} embers`);
-      assert.equal(n, g.n + b.n);
-      assert.deepEqual(lavaOf(e), { globs: g.n, embers: b.n, width: g.width }, 'lavaOf says what blow throws');
+      // (the second volley as many again, the same in every way but when it leaves)
+      assert.deepEqual([calls.globs[1], calls.embers[1]].map(c => [c.n, c.speed, c.width, c.at, c.dir]), [g, b].map(c => [c.n, c.speed, c.width, c.at, c.dir]), `q ${q}: the second volley the same`);
+      assert.deepEqual([calls.globs[1].o, calls.embers[1].o], [g.o, b.o], 'with the same make');
+      assert.equal(n, 2 * (g.n + b.n), 'both volleys counted');
+      assert.deepEqual(lavaOf(e), { globs: 2 * g.n, embers: 2 * b.n, width: g.width, volleys: [{ globs: g.n, embers: b.n }, { globs: g.n, embers: b.n }], gap: 0.05 }, 'lavaOf says what blow throws');
       assert.ok(Math.abs(g.width - Math.min(G.most, Math.max(G.least, 1.7 * Math.max(0.01, 0.024 * m)))) < 1e-12 && b.width === FX.motes.thin, `q ${q}: a glob ${(g.width * 100).toFixed(1)} cm thick (1.7 times a mote, ${G.least * 100} to ${G.most * 100} cm), an ember the thinnest`);
       assert.ok(Math.abs(g.speed - (2.5 + 3 * k)) < 1e-12 && Math.abs(b.speed - 1.2 * g.speed) < 1e-12 && b.o.wide === 1.2, 'globs as fast as the first kind of mote, embers 1.2 times faster and wider');
       assert.ok(Math.abs(g.o.life - 1.6 * life) < 1e-12 && Math.abs(b.o.life - 2 * life) < 1e-12, 'a glob lives 1.6 times a mote\'s life, an ember twice');
@@ -279,19 +288,20 @@ test('a knockdown\'s blow throws lava in place of the motes: globs and embers as
     }
   }
   assert.equal(lavaOf({ type: 'hit', damage: 3 }), null, 'an ordinary hit has none');
-  // (and the real ones: down-back, out-log and the liver's knockdown, 11, 11 and 6 globs)
+  // (and the real ones: down-back, out-log and the liver's knockdown, 11, 11 and 6 globs a volley)
   for (const [id, globs] of [['down-back', 11], ['out-log', 11], ['down-liver', 6]]) {
     const { e, struck: man } = firstHit(id),
       fx = createFx(dice(5)),
       n = blow(fx, e, man);
     assert.ok(e.down || e.out, `${id} is a knockdown`);
     assert.equal(fx.items.filter(it => it.kind === 'glob').length, globs, `${id}: ${globs} globs`);
-    assert.equal(fx.items.length, n, `${id}: ${n} thrown, all of them globs and embers`);
+    assert.equal(fx.items.length, n / 2, `${id}: ${n / 2} thrown at once, all of them globs and embers, as many again to come`);
     assert.ok(fx.items.every(it => it.kind === 'glob' || it.kind === 'ember'));
     // (on the way the glove went: their mean velocity as they leave within 30 degrees of the blow's line, as the motes')
-    const mean = [0, 1, 2].map(j => fx.items.reduce((s, it) => s + it.v[j], 0) / n);
+    const mean = [0, 1, 2].map(j => fx.items.reduce((s, it) => s + it.v[j], 0) / fx.items.length);
     assert.ok(angle(mean, e.vec) <= 30, `${id}: ${angle(mean, e.vec).toFixed(1)} degrees off the blow's line`);
   }
+  assert.equal(FX.lava.twice.share, 1, 'the second volley as many again');
 });
 
 test('where he comes down: one step in down-back and out-log, a part of him within 6 cm of the canvas, none before; a second ripple and a ring from there', () => {
@@ -759,6 +769,102 @@ test('a glob sheds an ember every 0.05 s of its flight, at 0.3 of its velocity, 
   });
 });
 
+/* A knockdown's blow, thrown into a real fx for the struck man `man` and moved on in steps of `steps` (seconds, used in turn)
+   until `until`: what is thrown at the moment the fx's clock comes to the second volley, told from the embers the first
+   volley's globs shed then by where they start (the second volley's all at its origin, a glob's shed ember where the glob
+   is). */
+function twice(e, man, steps, until, seed, change) {
+  const fx = createFx(dice(seed ?? 31));
+  blow(fx, e, man);
+  const first = fx.items.slice();
+  let t = 0,
+    k = 0,
+    second = null,
+    when = null;
+  while (t < until - 1e-9) {
+    const dt = steps[k++ % steps.length],
+      had = new Set(fx.items);
+    if (change) change(t, man);
+    fx.update(dt);
+    t += dt;
+    // (the first globs to be thrown after the first volley's, and the embers that leave with them, from the same point)
+    const globs = second ? [] : fx.items.filter(it => !had.has(it) && it.kind === 'glob');
+    if (globs.length) (second = fx.items.filter(it => !had.has(it) && len(sub(it.a, globs[0].a)) < 1e-12)), (when = t), (second.ages = second.map(it => it.age)), (second.where = second.map(it => it.b.slice())), (second.vel = second.map(it => it.v.slice()));
+  }
+  return { fx, first, second, when };
+}
+
+test('a knockdown\'s blow throws twice in quick succession: the second volley 0.05 s later on the motes\' own clock, from his far side as he is then (or as he was, for a man kept as a step), as many again', () => {
+  const e = knockdown(3),
+    origin = exitOf({ at: HEAD.points.head, r: FX.head }, e.at, e.vec);
+  // (when: on the third sixtieth, the twelfth two-hundred-fortieth, and in uneven steps as soon as 0.05 s have gone)
+  for (const steps of [[DT], [DT / 4], [DT / 3, (2 * DT) / 3], [0.007, 0.013, 0.031]]) {
+    const { first, second, when } = twice(e, { points: { head: HEAD.points.head.slice() } }, steps, 0.2);
+    assert.ok(second && when >= 0.05 - 1e-9 && when < 0.05 + Math.max(...steps), `in steps of ${steps.map(x => x.toFixed(4))}: thrown ${when.toFixed(4)} s after the first`);
+    assert.deepEqual([second.filter(it => it.kind === 'glob').length, second.filter(it => it.kind === 'ember').length], [11, 18], 'as many again: 11 globs, 18 embers');
+    assert.equal(first.length, 29);
+    // (a man kept as a step: from where the first left)
+    assert.ok(second.every(it => len(sub(it.a, origin)) < 1e-12), 'from where the first left');
+    // (and started as far along as the time gone past 0.05 s: its age, and where it is, that far on)
+    second.ages.forEach((age, i) => assert.ok(Math.abs(age - (when - 0.05)) < 1e-9, `${second[i].kind} ${age.toFixed(5)} s along as it is thrown`));
+    second.where.forEach((b, i) => assert.ok(len(sub(b, origin.map((x, j) => x + second.vel[i][j] * (when - 0.05)))) < 1e-9, 'and that far on its way'));
+  }
+  // (a man still going: from his far side as he is then, the line of the blow held to his head)
+  const moved = [-0.12, -0.05, 0.03],
+    live = twice(e, { points: { head: HEAD.points.head.slice() } }, [DT], 0.2, 31, (t, man) => t > 0.02 && (man.points = { head: HEAD.points.head.map((x, i) => x + moved[i]) }));
+  assert.ok(live.second.every(it => len(sub(it.a, origin.map((x, i) => x + moved[i]))) < 1e-9), 'his head went 13 cm: so did where the second leaves');
+  // (a liver hook: held to his trunk, the far side of it as it is then)
+  const liver = firstHit('down-liver'),
+    trunkOrigin = exitOf(liver.e.trunk, liver.e.at, liver.e.vec),
+    shift = [0.08, -0.06, 0.04],
+    body = twice(liver.e, JSON.parse(JSON.stringify(liver.struck)), [DT], 0.2, 31, (t, man) => {
+      if (t > 0.02 && !man.shifted) (man.points = Object.fromEntries(Object.entries(man.points).map(([k, p]) => [k, Array.isArray(p) && p.length === 3 ? p.map((x, i) => x + shift[i]) : p]))), (man.shifted = true);
+    });
+  assert.ok(body.second.length === 6 + 10 && body.second.every(it => len(sub(it.a, trunkOrigin.map((x, i) => x + shift[i]))) < 1e-9), 'off the far side of his trunk where it went');
+  /* (the same seed, the same second volley; and however the time is cut, the same: its make, where it starts, and a moment
+     on no further from itself than the first volley is from itself, cut the same ways: the motes are moved in the steps they
+     are given, whichever volley they are of, and the second's own timing adds nothing to that) */
+  const runs = [[DT], [DT / 4], [DT / 3, (2 * DT) / 3]].map(steps => twice(e, { points: { head: HEAD.points.head.slice() } }, steps, 0.1)),
+    apart = (a, b) => Math.max(...a.map((it, i) => len(sub(it.b, b[i].b))));
+  for (const r of runs.slice(1)) {
+    r.second.forEach((it, i) => {
+      const was = runs[0].second[i];
+      assert.deepEqual([it.kind, it.life, it.seed, it.width, r.second.vel[i]], [was.kind, was.life, was.seed, was.width, runs[0].second.vel[i]], 'the same dice');
+      assert.ok(Math.abs(it.age - was.age) < 1e-9, 'as old');
+      assert.ok(len(sub(r.second.where[i], runs[0].second.where[i])) < 1e-9, 'starting where it did');
+    });
+    const [s2, s1] = [apart(r.second, runs[0].second), apart(r.first, runs[0].first)];
+    assert.ok(s2 <= s1 + 0.001, `0.1 s on, the second volley ${(s2 * 1000).toFixed(1)} mm from itself, the first ${(s1 * 1000).toFixed(1)} mm`);
+  }
+  const again = twice(e, { points: { head: HEAD.points.head.slice() } }, [DT], 0.1);
+  assert.deepEqual(again.second.map(it => [it.v, it.life, it.b]), runs[0].second.map(it => [it.v, it.life, it.b]), 'the same seed, the same second volley');
+  // (a share of it, or none)
+  const keep = FX.lava.twice;
+  try {
+    FX.lava.twice = { gap: 0.05, share: 0.5 };
+    const half = twice(e, { points: { head: HEAD.points.head.slice() } }, [DT], 0.2);
+    assert.deepEqual([half.second.filter(it => it.kind === 'glob').length, half.second.filter(it => it.kind === 'ember').length], [6, 9], 'half as many: 6 globs, 9 embers');
+    assert.deepEqual(lavaOf(e).volleys, [{ globs: 11, embers: 18 }, { globs: 6, embers: 9 }]);
+    FX.lava.twice = null;
+    const once = twice(e, { points: { head: HEAD.points.head.slice() } }, [DT], 0.3);
+    assert.equal(once.second, null, 'none: thrown once');
+    assert.deepEqual([lavaOf(e).volleys.length, lavaOf(e).gap], [1, 0]);
+  } finally {
+    FX.lava.twice = keep;
+  }
+});
+
+test('an ordinary hit throws once', () => {
+  for (const id of ['hit-cross', 'body-liver', 'upperIn@3']) {
+    const { e, struck } = firstHit(id),
+      fx = createFx(dice(4)),
+      n = blow(Object.assign(fx, { after: () => assert.fail(`${id}: nothing to throw later`) }), e, struck);
+    let most = 0;
+    for (let t = 0; t < 0.4; t += DT) most = Math.max(most, fx.items.length), fx.update(DT);
+    assert.equal(most, n, `${id}: ${n} motes, never more`);
+  }
+});
+
 test('the most a knockdown throws stays within what an fx draws: rows at a blow of 0.5, 1 and 2.2 times the measure', () => {
   const most = {};
   for (const q of [0.5, 1, 2.2]) {
@@ -771,6 +877,7 @@ test('the most a knockdown throws stays within what an fx draws: rows at a blow 
     }
     most[q] = top;
   }
-  assert.ok(most[2.2] < 960 / 3, `at most ${most[0.5]}, ${most[1]} and ${most[2.2]} rows: well within the 960 an fx draws, even for three such blows at once`);
+  // (both volleys in the air: twice what one was, so room in an fx for two such blows at once, no longer three)
+  assert.ok(most[2.2] < 960 / 2, `at most ${most[0.5]}, ${most[1]} and ${most[2.2]} rows: well within the 960 an fx draws, even for two such blows at once`);
   assert.ok(most[0.5] < most[1] && most[1] < most[2.2], 'more for the harder blow');
 });
