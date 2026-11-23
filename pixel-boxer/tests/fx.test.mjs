@@ -117,25 +117,30 @@ function meanWay(e, struck) {
   return sum.map(x => x / k);
 }
 
-test('blow: sparks by the damage (how many, how thick), in their colours and speeds, from the far side, the way the glove went', () => {
+test('blow: sparks by the damage (how many, how thick, how long), in their colours, 5% faster, from the far side, the way the glove went', () => {
   // (the rule itself: a pro's straight to the head is the measure; half the damage, half of each; twice, twice; a cap)
   const at = { points: { head: [0, 1.5, 0] } },
     made = damage => {
       const calls = [];
-      blow({ sparks: (p, n, colours, speed, dir, width) => calls.push({ n, width }) }, { type: 'hit', damage, J: 0, at: [0.1, 1.5, 0], vec: [-1, 0, 0] }, at);
-      return { n: calls.reduce((s, c) => s + c.n, 0), width: calls[0].width };
+      blow({ sparks: (p, n, colours, speed, dir, width, o) => calls.push({ n, width, o }) }, { type: 'hit', damage, J: 0, at: [0.1, 1.5, 0], vec: [-1, 0, 0] }, at);
+      return { n: calls.reduce((s, c) => s + c.n, 0), width: calls[0].width, life: calls[0].o.life, pace: calls[0].o.pace };
     };
-  assert.deepEqual(made(3), { n: 28, width: 0.024 }, 'the reference: 28 sparks, 2.4 cm');
+  assert.deepEqual([made(3).n, made(3).width], [28, 0.024], 'the reference: 28 sparks, 2.4 cm');
   assert.ok(Math.abs(made(1.5).n - 14) <= 1 && Math.abs(made(1.5).width - 0.012) < 1e-12, 'half the damage: half as many (to a spark of each kind), half as thick');
   assert.deepEqual([made(6).n, +made(6).width.toFixed(6)], [56, 0.048], 'twice the damage: twice as many, twice as thick');
   assert.equal(made(30).n, made(3 * FX.most).n, 'no more than FX.most times the reference');
+  // (how long they last: a tenth less than they always did at the measure, in proportion to the damage, to 0.4 of that;
+  // and a twentieth faster, whatever the blow)
+  assert.ok(Math.abs(made(3).life - 0.9) < 1e-12 && Math.abs(made(6).life - 1.8) < 1e-12 && Math.abs(made(1.5).life - 0.45) < 1e-12, 'lives: 0.9 at the measure, twice the damage twice as long, half half');
+  assert.ok(Math.abs(made(0.2).life - 0.36) < 1e-12, 'the lightest touch lasts 0.4 of the measure\'s');
+  assert.ok([0.2, 1.5, 3, 6].every(d => made(d).pace === 1.05), 'all of them 5% faster');
   assert.ok(made(0.2).n >= 2 && made(0.2).width === FX.motes.thin, 'the lightest touch still shows: one of each kind, at the thinnest');
   assert.equal(scaleOf({ J: 85 }), scaleOf({ damage: 2.975 }), 'a hit with no damage on it is read off its impulse');
   const seen = {};
   for (const id of ['hit-jab', 'hit-cross', 'hit-hook', 'upperIn@3', 'body-liver', 'down-back']) {
     const { e, struck } = firstHit(id),
       calls = [],
-      fake = { sparks: (at, n, colours, speed, dir, width) => calls.push({ at, n, colours, speed, dir, width }) },
+      fake = { sparks: (at, n, colours, speed, dir, width, o) => calls.push({ at, n, colours, speed, dir, width, o }) },
       n = blow(fake, e, struck),
       q = scaleOf(e),
       was = sparksOf(q, e.J);

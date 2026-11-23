@@ -1,8 +1,9 @@
 /* How a blow is drawn (docs/moves-plan-6.md §2), the one place the game, the motion catalogue, the pending catalogue and the
    review sheet all take it from. Nothing here knows the renderer: it works out where things are, and puts motes into an fx
    (render/fx.mjs) and a ripple into a layer's `wave` (render/renderer.mjs).
-   A blow that lands throws the sparks it always has (the same colours, speeds and lives; how many and how thick, in
-   proportion to the damage it did), but from where the line of
+   A blow that lands throws the sparks it always has (the same colours; a twentieth faster; how many, how thick and how
+   long they last, in proportion to the damage it did, a pro's straight a tenth shorter-lived than they were), but from
+   where the line of
    the blow comes out of the part of him it struck, on his far side, and along the way the glove was going, up and down as
    well as across. They go into an fx of his own, drawn `outside` his silhouette, so none of them is ever seen over him: the
    first of them shows at his outline. A glove met by a glove (a block, a parry) has no struck body: its sparks stay where
@@ -12,12 +13,15 @@
      FX                    the numbers: head (the head as a ball, metres), out (how far off the surface the motes start),
                            ref (the damage everything is measured by: the health a pro's straight to the head takes, 85 N s),
                            most (the most times ref a blow is drawn as), motes { n (how many of each kind at ref), width
-                           (how thick at ref, metres), thin (the thinnest drawn) }, ripple { speed (m/s its front goes
+                           (how thick at ref, metres), thin (the thinnest drawn), life (how long they last at ref, times
+                           the sparks' own 0.16-0.38 s), short (the least that is, times ref's), pace (times the sparks'
+                           own velocity) }, ripple { speed (m/s its front goes
                            out), last (seconds), width (metres of the train of waves at its front, at ref), sway (metres it
                            carries what it passes, at the start, at ref), thin (the narrowest train), down { last, sway
                            (times) }: a knockdown's }
-     scaleOf(e)            the damage of a hit over FX.ref, to FX.most: how many motes, how thick, how wide and how far the
-                           ripple, all in proportion to it (the user's rule: twice the damage, twice of each)
+     scaleOf(e)            the damage of a hit over FX.ref, to FX.most: how many motes, how thick, how long they last, how
+                           wide and how far the ripple, all in proportion to it (the user's rule: twice the damage, twice
+                           of each)
      exitOf(part, at, vec) where the motes start: part { at, r } (a ball) or { at, to, r } (a capsule: a trunk, the hit's
                            e.trunk); at where the glove met him; vec the way it was going (unit). -> a point in the world
      blow(fx, e, struck)   a hit's motes into fx (the struck man's own), from the far side of what it struck (e.trunk if
@@ -36,7 +40,7 @@ export const FX = {
   out: 0.01,
   ref: 3,
   most: 2.2,
-  motes: { n: [17, 11], width: 0.024, thin: 0.01 },
+  motes: { n: [17, 11], width: 0.024, thin: 0.01, life: 0.9, short: 0.4, pace: 1.05 },
   ripple: { speed: 3, last: 0.4, width: 0.14, sway: 0.034, thin: 0.06, down: { last: 0.55, sway: 1.3 } }
 };
 // health a newton-second takes off a man with an ordinary chin (game/bout.mjs RULES.damage): for a hit that carries no damage
@@ -114,12 +118,15 @@ export function blow(fx, e, struck) {
     // (the way the glove was going: across, as before, and now up or down as well, at the same 0.7 of the speed)
     way = [e.vec[0], e.vec[2], e.vec[1]],
     // (how thick each is: in proportion to the damage, down to the thinnest that still shows as a pixel)
-    width = Math.max(FX.motes.thin, FX.motes.width * q);
+    width = Math.max(FX.motes.thin, FX.motes.width * q),
+    // (how long each lasts: a tenth less than the sparks always did at the measure, and in proportion to the damage from
+    // there, down to FX.motes.short of it; and all of them a twentieth faster)
+    o = { life: FX.motes.life * Math.max(FX.motes.short, q), pace: FX.motes.pace };
   let n = 0;
   SPARKS.forEach((sparks, i) => {
     const [colours, speed] = sparks(k),
       many = Math.max(1, Math.round(FX.motes.n[i] * q));
-    fx.sparks(from, many, colours, speed, way, width);
+    fx.sparks(from, many, colours, speed, way, width, o);
     n += many;
   });
   return n;

@@ -22,7 +22,7 @@ import { BODYSHOTS } from './bodyshots.mjs';
 const DT = 1 / 60;
 const VERSIONS = [
   { id: 'before', name: '전', note: '접촉점에서 튀는 색 입자와, 맞은 선수의 흰 번쩍임(0.07초).' },
-  { id: 'final', name: '확정', note: '같은 색 입자(색·속도·수명 그대로, 수와 굵기는 데미지에 비례)가 타격선이 맞은 몸을 빠져나가는 반대쪽 면에서 시작해, 주먹이 가던 방향(위아래 포함)으로 날아갑니다. 맞은 선수의 윤곽 안에서는 보이지 않아 윤곽에서 처음 나타납니다. 흰 번쩍임 대신 닿은 점에서 파문이 빛 없이 몸(머리 포함)에 퍼집니다: 초속 3 m, 0.4초(다운은 0.55초, 흔들림 1.3배), 흔들림과 폭은 데미지에 비례. 막음과 패리의 불꽃은 닿은 점 그대로입니다.' }
+  { id: 'final', name: '확정', note: '같은 색 입자(색은 그대로, 속도는 5% 빠르게, 수·굵기·수명은 데미지에 비례)가 타격선이 맞은 몸을 빠져나가는 반대쪽 면에서 시작해, 주먹이 가던 방향(위아래 포함)으로 날아갑니다. 맞은 선수의 윤곽 안에서는 보이지 않아 윤곽에서 처음 나타납니다. 흰 번쩍임 대신 닿은 점에서 파문이 빛 없이 몸(머리 포함)에 퍼집니다: 초속 3 m, 0.4초(다운은 0.55초, 흔들림 1.3배), 흔들림과 폭은 데미지에 비례. 막음과 패리의 불꽃은 닿은 점 그대로입니다.' }
 ];
 /* The rows: a light blow, the two hard ones, an uppercut under the chin (the inside uppercut of the skill ladder, the one
    that comes straight up: there it is the other man who is struck), a hook to the liver, and a knockdown. */

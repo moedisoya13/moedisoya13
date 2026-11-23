@@ -45,13 +45,16 @@ export function createFx(random) {
     },
     /* sparks thrown out round `at`, a fan with a little lift in it, carried on `dir` if there is one: [x, z] the way across,
        and [x, z, y] up or down as well (render/blow.mjs: the way the glove was going), each at 0.7 of the speed; width:
-       how thick each is drawn, metres (render/blow.mjs: by the damage done) */
-    sparks(at, n, colours, speed, dir, width) {
+       how thick each is drawn, metres (render/blow.mjs: by the damage done); o: { life (times its life), pace (times its
+       velocity, the fan's lift with it) } (render/blow.mjs: a hit's) */
+    sparks(at, n, colours, speed, dir, width, o) {
+      const life = (o && o.life) || 1,
+        pace = (o && o.pace) || 1;
       for (let i = 0; i < n; i++) {
         const a = rnd() * Math.PI * 2,
           s = speed * (0.35 + rnd() * 0.9),
-          v = [Math.cos(a) * s * 0.8 + (dir ? dir[0] * speed * 0.7 : 0), Math.sin(a) * s * 0.7 + 1.4 + (dir && dir[2] ? dir[2] * speed * 0.7 : 0), (rnd() - 0.5) * s + (dir ? dir[1] * speed * 0.7 : 0)];
-        add({ a: at.slice(), b: at.slice(), v, g: -13, drag: 3, width: width || 0.024, pal: colours, life: 0.16 + rnd() * 0.22, tail: 0.03, shrink: 0.6 });
+          v = [Math.cos(a) * s * 0.8 + (dir ? dir[0] * speed * 0.7 : 0), Math.sin(a) * s * 0.7 + 1.4 + (dir && dir[2] ? dir[2] * speed * 0.7 : 0), (rnd() - 0.5) * s + (dir ? dir[1] * speed * 0.7 : 0)].map(x => x * pace);
+        add({ a: at.slice(), b: at.slice(), v, g: -13, drag: 3, width: width || 0.024, pal: colours, life: (0.16 + rnd() * 0.22) * life, tail: 0.03, shrink: 0.6 });
       }
     },
     /* The spray off a blow: sweat thrown off the part of him that was struck, at the instant it lands. The way the glove
