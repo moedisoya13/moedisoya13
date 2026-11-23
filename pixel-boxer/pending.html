@@ -92,6 +92,8 @@
   .feet b[data-own] { display: inline-block; min-width: 15ch; }
   .feet [data-b] { display: inline-block; min-width: 3.2em; }
   .big b[data-j] { display: inline-block; min-width: 2.7em; text-align: right; }
+  /* (on a phone a card is too narrow to hold a caption on one line: there it may wrap, and nothing scrolls sideways) */
+  @media (max-width: 560px) { .feet > span { white-space: normal; } .feet b[data-own] { min-width: 0; } }
   .big { font: 400 30px/1 var(--display); color: var(--fg); }
   .big small { font: 500 11px/1 var(--data); color: var(--dim); margin-left: 4px; }
   .result .tag { font: 600 12px/1 var(--body); letter-spacing: .06em; padding: 5px 7px; border: 1.5px solid var(--line); color: var(--dim); }
@@ -137,6 +139,9 @@
   /* the contents: every part and every item, a jump away, each marked chosen or not */
   .toc { background: var(--bg); border-top: 1.5px solid var(--line); border-bottom: 1.5px solid var(--line); padding: 14px 0 16px; display: flex; flex-direction: column; gap: 12px; }
   .toc-title { margin: 0; padding: 0; border: 0; font: 400 26px/1.1 var(--display); letter-spacing: .02em; color: var(--fg); }
+  .toc-fold > summary { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; min-height: 44px; cursor: pointer; }
+  .toc-fold > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .toc-fold[open] > summary { margin-bottom: 12px; }
   .toc-count { margin: 0; font-size: 14px; }
   .toc-count b { font: 500 14px/1 var(--data); }
   .toc-parts { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap: 14px 24px; }

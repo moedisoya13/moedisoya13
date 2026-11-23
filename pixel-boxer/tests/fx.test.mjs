@@ -20,7 +20,7 @@
    its glow then inside its crust, never red, and a cold one is a cinder with at most a small glow; it is at its hottest while it
    rises and only ever cools; it does not bounce off the canvas but lies there going dark; an ember flickers the same at the
    same moment however often it is drawn, and goes out from orange by winking, never red; it is thrown twice in quick
-   succession (§2.4C 7), the second volley 0.05 s on the motes' own clock after the first, from his far side as he is then;
+   succession (§2.4C 7), the second volley 0.1 s on the motes' own clock after the first, from his far side as he is then;
    and the most that is ever thrown stays within what an fx can draw. */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -256,7 +256,7 @@ test('a knockdown\'s blow throws lava in place of the motes, in two volleys: glo
         n = blow(fake, e, struck);
       // (the first volley at once; the second when the fx's clock comes to it: here, as soon as asked)
       assert.deepEqual([calls.globs.length, calls.embers.length, calls.after.length], [1, 1, 1], 'one volley at once, one to come');
-      assert.equal(calls.after[0].gap, 0.05, 'the second 0.05 s later');
+      assert.equal(calls.after[0].gap, 0.1, 'the second 0.1 s later');
       calls.after[0].throwIt(0);
       return { n, calls, e };
     },
@@ -277,7 +277,7 @@ test('a knockdown\'s blow throws lava in place of the motes, in two volleys: glo
       assert.deepEqual([calls.globs[1], calls.embers[1]].map(c => [c.n, c.speed, c.width, c.at, c.dir]), [g, b].map(c => [c.n, c.speed, c.width, c.at, c.dir]), `q ${q}: the second volley the same`);
       assert.deepEqual([calls.globs[1].o, calls.embers[1].o], [g.o, b.o], 'with the same make');
       assert.equal(n, 2 * (g.n + b.n), 'both volleys counted');
-      assert.deepEqual(lavaOf(e), { globs: 2 * g.n, embers: 2 * b.n, width: g.width, volleys: [{ globs: g.n, embers: b.n }, { globs: g.n, embers: b.n }], gap: 0.05 }, 'lavaOf says what blow throws');
+      assert.deepEqual(lavaOf(e), { globs: 2 * g.n, embers: 2 * b.n, width: g.width, volleys: [{ globs: g.n, embers: b.n }, { globs: g.n, embers: b.n }], gap: 0.1 }, 'lavaOf says what blow throws');
       assert.ok(Math.abs(g.width - Math.min(G.most, Math.max(G.least, 1.7 * Math.max(0.01, 0.024 * m)))) < 1e-12 && b.width === FX.motes.thin, `q ${q}: a glob ${(g.width * 100).toFixed(1)} cm thick (1.7 times a mote, ${G.least * 100} to ${G.most * 100} cm), an ember the thinnest`);
       assert.ok(Math.abs(g.speed - (2.5 + 3 * k)) < 1e-12 && Math.abs(b.speed - 1.2 * g.speed) < 1e-12 && b.o.wide === 1.2, 'globs as fast as the first kind of mote, embers 1.2 times faster and wider');
       assert.ok(Math.abs(g.o.life - 1.6 * life) < 1e-12 && Math.abs(b.o.life - 2 * life) < 1e-12, 'a glob lives 1.6 times a mote\'s life, an ember twice');
@@ -794,20 +794,20 @@ function twice(e, man, steps, until, seed, change) {
   return { fx, first, second, when };
 }
 
-test('a knockdown\'s blow throws twice in quick succession: the second volley 0.05 s later on the motes\' own clock, from his far side as he is then (or as he was, for a man kept as a step), as many again', () => {
+test('a knockdown\'s blow throws twice in quick succession: the second volley 0.1 s later on the motes\' own clock, from his far side as he is then (or as he was, for a man kept as a step), as many again', () => {
   const e = knockdown(3),
     origin = exitOf({ at: HEAD.points.head, r: FX.head }, e.at, e.vec);
-  // (when: on the third sixtieth, the twelfth two-hundred-fortieth, and in uneven steps as soon as 0.05 s have gone)
+  // (when: on the sixth sixtieth, the twenty-fourth two-hundred-fortieth, and in uneven steps as soon as 0.1 s have gone)
   for (const steps of [[DT], [DT / 4], [DT / 3, (2 * DT) / 3], [0.007, 0.013, 0.031]]) {
     const { first, second, when } = twice(e, { points: { head: HEAD.points.head.slice() } }, steps, 0.2);
-    assert.ok(second && when >= 0.05 - 1e-9 && when < 0.05 + Math.max(...steps), `in steps of ${steps.map(x => x.toFixed(4))}: thrown ${when.toFixed(4)} s after the first`);
+    assert.ok(second && when >= 0.1 - 1e-9 && when < 0.1 + Math.max(...steps), `in steps of ${steps.map(x => x.toFixed(4))}: thrown ${when.toFixed(4)} s after the first`);
     assert.deepEqual([second.filter(it => it.kind === 'glob').length, second.filter(it => it.kind === 'ember').length], [11, 18], 'as many again: 11 globs, 18 embers');
     assert.equal(first.length, 29);
     // (a man kept as a step: from where the first left)
     assert.ok(second.every(it => len(sub(it.a, origin)) < 1e-12), 'from where the first left');
-    // (and started as far along as the time gone past 0.05 s: its age, and where it is, that far on)
-    second.ages.forEach((age, i) => assert.ok(Math.abs(age - (when - 0.05)) < 1e-9, `${second[i].kind} ${age.toFixed(5)} s along as it is thrown`));
-    second.where.forEach((b, i) => assert.ok(len(sub(b, origin.map((x, j) => x + second.vel[i][j] * (when - 0.05)))) < 1e-9, 'and that far on its way'));
+    // (and started as far along as the time gone past 0.1 s: its age, and where it is, that far on)
+    second.ages.forEach((age, i) => assert.ok(Math.abs(age - (when - 0.1)) < 1e-9, `${second[i].kind} ${age.toFixed(5)} s along as it is thrown`));
+    second.where.forEach((b, i) => assert.ok(len(sub(b, origin.map((x, j) => x + second.vel[i][j] * (when - 0.1)))) < 1e-9, 'and that far on its way'));
   }
   // (a man still going: from his far side as he is then, the line of the blow held to his head)
   const moved = [-0.12, -0.05, 0.03],
@@ -841,7 +841,7 @@ test('a knockdown\'s blow throws twice in quick succession: the second volley 0.
   // (a share of it, or none)
   const keep = FX.lava.twice;
   try {
-    FX.lava.twice = { gap: 0.05, share: 0.5 };
+    FX.lava.twice = { gap: 0.1, share: 0.5 };
     const half = twice(e, { points: { head: HEAD.points.head.slice() } }, [DT], 0.2);
     assert.deepEqual([half.second.filter(it => it.kind === 'glob').length, half.second.filter(it => it.kind === 'ember').length], [6, 9], 'half as many: 6 globs, 9 embers');
     assert.deepEqual(lavaOf(e).volleys, [{ globs: 11, embers: 18 }, { globs: 6, embers: 9 }]);

@@ -84,7 +84,7 @@ function head(item, no) {
   el.className = 'item-head';
   el.id = `item-${item.id}`;
   el.innerHTML = `<h3>${fmt(item.title)}</h3>
-    <div class="meta"><span>${item.part}부 · ${no}</span><code>${esc(item.id)}</code>${item.pairNo ? `<span class="pairno">비교 쌍 ${PAIR_NO[item.pairNo]}</span>` : ''}</div>
+    <div class="meta"><span>${(PARTS.find(P => P.n === item.part) || {}).mark || item.part + '부'} · ${no}</span><code>${esc(item.id)}</code>${item.pairNo ? `<span class="pairno">비교 쌍 ${PAIR_NO[item.pairNo]}</span>` : ''}</div>
     <p class="state"><b>현재 상태.</b> ${fmt(item.state)}</p>
     ${(item.tables || []).map(table).join('')}
     ${(item.notes || []).map(n => `<p class="note">${fmt(n)}</p>`).join('')}
@@ -210,13 +210,13 @@ function pairing(a, b, no) {
 }
 
 function contents() {
-  document.getElementById('toc').innerHTML = `<h2 class="toc-title">차례</h2>
-    <p class="toc-count" id="count">${ITEMS.length}개 가운데 <b>0</b>개를 정했습니다</p>
-    <ol class="toc-parts">${PARTS.map(P => `<li><a class="toc-part" href="#part-${P.n}">${P.n}. ${fmt(P.title)}</a><ul class="toc-rows">${ITEMS.filter(i => i.part === P.n).map(i => `<li><a href="#item-${i.id}" data-toc="${i.id}"><span class="dot" aria-hidden="true"></span><span>${fmt(i.title)}</span><span class="pick"></span></a></li>`).join('')}</ul></li>`).join('')}</ol>`;
+  // (the contents are folded away until asked for: the count stays in sight on the fold's own line)
+  document.getElementById('toc').innerHTML = `<details class="toc-fold"><summary><span class="toc-title">차례</span><span class="toc-count" id="count">${ITEMS.length}개 가운데 <b>0</b>개를 정했습니다</span></summary>
+    <ol class="toc-parts">${PARTS.map(P => `<li><a class="toc-part" href="#part-${P.n}">${P.mark ? '' : P.n + '. '}${fmt(P.title)}</a><ul class="toc-rows">${ITEMS.filter(i => i.part === P.n).map(i => `<li><a href="#item-${i.id}" data-toc="${i.id}"><span class="dot" aria-hidden="true"></span><span>${fmt(i.title)}</span><span class="pick"></span></a></li>`).join('')}</ul></li>`).join('')}</ol></details>`;
 }
 contents();
 for (const P of PARTS) {
-  main.insertAdjacentHTML('beforeend', `<h2 class="part" id="part-${P.n}"><span class="no">${P.n}</span>${fmt(P.title)}</h2><p class="part-note">${fmt(P.note)}</p>`);
+  main.insertAdjacentHTML('beforeend', `<h2 class="part" id="part-${P.n}"><span class="no">${P.mark || P.n}</span>${fmt(P.title)}</h2><p class="part-note">${fmt(P.note)}</p>`);
   const items = ITEMS.filter(i => i.part === P.n);
   for (let k = 0; k < items.length; k++) {
     if (items[k].pair) {

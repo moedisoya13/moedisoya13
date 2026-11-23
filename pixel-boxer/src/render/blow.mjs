@@ -101,7 +101,7 @@ export const FX = {
     crust: [7, 6, 5],
     globs: { n: 11, width: 1.7, least: 0.024, most: 0.06, fall: 0.8, drag: 0.8, life: 1.6, cool: 2.5, land: 0, spot: 0.35, shed: { every: 0.05, pace: 0.3, most: 4 } },
     embers: { n: 18, pace: 1.2, wide: 1.2, fall: 0.2, drag: 1.6, life: 2, brake: 4, wander: [0.1, 0.2], flicker: 0.04, trail: 1.5 },
-    twice: { gap: 0.05, share: 1 }
+    twice: { gap: 0.1, share: 1 }
   },
   // (land: the second ripple of a knockdown, from where he comes down: its strength times the blow's, and how long it goes)
   ripple: { speed: 3, last: 0.4, width: 0.14, sway: 0.034, thin: 0.06, down: { last: 0.55, sway: 1.3 }, land: { strength: 0.8, last: 0.45 } },
