@@ -3,7 +3,7 @@
    and how far it may go, so that one getting worse, or anything new, still fails. */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { audit, SCRIPTS } from '../src/audit.mjs';
+import { audit, SCRIPTS, LIMIT } from '../src/audit.mjs';
 import { MOVES } from '../src/anim/moves.mjs';
 
 // (a man in a knockdown's fall: his body is a passive body then, phys/fall.mjs, and nothing is keyed)
@@ -66,14 +66,22 @@ test('audit: no scripted bout breaks anything a body can do, beyond the listed e
   assert.deepEqual(broken, []);
 });
 
-/* The waist (plan 6 §1.3): turned on the pelvis no further than 25 degrees and no faster than 900 a second, with no exception;
-   and the animator keeps it inside its own 22 (anim/animator.mjs: WAIST), which no frame of any script goes past by more
-   than a measuring hair. */
-test('audit: the waist is never turned past its range or faster than it can turn, and never past the animator\'s 22 degrees', () => {
+/* The waist (plan 6 §1.3): turned on the pelvis no further than 25 degrees and no faster than 900 a second, in every frame,
+   a knockdown's fall too, with no exception. How far it turns is held apart for the two that turn it: where the animator
+   keys him, it keeps the waist inside its own 22 (anim/animator.mjs: WAIST), which no frame of any script goes past by more
+   than a measuring hair; in a knockdown's fall his body is the physics' (phys/fall.mjs), which holds the waist by limits of
+   its own and is held, like any frame, to the body's 25 (rig/body.mjs: RANGE.waistTwist), so a fallen man is not held to the
+   animator's 22, nor does his fall leave the animator's frames room past it. */
+test('audit: the waist is never turned past its range or faster than it can turn; the animator never turns it past its 22 degrees', () => {
   const { found } = audited();
   for (const check of ['waist twisted past its limit', 'waist turning faster than it can (degrees a second)']) {
     assert.ok(found[check] && found[check].frames > 10000, `${check}: checked in ${found[check] ? found[check].frames : 0} frames`);
     assert.equal(found[check].bad, 0, `${check}: ${JSON.stringify(found[check].cases.slice(0, 5))}`);
   }
-  assert.ok(found['waist twisted past its limit'].largest <= 22.5, `the waist turned ${found['waist twisted past its limit'].largest.toFixed(1)} degrees`);
+  const by = Object.entries(found['waist twisted past its limit'].largestBy),
+    most = list => Math.max(0, ...list.map(([, v]) => v)),
+    keyed = most(by.filter(([doing]) => !falling({ doing }))),
+    fallen = most(by.filter(([doing]) => falling({ doing })));
+  assert.ok(keyed <= 22.5, `the animator turned the waist ${keyed.toFixed(1)} degrees`);
+  assert.ok(fallen <= LIMIT.waistTwist, `a fall turned the waist ${fallen.toFixed(1)} degrees`);
 });

@@ -47,8 +47,11 @@ import { RANGE, FOOT, HEAD, SHOULDER, shoulderOf } from '../rig/body.mjs';
 /* (forty-eight steps a frame, and not the twelve it had at first: with twelve, a man landing face down had his belly rolled
    25 degrees on the canvas inside one frame, as the contact took hold of it over so long a step, his waist turning on his
    pelvis faster than a waist can (1180 degrees a second, against rig/body.mjs: RATE); in finer steps the canvas takes hold
-   of him as it does a real body, over two frames. Everything below that is reckoned a step or a pass at a time is set by the
-   second (a speed, a rate, a stiffness), so the number of steps changes how closely the body is followed, not what it is) */
+   of him as it does a real body, over two frames. What below is reckoned a pass at a time and is a speed or a rate (PRESS,
+   KNEE_TURN, FIX_MOST, GAIN) is set by the second, so that it means the same in any number of steps; the stiffnesses,
+   dampings and grip are by the second already. But where his corrections pull against each other (a locked arm held
+   inside his trunk's reach, a body heaped up on itself on the canvas), what they disagree by makes a speed out of nothing
+   in each step, more of it the finer the steps, and his falls do not come out exactly as they did at twelve) */
 const G = 9.81,
   STEPS = 48,
   ITER = 3,
@@ -221,6 +224,7 @@ function angular(a, b, rot, compliance, h) {
   if (a) turnBy(a, iw(a, p));
   if (b) turnBy(b, iw(b, [-p[0], -p[1], -p[2]]));
 }
+
 const at = (b, local) => M.add(b.x, qrot(b.q, M.sub(local, b.com))); // a point of a piece (local: in its own frame, from its joint)
 const off = (b, local) => qrot(b.q, M.sub(local, b.com)); // and its offset from the piece's middle
 
