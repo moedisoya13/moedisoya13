@@ -221,6 +221,29 @@ function angular(a, b, rot, compliance, h) {
   if (a) turnBy(a, iw(a, p));
   if (b) turnBy(b, iw(b, [-p[0], -p[1], -p[2]]));
 }
+/* A muscle's hold: a turns toward b by a share of the rotation `rot`, as stiffly as `stiff` (newton-metres a radian). Each
+   pass puts right a share of what is out and carries nothing to the next, so three passes a step make a spring whose
+   stiffness, a second, is not quite its number, and is more than it the stiffer the hold and the longer the step (a log's
+   lock, at twelve steps a frame, about three times as stiff as three passes of 30000 would be; an ankle locked so, forty
+   times). The holds were made as stiff as they are at twelve steps a frame, so that is what is kept: the share in a pass is
+   the one that makes the spring as stiff, a second, as twelve steps made it (each pass of a twelfth of a frame put right
+   1 - 1/g of what was out, g = 1 + stiff w H^2, so a step put right 1 - 1/g^3; a spring that does that in a step H gives
+   way under a load by 1 / ((g^3 - 1) / (w H^2)), and a step h as stiff puts right (h/H)^2 (g^3 - 1) parts in 1 + that) */
+const SET = 12; // (the steps a frame the holds were made with)
+function hold(a, b, rot, stiff, h) {
+  const th = len(rot);
+  if (th < 1e-9) return;
+  const n = [rot[0] / th, rot[1] / th, rot[2] / th],
+    w = wRot(a, n) + wRot(b, n);
+  if (w < 1e-12) return;
+  const H = (h * STEPS) / SET,
+    g = 1 + stiff * w * H * H,
+    share = 1 - Math.cbrt(1 / (1 + ((h * h) / (H * H)) * (g * g * g - 1))),
+    dl = (th * share) / w,
+    p = [n[0] * dl, n[1] * dl, n[2] * dl];
+  if (a) turnBy(a, iw(a, p));
+  if (b) turnBy(b, iw(b, [-p[0], -p[1], -p[2]]));
+}
 
 const at = (b, local) => M.add(b.x, qrot(b.q, M.sub(local, b.com))); // a point of a piece (local: in its own frame, from its joint)
 const off = (b, local) => qrot(b.q, M.sub(local, b.com)); // and its offset from the piece's middle
@@ -503,7 +526,9 @@ function twist(rel, axis, most, toWorld) {
 /* Which way a knee points round the leg's own line, from the front of the thigh (ahead of the pelvis when the leg hangs
    under it, up from it when the leg is out in front, down when it is out behind), as tools/audit.mjs measures it: the
    thigh turns in the hip only so far. Kept inside that by turning the thigh and the shin together about the line from hip
-   to ankle (the ankle, on the line, stays where it is). */
+   to ankle (the ankle, on the line, stays where it is). (The front is gone over from ahead to up or down smoothly, from
+   0.6 to 0.9 of the way the leg points; the audit goes over at once, at 0.8, so between those the two read the same knee
+   differently, by up to a few tens of degrees: it is kept inside the range as both read it.) */
 const KNEE_WAY = [RANGE.kneeAzimuth[0] + 6, RANGE.kneeAzimuth[1] - 6];
 /* (and only so fast, degrees a second, so much a pass times the step (half a degree a pass at twelve steps a frame): what
    the knee's way is measured from swings round as the leg goes out in front or behind, so a leg can find itself well
@@ -523,15 +548,19 @@ function kneeWay(bs, s, h) {
     py = qrot(pelvis.q, [0, 1, 0]),
     px = M.scale(qrot(pelvis.q, [1, 0, 0]), s === 'L' ? 1 : -1),
     ahead = dot(d, pz),
+    up = M.scale(py, ahead > 0 ? 1 : -1),
     w = smooth((Math.abs(ahead) - 0.6) / 0.3),
-    ref = M.add(M.scale(pz, 1 - w), M.scale(py, w * (ahead > 0 ? 1 : -1))),
+    ref = M.add(M.scale(pz, 1 - w), M.scale(up, w)),
     front = unit(M.sub(ref, M.scale(d, dot(ref, d)))),
     outward = unit(M.sub(px, M.scale(d, dot(px, d)))),
     a = Math.atan2(dot(off, outward), dot(off, front)) * DEG,
-    a2 = clamp(a, KNEE_WAY[0], KNEE_WAY[1]);
-  if (a2 === a) return;
+    edge = unit(M.sub(Math.abs(ahead) < 0.8 ? pz : up, M.scale(d, dot(Math.abs(ahead) < 0.8 ? pz : up, d)))), // (the audit's front)
+    b = Math.atan2(dot(off, outward), dot(off, edge)) * DEG,
+    // (the least turn that puts it inside the range from both fronts: a turn about d turns it as far from either)
+    turn = clamp(0, Math.max(KNEE_WAY[0] - a, KNEE_WAY[0] - b), Math.min(KNEE_WAY[1] - a, KNEE_WAY[1] - b));
+  if (turn === 0) return;
   // (turning about d by +phi carries the front toward d x front, which is outward for the right leg and inward for the left)
-  const phi = clamp((a2 - a) * 0.5, -KNEE_TURN * h, KNEE_TURN * h) * RAD * (dot(cross(d, front), outward) > 0 ? 1 : -1),
+  const phi = clamp(turn * 0.5, -KNEE_TURN * h, KNEE_TURN * h) * RAD * (dot(cross(d, front), outward) > 0 ? 1 : -1),
     rq = qaxis(d, phi);
   for (const b of [thigh, shin]) {
     b.x = M.add(hip, qrot(rq, M.sub(b.x, hip)));
@@ -881,7 +910,7 @@ export function stepFall(body, dt, obstacles) {
         if (m.w > 0.001) {
           const rel = qmul(qconj(p.q), c.q),
             rot = qrot(p.q, qvec(qmul(m.to, qconj(rel))));
-          angular(c, p, rot, 1 / (m.stiff * m.w * m.w), h);
+          hold(c, p, rot, m.stiff * m.w * m.w, h);
         }
         const fix = limit(Object.assign({ sOf: j.s === 'R' ? -1 : 1 }, j), p, c);
         if (fix) angular(c, p, most(fix, h), 0, h);
