@@ -339,6 +339,10 @@ A+B 실신·위빙, C1 몸통 판정, C2 바디 주먹·뒷손 훅, E 파도, F 
 - **규칙 어긋남**: SendMessage로 이어 시킨 구현 에이전트는 그때의 메인 세션 모델·노력도로 돌았다. N 3·4차, U 3·4차, V 3·4·4b차(16:51~21:33)는 메인 세션의 모델·high로, 23:39부터의 5차는 구현용 모델·high로 돌고 있다(규칙: 구현용 모델·xhigh).
 - 앞으로: 구현과 점검은 Agent 도구로 모델과 노력도(xhigh)를 박아 새로 띄워 넘긴다(박아 띄운 에이전트는 이어 시켜도 유지됨: M 구현이 그랬음).
 
+## 사용자 지시: 노력도 통일 (2026-11-23 23:55)
+
+"기획 쪽 모델은 high, 구현·점검 쪽 모델은 xhigh로 통일." → 메시지로 이어 시켜 노력도가 high로 돌던 N·U·V 5차 구현 에이전트 셋을 멈추고(남아 돌던 U의 점검 스크립트 `st-u2/probe/qc8.sh`와 그 node도 멈춤), 구현 쪽 모델·xhigh를 지정한 새 에이전트 셋이 같은 작업 폴더에서 이어받음. 넘긴 것: `scratchpad/wfout2/standard.md`(합치는 기준 B와 규칙), `brief-{N,U,V}-round5.md`(5차 브리프), 멈춘 때의 반쯤 한 변경 `{n3,u3,v3}-round5-partial.diff`(작업 폴더에 스테이지 안 된 채로도 남음). 새 에이전트의 작업 폴더 `scratchpad/st-n6`, `st-u5`, `st-v5`. 규칙은 `docs/handoff.md` §2에.
+
 ## 사용자 지적: 모션 카탈로그의 메모가 거의 반영되지 않았다 (2026-11-23)
 
 사실이다. 메모 27건(26줄; `feedback`을 다시 읽음, 11-22 뒤로 새 메모 없음) 가운데 **카탈로그의 동작에 보이는 것은 0건.** 끝난 것은 J(이펙트)와 K(허리 엔진: `hookIn` 메모의 "허리를 분리해 돌 수 있는 변수로"만 엔진에 생겼고 어느 주먹도 아직 쓰지 않음)뿐이고, 그 뒤의 시간은 이펙트(데미지 비례, 다운 효과, 용암·불티), K의 착지 수리, 소스 기획 둘에 썼다. 메모의 단계: M(`crossArm`의 audit) → N(`hookIn`, `hookR`, `upperIn`, `flicker`) → P(`crossArm`의 모양) → Q(`duck`, `pull`, `parry`, `parryDown`, `rollCounter`) → R(`inout`, `side`, `circle`, `dash`, `dashSide`) → S(`shift`, `wave`) → U(`collar`, `beckon`, `chinOut`, `wind`, `shrug`, `tapChin`) → V(`stagger`, `down-front`, `out-twist`).
