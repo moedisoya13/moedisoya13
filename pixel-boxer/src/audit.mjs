@@ -7,8 +7,10 @@
      dynamics   the centre of mass: falling faster than gravity, thrown upward, standing where he would topple; how fast the
                 waist turns on the pelvis (rig/body.mjs: RATE), and how fast the joints of a punch turn
    Nothing here fixes anything. tools/audit.mjs prints what it finds; tests/audit.test.mjs holds it to nothing.
-     audit(scripts, { only })   -> { found: { check: { frames, bad, worst, largest, by, most, cases } }, seen, falls, turning }
-                                    largest: the largest value the check was taken at, broken or not
+     audit(scripts, { only })   -> { found: { check: { frames, bad, worst, largest, largestBy, by, most, cases } }, seen, falls,
+                                    turning }
+                                    largest: the largest value the check was taken at, broken or not; largestBy: the
+                                    same, action by action
                                     seen: how many frames of a man were checked
                                     cases: every frame that broke the check (up to a few hundred of them), with where it was
      measure(f)                 one man in one frame: where everything is on the canvas, and every angle the checks need
@@ -198,14 +200,15 @@ const CASES = 400; // frames kept of each check that is broken, for saying where
 export function audit(scripts, o) {
   o = o || {};
   const only = o.only || null,
-    found = {}, // check -> { frames, bad, worst, by, most, cases }
+    found = {}, // check -> { frames, bad, worst, largest, largestBy, by, most, cases }
     falls = {},
     turning = {}; // punch -> grade -> joint -> fastest it turned, degrees a second
   let seen = 0;
   const note = (check, value, where, bad) => {
-    const c = (found[check] = found[check] || { frames: 0, bad: 0, worst: null, largest: 0, by: {}, most: {}, cases: [] });
+    const c = (found[check] = found[check] || { frames: 0, bad: 0, worst: null, largest: 0, largestBy: {}, by: {}, most: {}, cases: [] });
     c.frames++;
     c.largest = Math.max(c.largest, Math.abs(value));
+    c.largestBy[where.doing] = Math.max(c.largestBy[where.doing] || 0, Math.abs(value));
     if (!bad) return;
     c.bad++;
     c.by[where.doing] = (c.by[where.doing] || 0) + 1;
@@ -277,12 +280,11 @@ export function audit(scripts, o) {
               note(what + ' (degrees a frame)', d, where, Math.abs(d) > 40);
             }
           }
-          /* (how fast the waist is turned on the pelvis: by his muscles, so not in a knockdown's fall, where his body is passive
-             (phys/fall.mjs) and what turns it, as the canvas stops his hips, is the canvas; getting up is his own again) */
-          if (!(move && move.fall)) {
-            const waist = Math.abs(a.WaistTwist - before.angles.WaistTwist) / DT;
-            note('waist turning faster than it can (degrees a second)', waist, where, waist > RATE.waist);
-          }
+          /* (how fast the waist is turned on the pelvis, in every frame: in a knockdown's fall too, where his body is passive
+             (phys/fall.mjs) and what turns it, as the canvas stops his hips, is the canvas, which is no more able to turn a
+             waist faster than it turns than his muscles are) */
+          const waist = Math.abs(a.WaistTwist - before.angles.WaistTwist) / DT;
+          note('waist turning faster than it can (degrees a second)', waist, where, waist > RATE.waist);
           if (before2) {
             // the centre of mass: how hard it is being accelerated downward (nothing falls faster than it falls)
             const acc = (m.com[1] - 2 * before.com[1] + before2.com[1]) / (DT * DT);

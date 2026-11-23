@@ -15,7 +15,7 @@
    toes, held there a moment and let go of slowly from the knees up (LIFT). Lying there he breathes, one forearm stays up off
    the canvas a while and comes down slowly, and nothing else of him moves.
    Lying there, any man still breathes.
-   It is stepped at a fixed rate (twelve steps a frame), with nothing random in it, so a bout replays exactly.
+   It is stepped at a fixed rate (forty-eight steps a frame), with nothing random in it, so a bout replays exactly.
      const body = createFall(pose, before, dt, blow, out)
                                                         pose, before: his last two solved poses (his own space); blow: { J
                                                         (newton-seconds), dir (unit, his space: the way the glove was going
@@ -44,8 +44,13 @@ import * as M from '../rig/m3.mjs';
 import { NAMES, PARENT, TPOSE, fk } from '../rig/skeleton.mjs';
 import { RANGE, FOOT, HEAD, SHOULDER, shoulderOf } from '../rig/body.mjs';
 
+/* (forty-eight steps a frame, and not the twelve it had at first: with twelve, a man landing face down had his belly rolled
+   25 degrees on the canvas inside one frame, as the contact took hold of it over so long a step, his waist turning on his
+   pelvis faster than a waist can (1180 degrees a second, against rig/body.mjs: RATE); in finer steps the canvas takes hold
+   of him as it does a real body, over two frames. Everything below that is reckoned a step or a pass at a time is set by the
+   second (a speed, a rate, a stiffness), so the number of steps changes how closely the body is followed, not what it is) */
 const G = 9.81,
-  STEPS = 12,
+  STEPS = 48,
   ITER = 3,
   RAD = Math.PI / 180,
   DEG = 180 / Math.PI;
@@ -170,7 +175,9 @@ const DAMP = { move: 0.4, turn: 0.8, joint: 2.5, arm: 8, roll: 40 };
 // how near his own trunk's line a glove may come, and his head's middle a glove; any other part of a limb, its own thickness
 // and this much
 const KEEP = { glove: 0.16, head: 0.13, limb: 0.1 };
-const PRESS = 0.004; // metres a pass a limb is pressed out of his trunk at the most
+/* how fast a limb is pressed out of his trunk at the most (m/s: so much a pass, times the step; 4 mm a pass at twelve steps a
+   frame. A pass that moves it further makes it go that much faster, so it is a speed, whatever the step) */
+const PRESS = 2.88;
 
 const inertia = (m, [a, b, c]) => [(m / 3) * (b * b + c * c), (m / 3) * (a * a + c * c), (m / 3) * (a * a + b * b)];
 
@@ -498,11 +505,11 @@ function twist(rel, axis, most, toWorld) {
    thigh turns in the hip only so far. Kept inside that by turning the thigh and the shin together about the line from hip
    to ankle (the ankle, on the line, stays where it is). */
 const KNEE_WAY = [RANGE.kneeAzimuth[0] + 6, RANGE.kneeAzimuth[1] - 6];
-/* (and only so much at a time, degrees a pass: what the knee's way is measured from swings round as the leg goes out in
-   front or behind, so a leg can find itself well outside it in a step without having turned at all, and putting that right
-   at once flings the leg) */
-const KNEE_TURN = 0.5;
-function kneeWay(bs, s) {
+/* (and only so fast, degrees a second, so much a pass times the step (half a degree a pass at twelve steps a frame): what
+   the knee's way is measured from swings round as the leg goes out in front or behind, so a leg can find itself well
+   outside it in a step without having turned at all, and putting that right at once flings the leg) */
+const KNEE_TURN = 360;
+function kneeWay(bs, s, h) {
   const pelvis = bs[INDEX.pelvis],
     thigh = bs[INDEX[s + 'thigh']],
     shin = bs[INDEX[s + 'shin']],
@@ -524,7 +531,7 @@ function kneeWay(bs, s) {
     a2 = clamp(a, KNEE_WAY[0], KNEE_WAY[1]);
   if (a2 === a) return;
   // (turning about d by +phi carries the front toward d x front, which is outward for the right leg and inward for the left)
-  const phi = clamp((a2 - a) * 0.5, -KNEE_TURN, KNEE_TURN) * RAD * (dot(cross(d, front), outward) > 0 ? 1 : -1),
+  const phi = clamp((a2 - a) * 0.5, -KNEE_TURN * h, KNEE_TURN * h) * RAD * (dot(cross(d, front), outward) > 0 ? 1 : -1),
     rq = qaxis(d, phi);
   for (const b of [thigh, shin]) {
     b.x = M.add(hip, qrot(rq, M.sub(b.x, hip)));
@@ -532,18 +539,22 @@ function kneeWay(bs, s) {
   }
 }
 
-/* A joint found past its range is turned back by no more than this in one pass (radians), as Box2D caps its angular
-   corrections: in an ordinary step it is a fraction of a degree past, and this never bites, but where contacts and other
-   limits have shoved a joint well past in one go, or where a range is measured from something that has itself swung (an
-   ankle's from the foot it turns), turning it all the way back in one pass makes a speed out of nothing and throws the
-   body. */
-const FIX_MOST = 3 * RAD;
-const most = fix => {
-  const a = len(fix);
-  return a > FIX_MOST ? M.scale(fix, FIX_MOST / a) : fix;
+/* A joint found past its range is turned back by no more than this in one pass, as Box2D caps its angular corrections: in
+   an ordinary step it is a fraction of a degree past, and this never bites, but where contacts and other limits have shoved
+   a joint well past in one go, or where a range is measured from something that has itself swung (an ankle's from the foot
+   it turns), turning it all the way back in one pass makes a speed out of nothing and throws the body. What is held to is
+   that speed: radians a second, so much a pass times the step (3 degrees a pass at twelve steps a frame). */
+const FIX_MOST = 2160 * RAD;
+const most = (fix, h) => {
+  const a = len(fix),
+    m = FIX_MOST * h;
+  return a > m ? M.scale(fix, m / a) : fix;
 };
 // asleep: no piece of him further than this from where it was (metres: creeping at under 2 cm a second) for this long (seconds)
 const SLEEP = { moved: 0.01, after: 0.5 };
+/* what a step may add to his energy before it is taken back (below, in stepFall): watts, so much a step times the step (a
+   millijoule a step at twelve steps a frame), so that finer steps do not let more in a second through */
+const GAIN = 0.72;
 // the energy of all of him: moving, turning and up off the canvas (joules)
 function energy(bs) {
   let kin = 0,
@@ -873,13 +884,13 @@ export function stepFall(body, dt, obstacles) {
           angular(c, p, rot, 1 / (m.stiff * m.w * m.w), h);
         }
         const fix = limit(Object.assign({ sOf: j.s === 'R' ? -1 : 1 }, j), p, c);
-        if (fix) angular(c, p, most(fix), 0, h);
+        if (fix) angular(c, p, most(fix, h), 0, h);
       });
       {
         const fix = limit({ kind: 'trunk' }, pelvis, chest);
-        if (fix) angular(chest, pelvis, most(fix), 0, h);
+        if (fix) angular(chest, pelvis, most(fix, h), 0, h);
       }
-      for (const s of LIMB) if (!bs[INDEX[s + 'thigh']].frozen) kneeWay(bs, s);
+      for (const s of LIMB) if (!bs[INDEX[s + 'thigh']].frozen) kneeWay(bs, s, h);
       if (body.lift && body.t < body.lift.land) for (const s in body.lift.feet) tiptoe(body, s);
       // ---- the canvas, which holds him up and grips him
       for (const b of bs)
@@ -922,7 +933,7 @@ export function stepFall(body, dt, obstacles) {
             const trunk = k < 0.2 ? pelvis : k < 0.6 ? bs[INDEX.belly] : chest;
             // (a glove all the way out at once; any other part of a limb so much a pass, so that a trunk landing on an arm
             // presses it out from under him rather than flinging it)
-            positional(b, M.sub(pnt, b.x), trunk, M.sub(near, trunk.x), M.scale(unit(d, [1, 0, 0]), glove ? dl - keep : Math.max(dl - keep, -PRESS)), 0, h);
+            positional(b, M.sub(pnt, b.x), trunk, M.sub(near, trunk.x), M.scale(unit(d, [1, 0, 0]), glove ? dl - keep : Math.max(dl - keep, -PRESS * h)), 0, h);
             pressed.push([b, local, trunk, unit(d, [1, 0, 0])]);
           }
           if (b.name.endsWith('fore')) {
@@ -1034,9 +1045,10 @@ export function stepFall(body, dt, obstacles) {
     }
     /* (and a limp body has nothing in it to give it energy: what the corrections above add, where contacts, limits and
        joints pull against each other in a body heaped up on itself, is taken back, all of him slowed alike; but a man
-       thrown up onto his toes is not limp until he is down on his feet again: what his muscles do then is his) */
+       thrown up onto his toes is not limp until he is down on his feet again: what his muscles do then is his; a gain of
+       less than GAIN in a step is let be) */
     const after = energy(bs);
-    if (after.total > before.total + 1e-3 && !(body.lift && body.t < body.lift.land)) {
+    if (after.total > before.total + GAIN * h && !(body.lift && body.t < body.lift.land)) {
       const k = Math.sqrt(Math.max(0, before.total - after.pot) / Math.max(after.kin, 1e-9));
       for (const b of bs) (b.v = M.scale(b.v, k)), (b.w = M.scale(b.w, k));
     }
