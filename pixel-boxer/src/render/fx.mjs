@@ -61,7 +61,9 @@ export function heatOf(it) {
 export function createFx(random) {
   const items = [],
     rows = new Float32Array(CAP * 12),
-    rnd = random || Math.random;
+    rnd = random || Math.random,
+    due = []; // (what is to be thrown later, on this fx's own clock: { at, throwIt })
+  let clock = 0; // (this fx's own time: the sum of what it has been moved on by)
   const add = item => {
     if (items.length < CAP - 16) items.push(Object.assign({ age: 0, v: null, g: 0, drag: 0, width: 0.03, grow: 0 }, item));
   };
@@ -159,6 +161,12 @@ export function createFx(random) {
     rows,
     items, // (what is live, for checking it: tests/fx.test.mjs reads a glob's T and an ember's colours off these)
     count: 0,
+    /* throwIt(late) is called once this fx has been moved on by `seconds` more of its own time (render/blow.mjs: a
+       knockdown's second volley), as part of that update, after what was already in the air has moved: late is how far
+       past the moment the update went, so what it throws can start that far along, the same however the time was cut */
+    after(seconds, throwIt) {
+      due.push({ at: clock + seconds, throwIt });
+    },
     // the glove was at a last frame and is at b now: leave that stretch of its path behind, cooling through `colours`
     trail(a, b, width, colours, life) {
       add({ a: a.slice(), b: b.slice(), width, pal: colours, life: life || 0.1, shrink: 0.75 });
@@ -189,13 +197,15 @@ export function createFx(random) {
        `shed.pace` of its own velocity, as hot as its head, at most `shed.most` of them.
          o  { glow (colours, hottest first: three of them), crust (three, lightest first), life, pace, fall, drag (as
               sparks'), cool (m/s), land (seconds a glob cold before it comes down is carried on to the canvas, at most; 0:
-              it is gone at the end of its life), spot (s), shed: { every, pace, most, ember: the embers' o } } */
+              it is gone at the end of its life), spot (s), shed: { every, pace, most, ember: the embers' o }, age (s: how
+              long ago they were thrown, gone that far on their way already; 0 by default) } */
     globs(at, n, speed, dir, width, o) {
+      const age = o.age || 0;
       for (let i = 0; i < n; i++) {
         const v = fling(speed, dir, o.pace || 1),
           life = (0.16 + rnd() * 0.22) * (o.life || 1);
         add({
-          kind: 'glob', a: at.slice(), b: at.slice(), v, g: -13 * (o.fall ?? 1), drag: 3 * (o.drag ?? 1), width, glow: o.glow, crust: o.crust, cools: life, life: life + (o.land ?? 0), cool: o.cool ?? 2.5,
+          kind: 'glob', a: at.slice(), b: M.add(at, M.scale(v, age)), age, v, g: -13 * (o.fall ?? 1), drag: 3 * (o.drag ?? 1), width, glow: o.glow, crust: o.crust, cools: life, life: life + (o.land ?? 0), cool: o.cool ?? 2.5,
           T: 1, top: null, thrown: Math.max(0, -v[1]), way: len(v) > 1e-6 ? M.scale(v, 1 / len(v)) : [1, 0, 0], spot: o.spot ?? 0.35, shed: o.shed || null, shedding: 0, stuck: null
         });
       }
@@ -208,9 +218,9 @@ export function createFx(random) {
        sparks' gravity), and they wander to one side and the other at `wander` m/s, turning as they go. While fast (faster
        than `trail` m/s) each has a short tail a step cooler.
          o  { glow (colours, hottest first), life, pace, wide (times the fan's spread), fall, drag, brake (per m/s), wander: [least, most] m/s,
-              flicker (s), trail (m/s) } */
+              flicker (s), trail (m/s), age (as globs') } */
     embers(at, n, speed, dir, width, o) {
-      for (let i = 0; i < n; i++) ember(at, fling(speed, dir, o.pace || 1, o.wide), Object.assign({ width }, o), 0, 0);
+      for (let i = 0; i < n; i++) ember(at, fling(speed, dir, o.pace || 1, o.wide), Object.assign({ width }, o), 0, o.age || 0);
     },
     /* The spray off a blow: sweat thrown off the part of him that was struck, at the instant it lands. The way the glove
        was going is taken as a light: every bit of the part's surface that light leaves in shadow (the side away from the
@@ -399,6 +409,14 @@ export function createFx(random) {
           }
           it.a = M.sub(it.b, M.scale(it.v, it.tail));
         }
+      }
+      // (what falls due in this stretch of time is thrown now, as far along as the time already past it)
+      clock += dt;
+      for (let i = 0; i < due.length; ) {
+        if (due[i].at <= clock + 1e-9) {
+          const [d] = due.splice(i, 1);
+          d.throwIt(Math.max(0, clock - d.at));
+        } else i++;
       }
       for (const it of items) {
         if (n >= CAP) break;
