@@ -189,6 +189,15 @@ A+B 실신·위빙, C1 몸통 판정, C2 바디 주먹·뒷손 훅, E 파도, F 
 - 규칙 `RULES.insideOn`의 등급별 합계는 미결 카탈로그 `inside-rule`에.
 → 할 일: M이 합쳐진 본 브랜치 위로 옮겨(충돌: `src/audit.mjs`, `tests/audit.test.mjs`, 데이터 파일) 내가 다시 재고, 따로의 점검(세 번째)을 받는다.
 
+## N·U를 M이 합쳐진 본 브랜치 위로 옮김, 세 번째 따로 점검 (2026-11-23 밤)
+
+새 기준(0ac7c0c)의 값: `scratchpad/mbase3/{audit.txt,events.json,feel.txt}`. 단계 전체의 패치: `scratchpad/mbase3/{n-stage,u-stage}.patch`(7fa3003 기준).
+- **N**: 작업 폴더 `scratchpad/n3`(0ac7c0c 위, 스테이지에만, 커밋 없음; 충돌 없이 들어감). 내 재실행 `scratchpad/n3out/`, 세 번째 따로 점검 진행 중(작업 `scratchpad/st-n3/`). 3차 보고 전문 `scratchpad/wfout2/fix-N-round3.txt`. **N이 기존 시험을 고친 곳**(사용자에게 알릴 것, 점검에 느슨해짐 여부를 물음): `tests/bout.test.mjs`의 연쇄 순서(허리 다음 관절이 허리와 같은 때 켜져도 됨, `>=`)와 `tools/feel.mjs`의 "ordered"에 같은 허용, `tests/legend.test.mjs`의 4명 박자 수치 다시 잼.
+- **U 3차**(구현 팀 보고, 전문 `scratchpad/wfout2/fix-U-round3.txt`): 풍차의 자리 문제의 원인은 풀이가 손목을 어깨에서 22.3 cm 안으로 두지 않는 것(가드의 목표는 9~16 cm 앞)과, 0.75 m 안에서는 가드 자체가 상대 머리에서 5 cm쯤이라는 것. 자리를 "팔이 글러브를 둘 곳"(`armEnd`)으로 재고, 가까우면 앞손을 덜 올림(0.75 m 안에서 풍차는 뒷주먹 하나). 카드의 상대에게 280가지 모두 5.9 cm 이상(2차: 최악 1.0, 15가지가 5 미만). 등급 높은 상대가 들어오며 칠 때는 240가지 가운데 9가지가 5 cm 미만(최악 2.2, 안으로 든 것 0; 2차 22가지·−4.8 cm). 손짓 글러브가 상대 **글러브**와 겹치는 것(최악 17.7 cm)은 상대의 주먹이 손으로 들어오는 것이라, 손이 피하게 하면 손짓이 거의 사라짐(1.0 m에서 19 → 1 cm): 그대로 둠. 392/392(7fa3003 위).
+  - 본 브랜치 위로 옮김: `scratchpad/u3`. 충돌 둘(`src/audit.mjs`의 지켜보는 표 차례 → `auditor().result`로, `tests/audit.test.mjs` 양쪽 다 둠)을 내가 풂. 내 재실행 `scratchpad/u3out/`(N 다음에 돎), 세 번째 따로 점검(좁게) 진행 중(`scratchpad/st-u3/`).
+  - 에이전트가 알린 것: `pkill`이 안전 점검에 거절되어 하지 않음(병렬 시험이 끝까지 돎).
+- **V 3차**: 구현 중(`scratchpad/r-v`).
+
 ## 사용자 지적: 모션 카탈로그의 메모가 거의 반영되지 않았다 (2026-11-23)
 
 사실이다. 메모 27건(26줄; `feedback`을 다시 읽음, 11-22 뒤로 새 메모 없음) 가운데 **카탈로그의 동작에 보이는 것은 0건.** 끝난 것은 J(이펙트)와 K(허리 엔진: `hookIn` 메모의 "허리를 분리해 돌 수 있는 변수로"만 엔진에 생겼고 어느 주먹도 아직 쓰지 않음)뿐이고, 그 뒤의 시간은 이펙트(데미지 비례, 다운 효과, 용암·불티), K의 착지 수리, 소스 기획 둘에 썼다. 메모의 단계: M(`crossArm`의 audit) → N(`hookIn`, `hookR`, `upperIn`, `flicker`) → P(`crossArm`의 모양) → Q(`duck`, `pull`, `parry`, `parryDown`, `rollCounter`) → R(`inout`, `side`, `circle`, `dash`, `dashSide`) → S(`shift`, `wave`) → U(`collar`, `beckon`, `chinOut`, `wind`, `shrug`, `tapChin`) → V(`stagger`, `down-front`, `out-twist`).
