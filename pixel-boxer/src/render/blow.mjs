@@ -26,7 +26,10 @@
                            e.trunk); at where the glove met him; vec the way it was going (unit). -> a point in the world
      blow(fx, e, struck)   a hit's motes into fx (the struck man's own), from the far side of what it struck (e.trunk if
                            it is a body shot, else his head): their number and their thickness by the damage (a counter's
-                           gain and a body shot's smaller share are in the damage already). -> how many motes
+                           gain and a body shot's smaller share are in the damage already); a knockdown's lava in their
+                           place. -> how many motes (or globs and embers) it threw
+     lavaOf(e)             a knockdown's lava, as blow throws it: { globs, embers (how many of each), width (a glob's,
+                           metres) }, or null for any other event
      met(fx, e)            a block's or a parry's sparks, where the gloves met
      rippleOf(e, struck)   the ripple a hit starts: { joint, off, age: 0, strength, width, last, sway } (strength and
                            width by the damage; age to be moved on by the caller, in the same time as the motes), or null
@@ -34,12 +37,18 @@
      rippleRow(ripple, struck, set)   the layer's wave for it now: [x, y, z, front, width, strength, sway], or null once it
                            is over (set: the ripple's numbers, FX.ripple by default)
    A knockdown's blow (a hit that puts him down, or out cold: e.down, e.out) is drawn as its own (docs/moves-plan-6.md §2.4B),
-   with no light in any of it, and nothing of the bout changed: its motes hang (they last longer, fall slower, the air holds
-   them less); where his falling body first comes down on the canvas, a second ripple goes through him from the part that
-   came down, and a large ring goes out through the canvas from under it, lifting the tiles as it passes; and the game and
-   the effect study show the moment of the blow at a quarter of the speed. Every mote a blow throws (any hit) glows as
-   molten metal does: at its hottest while it rises, cooling from the top of its flight as it falls, its own colours again
-   once it is really falling.
+   with no light in any of it, and nothing of the bout changed: where his falling body first comes down on the canvas, a
+   second ripple goes through him from the part that came down, and a large ring goes out through the canvas from under it,
+   lifting the tiles as it passes; and the game and the effect study show the moment of the blow at a quarter of the speed.
+   Its motes are lava (§2.4C): in place of the two kinds of coloured mote every other hit throws, globs of it and embers, in
+   the colours of heat and of charcoal alone (never the palette's white or blues), from the same far side of him and the
+   same way. A glob is never one colour: hot, its head is the hottest, its body a step cooler and its tail two; as it cools
+   (from the top of its flight, as it falls faster and as it ages) a charcoal crust forms behind it and closes round a
+   shrinking orange glow (never red), until it is a cinder with one orange point, and the point goes out;
+   it is heavy, and where it comes down on the canvas it does not bounce but lies there as a flat spot, a glowing core over
+   a charcoal rim going dark, and is gone. As it flies it sheds embers. An ember is a speck, thrown faster and wider, caught
+   by the air within half a metre, then drifting and wandering, flickering between two steps of its glow as it cools (by its
+   own age and seed, so a slow motion and a replay show it the same), and going out from orange by winking.
      fallOf(e)             a knockdown blow's watch for where he comes down: { on, q, out, landed: null }, or null for any
                            other event
      landingOf(man)        the part of him nearest the canvas, if it is within FX.land.near of it: { joint, clear (metres
@@ -65,11 +74,25 @@ export const FX = {
   out: 0.01,
   ref: 3,
   most: 2.2,
-  /* hot: every mote of a hit glows as molten metal does (render/fx.mjs sparks): the palette's pale yellow while it rises
-     (never its white; assets/manifest.json 39, then amber 40 and orange 18), cooling from the top of its flight through
-     the others as it falls faster, its own colours again once it falls at `fall` m/s; one thrown downward glows at least
-     its first `least` seconds. down: a knockdown's motes, times their life, their fall and the air's hold on them */
-  motes: { n: [17, 11], width: 0.024, thin: 0.01, life: 0.95, short: 0.4, pace: 1.05, hot: { colours: [39, 40, 18], fall: 1, least: 0.03 }, down: { life: 1.6, fall: 0.5, drag: 0.8 } },
+  motes: { n: [17, 11], width: 0.024, thin: 0.01, life: 0.95, short: 0.4, pace: 1.05 },
+  /* a knockdown's lava, in place of the motes (render/fx.mjs globs, embers), with no light in it. glow: the palette's
+     colours of heat from the hottest down (assets/manifest.json: pale yellow 39, amber 40, orange 18); crust: the charcoal
+     a glob cools to, lightest first (7, 6, 5), so that nothing cooling is ever red: lava cools to a cinder with a glow in
+     it, and an ember goes out from orange, winking. globs: how many at ref; how thick, times the motes' width, never thinner than `least` metres (so that its
+     three tones show) nor thicker than `most` (one as big as his head would be a ball, not a drop); times the motes'
+     gravity, the air's hold on them and their life; how fast one must fall to be cold (m/s); how long one gone cold before
+     it comes down is carried on down to the canvas (s, at most: none, so that most go out in the air, as the plan has it);
+     how long it lies there once it is down (s); and the embers it sheds: one every so many seconds, at a share of its
+     velocity, at most so many. embers: how many at ref; times the speed and the spread of the globs' fan; times the motes'
+     gravity, the air's hold and their life; how much more the air holds one for every m/s it goes (the faster, the harder:
+     so that, a fifth faster than the globs, they are still stopped within half a metre); how fast it wanders (m/s, least
+     and most); how often it flickers (s); and the speed over which it has a tail (m/s) */
+  lava: {
+    glow: [39, 40, 18],
+    crust: [7, 6, 5],
+    globs: { n: 10, width: 1.7, least: 0.024, most: 0.06, fall: 0.8, drag: 0.8, life: 1.6, cool: 2.5, land: 0, spot: 0.35, shed: { every: 0.05, pace: 0.3, most: 4 } },
+    embers: { n: 18, pace: 1.2, wide: 1.2, fall: 0.2, drag: 1.6, life: 2, brake: 4, wander: [0.1, 0.2], flicker: 0.04, trail: 1.5 }
+  },
   // (land: the second ripple of a knockdown, from where he comes down: its strength times the blow's, and how long it goes)
   ripple: { speed: 3, last: 0.4, width: 0.14, sway: 0.034, thin: 0.06, down: { last: 0.55, sway: 1.3 }, land: { strength: 0.8, last: 0.45 } },
   // where a falling man comes down: the first step any of these parts of him (its middle, and how thick it is) is this near
@@ -153,6 +176,13 @@ export function exitOf(part, at, vec) {
   return M.add(p, M.scale(fl > 1e-9 ? M.scale(facing, 1 / fl) : d, FX.out));
 }
 
+// (how many globs and embers a knockdown's blow of q throws, and how thick a glob is)
+const lavaFor = q => {
+  const G = FX.lava.globs;
+  return { globs: Math.max(1, Math.round(G.n * q)), embers: Math.max(1, Math.round(FX.lava.embers.n * q)), width: Math.min(G.most, Math.max(G.least, Math.max(FX.motes.thin, FX.motes.width * q) * G.width)) };
+};
+export const lavaOf = e => (e.type === 'hit' && (e.down || e.out) ? lavaFor(scaleOf(e)) : null);
+
 export function blow(fx, e, struck) {
   const q = scaleOf(e),
     // (how fast they leave is as it was: by the impulse, or by the damage where that is more, a counter's)
@@ -163,11 +193,21 @@ export function blow(fx, e, struck) {
     way = [e.vec[0], e.vec[2], e.vec[1]],
     // (how thick each is: in proportion to the damage, down to the thinnest that still shows as a pixel)
     width = Math.max(FX.motes.thin, FX.motes.width * q),
-    // (a knockdown's hang: they last longer, fall slower, and the air holds them less)
-    down = e.down || e.out ? FX.motes.down : null,
     // (how long each lasts: a twentieth less than the sparks always did at the measure, and in proportion to the damage from
-    // there, down to FX.motes.short of it; and all of them a twentieth faster; and each drawn hot at first)
-    o = { life: FX.motes.life * Math.max(FX.motes.short, q) * (down ? down.life : 1), pace: FX.motes.pace, fall: down ? down.fall : 1, drag: down ? down.drag : 1, hot: FX.motes.hot };
+    // there, down to FX.motes.short of it; and all of them a twentieth faster)
+    o = { life: FX.motes.life * Math.max(FX.motes.short, q), pace: FX.motes.pace };
+  if (e.down || e.out) {
+    // a knockdown's: lava, the globs as fast as the first kind of mote, the embers faster, both lasting longer
+    const L = FX.lava,
+      G = L.globs,
+      E = L.embers,
+      { globs, embers, width: thick } = lavaFor(q),
+      speed = SPARKS[0](k)[1],
+      ember = { glow: L.glow, width: FX.motes.thin, life: o.life * E.life, fall: E.fall, drag: E.drag, brake: E.brake, wander: E.wander, flicker: E.flicker, trail: E.trail };
+    fx.globs(from, globs, speed, way, thick, { glow: L.glow, crust: L.crust, life: o.life * G.life, pace: o.pace, fall: G.fall, drag: G.drag, cool: G.cool, land: G.land, spot: G.spot, shed: Object.assign({ ember }, G.shed) });
+    fx.embers(from, embers, speed * E.pace, way, FX.motes.thin, Object.assign({ pace: o.pace, wide: E.wide }, ember));
+    return globs + embers;
+  }
   let n = 0;
   SPARKS.forEach((sparks, i) => {
     const [colours, speed] = sparks(k),

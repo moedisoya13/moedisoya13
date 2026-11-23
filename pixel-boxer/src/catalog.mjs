@@ -147,14 +147,14 @@ const PULL_NOTE = {
 const graded = (e, note, stat, levels, more) => Object.assign({ id: e.id, name: e.name, en: e.en, note, stat, cards: levels.map(lv => `${e.id}@${lv}`) }, more);
 const single = e => ({ id: e.id, name: e.name, en: e.en, single: true });
 
-const FX_NOTE = '이펙트: 입자가 맞은 몸의 반대쪽 면에서 타격 방향으로 나가 솟는 동안 쇳물처럼 달아올랐다가 떨어지며 식고, 흰 번쩍임 대신 닿은 점에서 파문이 퍼짐';
-// (a knockdown's own, plan 6 §2.4B: what its cards show now besides)
-const DOWN_NOTE = '이펙트(반대쪽 면에서 달아올라 나가는 입자, 흰 번쩍임 대신 파문)에 더해 다운의 효과: 입자가 오래 떠 있고, 캔버스에 닿는 곳에서 두 번째 파문과 바닥의 큰 고리 파문, 닿고 0.3초 뒤 ¼ 속도·1.2배 줌 리플레이';
+const FX_NOTE = '이펙트: 예전 색의 입자가 맞은 몸의 반대쪽 면에서 타격 방향으로 나가고, 흰 번쩍임 대신 닿은 점에서 파문이 퍼짐';
+// (a knockdown's own, plan 6 §2.4B and §2.4C: what its cards show now besides)
+const DOWN_NOTE = '이펙트: 입자 대신 용암 덩이와 불티. 덩이는 머리가 뜨겁고 꼬리로 갈수록 식은 여러 색으로 날다가 숯처럼 검게 식고, 불티는 깜빡이며 떠다니다 꺼짐. 흰 번쩍임 대신 파문, 캔버스에 닿는 곳에서 두 번째 파문과 바닥의 큰 고리 파문, 닿고 0.3초 뒤 ¼ 속도·1.2배 줌 리플레이';
 /* ---- what is new or changed since the catalogue was last published as the user reviewed it (version 22, commit 14594d1),
    by row: measured, not guessed. A row is changed where a card of it moved (every joint of both men compared frame by frame
    with the scripts at 14594d1: the cards listed moved more than 1 mm, the waist of plan 6 stage K turning what the chest used
    to) or where what it exists to show is drawn otherwise (the being-hit and knockdown cards: the blow's effect of stage J,
-   its glowing motes, and the knockdown's own effect and replay, §2.4B).
+   and the knockdown's own effect, its lava and its replay, §2.4B and §2.4C).
    No punch's events changed (node tools/events.mjs --diff is empty), and no row is new. The note says what changed. */
 const SINCE = {
   // changed: the waist (stage K)

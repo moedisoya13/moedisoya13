@@ -2,9 +2,9 @@
    move a sixtieth of a second at a time.
      review.html?entry=slip&from=0.7&to=1.1&n=12&cols=6      (and yaw, pitch, dist, y: the camera; focus=0 or 1: on that man
    alone; px: screen pixels to an art pixel; fx=1: a blow drawn as the game draws it (render/blow.mjs: the sparks off the far
-   side of what it struck, kept off the struck man's silhouette, drawn hot at first, and the ripple through him; a block's and
-   a parry's sparks; a knockdown's own: the second ripple where he comes down and the ring through the canvas, which is then
-   drawn under them), left out by default so that the pose is what is looked at; turn=1: the camera's yaw is taken from
+   side of what it struck, kept off the struck man's silhouette, and the ripple through him; a block's and a parry's sparks;
+   a knockdown's own: its lava in place of the sparks, the second ripple where he comes down and the ring through the
+   canvas, which is then drawn under them), left out by default so that the pose is what is looked at; turn=1: the camera's yaw is taken from
    where the man in focus faces, so a man going round is seen from the same side all the way; solo=1: the other man is not
    drawn; replay=1: the first replay the script makes (src/replay.mjs: a knockdown's, or a brilliant defence's), as the
    motion catalogue draws it, with the effects: from and to are then seconds of real time into it, a picture every sixtieth

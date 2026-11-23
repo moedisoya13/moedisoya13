@@ -13,7 +13,7 @@ layout(location=0) in vec2 a_corner;
 layout(location=1) in vec3 a_pos;
 layout(location=2) in vec3 a_covA;  // c00 c01 c02
 layout(location=3) in vec3 a_covB;  // c11 c12 c22
-layout(location=4) in vec3 a_misc;  // palette index, bone (in a layer with no bones: 1 marks a speck of light), density
+layout(location=4) in vec3 a_misc;  // palette index, bone (in a layer with no bones: 1 marks a speck of light, and a number below 0 pulls it that many metres toward the eye), density
 uniform vec4 u_bones[${MAX_BONES * 3}]; // per bone three rows: a 3x3 by rows, the move in w
 uniform mat4 u_view;
 uniform vec2 u_art;    // the art grid, in pixels
@@ -31,7 +31,7 @@ flat out float v_pal;
 flat out float v_al;
 flat out float v_light;
 void main() {
-  int b = int(a_misc.y + 0.5) * 3;
+  int b = int(max(a_misc.y, 0.0) + 0.5) * 3;
   vec4 r0 = u_bones[b], r1 = u_bones[b + 1], r2 = u_bones[b + 2];
   mat3 R = mat3(r0.x, r1.x, r2.x, r0.y, r1.y, r2.y, r0.z, r1.z, r2.z);
   vec3 world = R * a_pos + vec3(r0.w, r1.w, r2.w);
@@ -67,6 +67,9 @@ void main() {
   }
   float dist = -c.z;
   if (dist < u_depth.x) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
+  /* (a loose splat may be taken as a little nearer the eye than it is, for deciding what is nearest only: the parts of one
+     glob, so that its head is drawn over its body and its body over its tail from any side; render/fx.mjs) */
+  float pull = max(-a_misc.y, 0.0);
   float iz = 1.0 / dist;
   vec3 ja = vec3(u_focal * iz, 0.0, u_focal * c.x * iz * iz);
   vec3 jb = vec3(0.0, u_focal * iz, u_focal * c.y * iz * iz);
@@ -82,7 +85,7 @@ void main() {
   vec2 extent = sqrt(m2 * vec2(A, D)) + 1.0;
   v_d = a_corner * extent;
   vec2 centre = c.xy * u_focal * iz + u_art * 0.5 + u_shake;
-  gl_Position = vec4((centre + v_d) / u_art * 2.0 - 1.0, (dist - u_depth.x) / (u_depth.y - u_depth.x) * 2.0 - 1.0, 1.0);
+  gl_Position = vec4((centre + v_d) / u_art * 2.0 - 1.0, (max(dist - pull, u_depth.x) - u_depth.x) / (u_depth.y - u_depth.x) * 2.0 - 1.0, 1.0);
 }`;
 const SPLAT_FS = `#version 300 es
 precision highp float;
@@ -174,7 +177,7 @@ export function createRenderer(canvas, o) {
   gl.bindBuffer(gl.ARRAY_BUFFER, quad);
   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
 
-  // a set of splats on the card: twelve floats each (see tools/bake.mjs)
+  // a set of splats on the card: twelve floats each (see tools/bake.mjs; a loose splat's are render/fx.mjs's write)
   function mesh(data, count, dynamic) {
     const vao = gl.createVertexArray(),
       buffer = gl.createBuffer();

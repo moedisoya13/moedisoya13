@@ -8,20 +8,24 @@
      the ripple carries him and is wide in proportion to the damage too (longer for a knockdown, over when it is over)
      and goes where the part it landed on goes;
      and the flash of white is gone: from the bout and from the renderer;
-   and a knockdown's own (docs/moves-plan-6.md §2.4B): its motes hang (half the fall, 0.8 of the drag, 1.6 times the life);
-   where the falling man first comes down (down-back, out-log: one step, a part of him within 6 cm of the canvas, none of
+   and a knockdown's own (docs/moves-plan-6.md §2.4B): where the falling man first comes down (down-back, out-log: one step, a part of him within 6 cm of the canvas, none of
    him before it) a second ripple and a ring through the canvas, the ring's lift the same all round at one distance; and
    its slow motion: 0.25 s of the bout's time shown in a real second (to 0.05 s), 0.35 s for a knockout;
    every slow motion smooth (§2.4B 7): a replay at a quarter of the speed never shows the same picture twice running, turns
    no joint further in a picture than a quarter of what it turns in a step of the bout, and still starts and ends on the
    steps it always did;
-   and every mote of a hit drawn hot at first (§2.4B 8): the palette's hottest yellow and orange, never its white, and from
-   0.06 s on its own colours, the same mote it always was. */
+   and its motes are lava (§2.4C), every other hit's the coloured motes they always were, with nothing hot about them: a
+   knockdown throws globs and embers in their place, as many as the damage says, in the colours of heat and charcoal alone;
+   a hot glob shows two colours or three, its head the hottest, from whichever side it is seen; cooling, it crusts over,
+   its glow then inside its crust, never red, and a cold one is a cinder with at most a small glow; it is at its hottest while it
+   rises and only ever cools; it does not bounce off the canvas but lies there going dark; an ember flickers the same at the
+   same moment however often it is drawn, and goes out from orange by winking, never red; and the most that is ever thrown
+   stays within what an fx can draw. */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { exitOf, blow, rippleOf, rippleRow, scaleOf, FX, fallOf, landed, landingOf, landRipple, groundOf, groundRow, groundLift, slowOf, paceOf, slowOn } from '../src/render/blow.mjs';
-import { createFx } from '../src/render/fx.mjs';
+import { exitOf, blow, lavaOf, rippleOf, rippleRow, scaleOf, FX, fallOf, landed, landingOf, landRipple, groundOf, groundRow, groundLift, slowOf, paceOf, slowOn } from '../src/render/blow.mjs';
+import { createFx, heatOf } from '../src/render/fx.mjs';
 import { createReplay } from '../src/replay.mjs';
 import { fk, NAMES } from '../src/rig/skeleton.mjs';
 import { toWorld } from '../src/anim/pose.mjs';
@@ -37,6 +41,7 @@ const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 const len = a => Math.sqrt(dot(a, a));
 const unit = a => a.map(x => x / len(a));
+const wayOf = a => (len(a) > 1e-9 ? unit(a) : [1, 0, 0]);
 const angle = (a, b) => Math.acos(Math.max(-1, Math.min(1, dot(a, b) / (len(a) * len(b))))) * DEG;
 const dice = seed => () => {
   seed = (seed + 0x6d2b79f5) | 0;
@@ -149,7 +154,7 @@ test('blow: sparks by the damage (how many, how thick, how long), in their colou
   assert.ok(made(0.2).n >= 2 && made(0.2).width === FX.motes.thin, 'the lightest touch still shows: one of each kind, at the thinnest');
   assert.equal(scaleOf({ J: 85 }), scaleOf({ damage: 2.975 }), 'a hit with no damage on it is read off its impulse');
   const seen = {};
-  for (const id of ['hit-jab', 'hit-cross', 'hit-hook', 'upperIn@3', 'body-liver', 'down-back']) {
+  for (const id of ['hit-jab', 'hit-cross', 'hit-hook', 'upperIn@3', 'body-liver']) {
     const { e, struck } = firstHit(id),
       calls = [],
       fake = { sparks: (at, n, colours, speed, dir, width, o) => calls.push({ at, n, colours, speed, dir, width, o }) },
@@ -162,6 +167,7 @@ test('blow: sparks by the damage (how many, how thick, how long), in their colou
     assert.deepEqual(calls.map(c => [c.n, +c.speed.toFixed(6)]), was.kinds.map(([m, s]) => [m, +s.toFixed(6)]), `${id}: counts and speeds`);
     assert.ok(calls.every(c => Math.abs(c.width - was.width) < 1e-12), `${id}: ${(was.width * 100).toFixed(1)} cm thick`);
     assert.deepEqual(calls.map(c => c.colours), [[38, 39, 40, 41], [41, 41, 25]], `${id}: colours`);
+    assert.ok(calls.every(c => Object.keys(c.o).sort().join() === 'life,pace'), `${id}: nothing else asked of them (nothing hot, no hang): ${Object.keys(calls[0].o)}`);
     assert.deepEqual(calls.map(c => c.dir), [0, 1].map(() => [e.vec[0], e.vec[2], e.vec[1]]), `${id}: carried the way the glove went, up and down too`);
     const way = meanWay(e, struck),
       flat = [way[0], 0, way[2]],
@@ -235,35 +241,57 @@ function fight(id, each) {
   }
 }
 
-test('a knockdown\'s motes hang: 1.6 times the life, half the fall, 0.8 of the drag; the counts, the thickness and the colours as any blow\'s', () => {
+test('a knockdown\'s blow throws lava in place of the motes: globs and embers as many as the damage says (10 and 18 at the measure), as fast, thick and long-lived as the plan says', () => {
   const struck = { points: { head: [0, 1.5, 0] } },
     made = more => {
-      const calls = [];
-      blow({ sparks: (p, n, colours, speed, dir, width, o) => calls.push({ n, colours, width, o }) }, Object.assign({ type: 'hit', damage: 3, J: 85, at: [0.1, 1.5, 0], vec: [-1, 0, 0] }, more), struck);
-      return calls;
+      const calls = { sparks: [], globs: [], embers: [] },
+        fake = {
+          sparks: (...a) => calls.sparks.push(a),
+          globs: (at, n, speed, dir, width, o) => calls.globs.push({ at, n, speed, dir, width, o }),
+          embers: (at, n, speed, dir, width, o) => calls.embers.push({ at, n, speed, dir, width, o })
+        },
+        e = Object.assign({ type: 'hit', damage: 3, J: 85, at: [0.1, 1.5, 0], vec: [-1, 0, 0] }, more),
+        n = blow(fake, e, struck);
+      return { n, calls, e };
     },
-    plain = made({}),
-    down = made({ down: true }),
-    out = made({ down: true, out: 'outStiff' });
-  for (const k of [down, out]) {
-    assert.deepEqual(k.map(c => [c.n, c.width, c.colours]), plain.map(c => [c.n, c.width, c.colours]), 'as many, as thick, the same colours');
-    assert.ok(k.every((c, i) => Math.abs(c.o.life - plain[i].o.life * 1.6) < 1e-12 && c.o.fall === 0.5 && c.o.drag === 0.8 && c.o.pace === plain[i].o.pace), 'life 1.6 times, fall 0.5, drag 0.8');
+    G = FX.lava.globs,
+    E = FX.lava.embers;
+  assert.deepEqual([FX.lava.glow, FX.lava.crust], [[39, 40, 18], [7, 6, 5]], 'the glow, hottest first: pale yellow, amber, orange; the crust, charcoal, lightest first');
+  assert.ok(Math.abs(lavaOf({ type: 'hit', damage: 3, down: true }).width - 0.0408) < 1e-12, 'a glob at the measure 1.7 times the motes\' 2.4 cm');
+  for (const q of [0.1, 0.5, 1, 1.5, 2.2, 3]) {
+    for (const more of [{ down: true }, { down: true, out: 'outStiff' }, { out: 'outLog' }]) {
+      const { n, calls, e } = made(Object.assign({ damage: 3 * q }, more)),
+        m = Math.min(q, FX.most),
+        k = Math.min(1.6, Math.max(m, 85 / 85)),
+        life = 0.95 * Math.max(0.4, m),
+        [g, b] = [calls.globs[0], calls.embers[0]];
+      assert.equal(calls.sparks.length, 0, 'none of the ordinary motes');
+      assert.deepEqual([g.n, b.n], [Math.max(1, Math.round(10 * m)), Math.max(1, Math.round(18 * m))], `q ${q}: ${g.n} globs and ${b.n} embers`);
+      assert.equal(n, g.n + b.n);
+      assert.deepEqual(lavaOf(e), { globs: g.n, embers: b.n, width: g.width }, 'lavaOf says what blow throws');
+      assert.ok(Math.abs(g.width - Math.min(G.most, Math.max(G.least, 1.7 * Math.max(0.01, 0.024 * m)))) < 1e-12 && b.width === FX.motes.thin, `q ${q}: a glob ${(g.width * 100).toFixed(1)} cm thick (1.7 times a mote, ${G.least * 100} to ${G.most * 100} cm), an ember the thinnest`);
+      assert.ok(Math.abs(g.speed - (2.5 + 3 * k)) < 1e-12 && Math.abs(b.speed - 1.2 * g.speed) < 1e-12 && b.o.wide === 1.2, 'globs as fast as the first kind of mote, embers 1.2 times faster and wider');
+      assert.ok(Math.abs(g.o.life - 1.6 * life) < 1e-12 && Math.abs(b.o.life - 2 * life) < 1e-12, 'a glob lives 1.6 times a mote\'s life, an ember twice');
+      assert.deepEqual([g.o.fall, g.o.drag, b.o.fall, b.o.drag, g.o.cool, g.o.spot], [0.8, 0.8, 0.2, 1.6, 2.5, 0.35], 'a glob\'s weight; an ember\'s float');
+      assert.deepEqual([g.o.shed.every, g.o.shed.pace, g.o.shed.most], [0.05, 0.3, 4], 'a glob sheds an ember every 0.05 s at 0.3 of its velocity, four at most');
+      assert.deepEqual([g.at, b.at], [0, 1].map(() => exitOf({ at: struck.points.head, r: FX.head }, e.at, e.vec)), 'from the far side of his head, as any blow\'s');
+      assert.deepEqual([g.dir, b.dir], [0, 1].map(() => [e.vec[0], e.vec[2], e.vec[1]]), 'the way the glove went');
+    }
   }
-  assert.ok(plain.every(c => c.o.fall === 1 && c.o.drag === 1), 'an ordinary blow\'s fall and drag as they were');
-  // (and so they do hang: the same motes, thrown the same way, are higher off the canvas and still there later)
-  const thrown = (o, t) => {
-    const fx = createFx(dice(3));
-    fx.sparks([0, 1.5, 0], 40, [38], 5, null, 0.02, o);
-    const k = fx.update(t);
-    let y = 0;
-    for (let i = 0; i < k; i++) y += fx.rows[i * 12 + 1] / k;
-    return { k, y };
-  };
-  const hang = { life: 1.6, fall: 0.5, drag: 0.8 },
-    [a, b] = [{ life: 1 }, hang].map(o => thrown(o, 0.15)),
-    [c, d] = [{ life: 1 }, hang].map(o => thrown(o, 0.3));
-  assert.ok(a.k === 40 && b.k === 40 && b.y > a.y + 0.03, `at 0.15 s, all of them still there: ${b.y.toFixed(3)} m high on average, against ${a.y.toFixed(3)} m`);
-  assert.ok(d.k > c.k, `at 0.3 s: ${d.k} of 40 left, against ${c.k}`);
+  assert.equal(lavaOf({ type: 'hit', damage: 3 }), null, 'an ordinary hit has none');
+  // (and the real ones: down-back, out-log and the liver's knockdown, 10, 10 and 6 globs)
+  for (const [id, globs] of [['down-back', 10], ['out-log', 10], ['down-liver', 6]]) {
+    const { e, struck: man } = firstHit(id),
+      fx = createFx(dice(5)),
+      n = blow(fx, e, man);
+    assert.ok(e.down || e.out, `${id} is a knockdown`);
+    assert.equal(fx.items.filter(it => it.kind === 'glob').length, globs, `${id}: ${globs} globs`);
+    assert.equal(fx.items.length, n, `${id}: ${n} thrown, all of them globs and embers`);
+    assert.ok(fx.items.every(it => it.kind === 'glob' || it.kind === 'ember'));
+    // (on the way the glove went: their mean velocity as they leave within 30 degrees of the blow's line, as the motes')
+    const mean = [0, 1, 2].map(j => fx.items.reduce((s, it) => s + it.v[j], 0) / n);
+    assert.ok(angle(mean, e.vec) <= 30, `${id}: ${angle(mean, e.vec).toFixed(1)} degrees off the blow's line`);
+  }
 });
 
 test('where he comes down: one step in down-back and out-log, a part of him within 6 cm of the canvas, none before; a second ripple and a ring from there', () => {
@@ -433,61 +461,316 @@ test('a replay at a quarter of the speed is smooth: no picture twice running, no
   }
 });
 
-test('every mote of a hit glows: the palette\'s hottest yellow while it rises and at the top, cooling as it falls, its own colours once it falls at 1 m/s; one thrown down glows its first 0.03 s; never white', () => {
-  const palette = JSON.parse(readFileSync(new URL('../assets/manifest.json', import.meta.url), 'utf8')).palette,
-    rgbOf = i => [(palette[i] >> 16) & 255, (palette[i] >> 8) & 255, palette[i] & 255],
-    H = FX.motes.hot;
-  assert.deepEqual([H.colours, H.fall, H.least], [[39, 40, 18], 1, 0.03]);
-  for (const i of H.colours) {
-    const [r, g, b] = rgbOf(i);
-    assert.ok(r === 255 && r >= g && g > b && palette[i] !== 0xffffff, `${i} (#${palette[i].toString(16)}) is hot, not white`);
-  }
-  /* One mote, thrown with the dice at a half (straight out, its fan's lift 1.4 m/s up), followed in small steps: its fall
-     worked out alongside as the fx works it out (gravity, then the air, then the move), and its colour read off the row. */
-  const follow = (dir, speed, colours) => {
-    const fx = createFx(() => 0.5),
-      twin = createFx(() => 0.5);
-    fx.sparks([0, 1.5, 0], 1, colours, speed, dir, 0.02, { hot: H });
-    twin.sparks([0, 1.5, 0], 1, colours, speed, dir, 0.02, {});
-    let vy = 1.4 + (dir && dir[2] ? dir[2] * speed * 0.7 : 0),
-      age = 0;
-    const seen = [];
-    for (let n = 0; n < 2000; n++) {
-      const dt = n ? 1 / 960 : 0;
-      if (n) (vy += -13 * dt), (vy *= 1 - 3 * dt), (age += dt);
-      if (!fx.update(dt) || !twin.update(dt)) break;
-      seen.push({ age, vy, pal: fx.rows[9], own: twin.rows[9] });
-    }
-    return seen;
-  };
-  const up = follow(null, 3, [41, 41, 25]);
-  assert.ok(up.filter(s => s.vy > 0).every(s => s.pal === 39), 'while it rises, at the hottest');
-  const top = up.find(s => s.vy <= 0);
-  assert.ok(top && top.pal === 39, `at the top of its flight (${top.age.toFixed(3)} s) still at the hottest`);
-  const half = up.find(s => s.vy <= -0.5);
-  assert.ok(half && half.pal === 40, `falling at 0.5 m/s, part of the way cooled: ${half.pal}`);
-  const cold = up.filter(s => s.vy <= -1 - 1e-3);
-  assert.ok(cold.length > 5 && cold.every(s => s.pal === s.own), `falling at 1 m/s and faster (from ${cold[0].age.toFixed(3)} s), its own colours`);
-  assert.ok(up.filter(s => s.vy < -0.67 && s.vy > -1 + 1e-3).every(s => s.pal === 18), 'and the coolest of the glow just before');
-  // (thrown down: 1.4 m/s of lift and 2.1 m/s down along the way the glove went)
-  const down = follow([0, 0, -1], 5, [41, 41, 25]);
-  assert.ok(down[0].vy < -1, `thrown down at ${(-down[0].vy).toFixed(2)} m/s`);
-  assert.ok(down.filter(s => s.age < 0.03 - 1e-9).every(s => s.pal === 39), 'glowing its first 0.03 s');
-  assert.ok(down.filter(s => s.age >= 0.03 + 1e-3).every(s => s.pal === s.own), 'and then its own colours');
-  // (its own colours, but never the palette's white once it has glowed)
-  const white = follow([0, 0, -1], 5, [38, 41, 41, 25]);
-  assert.ok(white.every(s => s.pal !== 38) && white.some(s => s.own === 38 && s.pal === 41), 'past the white of its own colours');
-  // (the real blows: every mote hot as it is thrown, the motes of a hit thrown from the far side of him)
-  for (const id of ['hit-jab', 'hit-cross', 'hit-upper', 'body-liver', 'down-back']) {
+test('an ordinary hit\'s motes are as they always were: nothing hot about them, each going through its own colours over its life, the white of the first kind with them', () => {
+  for (const id of ['hit-jab', 'hit-cross', 'hit-upper', 'upperIn@3', 'body-liver']) {
     const { e, struck } = firstHit(id),
       fx = createFx(dice(9)),
-      n = blow(fx, e, struck),
-      k = fx.update(0);
-    assert.equal(k, n);
-    assert.ok(Array.from({ length: k }, (_, i) => fx.rows[i * 12 + 9]).every(p => p === 39), `${id}: all ${k} glowing as they are thrown`);
-    for (let t = 0; t < 0.5; t += DT) {
+      n = blow(fx, e, struck);
+    assert.ok(!e.down && !e.out, `${id} is not a knockdown`);
+    assert.equal(fx.update(0), n);
+    const kinds = fx.items.map(it => it.pal);
+    assert.ok(fx.items.every(it => !it.kind && !('hot' in it)), `${id}: plain motes, none of them hot`);
+    assert.ok(kinds.every(c => c.join() === '38,39,40,41' || c.join() === '41,41,25'), `${id}: the two kinds' colours`);
+    const seen = new Set();
+    for (let t = 0; t < 0.8; t += DT) {
       const m = fx.update(DT);
-      assert.ok(Array.from({ length: m }, (_, i) => fx.rows[i * 12 + 9]).every(p => p !== 38), `${id}: none of them white`);
+      assert.equal(m, fx.items.length, 'one row a mote');
+      fx.items.forEach((it, i) => {
+        const own = it.pal[Math.min(it.pal.length - 1, Math.floor((it.age / it.life) * it.pal.length))];
+        assert.equal(fx.rows[i * 12 + 9], own, `${id}: a mote ${it.age.toFixed(3)} s into its ${it.life.toFixed(3)} s in its own colour`);
+        assert.equal(fx.rows[i * 12 + 10], 0, 'with no light and drawn where it is');
+        seen.add(own);
+      });
+    }
+    assert.ok(seen.has(38) && seen.has(25), `${id}: white and blue among them (${[...seen]})`);
+  }
+});
+
+/* The rows of what is live, and the colours that one glob or ember is drawn in now: its rows are the ones it writes, in the
+   order of the items (a glob three, or two once it lies on the canvas; an ember one, or two while it is fast). */
+const rowsOf = fx => {
+  const n = fx.update(0);
+  return Array.from({ length: n }, (_, i) => Array.from(fx.rows.slice(i * 12, i * 12 + 12)));
+};
+const knockdown = (damage, vec) => ({ type: 'hit', damage, J: 85, down: true, at: [0.1, 1.5, 0], vec: vec || [-0.95, 0.29, -0.08] });
+const HEAD = { points: { head: [0, 1.5, 0] } };
+
+test('a knockdown\'s lava is drawn in the colours of heat and charcoal alone: never the white or the blues, never the dark reds, no light; an ember never red', () => {
+  const heat = new Set([39, 40, 18, 17, 7, 6, 5]); // (the glow, the red a glob might show inside its crust, and the crust)
+  for (const [id, seed] of [['down-back', 1], ['out-log', 2], ['down-liver', 3], ['most', 4], ['down', 5]]) {
+    const real = ['down-back', 'out-log', 'down-liver'].includes(id),
+      { e, struck } = real ? firstHit(id) : { e: knockdown(id === 'most' ? 6.6 : 3, id === 'down' ? [-0.3, -0.9, 0.2] : null), struck: HEAD },
+      fx = createFx(dice(seed));
+    blow(fx, e, struck);
+    const seen = new Set();
+    for (let t = 0; fx.items.length && t < 4; t += DT, fx.update(DT))
+      for (const r of rowsOf(fx)) {
+        seen.add(r[9]);
+        assert.ok(r[10] <= 0, `${id}: no light`);
+        for (const it of fx.items) if (it.kind === 'ember') assert.ok(!heatOf(it).includes(17), `${id}: an ember is never red`);
+        assert.notEqual(r[9], 17, `${id}: nothing red at all`);
+      }
+    assert.ok([...seen].every(c => heat.has(c)), `${id}: only the glow's and the crust's colours (${[...seen].sort((a, b) => a - b)})`);
+    assert.ok(![38, 41, 25, 16, 15].some(c => seen.has(c)), `${id}: never the white, the blues or the dark reds`);
+    assert.ok(seen.has(39) && FX.lava.crust.some(c => seen.has(c)), `${id}: from the hottest down to charcoal (${[...seen]})`);
+    assert.equal(fx.items.length, 0, `${id}: all of it gone in the end`);
+  }
+});
+
+/* Drawn as the renderer draws them, from the side `Z` (unit, toward the eye), looked at straight: each row an ellipse in the
+   picture's plane, solid where its density falls no lower than a half, and at each point the one nearest the eye (less how
+   far it is pulled toward it) wins. -> how much of the picture each colour has, and (as `bare`) how many points show the
+   second row, a glob's body, with the first, its crust, not round them */
+function picture(rows, Z) {
+  const up = Math.abs(Z[1]) < 0.95 ? [0, 1, 0] : [1, 0, 0],
+    X = unit([up[1] * Z[2] - up[2] * Z[1], up[2] * Z[0] - up[0] * Z[2], up[0] * Z[1] - up[1] * Z[0]]),
+    Y = [Z[1] * X[2] - Z[2] * X[1], Z[2] * X[0] - Z[0] * X[2], Z[0] * X[1] - Z[1] * X[0]];
+  const els = rows.map(r => {
+    const S = [[r[3], r[4], r[5]], [r[4], r[6], r[7]], [r[5], r[7], r[8]]],
+      quad = (u, v) => [0, 1, 2].reduce((s, a) => s + u[a] * [0, 1, 2].reduce((t, b) => t + S[a][b] * v[b], 0), 0),
+      a = quad(X, X) + 1e-7,
+      b = quad(X, Y),
+      d = quad(Y, Y) + 1e-7,
+      det = a * d - b * b;
+    return { x: dot(r, X), y: dot(r, Y), depth: -dot(r, Z) - Math.max(0, -r[10]), ia: d / det, ib: -b / det, id: a / det, pal: r[9], dense: r[11] };
+  });
+  const seen = new Map();
+  seen.bare = 0;
+  for (let gx = -0.25; gx <= 0.25; gx += 0.004)
+    for (let gy = -0.25; gy <= 0.25; gy += 0.004) {
+      let best = null,
+        crust = false;
+      for (const e of els) {
+        const x = gx + els[0].x - e.x,
+          y = gy + els[0].y - e.y,
+          on = e.dense * Math.exp(-0.5 * (e.ia * x * x + 2 * e.ib * x * y + e.id * y * y)) >= 0.5;
+        if (on && e === els[0]) crust = true;
+        if (on && (!best || e.depth < best.depth)) best = e;
+      }
+      if (best) seen.set(best.pal, (seen.get(best.pal) || 0) + 1);
+      if (best && best === els[1] && !crust) seen.bare++;
+    }
+  return seen;
+}
+
+test('a hot glob is never one colour: from any side, two or three of the heat\'s colours at once, its head the hottest of them and always to be seen', () => {
+  const L = FX.lava,
+    sides = Array.from({ length: 300 }, (_, i) => {
+      const z = 1 - (2 * (i + 0.5)) / 300,
+        r = Math.sqrt(1 - z * z);
+      return [r * Math.cos(i * 2.399963), z, r * Math.sin(i * 2.399963)];
+    });
+  let views = 0,
+    three = 0;
+  for (const [seed, dir, t] of [[4, [-1, 0, 0.3], 0.02], [7, [0.2, 0.5, -1], 0.1], [8, [0, 1, 0], 0.15]]) {
+    const fx = createFx(dice(seed));
+    fx.globs([0, 1.5, 0], 1, 6, dir, 0.04, { glow: L.glow, crust: L.crust, life: 1.6, pace: 1.05, fall: 0.8, drag: 0.8, cool: 2.5, land: 0, spot: 0.35 });
+    for (let k = 0; k < Math.round(t / DT); k++) fx.update(DT);
+    const it = fx.items[0],
+      rows = rowsOf(fx);
+    assert.ok(it && it.T > 0.75 && rows.length === 3, `glob ${seed}: hot (T ${it && it.T.toFixed(2)}), three parts`);
+    assert.deepEqual(rows.map(r => r[9]), heatOf(it), 'tail, body, head');
+    assert.deepEqual(heatOf(it), [18, 40, 39], 'hot: the head pale yellow, the body amber, the tail orange');
+    // (and from straight ahead of it and straight behind it, where its parts are one behind another)
+    for (const Z of [...sides, it.way, it.way.map(x => -x)]) {
+      const seen = picture(rows, Z),
+        all = [...seen.values()].reduce((s, x) => s + x, 0),
+        shown = [...seen].filter(([, c]) => c >= all * 0.03);
+      assert.ok(shown.length >= 2, `glob ${seed} seen from ${Z.map(x => x.toFixed(2))}: ${shown.length} colour`);
+      assert.ok(seen.has(39), `glob ${seed}: its head to be seen from ${Z.map(x => x.toFixed(2))}`);
+      views++;
+      if (shown.length === 3) three++;
     }
   }
+  assert.ok(three / views > 0.85, `three colours from most sides: ${three} of ${views}`);
+});
+
+test('a cooling glob crusts over: once the crust has closed its glow is only ever inside it, from any side and at any speed, and nothing is red; a cold one a charcoal cinder with at most a small orange point', () => {
+  const L = FX.lava,
+    sides = Array.from({ length: 200 }, (_, i) => {
+      const z = 1 - (2 * (i + 0.5)) / 200,
+        r = Math.sqrt(1 - z * z);
+      return [r * Math.cos(i * 2.399963), z, r * Math.sin(i * 2.399963)];
+    });
+  let looks = 0;
+  for (const [T, speed] of [[0.5, 0], [0.4, 1.5], [0.3, 4], [0.26, 8], [0.2, 0.5], [0.1, 3], [0.02, 6]]) {
+    const fx = createFx(dice(21));
+    fx.globs([0, 1.5, 0], 1, 6, [-1, 0.3, 0.2], 0.04, { glow: L.glow, crust: L.crust, life: 1.6, pace: 1.05, fall: 0.8, drag: 0.8, cool: 2.5, land: 0, spot: 0.35 });
+    fx.update(DT);
+    const g = fx.items[0];
+    g.T = T;
+    g.v = wayOf(g.v).map(x => x * speed);
+    const rows = rowsOf(fx),
+      colours = heatOf(g),
+      crust = new Set(L.crust);
+    assert.ok(crust.has(colours[0]), `T ${T}: its tail is crust (${colours})`);
+    for (const Z of [...sides, g.way, g.way.map(x => -x)]) {
+      const seen = picture(rows, Z),
+        all = [...seen.values()].reduce((a, b) => a + b, 0),
+        dark = L.crust.reduce((a, c) => a + (seen.get(c) || 0), 0),
+        glow = all - dark;
+      assert.equal(seen.bare, 0, `T ${T} at ${speed} m/s, seen from ${Z.map(x => x.toFixed(2))}: its body's glow inside its crust`);
+      assert.ok(!seen.has(17), `T ${T}: no red`);
+      if (T <= 0.25) {
+        assert.ok(glow <= all * 0.3 && dark >= all * 0.7, `T ${T} seen from ${Z.map(x => x.toFixed(2))}: charcoal ${dark} of ${all}, glow ${glow}`);
+      }
+      looks++;
+    }
+  }
+  assert.ok(looks > 1000);
+});
+
+test('a glob is at its hottest while it rises, and only cools: by how fast it falls from the top of its flight, and by its age', () => {
+  for (const [seed, dir] of [[1, [-1, 0, 0.3]], [2, [0, 0, 1]], [3, [0.3, -0.2, -1]], [4, [0, 0, -1]]]) {
+    const fx = createFx(dice(seed));
+    fx.globs([0, 1.5, 0], 12, 5.5, dir, 0.04, { glow: FX.lava.glow, crust: FX.lava.crust, life: 1.52, pace: 1.05, fall: 0.8, drag: 0.8, cool: 2.5, land: 0, spot: 0.35 });
+    const globs = fx.items.slice(),
+      last = new Map(globs.map(g => [g, { T: 1, rose: g.v[1] >= 0 }]));
+    let rising = 0,
+      cooled = 0;
+    for (let t = 0; t < 2; t += 1 / 240) {
+      fx.update(1 / 240);
+      for (const g of globs) {
+        if (!fx.items.includes(g) || g.stuck) continue;
+        const was = last.get(g);
+        if (g.top === null) (assert.ok(g.v[1] >= 0 && g.T === 1, `a glob still rising at ${g.v[1].toFixed(2)} m/s is at its hottest (T ${g.T})`), rising++);
+        assert.ok(g.T <= was.T + 1e-12, `never back: ${was.T.toFixed(3)} -> ${g.T.toFixed(3)}`);
+        // (from the top: no hotter than its fall says, and no hotter than its age says)
+        if (g.top !== null) assert.ok(g.T <= 1 - Math.min(1, Math.max(0, (-g.v[1] - g.thrown) / 2.5)) + 1e-12 && g.T <= 1 - Math.min(1, (g.age - g.top) / (g.cools - g.top)) + 1e-12);
+        if (g.T < was.T) cooled++;
+        was.T = g.T;
+      }
+    }
+    assert.ok(cooled > 0, `dir ${dir}: they cool`);
+    if (dir[2] === 1) assert.ok(rising > 20, `dir ${dir}: and rise hot first (${rising} looks)`);
+  }
+  // (its stages [tail, body, head]: hot; a crust behind; the crust round an orange glow; a cinder with an orange point; gone out)
+  const it = { kind: 'glob', glow: FX.lava.glow, crust: FX.lava.crust, age: 0.1, cools: 1 };
+  assert.deepEqual([1, 0.7, 0.4, 0.1].map(T => heatOf(Object.assign(it, { T }))), [[18, 40, 39], [7, 18, 40], [7, 18, 18], [5, 6, 18]]);
+  assert.deepEqual(heatOf(Object.assign(it, { T: 0.1, age: 0.9 })), [5, 6, 6], 'the point gone out in the last of its life');
+});
+
+test('a glob that comes down on the canvas does not bounce: it lies there flat, an orange core over a charcoal rim going dark over 0.35 s, and is gone', () => {
+  const fx = createFx(dice(6));
+  fx.globs([0, 0.5, 0], 8, 4, [0.3, 0.2, -1], 0.04, { glow: FX.lava.glow, crust: FX.lava.crust, life: 3, pace: 1, fall: 0.8, drag: 0.8, cool: 2.5, land: 0, spot: 0.35 });
+  const globs = fx.items.slice(),
+    down = new Map();
+  for (let t = 0; t < 2; t += DT) {
+    fx.update(DT);
+    for (const g of globs) {
+      if (!fx.items.includes(g)) continue;
+      if (g.stuck && !down.has(g)) down.set(g, { y: g.b[1], at: g.age, colours: [] });
+      if (!down.has(g)) continue;
+      const d = down.get(g);
+      assert.equal(g.b[1], d.y, 'it stays where it came down');
+      assert.ok(g.b[1] <= 0.02 + g.width, 'on the canvas');
+      d.colours.push(heatOf(g)[1]);
+      (d.rims = d.rims || []).push(heatOf(g)[0]);
+      d.last = g.age;
+    }
+  }
+  assert.ok(down.size === globs.length, `all ${globs.length} came down`);
+  for (const d of down.values()) {
+    assert.deepEqual([...new Set(d.colours)], [18, 6], 'its core orange, then charcoal');
+    assert.deepEqual([...new Set(d.rims)], [7, 6, 5], 'its rim charcoal, darkening');
+    assert.ok(d.last - d.at < 0.35 + 1e-9 && d.last - d.at > 0.3, `gone 0.35 s after it came down (${(d.last - d.at).toFixed(3)})`);
+  }
+  // (drawn flat on the canvas: its rim and its core, no height to them, the core over the rim)
+  const fresh = createFx(dice(6));
+  fresh.globs([0, 0.3, 0], 1, 2, [0, -1, 0], 0.04, { glow: FX.lava.glow, crust: FX.lava.crust, life: 3, pace: 1, fall: 0.8, drag: 0.8, cool: 2.5, land: 0, spot: 0.35 });
+  while (!fresh.items[0].stuck) fresh.update(DT);
+  const rows = rowsOf(fresh);
+  assert.equal(rows.length, 2);
+  assert.ok(rows.every(r => r[6] < 1e-5 && Math.abs(r[1] - 0.014) < 1e-9), 'flat, on the canvas');
+  assert.ok(-rows[1][10] > -rows[0][10], 'the core over the rim');
+});
+
+test('an ember flickers by its own age and seed: the same colours at the same moment of the bout, however often it is drawn; and it is caught by the air within half a metre', () => {
+  const thrown = () => {
+    const fx = createFx(dice(12));
+    blow(fx, knockdown(3), HEAD);
+    return { fx, embers: fx.items.filter(it => it.kind === 'ember') };
+  };
+  const [a, b, c] = [thrown(), thrown(), thrown()];
+  assert.equal(a.embers.length, 18);
+  let changes = 0,
+    looks = 0;
+  const last = new Map();
+  for (let n = 1; n <= 50; n++) {
+    a.fx.update(DT);
+    for (let k = 0; k < 4; k++) b.fx.update(DT / 4);
+    // (and in uneven steps: a third and two thirds of a sixtieth)
+    c.fx.update(DT / 3), c.fx.update((2 * DT) / 3);
+    a.embers.forEach((ea, i) => {
+      if (!a.fx.items.includes(ea)) return;
+      const [eb, ec] = [b.embers[i], c.embers[i]];
+      assert.ok(b.fx.items.includes(eb) && c.fx.items.includes(ec), 'as long-lived');
+      assert.deepEqual(heatOf(eb), heatOf(ea), `ember ${i} at ${(n * DT).toFixed(3)} s: the same in quarter steps`);
+      assert.deepEqual(heatOf(ec), heatOf(ea), `ember ${i} at ${(n * DT).toFixed(3)} s: the same in uneven steps`);
+      if (last.has(i) && last.get(i) !== heatOf(ea)[0]) changes++;
+      last.set(i, heatOf(ea)[0]);
+      looks++;
+    });
+  }
+  assert.ok(changes > looks / 8, `they flicker: ${changes} changes of colour in ${looks} looks`);
+  /* (it never stays hotter than it is: every 0.04 s either the step it is at or the next one, its tail a step cooler; at
+     the last, orange, on or off, more often off toward its end) */
+  const H = FX.lava.glow,
+    e = { kind: 'ember', heat: H, from: 0, life: 0.5, seed: 77, flicker: 0.04 },
+    stepAt = age => Math.min(2, Math.floor((age / 0.5) ** 3 * 3)),
+    off = [0, 0];
+  for (let age = 0; age < 0.5; age += 0.001) {
+    const [head, tail] = heatOf(Object.assign(e, { age })),
+      step = stepAt(age);
+    if (step < 2) assert.ok([step, step + 1].includes(H.indexOf(head)) && H.indexOf(tail) === Math.min(2, H.indexOf(head) + 1), `at ${age.toFixed(3)} s: ${head}/${tail}`);
+    else {
+      assert.ok(head === null ? tail === null : head === 18 && tail === 18, `at ${age.toFixed(3)} s, the last step: ${head}/${tail}`);
+      off[age < 0.5 * Math.cbrt(2.5 / 3) ? 0 : 1] += head === null ? 1 : 0;
+    }
+  }
+  assert.ok(off[0] > 0 && off[1] > 0, `it winks out at its last step (${off})`);
+  for (let k = 0; k < 12; k++) {
+    const first = k * 0.04 + 0.0005,
+      same = [];
+    for (let age = first; age < (k + 1) * 0.04 - 1e-4; age += 0.002) if (stepAt(age) === stepAt(first)) same.push(heatOf(Object.assign({}, e, { age })).join());
+    assert.equal(new Set(same).size, 1, `between ${(k * 0.04).toFixed(2)} and ${((k + 1) * 0.04).toFixed(2)} s: ${[...new Set(same)]}`);
+  }
+  // (thrown out fast, the air has them within half a metre)
+  for (const ea of a.embers) assert.ok(len(sub(ea.b, a.embers[0].a)) < 0.6, `an ember ${len(sub(ea.b, a.embers[0].a)).toFixed(2)} m from where it started`);
+});
+
+test('a glob sheds an ember every 0.05 s of its flight, at 0.3 of its velocity, four at most, as hot as its head', () => {
+  const fx = createFx(dice(3));
+  fx.globs([0, 1.5, 0], 1, 5, [0, 0, 1], 0.04, { glow: FX.lava.glow, crust: FX.lava.crust, life: 1.5, pace: 1, fall: 0.8, drag: 0.8, cool: 2.5, land: 0, spot: 0.35, shed: { every: 0.05, pace: 0.3, most: 4, ember: { glow: FX.lava.glow, width: 0.01, life: 2, fall: 0.2, drag: 1.6, brake: 4, wander: [0.1, 0.2], flicker: 0.04, trail: 1.5 } } });
+  const glob = fx.items[0],
+    shed = [];
+  for (let t = 0; t < 0.4; t += 1 / 120) {
+    const v = glob.v.slice(),
+      had = new Set(fx.items);
+    fx.update(1 / 120);
+    for (const it of fx.items) if (!had.has(it)) shed.push({ it, age: it.age, ev: it.v.slice(), v: glob.v.map(x => x * 0.3), at: glob.age, T: glob.T });
+  }
+  assert.equal(shed.length, 4, 'four of them');
+  shed.forEach((s, i) => {
+    assert.ok(Math.abs(s.at - s.age - 0.05 * (i + 1)) < 1e-9, `the ${i + 1}st on the beat: ${(s.at - s.age).toFixed(4)} s`);
+    assert.equal(s.it.kind, 'ember');
+    assert.ok(len(sub(s.ev, s.v)) < 1e-12, 'at 0.3 of the glob\'s velocity');
+    assert.equal(s.it.from, Math.min(2, s.T > 0.75 ? 0 : s.T > 0.5 ? 1 : 2), 'as hot as its head (an ember no cooler than orange)');
+  });
+});
+
+test('the most a knockdown throws stays within what an fx draws: rows at a blow of 0.5, 1 and 2.2 times the measure', () => {
+  const most = {};
+  for (const q of [0.5, 1, 2.2]) {
+    let top = 0;
+    for (let seed = 1; seed <= 6; seed++) {
+      const fx = createFx(dice(seed));
+      blow(fx, knockdown(3 * q), HEAD);
+      for (let t = 0; t < 3; t += DT) top = Math.max(top, fx.update(DT));
+      assert.equal(fx.items.length, 0);
+    }
+    most[q] = top;
+  }
+  assert.ok(most[2.2] < 960 / 3, `at most ${most[0.5]}, ${most[1]} and ${most[2.2]} rows: well within the 960 an fx draws, even for three such blows at once`);
+  assert.ok(most[0.5] < most[1] && most[1] < most[2.2], 'more for the harder blow');
 });
