@@ -14,7 +14,12 @@
    and distance: tune.mjs guardAt), scene and version (an effect card), band (the plan's range for a liver hook) }, or
    { image, say } (a reference sheet, docs/ref), or { fill: true } (the empty half of a row). An item's groups: each a clock
    (its cards stepped together, started again together), of rows of two. An item that pairs with the next: pair (its id),
-   and each its one card: card. */
+   and each its one card: card.
+   A recorded card (part 5: COMPARE, the motion of a stage not merged yet, src/clips.data.mjs): { clip (a clip id), say (what
+   it is), line (what its line under it says, from what the clip was measured to show: src/pending.mjs CLIP_SAY), blow (the
+   punch that line is about), slow (0.25: a quarter of the speed), cam ({ yaw, pitch, dist (metres, fixed), on (what it looks
+   at: the middle of the two men, man0 / man1 (at height y), head0 / head1 (y above it)), y }) }. The recorded cards of a group
+   play together. */
 import { NUMBERS } from './pending.numbers.mjs';
 
 const N = NUMBERS || {};
@@ -23,7 +28,7 @@ const f0 = x => (x === undefined || x === null ? '–' : String(Math.round(x)));
 const at = (o, ...keys) => keys.reduce((v, k) => (v && v[k] !== undefined ? v[k] : undefined), o);
 
 export const PARTS = [
-  { n: 5, mark: '새', title: '오늘 생긴 결정 (2026-11-23)', note: '오늘의 작업에서 나온 것입니다. 카드는 없고, 항목마다 지금의 상태와 기본값이 적혀 있습니다. 고르지 않으면 "권장"(기본값)으로 진행합니다.' },
+  { n: 5, mark: '새', title: '오늘 생긴 결정 (2026-11-23)', note: '오늘의 작업에서 나온 것입니다. 항목마다 지금의 상태와 기본값이 적혀 있고, 몇 항목에는 녹화한 비교가 있습니다: 아직 합치지 않은 단계의 동작을 그 작업 폴더에서 돌려 프레임마다 적어 둔 것으로, 왼쪽이 지금(게시된 동작), 오른쪽이 그 단계입니다. 카드 밑의 숫자는 그 녹화를 만든 같은 실행에서 잰 것입니다. 고르지 않으면 "권장"(기본값)으로 진행합니다.' },
   { n: 1, title: '남은 구현', note: '카드가 없습니다. 고르는 것은 진행 여부와 순서입니다.' },
   { n: 2, title: '결정을 기다리는 것', note: '기획자가 정한 기본값과 균형. 비교 쌍은 왼쪽이 지금, 오른쪽이 조정안입니다. 조정안 카드는 같은 엔진에 표의 값 하나둘만 바꿔 돌린 것이고, 게임의 기본값은 그대로입니다.' },
   { n: 3, title: '엔진 한계로 기획과 다른 것', note: '고르는 것은 대체로 같습니다: 수용(README의 알려진 한계에 남김), 다시 시도(방법은 한 줄로 적힘), 목표를 지움. 카드는 카탈로그의 대본 그대로이고, 참고 영상의 접촉 시트가 있으면 왼쪽에 기획 쪽으로 놓습니다.' },
@@ -94,8 +99,63 @@ const frameRow = (lv, gap) => {
 };
 
 /* ---- the items */
+/* ---- the recorded comparisons of part 5, under the items they are about (src/clips.data.mjs): the motion as it is now on
+   the left, the stage's on the right, the same script and the same moments of it */
+const VIEW = {
+  card: { yaw: 0.6, pitch: 0.25 },
+  // (close on the boxer, his front a little from the side: his guard)
+  guard: { yaw: 1.0, pitch: 0.15, dist: 2.6, on: 'man0', y: 1.0 },
+  // (close on the boxer from his front, on the side away from the other man's hooking arm: his two forearms)
+  arms: { yaw: 2.2, pitch: 0.25, dist: 2.3, on: 'man0', y: 1.0 },
+  // (from the side of the glove held out, close on the other man's head)
+  head: { yaw: 0.35, pitch: 0.15, dist: 2.2, on: 'head1', y: -0.15 },
+  top: { yaw: 0.6, pitch: 1.45 },
+  // (close on his head as it turns, in profile from the side the glove does not come from)
+  chin: { yaw: 3.14, pitch: 0.1, dist: 1.8, on: 'head0', y: -0.05 },
+  // (in front of him, from above the other man's shoulder: his arms spread across the picture)
+  wide: { yaw: 1.3, pitch: 0.65, dist: 2.8, on: 'man0', y: 1.1 },
+  // (from his left, a little above: where the rear hook comes round to his side)
+  left: { yaw: 0.0, pitch: 0.35, dist: 2.6, y: 0.95 },
+  // (from the side he falls to, a little above: the other man beside him, not in front of him)
+  over: { yaw: 0.0, pitch: 0.45, dist: 3.6, on: 'man0', y: 0.5 },
+  // (from behind him and above: a man on the canvas, his legs toward us, the other man beyond him)
+  fallen: { yaw: -1.45, pitch: 0.8, dist: 3.4, on: 'man0', y: 0.2 }
+};
+const clip = (id, say, line, more) => Object.assign({ clip: id, say, line }, more);
+const COMPARE = {
+  'low2-block': [
+    { title: '막은 뒤 가드가 내려오는 순간 (`block-elbow@2`의 0.80~1.20 s, ¼ 속도)', rows: [[clip('low2-now', '바디 훅을 팔꿈치로 막은 뒤 두 팔을 내림', 'cross', { slow: 0.25, cam: VIEW.arms }), clip('low2-m', '바디 훅을 팔꿈치로 막은 뒤 두 팔을 내림', 'cross', { slow: 0.25, cam: VIEW.arms })]] },
+    { title: '같은 드릴에 이어 오는 어퍼 (1.133 s에 누름: M의 타이밍 쓸기 그대로)', rows: [[clip('low2up-now', '바디 훅을 막고, 이어 오는 어퍼', 'blow', { blow: 'upper', cam: { yaw: 1, pitch: 0.2 } }), clip('low2up-m', '바디 훅을 막고, 이어 오는 어퍼', 'blow', { blow: 'upper', cam: { yaw: 1, pitch: 0.2 } })]] }
+  ],
+  'beckon-room': [
+    { title: '1.0 m(시합의 보통 거리)에서 손짓: 앞 글러브와 상대의 머리', rows: [[clip('beckon10-now', '손짓 4암, 상대 1.0 m', 'reach', { cam: VIEW.head }), clip('beckon10-u1', '손짓 4암, 상대 1.0 m', 'reach', { cam: VIEW.head })], [clip('beckon10-u2', '손짓 4암, 상대 1.0 m', 'reach', { cam: VIEW.head }), { fill: true }]] },
+    { title: '카드의 1.2 m에서: 메모가 바란 큰 손짓', rows: [[clip('beckon12-now', '손짓 4암, 상대 1.2 m', 'reach', { cam: VIEW.card }), clip('beckon12-u2', '손짓 4암, 상대 1.2 m', 'reach', { cam: VIEW.card })]] }
+  ],
+  'hookr-bound': [
+    { title: '뒷손 훅 3단계: 위에서 (가슴 속도는 이 카드 하나를 녹화하며 잰 값; 본문의 1071 → 1267 °/s는 3단계 뒷손 훅 대본 전체의 최댓값)', rows: [[clip('hookr-now', '뒷손 훅 3단계, 위에서', 'chest', { blow: 'hookR', cam: VIEW.top }), clip('hookr-n1', '뒷손 훅 3단계, 위에서', 'chest', { blow: 'hookR', cam: VIEW.top })]] },
+    { title: '같은 것을 카드의 카메라로', rows: [[clip('hookr-now', '뒷손 훅 3단계', 'chest', { blow: 'hookR', cam: { yaw: 0.6, pitch: 0.2 } }), clip('hookr-n1', '뒷손 훅 3단계', 'chest', { blow: 'hookR', cam: { yaw: 0.6, pitch: 0.2 } })]] },
+    { title: '숄더 롤 & 카운터 4명 (`rollCounter@4m`)', rows: [[clip('rollc-now', '롤로 흘린 뒤 뒷손 훅 반격', 'blow', { blow: 'hookR', cam: { yaw: 0.25, pitch: 0.26 } }), clip('rollc-n1', '롤로 흘린 뒤 뒷손 훅 반격', 'blow', { blow: 'hookR', cam: { yaw: 0.25, pitch: 0.26 } })]] }
+  ],
+  'twist-chin': [
+    { title: '맞은 직후: 고개가 돌고 턱이 숙는 것 (가까이, ¼ 속도)', rows: [[clip('twistc-now', '실신 · 통나무 · 훅, 맞은 직후', 'chin', { slow: 0.25, cam: VIEW.chin }), clip('twistc-vchin', '실신 · 통나무 · 훅, 맞은 직후', 'chin', { slow: 0.25, cam: VIEW.chin })]] },
+    { title: '쓰러짐 전체 (맞은 때부터 머리가 캔버스에 닿기까지; 기획의 기준 0.55~0.85 s)', rows: [[clip('twist-now', '실신 · 통나무 · 훅', 'head', { cam: VIEW.over }), clip('twist-vchin', '실신 · 통나무 · 훅', 'head', { cam: VIEW.over })]] }
+  ],
+  'shrug-view': [{ title: 'U 1차 구현의 으쓱 4암, 두 카메라', rows: [[clip('shrug-u1', '카드의 카메라', 'across', { cam: VIEW.card }), clip('shrug-u1', '그의 앞쪽에서 비스듬히', 'across', { cam: VIEW.wide })]] }],
+  'jump-watch': [
+    { title: '`guard@5a`: 커버를 한 프레임에 내림 (왼쪽 제 속도, 오른쪽 ¼)', rows: [[clip('jump-guard', '가드 5암, 커버를 내리는 때', 'jump', { cam: VIEW.guard }), clip('jump-guard', '가드 5암, 커버를 내리는 때', 'jump', { slow: 0.25, cam: VIEW.guard })]] },
+    { title: '`onetwo@5a`: 원투를 맞는 상대의 앞 글러브 (최악 값)', rows: [[clip('jump-onetwo', '스텝 원투 5암, 상대의 가드', 'jump', { cam: { yaw: 2.2, pitch: 0.15, dist: 2.6, on: 'man1', y: 1.0 } }), clip('jump-onetwo', '스텝 원투 5암, 상대의 가드', 'jump', { slow: 0.25, cam: { yaw: 2.2, pitch: 0.15, dist: 2.6, on: 'man1', y: 1.0 } })]] },
+    { title: '`crossArm@5m`: 크로스암을 내림', rows: [[clip('jump-cross', '크로스암 가드 5명, 막은 뒤', 'jump', { cam: VIEW.guard }), clip('jump-cross', '크로스암 가드 5명, 막은 뒤', 'jump', { slow: 0.25, cam: VIEW.guard })]] }
+  ],
+  'crossarm-weak': [{ title: '5암 크로스암, 누르는 프레임에 롤: 왼 옆구리를 노린 뒷손 훅 (N의 시험 장면)', rows: [[clip('weak-now', '낮은 뒷손 훅이 크로스암으로', 'blow', { blow: 'hookR', cam: VIEW.left }), clip('weak-n1', '낮은 뒷손 훅이 크로스암으로', 'blow', { blow: 'hookR', cam: VIEW.left })]] }],
+  'order-memo-first': [
+    { title: '지금까지의 단계: V 1차, 앞으로 쓰러진 다리 (`down-front`)', rows: [[clip('front-now', '다운 · 앞으로', 'legs', { cam: VIEW.fallen }), clip('front-v1', '다운 · 앞으로', 'legs', { cam: VIEW.fallen })]] },
+    { title: 'U 1차, 뒷목 잡고 어퍼 4암 (`collar@4a`)', rows: [[clip('collar-now', '뒷목을 당기고 어퍼', 'pull', { blow: 'upper', cam: { yaw: 0.25, pitch: 0.25 } }), clip('collar-u1', '뒷목을 당기고 어퍼', 'pull', { blow: 'upper', cam: { yaw: 0.25, pitch: 0.25 } })]] },
+    { title: 'N 1차, 숏 훅 3단계 (`hookIn@3`)', rows: [[clip('hookin-now', '숏 훅 3단계', 'chest', { blow: 'hookIn', cam: { yaw: 0.12, pitch: 0.2 } }), clip('hookin-n1', '숏 훅 3단계', 'chest', { blow: 'hookIn', cam: { yaw: 0.12, pitch: 0.2 } })]] }
+  ]
+};
+
 export const ITEMS = [
-  // ===== 5. what the work of 2026-11-23 left open (no cards)
+  // ===== 5. what the work of 2026-11-23 left open (some with recorded comparisons: COMPARE)
   ...[
     ['fx-twice', '다운 타격의 용암을 두 번 쏘기: 간격과 양',
       '지시대로 두 번 잇달아 쏩니다. 간격은 0.05초로 만들었다가 0.1초로 바꿨습니다(0.05초는 제 속도 화면에서 한 덩어리로 보였고, 0.1초는 첫 발이 퍼진 뒤 둘째 발이 터져 둘로 읽힙니다). 두 발 모두 채택한 수 그대로라 합쳐 두 배입니다(기준 타격에 덩이 11·불티 18씩). 가장 센 타격(2.2배)에서는 덩이 48·불티 80으로 번잡합니다.',
@@ -258,7 +318,7 @@ export const ITEMS = [
       '시드 하나(시드 4에서 풀백 3번 이상)로 보던 시험이, 가드의 글러브가 1 cm 달라진 것만으로 깨졌습니다(시드 시합은 작은 차이로 전개가 달라집니다). 시드 1~10의 합계로 바꿨습니다: 풀백 10번, 반격 8번, 맞힌 것 5번 이상. 지금은 18·17·12번이고, M 전에는 25·23·20번이었습니다.',
       [['sum', '합계 기준 그대로', '지금 값의 절반 남짓을 기준으로 둡니다.'], ['tight', '기준을 더 높게', '예: 14·12·8번. 단계마다 흔들려 자주 다시 재게 됩니다.'], ['one', '시드 하나로 되돌린다', '깨질 때마다 시드를 다시 고르게 됩니다.']],
       'sum', '"기술이 시합에서 나오고 맞는다"는 취지를 지키면서, 무관한 변화에는 깨지지 않습니다.']
-  ].map(([id, title, state, options, recommend, why]) => ({ id, part: 5, title, state, options: options.map(([oid, name, says]) => ({ id: oid, name, says })), recommend, why })),
+  ].map(([id, title, state, options, recommend, why]) => Object.assign({ id, part: 5, title, state, options: options.map(([oid, name, says]) => ({ id: oid, name, says })), recommend, why }, COMPARE[id] ? { groups: COMPARE[id] } : {})),
 
   // ===== 1. what is left to build
   {

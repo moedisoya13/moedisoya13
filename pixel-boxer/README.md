@@ -22,6 +22,7 @@ node tools/knees.mjs     # 무릎 점검: 모든 대본 × 일곱 단계의 무�
 node tools/legend.mjs    # 전설의 복합 모션: 서클링·사이드 스텝의 걸음마다 머리, 스텝 인·아웃의 슬립·스웨이, 세 대시의 머리 (일곱 단계)
 node tools/events.mjs     # 카탈로그의 모든 카드를 돌린 사건 기록 (--root 다른 체크아웃의 대본으로, --diff 옛것 새것: 바뀐 카드)
 node tools/bearing.mjs    # 팔방: 동작마다 돈 칸 (--reface 다시 마주 보기까지, --worth 칸의 값, --walk 걸어서 돌기, --write: src/bearing.data.mjs에 써서 카탈로그가 그림)
+node tools/clips.mjs      # 미결 카탈로그의 녹화 클립: 무엇이 녹화될지 찍음 (--write --root 키=폴더 …: src/clips/에 다시 녹화, --events <id>: 한 대본의 사건과 잰 값)
 node tools/combos.mjs     # 콤비네이션: 카드마다 박·사이·충격량 (--rows 줄과 카드, --census 시드 시합에서 나온 수, --write: src/combos.numbers.mjs에 잰 비행 시간)
 # http://127.0.0.1:8766/catalog.html   모션 카탈로그 (맨 위 차례에서 부·줄로; 기술마다 등급 카드가 한 줄: 풋워크, 수비, 주먹, 바디샷, L 전용 기술, 크로스암 · 숄더 롤, 과시형 암, 진입 · 이탈, 맞기와 다운)
 # http://127.0.0.1:8766/review.html?entry=duck&from=1.1&to=1.5&n=12   대본 하나를 프레임 시트로 (fx=1: 타격 이펙트까지, replay=1: 그 대본의 리플레이를 그림마다)
@@ -760,6 +761,7 @@ node tools/combos.mjs     # 콤비네이션: 카드마다 박·사이·충격량
 | `src/game/bout.mjs` | 시합. 몸을 풀고, 글러브 궤적과 머리의 충돌을 보고, 충격량을 계산합니다 |
 | `src/game/bearing.mjs` | 팔방: 상대의 정면에서 본 방위, 여덟 칸, 거리 띠, 돈 칸과 잡은 칸의 추적(순수 함수; 시합을 바꾸지 않음). 잰 표는 `src/bearing.data.mjs` |
 | `src/game/combos.data.mjs` | 콤비네이션의 데이터(박마다 주먹·과녁·무게·페이크·걸음·잇는 법). 줄과 카드는 `src/combos.mjs`, 카드마다 잰 비행 시간은 `src/combos.numbers.mjs` |
+| `src/clips.data.mjs`, `src/clips/`, `tools/clips.mjs` | 미결 카탈로그의 비교 클립: 목록(어느 체크아웃의 어느 대본, 몇 초부터 몇 초, 무엇을 재는지), 녹화물(생성물: 프레임마다 두 선수의 자세와 타격 사건), 녹화 도구 |
 | `src/memo.mjs`, `src/memo.actions.mjs` | 모션 카탈로그의 줄마다 남기는 메모, 그리고 메모마다의 조치(단계·상태·한 줄: 게시할 때마다 손으로 고침) |
 | `src/render/blow.mjs` | 타격 이펙트 한곳: 입자의 시작점(`exitOf`), 입자(`blow`, 달아오름과 다운의 떠 있음), 막음·패리의 불꽃(`met`), 파문(`rippleOf`, `rippleRow`), 다운의 착지(`fallOf`, `landingOf`, `landed`, `landRipple`), 바닥의 고리 파문(`groundOf`, `groundRow`, `groundLift`), 슬로(`slowOf`, `paceOf`, `slowOn`) |
 | `src/render/floor.mjs` | 카탈로그·`fxlab`·리뷰 시트의 바닥 타일 |

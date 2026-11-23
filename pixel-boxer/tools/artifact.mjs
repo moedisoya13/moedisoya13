@@ -4,8 +4,9 @@
      node tools/artifact.mjs <out.html>                                  the game
      node tools/artifact.mjs catalog.html src/catalog.mjs <out.html>     the footwork catalogue
      node tools/artifact.mjs pending.html src/pending.mjs <out.html>     the pending catalogue (or fxlab.html src/fxlab.mjs)
-   Either way the files map is printed as JSON: the modules, the assets (a page of boxers alone, without the ring: the
-   catalogues and the effect study), and the reference sheets (docs/ref) the modules name. */
+   Either way the files map is printed as JSON: the modules (those imported, and those loaded later by import('./...')), the
+   assets (a page of boxers alone, without the ring: the catalogues and the effect study), and the reference sheets (docs/ref)
+   the modules name. */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -36,7 +37,8 @@ const seen = new Set(),
   const text = readFileSync(path.join(root, file), 'utf8');
   // (a reference sheet a module names is loaded by the page from the same path)
   for (const m of text.matchAll(/docs\/ref\/[\w-]+\.jpg/g)) sheets.add(m[0]);
-  for (const m of text.matchAll(/from '(\.[^']+)'/g)) follow(path.posix.join(path.posix.dirname(file), m[1]));
+  // (and a module it loads only when it is wanted, import('./...'): the pending catalogue's recorded clips, src/clips/index.mjs)
+  for (const m of text.matchAll(/(?:from |import\()'(\.[^']+)'/g)) follow(path.posix.join(path.posix.dirname(file), m[1]));
 })(entry);
 const files = Object.fromEntries([...seen].sort().map(f => [f, { from: f, contentType: 'text/javascript' }]));
 files['assets/manifest.json'] = 'assets/manifest.json';

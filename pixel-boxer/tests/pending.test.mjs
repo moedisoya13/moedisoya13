@@ -2,6 +2,8 @@
 // the game's tables as they were, whatever happens inside it, and a card stepped between two steps of a variant fights exactly
 // as it does alone; its data (src/pending.data.mjs) names only fields that are there and scripts the catalogue has, with ids
 // fit to save decisions under; and what the variant cards show is what tools/pending.mjs measured (src/pending.numbers.mjs).
+// The recorded cards (src/clips.data.mjs, tools/clips.mjs): every clip of the manifest is there, as long as its window says,
+// whole, and named by a card; and a clip recorded from this checkout is recorded again the same from it.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
@@ -16,6 +18,9 @@ import { freshBout, drive } from '../src/footwork.mjs';
 import { MOVES } from '../src/anim/moves.mjs';
 import { CROSS, LEVEL } from '../src/anim/skill.mjs';
 import { TECHNIQUES } from '../src/game/techniques.mjs';
+import { CLIPS, ROOTS } from '../src/clips.data.mjs';
+import { CLIPS_MADE, LOAD } from '../src/clips/index.mjs';
+import { record, encode, FIELDS } from '../tools/clips.mjs';
 
 const DT = 1 / 60;
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -99,6 +104,12 @@ test('the data: every override names a field that is there, every card a catalog
   for (const card of allCards) {
     if (card.image) assert.ok(existsSync(path.join(root, card.image)), card.image);
     if (card.image || card.fill) continue;
+    // (a recorded card: a clip of the manifest, which has been recorded)
+    if (card.clip) {
+      assert.ok(CLIPS.some(c => c.id === card.clip) && CLIPS_MADE[card.clip], `${card.clip}: not a recorded clip`);
+      assert.ok(typeof card.line === 'string' && card.say, `${card.clip}: what it is and its line`);
+      continue;
+    }
     assert.ok(byId[card.entry], `${card.entry}: not a catalogue script`);
     for (const p of card.tune || []) {
       const [o, k] = patchesOf([p], TABLES)[0];
@@ -126,6 +137,40 @@ test('what the variant cards show is what tools/pending.mjs measured: the blow, 
       assert.equal(met ? (met.type === 'parry' ? (met.down ? 'down' : 'parry') : met.type) : null, want.met, card.key);
       assert.equal(landed ? +landed.J.toFixed(1) : null, want.counter, `${card.key}: his own blow`);
     }
+  }
+});
+
+test('the recorded clips: each of the manifest written, as many frames as its window, whole; each named by a card, and each card\'s a clip', async () => {
+  const ids = new Set();
+  for (const clip of CLIPS) {
+    assert.ok(!ids.has(clip.id) && /^[a-z0-9]+(-[a-z0-9]+)*$/.test(clip.id), `${clip.id}: an id once, fit for a file`);
+    ids.add(clip.id);
+    assert.ok(ROOTS[clip.root], `${clip.id}: no root ${clip.root}`);
+    const made = CLIPS_MADE[clip.id];
+    assert.ok(made && LOAD[clip.id], `${clip.id}: not recorded (node tools/clips.mjs --write --root ...)`);
+    assert.deepEqual([made.root, made.script, made.window], [clip.root, clip.script, clip.window], `${clip.id}: recorded as the manifest says`);
+    const frames = Math.round((clip.window[1] - clip.window[0]) * 60),
+      mod = await LOAD[clip.id]();
+    assert.equal(mod.FRAMES, frames, `${clip.id}: ${mod.FRAMES} frames for ${clip.window.join('-')} s`);
+    assert.equal(made.frames, frames, clip.id);
+    assert.equal(Buffer.from(mod.MEN, 'base64').length, frames * 2 * FIELDS * 2, `${clip.id}: the frames whole`);
+    for (const [k, e] of mod.EVENTS) assert.ok(k >= 0 && k < frames && e.type, `${clip.id}: an event at ${k}`);
+    // (and a clip as big as the page can bear: 150 KB)
+    assert.ok(mod.MEN.length < 150e3, `${clip.id}: ${mod.MEN.length} bytes`);
+  }
+  // (every clip shown, and nothing shown that is not one)
+  const named = new Set(allCards.filter(c => c.clip).map(c => c.clip));
+  assert.deepEqual([...named].sort(), [...ids].sort());
+  assert.deepEqual(Object.keys(CLIPS_MADE).sort(), [...ids].sort());
+});
+
+test('a clip recorded from this checkout is recorded again the same: the frames, the blows and what it measured', async () => {
+  for (const clip of CLIPS.filter(c => c.root === 'now')) {
+    const mod = await LOAD[clip.id](),
+      again = await record(clip, root);
+    assert.equal(encode(again.data), mod.MEN, `${clip.id}: the frames`);
+    assert.deepEqual(again.events, mod.EVENTS, `${clip.id}: the blows`);
+    assert.deepEqual(again.measured, CLIPS_MADE[clip.id].measured, `${clip.id}: what it measured`);
   }
 });
 
