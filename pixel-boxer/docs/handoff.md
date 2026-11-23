@@ -31,7 +31,7 @@
 | 이름 | 주소 | 상태 |
 |---|---|---|
 | 모션 카탈로그 | https://claude.ai/artifact/GGHUZQ9rFWLoRojwCzaK3N | 현행 v32(2026-11-23: 변동 없는 줄은 접음(`SINCE`에 없는 것); v31: 다운 타격의 용암을 두 번(0.1 s 간격); v30: 용암·불티 채택, 덩이 11개; v29: K 끝(쓰러짐의 허리 묶기), §2.4C(보통 타격은 예전 색, 다운 타격만 용암 덩이와 불티); v28: 다운 효과 §2.4B(슬로, 착지 파문, 바닥 고리 파문, ¼ 리플레이), 줄마다 메모, J의 이펙트(수·굵기·수명이 데미지에 비례, 수명 기준 5% 짧게, 속도 +5%), v22 기준의 새·바뀜 표시). 메모는 아티팩트 `db`의 `feedback` 컬렉션, 메모 하나가 문서 하나 `{item: 줄 id, text, at, by}`(`src/memo.mjs`): `ArtifactData`의 `list`로 읽는다. 재게시 때 `capabilities`는 생략(저장된 `db`·`user` 유지). 재게시: `node tools/artifact.mjs catalog.html src/catalog.mjs <out.html> > <files.json>` 후 `root`를 `pixel-boxer`로, files 맵 그대로 publish |
-| 미결 카탈로그 | https://claude.ai/artifact/UEM19aKseUxnixVYkrnAzd | v11(2026-11-23, 소스 C·D의 일곱 항목을 더해 "오늘 생긴 결정" 29항목; v10: 22항목을 맨 위에, 차례는 접음, 휴대폰 폭의 가로 스크롤 고침, 용암 두 번; v9: 용암·불티 채택, 덩이 11개; v8: §2.4C 반영; 게시가 한 번 거절됨: 다른 곳에서 올라온 버전(1795406506)이 카드 글줄이 줄바꿈으로 페이지를 밀지 않게 하는 스타일 8줄을 더해 두었고, 그것을 `pending.html`에 합쳐 다시 게시; v6: 다운 효과 §2.4B; v5: J 반영, 이펙트 데미지 비례). `pending.html`/`src/pending.mjs`, 기획 `docs/pending-catalog.md`. 결정은 아티팩트 `db`의 `decisions/<항목 id>` `{choice, note, at}`: `ArtifactData`의 `list`로 읽는다. 재게시: `node tools/artifact.mjs pending.html src/pending.mjs <out.html> > <files.json>`, `root`는 `pixel-boxer`, `capabilities`는 생략(저장된 `db`·`user` 유지) |
+| 미결 카탈로그 | https://claude.ai/artifact/UEM19aKseUxnixVYkrnAzd | v12(2026-11-23, 콤보의 세 항목을 더해 32항목; v11: 소스 C·D의 일곱 항목을 더해 29항목; v10: 22항목을 맨 위에, 차례는 접음, 휴대폰 폭의 가로 스크롤 고침, 용암 두 번; v9: 용암·불티 채택, 덩이 11개; v8: §2.4C 반영; 게시가 한 번 거절됨: 다른 곳에서 올라온 버전(1795406506)이 카드 글줄이 줄바꿈으로 페이지를 밀지 않게 하는 스타일 8줄을 더해 두었고, 그것을 `pending.html`에 합쳐 다시 게시; v6: 다운 효과 §2.4B; v5: J 반영, 이펙트 데미지 비례). `pending.html`/`src/pending.mjs`, 기획 `docs/pending-catalog.md`. 결정은 아티팩트 `db`의 `decisions/<항목 id>` `{choice, note, at}`: `ArtifactData`의 `list`로 읽는다. 재게시: `node tools/artifact.mjs pending.html src/pending.mjs <out.html> > <files.json>`, `root`는 `pixel-boxer`, `capabilities`는 생략(저장된 `db`·`user` 유지) |
 | 타격 이펙트 시안 | https://claude.ai/artifact/5tZd5Xyp7iiRxCuftpNwL6 | 새 주소 v8(2026-11-23, 용암 두 번(0.1 s 간격); v7: 용암·불티 채택, 덩이 11개; v6: §2.4C 용암과 불티; v5: 다운 효과 §2.4B; v4: 이전 것은 지워져 있었다; 수·굵기·수명이 데미지에 비례, 속도 +5%). `fxlab.html`/`src/fxlab.mjs`: "전"(접촉점 입자 + 흰 번쩍임)과 "확정"(반대쪽 면 입자 + 파문) 두 열, 장면 여섯. 재게시: `node tools/artifact.mjs fxlab.html src/fxlab.mjs <out.html> > <files.json>`, `root`는 `pixel-boxer`, `url`에 이 주소 |
 | 한밤의 링 | (없음) | 정리 승인 뒤 확인하니 이미 지워져 있었다 |
 | 달빛 결투 | (없음) | 정리 승인 뒤 확인하니 이미 지워져 있었다 |
@@ -60,6 +60,7 @@
 - `docs/pending.md`: 미결 목록(이 문서의 6절과 같은 내용을 유지).
 - `docs/moves-plan-6.md`: 6차 기획(허리, 타격 이펙트 §2~§2.4C, 메모 반영, 반응 시간 수비, 단계 K~Z).
 - `docs/leaping-hook.md`: 도약 훅의 동작 기획(단계 N2), 참고 시트 `docs/ref/leaping-hook.jpg`.
+- `docs/combos-plan.md`: 기본 콤보 일곱과 변형(가볍게·세게, 페이크, 같은 손 두 번, 바디), "훅 언더"(다 실은 앞손 훅 → 기울임 → 같은 손 바디 어퍼), 앞손 어퍼, 콤비네이션 데이터와 머리의 규칙, 카탈로그의 기술 줄, 단계 C0~C4.
 - `docs/source-cd-proposal.md`: 소스 C(콤비네이션 1-S-5-2-3-2)·D(연속 백스텝)의 분석과 구현 제안(후보 P1~P8, 묶는 방법 셋; 사용자 피드백 뒤 작업), 참고 시트 `docs/ref/source-c.jpg`, `source-d.jpg`.
 - `docs/bearing-system-plan.md`: 팔방 위치 시스템(상대의 정면 기준 여덟 칸과 거리 띠, 동작마다 돈 칸·잡은 칸, 다시 축 잡기 규칙, 칸의 값, 머리의 자리 잡기, 기초 단계 O), 그림 `docs/ref/bearing-cells.svg`.
 - `docs/waist-more-plan.md`: 허리로 더 좋아질 여섯 동작(A1 수비 → 반격의 장전, A3 막을 때 허리, A2 콤비네이션의 되감기, A4 바디에 맞음, B1 더킹 대시·대시의 멈춤, B2 방향 전환)의 기획, 단계 N4·V2와 P·Q·R에 접는 것.
