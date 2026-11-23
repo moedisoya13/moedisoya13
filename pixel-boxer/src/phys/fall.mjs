@@ -221,30 +221,6 @@ function angular(a, b, rot, compliance, h) {
   if (a) turnBy(a, iw(a, p));
   if (b) turnBy(b, iw(b, [-p[0], -p[1], -p[2]]));
 }
-/* A muscle's hold: a turns toward b by a share of the rotation `rot`, as stiffly as `stiff` (newton-metres a radian). Each
-   pass puts right a share of what is out and carries nothing to the next, so three passes a step make a spring whose
-   stiffness, a second, is not quite its number, and is more than it the stiffer the hold and the longer the step (a log's
-   lock, at twelve steps a frame, about three times as stiff as three passes of 30000 would be; an ankle locked so, forty
-   times). The holds were made as stiff as they are at twelve steps a frame, so that is what is kept: the share in a pass is
-   the one that makes the spring as stiff, a second, as twelve steps made it (each pass of a twelfth of a frame put right
-   1 - 1/g of what was out, g = 1 + stiff w H^2, so a step put right 1 - 1/g^3; a spring that does that in a step H gives
-   way under a load by 1 / ((g^3 - 1) / (w H^2)), and a step h as stiff puts right (h/H)^2 (g^3 - 1) parts in 1 + that) */
-const SET = 12; // (the steps a frame the holds were made with)
-function hold(a, b, rot, stiff, h) {
-  const th = len(rot);
-  if (th < 1e-9) return;
-  const n = [rot[0] / th, rot[1] / th, rot[2] / th],
-    w = wRot(a, n) + wRot(b, n);
-  if (w < 1e-12) return;
-  const H = (h * STEPS) / SET,
-    g = 1 + stiff * w * H * H,
-    share = 1 - Math.cbrt(1 / (1 + ((h * h) / (H * H)) * (g * g * g - 1))),
-    dl = (th * share) / w,
-    p = [n[0] * dl, n[1] * dl, n[2] * dl];
-  if (a) turnBy(a, iw(a, p));
-  if (b) turnBy(b, iw(b, [-p[0], -p[1], -p[2]]));
-}
-
 const at = (b, local) => M.add(b.x, qrot(b.q, M.sub(local, b.com))); // a point of a piece (local: in its own frame, from its joint)
 const off = (b, local) => qrot(b.q, M.sub(local, b.com)); // and its offset from the piece's middle
 
@@ -910,7 +886,7 @@ export function stepFall(body, dt, obstacles) {
         if (m.w > 0.001) {
           const rel = qmul(qconj(p.q), c.q),
             rot = qrot(p.q, qvec(qmul(m.to, qconj(rel))));
-          hold(c, p, rot, m.stiff * m.w * m.w, h);
+          angular(c, p, rot, 1 / (m.stiff * m.w * m.w), h);
         }
         const fix = limit(Object.assign({ sOf: j.s === 'R' ? -1 : 1 }, j), p, c);
         if (fix) angular(c, p, most(fix, h), 0, h);
