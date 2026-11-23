@@ -58,6 +58,12 @@
   .card.rung .result { justify-content: space-between; }
   .card.rung .result b, .card.rung .stats b { color: var(--fg); font-weight: 500; }
   .card.rung .stats { padding-top: 0; justify-content: space-between; }
+  /* a combination's beats: a line each, its number, from the beat before landing to it landing, how hard, what became of it */
+  .beats { display: grid; grid-template-columns: auto auto auto minmax(0, 1fr); gap: 4px 8px; align-items: baseline; font: 500 11px/1.2 var(--data); color: var(--dim); font-variant-numeric: tabular-nums; }
+  .beats > span:nth-child(4n+2), .beats > span:nth-child(4n+3) { text-align: right; }
+  .beats > span:nth-child(-n+4) { font: 600 10px/1.2 var(--body); }
+  .beats > span:nth-child(4n) { font-family: var(--body); overflow-wrap: anywhere; }
+  .beats b { color: var(--fg); font-weight: 500; }
   /* what became of the punch: lit for a moment each time round */
   .result .tag { font: 600 12px/1 var(--body); letter-spacing: .08em; padding: 5px 8px; border: 1.5px solid var(--line); color: var(--dim); }
   .result .tag.on { animation: tag .9s steps(6) forwards; }

@@ -27,6 +27,7 @@ import { ENTRIES, freshBout, drive } from './footwork.mjs';
 import { DEFENSE, ITEMS as GUARDS, PARRY_DOWN, CROSS_ARM, CROSS_BODY, CROSS_BODY_ROWS, ROLLING, CROSS_LEVELS, ROLL_LEVELS, PULL_WAYS, PULL_COUNTER, BLOCK_FIRE, FIRE_LEVELS, SHELL, SHELL_ROWS, SHELL_LEVELS } from './defense.mjs';
 import { LADDER, STANCES, DIRTY, FOOTWORK, PUNCHES, TECHNIQUES, ENTRY, MOVING, TRICKS, SHOWOFF, TAUNT_ROWS, TAUNTING, BODY_PUNCHES, BODY_LADDER, REAR, REAR_LADDER, WAVE_ROWS, WAVING, SHIFT_ROWS, SHIFT_LEVELS, SHIFTING, WALKING, walkRound, waveCard } from './ladder.mjs';
 import { BODYSHOTS, LIVER_BLOCK } from './bodyshots.mjs';
+import { COMBO_ROWS, COMBINATIONS, comboCard, comboStep } from './combos.mjs';
 import { LEVELS, LEVEL, CROSS } from './anim/skill.mjs';
 import { LINKS, ORDER, skipped } from './phys/chain.mjs';
 import { MOVES } from './anim/moves.mjs';
@@ -148,6 +149,8 @@ const PULL_NOTE = {
 };
 const graded = (e, note, stat, levels, more) => Object.assign({ id: e.id, name: e.name, en: e.en, note, stat, cards: levels.map(lv => `${e.id}@${lv}`) }, more);
 const single = e => ({ id: e.id, name: e.name, en: e.en, single: true });
+// (the combinations' cards, src/combos.mjs: each loop a fresh bout)
+for (const e of COMBINATIONS) byId[e.id] = e;
 
 /* ---- the eight bearings (docs/bearing-system-plan.md §8.1, stage O): every move that takes a man round the other, a row of
    two. The first is the path his centre took, drawn from above in the frame of the line the other man faced him on as it
@@ -307,9 +310,19 @@ const DOWN_NOTE = '이펙트: 입자 대신 용암 덩이와 불티를 빠르게
    with the scripts at 14594d1: the cards listed moved more than 1 mm, the waist of plan 6 stage K turning what the chest used
    to) or where what it exists to show is drawn otherwise (the being-hit and knockdown cards: the blow's effect of stage J,
    and the knockdown's own effect, its lava and its replay, §2.4B and §2.4C).
-   No punch's events changed (node tools/events.mjs --diff is empty), and no row is new but the eight bearings' (stage O of
-   docs/bearing-system-plan.md: marked where they are made, bearingRow). The note says what changed. */
+   No punch's events changed (node tools/events.mjs --diff is empty), and the rows that are new are the eight
+   bearings' (stage O of docs/bearing-system-plan.md: marked where they are made, bearingRow) and the combinations' (stage C0 of
+   docs/combos-plan.md: each combination a technique of its own). The note says what changed. */
 const SINCE = {
+  /* new: the combinations (docs/combos-plan.md §9.1, stage C0), each a row of its own; what its cards measured (node
+     tools/combos.mjs --cards; 3 · 4명 · 5명) */
+  '1-2': { since: 'new', note: '닿음 사이 233 · 200 · 183 ms, 든 가드에 잽 6 · 49 · 44, 스트레이트 22 · 25 · 26 N·s' },
+  '1-1-2': { since: 'new', note: '잽 → 잽 200 · 200 · 267 ms에 둘째 잽 0 · 1 · 53 N·s(같은 손: 앞 잽이 멈춘 가드 앞에서 출발), 스트레이트 22 · 24 · 26 N·s로 막힘(가드 없으면 99 · 105 · 105)' },
+  '1-2-3': { since: 'new', note: '스트레이트 → 훅 283 · 233 · 233 ms, 훅이 81 · 111 · 123 N·s로 막힘(가드 없으면 100 · 106 · 112)' },
+  '1-2-3-2': { since: 'new', note: '끝 스트레이트 22 · 9 · 28 N·s로 막힘(0.91 · 0.89 · 0.91 m). 붙은 채로(0.66~0.67 m, 가드 없음) 17 · 18 · 106: 길게 치기는 C2에서' },
+  '1-6-3-2': { since: 'new', note: '어퍼 56 · 58 · 93, 훅 42 · 88 · 96, 끝 스트레이트 20 · 10 · 12 N·s로 막힘(가드 없으면 어퍼 21 · 75 · 100, 훅 97 · 123 · 136)' },
+  '2-3-2': { since: 'new', note: '0.86 m에서. 훅 51 · 101 · 117 N·s로 막힘, 끝 스트레이트 8 · 11 · 10(발 박기와 길게 치기는 C2에서)' },
+  chain: { since: 'new', note: '훅 → 어퍼 283 · 250 · 233 ms, 어퍼 61 · 77 · 79 N·s로 막힘' },
   // changed: the waist (stage K)
   dashSide: { since: 'changed', cards: ['5m', '5a'], note: '5명·5암의 대시 중 U자 위빙을 허리가 돌림(머리·글러브 최대 0.42·0.71 cm, 허리 6.2°·8.4°)' },
   circle: { since: 'changed', cards: ['5m', '5a'], note: '5명·5암의 걸음마다 위빙을 허리가 돌림(최대 0.64·0.42 cm, 허리 6.8°·6.0°)' },
@@ -400,6 +413,15 @@ const PARTS = [
       ['초근거리', PUNCHES.filter(p => p.inside).map(p => ({ id: p.id, name: p.name, en: p.en, note: PUNCH_NOTE[p.id], stat: 'rung', knee: p.id === 'upperIn', cards: LEVELS.map(lv => `${p.id}@${lv}`) }))],
       ['뒷손 훅', REAR.map(p => graded(p, BODY_NOTE[p.id], 'rung', LEVELS))],
       ['암의 기술', TECHNIQUES.map(t => ({ id: t.id, name: t.name, en: t.en, note: TECH_NOTE[t.id], stat: 'foul', cards: LEVELS.map(lv => `${t.id}@${lv}`) }))]
+    ]
+  },
+  {
+    id: 'combos',
+    part: '콤비네이션',
+    note: '콤비네이션 하나가 기술 한 줄입니다. 순서와 쓰임은 expertboxing.com의 글 「7 Basic Boxing Combinations」에서, 시간과 양은 엔진에서 왔습니다. 번호는 정통 자세의 것입니다: 1 잽, 2 스트레이트, 3 앞손 훅, 4 뒷손 훅, 5 앞손 어퍼, 6 뒷손 어퍼. 카드는 머리를 거치지 않고 박자를 이름으로 누릅니다. 첫 주먹은 그 등급이 주먹을 누르는 때에(주먹 줄의 카드와 같이), 다음 주먹은 앞 주먹이 닿은 뒤 등급의 간격(잽 뒤, 강타 사이, 어퍼 앞이 다름)에 닿도록, 그 카드에서 그 주먹이 닿기까지 걸린 시간(잰 값)만큼 먼저 누릅니다. 사슬이 아직 받지 않으면 받는 첫 순간에 누릅니다. 상대는 모든 카드에서 프로(3)이고, 가드를 든 채 서서 맞기만 하며, 밀리면 제자리로 걸어 돌아옵니다. 다 던지면 처음 자리로 걸어 나옵니다. 등급은 아는 콤비네이션만 카드가 있습니다(1은 원투와 체인, 2는 셋을 더, 3부터 전부). 카드 아래는 박자마다 번호, 앞 주먹이 닿은 뒤 닿기까지(ms, 맞은 순간의 멈춤 포함), 충격량, 결과이고, 맨 아래는 첫 누름에서 끝 닿음까지, 쓴 숨(최대치의 %), 다 끝난 뒤 두 사람 중심 사이의 거리입니다. 앞손 어퍼(5, 1-2-5-2), 가볍게 · 다 실어 던지기와 페이크, 같은 손 잇기(더블 훅, 훅 언더), 발 박기와 길게 치는 끝 스트레이트는 다음 단계(C1~C3)의 것이라 아직 없고, 지금은 모든 주먹이 세게 나갑니다.',
+    groups: [
+      ['글의 콤비네이션', COMBO_ROWS.filter(r => r.id !== 'chain').map(r => graded(r, r.note, 'combo', r.levels))],
+      ['체인', COMBO_ROWS.filter(r => r.id === 'chain').map(r => graded(r, r.note, 'combo', r.levels))]
     ]
   },
   {
@@ -575,6 +597,10 @@ function gradeCard(e, item) {
   let stats = '';
   const pair = (a, b) => `<div class="feet stats"><span>${a}</span>${b ? `<span>${b}</span>` : ''}</div>`;
   switch (item.stat) {
+    // (a combination: a line a beat, src/combos.mjs)
+    case 'combo':
+      stats = comboCard(e);
+      break;
     case 'stance':
       stats = pair('골반 <b data-hips>–</b> cm', '머리 <b data-head>–</b> cm') + `<div class="feet"><span class="lamp lead" data-lamp="L"></span><span class="lamp rear" data-lamp="R"></span>${beat}<span class="pace">분당 <b data-pace>–</b>보</span></div>`;
       break;
@@ -992,6 +1018,9 @@ function start({ manifest, boxer }) {
       if (!a.action) m.kneeWas = { hy, y };
     }
     switch (item.stat) {
+      case 'combo':
+        comboStep(cell, a, b);
+        break;
       case 'bearing': {
         // (where he is round the other man, with the margin the cells change by: game/bearing.mjs)
         const tr = (m.tr = m.tr || createTracker()),

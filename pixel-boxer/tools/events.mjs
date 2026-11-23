@@ -22,15 +22,17 @@ const TYPES = ['hit', 'graze', 'block', 'parry', 'whiff', 'brilliant', 'foul', '
 // every script the catalogue of that checkout can show, by id (what its page shows, and what this one's shows)
 async function scripts(root) {
   const src = f => import(pathToFileURL(resolve(root, 'src', f)).href),
-    mods = await Promise.all(['footwork.mjs', 'defense.mjs', 'ladder.mjs', 'bodyshots.mjs'].map(f => src(f).catch(() => ({})))),
-    [foot, defense, ladder, body] = mods,
+    mods = await Promise.all(['footwork.mjs', 'defense.mjs', 'ladder.mjs', 'bodyshots.mjs', 'combos.mjs'].map(f => src(f).catch(() => ({})))),
+    [foot, defense, ladder, body, combos] = mods,
     lists = [
       foot.ENTRIES,
       // (every list of cards the page shows: the counters out of a pull, a cross-arm, a block and a shell, and the shift, with the rest)
       ...['DEFENSE', 'PARRY_DOWN', 'CROSS_ARM', 'CROSS_BODY', 'ROLLING', 'PULL_COUNTER', 'BLOCK_FIRE', 'SHELL'].map(k => defense[k]),
       ...['STANCES', 'LADDER', 'DIRTY', 'FOOTWORK', 'ENTRY', 'SHOWOFF', 'TAUNTING', 'BODY_LADDER', 'REAR_LADDER', 'WAVING', 'SHIFTING', 'WALKING'].map(k => ladder[k]),
       body.BODYSHOTS,
-      body.LIVER_BLOCK
+      body.LIVER_BLOCK,
+      // (the combinations, each a row of its own: src/combos.mjs, docs/combos-plan.md §9.1)
+      combos.COMBINATIONS
     ];
   const { step } = await src('game/bout.mjs');
   return { all: lists.filter(Boolean).flat(), step, freshBout: foot.freshBout, drive: foot.drive };
