@@ -388,34 +388,34 @@ export const WAVE_ROWS = [
   { id: 'wave', name: '파도', en: 'The wave', loop: 6 },
   { id: 'slick', name: '파도 · 슬릭백', en: 'The wave, slick back', loop: 3.2, jabAt: 2.0 }
 ];
-export const WAVING = WAVE_ROWS.flatMap(row =>
-  ['4m', '5m'].map(lv => {
-    let bout = null;
-    return {
-      id: `${row.id}@${lv}`,
-      level: lv,
-      item: row.id,
-      name: `${row.name} ${LEVEL[lv].label}`,
-      en: `${row.en} · ${LEVEL[lv].name}`,
-      group: '명의 기술',
-      fresh: true,
-      loop: row.loop,
-      view: { yaw: 0.6, pitch: 0.7 },
-      me: t => (t === 0 ? [-WAVE_FROM, 0] : null),
-      // (a step jab: straight in at him for 0.3 s, the jab 0.2 s after he sets off, and back to his spot)
-      him: t => (row.jabAt && bout && t >= row.jabAt && t < row.jabAt + 0.3 ? [bout.fighters[0].x, bout.fighters[0].z] : [0, 0]),
-      setup: b => {
-        bout = b;
-        b.fighters[0].skills = { all: lv };
-        // (he carries the wave: game/techniques.mjs; without it, asked for it, he would circle out)
-        b.fighters[0].techniques = ['wave'];
-        b.fighters[1].skills = row.jabAt ? { all: '3' } : { stance: '2' };
-      },
-      cue: (b, t) => (t >= WAVE_HOLD[0] && t < Math.min(WAVE_HOLD[1], row.loop - 0.9) ? ['away', 'wave'] : null),
-      against: row.jabAt ? [[row.jabAt + 0.2, 'jab']] : []
-    };
-  })
-);
+// (a card of its own each time it is asked for: the slick back's step in reads the bout the card is fighting, kept with it)
+export function waveCard(row, lv) {
+  let bout = null;
+  return {
+    id: `${row.id}@${lv}`,
+    level: lv,
+    item: row.id,
+    name: `${row.name} ${LEVEL[lv].label}`,
+    en: `${row.en} · ${LEVEL[lv].name}`,
+    group: '명의 기술',
+    fresh: true,
+    loop: row.loop,
+    view: { yaw: 0.6, pitch: 0.7 },
+    me: t => (t === 0 ? [-WAVE_FROM, 0] : null),
+    // (a step jab: straight in at him for 0.3 s, the jab 0.2 s after he sets off, and back to his spot)
+    him: t => (row.jabAt && bout && t >= row.jabAt && t < row.jabAt + 0.3 ? [bout.fighters[0].x, bout.fighters[0].z] : [0, 0]),
+    setup: b => {
+      bout = b;
+      b.fighters[0].skills = { all: lv };
+      // (he carries the wave: game/techniques.mjs; without it, asked for it, he would circle out)
+      b.fighters[0].techniques = ['wave'];
+      b.fighters[1].skills = row.jabAt ? { all: '3' } : { stance: '2' };
+    },
+    cue: (b, t) => (t >= WAVE_HOLD[0] && t < Math.min(WAVE_HOLD[1], row.loop - 0.9) ? ['away', 'wave'] : null),
+    against: row.jabAt ? [[row.jabAt + 0.2, 'jab']] : []
+  };
+}
+export const WAVING = WAVE_ROWS.flatMap(row => ['4m', '5m'].map(lv => waveCard(row, lv)));
 export const ENTRY = MOVING.flatMap(m =>
   LEVELS.map(lv => ({
     id: `${m.id}@${lv}`,
@@ -486,3 +486,52 @@ export const SHIFTING = SHIFT_ROWS.flatMap(row =>
     cue: shiftCue(row)
   }))
 );
+
+/* Walking round him (docs/bearing-system-plan.md §2.1, §8.1), at every grade: no move of its own, only the stick pushed all
+   the way, round the other man and no nearer or further from him, for WALK_HOLD of the loop, at walking speed (his sheet's,
+   2.3 m/s at 50) or behind his guard (1.1 m/s). The other man, a pro, stands where he is and turns to keep him in front of
+   him. How far round it takes him in a second, and how far round the other man lets him get, is the bearing's measure of
+   what the feet alone do (tools/bearing.mjs --walk). Each loop is a fresh bout.
+     walkRound(lv, { r, cover, way })   the script: r metres from him (1.0 by default, the jab's range), cover: the guard held
+                                        up all the while, way: +1 round to the other man's lead hand (to his own right; the
+                                        default), -1 the other way
+     WALKING                            the catalogue's: every grade at 1.0 m, the guard down, round to the lead hand */
+export const WALK_HOLD = [0.3, 2.3];
+export function walkRound(lv, o = {}) {
+  const r = o.r ?? 1.0,
+    way = o.way ?? 1,
+    centre = [HOME[0] + r, HOME[1]];
+  return {
+    id: `walk@${lv}` + (r !== 1.0 ? `-${r}` : '') + (o.cover ? '-cover' : '') + (way < 0 ? '-in' : ''),
+    item: 'walk',
+    level: lv,
+    name: `걸어서 돌기 ${LEVEL[lv].label}`,
+    en: `Walking round him · ${LEVEL[lv].name}`,
+    group: '팔방',
+    fresh: true,
+    loop: 3,
+    view: { yaw: Math.PI / 2, pitch: 1.1 },
+    // (he stays wherever the walk takes him: the script does not walk him back)
+    me: () => null,
+    him: () => centre,
+    cover: o.cover ? t => t >= WALK_HOLD[0] - 0.2 && t < WALK_HOLD[1] : undefined,
+    setup: b => {
+      b.fighters[0].skills = { all: lv };
+    },
+    // (the stick: along the circle round the other man, his own right being round to the other man's lead hand, and back onto it)
+    cue: (b, t) => {
+      if (t < WALK_HOLD[0] || t >= WALK_HOLD[1]) return null;
+      const [f, him] = b.fighters,
+        dx = f.x - him.x,
+        dz = f.z - him.z,
+        d = Math.hypot(dx, dz) || 1,
+        out = [dx / d, dz / d],
+        round = [out[1] * way, -out[0] * way],
+        k = Math.max(-1, Math.min(1, (r - d) * 6)),
+        v = [round[0] + out[0] * k, round[1] + out[1] * k],
+        l = Math.hypot(v[0], v[1]);
+      return { move: [v[0] / l, v[1] / l] };
+    }
+  };
+}
+export const WALKING = LEVELS.map(lv => walkRound(lv));

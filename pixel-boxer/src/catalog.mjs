@@ -25,7 +25,7 @@ import { step } from './game/bout.mjs';
 
 import { ENTRIES, freshBout, drive } from './footwork.mjs';
 import { DEFENSE, ITEMS as GUARDS, PARRY_DOWN, CROSS_ARM, CROSS_BODY, CROSS_BODY_ROWS, ROLLING, CROSS_LEVELS, ROLL_LEVELS, PULL_WAYS, PULL_COUNTER, BLOCK_FIRE, FIRE_LEVELS, SHELL, SHELL_ROWS, SHELL_LEVELS } from './defense.mjs';
-import { LADDER, STANCES, DIRTY, FOOTWORK, PUNCHES, TECHNIQUES, ENTRY, MOVING, TRICKS, SHOWOFF, TAUNT_ROWS, TAUNTING, BODY_PUNCHES, BODY_LADDER, REAR, REAR_LADDER, WAVE_ROWS, WAVING, SHIFT_ROWS, SHIFT_LEVELS, SHIFTING } from './ladder.mjs';
+import { LADDER, STANCES, DIRTY, FOOTWORK, PUNCHES, TECHNIQUES, ENTRY, MOVING, TRICKS, SHOWOFF, TAUNT_ROWS, TAUNTING, BODY_PUNCHES, BODY_LADDER, REAR, REAR_LADDER, WAVE_ROWS, WAVING, SHIFT_ROWS, SHIFT_LEVELS, SHIFTING, WALKING, walkRound, waveCard } from './ladder.mjs';
 import { BODYSHOTS, LIVER_BLOCK } from './bodyshots.mjs';
 import { LEVELS, LEVEL, CROSS } from './anim/skill.mjs';
 import { LINKS, ORDER, skipped } from './phys/chain.mjs';
@@ -35,6 +35,8 @@ import { WINDOWS } from './windows.data.mjs';
 import { createReplay } from './replay.mjs';
 import { across, lineAngle, guardOf } from './measure.mjs';
 import { attachMemos } from './memo.mjs';
+import { BEARING } from './bearing.data.mjs';
+import { createTracker, track, CELLS, BANDS, cellSaid } from './game/bearing.mjs';
 
 const DT = 1 / 60;
 // the fouls, as a card names them
@@ -53,7 +55,7 @@ const FOOTWORK_STATS = ['pendulum', 'inout', 'stalk', 'side', 'circle', 'turn', 
 // (the dashes each way are dash cards)
 const STAT = { bounce: 'stance', dashIn: 'dash', dashSide: 'dash' };
 // (the liver block cards have no punch of the other man's to fight round: each loop is a fresh bout all the same)
-const byId = Object.fromEntries([...ENTRIES, ...DEFENSE, ...STANCES, ...LADDER, ...DIRTY, ...FOOTWORK, ...ENTRY, ...SHOWOFF, ...TAUNTING, ...BODY_LADDER, ...REAR_LADDER, ...BODYSHOTS, ...LIVER_BLOCK.map(e => Object.assign({}, e, { fresh: true })), ...WAVING, ...PARRY_DOWN, ...CROSS_ARM, ...CROSS_BODY.map(e => Object.assign({}, e, { fresh: true })), ...ROLLING, ...PULL_COUNTER, ...[...BLOCK_FIRE, ...SHELL].map(e => Object.assign({}, e, { fresh: true })), ...SHIFTING].map(e => [e.id, e]));
+const byId = Object.fromEntries([...ENTRIES, ...DEFENSE, ...STANCES, ...LADDER, ...DIRTY, ...FOOTWORK, ...ENTRY, ...SHOWOFF, ...TAUNTING, ...BODY_LADDER, ...REAR_LADDER, ...BODYSHOTS, ...LIVER_BLOCK.map(e => Object.assign({}, e, { fresh: true })), ...WAVING, ...PARRY_DOWN, ...CROSS_ARM, ...CROSS_BODY.map(e => Object.assign({}, e, { fresh: true })), ...ROLLING, ...PULL_COUNTER, ...[...BLOCK_FIRE, ...SHELL].map(e => Object.assign({}, e, { fresh: true })), ...SHIFTING, ...WALKING].map(e => [e.id, e]));
 
 /* ---- what is in the catalogue: parts, and in each the techniques, each a row of seven grades (or, being hit, one card) */
 const FOOT_NOTE = {
@@ -147,6 +149,156 @@ const PULL_NOTE = {
 const graded = (e, note, stat, levels, more) => Object.assign({ id: e.id, name: e.name, en: e.en, note, stat, cards: levels.map(lv => `${e.id}@${lv}`) }, more);
 const single = e => ({ id: e.id, name: e.name, en: e.en, single: true });
 
+/* ---- the eight bearings (docs/bearing-system-plan.md §8.1, stage O): every move that takes a man round the other, a row of
+   two. The first is the path his centre took, drawn from above in the frame of the line the other man faced him on as it
+   started (his front up, his lead hand on the left: game/bearing.mjs), with the eight cells and the bands round him; it is
+   drawn from what tools/bearing.mjs measured into src/bearing.data.mjs, so no bout is fought for it. The second is the card
+   itself, the same script, seen from above and from behind the other man as he stood at the start. Nothing here moves
+   differently: these are the scripts the other parts show (the walk round him is new: src/ladder.mjs WALKING). */
+const BEARING_NEW = '새 부 팔방(단계 O): 위에서 본 길과 돈 칸, 잡은 방위. 동작은 그대로';
+const BEHIND = Math.PI / 2; // (the camera's yaw behind a man facing back down the canvas: the other man of every card here)
+const BEARING_ROWS = [
+  { group: '걸음과 대시', move: 'side', level: '3', note: '0.5 m 옆(그의 앞손 쪽)으로 곧게 걷는 카드입니다. 호를 따라 딛지 않아 거리가 조금 벌어지고, 한 걸음은 반 칸이 안 됩니다. 그는 서서 따라 돌아 정면 칸을 내주지 않습니다.' },
+  { group: '걸음과 대시', move: 'circle', level: '3', note: '대본이 그를 가운데 두고 43°까지 돌았다가 돌아옵니다(그의 뒷손 쪽으로 먼저). 그림은 바깥 끝까지 가는 처음 1.25초입니다.' },
+  { group: '걸음과 대시', move: 'walk', level: '3', note: '새 대본: 스틱을 끝까지 밀어 2초 동안, 1.0 m를 지키며 그의 앞손 쪽으로 걷습니다(자유 걸음, 능력치 50에서 초속 2.3 m). 한 칸에 0.34초로 어느 동작보다 빨리 돌지만, 서 있는 그는 초당 430°까지 따라 돌아 정면 칸을 내주지 않습니다.' },
+  { group: '걸음과 대시', move: 'dashSide', level: '3', note: '한 박자에 1.2 m를 옆(그의 뒷손 쪽)으로 갑니다. 거의 한 칸을 돌지만 띠 하나 밖으로 나가고, 그는 그동안 다 따라옵니다.' },
+  { group: '걸음과 대시', move: 'turn', level: '3', yaw: -BEHIND, note: '이 줄은 거꾸로입니다: 상대가 카드의 선수 둘레를 초당 64°까지 돌고, 가운데(위가 정면)는 카드의 선수입니다. 정점은 그가 상대를 못 본 각, 곧 정면 오차입니다.' },
+  { group: '진입 · 이탈', move: 'hopPivot', level: '3', note: '앞발 볼을 축으로 75° 돌고 뒤로 뜁니다. 제자리 피벗이라 방위는 반 칸만 바뀝니다(돌수록 그를 지나쳐 봅니다).' },
+  { group: '진입 · 이탈', move: 'hopCircle', level: '3', note: '옆으로 네 번 뛰어 돌며 밖으로 나갑니다.' },
+  { group: '진입 · 이탈', move: 'duckIn', level: '4m', note: '숙여 들어가며 4명·4암은 바깥(+)으로 각을 잡고, 5명·5암은 끝에서 앞발을 축으로 돌아 섭니다(−).' },
+  { group: 'L 전용 기술', move: 'shift', level: '4m', note: '스트레이트 뒤 뒷발이 앞발을 지나 그의 앞발 바깥(+)에 내려섭니다. 굵은 선은 내려설 때까지, 점선은 주먹 셋과 돌아오기입니다. 기획의 목표는 두 칸(4명 72°, 5명 76°)입니다.' },
+  { group: 'L 전용 기술', move: 'shift', level: '5m', note: '5명은 스트레이트의 어깨가 켜질 때 뒷발이 뜹니다.' },
+  { group: 'L 전용 기술', move: 'wave', level: '4m', note: '1.6 m 밖에서 그의 뒷손 쪽으로 돕니다. 기획의 목표는 한 번에 2~4칸, 한 칸에 4명 0.71초, 5명 0.58초입니다.' },
+  { group: 'L 전용 기술', move: 'wave', level: '5m', note: '5명의 물결은 길이가 들쭉날쭉합니다.' },
+  { group: 'L 전용 기술', move: 'slick', level: '4m', note: '파도를 타는 중에 그가 걸어 들어와 잽을 칩니다. 상체를 뒤로 눕혀 흘리고 파도는 이어집니다.' }
+];
+/* (the card of each: its script, seen from above; the walk round him and the wave are made afresh, since a wave card keeps
+   the bout it is fighting with it for the slick back's step in: src/ladder.mjs walkRound, waveCard) */
+const bearingRow = r => {
+  const rows = BEARING_ROWS.filter(x => x.move === r.move),
+    id = 'bearing-' + r.move + (rows.length > 1 ? '-' + r.level : ''),
+    base = r.move === 'walk' ? walkRound(r.level) : r.move === 'slick' || r.move === 'wave' ? waveCard(WAVE_ROWS.find(w => w.id === r.move), r.level) : byId[`${r.move}@${r.level}`],
+    move = BEARING.moves[r.move],
+    // (from above, on the man whose frame it is, far enough back for the furthest the other gets from him)
+    far = Math.max(...move.levels[r.level].path.map(p => Math.hypot(p[1], p[2]))),
+    entry = Object.assign({}, base, { id: `top-${base.id}`, view: { yaw: r.yaw ?? BEHIND, pitch: 1.3, y: 0.3, on: 1 - move.mover, frame: [(far + 0.55) / 0.33, 1] } });
+  byId[entry.id] = entry;
+  return { id, name: move.name + (rows.length > 1 ? ' ' + LEVEL[r.level].label : ''), en: move.en, note: r.note, stat: 'bearing', mover: move.mover, cards: [entry.id], plan: { move: r.move, level: r.level }, since: 'new', sinceNote: BEARING_NEW, sinceCards: null };
+};
+
+/* ---- the eight bearings: the part's two tables, and each row's path from above (src/bearing.data.mjs) */
+const PUNCH_SAID = { jab: '잽', cross: '스트레이트', hook: '앞손 훅', upper: '어퍼', hookR: '뒷손 훅', hookBody: '리버 훅', crossBody: '바디 스트레이트' };
+const fixed = (x, n = 2) => (x > 0 ? '+' : x < 0 ? '−' : '') + Math.abs(x).toFixed(n);
+const whole = x => (Math.round(x) > 0 ? '+' : Math.round(x) < 0 ? '−' : '') + Math.abs(Math.round(x));
+// (a move that goes round and round is said as so many cells a second, and a cell in so many seconds)
+const movedSaid = m => (m.rate !== undefined ? { cells: `초당 ${fixed(m.rate / 45)}`, time: `한 칸 ${m.perCell.toFixed(2)}` } : { cells: fixed(m.cells), time: m.time.toFixed(2) });
+const bandSaid = m => `${BANDS[m.band[0]].name}→<wbr>${BANDS[m.band[1]].name}`;
+function bearingHead() {
+  const head = document.createElement('div'),
+    items = PARTS.find(P => P.id === 'bearing').groups.flatMap(([, items]) => items),
+    lines = [];
+  head.className = 'bearing-head';
+  // what each move does, grade by grade: grades whose numbers are the same on one line
+  for (const [id, mv] of Object.entries(BEARING.moves)) {
+    const groups = [];
+    for (const [lv, m] of Object.entries(mv.levels)) {
+      const said = movedSaid(m),
+        key = [said.cells, said.time, bandSaid(m), whole(m.peak), m.window.toFixed(2)].join('|'),
+        same = groups.find(g => g.key === key);
+      if (same) same.levels.push(lv);
+      else groups.push({ key, levels: [lv], m, said });
+    }
+    const row = items.find(i => i.plan.move === id);
+    groups.forEach((g, i) =>
+      lines.push(
+        `<tr>${i === 0 ? `<th scope="row" rowspan="${groups.length}"><a href="#row-${row.id}">${mv.name}</a></th>` : ''}<td class="lv">${g.levels.length === LEVELS.length ? '전부' : g.levels.map(lv => LEVEL[lv].label).join('·<wbr>')}</td><td class="n">${g.said.cells}</td><td class="n">${g.said.time}</td><td class="band">${bandSaid(g.m)}</td><td class="n">${whole(g.m.peak)}${id === 'turn' ? '*' : ''}</td><td class="n">${g.m.window ? g.m.window.toFixed(2) : '0'}</td></tr>`
+      )
+    );
+  }
+  // what each cell is worth with nobody turning, at its middle (pros on both sides, each punch from its own distance)
+  const W = BEARING.worth['3'],
+    landed = (by, i) =>
+      Object.entries(W[by])
+        .filter(([, row]) => row[i].type === 'hit' || row[i].type === 'graze')
+        .map(([p, row]) => `${PUNCH_SAID[p]} ${Math.round(row[i].J)}`)
+        .join(' · ') || '없음',
+    cells = [0, 1, 2, 3, 4, -3, -2, -1].map(k => {
+      const c = CELLS.find(c => c.k === k),
+        i = W.angles.findIndex(a => Math.abs(a - c.at) < 1e-6);
+      return `<tr><th scope="row">${cellSaid(k)} ${c.name}</th><td>${landed('me', i)}</td><td>${landed('him', i)}</td></tr>`;
+    });
+  const still = Object.values(BEARING.moves).every(mv => Object.values(mv.levels).every(m => m.window === 0));
+  head.innerHTML = `<figure class="bt"><figcaption>동작마다 돈 칸 <span>상대는 카드의 상대 그대로, 서서 따라 돕니다. 돈 칸은 끝에서(시프트는 내려설 때), 초는 거기까지(1° 안으로 들어올 때), 정점은 그가 내준 방위의 가장 큰 값, 창은 그것이 22.5°를 넘은 시간(초)${still ? '. 지금은 어느 동작도 한 칸을 잡지 못합니다' : ''}</span></figcaption>
+      <table><thead><tr><th scope="col" class="l">동작</th><th scope="col" class="l">등급</th><th scope="col">돈 칸</th><th scope="col">초</th><th scope="col" class="l">띠</th><th scope="col">정점 °</th><th scope="col">창 초</th></tr></thead><tbody>${lines.join('')}</tbody></table>
+      <p class="bt-note">* 따라 돌기는 상대가 카드의 선수 둘레를 돌고, 정점은 카드 선수의 정면 오차입니다.</p></figure>
+    <figure class="bt"><figcaption>칸의 값 <span>아무도 돌지 않을 때 칸의 가운데에서, 3단계끼리, 주먹마다 제 거리에서 친 결과(N·s). 얻는 것은 가드를 든 그에게 들어가는 내 주먹, 내주는 것은 그의 주먹이 내게 닿는 것</span></figcaption>
+      <table class="worth"><thead><tr><th scope="col" class="l">칸</th><th scope="col" class="l">얻는 것</th><th scope="col" class="l">내주는 것</th></tr></thead><tbody>${cells.join('')}</tbody></table></figure>
+    <p class="plan-legend"><span><i class="sw path"></i>그 칸까지 간 길</span><span><i class="sw after"></i>그 뒤</span><span><i class="sw tick"></i>0.1초마다(긴 동작은 0.5초마다)</span><span><i class="sw lead"></i><i class="sw rear"></i>앞발 · 뒷발이 닿은 곳</span><span><i class="sw front"></i>처음 그의 정면</span><span><i class="sw facing"></i>끝에서 그의 정면</span></p>`;
+  return head;
+}
+// a row's first card: the path from above, and its numbers at the card's grade
+function planCard(item) {
+  const { move, level } = item.plan,
+    m = BEARING.moves[move].levels[level],
+    said = movedSaid(m),
+    card = document.createElement('article');
+  card.className = 'card rung plan-card';
+  card.setAttribute('role', 'listitem');
+  card.innerHTML = `<div class="stage plan" role="img" aria-label="${item.name} ${LEVEL[level].label}: 위에서 본 길">${planOf(m)}</div>
+    <div class="info"><h3>위에서 <span class="en">${LEVEL[level].label} · ${BEARING.moves[move].en}</span></h3>
+      <div class="feet stats"><span>돈 칸 <b>${said.cells}</b></span><span><b>${said.time}</b> 초</span></div>
+      <div class="feet stats"><span>정점 <b>${whole(m.peak)}</b>°</span><span>창 <b>${m.window.toFixed(2)}</b> 초</span></div>
+      <div class="feet stats"><span>${bandSaid(m)}</span><span><b>${m.d[0].toFixed(2)}</b>→<b>${m.d[1].toFixed(2)}</b> m</span></div></div>`;
+  return card;
+}
+/* The path from above: the other man in the middle, his front up and his lead hand to the left, the eight cells out to the
+   edges of the picture and the rings of the bands; the man's centre (bold to where the numbers are taken, then thin), a dot
+   every tenth of a second (every half in a long move), his feet where they came down, and the other man's front as it
+   started and as it ended. Lines
+   and dots keep their width in pixels however wide the card is, and the writing is the page's, laid over it. */
+function planOf(m) {
+  const S = 100,
+    far = Math.max(1.25, ...m.path.map(p => Math.hypot(p[1], p[2])), ...m.feet.map(f => Math.hypot(f[1], f[2]))) + 0.3,
+    H = far,
+    Wd = far * 1.25,
+    big = Math.hypot(Wd, H),
+    // (metres in that frame: x round to his lead hand, to the left; y ahead of him, up)
+    P = (x, y) => [-x * S, -y * S],
+    round = (deg, r) => P(r * Math.sin((deg * Math.PI) / 180), r * Math.cos((deg * Math.PI) / 180)),
+    xy = q => `${q[0].toFixed(1)},${q[1].toFixed(1)}`,
+    // (writing kept inside the picture however narrow it is)
+    pct = q => `left:${Math.min(95, Math.max(5, ((q[0] + Wd * S) / (2 * Wd * S)) * 100)).toFixed(2)}%;top:${Math.min(94, Math.max(6, ((q[1] + H * S) / (2 * H * S)) * 100)).toFixed(2)}%`,
+    dot = (q, cls) => `<path class="${cls}" d="M${xy(q)}h0.01"/>`,
+    line = (a, b, cls) => `<path class="${cls}" d="M${xy(a)}L${xy(b)}"/>`,
+    // (the edge of the picture, along a bearing)
+    rim = deg => {
+      const a = (deg * Math.PI) / 180;
+      return Math.min(Math.abs(Math.sin(a)) > 1e-6 ? Wd / Math.abs(Math.sin(a)) : Infinity, Math.abs(Math.cos(a)) > 1e-6 ? H / Math.abs(Math.cos(a)) : Infinity);
+    },
+    upto = m.path.filter(p => p[0] <= m.mark + 1e-6),
+    after = m.path.filter(p => p[0] >= m.mark - 1e-6),
+    out = [];
+  CELLS.forEach((c, i) => out.push(`<polygon class="sec${i % 2 ? ' odd' : ''}" points="0,0 ${Array.from({ length: 10 }, (_, j) => xy(round(c.at - 22.5 + j * 5, big))).join(' ')}"/>`));
+  CELLS.forEach(c => out.push(line(round(c.at + 22.5, 0.3), round(c.at + 22.5, big), 'edge')));
+  BANDS.filter(b => b.to < big).forEach(b => out.push(`<circle class="ring" r="${b.to * S}"/>`));
+  // (him: his head, his shoulders turned with his chest 38 degrees to his right, his front as it started, and as it ended)
+  out.push(`<ellipse class="body" rx="${0.24 * S}" ry="${0.09 * S}" transform="rotate(38)"/><circle class="body head" r="${0.1 * S}"/>`);
+  out.push(line(round(0, 0.14), round(0, 0.55), 'front'), line(round(m.end, 0.14), round(m.end, 0.45), 'facing'));
+  out.push(`<polyline class="after" points="${after.map(p => xy(P(p[1], p[2]))).join(' ')}"/><polyline class="path" points="${upto.map(p => xy(P(p[1], p[2]))).join(' ')}"/>`);
+  const every = m.mark > 2 ? 0.5 : 0.1;
+  for (const p of upto) if (p[0] > 0 && Math.abs(p[0] / every - Math.round(p[0] / every)) < 0.02 / (every * 10)) out.push(dot(P(p[1], p[2]), 'tick'));
+  for (const f of m.feet) out.push(dot(P(f[1], f[2]), 'foot ' + (f[3] === 'L' ? 'lead' : 'rear')));
+  if (upto.length) out.push(dot(P(upto[0][1], upto[0][2]), 'start'), dot(P(upto[upto.length - 1][1], upto[upto.length - 1][2]), 'mark'));
+  const labels = CELLS.map(c => `<span class="k" style="${pct(round(c.at, Math.max(0.9, rim(c.at) - 0.14)))}">${cellSaid(c.k)}</span>`).concat(
+    // (along the line behind him, a little to his lead hand's side, clear of the cell's number; the narrow ones only on a wide page)
+    BANDS.filter(b => b.from < far - 0.15).map(b => {
+      const from = Math.max(b.from, 0.62);
+      return `<span class="band${b.to - from < 0.2 ? ' thin' : ''}" style="${pct(round(166, (from + Math.min(b.to, far)) / 2))}">${b.name}</span>`;
+    })
+  );
+  return `<svg viewBox="${-Wd * S} ${-H * S} ${2 * Wd * S} ${2 * H * S}" preserveAspectRatio="xMidYMid meet" aria-hidden="true">${out.join('')}</svg>${labels.join('')}`;
+}
+
 const FX_NOTE = '이펙트: 예전 색의 입자가 맞은 몸의 반대쪽 면에서 타격 방향으로 나가고, 흰 번쩍임 대신 닿은 점에서 파문이 퍼짐';
 // (a knockdown's own, plan 6 §2.4B and §2.4C: what its cards show now besides)
 const DOWN_NOTE = '이펙트: 입자 대신 용암 덩이와 불티를 빠르게 두 번 잇달아. 덩이는 머리가 뜨겁고 꼬리로 갈수록 식은 여러 색으로 날다가 숯처럼 검게 식고, 불티는 깜빡이며 떠다니다 꺼짐. 흰 번쩍임 대신 파문, 캔버스에 닿는 곳에서 두 번째 파문과 바닥의 큰 고리 파문, 닿고 0.3초 뒤 ¼ 속도·1.2배 줌 리플레이';
@@ -155,7 +307,8 @@ const DOWN_NOTE = '이펙트: 입자 대신 용암 덩이와 불티를 빠르게
    with the scripts at 14594d1: the cards listed moved more than 1 mm, the waist of plan 6 stage K turning what the chest used
    to) or where what it exists to show is drawn otherwise (the being-hit and knockdown cards: the blow's effect of stage J,
    and the knockdown's own effect, its lava and its replay, §2.4B and §2.4C).
-   No punch's events changed (node tools/events.mjs --diff is empty), and no row is new. The note says what changed. */
+   No punch's events changed (node tools/events.mjs --diff is empty), and no row is new but the eight bearings' (stage O of
+   docs/bearing-system-plan.md: marked where they are made, bearingRow). The note says what changed. */
 const SINCE = {
   // changed: the waist (stage K)
   dashSide: { since: 'changed', cards: ['5m', '5a'], note: '5명·5암의 대시 중 U자 위빙을 허리가 돌림(머리·글러브 최대 0.42·0.71 cm, 허리 6.2°·8.4°)' },
@@ -298,6 +451,13 @@ const PARTS = [
     groups: [['진입 · 이탈', MOVING.map(m => ({ id: m.id, name: m.name, en: m.en, note: MOVE_NOTE[m.id], stat: 'moving', cards: LEVELS.map(lv => `${m.id}@${lv}`) }))]]
   },
   {
+    id: 'bearing',
+    part: '팔방',
+    note: '그가 바라보는 쪽(그의 정면)을 위로 두고 그의 둘레를 여덟 칸으로 나눕니다: 정면 0, 그의 앞손 쪽(그의 왼쪽, 바깥)으로 +1 +2 +3, 등 뒤 4, 뒷손 쪽(안)으로 −1 −2 −3. 칸은 45°씩이고 경계를 4° 넘어야 바뀌며, 거리는 여섯 띠입니다. 동작마다 숫자가 둘입니다: 돈 칸(동작이 시작할 때 그의 정면선에서 내가 그의 둘레로 돈 각 ÷ 45°: 내 발이 한 일)과 잡은 방위(그의 틀에서 내가 있는 곳: 그가 못 따라와 내준 것), 그리고 그것이 한 칸(22.5°) 넘게 남은 시간(창). 숫자는 tools/bearing.mjs가 카드의 대본을 실제로 돌려 잰 값이고, 동작은 하나도 바뀌지 않았습니다. 줄마다 왼쪽은 위에서 본 길, 오른쪽은 같은 대본의 카드(그의 뒤 위에서)입니다.',
+    head: true,
+    groups: [...new Set(BEARING_ROWS.map(r => r.group))].map(group => [group, BEARING_ROWS.filter(r => r.group === group).map(bearingRow)])
+  },
+  {
     id: 'hurt',
     part: '맞기와 다운',
     note: '맞는 반응과 다운은 등급을 매기지 않습니다. 충격량과 그 방향이 만드는 것이고, 등급이 바꾸는 것은 맞기 직전의 자세뿐입니다. 한 장씩 놓습니다. 실신은 주먹마다 다릅니다: 스트레이트는 통나무, 훅은 고개가 돌아간 통나무, 어퍼는 들렸다가 천천히 풀리는 림프입니다.',
@@ -342,6 +502,7 @@ for (const P of PARTS) {
   note.className = 'part-note';
   note.textContent = P.note;
   main.append(note);
+  if (P.head) main.append(bearingHead());
   for (const [group, items] of P.groups) {
     const section = document.createElement('section');
     section.innerHTML = `<h2>${group}</h2>`;
@@ -360,6 +521,7 @@ for (const P of PARTS) {
       block.dataset.item = item.id;
       block.id = `row-${item.id}`;
       block.innerHTML = `<div class="item-head"><h3>${item.name}${badge(item.since)} <span class="en">${item.en}</span>${item.since ? '' : FOLD}</h3>${item.since ? `<p class="since-note">${esc(item.sinceNote)}</p>` : ''}<p>${item.note}</p></div><div class="row7" role="list"></div>`;
+      if (item.plan) block.lastElementChild.append(planCard(item));
       for (const id of item.cards) block.lastElementChild.append(gradeCard(byId[id], item));
       section.append(block);
       ROWS.push({ item, ids: item.cards });
@@ -513,6 +675,10 @@ function gradeCard(e, item) {
     case 'shell':
       stats = `<div class="feet result"><span class="tag" data-tag>–</span></div>` + pair('머리 <b data-a>–</b> cm', '<b data-b>–</b> ms');
       break;
+    // (the eight bearings: the cell the man going round is in now, in the other man's frame, the bearing, and the band)
+    case 'bearing':
+      stats = pair('칸 <b data-a>–</b>', '<b data-b>–</b>°') + pair('띠 <b data-c>–</b>');
+      break;
     // (the Tyson shift: the three punches' impulses, the first to the body hook, and where he ends)
     case 'shift':
       stats = `<div class="feet result"><span class="tag" data-tag>–</span></div>` + pair('<b data-a>–</b> N·s', '바디 훅까지 <b data-b>–</b> ms') + pair('끝 <b data-c>–</b>');
@@ -597,7 +763,7 @@ function start({ manifest, boxer }) {
       shown: null, // what is being drawn, while a replay plays
       held: null, // the camera's target before a knockdown's replay drew it in
 
-      cam: { target: [0.45, entry.level ? 0.95 : entry.punch !== undefined ? 0.85 : 0.52, 0], yaw: entry.view.yaw, pitch: entry.view.pitch, dist: 5.4 },
+      cam: { target: [0.45, entry.view.y ?? (entry.level ? 0.95 : entry.punch !== undefined ? 0.85 : 0.52), 0], yaw: entry.view.yaw, pitch: entry.view.pitch, dist: 5.4 },
       shake: 0,
       t: 0
     };
@@ -826,6 +992,13 @@ function start({ manifest, boxer }) {
       if (!a.action) m.kneeWas = { hy, y };
     }
     switch (item.stat) {
+      case 'bearing': {
+        // (where he is round the other man, with the margin the cells change by: game/bearing.mjs)
+        const tr = (m.tr = m.tr || createTracker()),
+          p = track(tr, cell.bout).men[item.mover];
+        if (Math.round(cell.t / DT) % 6 === 0) put(cell, 'a', cellSaid(p.cell)), put(cell, 'b', `${Math.round(p.beta) < 0 ? '−' : '+'}${Math.abs(Math.round(p.beta))}`), put(cell, 'c', BANDS[p.band].name);
+        break;
+      }
       case 'shift':
         // (where he ends, once it is over: metres from the other man, and degrees off the line the other man faced him on)
         if (m.shiftAt !== undefined && !m.ended && !a.shift && cell.bout.t > m.shiftAt) {
@@ -1111,8 +1284,9 @@ function start({ manifest, boxer }) {
     const ease = 1 - Math.exp(-elapsed * 4),
       rect = { x: Math.round((box.left * dpr) / grid.scale), y: Math.round(((innerHeight - box.bottom) * dpr) / grid.scale), w: Math.round((box.width * dpr) / grid.scale), h: Math.round((box.height * dpr) / grid.scale) },
       [a, b] = men,
-      // (an exchange is framed on the two of them, close; footwork on the boxer whose feet these are)
-      mine = cell.exchange ? 0.5 : 0.6,
+      // (an exchange is framed on the two of them, close; footwork on the boxer whose feet these are; or on the man the card
+      // says: the eight bearings', on the man round whom the other goes)
+      mine = cell.entry.view.on !== undefined ? 1 - cell.entry.view.on : cell.exchange ? 0.5 : 0.6,
       // (a knockdown's replay is framed on him, between his head and his hips, drawn 1.2 times closer: cut to, and back from)
       close = cell.shown && cell.replay.kind === 'fall' ? men[cell.replay.on] : null;
     if (close) {
@@ -1125,7 +1299,8 @@ function start({ manifest, boxer }) {
       cell.cam.target[2] += (a.z * mine + b.z * (1 - mine) - cell.cam.target[2]) * ease;
     }
     // far enough back that both men are in the picture from the feet up, whatever shape the window is
-    const [near, wide] = cell.entry.level ? [3.4, 2.1] : cell.exchange ? [3.3, 2.5] : [5.2, 3.6];
+    // (or as much as the card asks for: the eight bearings' cards, seen from above)
+    const [near, wide] = cell.entry.view.frame || (cell.entry.level ? [3.4, 2.1] : cell.exchange ? [3.3, 2.5] : [5.2, 3.6]);
     cell.cam.dist = Math.max(near, wide / (2 * Math.tan((19 * Math.PI) / 180) * (rect.w / rect.h))) / (close ? 1.2 : 1);
     const jolt = !cell.shown && cell.shake > 0.3 ? [Math.sin(cell.t * 97) * cell.shake, Math.cos(cell.t * 83) * cell.shake * 0.6] : null;
     R.cell(rect, { camera: cell.cam, layers, shake: jolt });

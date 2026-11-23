@@ -16,6 +16,16 @@
   figure { margin: 0; }
   figcaption { color: var(--dim); padding-top: 2px; min-height: 2.6em; }
   figcaption b { color: var(--fg); font-weight: 500; }
+  /* the bearings laid over a picture (bearing=1): the cells' edges and the bands' rings on the canvas, the other man's path */
+  .bearing { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+  .bearing .ring { fill: none; stroke: #4c5b78; stroke-width: 1; stroke-opacity: .4; stroke-dasharray: 3 3; }
+  .bearing .edge { fill: none; stroke: #4c5b78; stroke-width: 1.2; stroke-opacity: .55; }
+  .bearing .front { fill: none; stroke: #c42a30; stroke-width: 2; stroke-opacity: .8; }
+  .bearing .k { font: 600 11px/1 ui-monospace, Menlo, Consolas, monospace; fill: #4c5b78; text-anchor: middle; dominant-baseline: middle; }
+  .bearing .k.on { fill: #c42a30; font-size: 13px; }
+  .bearing .path { fill: none; stroke: #d97a12; stroke-width: 3; stroke-opacity: .85; stroke-linejoin: round; stroke-linecap: round; }
+  .bearing .now { fill: #d97a12; stroke: #fff; stroke-width: 1.5; }
+  .stage .cell { position: absolute; left: 4px; top: 4px; padding: 2px 5px; background: var(--fg); color: var(--bg); font-size: 11px; }
 </style>
 </head>
 <body>

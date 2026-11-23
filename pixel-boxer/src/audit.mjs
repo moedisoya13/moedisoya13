@@ -25,7 +25,7 @@ import { RANGE as LIMIT, RATE, RADIUS, SEGMENTS, HEAD, GLOVE, shoulderOf } from 
 import { step } from './game/bout.mjs';
 import { ENTRIES, freshBout, drive } from './footwork.mjs';
 import { DEFENSE, PARRY_DOWN, CROSS_ARM, CROSS_BODY, ROLLING, PULL_COUNTER, BLOCK_FIRE, SHELL } from './defense.mjs';
-import { LADDER, DIRTY, STANCES, FOOTWORK, ENTRY, SHOWOFF, TAUNTING, BODY_LADDER, REAR_LADDER, WAVING, SHIFTING } from './ladder.mjs';
+import { LADDER, DIRTY, STANCES, FOOTWORK, ENTRY, SHOWOFF, TAUNTING, BODY_LADDER, REAR_LADDER, WAVING, SHIFTING, WALKING } from './ladder.mjs';
 import { BODYSHOTS, LIVER_BLOCK } from './bodyshots.mjs';
 import { MOVES } from './anim/moves.mjs';
 
@@ -33,7 +33,7 @@ const DT = 1 / 60,
   G = 9.81,
   DEG = 180 / Math.PI;
 export { LIMIT };
-export const SCRIPTS = [...ENTRIES, ...DEFENSE, ...LADDER, ...DIRTY, ...STANCES, ...FOOTWORK, ...ENTRY, ...SHOWOFF, ...TAUNTING, ...BODY_LADDER, ...REAR_LADDER, ...BODYSHOTS, ...LIVER_BLOCK, ...WAVING, ...PARRY_DOWN, ...CROSS_ARM, ...CROSS_BODY, ...ROLLING, ...PULL_COUNTER, ...BLOCK_FIRE, ...SHELL, ...SHIFTING];
+export const SCRIPTS = [...ENTRIES, ...DEFENSE, ...LADDER, ...DIRTY, ...STANCES, ...FOOTWORK, ...ENTRY, ...SHOWOFF, ...TAUNTING, ...BODY_LADDER, ...REAR_LADDER, ...BODYSHOTS, ...LIVER_BLOCK, ...WAVING, ...PARRY_DOWN, ...CROSS_ARM, ...CROSS_BODY, ...ROLLING, ...PULL_COUNTER, ...BLOCK_FIRE, ...SHELL, ...SHIFTING, ...WALKING];
 
 const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2],
   len = a => Math.hypot(a[0], a[1], a[2]),
