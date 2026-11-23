@@ -76,10 +76,10 @@ test('a card stepped between the steps of a variant fights as it does alone (liv
 });
 
 test('the data: every override names a field that is there, every card a catalogue script, every id fit to save under', () => {
-  assert.equal(ITEMS.length, 50);
+  assert.equal(ITEMS.length, 57);
   // (in the page's order: what the work of 2026-11-23 left open first, then the four parts)
   assert.deepEqual(PARTS.map(P => P.n), [5, 1, 2, 3, 4]);
-  assert.deepEqual(PARTS.map(P => ITEMS.filter(i => i.part === P.n).length), [22, 2, 7, 13, 6]);
+  assert.deepEqual(PARTS.map(P => ITEMS.filter(i => i.part === P.n).length), [29, 2, 7, 13, 6]);
   const ids = new Set();
   for (const item of ITEMS) {
     assert.match(item.id, /^[a-z0-9]+(-[a-z0-9]+)*$/, item.id);
