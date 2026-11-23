@@ -120,6 +120,13 @@
   .changes li { min-width: 0; overflow-wrap: anywhere; }
   .changes li a { font-weight: 600; margin: 0 6px 0 4px; }
   /* the mark: new, or changed (on the row's heading, in the contents, on the card that came out otherwise) */
+  /* what has nothing new or changed is folded: its name alone (and its notes, if it has any), until it is opened */
+  .item.folded > .item-head p, .item.folded > .row7, .item.folded > .memo:not(.has) { display: none; }
+  .card.folded > .stage, .card.folded .info > p, .card.folded .info > .feet, .card.folded .info > .memo:not(.has) { display: none; }
+  .item.folded, .item.folded + .item { margin-top: 6px; }
+  .item.folded > .item-head h3, .card.folded .info h3 { font-size: 18px; color: var(--dim); }
+  button.fold { margin-left: 8px; vertical-align: .15em; font: 600 11px/1 var(--body); letter-spacing: .04em; color: var(--fg); background: var(--card); border: 1.5px solid var(--line); padding: 5px 8px; min-height: 28px; cursor: pointer; }
+  button.fold:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .since { display: inline-block; vertical-align: .2em; margin-left: 6px; padding: 2px 5px; font: 600 10px/1 var(--body); letter-spacing: .04em; border: 1.5px solid currentColor; white-space: nowrap; }
   .toc-rows .since, .changes .since { margin-left: 0; vertical-align: 0; }
   .since.new { color: var(--new); }
@@ -170,6 +177,7 @@
       <span>속도</span>
       <span class="seg"><button id="speed-1" data-speed="1" aria-pressed="true">1×</button><button id="speed-half" data-speed="0.5" aria-pressed="false">½×</button><button id="speed-quarter" data-speed="0.25" aria-pressed="false">¼×</button></span>
       <button id="prints" aria-pressed="true">발자국</button>
+      <button id="fold-all" aria-pressed="false">모두 펼치기</button>
       <span id="memo-store" class="store" role="status">메모를 불러오는 중…</span>
     </div>
   </header>

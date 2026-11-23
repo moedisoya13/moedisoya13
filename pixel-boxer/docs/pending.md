@@ -86,6 +86,10 @@ A+B 실신·위빙, C1 몸통 판정, C2 바디 주먹·뒷손 훅, E 파도, F 
 
 - **끝(2026-11-23).** `fx.after`(입자의 시계로 나중에 던지기), `FX.lava.twice`. 간격은 0.05 → **0.1 s**(0.05는 제 속도에서 한 덩어리로 보임; 내가 시트를 보고 바꿈). 두 발 모두 전량(센 타격에서 번잡: 미결 카탈로그 `fx-twice`에서 고름). 행 수의 시험은 "세 타격이 겹쳐도"에서 "두 타격이 겹쳐도 `CAP` 안"으로 바뀜(두 발이라 한 타격의 최대가 424).
 
+## 사용자 지시: 콤보는 개별 기술로 카탈로그에, 변동 없는 항목은 접기 (2026-11-23)
+
+① "각 콤보들은 개별 기술로 카탈로그 수록." → 콤보 기획(`docs/combos-plan.md`, 쓰는 중)에 전달: 콤비네이션 하나하나가 제 id·이름·줄(등급별 카드)을 가진 기술. ② "변동이 없는 항목들은 다 접어둡니다." → 모션 카탈로그: `SINCE`에 없는 줄과 낱장 카드는 이름만 보이게 접음(`src/catalog.mjs`의 `FOLD`·`unfold`·`folding`, `catalog.html`의 `.folded`): "펼치기" 버튼, 차례·바뀐 것 목록의 링크로 가면 펼쳐짐, 맨 위 "모두 펼치기". 접힌 카드는 그리지도 돌리지도 않음. 메모가 달린 접힌 줄은 메모는 보임. 지금 67줄 가운데 56줄, 낱장 17장 가운데 1장이 접힘. 단계가 합쳐져 `SINCE`에 들어가는 줄은 펼쳐진 채로 나온다.
+
 ## 사용자 요청: 미결 사항을 미결 카탈로그에, 목차는 숨김 (2026-11-23) → 반영
 
 새 부 "오늘 생긴 결정"(16항목, 맨 위): `fx-twice`, `fx-ground-ring-game`, `fx-defence-amount`, `fx-defence-evade`, `fx-parry-white`, `fx-brilliant-game`, `order-memo-first`, `pivot-kind`, `block-return`, `source-a-script`, `waist-counter-gain`, `waist-combo-coil`, `chain-row`, `pull-cross-power`, `liver-waist-way`, `fall-unscripted`. 차례는 접어 둠(펼칠 수 있음). 휴대폰 폭의 가로 스크롤 19 px(다른 곳에서 올라온 버전의 글줄 스타일이 좁은 카드에서 넘침)를 고침. 결정은 `decisions/<id>`로 읽는다.

@@ -188,6 +188,33 @@ const SINCE = {
   'down-liver': { since: 'changed', note: DOWN_NOTE }
 };
 const SINCE_SAID = { new: '새', changed: '바뀜' };
+/* What has nothing new or changed is folded away (the user's rule: only what moved is open): a row or a card on its own shows
+   its name alone, with this button to open it; a link to it (the contents, the list of changes) opens it; and one button at the
+   top opens or folds them all. A folded card's stage has no size, so it is neither stepped nor drawn. */
+const FOLD = '<button type="button" class="fold" aria-expanded="false">펼치기</button>';
+function unfold(el, open) {
+  if (!el || !(el.classList.contains('folded') || el.dataset.unfolded)) return;
+  el.classList.toggle('folded', !open);
+  el.dataset.unfolded = open ? '1' : '';
+  const button = el.querySelector('button.fold');
+  if (button) (button.textContent = open ? '접기' : '펼치기'), button.setAttribute('aria-expanded', String(open));
+}
+function folding() {
+  document.addEventListener('click', ev => {
+    const button = ev.target.closest && ev.target.closest('button.fold');
+    if (button) return unfold(button.closest('.item, .card'), button.getAttribute('aria-expanded') !== 'true');
+    const link = ev.target.closest && ev.target.closest('a[href^="#row-"]');
+    if (link) unfold(document.getElementById(link.getAttribute('href').slice(1)), true);
+  });
+  const all = document.getElementById('fold-all');
+  if (all)
+    all.addEventListener('click', () => {
+      const open = all.getAttribute('aria-pressed') !== 'true';
+      all.setAttribute('aria-pressed', String(open));
+      for (const el of document.querySelectorAll('.item, .card')) unfold(el, open);
+    });
+  if (location.hash.startsWith('#row-')) unfold(document.getElementById(location.hash.slice(1)), true);
+}
 
 const PARTS = [
   {
@@ -329,10 +356,10 @@ for (const P of PARTS) {
     }
     for (const item of rows) {
       const block = document.createElement('div');
-      block.className = 'item' + (item.since ? ' since-' + item.since : '');
+      block.className = 'item' + (item.since ? ' since-' + item.since : ' folded'); // (a row with nothing new or changed is folded away: its name alone, until it is asked for)
       block.dataset.item = item.id;
       block.id = `row-${item.id}`;
-      block.innerHTML = `<div class="item-head"><h3>${item.name}${badge(item.since)} <span class="en">${item.en}</span></h3>${item.since ? `<p class="since-note">${esc(item.sinceNote)}</p>` : ''}<p>${item.note}</p></div><div class="row7" role="list"></div>`;
+      block.innerHTML = `<div class="item-head"><h3>${item.name}${badge(item.since)} <span class="en">${item.en}</span>${item.since ? '' : FOLD}</h3>${item.since ? `<p class="since-note">${esc(item.sinceNote)}</p>` : ''}<p>${item.note}</p></div><div class="row7" role="list"></div>`;
       for (const id of item.cards) block.lastElementChild.append(gradeCard(byId[id], item));
       section.append(block);
       ROWS.push({ item, ids: item.cards });
@@ -340,6 +367,7 @@ for (const P of PARTS) {
     main.append(section);
   }
 }
+folding();
 // (a thread of notes under every row and every card on its own: src/memo.mjs)
 attachMemos({
   items: ROWS.map(({ item }) => ({
@@ -500,11 +528,11 @@ function gradeCard(e, item) {
 // a card on its own (being hit, going down), its anchor and its mark with it
 function singleCard(e, item = {}) {
   const card = document.createElement('article');
-  card.className = 'card' + (item.since ? ' since-' + item.since : '');
+  card.className = 'card' + (item.since ? ' since-' + item.since : ' folded');
   card.dataset.entry = e.id;
   card.id = `row-${e.id}`;
   card.innerHTML = `<div class="stage" role="img" aria-label="${e.name} 애니메이션"><span class="replay" hidden>리플레이 ¼</span></div>
-    <div class="info"><h3>${e.name}${badge(item.since)} <span class="en">${e.en}</span></h3>${item.since ? `<p class="since-note">${esc(item.sinceNote)}</p>` : ''}<p>${e.note}</p>
+    <div class="info"><h3>${e.name}${badge(item.since)} <span class="en">${e.en}</span>${item.since ? '' : FOLD}</h3>${item.since ? `<p class="since-note">${esc(item.sinceNote)}</p>` : ''}<p>${e.note}</p>
       ${e.status ? `<div class="feet result"><span class="tag">${e.status}</span></div>` : `<div class="feet result"><span class="tag" data-tag>–</span><span class="pace"><b data-blow>–</b> N·s</span></div>`}${e.out ? `<div class="feet stats"><span>머리가 닿기까지 <b data-a>–</b> s</span></div>` : ''}${e.liver ? `<div class="feet stats"><span>무릎이 닿기까지 <b data-a>–</b> s</span></div>` : ''}</div>`;
   return card;
 }
