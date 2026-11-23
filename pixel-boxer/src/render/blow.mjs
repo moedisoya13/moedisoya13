@@ -2,7 +2,7 @@
    review sheet all take it from. Nothing here knows the renderer: it works out where things are, and puts motes into an fx
    (render/fx.mjs) and a ripple into a layer's `wave` (render/renderer.mjs).
    A blow that lands throws the sparks it always has (the same colours; a twentieth faster; how many, how thick and how
-   long they last, in proportion to the damage it did, a pro's straight a tenth shorter-lived than they were), but from
+   long they last, in proportion to the damage it did, a pro's straight a twentieth shorter-lived than they were), but from
    where the line of
    the blow comes out of the part of him it struck, on his far side, and along the way the glove was going, up and down as
    well as across. They go into an fx of his own, drawn `outside` his silhouette, so none of them is ever seen over him: the
@@ -40,7 +40,7 @@ export const FX = {
   out: 0.01,
   ref: 3,
   most: 2.2,
-  motes: { n: [17, 11], width: 0.024, thin: 0.01, life: 0.9, short: 0.4, pace: 1.05 },
+  motes: { n: [17, 11], width: 0.024, thin: 0.01, life: 0.95, short: 0.4, pace: 1.05 },
   ripple: { speed: 3, last: 0.4, width: 0.14, sway: 0.034, thin: 0.06, down: { last: 0.55, sway: 1.3 } }
 };
 // health a newton-second takes off a man with an ordinary chin (game/bout.mjs RULES.damage): for a hit that carries no damage
@@ -119,7 +119,7 @@ export function blow(fx, e, struck) {
     way = [e.vec[0], e.vec[2], e.vec[1]],
     // (how thick each is: in proportion to the damage, down to the thinnest that still shows as a pixel)
     width = Math.max(FX.motes.thin, FX.motes.width * q),
-    // (how long each lasts: a tenth less than the sparks always did at the measure, and in proportion to the damage from
+    // (how long each lasts: a twentieth less than the sparks always did at the measure, and in proportion to the damage from
     // there, down to FX.motes.short of it; and all of them a twentieth faster)
     o = { life: FX.motes.life * Math.max(FX.motes.short, q), pace: FX.motes.pace };
   let n = 0;

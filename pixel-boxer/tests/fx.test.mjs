@@ -129,10 +129,10 @@ test('blow: sparks by the damage (how many, how thick, how long), in their colou
   assert.ok(Math.abs(made(1.5).n - 14) <= 1 && Math.abs(made(1.5).width - 0.012) < 1e-12, 'half the damage: half as many (to a spark of each kind), half as thick');
   assert.deepEqual([made(6).n, +made(6).width.toFixed(6)], [56, 0.048], 'twice the damage: twice as many, twice as thick');
   assert.equal(made(30).n, made(3 * FX.most).n, 'no more than FX.most times the reference');
-  // (how long they last: a tenth less than they always did at the measure, in proportion to the damage, to 0.4 of that;
+  // (how long they last: a twentieth less than they always did at the measure, in proportion to the damage, to 0.4 of that;
   // and a twentieth faster, whatever the blow)
-  assert.ok(Math.abs(made(3).life - 0.9) < 1e-12 && Math.abs(made(6).life - 1.8) < 1e-12 && Math.abs(made(1.5).life - 0.45) < 1e-12, 'lives: 0.9 at the measure, twice the damage twice as long, half half');
-  assert.ok(Math.abs(made(0.2).life - 0.36) < 1e-12, 'the lightest touch lasts 0.4 of the measure\'s');
+  assert.ok(Math.abs(made(3).life - 0.95) < 1e-12 && Math.abs(made(6).life - 1.9) < 1e-12 && Math.abs(made(1.5).life - 0.475) < 1e-12, 'lives: 0.95 at the measure, twice the damage twice as long, half half');
+  assert.ok(Math.abs(made(0.2).life - 0.38) < 1e-12, 'the lightest touch lasts 0.4 of the measure\'s');
   assert.ok([0.2, 1.5, 3, 6].every(d => made(d).pace === 1.05), 'all of them 5% faster');
   assert.ok(made(0.2).n >= 2 && made(0.2).width === FX.motes.thin, 'the lightest touch still shows: one of each kind, at the thinnest');
   assert.equal(scaleOf({ J: 85 }), scaleOf({ damage: 2.975 }), 'a hit with no damage on it is read off its impulse');
