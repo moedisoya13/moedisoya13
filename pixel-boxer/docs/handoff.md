@@ -60,6 +60,7 @@
 - `docs/pending.md`: 미결 목록(이 문서의 6절과 같은 내용을 유지).
 - `docs/moves-plan-6.md`: 6차 기획(허리, 타격 이펙트 §2~§2.4C, 메모 반영, 반응 시간 수비, 단계 K~Z).
 - `docs/leaping-hook.md`: 도약 훅의 동작 기획(단계 N2), 참고 시트 `docs/ref/leaping-hook.jpg`.
+- `docs/game-sketch.md`: 게임 시스템의 스케치(사용자의 원문과 읽은 것): 선수 생활의 칩 서른 장, 플레이어의 백·흑 주사위. 기획이 아님.
 - `docs/combos-plan.md`: 기본 콤보 일곱과 변형(가볍게·세게, 페이크, 같은 손 두 번, 바디), "훅 언더"(다 실은 앞손 훅 → 기울임 → 같은 손 바디 어퍼), 앞손 어퍼, 콤비네이션 데이터와 머리의 규칙, 카탈로그의 기술 줄, 단계 C0~C4.
 - `docs/source-cd-proposal.md`: 소스 C(콤비네이션 1-S-5-2-3-2)·D(연속 백스텝)의 분석과 구현 제안(후보 P1~P8, 묶는 방법 셋; 사용자 피드백 뒤 작업), 참고 시트 `docs/ref/source-c.jpg`, `source-d.jpg`.
 - `docs/bearing-system-plan.md`: 팔방 위치 시스템(상대의 정면 기준 여덟 칸과 거리 띠, 동작마다 돈 칸·잡은 칸, 다시 축 잡기 규칙, 칸의 값, 머리의 자리 잡기, 기초 단계 O), 그림 `docs/ref/bearing-cells.svg`.
