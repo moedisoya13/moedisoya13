@@ -5,6 +5,7 @@
 import * as M from '../rig/m3.mjs';
 
 const CAP = 960;
+const WHITE = 38; // the palette's white (assets/manifest.json)
 const len = a => Math.hypot(a[0], a[1], a[2]);
 
 export function createFx(random) {
@@ -46,8 +47,11 @@ export function createFx(random) {
     /* sparks thrown out round `at`, a fan with a little lift in it, carried on `dir` if there is one: [x, z] the way across,
        and [x, z, y] up or down as well (render/blow.mjs: the way the glove was going), each at 0.7 of the speed; width:
        how thick each is drawn, metres (render/blow.mjs: by the damage done); o: { life (times its life), pace (times its
-       velocity, the fan's lift with it), fall (times its gravity), drag (times the air's hold on it), hot: { colours, last }
-       (what it is drawn as for its first `last` seconds, before its own colours) } (render/blow.mjs: a hit's) */
+       velocity, the fan's lift with it), fall (times its gravity), drag (times the air's hold on it), hot: { colours (hottest
+       first), fall (m/s), least (s) }: a mote glowing as it flies, at the hottest of them while it rises, cooling from the top
+       of its flight through the rest of them as it falls faster, and its own colours again once it falls at `fall` (and it
+       stays so: one that bounces does not glow again); one thrown downward glows for its first `least` seconds before that
+       rule takes it; and having glowed, it is never drawn white } (render/blow.mjs: a hit's) */
     sparks(at, n, colours, speed, dir, width, o) {
       const life = (o && o.life) || 1,
         pace = (o && o.pace) || 1,
@@ -58,7 +62,7 @@ export function createFx(random) {
         const a = rnd() * Math.PI * 2,
           s = speed * (0.35 + rnd() * 0.9),
           v = [Math.cos(a) * s * 0.8 + (dir ? dir[0] * speed * 0.7 : 0), Math.sin(a) * s * 0.7 + 1.4 + (dir && dir[2] ? dir[2] * speed * 0.7 : 0), (rnd() - 0.5) * s + (dir ? dir[1] * speed * 0.7 : 0)].map(x => x * pace);
-        add({ a: at.slice(), b: at.slice(), v, g: -13 * fall, drag: 3 * drag, width: width || 0.024, pal: colours, hot, life: (0.16 + rnd() * 0.22) * life, tail: 0.03, shrink: 0.6 });
+        add({ a: at.slice(), b: at.slice(), v, g: -13 * fall, drag: 3 * drag, width: width || 0.024, pal: colours, hot, cool: 0, life: (0.16 + rnd() * 0.22) * life, tail: 0.03, shrink: 0.6 });
       }
     },
     /* The spray off a blow: sweat thrown off the part of him that was struck, at the instant it lands. The way the glove
@@ -212,14 +216,18 @@ export function createFx(random) {
             else it.v[1] *= -0.35;
           }
           it.a = M.sub(it.b, M.scale(it.v, it.tail));
+          // (how far a glowing mote has cooled: by how fast it falls, never back)
+          if (it.hot && it.age >= it.hot.least) it.cool = Math.max(it.cool, Math.min(1, -it.v[1] / it.hot.fall));
         }
       }
       for (const it of items) {
         if (n >= CAP) break;
         if (it.stick && it.top <= 0.5) continue; // (a bead is not seen until the head moves under it)
         const u = it.age / it.life,
-          // (a mote still hot: the hot colours, hottest first, over its first moments; then its own, from where it is in its life)
-          pal = it.hot && it.age < it.hot.last ? it.hot.colours[Math.min(it.hot.colours.length - 1, Math.floor((it.age / it.hot.last) * it.hot.colours.length))] : Array.isArray(it.pal) ? it.pal[Math.min(it.pal.length - 1, Math.floor(u * it.pal.length))] : it.pal;
+          own = Array.isArray(it.pal) ? Math.min(it.pal.length - 1, Math.floor(u * it.pal.length)) : -1,
+          // (a mote still glowing: its hot colours as far as it has cooled; then its own, from where it is in its life, but past
+          // the palette's white if it has glowed)
+          pal = it.hot && it.cool < 1 ? it.hot.colours[Math.min(it.hot.colours.length - 1, Math.floor(it.cool * it.hot.colours.length))] : own < 0 ? it.pal : it.hot && it.pal[own] === WHITE ? it.pal.slice(own).find(c => c !== WHITE) ?? it.pal[own] : it.pal[own];
         // (a mote of the mist is a single pixel while it flies, and thins away to nothing over the rest of its life)
         write(n++, it.a, it.b, it.width * (it.stick ? 0.6 : 1 - it.shrink * u), pal, it.flat, it.thin ? 1.5 - 1.1 * Math.max(0, (u - 0.4) / 0.6) ** 1.5 : 3, it.thin);
       }

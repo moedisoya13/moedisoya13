@@ -37,8 +37,9 @@
    with no light in any of it, and nothing of the bout changed: its motes hang (they last longer, fall slower, the air holds
    them less); where his falling body first comes down on the canvas, a second ripple goes through him from the part that
    came down, and a large ring goes out through the canvas from under it, lifting the tiles as it passes; and the game and
-   the effect study show the moment of the blow at a quarter of the speed. Every mote a blow throws (any hit) is first
-   drawn hot, as molten metal is, and cools to its own colours within its first few frames.
+   the effect study show the moment of the blow at a quarter of the speed. Every mote a blow throws (any hit) glows as
+   molten metal does: at its hottest while it rises, cooling from the top of its flight as it falls, its own colours again
+   once it is really falling.
      fallOf(e)             a knockdown blow's watch for where he comes down: { on, q, out, landed: null }, or null for any
                            other event
      landingOf(man)        the part of him nearest the canvas, if it is within FX.land.near of it: { joint, clear (metres
@@ -64,10 +65,11 @@ export const FX = {
   out: 0.01,
   ref: 3,
   most: 2.2,
-  /* hot: what every mote of a hit is drawn as first, hottest first (the palette's pale yellow, amber and orange: never its
-     white, assets/manifest.json 39, 40, 18), for its first `last` seconds; down: a knockdown's motes, times their life,
-     their fall and the air's hold on them */
-  motes: { n: [17, 11], width: 0.024, thin: 0.01, life: 0.95, short: 0.4, pace: 1.05, hot: { colours: [39, 40, 18], last: 0.06 }, down: { life: 1.6, fall: 0.5, drag: 0.8 } },
+  /* hot: every mote of a hit glows as molten metal does (render/fx.mjs sparks): the palette's pale yellow while it rises
+     (never its white; assets/manifest.json 39, then amber 40 and orange 18), cooling from the top of its flight through
+     the others as it falls faster, its own colours again once it falls at `fall` m/s; one thrown downward glows at least
+     its first `least` seconds. down: a knockdown's motes, times their life, their fall and the air's hold on them */
+  motes: { n: [17, 11], width: 0.024, thin: 0.01, life: 0.95, short: 0.4, pace: 1.05, hot: { colours: [39, 40, 18], fall: 1, least: 0.03 }, down: { life: 1.6, fall: 0.5, drag: 0.8 } },
   // (land: the second ripple of a knockdown, from where he comes down: its strength times the blow's, and how long it goes)
   ripple: { speed: 3, last: 0.4, width: 0.14, sway: 0.034, thin: 0.06, down: { last: 0.55, sway: 1.3 }, land: { strength: 0.8, last: 0.45 } },
   // where a falling man comes down: the first step any of these parts of him (its middle, and how thick it is) is this near

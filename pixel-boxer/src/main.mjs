@@ -199,6 +199,8 @@ function start({ manifest, boxer, ring }) {
         }
         first = false;
         step(bout, [mine, spar ? {} : think(rival, bout, DT)], DT);
+        // (the held moment of a knockdown's blow over: the rest of this picture's time is the slow motion's already)
+        if (slow && slow.held && bout.stop <= 0) (slow.held = false), (acc *= paceOf(slow));
         if (spar) bout.fighters[1].hp = Math.max(bout.fighters[1].hp, 25); // a sparring partner does not go down
         for (const e of bout.events) react(e);
         // (where a knocked-down man first comes down on the canvas: a second ripple through him, and a ring through the canvas)

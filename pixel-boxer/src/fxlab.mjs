@@ -28,7 +28,7 @@ import { BODYSHOTS } from './bodyshots.mjs';
 const DT = 1 / 60;
 const VERSIONS = [
   { id: 'before', name: '전', note: '접촉점에서 튀는 색 입자와, 맞은 선수의 흰 번쩍임(0.07초).' },
-  { id: 'final', name: '확정', note: '같은 색 입자(색은 그대로, 속도는 5% 빠르게, 수·굵기·수명은 데미지에 비례)가 타격선이 맞은 몸을 빠져나가는 반대쪽 면에서 시작해, 주먹이 가던 방향(위아래 포함)으로 날아갑니다. 맞은 선수의 윤곽 안에서는 보이지 않아 윤곽에서 처음 나타납니다. 흰 번쩍임 대신 닿은 점에서 파문이 빛 없이 몸(머리 포함)에 퍼집니다: 초속 3 m, 0.4초(다운은 0.55초, 흔들림 1.3배), 흔들림과 폭은 데미지에 비례. 막음과 패리의 불꽃은 닿은 점 그대로입니다.' }
+  { id: 'final', name: '확정', note: '같은 색 입자(색은 그대로, 속도는 5% 빠르게, 수·굵기·수명은 데미지에 비례)가 타격선이 맞은 몸을 빠져나가는 반대쪽 면에서 시작해, 주먹이 가던 방향(위아래 포함)으로 날아갑니다. 맞은 선수의 윤곽 안에서는 보이지 않아 윤곽에서 처음 나타납니다. 흰 번쩍임 대신 닿은 점에서 파문이 빛 없이 몸(머리 포함)에 퍼집니다: 초속 3 m, 0.4초(다운은 0.55초, 흔들림 1.3배), 흔들림과 폭은 데미지에 비례. 입자는 솟는 동안 가장 뜨거운 노랑으로 빛나다가 떨어지며 식습니다. 다운은 1/4 속도의 슬로, 오래 떠 있는 입자, 착지의 두 번째 파문과 바닥의 고리 파문. 막음과 패리의 불꽃은 닿은 점 그대로입니다.' }
 ];
 /* The rows: a light blow, the two hard ones, an uppercut under the chin (the inside uppercut of the skill ladder, the one
    that comes straight up: there it is the other man who is struck), a hook to the liver, and a knockdown. */
@@ -216,12 +216,18 @@ function start({ manifest, boxer }) {
     // framed on the man who is hit, a little behind him: the room is on the far side of him, for what the blow throws off
     cell.cam.target[0] += (hit.x * 1.45 - other.x * 0.45 - cell.cam.target[0]) * ease;
     cell.cam.target[2] += (hit.z * 1.45 - other.z * 0.45 - cell.cam.target[2]) * ease;
+    // (and a knockdown's followed down to the canvas, between his head and his hips, for where he comes down on it)
+    if (cell.entry.fall) cell.cam.target[1] += (Math.min(1.3, (hit.points.head[1] + hit.points.hips[1]) / 2 + 0.15) - cell.cam.target[1]) * ease;
     const jolt = cell.shake > 0.3 ? [Math.sin(cell.t * 97) * cell.shake, Math.cos(cell.t * 83) * cell.shake * 0.6] : null;
     return { camera: cell.cam, layers, shake: jolt };
   }
   function frame(now) {
-    const elapsed = globalThis.__lab.hold ? 0 : Math.min(0.1, (now - last) / 1000 || 0) * speed;
+    draw(globalThis.__lab.hold ? 0 : Math.min(0.1, (now - last) / 1000 || 0) * speed, now);
     last = now;
+    requestAnimationFrame(frame);
+  }
+  // one picture of every card on screen, `elapsed` seconds on
+  function draw(elapsed, now) {
     const dpr = Math.min(devicePixelRatio || 1, 3),
       w = Math.max(1, Math.round(canvas.clientWidth * dpr)),
       h = Math.max(1, Math.round(canvas.clientHeight * dpr));
@@ -243,6 +249,8 @@ function start({ manifest, boxer }) {
         }
         cell.acc -= DT;
         tick(cell);
+        // (the held moment of a knockdown's blow over: the rest of this picture's time is the slow motion's already)
+        if (cell.slow && cell.slow.held && cell.bout.stop <= 0) (cell.slow.held = false), (cell.acc *= paceOf(cell.slow));
       }
       if (steps > 6) cell.acc = 0;
       cell.slow = slowOn(cell.slow, elapsed, cell.bout.t - cell.slowAt, cell.bout.stop > 0);
@@ -251,7 +259,6 @@ function start({ manifest, boxer }) {
       R.cell(rect, scene(cell, time, cell.bout.stop > 0 ? 1 : Math.min(1, cell.acc / DT)));
     }
     R.end({ hall: ground, ink });
-    requestAnimationFrame(frame);
   }
 
   for (const button of document.querySelectorAll('[data-speed]'))
@@ -259,13 +266,15 @@ function start({ manifest, boxer }) {
       speed = Number(button.dataset.speed);
       for (const other of document.querySelectorAll('[data-speed]')) other.setAttribute('aria-pressed', String(other === button));
     });
-  /* (for looking at the page from a script: every card stepped on by so many seconds at once, the effects with it; and the
-     renderer and a card's frame, scene(cell, 0), to draw it apart and measure it) */
+  /* (for looking at the page from a script: every card stepped on by so many seconds at once, the effects with it; one
+     picture drawn so many seconds on, frame(sec), as the page draws them (with hold set, the page's own pictures stand
+     still between); and the renderer and a card's frame, scene(cell, 0), to draw it apart and measure it) */
   globalThis.__lab = {
     cells,
     hold: false,
     reset: () => cells.forEach(cell => (restart(cell), (cell.acc = 0))),
     advance: sec => cells.forEach(cell => { for (let i = 0; i < Math.round(sec / DT); i++) if (due(cell)) (tick(cell), cell.fx.update(DT, [], 22), cell.motes.forEach(m => m.fx.update(DT)), cell.ripples.forEach(r => r && (r.age += DT)), cell.ground && (cell.ground.age += DT)); }),
+    frame: sec => draw(sec, performance.now()),
     renderer: R,
     scene,
     FX

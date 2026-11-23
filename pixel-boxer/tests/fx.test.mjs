@@ -433,36 +433,61 @@ test('a replay at a quarter of the speed is smooth: no picture twice running, no
   }
 });
 
-test('every mote of a hit is drawn hot at first, the hottest yellow and orange of the palette and never its white, and from 0.06 s on is the mote it always was', () => {
+test('every mote of a hit glows: the palette\'s hottest yellow while it rises and at the top, cooling as it falls, its own colours once it falls at 1 m/s; one thrown down glows its first 0.03 s; never white', () => {
   const palette = JSON.parse(readFileSync(new URL('../assets/manifest.json', import.meta.url), 'utf8')).palette,
-    rgbOf = i => [(palette[i] >> 16) & 255, (palette[i] >> 8) & 255, palette[i] & 255];
-  assert.deepEqual(FX.motes.hot.colours, [39, 40, 18]);
-  for (const i of FX.motes.hot.colours) {
+    rgbOf = i => [(palette[i] >> 16) & 255, (palette[i] >> 8) & 255, palette[i] & 255],
+    H = FX.motes.hot;
+  assert.deepEqual([H.colours, H.fall, H.least], [[39, 40, 18], 1, 0.03]);
+  for (const i of H.colours) {
     const [r, g, b] = rgbOf(i);
     assert.ok(r === 255 && r >= g && g > b && palette[i] !== 0xffffff, `${i} (#${palette[i].toString(16)}) is hot, not white`);
   }
-  for (const id of ['hit-jab', 'hit-cross', 'body-liver', 'down-back']) {
+  /* One mote, thrown with the dice at a half (straight out, its fan's lift 1.4 m/s up), followed in small steps: its fall
+     worked out alongside as the fx works it out (gravity, then the air, then the move), and its colour read off the row. */
+  const follow = (dir, speed, colours) => {
+    const fx = createFx(() => 0.5),
+      twin = createFx(() => 0.5);
+    fx.sparks([0, 1.5, 0], 1, colours, speed, dir, 0.02, { hot: H });
+    twin.sparks([0, 1.5, 0], 1, colours, speed, dir, 0.02, {});
+    let vy = 1.4 + (dir && dir[2] ? dir[2] * speed * 0.7 : 0),
+      age = 0;
+    const seen = [];
+    for (let n = 0; n < 2000; n++) {
+      const dt = n ? 1 / 960 : 0;
+      if (n) (vy += -13 * dt), (vy *= 1 - 3 * dt), (age += dt);
+      if (!fx.update(dt) || !twin.update(dt)) break;
+      seen.push({ age, vy, pal: fx.rows[9], own: twin.rows[9] });
+    }
+    return seen;
+  };
+  const up = follow(null, 3, [41, 41, 25]);
+  assert.ok(up.filter(s => s.vy > 0).every(s => s.pal === 39), 'while it rises, at the hottest');
+  const top = up.find(s => s.vy <= 0);
+  assert.ok(top && top.pal === 39, `at the top of its flight (${top.age.toFixed(3)} s) still at the hottest`);
+  const half = up.find(s => s.vy <= -0.5);
+  assert.ok(half && half.pal === 40, `falling at 0.5 m/s, part of the way cooled: ${half.pal}`);
+  const cold = up.filter(s => s.vy <= -1 - 1e-3);
+  assert.ok(cold.length > 5 && cold.every(s => s.pal === s.own), `falling at 1 m/s and faster (from ${cold[0].age.toFixed(3)} s), its own colours`);
+  assert.ok(up.filter(s => s.vy < -0.67 && s.vy > -1 + 1e-3).every(s => s.pal === 18), 'and the coolest of the glow just before');
+  // (thrown down: 1.4 m/s of lift and 2.1 m/s down along the way the glove went)
+  const down = follow([0, 0, -1], 5, [41, 41, 25]);
+  assert.ok(down[0].vy < -1, `thrown down at ${(-down[0].vy).toFixed(2)} m/s`);
+  assert.ok(down.filter(s => s.age < 0.03 - 1e-9).every(s => s.pal === 39), 'glowing its first 0.03 s');
+  assert.ok(down.filter(s => s.age >= 0.03 + 1e-3).every(s => s.pal === s.own), 'and then its own colours');
+  // (its own colours, but never the palette's white once it has glowed)
+  const white = follow([0, 0, -1], 5, [38, 41, 41, 25]);
+  assert.ok(white.every(s => s.pal !== 38) && white.some(s => s.own === 38 && s.pal === 41), 'past the white of its own colours');
+  // (the real blows: every mote hot as it is thrown, the motes of a hit thrown from the far side of him)
+  for (const id of ['hit-jab', 'hit-cross', 'hit-upper', 'body-liver', 'down-back']) {
     const { e, struck } = firstHit(id),
-      calls = [];
-    blow({ sparks: (...a) => calls.push(a) }, e, struck);
-    // (the same motes thrown twice, the same dice: as blow throws them, and without the heat, as they were thrown before)
-    const hot = createFx(dice(9)),
-      cold = createFx(dice(9));
-    for (const a of calls) hot.sparks(...a), cold.sparks(...a.slice(0, 6), Object.assign({}, a[6], { hot: null }));
-    const n = calls.reduce((s, a) => s + a[1], 0);
-    for (let t = 0, frame = 0; t < 0.2; t += DT, frame++) {
-      const k = hot.update(frame ? DT : 0),
-        c = cold.update(frame ? DT : 0);
-      assert.equal(k, c);
-      if (frame === 0) assert.equal(k, n);
-      const pal = f => Array.from({ length: k }, (_, i) => f.rows[i * 12 + 9]);
-      if (t < 0.06 - 1e-9) {
-        const want = FX.motes.hot.colours[Math.min(2, Math.floor((t / 0.06) * 3))];
-        assert.ok(pal(hot).every(p => p === want), `${id}: at ${t.toFixed(3)} s every mote is ${want}`);
-      } else {
-        assert.deepEqual(pal(hot), pal(cold), `${id}: at ${t.toFixed(3)} s its own colours`);
-        assert.deepEqual(Array.from(hot.rows.slice(0, k * 12)), Array.from(cold.rows.slice(0, k * 12)), `${id}: and the same mote, where it always was`);
-      }
+      fx = createFx(dice(9)),
+      n = blow(fx, e, struck),
+      k = fx.update(0);
+    assert.equal(k, n);
+    assert.ok(Array.from({ length: k }, (_, i) => fx.rows[i * 12 + 9]).every(p => p === 39), `${id}: all ${k} glowing as they are thrown`);
+    for (let t = 0; t < 0.5; t += DT) {
+      const m = fx.update(DT);
+      assert.ok(Array.from({ length: m }, (_, i) => fx.rows[i * 12 + 9]).every(p => p !== 38), `${id}: none of them white`);
     }
   }
 });
