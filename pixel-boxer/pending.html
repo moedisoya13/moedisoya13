@@ -84,6 +84,14 @@
   .feet { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font: 500 11px/1.3 var(--data); color: var(--dim); font-variant-numeric: tabular-nums; }
   .feet b { color: var(--fg); font-weight: 500; }
   .feet .want { color: var(--dim); }
+  /* what a bout writes into a card keeps its room whatever it says, from the first frame: a caption never rewraps its row and moves the page */
+  .feet > span { white-space: nowrap; }
+  .feet [data-tag] { display: inline-block; min-width: calc(5em + 17px); text-align: center; }
+  .feet b[data-a], .feet b[data-c], .feet b[data-tilt] { display: inline-block; min-width: 6ch; text-align: right; }
+  .feet b[data-blow], .feet b[data-beads], .feet b[data-reach] { display: inline-block; min-width: 3ch; text-align: right; }
+  .feet b[data-own] { display: inline-block; min-width: 15ch; }
+  .feet [data-b] { display: inline-block; min-width: 3.2em; }
+  .big b[data-j] { display: inline-block; min-width: 2.7em; text-align: right; }
   .big { font: 400 30px/1 var(--display); color: var(--fg); }
   .big small { font: 500 11px/1 var(--data); color: var(--dim); margin-left: 4px; }
   .result .tag { font: 600 12px/1 var(--body); letter-spacing: .06em; padding: 5px 7px; border: 1.5px solid var(--line); color: var(--dim); }
