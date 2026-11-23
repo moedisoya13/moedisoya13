@@ -36,6 +36,7 @@ import { WINDOWS } from './windows.data.mjs';
 import { createReplay } from './replay.mjs';
 import { across, lineAngle, guardOf } from './measure.mjs';
 import { attachMemos } from './memo.mjs';
+import { ACTIONS, STATES } from './memo.actions.mjs';
 import { BEARING } from './bearing.data.mjs';
 import { createTracker, track, CELLS, BANDS, cellSaid } from './game/bearing.mjs';
 
@@ -560,7 +561,10 @@ attachMemos({
     host: item.single ? document.getElementById(`row-${item.id}`).querySelector('.info') : document.getElementById(`row-${item.id}`)
   })),
   line: document.getElementById('memo-store'),
-  toc: id => document.querySelector(`#toc .toc-rows a[href="#row-${id}"]`)
+  toc: id => document.querySelector(`#toc .toc-rows a[href="#row-${id}"]`),
+  // (and what is being done about each row's notes: src/memo.actions.mjs)
+  actions: ACTIONS,
+  states: STATES
 });
 shownAsLD(document.body);
 // (opened at a row's address: the page is written by now, so go there; the browser's own jump came before it was)

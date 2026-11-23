@@ -154,6 +154,11 @@
   .memo summary b { font: 500 12px/1 var(--data); color: var(--dim); }
   .memo.has summary, .memo.has summary b { color: var(--fg); }
   .memo.has { border-color: var(--rear); }
+  /* what is being done about a row's notes (src/memo.actions.mjs): the stage and its state beside the count, a line under it */
+  .memo-act { margin-left: auto; font: 600 11px/1.2 var(--body); color: var(--dim); border: 1.5px solid currentColor; padding: 3px 6px; text-align: right; }
+  .memo-act[data-state="fix"], .memo-act[data-state="check"], .memo-act[data-state="work"] { color: var(--changed); }
+  .memo-act[data-state="done"] { color: var(--new); }
+  .memo-act-note { margin: 0; padding: 0 10px 8px; font-size: 13px; line-height: 1.5; color: var(--dim); overflow-wrap: anywhere; }
   .memo summary:focus-visible, .memo button:focus-visible, .memo textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .memo-list { list-style: none; margin: 0; padding: 0 10px; display: flex; flex-direction: column; gap: 8px; }
   .memo-list:empty { display: none; }

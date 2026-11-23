@@ -36,8 +36,10 @@ const when = iso => {
 const within = (p, ms) => Promise.race([p, new Promise(resolve => setTimeout(() => resolve('late'), ms))]);
 
 /* items: [{ id, name, host }] where host is the element the thread goes into; line: the element that says where the notes
-   are kept; toc: (id) => the contents link of that row, or null */
-export function attachMemos({ items, line, toc }) {
+   are kept; toc: (id) => the contents link of that row, or null; actions: { [id]: { stage, state, text } } and states:
+   { [state]: how it reads } (src/memo.actions.mjs: what is being done about a row's notes, shown beside the count and
+   under it) */
+export function attachMemos({ items, line, toc, actions = {}, states = {} }) {
   const known = new Set(items.map(i => i.id)),
     boxes = {};
   let notes = {},
@@ -57,6 +59,7 @@ export function attachMemos({ items, line, toc }) {
     box.className = 'memo';
     box.dataset.memo = id;
     box.innerHTML = `<summary><span class="memo-label">메모</span> <b data-n>0</b></summary>
+      <p class="memo-act-note" hidden></p>
       <ol class="memo-list" aria-live="polite"></ol>
       <form class="memo-form">
         <label class="memo-hint" for="memo-${id}"></label>
@@ -64,6 +67,16 @@ export function attachMemos({ items, line, toc }) {
         <div class="memo-row"><span class="memo-state" data-state></span><button type="submit">남기기</button></div>
       </form>`;
     box.querySelector('.memo-hint').textContent = `${name}에 메모`;
+    // (what is being done about this row's notes: the stage and how far it is, beside the count; a line of it, under)
+    const act = actions[id];
+    if (act) {
+      const chip = Object.assign(document.createElement('span'), { className: 'memo-act', textContent: `조치 · ${act.stage} 단계 · ${states[act.state] || act.state}` }),
+        said = box.querySelector('.memo-act-note');
+      chip.dataset.state = act.state;
+      box.querySelector('summary').append(chip);
+      said.textContent = act.text;
+      said.hidden = false;
+    }
     const form = box.querySelector('form'),
       area = form.querySelector('textarea'),
       button = form.querySelector('button');

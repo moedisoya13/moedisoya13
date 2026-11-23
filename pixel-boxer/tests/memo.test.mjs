@@ -26,3 +26,15 @@ test('the notes go to their rows, oldest first; unknown rows and malformed docum
   assert.deepEqual(out.jab.map(n => n.text), ['첫째', '둘째']);
   assert.equal(out.hook[0].by, null);
 });
+
+test('what is being done about a note: each row names its stage, a state the page can say, and a line of it', async () => {
+  const { ACTIONS, STATES } = await import('../src/memo.actions.mjs');
+  assert.ok(Object.keys(ACTIONS).length >= 26);
+  for (const [id, a] of Object.entries(ACTIONS)) {
+    assert.ok(/^[A-Z][0-9]?$/.test(a.stage), `${id}: stage ${a.stage}`);
+    assert.ok(a.state in STATES, `${id}: state ${a.state}`);
+    assert.ok(typeof a.text === 'string' && a.text.length > 20 && a.text.length < 400, `${id}: its line`);
+    // (the grades are written 명 and 암; the page shows them as L and D)
+    assert.ok(!/[45][LD]\b/.test(a.text), `${id}: a grade written as a letter`);
+  }
+});
