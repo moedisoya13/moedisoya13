@@ -289,7 +289,7 @@ function start({ manifest, boxer, ring }) {
 
   reset();
   if (query.has('auto')) begin();
-  globalThis.__bout = { shown: [], get bout() { return bout; }, get phase() { return phase; }, stats, renderer: R, cam, RULES };
+  globalThis.__bout = { shown: [], get bout() { return bout; }, get phase() { return phase; }, get slow() { return slow; }, get ground() { return ground; }, stats, renderer: R, cam, RULES };
   $('loading').remove();
   requestAnimationFrame(frame);
 }
