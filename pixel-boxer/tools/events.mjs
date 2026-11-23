@@ -24,7 +24,14 @@ async function scripts(root) {
   const src = f => import(pathToFileURL(resolve(root, 'src', f)).href),
     mods = await Promise.all(['footwork.mjs', 'defense.mjs', 'ladder.mjs', 'bodyshots.mjs'].map(f => src(f).catch(() => ({})))),
     [foot, defense, ladder, body] = mods,
-    lists = [foot.ENTRIES, defense.DEFENSE, defense.PARRY_DOWN, defense.CROSS_ARM, defense.ROLLING, ...['STANCES', 'LADDER', 'DIRTY', 'FOOTWORK', 'ENTRY', 'SHOWOFF', 'TAUNTING', 'BODY_LADDER', 'REAR_LADDER', 'WAVING'].map(k => ladder[k]), body.BODYSHOTS, body.LIVER_BLOCK];
+    lists = [
+      foot.ENTRIES,
+      // (every list of cards the page shows: the counters out of a pull, a cross-arm, a block and a shell, and the shift, with the rest)
+      ...['DEFENSE', 'PARRY_DOWN', 'CROSS_ARM', 'CROSS_BODY', 'ROLLING', 'PULL_COUNTER', 'BLOCK_FIRE', 'SHELL'].map(k => defense[k]),
+      ...['STANCES', 'LADDER', 'DIRTY', 'FOOTWORK', 'ENTRY', 'SHOWOFF', 'TAUNTING', 'BODY_LADDER', 'REAR_LADDER', 'WAVING', 'SHIFTING'].map(k => ladder[k]),
+      body.BODYSHOTS,
+      body.LIVER_BLOCK
+    ];
   const { step } = await src('game/bout.mjs');
   return { all: lists.filter(Boolean).flat(), step, freshBout: foot.freshBout, drive: foot.drive };
 }

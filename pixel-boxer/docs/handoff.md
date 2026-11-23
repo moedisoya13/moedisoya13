@@ -60,6 +60,7 @@
 - `docs/pending.md`: 미결 목록(이 문서의 6절과 같은 내용을 유지).
 - `docs/moves-plan-6.md`: 6차 기획(허리, 타격 이펙트 §2~§2.4C, 메모 반영, 반응 시간 수비, 단계 K~Z).
 - `docs/leaping-hook.md`: 도약 훅의 동작 기획(단계 N2), 참고 시트 `docs/ref/leaping-hook.jpg`.
+- `docs/waist-more-plan.md`: 허리로 더 좋아질 여섯 동작(A1 수비 → 반격의 장전, A3 막을 때 허리, A2 콤비네이션의 되감기, A4 바디에 맞음, B1 더킹 대시·대시의 멈춤, B2 방향 전환)의 기획, 단계 N4·V2와 P·Q·R에 접는 것.
 - `docs/source-ab-plan.md`: 소스 A(12박 콤비네이션)·B(원투 뒤의 방어 다섯)에서 뽑은 기술의 동작 기획(제안 단계 N3, R2; 사용자 확인 대기), 참고 시트 `docs/ref/source-a.jpg`, `source-b.jpg`.
 
 ## 6. 미결 내역 (새 세션의 브리핑 대상)
