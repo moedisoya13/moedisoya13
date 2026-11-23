@@ -23,6 +23,8 @@ uniform vec2 u_depth;  // near, far
 uniform vec4 u_wave;   // a ripple through what was struck: where it began (world), and how far out its front is now
 uniform float u_mask;
 uniform vec3 u_waveK;  // its width (metres), its strength (0 is no ripple; by the damage, render/blow.mjs), and how far it sways what it passes (metres)
+uniform vec4 u_ground; // a ring through the canvas: where it began (world x, z), how far out its front is, and its width (metres)
+uniform vec2 u_groundK; // how high it lifts what it passes (metres; 0 is no ring), and the lift past which a tile is drawn a step lighter (0: never)
 out vec2 v_d;
 out vec3 v_conic;
 flat out float v_pal;
@@ -33,6 +35,19 @@ void main() {
   vec4 r0 = u_bones[b], r1 = u_bones[b + 1], r2 = u_bones[b + 2];
   mat3 R = mat3(r0.x, r1.x, r2.x, r0.y, r1.y, r2.y, r0.z, r1.z, r2.z);
   vec3 world = R * a_pos + vec3(r0.w, r1.w, r2.w);
+  float pal = a_misc.x;
+  /* The ring through the canvas, where a knocked-down man comes down on it: no light, only the canvas lifted and let down as
+     a ring of waves goes out over it from that point, measured flat along the canvas (a crest at its front, steep ahead of
+     it, and a trough and a smaller crest trailing behind). Only what lies on the canvas moves: a post, a rope or a man
+     standing on it does not. Where a tile of the canvas (its ramp, 22 to 25) is lifted past the glow, it is drawn a step
+     lighter, never more. */
+  if (u_groundK.x > 0.0) {
+    float x = length(world.xz - u_ground.xy) - u_ground.z, w = u_ground.w;
+    float env = x > 0.0 ? exp(-(x * x) / (0.09 * w * w)) : exp(-(x * x) / (w * w));
+    float h = u_groundK.x * env * cos(6.2832 * x / (1.4 * w)) * (1.0 - smoothstep(0.03, 0.12, abs(world.y)));
+    world.y += h;
+    if (u_groundK.y > 0.0 && h > u_groundK.y && pal > 21.5 && pal < 24.5) pal += 1.0;
+  }
   mat3 S = mat3(a_covA.x, a_covA.y, a_covA.z, a_covA.y, a_covB.x, a_covB.y, a_covA.z, a_covB.y, a_covB.z);
   mat3 M = mat3(u_view) * R;
   mat3 C = M * S * transpose(M);
@@ -61,7 +76,7 @@ void main() {
   v_conic = vec3(D, -B, A) / det;
   v_al = a_misc.z;
   v_light = u_mask < 0.9 && a_misc.y > 0.5 ? 1.0 : 0.0;
-  v_pal = a_misc.x;
+  v_pal = pal;
   // the ellipse ends where density * exp(-m2 / 2) falls to a half
   float m2 = 2.0 * log(max(a_misc.z, 0.51) * 2.0);
   vec2 extent = sqrt(m2 * vec2(A, D)) + 1.0;
@@ -222,6 +237,9 @@ export function createRenderer(canvas, o) {
        frame: { camera: { target, yaw, pitch, dist }, shake: [x, y] art pixels,
                 layers: [{ mesh, bones (vec4 rows, or none for things that stand still), palette (paletteArray), mask,
                            wave: [x, y, z, front, width, strength, sway] (a ripple through it, from a point in the world: it sways, with no light),
+                           ground: [x, y, z, front, width, lift, glow] (the other kind of ripple, through the canvas: a ring measured flat
+                             along it, lifting what lies on it by up to `lift` metres, a tile of the canvas lifted past `glow` a step
+                             lighter; render/blow.mjs groundRow),
                            silhouette: k, 1 to 8 (every pixel of the cell this layer covers is kept as silhouette k, whether or not
                              something nearer hides it there: its whole outline in the picture, not only what shows of it),
                            outside: k (this layer is drawn only off silhouette k, in front of it or behind it alike; elsewhere depth
@@ -287,6 +305,9 @@ export function createRenderer(canvas, o) {
       const wv = layer.wave;
       gl.uniform4f(splat.u.u_wave, wv ? wv[0] : 0, wv ? wv[1] : 0, wv ? wv[2] : 0, wv ? wv[3] : 0);
       gl.uniform3f(splat.u.u_waveK, wv ? wv[4] : 1, wv ? wv[5] : 0, wv ? wv[6] : 0);
+      const gr = layer.ground;
+      gl.uniform4f(splat.u.u_ground, gr ? gr[0] : 0, gr ? gr[2] : 0, gr ? gr[3] : 0, gr ? gr[4] : 1);
+      gl.uniform2f(splat.u.u_groundK, gr ? gr[5] : 0, gr ? gr[6] : 0);
       gl.bindVertexArray(layer.mesh.vao);
       gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, layer.mesh.count);
       drawn += layer.mesh.count;

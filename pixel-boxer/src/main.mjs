@@ -1,8 +1,12 @@
 /* The page: loads the baked splats, steps the bout sixty times a second (the bout solves the boxers' bodies itself: they are
-   part of its physics), and draws it at whatever rate the screen runs, each boxer placed between his last two steps. */
+   part of its physics), and draws it at whatever rate the screen runs, each boxer placed between his last two steps. A
+   knockdown's blow is shown a moment at a quarter of the speed (render/blow.mjs: slowOf): the bout still steps sixty
+   times a second of its own time, only fewer of them go by in a second of ours, and what is drawn between two steps goes on
+   being drawn between them, so the slow motion is as smooth as the rest. */
 import { createRenderer, paletteArray, rgb } from './render/renderer.mjs';
 import { createFx } from './render/fx.mjs';
-import { blow, met, rippleOf, rippleRow } from './render/blow.mjs';
+import { blow, met, rippleOf, rippleRow, fallOf, landed, landRipple, groundOf, groundRow, slowOf, paceOf, slowOn } from './render/blow.mjs';
+import { captureBout, blend } from './replay.mjs';
 import { unpack, fromBase64 } from './render/splats.mjs';
 import * as M from './rig/m3.mjs';
 import { fk, NAMES } from './rig/skeleton.mjs';
@@ -51,9 +55,9 @@ function start({ manifest, boxer, ring }) {
   const hall = new Float32Array(HALL.flatMap(rgb)),
     ink = new Float32Array(rgb(manifest.palette[0]));
   const bones = [new Float32Array(R.maxBones * 12), new Float32Array(R.maxBones * 12)],
-    mats = new Float32Array(NAMES.length * 12),
-    // each boxer's bone matrices at the last step and the one before: what is drawn lies between them
-    posed = [0, 1].map(() => ({ now: new Float32Array(NAMES.length * 12), was: new Float32Array(NAMES.length * 12) }));
+    mats = new Float32Array(NAMES.length * 12);
+  // both boxers as they were at the last step and the one before (src/replay.mjs captureBout): what is drawn lies between them
+  let posed = null;
 
   let stage = 0,
     bout,
@@ -66,7 +70,11 @@ function start({ manifest, boxer, ring }) {
     spar = query.has('spar'), // the other corner only stands there: for looking at the motion
     white = 0,
     dim = 0,
-    ripples = [null, null]; // the ripple going through each man, if one is (render/blow.mjs)
+    ripples = [null, null], // the ripple going through each man, if one is (render/blow.mjs)
+    falls = [null, null], // a man knocked down, until he comes down on the canvas (render/blow.mjs: fallOf)
+    ground = null, // the ring through the canvas from where he came down
+    slow = null, // a knockdown's slow motion, while it lasts
+    slowAt = 0; // the bout's time at its blow
   const cam = { target: [0, 0.8, 0], yaw: 0, pitch: 0.5, dist: 8 },
     shake = { amp: 0 },
     stats = { frames: 0, ms: 0, drawn: 0 };
@@ -77,6 +85,8 @@ function start({ manifest, boxer, ring }) {
     pose(true);
     dim = 0;
     ripples = [null, null];
+    falls = [null, null];
+    ground = slow = null;
     $('stage').textContent = STAGES[stage].name;
     hud();
   }
@@ -103,11 +113,11 @@ function start({ manifest, boxer, ring }) {
   });
   addEventListener('keydown', e => (e.code === 'Enter' || e.code === 'Space' || e.code === 'KeyJ') && begin());
 
-  // after a step: each boxer's bones for the picture, and the streak of a glove that is travelling
+  // after a step: both boxers as they are now for the picture, and the streak of a glove that is travelling
   function pose(fresh) {
+    const now = captureBout(bout);
+    posed = { was: fresh ? now : posed.now, now };
     bout.fighters.forEach((f, i) => {
-      posed[i].was.set(fresh ? boneMatrices(f.pose, bind, f.place, mats, 0) : posed[i].now);
-      posed[i].now.set(boneMatrices(f.pose, bind, f.place, mats, 0));
       const hand = f.action && MOVES[f.action.name].punch ? MOVES[f.action.name].hand : null;
       if (!fresh && hand && f.before) {
         const a = f.before[hand],
@@ -131,6 +141,8 @@ function start({ manifest, boxer, ring }) {
       // (sparks off the far side of what it struck, never seen over him, and a ripple through him from where it landed)
       blow(motes[e.on], e, f[e.on]);
       ripples[e.on] = rippleOf(e, f[e.on]);
+      // (a knockdown: watched until he comes down on the canvas, and shown a moment slowly from the blow on)
+      if (fallOf(e)) (falls[e.on] = fallOf(e)), (slow = slowOf(e)), (slowAt = bout.t);
       shake.amp = e.down ? 7 : 1.5 + 3.5 * k;
       try {
         if (navigator.vibrate && e.on === 0) navigator.vibrate(Math.round(15 + 40 * k));
@@ -165,7 +177,9 @@ function start({ manifest, boxer, ring }) {
 
   function frame(now) {
     const t0 = performance.now(),
-      elapsed = Math.min(0.1, (now - last) / 1000 || 0) * SPEED;
+      real = Math.min(0.1, (now - last) / 1000 || 0) * SPEED,
+      // (the time of the picture: the real time, or less of it in a knockdown's slow motion)
+      elapsed = real * paceOf(slow);
     last = now;
     time += elapsed;
     fit();
@@ -187,8 +201,14 @@ function start({ manifest, boxer, ring }) {
         step(bout, [mine, spar ? {} : think(rival, bout, DT)], DT);
         if (spar) bout.fighters[1].hp = Math.max(bout.fighters[1].hp, 25); // a sparring partner does not go down
         for (const e of bout.events) react(e);
+        // (where a knocked-down man first comes down on the canvas: a second ripple through him, and a ring through the canvas)
+        falls.forEach((fall, i) => {
+          const at = landed(fall, bout.fighters[i]);
+          if (at) (ripples[i] = landRipple(fall, bout.fighters[i], at)), (ground = groundOf(fall, at));
+        });
         if (bout.stop <= 0 || bout.events.length) pose();
       }
+      slow = slowOn(slow, real, bout.t - slowAt, bout.stop > 0);
       hud();
     } else input.read();
     if (phase === 'over' && bout.t - bout.overAt > 1.6 && !$('result').classList.contains('on')) {
@@ -201,34 +221,39 @@ function start({ manifest, boxer, ring }) {
 
     // ---- each boxer, between his last two steps (and held where he is through the moment of a blow)
     const held = bout.stop > 0,
-      between = held ? 1 : Math.min(1, acc / DT);
+      between = held ? 1 : Math.min(1, acc / DT),
+      shown = blend(posed.was, posed.now, between).men,
+      fade = held ? elapsed * 0.2 : elapsed; // (what is in the air goes on slowly through the moment of a blow)
     stopped = held ? Math.max(stopped, bout.stop) : 0;
-    const shadows = [],
-      layers = [{ mesh: meshes.ring, palette: palettes[0], mask: 0.5 }];
+    if (ground) ground.age += fade;
+    const ring = groundRow(ground),
+      shadows = [],
+      layers = [{ mesh: meshes.ring, palette: palettes[0], mask: 0.5, ground: ring }];
     bout.fighters.forEach((f, i) => {
-      const { was, now } = posed[i];
-      for (let k = 0; k < mats.length; k++) mats[k] = was[k] + (now[k] - was[k]) * between;
+      const m = shown[i];
+      boneMatrices(m.pose, bind, m.place, mats, 0);
       if (held && f.sinceHit < 0.2) {
         // a boxer who has just been hit shudders through it
         const shudder = 0.022 * (bout.stop / stopped) * Math.sin(time * 2 * Math.PI * 27);
         for (let k = 0; k < NAMES.length; k++) (mats[k * 12 + 9] += shudder * Math.cos(f.yaw)), (mats[k * 12 + 11] -= shudder * Math.sin(f.yaw));
       }
       R.packBones(mats, bones[i]);
-      layers.push({ mesh: meshes.boxer, bones: bones[i], palette: palettes[i], mask: 1, wave: rippleRow(ripples[i], f), silhouette: i + 1 });
-      shadows.push({ x: f.x + f.pose.at.Hips[2] * Math.sin(f.yaw), z: f.z + f.pose.at.Hips[2] * Math.cos(f.yaw), yaw: f.yaw, long: f.down ? 0.5 : 0.3, wide: f.down ? 0.32 : 0.24 });
+      layers.push({ mesh: meshes.boxer, bones: bones[i], palette: palettes[i], mask: 1, wave: rippleRow(ripples[i], m), silhouette: i + 1 });
+      shadows.push({ x: m.x + m.pose.at.Hips[2] * Math.sin(m.yaw), z: m.z + m.pose.at.Hips[2] * Math.cos(m.yaw), yaw: m.yaw, long: f.down ? 0.5 : 0.3, wide: f.down ? 0.32 : 0.24 });
     });
-    meshes.fx[0].update(fx[0].rows, fx[0].update(held ? elapsed * 0.2 : elapsed, shadows, 22));
-    for (const i of [1, 2]) meshes.fx[i].update(fx[i].rows, fx[i].update(held ? elapsed * 0.2 : elapsed));
-    motes.forEach((m, i) => meshes.motes[i].update(m.rows, m.update(held ? elapsed * 0.2 : elapsed)));
+    meshes.fx[0].update(fx[0].rows, fx[0].update(fade, shadows, 22));
+    for (const i of [1, 2]) meshes.fx[i].update(fx[i].rows, fx[i].update(fade));
+    motes.forEach((m, i) => meshes.motes[i].update(m.rows, m.update(fade)));
     // (a ripple goes on in the same time as the sparks)
-    for (const r of ripples) if (r) r.age += held ? elapsed * 0.2 : elapsed;
-    layers.splice(1, 0, { mesh: meshes.fx[0], palette: palettes[0], mask: 0.6 });
+    for (const r of ripples) if (r) r.age += fade;
+    // (the shadows and the dust on the canvas ride the ring through it, never lit by it)
+    layers.splice(1, 0, { mesh: meshes.fx[0], palette: palettes[0], mask: 0.6, ground: ring && [...ring.slice(0, 6), 0] });
     layers.push({ mesh: meshes.fx[1], palette: palettes[0], mask: 0.6 }, { mesh: meshes.fx[2], palette: palettes[1], mask: 0.6 });
     // (what a blow threw off each man is never seen over him, in front of him or behind: it shows first at his outline)
     layers.push(...meshes.motes.map((mesh, i) => ({ mesh, palette: palettes[0], mask: 0.6, outside: i + 1 })));
 
     // ---- camera: above and to one side of the line between them, swinging round slowly as they circle
-    const [a, b] = bout.fighters,
+    const [a, b] = shown,
       ease = k => 1 - Math.exp(-elapsed * k),
       axis = Math.atan2(b.x - a.x, b.z - a.z),
       sideA = axis - Math.PI / 2,

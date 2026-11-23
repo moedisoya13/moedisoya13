@@ -1,5 +1,5 @@
 /* Short-lived splats over the match: the streak a glove leaves along the path it really took, sparks off a blow (where they
-   start and which way they go: render/blow.mjs), the sweat that leaves the far side of a head when it is hit (a study, not drawn
+   start, which way they go, and how hot they are at first: render/blow.mjs), the sweat that leaves the far side of a head when it is hit (a study, not drawn
    in the game), dust from a foot, and the shadows that pin the boxers to the canvas. Each is a stretched gaussian from a to b; every frame
    the live ones are written into one array of rows for the renderer. */
 import * as M from '../rig/m3.mjs';
@@ -46,15 +46,19 @@ export function createFx(random) {
     /* sparks thrown out round `at`, a fan with a little lift in it, carried on `dir` if there is one: [x, z] the way across,
        and [x, z, y] up or down as well (render/blow.mjs: the way the glove was going), each at 0.7 of the speed; width:
        how thick each is drawn, metres (render/blow.mjs: by the damage done); o: { life (times its life), pace (times its
-       velocity, the fan's lift with it) } (render/blow.mjs: a hit's) */
+       velocity, the fan's lift with it), fall (times its gravity), drag (times the air's hold on it), hot: { colours, last }
+       (what it is drawn as for its first `last` seconds, before its own colours) } (render/blow.mjs: a hit's) */
     sparks(at, n, colours, speed, dir, width, o) {
       const life = (o && o.life) || 1,
-        pace = (o && o.pace) || 1;
+        pace = (o && o.pace) || 1,
+        fall = (o && o.fall) || 1,
+        drag = (o && o.drag) || 1,
+        hot = (o && o.hot) || null;
       for (let i = 0; i < n; i++) {
         const a = rnd() * Math.PI * 2,
           s = speed * (0.35 + rnd() * 0.9),
           v = [Math.cos(a) * s * 0.8 + (dir ? dir[0] * speed * 0.7 : 0), Math.sin(a) * s * 0.7 + 1.4 + (dir && dir[2] ? dir[2] * speed * 0.7 : 0), (rnd() - 0.5) * s + (dir ? dir[1] * speed * 0.7 : 0)].map(x => x * pace);
-        add({ a: at.slice(), b: at.slice(), v, g: -13, drag: 3, width: width || 0.024, pal: colours, life: (0.16 + rnd() * 0.22) * life, tail: 0.03, shrink: 0.6 });
+        add({ a: at.slice(), b: at.slice(), v, g: -13 * fall, drag: 3 * drag, width: width || 0.024, pal: colours, hot, life: (0.16 + rnd() * 0.22) * life, tail: 0.03, shrink: 0.6 });
       }
     },
     /* The spray off a blow: sweat thrown off the part of him that was struck, at the instant it lands. The way the glove
@@ -213,9 +217,11 @@ export function createFx(random) {
       for (const it of items) {
         if (n >= CAP) break;
         if (it.stick && it.top <= 0.5) continue; // (a bead is not seen until the head moves under it)
-        const u = it.age / it.life;
+        const u = it.age / it.life,
+          // (a mote still hot: the hot colours, hottest first, over its first moments; then its own, from where it is in its life)
+          pal = it.hot && it.age < it.hot.last ? it.hot.colours[Math.min(it.hot.colours.length - 1, Math.floor((it.age / it.hot.last) * it.hot.colours.length))] : Array.isArray(it.pal) ? it.pal[Math.min(it.pal.length - 1, Math.floor(u * it.pal.length))] : it.pal;
         // (a mote of the mist is a single pixel while it flies, and thins away to nothing over the rest of its life)
-        write(n++, it.a, it.b, it.width * (it.stick ? 0.6 : 1 - it.shrink * u), Array.isArray(it.pal) ? it.pal[Math.min(it.pal.length - 1, Math.floor(u * it.pal.length))] : it.pal, it.flat, it.thin ? 1.5 - 1.1 * Math.max(0, (u - 0.4) / 0.6) ** 1.5 : 3, it.thin);
+        write(n++, it.a, it.b, it.width * (it.stick ? 0.6 : 1 - it.shrink * u), pal, it.flat, it.thin ? 1.5 - 1.1 * Math.max(0, (u - 0.4) / 0.6) ** 1.5 : 3, it.thin);
       }
       this.count = n;
       return n;

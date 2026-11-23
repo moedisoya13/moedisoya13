@@ -32,16 +32,55 @@
                            width by the damage; age to be moved on by the caller, in the same time as the motes), or null
                            for anything that is not a hit
      rippleRow(ripple, struck, set)   the layer's wave for it now: [x, y, z, front, width, strength, sway], or null once it
-                           is over (set: the ripple's numbers, FX.ripple by default) */
+                           is over (set: the ripple's numbers, FX.ripple by default)
+   A knockdown's blow (a hit that puts him down, or out cold: e.down, e.out) is drawn as its own (docs/moves-plan-6.md §2.4B),
+   with no light in any of it, and nothing of the bout changed: its motes hang (they last longer, fall slower, the air holds
+   them less); where his falling body first comes down on the canvas, a second ripple goes through him from the part that
+   came down, and a large ring goes out through the canvas from under it, lifting the tiles as it passes; and the game and
+   the effect study show the moment of the blow at a quarter of the speed. Every mote a blow throws (any hit) is first
+   drawn hot, as molten metal is, and cools to its own colours within its first few frames.
+     fallOf(e)             a knockdown blow's watch for where he comes down: { on, q, out, landed: null }, or null for any
+                           other event
+     landingOf(man)        the part of him nearest the canvas, if it is within FX.land.near of it: { joint, clear (metres
+                           between the part's underside and the canvas), at (that underside, world) }, or null. man: as
+                           the bout keeps him, or as a replay does ({ pose, place, points })
+     landed(fall, man)     after each step of the bout: where he first comes down, on the step he does (once), else null
+     landRipple(fall, man, landing)   the second ripple, from the part that came down: as rippleOf's, FX.ripple.land
+     groundOf(fall, landing)          the ring through the canvas: { at (world, on the canvas), age: 0, last, lift (metres) }
+     groundRow(ground, set)           the canvas layer's ground wave for it now: [x, y, z, front, width, lift, glow] (glow: the
+                           lift past which a tile is drawn a step lighter, 0 none), or null once it is over
+     groundLift(row, p)    how high that lifts a point of the canvas (the renderer's own reckoning, for checking it)
+     slowOf(e)             the slow motion a knockdown's blow starts: { span (bout seconds), u, back, held }, or null
+     paceOf(slow)          the speed the picture is to play at now (1 is as it happens)
+     slowOn(slow, real, since, held)  moved on by `real` seconds of real time, the bout now `since` seconds past the blow
+                           (its own time: the held moment of the blow is not counted), held while that moment is held ->
+                           the slow motion, or null once it is over */
 import * as M from '../rig/m3.mjs';
+import { RADIUS } from '../rig/body.mjs';
+import { toWorld } from '../anim/pose.mjs';
 
 export const FX = {
   head: 0.115,
   out: 0.01,
   ref: 3,
   most: 2.2,
-  motes: { n: [17, 11], width: 0.024, thin: 0.01, life: 0.95, short: 0.4, pace: 1.05 },
-  ripple: { speed: 3, last: 0.4, width: 0.14, sway: 0.034, thin: 0.06, down: { last: 0.55, sway: 1.3 } }
+  /* hot: what every mote of a hit is drawn as first, hottest first (the palette's pale yellow, amber and orange: never its
+     white, assets/manifest.json 39, 40, 18), for its first `last` seconds; down: a knockdown's motes, times their life,
+     their fall and the air's hold on them */
+  motes: { n: [17, 11], width: 0.024, thin: 0.01, life: 0.95, short: 0.4, pace: 1.05, hot: { colours: [39, 40, 18], last: 0.06 }, down: { life: 1.6, fall: 0.5, drag: 0.8 } },
+  // (land: the second ripple of a knockdown, from where he comes down: its strength times the blow's, and how long it goes)
+  ripple: { speed: 3, last: 0.4, width: 0.14, sway: 0.034, thin: 0.06, down: { last: 0.55, sway: 1.3 }, land: { strength: 0.8, last: 0.45 } },
+  // where a falling man comes down: the first step any of these parts of him (its middle, and how thick it is) is this near
+  land: { near: 0.06, parts: [['hips', RADIUS.Hips], ['chest', RADIUS.Chest], ['head', RADIUS.head], ['LeftShin', RADIUS.Shin], ['RightShin', RADIUS.Shin]] },
+  /* the ring through the canvas from where he comes down: its front's speed (m/s), how long it goes, the width of its train
+     of waves (metres), how high it lifts the tiles (metres: at the measure, FX.ref, in proportion to the damage below it,
+     never more than that and never less than `least`), the share of the lift past which a tile is drawn a step lighter, and
+     a knockout's (how long, times the lift) */
+  ground: { speed: 4, last: 0.6, width: 0.35, lift: 0.03, least: 0.01, glow: 0.3, out: { last: 0.75, lift: 1.3 } },
+  /* a knockdown's slow motion: the speed it is shown at, the speed it starts from and the real seconds it takes to get from
+     that to it, the real seconds it takes to get back to full speed once it is over, and how long it lasts (bout seconds)
+     for a knockdown and for a knockout */
+  slow: { rate: 0.25, from: 0.5, ease: 0.05, back: 0.1, down: 0.25, out: 0.35 }
 };
 // health a newton-second takes off a man with an ordinary chin (game/bout.mjs RULES.damage): for a hit that carries no damage
 const PER_NS = 0.035;
@@ -53,6 +92,9 @@ export const scaleOf = e => Math.min(FX.most, Math.max(0, (e.damage ?? e.J * PER
 
 const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 const len = a => Math.sqrt(dot(a, a));
+const smooth = x => ((x = Math.max(0, Math.min(1, x))), x * x * (3 - 2 * x));
+// a point of him by name, in the world: one the bout keeps (his head, hips, chest, belly...), or else a joint of his pose
+const pointOf = (man, joint) => (man.points && man.points[joint]) || toWorld(man.place, man.pose.at[joint], man.pose.stretch);
 
 /* The point of the part's core (its middle, or the segment from at to to) nearest the point p. */
 function nearest(part, p) {
@@ -119,9 +161,11 @@ export function blow(fx, e, struck) {
     way = [e.vec[0], e.vec[2], e.vec[1]],
     // (how thick each is: in proportion to the damage, down to the thinnest that still shows as a pixel)
     width = Math.max(FX.motes.thin, FX.motes.width * q),
+    // (a knockdown's hang: they last longer, fall slower, and the air holds them less)
+    down = e.down || e.out ? FX.motes.down : null,
     // (how long each lasts: a twentieth less than the sparks always did at the measure, and in proportion to the damage from
-    // there, down to FX.motes.short of it; and all of them a twentieth faster)
-    o = { life: FX.motes.life * Math.max(FX.motes.short, q), pace: FX.motes.pace };
+    // there, down to FX.motes.short of it; and all of them a twentieth faster; and each drawn hot at first)
+    o = { life: FX.motes.life * Math.max(FX.motes.short, q) * (down ? down.life : 1), pace: FX.motes.pace, fall: down ? down.fall : 1, drag: down ? down.drag : 1, hot: FX.motes.hot };
   let n = 0;
   SPARKS.forEach((sparks, i) => {
     const [colours, speed] = sparks(k),
@@ -159,6 +203,83 @@ export function rippleOf(e, struck) {
 export function rippleRow(ripple, struck, set) {
   set = set || FX.ripple;
   if (!ripple || ripple.age >= ripple.last) return null;
-  const c = M.add(struck.points[ripple.joint], ripple.off);
+  const c = M.add(pointOf(struck, ripple.joint), ripple.off);
   return [c[0], c[1], c[2], set.speed * ripple.age, ripple.width ?? set.width, ripple.strength * (1 - ripple.age / ripple.last) ** 1.2, ripple.sway];
+}
+
+export const fallOf = e => (e.type === 'hit' && (e.down || e.out) ? { on: e.on, q: scaleOf(e), out: !!e.out, landed: null } : null);
+
+/* (each part's underside: its middle, as far down as it is thick; the lowest of them, if it is near enough the canvas. A
+   knee is a joint of his pose; the rest the bout keeps as his points) */
+export function landingOf(man) {
+  let low = null;
+  for (const [joint, r] of FX.land.parts) {
+    const p = pointOf(man, joint),
+      clear = p[1] - r;
+    if (!low || clear < low.clear) low = { joint, clear, at: [p[0], clear, p[2]] };
+  }
+  return low.clear < FX.land.near ? low : null;
+}
+
+export function landed(fall, man) {
+  if (!fall || fall.landed) return null;
+  const l = landingOf(man);
+  if (l) fall.landed = l;
+  return l;
+}
+
+export function landRipple(fall, man, landing) {
+  const set = FX.ripple,
+    q = fall.q * set.land.strength;
+  // (held to the part that came down, from its underside; as long a sway as the blow's own ripple)
+  return { joint: landing.joint, off: M.sub(landing.at, pointOf(man, landing.joint)), age: 0, strength: q, width: Math.max(set.thin, set.width * q), last: set.land.last, sway: set.sway * set.down.sway };
+}
+
+export function groundOf(fall, landing) {
+  const set = FX.ground,
+    out = fall.out ? set.out : null;
+  // (as high as the blow was hard, a knockout's higher: up to the most it lifts them, which a pro's straight does)
+  return { at: [landing.at[0], 0, landing.at[2]], age: 0, last: out ? out.last : set.last, lift: Math.min(set.lift, Math.max(set.least, set.lift * fall.q * (out ? out.lift : 1))) };
+}
+
+export function groundRow(ground, set) {
+  set = set || FX.ground;
+  if (!ground || ground.age >= ground.last) return null;
+  const fade = (1 - ground.age / ground.last) ** 1.2,
+    lift = ground.lift * fade;
+  // (the crest a step lighter while it is still high enough to be seen as a crest)
+  return [ground.at[0], ground.at[1], ground.at[2], set.speed * ground.age, set.width, lift, fade > 0.3 ? set.glow * lift : 0];
+}
+
+/* How high the ring lifts a point of the canvas (world), as the renderer's shader works it out (render/renderer.mjs: the
+   ground wave): from how far out it is along the canvas, past or short of the front, a crest at the front, steep ahead of
+   it, a trough and a smaller crest trailing behind; nothing above the canvas. -> metres */
+export function groundLift(row, p) {
+  if (!row) return 0;
+  const x = Math.hypot(p[0] - row[0], p[2] - row[2]) - row[3],
+    w = row[4],
+    env = x > 0 ? Math.exp(-(x * x) / (0.09 * w * w)) : Math.exp(-(x * x) / (w * w)),
+    y = Math.abs(p[1]),
+    above = Math.max(0, Math.min(1, (y - 0.03) / 0.09));
+  return row[5] * env * Math.cos((6.2832 * x) / (1.4 * w)) * (1 - above * above * (3 - 2 * above));
+}
+
+export const slowOf = e => (e.type === 'hit' && (e.down || e.out) ? { span: e.out ? FX.slow.out : FX.slow.down, u: 0, back: -1, held: true } : null);
+
+/* (from half the speed down to a quarter as it starts, eased, in its first FX.slow.ease real seconds; a quarter until the
+   bout is so far past the blow; then back up to the full speed, eased, in FX.slow.back real seconds) */
+export function paceOf(slow) {
+  const S = FX.slow;
+  if (!slow || slow.held) return 1;
+  if (slow.back < 0) return S.from + (S.rate - S.from) * smooth(slow.u / S.ease);
+  return S.rate + (1 - S.rate) * smooth((slow.u - slow.back) / S.back);
+}
+
+export function slowOn(slow, real, since, held) {
+  if (!slow) return null;
+  slow.held = held;
+  if (held) return slow; // (the moment of the blow, held as it always is: the slow motion is of the bout's own time)
+  slow.u += real;
+  if (slow.back < 0 && since >= slow.span - 1e-9) slow.back = slow.u;
+  return slow.back >= 0 && slow.u - slow.back >= FX.slow.back ? null : slow;
 }

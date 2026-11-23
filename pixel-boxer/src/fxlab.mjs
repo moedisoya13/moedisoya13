@@ -3,12 +3,18 @@
    struck man white for 0.07 s (his palette made white for so long: the renderer has no flash any more). "확정" is the blow as
    the game now draws it (render/blow.mjs): the same sparks from where the line of the blow comes out of his far side, along
    the way the glove was going, never seen over him (an fx of his own drawn `outside` his silhouette), and a ripple through
-   him from where it landed in place of the white. Every card is a real bout from the catalogue (src/defense.mjs,
-   src/ladder.mjs, src/bodyshots.mjs), looped; the two cards of a row are the same exchange, frame for frame. */
+   him from where it landed in place of the white; every mote drawn hot at first, cooling to its own colours in its first few
+   frames. A knockdown's blow is its own (docs/moves-plan-6.md §2.4B): shown a moment at a quarter of the speed, its motes
+   hanging, and where he comes down on the canvas a second ripple through him and a ring through the canvas. Every card is a
+   real bout from the catalogue (src/defense.mjs, src/ladder.mjs, src/bodyshots.mjs), looped; the two cards of a row are the
+   same exchange, frame for frame (one that has played its loop waits for the other, slowed in its knockdown, so that they
+   start again together). A card is drawn between its last two steps, so a slow motion is as smooth as the rest. */
 import { createRenderer, paletteArray, rgb } from './render/renderer.mjs';
 import { createFx } from './render/fx.mjs';
-import { blow, met, rippleOf, rippleRow, scaleOf, FX } from './render/blow.mjs';
+import { blow, met, rippleOf, rippleRow, scaleOf, FX, fallOf, landed, landRipple, groundOf, groundRow, slowOf, paceOf, slowOn } from './render/blow.mjs';
+import { captureBout, blend } from './replay.mjs';
 import { unpack, fromBase64 } from './render/splats.mjs';
+import { floor } from './render/floor.mjs';
 import { fk, NAMES } from './rig/skeleton.mjs';
 import { RIVAL } from './rig/boxer.mjs';
 import { boneMatrices } from './anim/pose.mjs';
@@ -55,26 +61,6 @@ const ROWS = [
   }
 }
 
-function floor(half, centre) {
-  const gap = 0.085,
-    n = Math.round((half * 2) / gap),
-    rows = new Float32Array(n * n * 12),
-    s = 0.042 ** 2;
-  let k = 0;
-  for (let i = 0; i < n; i++)
-    for (let j = 0; j < n; j++) {
-      const x = centre[0] - half + (i + 0.5) * gap,
-        z = centre[1] - half + (j + 0.5) * gap,
-        tile = 0.5,
-        fx = Math.abs((((x / tile) % 1) + 1.5) % 1 - 0.5) * tile,
-        fz = Math.abs((((z / tile) % 1) + 1.5) % 1 - 0.5) * tile,
-        dark = (Math.floor(x / tile + 100) + Math.floor(z / tile + 100)) % 2;
-      rows.set([x, 0, z, s, 0, 0, 1e-6, 0, s, fx < 0.03 || fz < 0.03 ? 22 : dark ? 23 : 24, 0, 3], k);
-      k += 12;
-    }
-  return { rows, count: n * n };
-}
-
 async function load() {
   const manifest = await (await fetch('assets/manifest.json')).json();
   const boxer = unpack(fromBase64(await (await fetch('assets/' + manifest.boxer.file)).text()), manifest.boxer);
@@ -114,18 +100,41 @@ function start({ manifest, boxer }) {
         const m = createFx(() => cell.rnd());
         return { fx: m, mesh: R.mesh(m.rows, 0, true) };
       }),
-      cell = { entry, version, el, stage: el.querySelector('.stage'), blow: el.querySelector('[data-blow]'), beads: el.querySelector('[data-beads]'), head: el.querySelector('[data-head]'), fx, mesh: R.mesh(fx.rows, 0, true), motes, bones: [new Float32Array(R.maxBones * 12), new Float32Array(R.maxBones * 12)], seed, rnd: dice(seed), bout: null, t: 0, acc: 0, shake: 0, ripples: [null, null], whites: [0, 0], struck: entry.id.includes('@') ? 1 : 0, cam: { target: [entry.id.includes('@') ? 1.2 : -0.45, 1.3, 0], yaw: entry.view.yaw, pitch: 0.14, dist: 2.9 } };
+      cell = { entry, version, el, stage: el.querySelector('.stage'), blow: el.querySelector('[data-blow]'), beads: el.querySelector('[data-beads]'), head: el.querySelector('[data-head]'), fx, mesh: R.mesh(fx.rows, 0, true), motes, bones: [new Float32Array(R.maxBones * 12), new Float32Array(R.maxBones * 12)], seed, rnd: dice(seed), bout: null, t: 0, acc: 0, shake: 0, ripples: [null, null], whites: [0, 0], falls: [null, null], ground: null, slow: null, slowAt: 0, was: null, now: null, struck: entry.id.includes('@') ? 1 : 0, cam: { target: [entry.id.includes('@') ? 1.2 : -0.45, 1.3, 0], yaw: entry.view.yaw, pitch: 0.14, dist: 2.9 } };
     cell.bout = freshBout(entry);
+    cell.was = cell.now = captureBout(cell.bout);
     return cell;
   });
 
+  // a card from the start of its loop: a fresh bout, the same dice, nothing in the air
+  function restart(cell) {
+    cell.bout = freshBout(cell.entry);
+    cell.t = 0;
+    cell.rnd = dice(cell.seed);
+    cell.ripples = [null, null];
+    cell.whites = [0, 0];
+    cell.falls = [null, null];
+    cell.ground = cell.slow = null;
+    cell.was = cell.now = captureBout(cell.bout);
+  }
+  /* May a card take a step? Not at the end of its loop until the other card of its row is there too (it may be behind, in
+     a slow motion the other has not got): then the two start again together. */
+  function due(cell) {
+    if (cell.t < cell.entry.loop - 1e-9) return true;
+    const row = cells.filter(c => c.entry === cell.entry);
+    if (row.some(c => c.t < c.entry.loop - 1e-9)) return false;
+    row.forEach(restart);
+    return true;
+  }
   function tick(cell) {
-    const { entry, version } = cell;
-    if (cell.t > 0 && Math.round(cell.t / DT) % Math.round(entry.loop / DT) === 0) (cell.bout = freshBout(entry)), (cell.t = 0), (cell.rnd = dice(cell.seed)), (cell.ripples = [null, null]), (cell.whites = [0, 0]);
-    const bout = cell.bout,
+    const { entry, version } = cell,
+      bout = cell.bout,
       [a, b] = bout.fighters;
     step(bout, drive(entry, bout, cell.t, DT), DT);
     cell.t += DT;
+    // (the step before and this one: what is drawn lies between them)
+    cell.was = cell.now;
+    cell.now = captureBout(bout);
     b.hp = 1000;
     if (!entry.hurt) a.hp = 1000;
     // (the white of before went off on the bout's own clock, as the bout kept it)
@@ -144,6 +153,8 @@ function start({ manifest, boxer }) {
           cell.el.querySelector('[data-thick]').textContent = (Math.max(FX.motes.thin, FX.motes.width * scaleOf(e)) * 100).toFixed(1);
           cell.el.querySelector('[data-sway]').textContent = (r.strength * r.sway * 100).toFixed(1);
           cell.el.querySelector('[data-wide]').textContent = (r.width * 100).toFixed(0);
+          // (a knockdown: watched until he comes down on the canvas, and shown a moment slowly from the blow on)
+          if (fallOf(e)) (cell.falls[e.on] = fallOf(e)), (cell.slow = slowOf(e)), (cell.slowAt = bout.t);
         } else {
           // as it was drawn before: the sparks where the glove met him, and he goes white
           cell.fx.sparks(e.at, Math.round(5 + 12 * k), [38, 39, 40, 41], 2.5 + 3 * k, e.dir);
@@ -158,6 +169,11 @@ function start({ manifest, boxer }) {
         cell.beads.textContent = String(n);
       } else if (e.type === 'block' || e.type === 'parry') (met(cell.fx, e), (cell.shake = e.type === 'parry' ? 2 : 1));
     }
+    // (where a knocked-down man first comes down on the canvas: a second ripple through him, and a ring through the canvas)
+    cell.falls.forEach((fall, i) => {
+      const at = landed(fall, bout.fighters[i]);
+      if (at) (cell.ripples[i] = landRipple(fall, bout.fighters[i], at)), (cell.ground = groundOf(fall, at));
+    });
     cell.shake *= 0.82;
   }
 
@@ -165,11 +181,14 @@ function start({ manifest, boxer }) {
     const bg = getComputedStyle(document.body).backgroundColor.match(/[\d.]+/g).map(Number);
     ground = new Float32Array([0, 1, 2, 3].flatMap(() => [bg[0] / 255, bg[1] / 255, bg[2] / 255]));
   }
-  /* A card's picture as its bout stands, what is in the air moved on by `elapsed` seconds: the frame R.cell takes. */
-  function scene(cell, elapsed) {
-    const [a, b] = cell.bout.fighters,
-      layers = [{ mesh: meshes.floor, palette: palettes[0], mask: 0.5 }],
+  /* A card's picture as its bout stands (drawn k of the way from its step before the last to its last), what is in the air
+     moved on by `elapsed` seconds: the frame R.cell takes. */
+  function scene(cell, elapsed, k = 1) {
+    const [a, b] = blend(cell.was, cell.now, k).men,
       shadows = [];
+    if (cell.ground) cell.ground.age += elapsed;
+    const ring = groundRow(cell.ground) || (cell.ground = null),
+      layers = [{ mesh: meshes.floor, palette: palettes[0], mask: 0.5, ground: ring }];
     [a, b].forEach((f, i) => {
       R.packBones(boneMatrices(f.pose, bind, f.place, mats, 0), cell.bones[i]);
       shadows.push({ x: f.x + f.pose.at.Hips[2] * Math.sin(f.yaw), z: f.z + f.pose.at.Hips[2] * Math.cos(f.yaw), yaw: f.yaw, long: 0.3, wide: 0.24 });
@@ -184,7 +203,8 @@ function start({ manifest, boxer }) {
       return rippleRow(r, f) || (cell.ripples[i] = null);
     });
     layers.push(
-      { mesh: cell.mesh, palette: palettes[0], mask: 0.6 },
+      // (the shadows on the canvas ride the ring through it, never lit by it)
+      { mesh: cell.mesh, palette: palettes[0], mask: 0.6, ground: ring && [...ring.slice(0, 6), 0] },
       { mesh: meshes.boxer, bones: cell.bones[0], palette: cell.whites[0] > 0 ? white : palettes[0], mask: 1, wave: waves[0], silhouette: 1 },
       { mesh: meshes.boxer, bones: cell.bones[1], palette: cell.whites[1] > 0 ? white : palettes[1], mask: 1, wave: waves[1], silhouette: 2 },
       /* what a blow throws off each man is never seen over him, in front of him or behind: where it crosses his own outline
@@ -212,12 +232,23 @@ function start({ manifest, boxer }) {
     for (const cell of cells) {
       const box = cell.stage.getBoundingClientRect();
       if (box.bottom < 0 || box.top > innerHeight || box.width < 8) continue;
-      cell.acc += elapsed;
+      // (its own time: the real time, or less of it in a knockdown's slow motion)
+      const time = elapsed * paceOf(cell.slow);
+      cell.acc += time;
       let steps = 0;
-      while (cell.acc >= DT && steps++ < 6) (cell.acc -= DT), tick(cell);
+      while (cell.acc >= DT && steps++ < 6) {
+        if (!due(cell)) {
+          cell.acc = 0;
+          break;
+        }
+        cell.acc -= DT;
+        tick(cell);
+      }
       if (steps > 6) cell.acc = 0;
+      cell.slow = slowOn(cell.slow, elapsed, cell.bout.t - cell.slowAt, cell.bout.stop > 0);
       const rect = { x: Math.round((box.left * dpr) / grid.scale), y: Math.round(((innerHeight - box.bottom) * dpr) / grid.scale), w: Math.round((box.width * dpr) / grid.scale), h: Math.round((box.height * dpr) / grid.scale) };
-      R.cell(rect, scene(cell, elapsed));
+      // (held through the moment of a blow where it is; else between its last two steps, by how far it is to the next)
+      R.cell(rect, scene(cell, time, cell.bout.stop > 0 ? 1 : Math.min(1, cell.acc / DT)));
     }
     R.end({ hall: ground, ink });
     requestAnimationFrame(frame);
@@ -233,8 +264,8 @@ function start({ manifest, boxer }) {
   globalThis.__lab = {
     cells,
     hold: false,
-    reset: () => cells.forEach(cell => ((cell.bout = freshBout(cell.entry)), (cell.t = 0), (cell.acc = 0), (cell.ripples = [null, null]), (cell.whites = [0, 0]), (cell.rnd = dice(cell.seed)))),
-    advance: sec => cells.forEach(cell => { for (let i = 0; i < Math.round(sec / DT); i++) (tick(cell), cell.fx.update(DT, [], 22), cell.motes.forEach(m => m.fx.update(DT)), cell.ripples.forEach(r => r && (r.age += DT))); }),
+    reset: () => cells.forEach(cell => (restart(cell), (cell.acc = 0))),
+    advance: sec => cells.forEach(cell => { for (let i = 0; i < Math.round(sec / DT); i++) if (due(cell)) (tick(cell), cell.fx.update(DT, [], 22), cell.motes.forEach(m => m.fx.update(DT)), cell.ripples.forEach(r => r && (r.age += DT)), cell.ground && (cell.ground.age += DT)); }),
     renderer: R,
     scene,
     FX
