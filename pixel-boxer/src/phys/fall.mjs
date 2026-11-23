@@ -42,7 +42,7 @@
    right by moving and turning the bodies as their masses and inertias share it, and the velocities are what that comes to. */
 import * as M from '../rig/m3.mjs';
 import { NAMES, PARENT, TPOSE, fk } from '../rig/skeleton.mjs';
-import { RANGE, FOOT, HEAD, SHOULDER, shoulderOf } from '../rig/body.mjs';
+import { RANGE, RATE, FOOT, HEAD, SHOULDER, shoulderOf } from '../rig/body.mjs';
 
 /* (twelve steps a frame. What below is reckoned a pass at a time and is a speed or a rate (PRESS, KNEE_TURN, FIX_MOST, GAIN)
    is set by the second, so that it means the same in any number of steps; the stiffnesses, dampings and grip are by the
@@ -545,6 +545,28 @@ function kneeWay(bs, s, h) {
   }
 }
 
+/* How far the waist (the belly piece, which carries Spine1) is turned on the pelvis, as tools/audit.mjs measures it: the way
+   the belly's front points round the pelvis's own up (radians); and the way to turn the belly on the pelvis that turns that
+   fastest, with how fast it does (g: that turn's speed is the belly's turning less the pelvis's, along g) */
+function waistOf(pelvis, belly) {
+  const f = qrot(qconj(pelvis.q), qrot(belly.q, [0, 0, 1])),
+    flat = f[0] * f[0] + f[2] * f[2];
+  return { at: Math.atan2(f[0], f[2]), g: flat > 1e-6 ? qrot(pelvis.q, [(-f[1] * f[0]) / flat, 1, (-f[1] * f[2]) / flat]) : null };
+}
+/* The waist turned on the pelvis in one step no further than a waist turns in so long (rig/body.mjs: RATE), from where it
+   was as the step began. The belly is a piece of its own, and limp nothing holds it to the pieces either side of it but its
+   range, so a belly that comes down on the canvas on one side first is spun by it about the spine's line, and would go on
+   spinning until its range stops it; what it turns further than that in a step is turned back, the belly and the pelvis
+   sharing it as their inertias do, and the joints round them carry it on to the rest of him in the steps after. */
+function waistRate(pelvis, belly, from, h) {
+  const { at, g } = waistOf(pelvis, belly),
+    d = ((at - from + 3 * Math.PI) % (2 * Math.PI)) - Math.PI,
+    over = Math.abs(d) - RATE.waist * RAD * h;
+  if (over <= 0 || !g) return;
+  const gl = len(g);
+  angular(belly, pelvis, M.scale(g, (-Math.sign(d) * over) / (gl * gl)), 0, h);
+}
+
 /* A joint found past its range is turned back by no more than this in one pass, as Box2D caps its angular corrections: in
    an ordinary step it is a fraction of a degree past, and this never bites, but where contacts and other limits have shoved
    a joint well past in one go, or where a range is measured from something that has itself swung (an ankle's from the foot
@@ -862,7 +884,8 @@ export function stepFall(body, dt, obstacles) {
     // (lifted: all of him but his feet pushed up while the blow throws him, his feet drawn up after him by his ankles; given
     // before what he has is reckoned, as a shove is)
     if (body.lift && body.t <= LIFT.time + 1e-9) for (const b of bs) if (!b.frozen && !b.name.endsWith('foot')) b.v[1] += (body.lift.a + G) * h;
-    const before = energy(bs),
+    const waist = waistOf(pelvis, bs[INDEX.belly]).at, // (where the waist was as the step began)
+      before = energy(bs),
       touching = [], // contacts this step: [piece, its local point, normal, how fast that point was going along it]
       pressed = []; // a limb kept out of his own trunk or head this step: [limb, its local point, the other piece, normal]
     for (const b of bs) {
@@ -976,6 +999,8 @@ export function stepFall(body, dt, obstacles) {
             }
           }
     }
+    // (and the waist turned no further in the step than a waist turns in so long: after all of that, which it is the step's)
+    waistRate(pelvis, bs[INDEX.belly], waist, h);
     // ---- what that comes to: the velocities, a little damped (a limp body is not a spring)
     for (const b of bs) {
       b.v = M.scale(M.sub(b.x, b.xp), 1 / h);
