@@ -503,9 +503,7 @@ function twist(rel, axis, most, toWorld) {
 /* Which way a knee points round the leg's own line, from the front of the thigh (ahead of the pelvis when the leg hangs
    under it, up from it when the leg is out in front, down when it is out behind), as tools/audit.mjs measures it: the
    thigh turns in the hip only so far. Kept inside that by turning the thigh and the shin together about the line from hip
-   to ankle (the ankle, on the line, stays where it is). (The front is gone over from ahead to up or down smoothly, from
-   0.6 to 0.9 of the way the leg points; the audit goes over at once, at 0.8, so between those the two read the same knee
-   differently, by up to a few tens of degrees: it is kept inside the range as both read it.) */
+   to ankle (the ankle, on the line, stays where it is). */
 const KNEE_WAY = [RANGE.kneeAzimuth[0] + 6, RANGE.kneeAzimuth[1] - 6];
 /* (and only so fast, degrees a second, so much a pass times the step (half a degree a pass at twelve steps a frame): what
    the knee's way is measured from swings round as the leg goes out in front or behind, so a leg can find itself well
@@ -525,19 +523,15 @@ function kneeWay(bs, s, h) {
     py = qrot(pelvis.q, [0, 1, 0]),
     px = M.scale(qrot(pelvis.q, [1, 0, 0]), s === 'L' ? 1 : -1),
     ahead = dot(d, pz),
-    up = M.scale(py, ahead > 0 ? 1 : -1),
     w = smooth((Math.abs(ahead) - 0.6) / 0.3),
-    ref = M.add(M.scale(pz, 1 - w), M.scale(up, w)),
+    ref = M.add(M.scale(pz, 1 - w), M.scale(py, w * (ahead > 0 ? 1 : -1))),
     front = unit(M.sub(ref, M.scale(d, dot(ref, d)))),
     outward = unit(M.sub(px, M.scale(d, dot(px, d)))),
     a = Math.atan2(dot(off, outward), dot(off, front)) * DEG,
-    edge = unit(M.sub(Math.abs(ahead) < 0.8 ? pz : up, M.scale(d, dot(Math.abs(ahead) < 0.8 ? pz : up, d)))), // (the audit's front)
-    b = Math.atan2(dot(off, outward), dot(off, edge)) * DEG,
-    // (the least turn that puts it inside the range from both fronts: a turn about d turns it as far from either)
-    turn = clamp(0, Math.max(KNEE_WAY[0] - a, KNEE_WAY[0] - b), Math.min(KNEE_WAY[1] - a, KNEE_WAY[1] - b));
-  if (turn === 0) return;
+    a2 = clamp(a, KNEE_WAY[0], KNEE_WAY[1]);
+  if (a2 === a) return;
   // (turning about d by +phi carries the front toward d x front, which is outward for the right leg and inward for the left)
-  const phi = clamp(turn * 0.5, -KNEE_TURN * h, KNEE_TURN * h) * RAD * (dot(cross(d, front), outward) > 0 ? 1 : -1),
+  const phi = clamp((a2 - a) * 0.5, -KNEE_TURN * h, KNEE_TURN * h) * RAD * (dot(cross(d, front), outward) > 0 ? 1 : -1),
     rq = qaxis(d, phi);
   for (const b of [thigh, shin]) {
     b.x = M.add(hip, qrot(rq, M.sub(b.x, hip)));
@@ -557,7 +551,8 @@ function waistOf(pelvis, belly) {
    was as the step began. The belly is a piece of its own, and limp nothing holds it to the pieces either side of it but its
    range, so a belly that comes down on the canvas on one side first is spun by it about the spine's line, and would go on
    spinning until its range stops it; what it turns further than that in a step is turned back, the belly and the pelvis
-   sharing it as their inertias do, and the joints round them carry it on to the rest of him in the steps after. */
+   sharing it as their inertias do, and the joints round them carry it on to the rest of him in the steps after. (The turn
+   back is reckoned to the first order, so a step can be left a few hundredths of a degree a second over.) */
 function waistRate(pelvis, belly, from, h) {
   const { at, g } = waistOf(pelvis, belly),
     d = ((at - from + 3 * Math.PI) % (2 * Math.PI)) - Math.PI,
