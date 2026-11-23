@@ -125,9 +125,12 @@ export const SHAPE = {
     // the hips go first, less far, and the bend does more; the shoulder on the side he goes rolls back with them: wound up
     // (the glove on the side the punch goes by stays on his cheek, out of its way)
     '4m': { size: { hx: 0.7, lkf: 0.6, rkf: 0.6, side: 1.5 }, add: { twist: 8, hp: 3 }, line: [-0.1, -0.01] },
-    '4a': { size: { hx: 0.75, lkf: 0.6, rkf: 0.6, side: 1.6 }, add: { twist: 8, hp: 3, lean: 3 }, line: [-0.1, -0.01] },
-    '5m': { size: { hx: 0.5, lkf: 0.45, rkf: 0.45, side: 1.8 }, add: { twist: 12, hp: 3 }, far: 0.02, line: [-0.12, -0.01] },
-    '5a': { size: { hx: 0.5, lkf: 0.45, rkf: 0.45, side: 1.8 }, add: { twist: 12, hp: 3, lean: 4 }, far: 0.02, line: [-0.12, -0.01] }
+    /* (a dirty great one's and a legend's trunk goes across further and quicker, and that glove, drawn back as far as the
+       clean great one's, was drawn in through his other forearm, held up in front of his chin by then: it is drawn back less
+       far, and stays in front of it) */
+    '4a': { size: { hx: 0.75, lkf: 0.6, rkf: 0.6, side: 1.6 }, add: { twist: 8, hp: 3, lean: 3 }, line: [-0.08, -0.01] },
+    '5m': { size: { hx: 0.5, lkf: 0.45, rkf: 0.45, side: 1.8 }, add: { twist: 12, hp: 3 }, far: 0.02, line: [-0.08, -0.01] },
+    '5a': { size: { hx: 0.5, lkf: 0.45, rkf: 0.45, side: 1.8 }, add: { twist: 12, hp: 3, lean: 4 }, far: 0.02, line: [-0.08, -0.01] }
   },
   /* (how far down a duck and a weave go, and how much of it is the knees, is the grade's: skill.mjs, evade.knee) */
   duck: {

@@ -132,8 +132,8 @@ export function coverLow(s, c, seen, cv, cover, dt, clock) {
     toward = L.zone === 'liver' ? -1 : L.zone === 'ribs' ? 1 : 0; // (+ his left)
   if (rear) (c.ry -= low.drop * e), (c.rz -= low.in * e), (c.rx -= 0.02 * e), (c.rkf += low.knee * e * (both ? 0.6 : 1));
   if (lead) (c.ly -= low.drop * e), (c.lz -= low.in * e), (c.lx += 0.02 * e), (c.lkf += low.knee * e * (both ? 0.6 : 1));
-  // (the pit of the stomach: the two elbows brought in together in front of it)
-  if (both) (c.lx -= 0.1 * e), (c.rx += 0.1 * e);
+  // (the pit of the stomach: the two elbows brought in together in front of it, each glove drawn low.mid metres toward the middle)
+  if (both) (c.lx -= (low.mid ? low.mid[0] : 0.1) * e), (c.rx += (low.mid ? low.mid[1] : 0.1) * e);
   c.side += toward * low.side * e;
   if (low.turn) c.yaw += (toward ? -toward : 1) * low.turn * e;
 }

@@ -622,9 +622,14 @@ test("the pull counter: the head's pick, the rear hook inside 0.85 m, the body b
   assert.ok(TECHNIQUES.pullCounter.ready);
 });
 
-test('the pull counter: in a match of default loadouts he sways back meant as one and counters out of it; the same seed, the same match', () => {
-  const fight = () => {
-    const match = createMatch({ seed: 4, sheets: [Object.assign(blank(), { iq: 80, defense: 85 }), Object.assign(blank(), { iq: 70 })], skills: [{ all: '4m' }, { all: '3' }], plans: [PLANS.counter, PLANS.pressure], rounds: 1, roundTime: 60 }),
+/* (over many seeded matches, not one: a single seeded bout is chaotic, and a centimetre in a guard at frame 64 changes which
+   punch is blocked a thousand frames later, and whether he sways back from it; how often he pulls and counters, and lands,
+   is what the matches say about the technique. Ten one-round matches, about 35 seconds: seeds 1 to 10 gave 18 pulls, 17
+   counters out of them and 12 of those landed when this was written (25, 23 and 20 before a glove was kept out of his other
+   arm; seed by seed anything from none to five), and it is held to a little over half of that) */
+test('the pull counter: in matches of default loadouts he sways back meant as one and counters out of it, and the counters land; the same seed, the same match', () => {
+  const fight = seed => {
+    const match = createMatch({ seed, sheets: [Object.assign(blank(), { iq: 80, defense: 85 }), Object.assign(blank(), { iq: 70 })], skills: [{ all: '4m' }, { all: '3' }], plans: [PLANS.counter, PLANS.pressure], rounds: 1, roundTime: 60 }),
       seen = { pulls: 0, counters: {}, landed: 0, events: 0 };
     for (let i = 0; i < 60 * 60 && match.phase !== 'over'; i++) {
       stepMatch(match, DT);
@@ -640,9 +645,13 @@ test('the pull counter: in a match of default loadouts he sways back meant as on
     }
     return seen;
   };
-  const a = fight();
-  assert.ok(a.pulls >= 3 && Object.values(a.counters).reduce((x, y) => x + y, 0) >= 1 && a.landed >= 1, JSON.stringify(a));
-  assert.deepEqual(fight(), a);
+  const all = [];
+  for (let seed = 1; seed <= 10; seed++) all.push(fight(seed));
+  const pulls = all.reduce((n, s) => n + s.pulls, 0),
+    counters = all.reduce((n, s) => n + Object.values(s.counters).reduce((x, y) => x + y, 0), 0),
+    landed = all.reduce((n, s) => n + s.landed, 0);
+  assert.ok(pulls >= 10 && counters >= 8 && landed >= 5, `over seeds 1-10: ${pulls} pulls, ${counters} counters, ${landed} landed; ${JSON.stringify(all)}`);
+  assert.deepEqual(fight(1), all[0]);
 });
 
 test('the pull counter: every card within the physics audit', () => {

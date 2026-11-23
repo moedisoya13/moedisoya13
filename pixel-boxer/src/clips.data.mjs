@@ -7,11 +7,11 @@
              against, also, press, loop), window: [from, to] seconds of the run, measure (tools/clips.mjs MEASURES), of
              (what the measure is told: move, the punch whose waist is timed) }
    Record them all again, when the stages change:
-     node tools/clips.mjs --write --root m=<M> --root n1=<N> --root u1=<U> --root u2=<U fixed> --root v1=<V> --root vchin=<V, chin 32>
+     node tools/clips.mjs --write --root prem=<before M> --root n1=<N> --root u1=<U> --root u2=<U fixed> --root v1=<V> --root vchin=<V, chin 32>
    (`now` is this checkout.) */
 export const ROOTS = {
   now: { say: '지금 (게시된 동작)', where: 'this checkout' },
-  m: { say: 'M (합치기 전, 점검 중)', where: 'stage M: git archive 7fa3003 pixel-boxer' },
+  prem: { say: 'M 전 (합치기 전의 동작)', where: 'before stage M was merged: git archive 8b17869 src tools' },
   n1: { say: 'N 1차 구현 (합치기 전, 고치는 중)', where: 'stage N, first round: scratchpad/wt-n/pixel-boxer (4c726b9 + its changes)' },
   u1: { say: 'U 1차 구현 (합치기 전, 고치는 중)', where: 'stage U, first round: scratchpad/wt-u/pixel-boxer (4c726b9 + its changes)' },
   u2: { say: 'U 고침 (점검 중)', where: "stage U's fix round: scratchpad/r-u/pixel-boxer (7fa3003, M, + its changes)" },
@@ -26,8 +26,8 @@ const WEAK = { scene: 'aimed', level: '5a', punch: 'hookR', aim: [1.2, -60], rol
 export const CLIPS = [
   // low2-block: the grade-2 two-arm block's guard coming down after the elbow has met the body hook (close, slow), and the
   // drill with an uppercut pressed at 1.133 s (stage M's timing sweep: 0.8 s + 20 frames)
-  ...pair('low2', ['now', 'm'], { script: 'block-elbow@2', window: [0.8, 1.2], measure: 'block' }),
-  ...pair('low2up', ['now', 'm'], { script: 'block-elbow@2', change: { also: [[0.8 + 20 / 60, 'power']] }, window: [0.45, 1.6], measure: 'block' }),
+  ...pair('low2', ['prem', 'now'], { script: 'block-elbow@2', window: [0.8, 1.2], measure: 'block' }),
+  ...pair('low2up', ['prem', 'now'], { script: 'block-elbow@2', change: { also: [[0.8 + 20 / 60, 'power']] }, window: [0.45, 1.6], measure: 'block' }),
   // beckon-room: the beckon of 4암 at 1.0 m between centres (the distance of a real bout), and at the card's 1.2 m
   ...pair('beckon10', ['now', 'u1', 'u2'], { script: 'beckon@4a', change: { him: 1.0 }, window: [0.4, 2.2], measure: 'reach' }),
   ...pair('beckon12', ['now', 'u2'], { script: 'beckon@4a', change: { him: 1.2 }, window: [0.4, 2.2], measure: 'reach' }),

@@ -8,6 +8,8 @@
      SEGMENTS  Dempster's shares of a body's mass, and where along each segment its middle is
      FOOT      the sole, as balls in the foot's own frame from the ankle: [centre, radius]. Flat, each just touches the canvas
      GLOVE     how far past the wrist the middle of the glove is, along the forearm, and its radius
+     ARM       his arm as his own other glove meets it (with gloveInArm, which says how far a glove is into it): the solver
+               keeps each glove out of the other arm, and the audit holds it there
      HEAD      the middle of the head, in the head's own frame from the Head joint
      SHOULDER  where the upper arm can point and how far it can turn about itself (with shoulderOf, which reads an arm
                against it): the solver, the knockdown's body and the audit all hold the shoulder to this one table */
@@ -59,6 +61,38 @@ export const FOOT = {
   ]
 };
 export const GLOVE = { ahead: 0.075, r: 0.1 };
+/* His arm, as his own other glove meets it (plan 6 §6.1): the upper arm, from the shoulder to the elbow, and the elbow's ball
+   as thick as RADIUS.Arm; the forearm from the elbow as thick as RADIUS.ForeArm, but only the elbow's `fore` of it (the
+   wrist's end is where the two gloves meet, in a guard); and a glove comes `give` nearer than touching before it is in the
+   arm at all (its padding squashed against it, as against the chest and the cheek). */
+export const ARM = { fore: 0.8, give: 0.03 };
+/* How far a glove is into an arm: g the middle of the glove, the arm's shoulder, elbow and wrist (all in the same space)
+   -> { depth (metres past touching, less the give; negative, clear of it by so much), part ('upper arm', 'elbow' or
+   'forearm': where it is deepest), at (the nearest point on that part's middle line), out (the way out of it, unit, from at
+   toward the glove), along (how far along the forearm at is, 0 at the elbow .. 1 at the wrist) } */
+export function gloveInArm(g, shoulder, elbow, wrist) {
+  const near = (a, b, most) => {
+    const d = [b[0] - a[0], b[1] - a[1], b[2] - a[2]],
+      dd = d[0] * d[0] + d[1] * d[1] + d[2] * d[2] || 1e-12,
+      k = Math.max(0, Math.min(most, ((g[0] - a[0]) * d[0] + (g[1] - a[1]) * d[1] + (g[2] - a[2]) * d[2]) / dd));
+    return { k, at: [a[0] + d[0] * k, a[1] + d[1] * k, a[2] + d[2] * k] };
+  };
+  const into = (at, r) => GLOVE.r + r - Math.hypot(g[0] - at[0], g[1] - at[1], g[2] - at[2]) - ARM.give,
+    up = near(shoulder, elbow, 1),
+    fore = near(elbow, wrist, ARM.fore),
+    a = { depth: into(up.at, RADIUS.Arm), part: up.k >= 1 ? 'elbow' : 'upper arm', at: up.at, along: 0 },
+    b = { depth: into(fore.at, RADIUS.ForeArm), part: fore.k <= 0 ? 'elbow' : 'forearm', at: fore.at, along: fore.k },
+    deepest = b.depth > a.depth ? b : a,
+    o = [g[0] - deepest.at[0], g[1] - deepest.at[1], g[2] - deepest.at[2]],
+    l = Math.hypot(o[0], o[1], o[2]);
+  // (a glove right on the line has no nearest way out: it goes out level, square to the arm)
+  if (l < 1e-6) {
+    const s = deepest === b ? [wrist[0] - elbow[0], wrist[1] - elbow[1], wrist[2] - elbow[2]] : [elbow[0] - shoulder[0], elbow[1] - shoulder[1], elbow[2] - shoulder[2]],
+      cl = Math.hypot(s[2], s[0]);
+    return Object.assign(deepest, { out: cl > 1e-9 ? [-s[2] / cl, 0, s[0] / cl] : [1, 0, 0] });
+  }
+  return Object.assign(deepest, { out: [o[0] / l, o[1] / l, o[2] / l] });
+}
 export const HEAD = [0, 0.1, 0.02];
 
 /* The shoulder is a ball, and the upper arm can point only into part of the sphere round it. Its direction is read as the

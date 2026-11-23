@@ -239,6 +239,9 @@ function bend(hips, spine, feet, kf, elev) {
 }
 
 const REACH = LEN.upperArm + LEN.foreArm - 0.03; // as far as a wrist gets from its shoulder
+/* how fast a hand is put off where it is sent, or let back, to keep its glove out of his other arm, and how much faster that
+   may move its glove (solve.mjs): metres a second, under 4 cm a frame */
+const APART = 2.2;
 const HOLD_ROUND = 750; // degrees a second: the fastest a hook's fist is taken round to its side as the legs drive (sweep)
 const BENT = 0.4; // and as far as it gets with the elbow held at a right angle
 /* A shoulder shrugged up (the cross-arm guard's lead shoulder: show.mjs): the collarbone (LeftShoulder, from the chest to the
@@ -436,6 +439,10 @@ export function createAnimator(seed) {
   const fidget = { L: 0, R: 0, move: null, next: 1.8 + 1.4 * roll(), side: 'R' };
   // how far a beginner's body goes on past his feet when he stops, sprung back
   const lurch = { x: { x: 0, v: 0 }, z: { x: 0, v: 0 }, was: [0, 0] };
+  // how far up his cross-arm guard was last frame, and how much it is on its way up or down (show.mjs crossGuard)
+  let crossWas = 0,
+    crossUp = 0,
+    crossDown = 0;
   // how fast the canvas is going past under each foot, followed a little late so a shove or a stop does not snatch the feet
   const under = { L: [0, 0], R: [0, 0] },
     /* The feet are on the canvas, not on the body. A planted foot stays where it was put while the body travels and turns
@@ -448,6 +455,7 @@ export function createAnimator(seed) {
     round = { L: null, R: null }, // and where it was round the arm (solve.mjs: roundOf), degrees
     arm = { L: null, R: null }, // and each upper arm's way as the chest saw it (solve.mjs: arms)
     wrist = { L: null, R: null }, // and where each wrist was
+    apart = { L: null, R: null }, // and how far each hand was put off where it was sent, to keep it out of the other arm (solve.mjs: apart)
     knees = { L: null, R: null }, // and each knee round its leg (solve.mjs: azimuth), degrees
     // where each hand was drawn last frame and how fast it was going, and what is still owed to the move before
     hand = { L: null, R: null },
@@ -1030,7 +1038,13 @@ export function createAnimator(seed) {
       {
         const r = rolling ? shoulderRoll(c, rolling.roll, rolling.t, rolling.out) : null;
         crossK = shape ? Math.max(xc ? cover : 0, r && !xc ? r.w : 0) : 0;
-        if (crossK > 0.002) shrug += crossGuard(c, shape, crossK);
+        /* (how much it is on its way up, or down, followed, for the way the lead hand goes into it and out: but not a hammer
+           put up fresh, show.mjs crossGuard) */
+        const freshHammer = !!(xc && xc.hammer) && !rolling && view.fresh !== null && view.fresh !== undefined;
+        crossUp = freshHammer ? 0 : crossUp + ((crossK > crossWas + 1e-6 ? 1 : 0) - crossUp) * (1 - Math.exp(-dt * 20));
+        crossDown += ((crossK < crossWas - 1e-6 ? 1 : 0) - crossDown) * (1 - Math.exp(-dt * 20));
+        crossWas = crossK;
+        if (crossK > 0.002) shrug += crossGuard(c, shape, crossK, crossUp, crossDown);
         if (r) shrug += r.shrug;
         // (a lead hook coming: the rear glove back to the ear, so long after it starts, in 0.04 s, and back as it goes)
         const want = shape && crossK > 0.5 && view.hook !== null && view.hook !== undefined ? smooth((view.hook - shape.ear) / 0.04) : 0;
@@ -1689,7 +1703,7 @@ export function createAnimator(seed) {
         rising.id = id;
         doing = id;
         for (const ch of CHANNELS) (shown[ch] = c[ch]), (speed[ch] = 0), (carry[ch].x = carry[ch].v = 0);
-        for (const side of ['L', 'R']) (hand[side] = null), (elbow[side] = null), (round[side] = null), (arm[side] = null), (wrist[side] = null), (knees[side] = null), (steer[side] = [0, 0, 0]);
+        for (const side of ['L', 'R']) (hand[side] = null), (elbow[side] = null), (round[side] = null), (arm[side] = null), (wrist[side] = null), (apart[side] = null), (knees[side] = null), (steer[side] = [0, 0, 0]);
         height = null;
         exit = null;
         fall = null;
@@ -2013,7 +2027,9 @@ export function createAnimator(seed) {
         hand[side] = at;
         // (and it goes round the arm no faster than an elbow can, 1200 degrees a second, and the shoulder swings it no faster
         // than 900)
-        hands[side] = { at, toward: M.lerp(M.scale(asked, 1 / l), elbow[side] || [0, 0, 0], keep), round: { was: round[side], most: 1200 * dt }, shoulder: { was: arm[side], most: 900 * dt }, last: wrist[side], punch: !!mine && (action.chain.phase === 'coil' || action.chain.phase === 'throw') && !(pullIn(action) > 0 && action.chain.t < action.chain.wait), locked: !!mine && mine.arm === 'swing' };
+        /* (and, kept out of the other arm, it is put off where it is sent no faster than APART: how locked to the chest it is,
+           and how far put down in the room, say which hand gives way: solve.mjs) */
+        hands[side] = { at, toward: M.lerp(M.scale(asked, 1 / l), elbow[side] || [0, 0, 0], keep), round: { was: round[side], most: 1200 * dt }, shoulder: { was: arm[side], most: 900 * dt }, last: wrist[side], punch: !!mine && (action.chain.phase === 'coil' || action.chain.phase === 'throw') && !(pullIn(action) > 0 && action.chain.t < action.chain.wait), locked: !!mine && mine.arm === 'swing', chest: clamp(c[k + 'c'], 0, 1), room: clamp(c[k + 'g'], 0, 1), apart: { was: apart[side], most: APART * dt } };
       }
       let stance = { hips, spine, feet, hands, stretch: 1 + c.st };
       if (rising && action && rising.id === id) {
@@ -2085,6 +2101,7 @@ export function createAnimator(seed) {
         round[side] = pose.round[side];
         arm[side] = pose.arms ? pose.arms[side] : null;
         wrist[side] = pose.at[Side + 'Hand'];
+        apart[side] = pose.apart ? pose.apart[side] : null;
         knees[side] = pose.knees ? pose.knees[side] : null;
       }
       return remember(pose);

@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 /* The physics audit (src/audit.mjs), printed: for each check, how often it is broken and the worst case (which script, when,
-   who, doing what). tests/audit.test.mjs runs the same audit and holds it to nothing broken.
+   who, doing what), how deep a man's own glove went into his other arm in each action, broken or not, and, under "watched",
+   what is measured and not yet held (src/audit.mjs: a glove jumping, script group by script group).
+   tests/audit.test.mjs runs the same audit and holds it to nothing broken.
      node tools/audit.mjs                       the summary
      node tools/audit.mjs --all                 every action a check was broken in, not just the five it was broken in most
      node tools/audit.mjs --script a,b          only these scripts (by id)
@@ -16,9 +18,9 @@ const args = process.argv.slice(2),
 
 const pick = opt('script') ? opt('script').split(',') : null,
   scripts = pick ? SCRIPTS.filter(e => pick.includes(e.id)) : SCRIPTS,
-  { found, seen, falls, turning } = audit(scripts, { only: opt('only') ? opt('only').split(',') : null });
+  { found, watched, seen, falls, turning } = audit(scripts, { only: opt('only') ? opt('only').split(',') : null });
 
-if (opt('json')) (await import('node:fs')).writeFileSync(opt('json'), JSON.stringify({ found, falls: Object.fromEntries(Object.entries(falls).map(([k, v]) => [k, v.map(f => ({ t: f.t, doing: f.doing, com: f.com, head: f.head, hips: f.hips, angles: f.angles }))])), turning }));
+if (opt('json')) (await import('node:fs')).writeFileSync(opt('json'), JSON.stringify({ found, watched, falls: Object.fromEntries(Object.entries(falls).map(([k, v]) => [k, v.map(f => ({ t: f.t, doing: f.doing, com: f.com, head: f.head, hips: f.hips, angles: f.angles }))])), turning }));
 const rows = Object.entries(found)
   .filter(([, c]) => c.bad)
   .sort((x, y) => y[1].bad - x[1].bad);
@@ -27,7 +29,38 @@ console.log('check'.padEnd(70) + 'frames'.padStart(7) + '  worst'.padEnd(10) + '
 for (const [check, c] of rows) {
   const w = c.worst,
     by = Object.entries(c.by).sort((x, y) => y[1] - x[1]).slice(0, flag('all') ? 99 : 5).map(([k, n]) => `${k} ${n} (${c.most[k]})`).join(', ');
-  console.log(check.padEnd(70) + String(c.bad).padStart(7) + ('  ' + (+w.value.toFixed(1))).padEnd(10) + `  ${w.script} @ ${w.t}, ${w.who}, ${w.doing}`.padEnd(48) + ' | ' + by);
+  console.log(check.padEnd(70) + String(c.bad).padStart(7) + ('  ' + (+w.value.toFixed(1))).padEnd(10) + `  ${w.script} @ ${w.t}, ${w.who}${w.part ? ' (' + w.part + ')' : ''}, ${w.doing}`.padEnd(48) + ' | ' + by);
+}
+/* (his own glove in his other arm, broken or not: the deepest it went in each action, past touching with the padding's give
+   taken off, as the check is held to 2; and where it is broken, script by script) */
+{
+  const check = 'his own glove in his other arm',
+    c = found[check];
+  if (c) {
+    const deep = Object.entries(c.largestBy).filter(([, v]) => v > 0.05).sort((x, y) => y[1] - x[1]);
+    console.log(`\n${check}, the deepest it went (cm, held to 2): ` + (deep.length ? deep.slice(0, flag('all') ? 99 : 8).map(([k, v]) => `${k} ${v.toFixed(1)}`).join(', ') : 'nowhere'));
+    if (c.bad) {
+      const each = {};
+      for (const k of c.cases) (each[k.script] = each[k.script] || { n: 0, most: 0 }), each[k.script].n++, (each[k.script].most = Math.max(each[k.script].most, k.value));
+      console.log(`${check}, script by script (${c.bad} in all): ` + Object.entries(each).sort((x, y) => y[1].n - x[1].n).map(([s, e]) => `${s} ${e.n} (${e.most.toFixed(1)})`).join(', '));
+    }
+  }
+}
+/* (watched, not held: a glove jumping, its hand not punching, parrying or pawing. How many frames break it and the worst, and
+   script group by script group, frames and the worst m/s: what is to be mended, and what a stage's audit is compared by) */
+for (const [check, c] of Object.entries(watched)) {
+  if (!c.bad) {
+    console.log(`\nwatched, not held: ${check}: nowhere`);
+    continue;
+  }
+  const w = c.worst,
+    by = {};
+  for (const [script, k] of Object.entries(c.scripts)) {
+    const g = (by[script.split('@')[0]] = by[script.split('@')[0]] || { n: 0, most: 0 });
+    (g.n += k.frames), (g.most = Math.max(g.most, k.most));
+  }
+  console.log(`\nwatched, not held: ${check}: ${c.bad} frames in ${Object.keys(by).length} groups of scripts, the worst ${+w.value.toFixed(1)} at ${w.script} @ ${w.t}, ${w.who}${w.part ? ' (' + w.part + ')' : ''}, ${w.doing}`);
+  console.log(Object.entries(by).sort((x, y) => y[1].most - x[1].most || (x[0] < y[0] ? -1 : 1)).map(([g, e]) => `${g} ${e.n} (${e.most.toFixed(1)})`).join(', '));
 }
 /* (a landing on the canvas is held to so many frames a script, not in all: tests/audit.test.mjs allows a knockdown's fall at
    most 4 frames thrown upward in any one script, none past 14 g; the total is the table's) */

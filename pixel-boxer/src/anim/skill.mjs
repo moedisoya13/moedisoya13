@@ -298,14 +298,18 @@ const VARY_5A = { jab: [['thumb', 0.15], ['flicker', 0.5]], power: [['pawUp', 0.
    body, the elbow on that side is brought down over it `delay` seconds after he could have seen where it was going (from when
    the joint that steers it fired: game/bout.mjs; null: he never does), over `time` seconds: the glove `drop` metres down and
    `in` back toward him, so that the elbow comes down to his side, the trunk bent `side` degrees down over it and that knee
-   `knee` degrees more. both: both arms, whatever is coming (he cannot tell which side it is); turn: degrees the trunk turns off
+   `knee` degrees more. both: both arms, whatever is coming (he cannot tell which side it is), each glove drawn `mid` metres
+   in toward the middle ([lead, rear], 0.1 each if left out: anim/body.mjs); turn: degrees the trunk turns off
    it as it comes, to take it glancing; after: metres both gloves are let down once a blow has landed on his body (his head
    left open). The textbook's is the pro's, and every guard's that does not say. Whoever holds the cross-arm guard (cover.cross
    on) does not bring an elbow down at all: his lead forearm is across his belly already (show.mjs); a dirty great one or
    legend without it brings it down as the clean one of his grade does, off the beat (docs/moves-plan-5.md §3.4, second
    edition) */
 const LOW_1 = { delay: null, after: 0.12 };
-const LOW_2 = { delay: 0.17, both: true, drop: 0.22, in: 0.1, side: 0, knee: 6, time: 0.1, turn: 0, after: 0 };
+/* (an amateur's both arms: his gloves are held together at his face, and drawn the whole 0.1 in toward the middle as they
+   come down, each would go through the other's forearm: they come down all but straight, side by side, each forearm in front
+   of its own side of his belly, his head as open as it was) */
+const LOW_2 = { delay: 0.17, both: true, drop: 0.22, mid: [0.03, 0.02], in: 0.1, side: 0, knee: 6, time: 0.1, turn: 0, after: 0 };
 const LOW_3 = { delay: 0.1, both: false, drop: 0.12, in: 0.1, side: 8, knee: 10, time: 0.1, turn: 0, after: 0 };
 const LOW_4M = { ...LOW_3, delay: 0.07, drop: 0.06, turn: 4 };
 const LOW_5M = { ...LOW_3, delay: 0.05, drop: 0.08, side: 12, time: 0.08 };

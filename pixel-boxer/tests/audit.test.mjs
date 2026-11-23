@@ -3,7 +3,11 @@
    and how far it may go, so that one getting worse, or anything new, still fails. */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { audit, SCRIPTS, LIMIT } from '../src/audit.mjs';
+import { audit, auditor, SCRIPTS, LIMIT, JUMP, JUMPING, KNOCKED } from '../src/audit.mjs';
+import { createMatch, stepMatch } from '../src/game/match.mjs';
+import { PLANS } from '../src/game/brain.mjs';
+import { loadout } from '../src/game/profile.mjs';
+import { TECHNIQUES } from '../src/game/techniques.mjs';
 import { MOVES } from '../src/anim/moves.mjs';
 
 // (a man in a knockdown's fall: his body is a passive body then, phys/fall.mjs, and nothing is keyed)
@@ -66,6 +70,16 @@ test('audit: no scripted bout breaks anything a body can do, beyond the listed e
   assert.deepEqual(broken, []);
 });
 
+/* His own glove in his other arm (plan 6 §6.1): neither glove goes more than 2 cm into the other arm (its elbow, its
+   forearm short of the wrist, its upper arm; past touching, the padding's give taken off: rig/body.mjs ARM), in any frame
+   he stands in, with no exception. The solver keeps it out (rig/solve.mjs: KEEP.arm). */
+test('audit: his own glove is never in his other arm', () => {
+  const { found } = audited(),
+    c = found['his own glove in his other arm'];
+  assert.ok(c && c.frames > 10000, `checked in ${c ? c.frames : 0} frames`);
+  assert.equal(c.bad, 0, `${c.bad} frames: ${JSON.stringify(c.cases.slice(0, 5))}`);
+});
+
 /* The waist (plan 6 §1.3): turned on the pelvis no further than 25 degrees and no faster than 900 a second, in every frame,
    a knockdown's fall too, with no exception. How far it turns is held apart for the two that turn it: where the animator
    keys him, it keeps the waist inside its own 22 (anim/animator.mjs: WAIST), which no frame of any script goes past by more
@@ -84,4 +98,54 @@ test('audit: the waist is never turned past its range or faster than it can turn
     fallen = most(by.filter(([doing]) => falling({ doing })));
   assert.ok(keyed <= 22.5, `the animator turned the waist ${keyed.toFixed(1)} degrees`);
   assert.ok(fallen <= LIMIT.waistTwist, `a fall turned the waist ${fallen.toFixed(1)} degrees`);
+});
+
+/* Kept out of his other arm, a glove is eased out and back, not knocked (plan 6 §6.1): what the solver's keeping-apart does
+   to a glove (rig/solve.mjs: apart) changes that glove's velocity by no more than JUMP (3.6 m/s) in a frame, in any frame
+   he stands in (the three after a blow too, but not those held at it), whatever the hand is doing, with no exception. */
+test('audit: keeping a glove out of his other arm never knocks it', () => {
+  const { found } = audited(),
+    c = found[KNOCKED];
+  assert.ok(c && c.frames > 10000, `checked in ${c ? c.frames : 0} frames`);
+  assert.equal(JUMP, 3.6);
+  assert.equal(c.bad, 0, `${c.bad} frames: ${JSON.stringify(c.cases.slice(0, 5))}`);
+});
+
+/* A glove jumping, of a hand not throwing a punch, nor parrying, nor pawing, is watched and not held (src/audit.mjs: the
+   bouts were not made to it, and tools/audit.mjs prints where it is broken, group by group). What is held here is only that
+   it is measured, apart from the checks, so that it cannot be dropped unseen. */
+test('audit: a glove jumping is measured, apart from what is held', () => {
+  const { found, watched } = audited(),
+    c = watched[JUMPING];
+  assert.ok(c && c.frames > 10000, `measured in ${c ? c.frames : 0} frames`);
+  assert.ok(!(JUMPING in found));
+});
+
+/* And in a match (plan 6 §6.1): a match goes where no script goes, so three seeded matches are fought here and held, frame
+   by frame, to the same checks through the same code as the scripts (src/audit.mjs: auditor), and keeping a glove out of
+   his other arm knocks it in no frame of them. They are three of the 32 seeded bouts the separate check of stage M fought
+   (seed 11, pressure against counter, one round, fifty seconds): a 5명 against a 5암 and a 1 against a 5암, the two where it
+   first found the glove knocked hardest (6.6 m/s), and a 4명 against a 4명 with every technique each has. In all 32, one
+   frame still breaks the measure, by 3.8 m/s (bout 9 at 44.33 s): there the arm itself, sent where it is sent, jumps in
+   that frame (its glove's velocity changing by 14 m/s), and keeping it out of the other arm leaves the glove's motion
+   smoother than it would be without (13.0 m/s against 14.5: the measure reads the push against that bare glove, which
+   itself jumps). How many frames have a glove more than 2 cm in the other arm is said, not held. */
+test('audit: in seeded matches, keeping a glove out of his other arm never knocks it', t => {
+  const a = auditor();
+  for (const [id, grades, all] of [['seed 11: 5m against 5a', ['5m', '5a']], ['seed 11: 1 against 5a', ['1', '5a']], ['seed 11: 4m against 4m, every technique', ['4m', '4m'], true]]) {
+    const skills = grades.map(g => ({ all: g })),
+      match = createMatch({ seed: 11, skills, rounds: 1, roundTime: 600, plans: [PLANS.pressure, PLANS.counter], techniques: all ? skills.map(s => loadout(s, Object.keys(TECHNIQUES))) : undefined });
+    a.begin({ id });
+    for (let tick = 0; tick < 3000; tick++) {
+      stepMatch(match, 1 / 60);
+      if (match.phase === 'over') break;
+      a.frame(match.bout, tick);
+    }
+  }
+  const { found, seen } = a.result(),
+    c = found[KNOCKED],
+    arm = found['his own glove in his other arm'];
+  assert.ok(seen > 10000 && c && c.frames > 10000, `${seen} frames, the check taken in ${c ? c.frames : 0}`);
+  assert.equal(c.bad, 0, `${c.bad} frames: ${JSON.stringify(c.cases.slice(0, 5))}`);
+  t.diagnostic(`${arm.bad} frames of ${arm.frames} with a glove more than 2 cm in the other arm, the deepest ${arm.worst ? arm.worst.value.toFixed(1) + ' cm (' + arm.worst.script + ' @ ' + arm.worst.t + ' s)' : 'none'}; a glove knocked at most ${c.largest.toFixed(2)} m/s`);
 });

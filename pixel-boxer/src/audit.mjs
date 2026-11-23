@@ -3,25 +3,39 @@
      anatomy    joint ranges (rig/body.mjs: RANGE, and SHOULDER for where the upper arm can point and how far it can turn
                 about itself): elbow, shoulder, knee, hip, ankle, spine, neck; limbs changing length; a joint flipping over
                 between frames
-     contact    anything under the canvas; a man's own glove inside his trunk or head; one man inside the other
+     contact    anything under the canvas; a man's own glove inside his trunk or head, or inside his other arm (its elbow,
+                its forearm, its upper arm: rig/body.mjs ARM); one man inside the other
      dynamics   the centre of mass: falling faster than gravity, thrown upward, standing where he would topple; how fast the
-                waist turns on the pelvis (rig/body.mjs: RATE), and how fast the joints of a punch turn
+                waist turns on the pelvis (rig/body.mjs: RATE), and how fast the joints of a punch turn; a glove knocked
+                by being kept out of his other arm (JUMP); and, watched and not yet held, a glove jumping, its hand not
+                throwing a punch, nor parrying, nor pawing (JUMP)
    Nothing here fixes anything. tools/audit.mjs prints what it finds; tests/audit.test.mjs holds it to nothing.
-     audit(scripts, { only })   -> { found: { check: { frames, bad, worst, largest, largestBy, by, most, cases } }, seen, falls,
-                                    turning }
+     audit(scripts, { only })   -> { found: { check: { frames, bad, worst, largest, largestBy, by, most, cases, scripts } },
+                                    watched (the same, of what is measured and not yet held: below), seen, falls, turning }
                                     largest: the largest value the check was taken at, broken or not; largestBy: the
                                     same, action by action
                                     seen: how many frames of a man were checked
                                     cases: every frame that broke the check (up to a few hundred of them), with where it was
-     measure(f)                 one man in one frame: where everything is on the canvas, and every angle the checks need
+                                    scripts: script by script, how many frames broke it and the worst of them
+     auditor(o)                 the same checks, frame by frame, of any bout as it is fought (a script, or a match):
+                                    { begin(entry), frame(bout, tick), result() }, result() what audit() returns
+     measure(f)                 one man in one frame: where everything is on the canvas, every angle the checks need, and
+                                    each glove as his chest sees it
      SCRIPTS                    every scripted bout there is
    What is left out on purpose, because it is the game and not the body: the frames held at the moment of a blow (time is
    stopped), and the three frames drawn after anyone is struck (a blow is meant to jolt; the frames held in between are not
-   counted, or a long hold would use the three up). A foot counts as holding him up while
+   counted, or a long hold would use the three up). His own glove in his other arm is not looked for in those frames, nor
+   while he is down or getting up, and a glove jumping not while he is down or getting up either: down, his body is the
+   fall's (phys/fall.mjs), which keeps nothing of his out of his other arm (in every script's knockdowns a glove goes 6.25 cm
+   into it at worst, down-front's, and past 2 cm in 98 frames); getting up, his hands are put down on the canvas, and a hand
+   put down does not give way (6.77 cm at worst, down-front's riseFront, past 2 cm in 10 frames); and in the three frames
+   after a blow, an arm flung on by it (2.8 cm at worst, crossBody-liver@4m's uppercut). A glove knocked by being kept out of
+   his other arm is looked for in those three frames too, for keeping it out is the solver's doing, not the blow's; but not
+   in the frames held at a blow, nor while he is down or getting up. A foot counts as holding him up while
    its ankle is low or its ball is on the canvas (a heel raised off a ball that is down is still a foot on the canvas). */
 import * as M from './rig/m3.mjs';
 import { fk, TPOSE } from './rig/skeleton.mjs';
-import { RANGE as LIMIT, RATE, RADIUS, SEGMENTS, HEAD, GLOVE, shoulderOf } from './rig/body.mjs';
+import { RANGE as LIMIT, RATE, RADIUS, SEGMENTS, HEAD, GLOVE, shoulderOf, gloveInArm } from './rig/body.mjs';
 import { step } from './game/bout.mjs';
 import { ENTRIES, freshBout, drive } from './footwork.mjs';
 import { DEFENSE, PARRY_DOWN, CROSS_ARM, CROSS_BODY, ROLLING, PULL_COUNTER, BLOCK_FIRE, SHELL } from './defense.mjs';
@@ -33,6 +47,22 @@ import { MOVES } from './anim/moves.mjs';
 const DT = 1 / 60,
   G = 9.81,
   DEG = 180 / Math.PI;
+/* Watched, not held. A check the bouts were not made to is measured and printed like the rest, but apart from them
+   (`watched`), and no test holds it: what it finds is a list of what is to be mended, stage by stage, and it becomes a check
+   of `found`, held to nothing broken, when nothing breaks it (or sooner, by the user's word: docs/pending.md).
+   A glove jumping: how much the velocity of a hand that is not throwing a punch, nor parrying, nor pawing changes in a frame,
+   as his chest sees it (what moves a glove there is his arm alone), metres a second. Such a hand is held and moved about by
+   its arm, not thrown: a straight punch, thrown, takes the fist off the guard to 8 or 10 m/s in under a tenth of a second
+   (some 10 g, and a few times that at its sharpest), and nothing drives a hand that is only being held harder than that.
+   3.6 m/s in a sixtieth of a second is 216 m/s2, 22 g: as much as a glove going 3 cm one way in a frame and 3 cm straight
+   back the next (tools/feel.mjs counts that a pop). */
+export const JUMP = 3.6;
+export const JUMPING = 'a glove jumping, not punching (m/s of velocity changed in a frame)';
+/* And held: what keeping a glove out of his other arm does to that glove (rig/solve.mjs: apart) changes the glove's velocity
+   by no more than JUMP in a frame. A glove is eased out of an arm, and back, not knocked. */
+export const KNOCKED = 'a glove knocked by being kept out of his other arm (m/s of velocity changed in a frame)';
+// (a show-off's lead hand sent for the other man while the rear one throws: anim/animator.mjs REACHING)
+const REACHING = ['pawDown', 'pawUp', 'collar'];
 export { LIMIT };
 export const SCRIPTS = [...ENTRIES, ...DEFENSE, ...LADDER, ...DIRTY, ...STANCES, ...FOOTWORK, ...ENTRY, ...SHOWOFF, ...TAUNTING, ...BODY_LADDER, ...REAR_LADDER, ...BODYSHOTS, ...LIVER_BLOCK, ...WAVING, ...PARRY_DOWN, ...CROSS_ARM, ...CROSS_BODY, ...ROLLING, ...PULL_COUNTER, ...BLOCK_FIRE, ...SHELL, ...SHIFTING, ...WALKING];
 
@@ -150,6 +180,16 @@ export function measure(f) {
     out.self.push([S + ' glove in trunk', RADIUS.glove + RADIUS.Chest - toTrunk - 0.07]); // (a glove held against the chest is not in it)
     out.self.push([S + ' glove in head', RADIUS.glove + RADIUS.head - dist(g, P.head) - 0.08]); // (nor is one at the cheek)
   }
+  // ---- each glove as his chest sees it: where it is from the chest, along the chest's own axes
+  out.gloves = { Left: into(R.Chest, M.sub(P.gloveLeft, P.Chest)), Right: into(R.Chest, M.sub(P.gloveRight, P.Chest)) };
+  // ---- and how far each was moved by being kept out of his other arm, as the chest sees it (rig/solve.mjs: apart)
+  out.apart = { Left: (pose.apart && pose.apart.L && pose.apart.L.glove) || [0, 0, 0], Right: (pose.apart && pose.apart.R && pose.apart.R.glove) || [0, 0, 0] };
+  // ---- and each in his other arm: how deep, and in what (rig/body.mjs: gloveInArm; the padding squashed against it is not in it)
+  out.arms = ['Left', 'Right'].map(S => {
+    const O = S === 'Left' ? 'Right' : 'Left',
+      into = gloveInArm(P['glove' + S], P[O + 'Arm'], P[O + 'ForeArm'], P[O + 'Hand']);
+    return { glove: S, depth: into.depth, part: `${S.toLowerCase()} glove in ${O.toLowerCase()} ${into.part}` };
+  });
   return out;
 }
 export const SOLID = [['head', RADIUS.head], ['Chest', RADIUS.Chest], ['Hips', RADIUS.Hips], ...['Left', 'Right'].flatMap(S => [['glove' + S, RADIUS.glove], [S + 'Arm', RADIUS.Arm], [S + 'ForeArm', RADIUS.ForeArm], [S + 'Shin', RADIUS.Shin], [S + 'Foot', RADIUS.Foot], [S + 'ToeBase', RADIUS.ToeBase]])];
@@ -199,16 +239,25 @@ export function outsideSupport(at, point, under) {
 
 const CASES = 400; // frames kept of each check that is broken, for saying where
 
-/* Fight each script once and hold every frame of both men to the checks. `only`: just frames in these actions. */
-export function audit(scripts, o) {
+/* The checks, frame by frame, of any bout as it is fought: a scripted one (audit, below) or a match (game/match.mjs: the
+   match's bout, after each stepMatch). auditor(o) -> { begin(entry), frame(bout, tick), result() }: begin a bout (entry: its
+   script, or anything with an id that says which bout it is), hold each frame of it to the checks as it is drawn (the bout as
+   it stands once this frame is stepped), and, at the end, what audit() returns. */
+export function auditor(o) {
   o = o || {};
   const only = o.only || null,
     found = {}, // check -> { frames, bad, worst, largest, largestBy, by, most, cases }
+    watched = {}, // the same, of what is measured and not yet held
     falls = {},
     turning = {}; // punch -> grade -> joint -> fastest it turned, degrees a second
-  let seen = 0;
-  const note = (check, value, where, bad) => {
-    const c = (found[check] = found[check] || { frames: 0, bad: 0, worst: null, largest: 0, largestBy: {}, by: {}, most: {}, cases: [] });
+  let seen = 0,
+    entry = null,
+    prev,
+    prev2,
+    struck, // frames drawn since each man was in a blow
+    unbalanced;
+  const tally = table => (check, value, where, bad) => {
+    const c = (table[check] = table[check] || { frames: 0, bad: 0, worst: null, largest: 0, largestBy: {}, by: {}, most: {}, cases: [], scripts: {} });
     c.frames++;
     c.largest = Math.max(c.largest, Math.abs(value));
     c.largestBy[where.doing] = Math.max(c.largestBy[where.doing] || 0, Math.abs(value));
@@ -217,18 +266,22 @@ export function audit(scripts, o) {
     c.by[where.doing] = (c.by[where.doing] || 0) + 1;
     if (!(Math.abs(c.most[where.doing]) >= Math.abs(value))) c.most[where.doing] = +value.toFixed(1);
     if (!c.worst || Math.abs(value) > Math.abs(c.worst.value)) c.worst = { value, ...where };
+    const k = (c.scripts[where.script] = c.scripts[where.script] || { frames: 0, most: 0 });
+    k.frames++;
+    k.most = Math.max(k.most, +Math.abs(value).toFixed(2));
     if (c.cases.length < CASES) c.cases.push({ value: +value.toFixed(2), ...where });
   };
-  for (const entry of scripts) {
-    const bout = freshBout(entry),
-      prev = [null, null],
+  const note = tally(found),
+    watch = tally(watched);
+  return {
+    begin(e) {
+      entry = e;
+      prev = [null, null];
       prev2 = [null, null];
-    let struck = [99, 99], // frames drawn since each man was in a blow
+      struck = [99, 99];
       unbalanced = [0, 0];
-    for (let tick = 0; tick < Math.round(entry.loop / DT); tick++) {
-      step(bout, drive(entry, bout, tick * DT, DT), DT);
-      bout.fighters[1].hp = 1000;
-      if (!entry.hurt) bout.fighters[0].hp = 1000;
+    },
+    frame(bout, tick) {
       for (const e of bout.events) if (['hit', 'block', 'parry'].includes(e.type)) (struck[e.on] = 0), (struck[e.who] = 0);
       const held = bout.stop > 0,
         now = bout.fighters.map(measure);
@@ -241,6 +294,12 @@ export function audit(scripts, o) {
         const a = m.angles,
           move = MOVES[doing],
           floor = move && move.floor;
+        /* (which hands are busy: the one throwing a punch, both while the other reaches for the other man (a paw, a collar
+           tie), and both while a guard is put up fresh, its gloves put out to meet the punch: game/bout.mjs, f.k.parry) */
+        m.busy = { Left: false, Right: false };
+        if (move && move.punch) m.busy[move.hand === 'L' ? 'Left' : 'Right'] = true;
+        if (move && move.punch && REACHING.includes(f.action.variant)) m.busy.Left = m.busy.Right = true;
+        if (f.cover && f.coverAge <= f.k.parry) m.busy.Left = m.busy.Right = true;
         // ---- anatomy
         for (const S of ['Left', 'Right']) {
           note('elbow past straight', a[S + 'Elbow'], where, a[S + 'Elbow'] > LIMIT.elbowStraight);
@@ -274,6 +333,10 @@ export function audit(scripts, o) {
         const before = prev[i],
           before2 = prev2[i],
           fresh = struck[i] <= 3;
+        /* (his own glove in his other arm, but not while he is down or getting up, nor in the frames held at a blow and the
+           three after one, above: as deep as it is past touching, less the padding's give, and 0 where it is clear, so that
+           the check reads off the deepest each action went) */
+        if (!floor && !f.down && !held && !fresh) for (const g of m.arms) note('his own glove in his other arm', Math.max(0, g.depth) * 100, Object.assign({}, where, { part: g.part }), g.depth > 0.02);
         if (before && !held && !fresh) {
           for (const S of ['Left', 'Right']) {
             for (const [what, key, bent] of [['elbow flipping round', S + 'ElbowRound', a[S + 'Elbow'] < 150], ['knee flipping round', S + 'KneeRound', a[S + 'Knee'] < 150]]) {
@@ -293,8 +356,24 @@ export function audit(scripts, o) {
             const acc = (m.com[1] - 2 * before.com[1] + before2.com[1]) / (DT * DT);
             note('falling faster than gravity (g)', -acc / G, where, -acc / G > 1.5);
             note('thrown upward (g)', acc / G, where, acc / G > 4);
+            // (a glove jumping: of a hand none of the three frames finds busy, standing)
+            if (!floor && !f.down)
+              for (const S of ['Left', 'Right']) {
+                if (!before.busy || !before2.busy || m.busy[S] || before.busy[S] || before2.busy[S]) continue;
+                const jump = len(M.add(M.sub(m.gloves[S], M.scale(before.gloves[S], 2)), before2.gloves[S])) / DT;
+                watch(JUMPING, jump, Object.assign({}, where, { part: S.toLowerCase() + ' glove' }), jump > JUMP);
+              }
           }
         }
+        /* (a glove knocked by being kept out of his other arm: any hand, whatever it is doing, and in the three frames after a
+           blow too, for keeping it out is the solver's doing, not the blow's; but not in the frames held at a blow, where time
+           is stopped) */
+        if (before && before2 && !held && !floor && !f.down)
+          for (const S of ['Left', 'Right']) {
+            if (!before.apart || !before2.apart) continue;
+            const knock = len(M.add(M.sub(m.apart[S], M.scale(before.apart[S], 2)), before2.apart[S])) / DT;
+            note(KNOCKED, knock, Object.assign({}, where, { part: S.toLowerCase() + ' glove' }), knock > JUMP);
+          }
         if (!floor && !f.down) {
           const out = outsideSupport(m.at, m.com, now[1 - i].at);
           if (out !== null) {
@@ -326,7 +405,23 @@ export function audit(scripts, o) {
           note(glove ? 'a glove inside the other man' : 'the two men inside each other', depth * 100, { script: entry.id, t: +(tick * DT).toFixed(3), who: na + ' in ' + nb, doing }, depth > (glove ? 0.08 : 0.05));
         }
       if (!held) (prev2[0] = prev[0]), (prev2[1] = prev[1]), (prev[0] = now[0]), (prev[1] = now[1]), struck[0]++, struck[1]++;
+    },
+    result: () => ({ found, watched, seen, falls, turning })
+  };
+}
+
+/* Fight each script once and hold every frame of both men to the checks. `only`: just frames in these actions. */
+export function audit(scripts, o) {
+  const a = auditor(o);
+  for (const entry of scripts) {
+    const bout = freshBout(entry);
+    a.begin(entry);
+    for (let tick = 0; tick < Math.round(entry.loop / DT); tick++) {
+      step(bout, drive(entry, bout, tick * DT, DT), DT);
+      bout.fighters[1].hp = 1000;
+      if (!entry.hurt) bout.fighters[0].hp = 1000;
+      a.frame(bout, tick);
     }
   }
-  return { found, seen, falls, turning };
+  return a.result();
 }

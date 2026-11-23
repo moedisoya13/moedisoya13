@@ -13,14 +13,20 @@
                          how far it may go round from there this frame), shoulder: { was, most } (the upper arm's way last
                          frame, as solve() gave it in arms, and how many degrees it may swing from there this frame), last:
                          where the wrist was last frame (where a hand the shoulder cannot put where it is sent goes instead,
-                         as near that as will do) } },
+                         as near that as will do), punch (a punch on its way), chest (how locked to the chest it is, 0..1:
+                         moves.mjs lc, rc), room (how far it is put down in the room, 0..1: lg, rg), apart: { was, most }
+                         (how far it was put off where it was sent last frame, to keep its glove out of the other arm, as
+                         solve() gave it in apart, and how many metres that may change by this frame) } },
        stretch }
    solve(stance) -> { root, rot: { Joint: 3x3 local }, stretch, at: { Joint: where it is, in his space }, head (the middle
                       of the head), round: { L, R }, arms: { L, R } (each upper arm's way as the chest sees it, mirrored
                       onto the left: what the shoulder's swing limit reads), knees: { L, R } (each knee round its leg, as
                       the flip limit reads it),
                       knee: { L | R: { flex, out } } (each knee as it came out: degrees bent from straight, and degrees turned
-                      out from over the foot, in negative) }
+                      out from over the foot, in negative),
+                      apart: { L, R } (how far each hand was put off where it was sent to keep its glove out of the other
+                      arm, what that did to its glove, and how much that changed this frame, as the chest sees it: { at,
+                      glove, step }, metres, or null) }
    centre(pose) -> his centre of mass, in his space as he is drawn (stretched about the canvas).
 
    The body is held inside what it can do (body.mjs), whatever it is asked: a heel that lifts turns the foot on its ball, so
@@ -28,11 +34,12 @@
    ankle would go past its range; the knee points the way the pelvis lets it and never under the canvas; the elbow is put
    where the shoulder lets the upper arm point and turn (body.mjs: SHOULDER), off the canvas, and goes round the arm and swings
    no faster than it can, and where no elbow will do the hand goes less far; a glove stays out of his own head and
-   trunk and on top of the canvas. Each of these moves a joint round the circle a limb's middle joint can be anywhere on, or
-   moves the end of the limb, as little as it takes. */
+   trunk and on top of the canvas, and out of his other arm (the hand not punching gives way, a little at a time). Each of
+   these moves a joint round the circle a limb's middle joint can be anywhere on, or moves the end of the limb, as little as
+   it takes. */
 import * as M from './m3.mjs';
 import { NAMES, PARENT, TPOSE } from './skeleton.mjs';
-import { RANGE, RADIUS, FOOT, GLOVE, HEAD, SEGMENTS, shoulderOf } from './body.mjs';
+import { RANGE, RADIUS, FOOT, GLOVE, HEAD, SEGMENTS, shoulderOf, gloveInArm } from './body.mjs';
 
 const RAD = Math.PI / 180,
   DEG = 180 / Math.PI;
@@ -56,8 +63,27 @@ const turned = (v, k, th) => {
   return M.add(M.add(M.scale(v, c), M.scale(cross(k, v), sn)), M.scale(k, dot(k, v) * (1 - c)));
 };
 
+/* The most two-bone solves of an arm (limb) one solve() may do, keeping his gloves out of his other arms included: what keeping
+   a glove out does past that is let be for the frame. A limb solve is what an arm costs: one whose elbow fits at once is
+   quick, one that has to look round the arm for an elbow the shoulder allows (a hand sent out of reach) several times
+   slower. On the machine this was measured on, loaded, a solve() that did 51 to 150 of them took 2.3 ms at the fastest
+   and 4.3 on average, so 200 is some 3 to 9 ms there, and five to ten times that on a phone: a dropped frame. Before a glove
+   was kept out of the other arm, the worst solve() of 32 seeded bouts did 157, and one in about 2,300 did more than 50;
+   200 holds keeping-apart's worst to about that, and as rare (with it, 191 at worst, and one in about 1,150 past 50). */
+const ARM_LIMBS = 200;
+// (the most limb solves trying one push can take: is it in reach, and then, five times over, the arm and a glove kept out of
+// his head and trunk, each in reach)
+const TRY = 11;
+// (the 26 ways round a point, along the axes and between them, for a search all round)
+const ROUND = [];
+for (const x of [-1, 0, 1]) for (const y of [-1, 0, 1]) for (const z of [-1, 0, 1]) if (x || y || z) ROUND.push([x, y, z].map(v => v / Math.hypot(x, y, z)));
+// (the fewest limb solves a second keeping-apart pass is begun with: both arms let be and the hand already put off put there
+// again, two pushes of the other, and the other found and put where it is found)
+const AFTER = 2 + 1 + 2 * TRY + TRY + 1;
+
 /* What the solver holds him to: the body's ranges, a little inside them (the audit holds him to the ranges themselves), and
-   how close a glove may come to his own head and trunk (a glove at the cheek or against the ribs is not in them). */
+   how close a glove may come to his own head and trunk (a glove at the cheek or against the ribs is not in them), and to his
+   other arm (the audit lets it in 2 cm). */
 const KEEP = {
   ankleUp: RANGE.ankleUp - 3,
   ankleDown: RANGE.ankleDown - 3,
@@ -69,7 +95,8 @@ const KEEP = {
   hipOut: RANGE.hipOut - 3,
   hipBehind: RANGE.hipBehind - 3,
   head: RADIUS.glove + RADIUS.head - 0.08,
-  trunk: RADIUS.glove + RADIUS.Chest - 0.07 + 0.01
+  trunk: RADIUS.glove + RADIUS.Chest - 0.07 + 0.01,
+  arm: 0 // how far (metres) a glove may be into his other arm, past touching with its padding squashed (body.mjs: ARM)
 };
 
 /* The middle joint of a two-bone limb. A target past the limb's length is brought back onto it, but softly: the last few
@@ -173,6 +200,25 @@ export function roundOf(shoulder, elbow, wrist, chestUp) {
   return Math.atan2(dot(off, ref2), dot(off, ref)) * DEG;
 }
 
+/* A push (a vector) brought from where it was toward where it is wanted, no further in a frame than `most`: its size changed
+   by no more than that, and turned by no more than that measured round the arc its end goes along (so that a push turning
+   round, as a glove slides round an arm, does not shrink to nothing on the way). */
+function toward(was, want, most) {
+  const lw = len(was),
+    lt = len(want);
+  if (lw < 1e-6) return lt <= most ? want : M.scale(want, most / lt);
+  const size = clamp(lt, lw - most, lw + most);
+  if (lt < 1e-6 || size < 1e-6) return M.scale(was, Math.max(0, size) / lw);
+  const a = M.scale(was, 1 / lw),
+    b = M.scale(want, 1 / lt),
+    th = Math.acos(clamp(dot(a, b), -1, 1)),
+    turn = Math.min(th, most / Math.max(lw, size, 1e-6));
+  if (th < 1e-6) return M.scale(b, size);
+  // (turned about the axis between them; straight back the other way, about any axis square to it)
+  const axis = th > Math.PI - 1e-3 ? norm(cross(a, Math.abs(a[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0])) : norm(cross(a, b));
+  return M.scale(turned(a, axis, turn), size);
+}
+
 export function solve(stance) {
   const spine = stance.spine || {},
     G = {},
@@ -196,10 +242,19 @@ export function solve(stance) {
   const head = M.add(P.Head, M.app(G.Head, HEAD)),
     chestUp = col(G.Chest, 1);
 
-  for (const side of ['L', 'R']) {
+  /* ---- an arm: the bones run along their own X, outward, and the elbow folds about their Y. extra: how far its hand is put
+     off where it is sent (to keep a glove out of the other arm, below), or nothing. A hand the shoulder cannot put where it is
+     sent goes where it can (within, below): one put off from there is put off from where it went, not from where it was sent
+     (from there a push of a centimetre can swing the arm round to the other way it can go, its glove a long way off) */
+  const went = { L: null, R: null },
+    bareTo = { L: null, R: null }; // (what each arm was solved to, not put off: to put it back there with one solve)
+  let armLimbs = 0; // (how many limb solves of an arm this call has done: ARM_LIMBS)
+  /* how: nothing, the arm solved in full; 'try', sent off by extra only as it is sent, or not at all (-> false) if the shoulder
+     cannot put the hand there, or a glove kept out of his head or trunk would take it where it cannot; or a target an arm was
+     solved to before, to solve it to that again at once. -> the target the arm was solved to */
+  const armOf = (side, extra, how) => {
     const Side = side === 'L' ? 'Left' : 'Right',
       s = side === 'L' ? 1 : -1;
-    // ---- arm: the bones run along their own X, outward, and the elbow folds about their Y
     const hand = stance.hands[side];
     place(Side + 'Arm', M.id());
     const shoulder = P[Side + 'Arm'],
@@ -221,9 +276,11 @@ export function solve(stance) {
       onTop = elbow => elbow[1] >= RADIUS.ForeArm;
     /* (a hand cannot be put far behind the chest's plane: the shoulder does not go there. A target that is, as a hook
        thrown by a body turned past what it was aimed at would ask, is brought round in front to where it can be reached) */
-    let target = hand.at,
+    const again = how && how !== 'try' ? how : null,
+      trying = how === 'try';
+    let target = again || (extra ? M.add(went[side] || hand.at, extra) : hand.at),
       arm;
-    {
+    if (!again) {
       const to = M.sub(target, shoulder),
         l = len(to),
         d = M.app(M.tr(G.Chest), M.scale(to, 1 / (l || 1))),
@@ -257,13 +314,17 @@ export function solve(stance) {
       return now === null ? 0 : Math.abs(wrap(now - hand.round.was));
     } : null);
     // (whether an elbow lets the shoulder put the hand there without going round the arm faster than it can)
+    const solveTo = (to, rules) => (armLimbs++, limb(shoulder, to, LEN.upperArm, LEN.foreArm, pole, rules, undefined, undefined, nearer(to)));
     const reachable = to => {
-      const a = limb(shoulder, to, LEN.upperArm, LEN.foreArm, pole, rulesFor(to).slice(0, 3), undefined, undefined, nearer(to));
+      const a = solveTo(to, rulesFor(to).slice(0, 3));
       return a.kept === undefined ? ball(to)(a.mid) : a.kept >= 3;
     };
     // (not a punching hand: a punch is thrown, and where it goes is what it hits)
-    const within = at => {
-      if (hand.punch || reachable(at)) return at;
+    /* (an arm solved with all its rules tells as much: what keeps the first three of them, or a straight arm the shoulder
+       lets be, is in reach; so a target is solved once, and that solve used, where it is) */
+    const inReach = (a, to) => (a.kept === undefined ? ball(to)(a.mid) : a.kept >= 3);
+    // (where the shoulder cannot put it: brought round)
+    const around = at => {
       const to = M.sub(at, shoulder),
         l = len(to),
         from = norm(to),
@@ -276,9 +337,23 @@ export function solve(stance) {
         }
       return M.add(shoulder, M.scale(ways[ways.length - 1], l));
     };
-    target = within(target);
+    const sent = target;
+    // (the arm solved to the target, if it is in reach as it is; else brought round, or, tried only as it is sent, not had)
+    let ready = null;
+    const reach = to => {
+      if (hand.punch) return to;
+      const a = solveTo(to, rulesFor(to));
+      if (inReach(a, to)) return (ready = a), to;
+      return trying ? null : around(to);
+    };
+    if (!again && (target = reach(target)) === null) return false;
+    const reached = len(M.sub(target, sent)) < 1e-9;
+    let solved = target;
     for (let pass = 0; pass < 5; pass++) {
-      arm = limb(shoulder, target, LEN.upperArm, LEN.foreArm, pole, rulesFor(target), undefined, undefined, nearer(target));
+      solved = target;
+      arm = ready || solveTo(target, rulesFor(target));
+      ready = null;
+      if (again) break;
       // the glove: out of his own head and trunk, and on top of the canvas
       const glove = M.add(arm.end, M.scale(norm(M.sub(arm.end, arm.mid)), GLOVE.ahead)),
         trunk = M.sub(P.Chest, P.Hips),
@@ -292,7 +367,7 @@ export function solve(stance) {
       }
       if (glove[1] + push[1] < GLOVE.r) push[1] = GLOVE.r + 0.004 - glove[1];
       if (len(push) < 1e-4) break;
-      target = within(M.add(arm.end, push));
+      if ((target = reach(M.add(arm.end, push))) === null) return false;
     }
     const d1 = norm(M.sub(arm.mid, shoulder)),
       d2 = norm(M.sub(arm.end, arm.mid));
@@ -312,9 +387,174 @@ export function solve(stance) {
     aim(Side + 'Arm', fromCols(x1, fold, cross(x1, fold)));
     aim(Side + 'ForeArm', fromCols(x2, fold, cross(x2, fold)));
     place(Side + 'Hand', M.id());
+    if (!extra && !again) (went[side] = reached ? null : P[Side + 'Hand']), (bareTo[side] = solved);
     round[side] = roundOf(shoulder, P[Side + 'ForeArm'], P[Side + 'Hand'], chestUp);
     arms[side] = seen(P[Side + 'ForeArm']);
+    return solved;
+  };
+  for (const side of ['L', 'R']) armOf(side, null);
 
+  /* ---- his own gloves out of his other arm (body.mjs: ARM). Both arms where they are sent, a glove in the other arm is
+     taken out of it to the nearest place outside, by the hand that is not throwing a punch (a punch is thrown, and goes where
+     it goes), or, if neither is, by the one the less locked to the chest (hand.chest, moves.mjs: lc, rc; a hand held to the
+     face gives way to one the chest swings), and by the glove's own if they are locked as much as each other. A glove gives
+     by being moved out the way out of the arm; an arm gives by its hand being moved the other way, the arm going with it (by
+     as much again as the glove is nearer the elbow than the wrist: the forearm turns about the elbow). So an arm gives only
+     where its hand moves it: met on the wrist's half of its forearm; met nearer the elbow, at the elbow or on the upper arm,
+     its hand would have to go twice as far as the glove is in, or more, and the glove gives instead (unless it is thrown). A
+     hand put down on the canvas does not give (hand.room). Where either may give, the one already giving (put off last
+     frame, the other not) goes on giving: handed from one to the other mid-way, each would start again from nothing.
+     And it is the glove that is held, not only where its hand is sent: each hand is sent off where it is sent by no more
+     than hand.apart.most further than last frame, nor turned round by more (hand.apart.was.at), and what that does to its
+     glove (from where the glove is without it) may change by no more than hand.apart.most from last frame's
+     (hand.apart.was.glove), nor that change by more than as much again from last frame's (hand.apart.was.step: a glove is
+     eased out of an arm, and back, not knocked), nor be much more than the hand was sent off by (an arm at the end of its
+     reach, sent a few centimetres off, can swing its glove a long way: where no elbow will do, the hand goes where it
+     can). Where the way it is sent will not do, the hand goes as far from last frame's toward it as will; if none of that
+     will, it lets last frame's go as far as will do; if none of that will either, pushes all round are tried; and if
+     nothing will, it does what breaks those limits the least (where his own arm has just been flung somewhere new, by a
+     blow or by a hand sent where the shoulder cannot put it, the glove cannot always be kept on its way). A hand let go of
+     keeps, for the next frame, how far that moved its glove. A glove does not jump out of an arm, or back. Where the hand
+     that gives cannot keep up with a glove coming into the arm, what it has done is kept and the other gives way too, if
+     it may, from there. What that leaves of a glove in an arm is the move's to keep out (its hand channels). */
+  const gloveOf = Side => M.add(P[Side + 'Hand'], M.scale(norm(M.sub(P[Side + 'Hand'], P[Side + 'ForeArm'])), GLOVE.ahead)),
+    bare = { L: gloveOf('Left'), R: gloveOf('Right') }; // (each glove where it is without being put off)
+  /* (the whole of it, with what a hand has already been put off by kept, as it is: `fixed`, { L | R: { at, e } }, and that
+     hand held where it is put) -> { apart, done: { L | R: { at (how far its hand is put off, in his space), e (what that
+     does to its glove), tried (whether it was asked to give) } } } */
+  const searched = { L: false, R: false }; // (each hand is searched for all round once a call at most)
+  const keepApart = (fixed = {}) => {
+    const extra = { L: fixed.L ? fixed.L.at : null, R: fixed.R ? fixed.R.at : null },
+      stays = h => !!h.punch || (h.room || 0) > 0.5 || (h === stance.hands.L && !!fixed.L) || (h === stance.hands.R && !!fixed.R);
+    for (const side of ['L', 'R']) if (fixed[side]) armOf(side, fixed[side].at, fixed[side].to);
+    const asked = { L: false, R: false };
+    for (let pass = 0; pass < 6; pass++) {
+      let moved = false;
+      for (const [side, other] of [['L', 'R'], ['R', 'L']]) {
+        const into = gloveInArm(gloveOf(side === 'L' ? 'Left' : 'Right'), ...['Arm', 'ForeArm', 'Hand'].map(j => P[(other === 'L' ? 'Left' : 'Right') + j])),
+          by = into.depth - KEEP.arm,
+          mine = stance.hands[side],
+          his = stance.hands[other];
+        if (by <= 1e-3 || (stays(mine) && stays(his))) continue;
+        const giving = h => !!(h.apart && h.apart.was && len(h.apart.was.at) > 1e-6),
+          gives = stays(mine) ? other : stays(his) || !(into.part === 'forearm' && into.along >= 0.5) ? side : giving(mine) !== giving(his) ? (giving(mine) ? side : other) : (mine.chest || 0) <= (his.chest || 0) ? side : other,
+          push = gives === side ? M.scale(into.out, by) : M.scale(into.out, -by / (into.part === 'forearm' ? Math.max(0.5, into.along) : 1));
+        extra[gives] = extra[gives] ? M.add(extra[gives], push) : push;
+        asked[gives] = true;
+        // (sent off by all asked so far, as it is sent: while this call has the limb solves for it, and for both to be found)
+        if (ARM_LIMBS - armLimbs < 3 * TRY + 2) break;
+        armOf(gives, extra[gives], 'try');
+        moved = true;
+      }
+      if (!moved || ARM_LIMBS - armLimbs < 3 * TRY + 2) break;
+    }
+    // (each held to last frame's, as the chest carries it; and that, for next frame)
+    const apart = {},
+      done = {};
+    for (const side of ['L', 'R']) {
+      const Side = side === 'L' ? 'Left' : 'Right',
+        hand = stance.hands[side];
+      if (fixed[side]) {
+        done[side] = fixed[side];
+        apart[side] = len(fixed[side].at) > 1e-6 || len(fixed[side].e) > 1e-6 ? { at: M.app(M.tr(G.Chest), fixed[side].at), glove: M.app(M.tr(G.Chest), fixed[side].e), step: M.app(M.tr(G.Chest), fixed[side].step) } : null;
+        continue;
+      }
+      const want = extra[side] || [0, 0, 0],
+        // (not put off at all last frame is put off by nothing; only a hand with no last frame, the guard drawn on its own, is not held)
+        limited = !!hand.apart,
+        most = limited ? hand.apart.most : Infinity,
+        was = limited && hand.apart.was ? { at: M.app(G.Chest, hand.apart.was.at), glove: M.app(G.Chest, hand.apart.was.glove), step: hand.apart.was.step ? M.app(G.Chest, hand.apart.was.step) : [0, 0, 0] } : { at: [0, 0, 0], glove: [0, 0, 0], step: [0, 0, 0] },
+        now = limited ? toward(was.at, want, most) : want,
+        // (what sending it so far off does to its glove, and by how much that will not do: more change to the glove since last
+        // frame than a hand can make in one, or a change more unlike last frame's than that, or a glove swung much further than
+        // its hand was sent)
+        // (-> { e, to: what the arm was solved to }, or null where the hand cannot be put so, as it is sent)
+        effect = at => {
+          const to = len(at) > 1e-6 ? armOf(side, at, 'try') : armOf(side, null, bareTo[side]);
+          return to ? { e: M.sub(gloveOf(Side), bare[side]), to } : null;
+        },
+        over = (at, e) => (limited ? Math.max(0, len(M.sub(e, was.glove)) - most) + Math.max(0, len(M.sub(M.sub(e, was.glove), was.step)) - most) : 0) + Math.max(0, len(e) - 1.5 * len(at) - 0.01);
+      if (len(now) < 1e-6 && over(now, [0, 0, 0]) <= 1e-4) {
+        if (extra[side]) armOf(side, null, bareTo[side]);
+        // (let go of: and, where that moved its glove, by how much, for next frame, so that it is not pushed straight back)
+        done[side] = { at: [0, 0, 0], e: [0, 0, 0], to: bareTo[side], step: M.scale(was.glove, -1), tried: asked[side] };
+        apart[side] = len(was.glove) > 1e-6 ? { at: [0, 0, 0], glove: [0, 0, 0], step: M.app(M.tr(G.Chest), done[side].step) } : null;
+        continue;
+      }
+      /* (what is left of this call's limb solves for trying: less the one that puts this hand where it is found, and what the
+         other hand, still to come, needs to be tried once and put) */
+      const spare = () => ARM_LIMBS - armLimbs - 1 - (side === 'L' && !fixed.R ? TRY + 1 : 0);
+      let best = null,
+        last = null;
+      /* (each tried in turn, only as it is sent, and the first that breaks nothing taken; else, all tried, or this call's limb
+         solves spent, the one that breaks the least, and of those the nearest where it is sent) */
+      const fits = () => !!best && best.over <= 1e-4,
+        tryAll = list => {
+          for (const a of list) {
+            if (fits() || spare() < TRY) return;
+            const r = effect(a);
+            last = r ? r.to : null;
+            if (!r) continue;
+            const o = over(a, r.e),
+              miss = len(M.sub(a, want));
+            if (!best || o < best.over - 1e-4 || (o < best.over + 1e-4 && miss < best.miss)) best = { at: a, e: r.e, to: r.to, over: o, miss };
+          }
+        };
+      tryAll([now]);
+      if (!fits()) {
+        /* (as far from last frame's toward where it is sent as will do; and if nothing on the way will, as far as will do
+           from last frame's toward letting it go; and if nothing will, what does the least that will not) */
+        const tries = [];
+        for (let k = 0; k < 8; k++) tries.push(M.add(was.at, M.scale(M.sub(now, was.at), k / 8)));
+        for (let k = 1; k <= 4; k++) tries.push(M.scale(was.at, 1 - k / 4));
+        // (and past where it is sent, along last frame's way, for a glove still on its way out that cannot stop at once)
+        for (let k = 1; k <= 4; k++) tries.push(M.add(now, M.scale(M.sub(now, was.at), k / 4)));
+        // (those that would do, were the glove to go with its hand from where it was found for where it is sent, first; and of
+        // those, the nearest where it is sent)
+        const ref0 = best || { at: was.at, e: was.glove };
+        tryAll(tries.map(a => ({ a, fits: Math.round(over(a, M.add(ref0.e, M.sub(a, ref0.at))) / 0.005), miss: len(M.sub(a, want)) })).sort((x, y) => x.fits - y.fits || x.miss - y.miss).map(x => x.a));
+        /* (and if nothing on those ways will, pushes all round last frame's and round the best found, 1 to 8 cm off: an arm
+           at the end of its reach, or with the shoulder turning it as far as it turns, can go one way for a push and another
+           way altogether for one a little to the side. Once a call for each hand at most) */
+        if (!fits() && !searched[side]) {
+          searched[side] = true;
+          const ref = best || { at: was.at, e: was.glove },
+            from = [was.at, ref.at];
+          /* (were the glove to go with its hand from where the best found put it: those that would put it where it may be
+             first, and of those the nearest where the hand is sent; so that, an arm going about as its hand does, the first
+             tried is mostly the one) */
+          const all = [];
+          for (const r of [0.01, 0.025, 0.05, 0.08])
+            for (const c of from)
+              for (const d of ROUND) {
+                const a = M.add(c, M.scale(d, r));
+                all.push({ a, fits: Math.round(over(a, M.add(ref.e, M.sub(a, ref.at))) / 0.005), miss: len(M.sub(a, want)) });
+              }
+          tryAll(all.sort((x, y) => x.fits - y.fits || x.miss - y.miss).map(x => x.a));
+        }
+      }
+      // (none of it in reach as it is sent: let go)
+      if (!best) best = { at: [0, 0, 0], e: [0, 0, 0], to: bareTo[side] };
+      if (last !== best.to) armOf(side, best.at, best.to);
+      done[side] = { at: best.at, e: best.e, to: best.to, step: M.sub(best.e, was.glove), tried: asked[side] };
+      apart[side] = len(best.at) > 1e-6 || len(best.e) > 1e-6 ? { at: M.app(M.tr(G.Chest), best.at), glove: M.app(M.tr(G.Chest), best.e), step: M.app(M.tr(G.Chest), done[side].step) } : null;
+    }
+    return { apart, done };
+  };
+  let { apart, done } = keepApart();
+  /* (a glove still in the other arm, the one that gave held to what it can do in a frame: what that hand has done is kept,
+     and the other gives way too, if it may) */
+  const still = side => gloveInArm(gloveOf(side === 'L' ? 'Left' : 'Right'), ...['Arm', 'ForeArm', 'Hand'].map(j => P[(side === 'L' ? 'Right' : 'Left') + j])).depth > KEEP.arm + 0.002,
+    gave = ['L', 'R'].filter(side => done[side] && done[side].tried);
+  // (if this call has the limb solves left for it: else what the first pass did stands)
+  if (gave.length === 1 && ['L', 'R'].some(still) && ARM_LIMBS - armLimbs >= AFTER) {
+    for (const side of ['L', 'R']) armOf(side, null, bareTo[side]);
+    ({ apart } = keepApart({ [gave[0]]: done[gave[0]] }));
+  }
+
+  for (const side of ['L', 'R']) {
+    const Side = side === 'L' ? 'Left' : 'Right',
+      s = side === 'L' ? 1 : -1;
     // ---- leg: the bones run down their own -Y, and the knee folds about their X
     const foot = stance.feet[side];
     place(Side + 'Leg', M.id());
@@ -419,7 +659,7 @@ export function solve(stance) {
     place(Side + 'ToeBase', M.rx(-Math.max(0, foot.R ? 0 : pitch) * 0.8)); // the toes stay on the canvas when the heel lifts
   }
   for (const name of NAMES) if (!rot[name]) place(name, M.id());
-  return { root: M.sub(stance.hips, TPOSE.Hips), rot, stretch: stance.stretch || 1, at: P, head, round, knees, knee, arms };
+  return { root: M.sub(stance.hips, TPOSE.Hips), rot, stretch: stance.stretch || 1, at: P, head, round, knees, knee, arms, apart };
 }
 
 // his centre of mass (Dempster's shares, body.mjs), as he is drawn: stretched taller and thinner about the canvas

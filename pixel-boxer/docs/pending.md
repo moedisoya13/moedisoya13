@@ -173,6 +173,22 @@ A+B 실신·위빙, C1 몸통 판정, C2 바디 주먹·뒷손 훅, E 파도, F 
 - 실신의 턱: 그대로(23.1°; 사용자가 표에서 고름: `twist-chin`). 메모: stagger 일부(처짐 28.9/21.8 cm·구름 32°·무릎 26.7°·받치는 걸음, 시트에서는 은근함), down-front 일부(넓적다리 113/74°, 발목 1.53/0.93 m; 접힌 다리의 발이 떠 있음), out-twist 답 안 됨.
 → **V 3차를 보냄**(같은 구현 에이전트): 1 → 2 → 무릎 → 보고 고침. N·U 3차, M 7차와 함께 도는 중(기계가 바빠 한 에이전트에 node 한둘).
 
+## M 7차 결과, 내 검증, **M을 본 브랜치에 합침** (2026-11-23 밤)
+
+7차(구현 팀): 비용을 팔 풀이(`limb`) 횟수로 묶음, `ARM_LIMBS` 200. 목표마다 한 번만 풀고, 밀어 볼 자리는 보낸 그대로만 풀어 봄(닿지 않으면 맞지 않는 것; 40걸음 찾기는 떼어 놓기에서 돌지 않음), 고른 밀기만 다시 풂.
+- **내 계수기**(`scratchpad/mverify/instr2.py`, `cost.mjs`): 32판에서 한 `solve()`의 팔 limb 최악 191(기준 157, 6차 1,163), 50 초과 308번(기준 155), 150 초과 76, 400 초과 0, 평균 2.72(기준 4.42: 목표마다 한 번만 풀게 되어 맨팔도 싸짐). 대본: 최악 92, 50 초과 85(기준 93·83).
+- **내 재실행**(`scratchpad/mverify/r7out/`): 382/382, feel 같음, 대본의 지키는 점검 모두 깨끗(제 팔 안 가장 깊은 것 slip 1.7·roll 1.7·cover 0.7·hookR 0.5 cm; 밀려 튐 0), 지켜보는 튐 749 → 755프레임, events는 `shift@4m`(막힌 숏 어퍼 11 → 22 N·s), `counter@5m` 103 → 104, `counter@5a` 112 → 111. 32판(`auditor()`): 밀려 튄 프레임 1(bout9 44.333 s, 3.81 m/s: 밀기를 꺼도 팔 자체가 14 m/s 튐), 다른 팔 안 2 cm 초과 64프레임(기준 1,640; 최악 10.08 cm). 못 지킨 것은 깊이뿐(6차 56 → 64): 비용 묶음의 값.
+- **합침**: 7fa3003 + 문서 둘 + 5~7차를 본 브랜치에. 문서를 마지막 수치로 고침(README, `docs/moves-plan-6.md` §6.1 "만든 것"). 본 브랜치에서 385/385, feel 같음, audit는 검증한 것과 같음.
+- 카탈로그: M이 움직인 줄을 재서(`scratchpad/mverify/moved.mjs`: 두 선수의 관절을 프레임마다, 1 mm 넘게 움직인 카드) `SINCE`에 20줄: slip·slip-cross·counter·shrug(슬립의 앞 글러브, 최대 15.5 cm), duck·roll·parry·block·guard·stalk·collar(풀이의 밀기, 1.5~7.7 cm), block-elbow·block-liver(2단계의 두 팔, 10~12 cm), crossArm·crossArm-hook·crossBody-jab/cross/liver·rollCounter(드나드는 길, 4~7 cm), shift(4명·5명, 15~17 cm). `memo.actions.mjs`의 crossArm은 "반영됨"(모양은 P).
+- 미결 카탈로그: "지금"이 바뀌어 클립을 다시 녹화(`node tools/clips.mjs --write --root prem=<M 전>`; M 전의 사본은 `scratchpad/pcwork/prem` = 8b17869의 src·tools). `low2-block`의 비교는 "M 전 대 지금"으로(겹침 15.5 → 3.4 cm, 어퍼 막음 19.4 → 명중 55.8 N·s). 지금의 튐 클립: guard@5a 12.6 m/s, onetwo@5a 16.9, crossArm@5m 14.1. 새 항목 둘(N에서): `inside-rule`(권장 low), `waist-bound`(권장 own) → 5부 42항목, 전체 70.
+
+## N 3차 결과 (구현 팀 보고; 내 검증과 따로의 점검은 아직)
+
+보고 요지: 392/392, feel 같음, 지키는 점검 깨끗, events 59장. 연타의 어퍼가 누르는 박자 18가지 모두에서 맞음(3단계: 기준 이상; 기준도 약하던 열 박자 25~32 N·s는 그대로), 5단계 인사이드 훅의 옆걸음 띠 90번 가운데 2번(기준 4번; 둘 다 기준도 깨는 종류), 0.62 m의 어퍼는 앞 글러브가 원인이었고 고침(4.3 cm).
+- 값: 훅을 허리가 돈 만큼 먼저 올리게 해 인사이드 훅이 또 세짐: 14.9 / 43.2 / 59.9 / 72.7 / 74.1 / 77.7 / 86.0 N·s(기준 14.9 / 36.1 / 46.6 / 54.7 / 58.8 / 56.8 / 65.1; 5암이 기획의 띠 70~85를 1 넘음). 프로의 U 바닥 8.2 → 3.0 cm(기획 10)로 나빠짐. 지켜보는 튐 749 → 785. 어퍼의 옆걸음 띠 3/90(기준 6/90)이지만 하나는 기준에 없는 종류(정강이 겹침 5.2 cm, 두 프레임).
+- 규칙 `RULES.insideOn`의 등급별 합계는 미결 카탈로그 `inside-rule`에.
+→ 할 일: M이 합쳐진 본 브랜치 위로 옮겨(충돌: `src/audit.mjs`, `tests/audit.test.mjs`, 데이터 파일) 내가 다시 재고, 따로의 점검(세 번째)을 받는다.
+
 ## 사용자 지적: 모션 카탈로그의 메모가 거의 반영되지 않았다 (2026-11-23)
 
 사실이다. 메모 27건(26줄; `feedback`을 다시 읽음, 11-22 뒤로 새 메모 없음) 가운데 **카탈로그의 동작에 보이는 것은 0건.** 끝난 것은 J(이펙트)와 K(허리 엔진: `hookIn` 메모의 "허리를 분리해 돌 수 있는 변수로"만 엔진에 생겼고 어느 주먹도 아직 쓰지 않음)뿐이고, 그 뒤의 시간은 이펙트(데미지 비례, 다운 효과, 용암·불티), K의 착지 수리, 소스 기획 둘에 썼다. 메모의 단계: M(`crossArm`의 audit) → N(`hookIn`, `hookR`, `upperIn`, `flicker`) → P(`crossArm`의 모양) → Q(`duck`, `pull`, `parry`, `parryDown`, `rollCounter`) → R(`inout`, `side`, `circle`, `dash`, `dashSide`) → S(`shift`, `wave`) → U(`collar`, `beckon`, `chinOut`, `wind`, `shrug`, `tapChin`) → V(`stagger`, `down-front`, `out-twist`).

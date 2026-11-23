@@ -7,7 +7,8 @@
    §4A), here because the dirty great ones carry the guard by default and the hammer is theirs alone.
      stance(c, show, s)        the stance (§5.1): the lead hand let down to the waist, swinging like a pendulum, the lead
                                shoulder up, leant back, the chin out
-     crossGuard(c, cross, k)   the cross-arm guard, the classic one (docs/moves-plan-5.md §4A.2), k of the way up; -> metres
+     crossGuard(c, cross, k, up, down)   the cross-arm guard, the classic one (docs/moves-plan-5.md §4A.2), k of the way
+                               up (up, down, 0..1: how much it is on its way up or down, WAY); -> metres
                                the lead shoulder is shrugged up. A technique (game/techniques.mjs: crossArm): whoever carries
                                it from 3 up holds his grade's (skill.mjs: CROSS), and by default the dirty great ones do
      ear(c, cross, k)          its rear glove taken back to the ear as a lead hook comes (§4A.3)
@@ -55,19 +56,29 @@ export function stance(c, show, s) {
   c.twist -= show.roll * k;
 }
 
-/* The cross-arm guard, the classic one, as the guard is up (k: 0..1). cross (skill.mjs: CROSS[grade]): the rear glove up at
-   the chin, held to the face as a guard's is, its forearm stood up under it and the elbow down in front of the ribs; the lead
-   forearm laid across the belly, locked to the chest (it goes where the trunk goes, not where the head goes), the elbow at
-   the lead side; side on, the chest closed, bent forward on bent knees, the chin down and turned behind the lead shoulder,
-   which is shrugged up (the animator's to do: not a channel; -> how far). The head is the rear glove's and the shoulder's to
-   keep, the body the forearm's (game/bout.mjs: the forearms and the lead shoulder are in the way of a punch). */
-export function crossGuard(c, cross, k) {
+/* The way into and out of the cross-arm guard (not its shape, which is CROSS's): the lead hand goes between the guard at his
+   face and his belly round the rear forearm standing up in front of his chest, not through it. On the way down into it, under
+   the rear elbow: dipped `dip` metres half way (as far as the guard is on its way up: up, from the animator, which leaves
+   out a dirty great one's hammer put up fresh, hammer below, whose stroke is the rear fist's and timed to the frame); on the
+   way back up out of it, in front of it: `ahead` metres half way, ahead of his chest as it stands in the guard (down) */
+const WAY = { dip: 0.08, ahead: 0.08 };
+/* The cross-arm guard, the classic one, as the guard is up (k: 0..1; up, down: how much it is on its way). cross (skill.mjs:
+   CROSS[grade]): the rear glove up at the chin, held to the face as a guard's is, its forearm stood up under it and the
+   elbow down in front of the ribs; the lead forearm laid across the belly, locked to the chest (it goes where the trunk
+   goes, not where the head goes), the elbow at the lead side; side on, the chest closed, bent forward on bent knees, the
+   chin down and turned behind the lead shoulder, which is shrugged up (the animator's to do: not a channel; -> how far). The
+   head is the rear glove's and the shoulder's to keep, the body the forearm's (game/bout.mjs: the forearms and the lead
+   shoulder are in the way of a punch). */
+export function crossGuard(c, cross, k, up, down) {
   for (const [side, [x, y, z, e]] of [['l', cross.L], ['r', cross.R]]) {
     c[side + 'x'] += x * k;
     c[side + 'y'] += y * k;
     c[side + 'z'] += z * k;
     c[side + 'e'] += e * k;
   }
+  const half = Math.sin(Math.PI * Math.min(1, k)) ** 2;
+  if (up) c.ly -= WAY.dip * up * half;
+  if (down) (c.lx -= 0.6 * WAY.ahead * down * half), (c.lz += 0.8 * WAY.ahead * down * half);
   c.lc += cross.lock * k;
   c.lean += cross.lean * k;
   c.hp += cross.chin * k;
