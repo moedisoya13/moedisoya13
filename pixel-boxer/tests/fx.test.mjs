@@ -241,7 +241,7 @@ function fight(id, each) {
   }
 }
 
-test('a knockdown\'s blow throws lava in place of the motes: globs and embers as many as the damage says (10 and 18 at the measure), as fast, thick and long-lived as the plan says', () => {
+test('a knockdown\'s blow throws lava in place of the motes: globs and embers as many as the damage says (11 and 18 at the measure), as fast, thick and long-lived as the plan says', () => {
   const struck = { points: { head: [0, 1.5, 0] } },
     made = more => {
       const calls = { sparks: [], globs: [], embers: [] },
@@ -266,7 +266,7 @@ test('a knockdown\'s blow throws lava in place of the motes: globs and embers as
         life = 0.95 * Math.max(0.4, m),
         [g, b] = [calls.globs[0], calls.embers[0]];
       assert.equal(calls.sparks.length, 0, 'none of the ordinary motes');
-      assert.deepEqual([g.n, b.n], [Math.max(1, Math.round(10 * m)), Math.max(1, Math.round(18 * m))], `q ${q}: ${g.n} globs and ${b.n} embers`);
+      assert.deepEqual([g.n, b.n], [Math.max(1, Math.round(11 * m)), Math.max(1, Math.round(18 * m))], `q ${q}: ${g.n} globs and ${b.n} embers`);
       assert.equal(n, g.n + b.n);
       assert.deepEqual(lavaOf(e), { globs: g.n, embers: b.n, width: g.width }, 'lavaOf says what blow throws');
       assert.ok(Math.abs(g.width - Math.min(G.most, Math.max(G.least, 1.7 * Math.max(0.01, 0.024 * m)))) < 1e-12 && b.width === FX.motes.thin, `q ${q}: a glob ${(g.width * 100).toFixed(1)} cm thick (1.7 times a mote, ${G.least * 100} to ${G.most * 100} cm), an ember the thinnest`);
@@ -279,8 +279,8 @@ test('a knockdown\'s blow throws lava in place of the motes: globs and embers as
     }
   }
   assert.equal(lavaOf({ type: 'hit', damage: 3 }), null, 'an ordinary hit has none');
-  // (and the real ones: down-back, out-log and the liver's knockdown, 10, 10 and 6 globs)
-  for (const [id, globs] of [['down-back', 10], ['out-log', 10], ['down-liver', 6]]) {
+  // (and the real ones: down-back, out-log and the liver's knockdown, 11, 11 and 6 globs)
+  for (const [id, globs] of [['down-back', 11], ['out-log', 11], ['down-liver', 6]]) {
     const { e, struck: man } = firstHit(id),
       fx = createFx(dice(5)),
       n = blow(fx, e, man);

@@ -90,7 +90,7 @@ export const FX = {
   lava: {
     glow: [39, 40, 18],
     crust: [7, 6, 5],
-    globs: { n: 10, width: 1.7, least: 0.024, most: 0.06, fall: 0.8, drag: 0.8, life: 1.6, cool: 2.5, land: 0, spot: 0.35, shed: { every: 0.05, pace: 0.3, most: 4 } },
+    globs: { n: 11, width: 1.7, least: 0.024, most: 0.06, fall: 0.8, drag: 0.8, life: 1.6, cool: 2.5, land: 0, spot: 0.35, shed: { every: 0.05, pace: 0.3, most: 4 } },
     embers: { n: 18, pace: 1.2, wide: 1.2, fall: 0.2, drag: 1.6, life: 2, brake: 4, wander: [0.1, 0.2], flicker: 0.04, trail: 1.5 }
   },
   // (land: the second ripple of a knockdown, from where he comes down: its strength times the blow's, and how long it goes)
