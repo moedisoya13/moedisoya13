@@ -3,7 +3,7 @@
    and how far it may go, so that one getting worse, or anything new, still fails. */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { audit, auditor, SCRIPTS, LIMIT, JUMP, JUMPING, KNOCKED } from '../src/audit.mjs';
+import { audit, auditor, SCRIPTS, LIMIT, JUMP, JUMPING, KNOCKED, GETUP, GETTING_UP } from '../src/audit.mjs';
 import { createMatch, stepMatch } from '../src/game/match.mjs';
 import { PLANS } from '../src/game/brain.mjs';
 import { loadout } from '../src/game/profile.mjs';
@@ -81,12 +81,17 @@ test('audit: his own glove is never in his other arm', () => {
 });
 
 /* The waist (plan 6 §1.3): turned on the pelvis no further than 25 degrees and no faster than 900 a second, in every frame,
-   a knockdown's fall too, with no exception. How far it turns is held apart for the two that turn it: where the animator
-   keys him, it keeps the waist inside its own 22 (anim/animator.mjs: WAIST), which no frame of any script goes past by more
-   than a measuring hair; in a knockdown's fall his body is the physics' (phys/fall.mjs), which holds the waist by limits of
-   its own and is held, like any frame, to the body's 25 (rig/body.mjs: RANGE.waistTwist), so a fallen man is not held to the
-   animator's 22, nor does his fall leave the animator's frames room past it. */
-test('audit: the waist is never turned past its range or faster than it can turn; the animator never turns it past its 22 degrees', () => {
+   a knockdown's fall too, with no exception. And both that turn it hold it to the same 22, three inside that (rig/body.mjs:
+   RANGE.waistTwist): where the animator keys him (anim/animator.mjs: WAIST), and in an ordinary knockdown's fall, where his
+   body is the physics' (phys/fall.mjs: LIM.waist, read as this reads it); no frame of any script goes past it by more than a
+   measuring hair. (A fall was held to the body's 25 apart from the animator's frames while the physics held the waist by
+   limits of its own, which this read 2 degrees wider: 22.4 at the most, 22.1 now: docs/moves-plan-6.md §3.5.) So the fall's
+   bound is split: tightened for an ordinary knockdown's fall (22.5), unchanged out cold (25). A fall out cold is held, as
+   it was, to the body's 25: the physics holds his waist by the spine's own limits, as it did (LIM.waist,
+   holding it too, folded a limp man's knees past their limit in falls the scripts do not show), and out-limp's lifted man
+   reads 22.5 in it, his waist turned a little further by the blows he blocks before the uppercut (anim/animator.mjs: HIT,
+   waist), 22.3 before. */
+test('audit: the waist is never turned past its range or faster than it can turn; the animator and an ordinary knockdown\'s fall never turn it past their 22 degrees', () => {
   const { found } = audited();
   for (const check of ['waist twisted past its limit', 'waist turning faster than it can (degrees a second)']) {
     assert.ok(found[check] && found[check].frames > 10000, `${check}: checked in ${found[check] ? found[check].frames : 0} frames`);
@@ -95,9 +100,11 @@ test('audit: the waist is never turned past its range or faster than it can turn
   const by = Object.entries(found['waist twisted past its limit'].largestBy),
     most = list => Math.max(0, ...list.map(([, v]) => v)),
     keyed = most(by.filter(([doing]) => !falling({ doing }))),
-    fallen = most(by.filter(([doing]) => falling({ doing })));
+    fallen = most(by.filter(([doing]) => falling({ doing }) && !MOVES[doing].faint)),
+    cold = most(by.filter(([doing]) => falling({ doing }) && MOVES[doing].faint));
   assert.ok(keyed <= 22.5, `the animator turned the waist ${keyed.toFixed(1)} degrees`);
-  assert.ok(fallen <= LIMIT.waistTwist, `a fall turned the waist ${fallen.toFixed(1)} degrees`);
+  assert.ok(fallen <= LIMIT.waistTwist - 2.5, `an ordinary knockdown's fall turned the waist ${fallen.toFixed(1)} degrees`);
+  assert.ok(cold <= LIMIT.waistTwist, `a fall out cold turned the waist ${cold.toFixed(1)} degrees`);
 });
 
 /* Kept out of his other arm, a glove is eased out and back, not knocked (plan 6 §6.1): what the solver's keeping-apart does
@@ -148,4 +155,14 @@ test('audit: in seeded matches, keeping a glove out of his other arm never knock
   assert.ok(seen > 10000 && c && c.frames > 10000, `${seen} frames, the check taken in ${c ? c.frames : 0}`);
   assert.equal(c.bad, 0, `${c.bad} frames: ${JSON.stringify(c.cases.slice(0, 5))}`);
   t.diagnostic(`${arm.bad} frames of ${arm.frames} with a glove more than 2 cm in the other arm, the deepest ${arm.worst ? arm.worst.value.toFixed(1) + ' cm (' + arm.worst.script + ' @ ' + arm.worst.t + ' s)' : 'none'}; a glove knocked at most ${c.largest.toFixed(2)} m/s`);
+});
+
+/* And a joint jumping as he gets up (src/audit.mjs: GETUP), the same: measured in every frame of every get-up there is,
+   apart from what is held (his legs out of how he lay are held: tests/fall.test.mjs). */
+test('audit: a joint jumping as he gets up is measured, apart from what is held', () => {
+  const { found, watched } = audited(),
+    c = watched[GETTING_UP];
+  assert.ok(c && c.frames > 300, `measured in ${c ? c.frames : 0} frames`);
+  assert.equal(GETUP, 0.08);
+  assert.ok(!(GETTING_UP in found));
 });

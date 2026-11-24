@@ -8,7 +8,7 @@
      dynamics   the centre of mass: falling faster than gravity, thrown upward, standing where he would topple; how fast the
                 waist turns on the pelvis (rig/body.mjs: RATE), and how fast the joints of a punch turn; a glove knocked
                 by being kept out of his other arm (JUMP); and, watched and not yet held, a glove jumping, its hand not
-                throwing a punch, nor parrying, nor pawing (JUMP)
+                throwing a punch, nor parrying, nor pawing (JUMP), and a joint jumping as he gets up (GETUP)
    Nothing here fixes anything. tools/audit.mjs prints what it finds; tests/audit.test.mjs holds it to nothing.
      audit(scripts, { only })   -> { found: { check: { frames, bad, worst, largest, largestBy, by, most, cases, scripts } },
                                     watched (the same, of what is measured and not yet held: below), seen, falls, turning }
@@ -26,10 +26,10 @@
    stopped), and the three frames drawn after anyone is struck (a blow is meant to jolt; the frames held in between are not
    counted, or a long hold would use the three up). His own glove in his other arm is not looked for in those frames, nor
    while he is down or getting up, and a glove jumping not while he is down or getting up either: down, his body is the
-   fall's (phys/fall.mjs), which keeps nothing of his out of his other arm (in every script's knockdowns a glove goes 6.25 cm
-   into it at worst, down-front's, and past 2 cm in 98 frames); getting up, his hands are put down on the canvas, and a hand
-   put down does not give way (6.77 cm at worst, down-front's riseFront, past 2 cm in 10 frames); and in the three frames
-   after a blow, an arm flung on by it (2.8 cm at worst, crossBody-liver@4m's uppercut). A glove knocked by being kept out of
+   fall's (phys/fall.mjs), which keeps nothing of his out of his other arm (in every script's knockdowns a glove goes 7.42 cm
+   into it at worst, down-front's, and past 2 cm in 97 frames); getting up, his hands are put down on the canvas, and a hand
+   put down does not give way (6.40 cm at worst, down-front's riseFront, past 2 cm in 11 frames); and in the three frames
+   after a blow, an arm flung on by it (2.6 cm at worst, crossBody-liver@4m's uppercut). A glove knocked by being kept out of
    his other arm is looked for in those three frames too, for keeping it out is the solver's doing, not the blow's; but not
    in the frames held at a blow, nor while he is down or getting up. A foot counts as holding him up while
    its ankle is low or its ball is on the canvas (a heel raised off a ball that is down is still a foot on the canvas). */
@@ -58,8 +58,20 @@ const DT = 1 / 60,
    back the next (tools/feel.mjs counts that a pop). */
 export const JUMP = 3.6;
 export const JUMPING = 'a glove jumping, not punching (m/s of velocity changed in a frame)';
+/* A joint jumping as he gets up: how far the joint of him that moves the most in a frame moves, in any frame of a way up off
+   the canvas (moves.mjs: rise, riseFront, riseSide, riseKnee, riseLiver), metres. GETUP is 8 cm, 4.8 m/s: half as fast as a
+   jab's glove at its fastest (tools/feel.mjs, 9 m/s), and a man getting up off the canvas moves nothing of him faster. His
+   legs, from the last frame he lay in to the end of the part of the rise blended out of it, are held to it
+   (tests/fall.test.mjs); the rest of each rise, as its keys and the solver make it, is watched: a knee swung round its leg in
+   a frame as the rise off his back folds it right up, a rear glove let go of the liver in a frame as he rises off the knee,
+   a hand brought round fast as he is turned over. */
+export const GETUP = 0.08;
+export const GETTING_UP = 'a joint jumping as he gets up (cm in a frame)';
 /* And held: what keeping a glove out of his other arm does to that glove (rig/solve.mjs: apart) changes the glove's velocity
-   by no more than JUMP in a frame. A glove is eased out of an arm, and back, not knocked. */
+   by no more than JUMP in a frame. A glove is eased out of an arm, and back, not knocked. (On a rocked man's slowed arm,
+   which is not drawn as the solver solved it, the pose's apart is the push as the drawn arm has followed it, for it is the
+   glove as drawn that the check is about; the solver is still told its own push the next frame: anim/animator.mjs,
+   rockedArms.) */
 export const KNOCKED = 'a glove knocked by being kept out of his other arm (m/s of velocity changed in a frame)';
 // (a show-off's lead hand sent for the other man while the rear one throws: anim/animator.mjs REACHING)
 const REACHING = ['pawDown', 'pawUp', 'collar'];
@@ -375,6 +387,16 @@ export function auditor(o) {
             const knock = len(M.add(M.sub(m.apart[S], M.scale(before.apart[S], 2)), before2.apart[S])) / DT;
             note(KNOCKED, knock, Object.assign({}, where, { part: S.toLowerCase() + ' glove' }), knock > JUMP);
           }
+        // (getting up: the joint of him that moved the most in the frame, watched: GETUP)
+        if (before && !held && floor && doing.startsWith('rise')) {
+          let most = 0,
+            part = '';
+          for (const n in m.at) {
+            const d = dist(m.at[n], before.at[n]);
+            if (d > most) (most = d), (part = n);
+          }
+          watch(GETTING_UP, most * 100, Object.assign({}, where, { part }), most > GETUP);
+        }
         if (!floor && !f.down) {
           const out = outsideSupport(m.at, m.com, now[1 - i].at);
           if (out !== null) {

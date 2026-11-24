@@ -94,13 +94,15 @@ function play(r) {
 }
 
 // the start, the span and the real time of each card's replay, as built (bout seconds from the blow; real seconds)
+// (down-front's and out-twist's starts measured again when stage V was merged: 1.183 -> 1.167 and 1.567 -> 1.550 s: under
+// V's falls the last of what the fall threw goes out a frame sooner; the rule is the same)
 const TABLE = {
   'down-back': { start: 1.217, from: -0.133, to: 0.35, real: 1.75 },
-  'down-front': { start: 1.183, from: -0.117, to: 0.35, real: 1.717 },
+  'down-front': { start: 1.167, from: -0.117, to: 0.35, real: 1.717 },
   'down-side': { start: 1.167, from: -0.15, to: 0.35, real: 1.783 },
   'down-knee': { start: 1.283, from: -0.133, to: 0.35, real: 1.75 },
   'down-liver': { start: 1.483, from: -0.15, to: 0.35, real: 1.783 },
-  'out-twist': { start: 1.567, from: -0.15, to: 0.35, real: 1.783 },
+  'out-twist': { start: 1.55, from: -0.15, to: 0.35, real: 1.783 },
   'out-log': { start: 1.45, from: -0.133, to: 0.35, real: 1.75 },
   'out-limp': { start: 1.883, from: -0.15, to: 0.35, real: 1.783 }
 };

@@ -165,7 +165,7 @@ export function createBout(seed, o) {
 }
 // stand both boxers in their guards where they are (after they have been put somewhere by hand)
 export function settle(bout) {
-  for (const f of bout.fighters) (f.animator = createAnimator(f === bout.fighters[0] ? 0 : 1)), (f.before = f.points = null);
+  for (const f of bout.fighters) (f.animator = createAnimator(f === bout.fighters[0] ? 0 : 1)), (f.before = f.points = f.parts = null);
   for (let i = 0; i < 2; i++) bout.fighters.forEach((f, k) => solvePose(bout, f, k, 0));
 }
 export function random(bout) {
@@ -1248,7 +1248,10 @@ function viewOf(bout, i) {
       // the other man, in his own terms: his lead foot's instep (what a dirty man stands on), and whether this man's own lead
       // foot is stood on (and his elbows: what the bottom of an inside uppercut's U is kept clear of, anim/animator.mjs; and
       // his shoulders, elbows and gloves: what a cross counter's rear arm goes over, anim/over.mjs)
-      foe: f.place && other.pose && other.points ? { foot: mine(f, at(other, 'LeftFoot', [0, -0.02, 0.07])), glove: { L: mine(f, other.points.L), R: mine(f, other.points.R) }, head: mine(f, other.points.head), elbow: { L: mine(f, other.points.LE), R: mine(f, other.points.RE) }, shoulder: { L: mine(f, other.points.LS), R: mine(f, other.points.RS) }, aim: leadAim(bout, f, other), lag: i === 0 ? 1 : 0, nape: mine(f, napeOf(other)), right: dirIn(f, [-Math.cos(other.yaw), Math.sin(other.yaw)]) } : null,
+      // (and the rest of his body that a glove can be in, as the audit reads it, src/audit.mjs SOLID, and his gloves, where they
+      // will be as he is drawn this frame: a rocked man's slowed arms are kept out of them as the solver's would be,
+      // anim/animator.mjs rockedArms)
+      foe: f.place && other.pose && other.points ? { foot: mine(f, at(other, 'LeftFoot', [0, -0.02, 0.07])), glove: { L: mine(f, other.points.L), R: mine(f, other.points.R) }, head: mine(f, other.points.head), elbow: { L: mine(f, other.points.LE), R: mine(f, other.points.RE) }, shoulder: { L: mine(f, other.points.LS), R: mine(f, other.points.RS) }, aim: leadAim(bout, f, other), lag: i === 0 ? 1 : 0, nape: mine(f, napeOf(other)), right: dirIn(f, [-Math.cos(other.yaw), Math.sin(other.yaw)]), ...bodyOf(bout, f, other) } : null,
       pinned: f.pinned > 0,
       // the down parry his guard is put up for, if it is (anim/clean.mjs): how soon the glove coming in will be on his rear glove
       pat: f.pat ? patView(bout, f, other) : null,
@@ -1350,6 +1353,19 @@ const dirIn = (f, d) => {
   const v = M.app(M.tr(f.place.R), [d[0], 0, d[1]]);
   return [v[0], 0, v[2]];
 };
+// (the other man's joints a glove of his can be in, standing, as the audit reads them: src/audit.mjs SOLID, but his head and gloves)
+const FOE = ['Chest', 'Hips', 'LeftArm', 'RightArm', 'LeftForeArm', 'RightForeArm', 'LeftShin', 'RightShin', 'LeftFoot', 'RightFoot', 'LeftToeBase', 'RightToeBase'];
+/* (those, and his gloves, in boxer f's own space, as the other man will be drawn this frame: as he was drawn, if he has been
+   already this frame, and if he is yet to be, on from there as far as he went last frame; read as he was last drawn, a hook's
+   shoulder coming round was 9 cm further into a slowed glove than it was read: solvePose, parts) */
+const bodyOf = (bout, f, other) => {
+  const b = other.parts,
+    on = (p, was) => (b && b.t !== bout.t && was ? M.sub(M.scale(p, 2), was) : p),
+    // (in his own space as he is about to be drawn, where he has got to this frame: solvePose, place)
+    me = p => mine({ place: { R: M.ry((f.yaw * 180) / Math.PI), p: [f.x, 0, f.z] }, pose: f.pose }, p);
+  if (!b) return { body: FOE.map(j => [j, me(at(other, j))]), hands: { L: me(other.points.L), R: me(other.points.R) } };
+  return { body: FOE.map((j, k) => [j, me(on(b.at[k], b.was && b.was[k]))]), hands: { L: me(on(other.points.L, other.before && other.before.L)), R: me(on(other.points.R, other.before && other.before.R)) } };
+};
 const NEAR = [['Hips', 0.14], ['Spine2', 0.14], ['Chest', 0.15], ['LeftShin', 0.07], ['RightShin', 0.07], ['LeftLeg', 0.1], ['RightLeg', 0.1], ['LeftFoot', 0.06], ['RightFoot', 0.06]];
 /* (where the other man's lead straight is sent, once its aim is set, in this man's terms: where the arm coming in will be at
    its end, what a cross counter's rear arm goes over, anim/over.mjs) */
@@ -1385,6 +1401,8 @@ function solvePose(bout, f, i, dt) {
     };
   f.pose = pose;
   f.place = place;
+  // (and where the joints of him a glove can be in are, and were the last time he was drawn: bodyOf)
+  f.parts = { t: bout.t, at: FOE.map(at), was: f.parts ? f.parts.at : null };
   f.before = f.points;
   f.points = {
     L: beyond(at('LeftForeArm'), at('LeftHand'), 0.075), // the middle of each glove: on past the wrist

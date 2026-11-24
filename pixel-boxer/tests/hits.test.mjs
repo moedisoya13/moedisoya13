@@ -4,6 +4,8 @@
      a struck body takes the whole vector, the head first: back lays the trunk back and pushes the hips back and the weight
      onto the heels, up lifts him onto his toes and down into his knees, across bends him that way; more of each for more of
      the vector, and all of it for more of the impulse;
+     a rocked man shows it: the gloves sag, the head rolls after the trunk, the knees give, a foot is put out to catch him,
+     and his head stays there to be hit;
      the shoulder's table (rig/body.mjs: SHOULDER) holds a guard and a punch and not the three places an arm cannot go; and
      each of the four ways up keeps to it, swings the shoulder no faster than 900 degrees a second, and keeps the elbows out
      of the trunk. */
@@ -146,6 +148,82 @@ test('struck: every part of it grows with the impulse', () => {
   const at = J => struck(J, unit([-0.4, 0.4, -0.8]));
   const [a, b, c] = [40, 85, 110].map(at);
   for (const k of ['tilt', 'head', 'back', 'up', 'across']) assert.ok(a[k] < b[k] && b[k] < c[k], `${k}: ${[a, b, c].map(x => x[k].toFixed(1))}`);
+});
+
+/* ---- rocked (docs/moves-plan-6.md §3.5 N24): a cross that stops a hurt man 0.8 s, over the second and a half after it,
+   against the same man struck by it and not rocked (no stun given: nothing rocks him) and against him not struck at all.
+   The cues of a man whose legs have gone: the gloves sag (from 0.4 s, against the man struck and not rocked, so that the
+   blow's own knocking open of the guard is not counted), the lead glove the plan's 22 cm and more, the rear its 16 (it was
+   14 cm both together, which against the same man reads 20 and 15); the head rolls about, after the trunk; the knees give
+   (against him not struck); a foot steps out and is put down to catch him; and for all that his head stays where it was
+   to be hit. */
+function rocked() {
+  const a = createAnimator(0),
+    b = createAnimator(0),
+    c = createAnimator(0),
+    view = { move: [0, 0], turn: 0, cover: 0, action: null },
+    place = { R: [1, 0, 0, 0, 1, 0, 0, 0, 1], p: [0, 0, 0] };
+  for (let i = 0; i < 90; i++) a.update(view, DT), b.update(view, DT), c.update(view, DT);
+  a.strike({ J: 85, dir: [0.1, 0.29, -0.95], stun: 0.8, hp: 30 });
+  c.strike({ J: 85, dir: [0.1, 0.29, -0.95] });
+  const out = { lead: 0, rear: 0, roll: [99, -99], knee: 0, step: null, heads: [] };
+  for (let i = 1; i <= 1.5 / DT; i++) {
+    const v = Object.assign({}, view, { stun: i * DT < 0.3 }),
+      ma = measure({ pose: a.update(v, DT), place }),
+      mb = measure({ pose: b.update(v, DT), place }),
+      mc = measure({ pose: c.update(v, DT), place }),
+      t = i * DT;
+    if (t > 0.4) (out.lead = Math.max(out.lead, mc.at.gloveLeft[1] - ma.at.gloveLeft[1])), (out.rear = Math.max(out.rear, mc.at.gloveRight[1] - ma.at.gloveRight[1])), out.heads.push(ma.at.head);
+    if (t > 0.3) out.roll = [Math.min(out.roll[0], ma.angles.NeckSide), Math.max(out.roll[1], ma.angles.NeckSide)];
+    for (const S of ['Left', 'Right']) {
+      out.knee = Math.max(out.knee, mb.angles[S + 'Knee'] - ma.angles[S + 'Knee']);
+      // (a foot put down, on the canvas as the unstruck man's is, 8 cm and more from where his is)
+      const d = Math.hypot(ma.at[S + 'Foot'][0] - mb.at[S + 'Foot'][0], ma.at[S + 'Foot'][2] - mb.at[S + 'Foot'][2]);
+      if (out.step === null && ma.at[S + 'Foot'][1] - mb.at[S + 'Foot'][1] < 0.005 && d >= 0.08) out.step = { t, S, d };
+    }
+  }
+  const mid = [0, 2].map(k => out.heads.reduce((s, h) => s + h[k], 0) / out.heads.length);
+  out.head = Math.max(...out.heads.map(h => Math.hypot(h[0] - mid[0], h[2] - mid[1])));
+  return out;
+}
+test('rocked: the gloves sag (the lead 22 cm and more, the rear 16), the head rolls through 30 degrees, the knees give 24, a foot steps out to catch him, and his head stays within 9 cm', () => {
+  const r = rocked();
+  assert.ok(r.lead >= 0.22 && r.rear >= 0.16 && r.lead > r.rear, `the gloves sag: lead ${(r.lead * 100).toFixed(1)} cm, rear ${(r.rear * 100).toFixed(1)} cm`);
+  assert.ok(r.roll[1] - r.roll[0] >= 30, `the head rolls through ${(r.roll[1] - r.roll[0]).toFixed(1)} degrees`);
+  assert.ok(r.knee >= 24, `a knee gives ${r.knee.toFixed(1)} degrees`);
+  assert.ok(r.step && r.step.t <= 1.5, `a foot put out to catch him: ${JSON.stringify(r.step)}`);
+  assert.ok(r.head <= 0.09, `his head ${(r.head * 100).toFixed(1)} cm from where it is on the whole`);
+});
+
+/* And his arms do not snap. Once the blow's own three frames are over (a blow is meant to jolt: src/audit.mjs), neither
+   glove, wrist nor elbow of a rocked man moves 10 cm in a frame, whichever side the blow came from and however hard: his
+   arms turn on shoulder and elbow no faster than 600 degrees a second (anim/animator.mjs: WOBBLE.slow), which at the
+   glove is 8 cm a frame, and his trunk carries the shoulder a little besides. (A struck man's guard is where the solver's
+   answer for an arm is least sure, and a rocked man's sway, or his sagging glove, tipped it: the lead glove went 30 cm in
+   a frame on the cross above, 0.07 s after it, and up to 32 cm on these; before he was rocked any the more, up to 24.) */
+test('rocked: after the blow, his gloves, wrists and elbows never move 10 cm in a frame, from any side, at 85 and 110 newton-seconds', () => {
+  const place = { R: [1, 0, 0, 0, 1, 0, 0, 0, 1], p: [0, 0, 0] },
+    view = { move: [0, 0], turn: 0, cover: 0, action: null },
+    worst = [];
+  for (const [side, dir] of [['front', [0.1, 0.29, -0.95]], ['his right', [0.9, 0.1, -0.4]], ['his left', [-0.9, 0.1, -0.4]], ['under', [0, 0.9, -0.4]]])
+    for (const J of [85, 110]) {
+      const a = createAnimator(0);
+      for (let i = 0; i < 90; i++) a.update(view, DT);
+      a.strike({ J, dir, stun: 0.8, hp: 30 });
+      let was = null,
+        most = [0];
+      for (let i = 1; i <= 1.2 / DT; i++) {
+        const m = measure({ pose: a.update(Object.assign({}, view, { stun: i * DT < 0.3 }), DT), place });
+        if (was && i > 3)
+          for (const n of ['gloveLeft', 'gloveRight', 'LeftHand', 'RightHand', 'LeftForeArm', 'RightForeArm']) {
+            const d = Math.hypot(...m.at[n].map((x, k) => x - was.at[n][k]));
+            if (d > most[0]) most = [d, n, i];
+          }
+        was = m;
+      }
+      worst.push({ d: most[0], said: `${side} ${J}: ${(most[0] * 100).toFixed(1)} cm (${most[1]}, frame ${most[2]})` });
+    }
+  assert.ok(worst.every(w => w.d < 0.1), worst.map(w => w.said).join('; '));
 });
 
 /* ---- the shoulder */

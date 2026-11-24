@@ -4,8 +4,9 @@
                        let go once he is down on the canvas; he goes over like a tree, the foot he turns on on the canvas
                        until his trunk is 45 degrees over; his head on the canvas sooner than an ordinary knockdown's, and the
                        back of it comes up off the canvas once, a little
-     twist (outTwist)  from a hook: in the first 0.06 s his neck alone turns, the way the glove went on through him, and is
-                       locked there; he goes over in one piece toward it, on the outside edge of that foot, onto his shoulder
+     twist (outTwist)  from a hook: in the first 0.06 s his neck alone turns, the way the glove went on through him, the chin
+                       pulled down, and is locked there; he goes over in one piece, stiff (knees, hips and spine within 6
+                       degrees), toward it, on the outside edge of that foot and turned round the upright, onto his shoulder
      lift (outLift)    from an uppercut: thrown up onto his toes with his head back, held there, and let go of slowly from the
                        knees up; he crumples where he stands, twice as slowly as a limp man from the same blow
      limp (out)        every joint's hold gone 0.05 s in: no blow's now, but kept, and held to that
@@ -226,7 +227,13 @@ test('log: he goes over like a tree, on his planted heel: the foot he turns on s
 
 /* ---- twisted (§1.2) */
 const LOCK = 0.06; // (when the neck is locked: phys/fall.mjs TWIST.time)
-test('twist: by 0.07 s his head is turned 45-65 degrees the way the glove went on through him, his chin down 15-28', () => {
+/* (turned further than it was, 52-70 degrees: docs/moves-plan-6.md §3.5 N26. That is the window moved from 45-65 and made 2
+   degrees narrower: its lower bound tightened, 45 to 52, its upper loosened, 65 to 70. He turned 61.0 degrees before and
+   64.4 now, both inside both, so it does not tell the two apart (nor do the tests below: the base meets them too). The
+   chin is not held to the plan's 24-40: it is 23.1 degrees, 22.4 before. Pulled further down it turns him back against the
+   shove and he is not down by 0.85 s, and from 24 on his rear glove, kept off his face, is pushed 8.3 cm into the forearm
+   of the hook that has just landed: phys/fall.mjs TWIST) */
+test('twist: by 0.07 s his head is turned 52-70 degrees the way the glove went on through him, his chin down 15-28', () => {
   const r = ran(TWIST),
     k = fallAt(r, LOCK),
     way = his(k, r.follow);
@@ -234,11 +241,11 @@ test('twist: by 0.07 s his head is turned 45-65 degrees the way the glove went o
   const a = k.angles;
   // (his left is +: the lead hook goes on through to his left)
   assert.ok(way[0] > 0, `the glove went on to his ${way[0] > 0 ? 'left' : 'right'}`);
-  assert.ok(Math.abs(a.NeckTwist) >= 45 && Math.abs(a.NeckTwist) <= 65 && Math.sign(a.NeckTwist) === Math.sign(way[0]), `turned ${a.NeckTwist.toFixed(1)}`);
+  assert.ok(Math.abs(a.NeckTwist) >= 52 && Math.abs(a.NeckTwist) <= 70 && Math.sign(a.NeckTwist) === Math.sign(way[0]), `turned ${a.NeckTwist.toFixed(1)}`);
   assert.ok(a.NeckForward >= 15 && a.NeckForward <= 28, `chin down ${a.NeckForward.toFixed(1)}`);
 });
 
-test('twist: from 0.07 s until he is let go, his neck moves less than 6 degrees, his knees, hips and spine less than 10', () => {
+test('twist: from 0.07 s until he is let go, his neck moves less than 6 degrees, and from the blow his knees, hips and spine less than 6: stiff all over', () => {
   const r = ran(TWIST),
     first = r.frames.find(k => k.body),
     at = fallAt(r, LOCK),
@@ -253,15 +260,25 @@ test('twist: from 0.07 s until he is let go, his neck moves less than 6 degrees,
   let most = { knee: 0, hip: 0, spine: 0 };
   for (const k of r.frames.filter(k => k.body && k.body.t <= freed + 1e-9))
     for (const kind in most) k.turn[kind].forEach((q, i) => (most[kind] = Math.max(most[kind], between(q, first.turn[kind][i]))));
-  for (const kind in most) assert.ok(most[kind] <= 10, `${kind}: ${most[kind].toFixed(1)} degrees`);
+  for (const kind in most) assert.ok(most[kind] <= 6, `${kind}: ${most[kind].toFixed(1)} degrees`);
 });
 
-test('twist: he goes over the way the glove went on through him (25 degrees), turned round the way his head went', () => {
+/* (the way he goes over is the way the glove went on through him, "the way the blow was given", not the way it came from:
+   docs/moves-plan-6.md §3.5 N26; and as he goes over he is turned round the upright the way his head went: his pelvis's
+   front, on the canvas, before his trunk is 45 degrees over. It was held to 25 degrees off the glove's way, and is to the
+   plan's 20 now) */
+test('twist: he goes over the way the glove went on through him (20 degrees), turned 9 degrees and more round the way his head went', () => {
   const r = ran(TWIST),
     lay = r.frames.find(k => k.body && k.body.lay !== undefined),
     moved = [lay.com[0] - r.before.com[0], 0, lay.com[2] - r.before.com[2]],
     off = angleOf(his(lay, moved), his(lay, r.follow));
-  assert.ok(off <= 25, `his centre of mass went ${off.toFixed(1)} degrees off the glove's way on`);
+  assert.ok(off <= 20, `his centre of mass went ${off.toFixed(1)} degrees off the glove's way on`);
+  const going = r.frames.filter(k => k.body),
+    over = going.findIndex(k => k.tilt >= 45),
+    turn = k => ((k.angles.PelvisYaw - going[0].angles.PelvisYaw + 540) % 360) - 180,
+    most = Math.max(...going.slice(0, over).map(k => Math.abs(turn(k))));
+  assert.ok(over > 0, 'he went over');
+  assert.ok(most >= 9, `turned ${most.toFixed(1)} degrees round the upright before he was 45 degrees over`);
 });
 
 test('twist: the mirror (a rear hook, which the bout does not throw yet): his head turns and he goes over the other way', () => {

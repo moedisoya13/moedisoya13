@@ -40,7 +40,7 @@ import { TPOSE, fk } from '../rig/skeleton.mjs';
 import { solve, centre, footPose, LEN } from '../rig/solve.mjs';
 import { createFall, stepFall, shoveFall, poseOf, lyingOf, moveFall } from '../phys/fall.mjs';
 import * as Q from './quat.mjs';
-import { FOOT, HEAD, RADIUS, shoulderOf } from '../rig/body.mjs';
+import { FOOT, HEAD, RADIUS, RANGE, GLOVE, shoulderOf, gloveInArm } from '../rig/body.mjs';
 import { LINKS, stepChain } from '../phys/chain.mjs';
 import { CHANNELS, GUARD, MOVES, LEFT_BEND, LIE, UP, sampleMove, mirrorKnees } from './moves.mjs';
 import { LEVEL } from './skill.mjs';
@@ -65,12 +65,88 @@ const HOP = 0.03; // metres an unweighted foot clears the canvas by, bouncing on
    straightened off it, about `knee` degrees either way in the textbook (skill.mjs: stance.knee, each grade's), at `slope`
    metres of the hips a degree (both knees together, about the guard's 38 and 48). */
 const BOUNCE = { contact: 0.38, float: 0.016, knee: 5.4, slope: 0.0027 };
-// rocked: seconds it takes to wear off (to a third), and how quickly it comes on
-const WOBBLE = { last: 0.95, onset: 0.1 };
+/* Rocked (strike: a blow that stopped him long enough, or one more on a man already hurt), his legs gone for a second or so
+   (docs/moves-plan-6.md §3.5 N24): `last` seconds for it to wear off (to a third), `onset` for it to come on. At its worst:
+     gloves  both down `glove` metres, as they were, where the move puts them; and past that his arms hang from the
+             shoulders, the lead the heavier: each upper arm let down `droop` degrees about the line across his chest and
+             its elbow opened as far again by half (lead, rear), over `drooped` seconds from the blow, and let go of in
+             `quick` by a hand that throws. That is done to the solved arm, in the shoulder's and the elbow's own terms,
+             not to where the hand is sent (rockedArms, below): a guard's wrist is sent nearer its shoulder than the arm
+             folds, and sent a little lower as the blow threw his head and trunk back, the solver's answer for the
+             shoulder jumped (the lead glove 30 cm in a frame, the upper arm's plane from 13 to -104 degrees)
+     arms    and they are slow: while he is rocked at all (`slowed` of it and up), the upper arm of a hand that is not
+             throwing turns on its shoulder, and the forearm on its elbow, no faster than `slow` degrees a second from
+             how they were drawn last, and come to rest softly (`follow` of what is left a second: rockedArms, below). A
+             struck man's guard is where the solver's answer for an arm is least sure, his head and trunk thrown back onto
+             his wrists, and whatever is added to him then, a deeper sway as much as a sagging glove, can tip it into
+             another answer in a frame; a man with his legs gone does not whip an arm round in a sixtieth of a second
+             (and the solver's keeping a glove out of his other arm reaches the drawn arm as slowly: what the pose says
+             of that push is the push followed the same way, rockedArms). An arm let go of, its hand throwing or he over
+             it, is the solver's and how it was off the solver's, that let out `caught` times as fast, in three frames or
+             so, before it is the solver's again. And an arm drawn so goes round his own head and his trunk: wherever
+             its glove would be more than `own` metres in either (the audit holds each to 0.02) and deeper than the
+             solver's own has it, it is turned on its shoulder by what takes it out. The solver keeps his gloves out of
+             them, and a head rolling onto a glove that is slow to follow it was in it, 9 cm at worst (11 an arm let
+             go of), in 100 frames of 32 bouts. His other arm likewise, by the arm of the two the solver would have give,
+             and no faster than `slow` (both arms taken toward the solver's until the glove was out, they jumped 16 to
+             29 cm in a frame); and the other man's body, past `him` metres (the audit holds a glove to 0.08 in him: this
+             is read before his hips are let carry what he cannot do, and of the other man as he will be drawn, so with
+             3 cm to spare) and deeper than the solver's own glove is in him, or his elbow in the other man's glove:
+             hanging back from a blow, a slowed glove was in him where the solver's was not in 110 frames of 32 bouts
+             (27 so, and 41 in the bouts as they go now; of the 27 most were a punch's forearm coming through his guard
+             faster than a frame's reading of it foresees, and the frames a landed blow is held at); kept out of him
+             only on his feet, not going down or getting up. Slowed from `slowed` of rocked and up, a rocked man's arms
+             are slow for about 4 s after each rocking, in 29% of the time men fight (192 matches between the computer's
+             men): he blocks 0.385 of what reaches him rocked, against 0.414 before, about 7% less
+     head    rolling `roll` degrees either way, after the trunk (`lag` radians behind its sway), the chin down `chin`; his eyes
+             only `look` of the way on the other man (his grade's is 0.9: anim/skill.mjs, look). (The plan's 18 degrees, as it wears off over
+             `last`, rolls the head through 24 degrees in all in the first second and a half; 24 rolls it through 32.) The
+             roll comes on over `rolled` seconds from the blow, when the blow's own snap of his head is spent: on top of
+             that from the first frame, three frames after a 118 N·s cross, his neck was tilted 45.6 degrees, 0.6 past
+             what a neck tilts (1 frame of 32 bouts; 38.8 without the roll)
+     knees   each giving `knee` degrees (7 to 22, and the step that catches him on top), the two a quarter of a second apart,
+             turned in `in` degrees (the plan's 8 to 26, and 8 to 24, put a struck man walking back in over one foot past the
+             audit's 0.3 s in blockFire@5m: tests/audit.test.mjs); each the less, to not at all, as it comes within `room`
+             of the other man's shins and feet (kneeRoom)
+     trunk   swaying `side` degrees from side to side over them, the waist turning `waist` degrees against it (the chest loose
+             on the pelvis), the hips going `hips` metres out the other way under it
+     feet    every `every` seconds a step out to catch him (`brace`: the foot on the side he is swaying to, `d` metres out to
+             that side and a little back, lifted `lift` metres and put down over `time` seconds; a foot already out is brought
+             back under him instead), from `from` of it and up, and not while a blow is knocking him back (faster than
+             `shoved` m/s: his feet are stepping back already) nor while he throws a punch; brought back under him once he
+             has got over it
+   His head itself goes only a little way: a rocked man is there to be hit, not harder to find. */
+const WOBBLE = {
+  last: 1.3,
+  onset: 0.1,
+  glove: 0.14,
+  droop: { L: 9, R: 4 },
+  drooped: 0.3,
+  quick: 0.1,
+  slow: 600,
+  follow: 20,
+  caught: 3,
+  own: 0.01,
+  him: 0.05,
+  slowed: 0.02,
+  roll: 24,
+  rolled: 0.2,
+  lag: 1.4,
+  chin: 16,
+  look: 0.5,
+  knee: [7, 15],
+  in: 14,
+  room: [0.12, 0.3, 0.1],
+  side: 9,
+  waist: 6,
+  hips: 0.04,
+  brace: { every: 0.9, first: 0.3, from: 0.25, d: [0.08, 0.12], lift: 0.035, time: 0.22, out: 0.06, shoved: 0.05 }
+};
 /* Being hit (strike): the whole of him takes the blow's vector, the head first and the rest after it, down the body: the
    trunk `trunk` seconds after the head, the hips `hips` after, the feet `feet` after. Amounts are for `ref` newton-seconds
    (a clean cross) and go with the impulse (the bout caps it at 110), each a velocity given to a spring that is let go of as
-   it always was (so a harder blow is longer getting over):
+   it always was (so a harder blow is longer getting over). Of the trunk's turn, `waist` is the waist's (Spine1, turned on
+   the pelvis), `waisted` seconds after the head, between the chest and the hips (docs/moves-plan-6.md §1.5):
      back    the trunk laid back (`lean` degrees: its springs take it `give` degrees a second of kick for each degree they
              lean it and bend it, and it leans and bends as it faces, turned to his right), the hips pushed back
              (`hz`: 4 cm), the weight onto his heels: the lead foot's toes up (`toes` degrees), the rear heel down with it
@@ -84,7 +160,7 @@ const WOBBLE = { last: 0.95, onset: 0.1 };
      down    pressed down into his knees */
 // (of a head thrown by a blow, how much the gloves are not carried with it)
 const SNAP = 0.25;
-const HIT = { ref: 85, trunk: 0.03, hips: 0.045, feet: 0.06, lean: 27, ext: 0.3, side: 11, give: [26.6, 20], hz: 1.25, toes: 360, hx: 0.85, edge: 260, lift: { knee: 0.04, most: 0.055, push: 0.045, free: 0.02, heel: 330 }, mass: 75, shove: 2.2 };
+const HIT = { ref: 85, trunk: 0.03, waist: 1 / 3, waisted: 0.038, hips: 0.045, feet: 0.06, lean: 27, ext: 0.3, side: 11, give: [26.6, 20], hz: 1.25, toes: 360, hx: 0.85, edge: 260, lift: { knee: 0.04, most: 0.055, push: 0.045, free: 0.02, heel: 330 }, mass: 75, shove: 2.2 };
 BOUNCE.squash = (4 * BOUNCE.float * BOUNCE.contact) / ((1 - BOUNCE.contact) * Math.PI); // the depth that meets the float at the same speed
 const ROCK = 0.034; // metres the weight swings forward and back between the feet, bouncing on the spot
 /* A dash's knees, degrees and seconds: the leg he pushes off bent `push` in `load` (two frames), straightened back to `out` by
@@ -155,9 +231,10 @@ const NECK = { knee: 60, most: 75 };
    it 10 degrees to his right already, so a lead hook has the less of it to use) */
 const TWIST = { knee: 34, most: 42 };
 /* (the waist, the disc between the pelvis and the chest (Spine1), turns on the pelvis past 16 degrees less and less, never
-   past 22; and the spine's whole twist above is the waist's and the chest's together: where the two would go past it, the
-   chest gives first) */
-const WAIST = { knee: 16, most: 22 };
+   past 22: three inside the body's range for it (rig/body.mjs: RANGE.waistTwist), as a knockdown's fall holds it
+   (phys/fall.mjs: LIM.waist); and the spine's whole twist above is the waist's and the chest's together: where the two would
+   go past it, the chest gives first) */
+const WAIST = { knee: RANGE.waistTwist - 9, most: RANGE.waistTwist - 3 };
 const soft = (x, { knee, most }) => (Math.abs(x) <= knee ? x : Math.sign(x) * (knee + (most - knee) * Math.tanh((Math.abs(x) - knee) / (most - knee))));
 function trunk(c, gaze) {
   const lean = GUARD.lean + c.lean,
@@ -487,7 +564,7 @@ export function createAnimator(seed) {
     held = { L: null, R: null }; // how far round to its side a hook's fist is held, degrees (see sweep)
   // the give of a struck body: head (nod, turn, tilt), trunk (lean, side, turn), and how far the guard is knocked open
   // (and the rest of him: the hips back and across, the lead toes up, a foot rolled onto an edge, the knees taking him)
-  const give = { hp: { x: 0, v: 0 }, hw: { x: 0, v: 0 }, hr: { x: 0, v: 0 }, lean: { x: 0, v: 0 }, side: { x: 0, v: 0 }, yaw: { x: 0, v: 0 }, open: { x: 0, v: 0 }, sink: { x: 0, v: 0 }, hz: { x: 0, v: 0 }, hx: { x: 0, v: 0 }, toes: { x: 0, v: 0 }, edge: { x: 0, v: 0 }, settle: { x: 0, v: 0 } };
+  const give = { hp: { x: 0, v: 0 }, hw: { x: 0, v: 0 }, hr: { x: 0, v: 0 }, lean: { x: 0, v: 0 }, side: { x: 0, v: 0 }, yaw: { x: 0, v: 0 }, waist: { x: 0, v: 0 }, open: { x: 0, v: 0 }, sink: { x: 0, v: 0 }, hz: { x: 0, v: 0 }, hx: { x: 0, v: 0 }, toes: { x: 0, v: 0 }, edge: { x: 0, v: 0 }, settle: { x: 0, v: 0 } };
   // the head as a blow throws it this frame (nod, turn, tilt: what of the give is the head's)
   const snap = { hp: 0, hw: 0, hr: 0 };
   // lifted by a blow: how high the hips are (metres), how fast they are going, and for how much longer they are being pushed up
@@ -510,7 +587,17 @@ export function createAnimator(seed) {
   // the lead forearm of a cross-arm guard given by a blow on it: metres, and how long ago (show.mjs, skill.mjs CROSS: sag)
   const sag = { d: 0, t: 9 };
   // a man rocked by a blow: how badly (0..1) and how long ago; his legs are gone for a second or so
-  const wobble = { amount: 0, t: 9 };
+  const wobble = { amount: 0, t: 9, now: 0 };
+  // the feet he has put out to catch himself, rocked (WOBBLE.brace): how far each is out ([across, ahead] metres), the step
+  // under way, and how long until the next
+  const brace = { L: [0, 0], R: [0, 0], move: null, next: 0 };
+  // how far each arm hangs from its shoulder, rocked (WOBBLE.droop): 0..1
+  const droop = { L: 0, R: 0 };
+  // his arms as they were last drawn, slowed, rocked (WOBBLE.slow): each { arm, fore (their turns), push (of its glove, as
+  // said of it), own, pushed (the solver's own turns and push then), at (when) } or null
+  // (and on: which are slowed this frame; drawn: how each is drawn this frame, once it has been worked out)
+  // (and pushed: what is said of each drawn arm's glove being kept out of his other arm, where that is not the solver's own)
+  const slow = { L: null, R: null, on: { L: false, R: false }, drawn: null, pushed: { L: null, R: null } };
   // the head's offset off the line of the punch, as it was last frame (what the way out of the punch starts from)
   const off = { x: 0, y: 0 };
   // what a dirty man's fouls are doing to him: a flinch at a foot stood on, a glove over an eye he has been thumbed in
@@ -528,6 +615,23 @@ export function createAnimator(seed) {
   const shift = createShift(),
     drawn = { L: null, R: null };
   const remember = pose => ((poses = [poses[1], pose]), pose);
+  /* (how much of a rocked man's knees' giving and turning in each knee has room for (WOBBLE.room): in close, his knee bent and
+     turned in so went into the other man's shin or foot, his lead knee 5 to 10 cm into the other's for 20 frames of 32
+     bouts; nearer them than room[1] metres, as he was last drawn, it gives the less, and not at all nearer than room[0],
+     come to over room[2] seconds, so that it does not go back and forth) */
+  const kneeGive = { Left: 1, Right: 1 };
+  const kneeRoom = (dt, foe) => {
+    const last = poses[1],
+      body = foe && foe.body,
+      R = WOBBLE.room;
+    for (const S of ['Left', 'Right']) {
+      let d = Infinity;
+      if (last && last.at && body) for (const [j, p] of body) if (/Shin|Foot/.test(j)) d = Math.min(d, Math.hypot(...M.sub(last.at[S + 'Shin'], p)));
+      const want = smooth((d - R[0]) / (R[1] - R[0]));
+      kneeGive[S] += (want - kneeGive[S]) * Math.min(1, dt / R[2]);
+    }
+    return kneeGive;
+  };
   // a pose part of the way from another to it, each bone turned part of the way (what the solver said of it kept)
   const between = (from, to, w) => {
     const out = Object.assign({}, to, { root: M.lerp(from.root, to.root, w), rot: {} });
@@ -538,8 +642,512 @@ export function createAnimator(seed) {
     return out;
   };
 
+  /* A rocked man's arms (WOBBLE): slow, and hanging from his shoulders. The solved pose with, for each hand that is slowed
+     (slow.on), the upper arm and the forearm turned toward how the solver has them from how they were drawn last frame, each
+     on its own joint, by `follow` of what is left a second and no faster than `slow`; and then, by k.L and k.R of
+     WOBBLE.droop, each upper arm turned down about the line across his chest, the hand going down in front of him and the
+     elbow back, and the elbow opened. So the arm goes on from where it was drawn, wherever the solver has gone, and nothing
+     added to a rocked man can make it jump. Where that would put the upper arm outside what the shoulder lets it be
+     (rig/body.mjs: SHOULDER, a degree inside), it goes round by the nearest the shoulder does let it be (letBe), and hangs
+     from there less far, until it does not; the solver's own arm is inside it, and only an arm that cannot be brought in
+     so is slowed less; and one whose glove would be in his own head, trunk or other arm goes round it (WOBBLE.own). An arm not drawn so last frame
+     is as the solver has it; one let go of is the solver's and how it was off it, that let out first (WOBBLE.caught). */
+  const ARMS = [['L', 'Left', 1], ['R', 'Right', -1]];
+  const hung = (pose, F, Side, s, rot, deg) => {
+    // (about the chest's own x, as the upper arm's parent sees it)
+    const up = F.R[Side + 'Shoulder'],
+      across = M.mul(M.tr(up), M.mul(F.R.Chest, M.mul(M.rx(deg), M.mul(M.tr(F.R.Chest), up))));
+    return { arm: M.mul(across, rot.arm), fore: M.mul(rot.fore, M.ry(s * deg * 1.5)) };
+  };
+  // (the upper arm, its forearm bending so, read against what the shoulder lets it be: as the chest sees them, mirrored onto
+  // the left, a degree inside)
+  const shoulder = (F, Side, s, rot) => {
+    const R = M.mul(M.tr(F.R.Chest), M.mul(F.R[Side + 'Shoulder'], rot.arm)),
+      Rf = M.mul(R, rot.fore);
+    return shoulderOf([M.col(R, 0)[0], M.col(R, 0)[1] * s, M.col(R, 0)[2] * s], [M.col(Rf, 0)[0], M.col(Rf, 0)[1] * s, M.col(Rf, 0)[2] * s], 1);
+  };
+  const shouldered = (F, Side, s, rot) => {
+    const sh = shoulder(F, Side, s, rot);
+    return sh.zone <= 0 && sh.turned <= 0;
+  };
+  /* (an arm the shoulder does not let be so, brought to the nearest it does: let down toward hanging by as far as it is
+     raised past the most of its plane, and turned about itself by as far as it is turned past what it may be, and again
+     while that leaves either. As little as it is outside, so little it is moved: nothing jumps. Null where four goes at it
+     do not bring it in) */
+  const letBe = (F, Side, s, rot) => {
+    const up = M.mul(M.tr(F.R.Chest), F.R[Side + 'Shoulder']);
+    let at = rot;
+    for (let i = 0; i < 4; i++) {
+      const sh = shoulder(F, Side, s, at);
+      if (sh.zone <= 0 && sh.turned <= 0) return at;
+      if (sh.zone > 0) {
+        const d = M.scale(M.col(M.mul(up, at.arm), 0), s),
+          l = Math.hypot(d[0], d[2]); // (about d x his chest's own down)
+        if (l > 1e-6) {
+          const h = ((sh.zone + 0.2) * M.RAD) / 2,
+            turn = Q.toM3([(d[2] / l) * Math.sin(h), 0, (-d[0] / l) * Math.sin(h), Math.cos(h)]);
+          at = { arm: M.mul(M.tr(up), M.mul(turn, M.mul(up, at.arm))), fore: at.fore };
+        }
+      }
+      if (sh.turned > 0) {
+        const one = { arm: M.mul(at.arm, M.rx(sh.turned + 0.2)), fore: at.fore },
+          other = { arm: M.mul(at.arm, M.rx(-sh.turned - 0.2)), fore: at.fore };
+        at = shoulder(F, Side, s, one).turned <= shoulder(F, Side, s, other).turned ? one : other;
+      }
+    }
+    return shouldered(F, Side, s, at) ? at : null;
+  };
+  // (an arm part of the way from one to another: both its turns, the short way)
+  const blend = (x, y, t) => ({ arm: Q.toM3(Q.slerp(Q.fromM3(x.arm), Q.fromM3(y.arm), t)), fore: Q.toM3(Q.slerp(Q.fromM3(x.fore), Q.fromM3(y.fore), t)) });
+  /* (each glove in his own head, in his trunk and in his other arm, his arms turned so, as the audit measures them
+     (audit.mjs: measure; a glove held at the cheek or against the chest is not in it): for the left and the right, { head,
+     trunk (how deep, metres), g (the glove), at (its shoulder), out (the way out of each, from its middle to the glove),
+     arm (it in his other arm: rig/body.mjs, gloveInArm) }) */
+  const inHimself = (pose, arms) => {
+    const rot = Object.assign({}, pose.rot);
+    for (const [side, Side] of ARMS) (rot[Side + 'Arm'] = arms[side].arm), (rot[Side + 'ForeArm'] = arms[side].fore);
+    const P = fk(Object.assign({}, pose, { rot })).p,
+      trunk = M.sub(P.Chest, P.Hips);
+    return ARMS.map(([, Side]) => {
+      const Other = Side === 'Left' ? 'Right' : 'Left',
+        along = M.sub(P[Side + 'Hand'], P[Side + 'ForeArm']),
+        g = M.add(P[Side + 'Hand'], M.scale(along, GLOVE.ahead / (Math.hypot(...along) || 1))),
+        by = M.sub(g, P.Hips),
+        k = clamp((by[0] * trunk[0] + by[1] * trunk[1] + by[2] * trunk[2]) / (trunk[0] * trunk[0] + trunk[1] * trunk[1] + trunk[2] * trunk[2]), 0, 1),
+        out = [M.sub(g, pose.head), M.sub(g, M.add(P.Hips, M.scale(trunk, k)))];
+      return { g, at: P[Side + 'Arm'], out, head: RADIUS.glove + RADIUS.head - Math.hypot(...out[0]) - 0.08, trunk: RADIUS.glove + RADIUS.Chest - Math.hypot(...out[1]) - 0.07, arm: gloveInArm(g, P[Other + 'Arm'], P[Other + 'ForeArm'], P[Other + 'Hand']) };
+    });
+  };
+  /* (how deep each glove of his is in the other man, and his elbow in the other man's gloves, his arms turned so, as the audit
+     measures them (audit.mjs: SOLID; a glove on a head or a glove is a punch landing, or a guard): for the left and the right,
+     { depth (metres), p (his glove or elbow, whichever is the deeper), out (the way out, from the other man's part to it),
+     at (his shoulder) }, or null where there is no other man) */
+  const inHim = (pose, arms, foe) => {
+    if (!foe || !foe.body) return null;
+    const rot = Object.assign({}, pose.rot);
+    for (const [side, Side] of ARMS) (rot[Side + 'Arm'] = arms[side].arm), (rot[Side + 'ForeArm'] = arms[side].fore);
+    const P = fk(Object.assign({}, pose, { rot })).p;
+    return ARMS.map(([, Side]) => {
+      const along = M.sub(P[Side + 'Hand'], P[Side + 'ForeArm']),
+        g = M.add(P[Side + 'Hand'], M.scale(along, GLOVE.ahead / (Math.hypot(...along) || 1))),
+        best = { depth: -1, p: g, out: [0, 0, 1], at: P[Side + 'Arm'] },
+        meet = (p, r, c, rc) => {
+          const d = M.sub(p, c),
+            l = Math.hypot(...d),
+            depth = r + rc - l;
+          if (depth > best.depth) Object.assign(best, { depth, p, out: l > 1e-6 ? M.scale(d, 1 / l) : [0, 0, 1] });
+        };
+      for (const [j, c] of foe.body) meet(g, RADIUS.glove, c, RADIUS[j.replace(/^(Left|Right)/, '')]);
+      for (const c of [foe.hands.L, foe.hands.R]) meet(P[Side + 'ForeArm'], RADIUS.ForeArm, c, RADIUS.glove);
+      return best;
+    });
+  };
+  const rockedArms = (pose, k, dt, st, foe) => {
+    const F = fk(pose);
+    // (worked out once a frame, from the pose as it is first solved: solved again with his hips moved, his arms are drawn the same)
+    if (!slow.drawn) {
+      (slow.drawn = { L: null, R: null }), (slow.pushed = { L: null, R: null });
+      for (const [side, Side, s] of ARMS) {
+        const was = slow[side] && slow[side].at >= clock - dt * 1.5 ? slow[side] : null,
+          own = { arm: pose.rot[Side + 'Arm'], fore: pose.rot[Side + 'ForeArm'] },
+          deg = WOBBLE.droop[side] * k[side],
+          /* (an arm let go of, its hand throwing or he over it, is not as the solver has it at once: how it is off the
+             solver's is let out, `caught` times as fast, and it is the solver's again when none is left. It is the
+             solver's and that, not a following of the solver's: following a hand that is thrown, it would be drawn
+             half a frame behind it) */
+          quick = slow.on[side] ? 1 : WOBBLE.caught,
+          part = 1 - Math.exp(-WOBBLE.follow * quick * dt),
+          // (what keeping its glove out of his other arm does to the glove, as the solver has the arm: its push, pose.apart)
+          pushed = pose.apart && pose.apart[side] ? pose.apart[side].glove : [0, 0, 0];
+        let now = own,
+          left = 0;
+        if (was) {
+          const most = WOBBLE.slow * quick * M.RAD * dt;
+          now = {};
+          for (const j of ['arm', 'fore']) {
+            // (how it was drawn, off the solver's own of now while it is slowed, of then once it is let go)
+            const off = Q.fromM3(M.mul(was[j], M.tr(slow.on[side] ? own[j] : was.own[j]))),
+              th = 2 * Math.acos(clamp(Math.abs(off[3]), 0, 1)),
+              by = Math.min(most, th * part);
+            now[j] = th < 1e-5 ? own[j] : M.mul(Q.toM3(Q.power(off, 1 - by / th)), own[j]);
+            left = Math.max(left, th - by);
+          }
+        }
+        /* (and that push reaches the arm as it is drawn as slowly as the arm follows the solver's: what is said of the pose
+           as drawn (its apart) is the push followed so, and the solver is told its own next frame, `own`) */
+        const push = was ? M.add(pushed, M.scale(M.sub(was.push, slow.on[side] ? pushed : was.pushed), 1 - part)) : pushed,
+          caught = !slow.on[side] && left < 0.5 * M.RAD && Math.hypot(...M.sub(push, pushed)) < 0.001;
+        if (was && !caught) slow.pushed[side] = push;
+        else now = own;
+        if (now !== own || deg > 1e-3) {
+          /* (slowed, it is part of the way between two places the shoulder allows, and the way between them can pass
+             through one it does not, an arm in a guard being turned out about as far as it goes: it goes round by the
+             nearest the shoulder does allow. Taken straight to the solver's instead, it jumped as the solver's had, 40 cm
+             in a frame; that is left for an arm four goes do not bring in) */
+          if (now !== own && !shouldered(F, Side, s, now)) {
+            const near = letBe(F, Side, s, now);
+            let lo = 0,
+              hi = 1;
+            if (!near) for (let i = 0; i < 8; i++) shouldered(F, Side, s, blend(own, now, (lo + hi) * 0.5)) ? (lo = (lo + hi) * 0.5) : (hi = (lo + hi) * 0.5);
+            now = near || blend(own, now, lo);
+          }
+          // (and hanging from there as far as the shoulder lets it)
+          let drawn = deg > 1e-3 ? hung(pose, F, Side, s, now, deg) : now;
+          if (drawn !== now && !shouldered(F, Side, s, drawn)) {
+            let lo = 0,
+              hi = 1;
+            for (let i = 0; i < 8; i++) shouldered(F, Side, s, hung(pose, F, Side, s, now, deg * (lo + hi) * 0.5)) ? (lo = (lo + hi) * 0.5) : (hi = (lo + hi) * 0.5);
+            drawn = hung(pose, F, Side, s, now, deg * lo);
+          }
+          slow.drawn[side] = drawn;
+        }
+        slow[side] = slow.on[side] || (was && !caught) ? { arm: now.arm, fore: now.fore, push: was && !caught ? push : pushed, own, pushed, at: clock } : null;
+      }
+      /* (and the solver keeps each glove out of his head and his trunk, which an arm drawn otherwise is not kept out of: his
+         head rolls onto a glove that is slow to follow it, or the way to where the solver has gone lies through it. Where
+         an arm as it is drawn has its glove deeper in either than `own`, and than the solver's own has it, it goes round:
+         the whole arm turned on its shoulder, the glove straight out of what it is in, by as far as it is in it, so that
+         as little as it is in, so little it is moved. Only where four goes do not bring it out, or the shoulder does not
+         let it be so, is it slowed less instead: taken toward the solver's by as much as does) */
+      if (slow.drawn.L || slow.drawn.R) {
+        const own = { L: { arm: pose.rot.LeftArm, fore: pose.rot.LeftForeArm }, R: { arm: pose.rot.RightArm, fore: pose.rot.RightForeArm } },
+          drawn = { L: slow.drawn.L || own.L, R: slow.drawn.R || own.R },
+          solved = inHimself(pose, own),
+          may = solved.map(o => [Math.max(o.head, WOBBLE.own) + 1e-4, Math.max(o.trunk, WOBBLE.own) + 1e-4, Math.max(o.arm.depth, WOBBLE.own) + 1e-4]),
+          most = WOBBLE.slow * M.RAD * dt,
+          spent = { L: 0, R: 0 };
+        /* (his other arm first, which the solver keeps each glove out of too (rig/solve.mjs: keepApart) and a slowed arm is
+           not kept out of: where a glove as it is drawn is deeper in his other arm as that is drawn than `own`, and than the
+           solver's own glove is in the solver's own arm, a slowed arm gives, turned on its shoulder by what takes the glove
+           out: the glove's own arm, its glove going the way out of the other; or the other, going the other way from under
+           it. Of two slowed arms, the one the solver would have give: the glove's, unless it is met on the wrist's half of
+           the forearm and its hand is the more locked to the chest. No faster than a slowed arm turns, `slow`, so that it
+           takes a few frames, and nothing jumps; a hand that is throwing does not give) */
+        for (let pass = 0; pass < 4; pass++) {
+          let moved = false;
+          ARMS.forEach(([side], n) => {
+            const other = ARMS[1 - n][0],
+              all = inHimself(pose, drawn),
+              into = all[n].arm,
+              deep = into.depth - may[n][2];
+            if (deep <= 0) return;
+            const can = x => slow.on[x] && !!slow[x] && spent[x] < most - 1e-4,
+              mine = into.part !== 'forearm' || into.along < 0.5 || (st.hands[side].chest || 0) <= (st.hands[other].chest || 0),
+              gives = can(side) && can(other) ? (mine ? side : other) : can(side) ? side : can(other) ? other : null;
+            // (where neither may, an arm that only hangs, a fifth of a degree at most by then, hangs not at all: it is the solver's)
+            if (!gives) {
+              for (const x of [side, other]) if (slow.drawn[x] && !slow[x]) (slow.drawn[x] = null), (drawn[x] = own[x]), (moved = true);
+              return;
+            }
+            const [, Side, s] = ARMS[gives === side ? n : 1 - n],
+              up = F.R[Side + 'Shoulder'],
+              r = M.sub(gives === side ? all[n].g : into.at, all[gives === side ? n : 1 - n].at),
+              u = gives === side ? into.out : M.scale(into.out, -1),
+              ax = [r[1] * u[2] - r[2] * u[1], r[2] * u[0] - r[0] * u[2], r[0] * u[1] - r[1] * u[0]],
+              l = Math.hypot(...ax);
+            if (l < 1e-6) return;
+            const th = Math.min((deep + 0.002) / l, most - spent[gives]),
+              turn = M.mul(M.tr(up), M.mul(Q.toM3([(ax[0] / l) * Math.sin(th / 2), (ax[1] / l) * Math.sin(th / 2), (ax[2] / l) * Math.sin(th / 2), Math.cos(th / 2)]), up)),
+              turned = { arm: M.mul(turn, drawn[gives].arm), fore: drawn[gives].fore },
+              a = shouldered(F, Side, s, turned) ? turned : letBe(F, Side, s, turned);
+            // (only if it does take the glove further out)
+            if (!a || inHimself(pose, Object.assign({}, drawn, { [gives]: a }))[n].arm.depth > into.depth - 1e-5) return;
+            (slow.drawn[gives] = drawn[gives] = a), (spent[gives] += th), (moved = true);
+            // (and it goes on from there)
+            const now = { arm: M.mul(turn, slow[gives].arm), fore: slow[gives].fore },
+              near = shouldered(F, Side, s, now) ? now : letBe(F, Side, s, now);
+            if (near) (slow[gives].arm = near.arm), (slow[gives].fore = near.fore);
+          });
+          if (!moved) break;
+        }
+        /* (and the other man, whom the solver does not keep his gloves out of, but whom an arm drawn otherwise, hanging back
+           from a blow, can be in where the solver's is not: where a glove as it is drawn is further in his body than `him`
+           metres (the audit holds it to 0.08) and than the solver's own glove is, or his elbow in the other man's glove, the
+           arm is turned on its shoulder by what takes it out, no faster than a slowed arm turns, and where that is not
+           enough slowed less, as far as brings it out) */
+        const solvedIn = inHim(pose, own, foe);
+        if (solvedIn)
+          ARMS.forEach(([side, Side, s], n) => {
+            if (!slow.drawn[side] || !slow[side]) return;
+            const may = Math.max(solvedIn[n].depth, WOBBLE.him) + 1e-4,
+              read = a => inHim(pose, Object.assign({}, drawn, { [side]: a }), foe)[n],
+              allowed = a => (shouldered(F, Side, s, a) ? a : letBe(F, Side, s, a)),
+              up = F.R[Side + 'Shoulder'];
+            let is = read(drawn[side]);
+            if (is.depth <= may) return;
+            let at = drawn[side],
+              turned = M.id();
+            for (let i = 0; i < 4 && is.depth > may && spent[side] < most - 1e-4; i++) {
+              const r = M.sub(is.p, is.at),
+                u = is.out,
+                ax = [r[1] * u[2] - r[2] * u[1], r[2] * u[0] - r[0] * u[2], r[0] * u[1] - r[1] * u[0]],
+                l = Math.hypot(...ax);
+              if (l < 1e-6) break;
+              const th = Math.min((is.depth - may + 0.002) / l, most - spent[side]),
+                turn = M.mul(M.tr(up), M.mul(Q.toM3([(ax[0] / l) * Math.sin(th / 2), (ax[1] / l) * Math.sin(th / 2), (ax[2] / l) * Math.sin(th / 2), Math.cos(th / 2)]), up)),
+                next = allowed({ arm: M.mul(turn, at.arm), fore: at.fore }),
+                was = is.depth;
+              if (!next) break;
+              is = read(next);
+              if (is.depth > was - 1e-5) break;
+              (at = next), (turned = M.mul(turn, turned)), (spent[side] += th);
+            }
+            if (is.depth > may) {
+              // (slowed less: toward the solver's, as far as takes it out)
+              let lo = 0,
+                hi = 1,
+                best = own[side];
+              for (let i = 0; i < 7; i++) {
+                const t = (lo + hi) * 0.5,
+                  a = allowed(blend(own[side], at, t));
+                a && read(a).depth <= may ? ((lo = t), (best = a)) : (hi = t);
+              }
+              slow.drawn[side] = drawn[side] = best;
+              const near = lo > 0 ? allowed(blend(own[side], { arm: M.mul(turned, slow[side].arm), fore: slow[side].fore }, lo)) || own[side] : own[side];
+              (slow[side].arm = near.arm), (slow[side].fore = near.fore);
+              return;
+            }
+            slow.drawn[side] = drawn[side] = at;
+            // (and it goes on from there)
+            const near = allowed({ arm: M.mul(turned, slow[side].arm), fore: slow[side].fore });
+            if (near) (slow[side].arm = near.arm), (slow[side].fore = near.fore);
+          });
+        // (and then his head and his trunk, which come before his other arm and the other man)
+        ARMS.forEach(([side, Side, s], n) => {
+          if (!slow.drawn[side]) return;
+          const read = a => inHimself(pose, Object.assign({}, drawn, { [side]: a }))[n],
+            over = o => o.head > may[n][0] || o.trunk > may[n][1],
+            allowed = a => (shouldered(F, Side, s, a) ? a : letBe(F, Side, s, a)),
+            up = F.R[Side + 'Shoulder'];
+          let is = read(drawn[side]);
+          if (!over(is)) return;
+          let at = drawn[side],
+            turned = M.id();
+          for (let i = 0; i < 4 && over(is); i++) {
+            const which = is.head - may[n][0] > is.trunk - may[n][1] ? 0 : 1,
+              deep = which ? is.trunk - may[n][1] : is.head - may[n][0],
+              r = M.sub(is.g, is.at),
+              u = is.out[which],
+              ax = [r[1] * u[2] - r[2] * u[1], r[2] * u[0] - r[0] * u[2], r[0] * u[1] - r[1] * u[0]],
+              l = Math.hypot(...ax),
+              lu = Math.hypot(...u);
+            if (l < 1e-6 * lu) break;
+            // (about r x u, which takes the glove toward u: so far round that it is out by what it was in, and 2 mm)
+            const h = Math.min(((deep + 0.002) * lu) / l, 0.25) / 2,
+              turn = M.mul(M.tr(up), M.mul(Q.toM3([(ax[0] / l) * Math.sin(h), (ax[1] / l) * Math.sin(h), (ax[2] / l) * Math.sin(h), Math.cos(h)]), up));
+            (at = { arm: M.mul(turn, at.arm), fore: at.fore }), (turned = M.mul(turn, turned));
+            is = read(at);
+          }
+          const round = over(is) ? null : allowed(at);
+          if (round && !over(read(round))) {
+            slow.drawn[side] = drawn[side] = round;
+            // (and it goes on from there)
+            if (slow[side]) {
+              const near = allowed({ arm: M.mul(turned, slow[side].arm), fore: slow[side].fore }) || own[side];
+              (slow[side].arm = near.arm), (slow[side].fore = near.fore);
+            }
+            return;
+          }
+          let lo = 0,
+            hi = 1,
+            best = own[side];
+          for (let i = 0; i < 7; i++) {
+            const t = (lo + hi) * 0.5,
+              a = allowed(blend(own[side], drawn[side], t));
+            a && !over(read(a)) ? ((lo = t), (best = a)) : (hi = t);
+          }
+          slow.drawn[side] = drawn[side] = best;
+          if (slow[side]) {
+            const near = lo > 0 ? allowed(blend(own[side], slow[side], lo)) || own[side] : own[side];
+            (slow[side].arm = near.arm), (slow[side].fore = near.fore);
+          }
+        });
+      }
+    }
+    if (!slow.drawn.L && !slow.drawn.R && !slow.pushed.L && !slow.pushed.R) return pose;
+    /* (and where the solver had his elbows and wrists, and how far it put each hand off, is kept, `own`: what it is told of
+       them next frame is its own answer, not this) */
+    const out = Object.assign({}, pose, { rot: Object.assign({}, pose.rot), own: {}, apart: Object.assign({}, pose.apart) });
+    for (const [side, Side] of ARMS) {
+      out.own[side] = { arm: pose.at[Side + 'Arm'], fore: pose.at[Side + 'ForeArm'], hand: pose.at[Side + 'Hand'], apart: pose.apart ? pose.apart[side] : null };
+      if (slow.drawn[side]) (out.rot[Side + 'Arm'] = slow.drawn[side].arm), (out.rot[Side + 'ForeArm'] = slow.drawn[side].fore);
+      if (slow.pushed[side]) out.apart[side] = Math.hypot(...slow.pushed[side]) > 1e-6 ? Object.assign({ at: [0, 0, 0], step: [0, 0, 0] }, pose.apart && pose.apart[side], { glove: slow.pushed[side] }) : null;
+    }
+    const G = fk(out);
+    out.at = G.p;
+    out.head = M.add(G.p.Head, M.app(G.R.Head, HEAD));
+    return out;
+  };
+  /* His legs, meanwhile, are blended joint by joint, not by where their ends are: each thigh turned on the pelvis, each knee
+     bent and each foot turned from how he lay to how the rise's own pose has them, solved from hips moved as far as these
+     have been (st: the blended stance as it went to the solver, `from` as it was blended). A leg's ends moved straight are
+     a target it may not reach inside its ranges (one that lay folded right up, its heel over its buttock, as the hips are
+     lifted off the canvas), and the solver lets such a leg out straighter a step at a time, each a jump of its own (15 to
+     35 cm in a frame); a knee bent part of the way from one angle to the other stays on its side of the leg. Each joint
+     is turned the short way as it stood when the rise began, and goes on that way round whatever the rise's own pose does
+     after (near half a turn apart, the short way changes sides from one frame to the next). */
+  const LEG = ['Leg', 'Shin', 'Foot', 'ToeBase'];
+  /* (a leg turned part of the way from one pose to another can pass through where the hip does not let it go: a thigh across
+     the other leg or out behind is turned back to the edge of its range, and a knee pointing round the leg's line further
+     than a hip turns the thigh is turned back to the edge of that, the rest of the leg with it, as the solver keeps a leg,
+     a little inside rig/body.mjs RANGE; its way round read as the audit reads it. That is for what the blend itself does.
+     Where the fall left a leg outside those to begin with (phys/fall.mjs: a knee folded right up and lying the wrong way
+     round, a thigh at the end of its range), nothing is turned back at once: its range for this rise is as wide as it
+     lay, and a knee lying more than `KNEE_LAIN` degrees the wrong way round is not turned back at all but comes round
+     with the blend. Turned back to the nearer edge, a knee lying about opposite its range changed edges from one frame
+     to the next, half a turn round the leg in a frame, 19 to 31 cm.) */
+  const THIGH = { in: Math.sin((RANGE.hipIn - 3) * M.RAD), out: Math.sin((RANGE.hipOut - 3) * M.RAD), behind: Math.sin((RANGE.hipBehind - 3) * M.RAD) },
+    KNEE_ROUND = [RANGE.kneeAzimuth[0] + 2, RANGE.kneeAzimuth[1] - 2],
+    KNEE_LAIN = 45;
+  const dot3 = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2],
+    cross3 = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]],
+    off3 = (v, d) => M.sub(v, M.scale(d, dot3(v, d))),
+    wrap180 = a => ((((a + 180) % 360) + 360) % 360) - 180;
+  // (the thigh's turn on the pelvis turned on by `a` radians about `axis`, in the pelvis's own terms)
+  const turnLeg = (rot, name, axis, a) => {
+    const h = a / 2,
+      k = Math.sin(h) / (Math.hypot(...axis) || 1);
+    rot[name] = M.mul(Q.toM3([axis[0] * k, axis[1] * k, axis[2] * k, Math.cos(h)]), rot[name]);
+  };
+  /* (a leg as the pelvis sees it, from its hip: the knee, the ankle, and which way the knee points round the line from hip to
+     ankle, degrees, with how far off that line it is, metres: next to nothing, the way round says nothing) */
+  const legOf = (pose, S) => {
+    const F = fk(pose),
+      back = M.tr(F.R.Hips),
+      s = S === 'Left' ? 1 : -1,
+      [knee, ankle] = ['Shin', 'Foot'].map(j => M.app(back, M.sub(F.p[S + j], F.p[S + 'Leg']))),
+      down = unit(ankle),
+      koff = off3(knee, down),
+      ahead = down[2],
+      front = unit(off3(Math.abs(ahead) < 0.8 ? [0, 0, 1] : [0, ahead > 0 ? 1 : -1, 0], down)),
+      outward = unit(off3([s, 0, 0], down));
+    // (turning about the line from hip to ankle by +a carries the front toward down x front: `way` is which way that is)
+    return { knee, down, off: Math.hypot(...koff), round: Math.atan2(dot3(koff, outward), dot3(koff, front)) / M.RAD, way: dot3(cross3(down, front), outward) > 0 ? 1 : -1 };
+  };
+  // (a turn part of the way from a to b, as quaternions, with no choosing of the short way: that is the caller's)
+  const partWay = (a, b, t) => {
+    const d = clamp(a[0] * b[0] + a[1] * b[1] + a[2] * b[2] + a[3] * b[3], -1, 1),
+      th = Math.acos(d),
+      sn = Math.sin(th),
+      ka = sn < 1e-5 ? 1 - t : Math.sin((1 - t) * th) / sn,
+      kb = sn < 1e-5 ? t : Math.sin(t * th) / sn,
+      q = [a[0] * ka + b[0] * kb, a[1] * ka + b[1] * kb, a[2] * ka + b[2] * kb, a[3] * ka + b[3] * kb],
+      l = Math.hypot(q[0], q[1], q[2], q[3]) || 1;
+    return [q[0] / l, q[1] / l, q[2] / l, q[3] / l];
+  };
+  /* (and a knee is kept out of the canvas: each leg's turns are blended toward the rise's own taken at the rise's own hips,
+     which are higher than his yet are, and with his hips still low a thigh so turned puts the knee into the canvas: down-front
+     with his health dropped 0.02 s before the jab, 5.8 cm, in 55 frames. Where the knee, as he is drawn (his hips where he
+     can have them, and propped up off the canvas: ON_CANVAS), would be lower than it lay and than on the canvas (its ball on
+     it, rig/body.mjs RADIUS), the thigh is turned up on the hip by the least that brings it there, the shin kept as it was, so
+     that it goes where the knee goes) */
+  const kneeHeight = (pose, S) => fk(pose).p[S + 'Shin'][1] * (pose.stretch || 1);
+  // (how far a foot is rolled over on its ankle, degrees, as the audit reads it: the shin against the foot's own across)
+  const ANKLE_ROLL = RANGE.ankleRoll - 2;
+  const ankleRoll = (pose, S) => {
+    const F = fk(pose);
+    return Math.asin(clamp(dot3(unit(M.sub(F.p[S + 'Shin'], F.p[S + 'Foot'])), M.app(F.R[S + 'Foot'], [1, 0, 0])), -1, 1)) / M.RAD;
+  };
+  const kneeUp = (pose, S, floor) => {
+    const F = fk(pose),
+      hip = F.p[S + 'Leg'],
+      d = M.sub(F.p[S + 'Shin'], hip),
+      want = floor / (pose.stretch || 1) - hip[1];
+    if (d[1] >= want - 1e-6) return;
+    const h = Math.hypot(d[0], d[2]),
+      // (the way out from under the hip it goes: the way it leans, or straight down, forward)
+      e = h > 1e-3 ? [d[0] / h, 0, d[2] / h] : unit(off3(M.app(F.R.Hips, [0, 0, 1]), [0, 1, 0])),
+      along = dot3(d, e),
+      L = Math.hypot(...d),
+      th = Math.asin(clamp(want / L, -1, 1)) - Math.atan2(d[1], along),
+      k = [-e[2], 0, e[0]];
+    if (!(th > 0)) return;
+    turnLeg(pose.rot, S + 'Leg', M.app(M.tr(F.R.Hips), k), th);
+    turnLeg(pose.rot, S + 'Shin', M.app(M.tr(F.R[S + 'Leg']), k), -th);
+  };
+  const legsUnlying = (pose, st, from, { key, w }) => {
+    const own = solve(Object.assign({}, key, { hips: M.add(key.hips, M.sub(st.hips, from.hips)) })),
+      out = Object.assign({}, pose, { rot: Object.assign({}, pose.rot), knees: own.knees, knee: own.knee });
+    // (how each leg lay, and so what it is held to through this rise; and each joint's turn as it was last blended toward)
+    if (!rising.legs) {
+      rising.legs = { to: {} };
+      for (const S of ['Left', 'Right']) {
+        const s = S === 'Left' ? 1 : -1,
+          lay = legOf(rising.pose, S),
+          t = unit(lay.knee),
+          past = lay.off > 0.04 ? Math.max(KNEE_ROUND[0] - lay.round, lay.round - KNEE_ROUND[1], 0) : 0,
+          // (as wide as it lay: past the edge it lay nearer, the long way round counted too)
+          over = Math.min(past, 360 - (KNEE_ROUND[1] - KNEE_ROUND[0]) - past),
+          upper = wrap180(lay.round - KNEE_ROUND[1]) > 0 && wrap180(lay.round - KNEE_ROUND[1]) <= wrap180(KNEE_ROUND[0] - lay.round);
+        rising.legs[S] = {
+          in: Math.max(THIGH.in, -t[0] * s),
+          out: Math.max(THIGH.out, t[0] * s),
+          behind: Math.max(THIGH.behind, -t[2]),
+          round: past <= 0 ? KNEE_ROUND : over > KNEE_LAIN ? null : upper ? [KNEE_ROUND[0], KNEE_ROUND[1] + over] : [KNEE_ROUND[0] - over, KNEE_ROUND[1]],
+          knee: kneeHeight(rising.pose, S),
+          roll: Math.max(ANKLE_ROLL, Math.abs(ankleRoll(rising.pose, S)))
+        };
+      }
+    }
+    for (const S of ['Left', 'Right']) {
+      for (const b of LEG) {
+        const a = Q.fromM3(rising.pose.rot[S + b]),
+          was = rising.legs.to[S + b] || a;
+        let q = Q.fromM3(own.rot[S + b]);
+        // (the same turn either way round: the one nearer what it was last frame, and at first the lying pose's)
+        if (q[0] * was[0] + q[1] * was[1] + q[2] * was[2] + q[3] * was[3] < 0) q = q.map(x => -x);
+        rising.legs.to[S + b] = q;
+        out.rot[S + b] = Q.toM3(partWay(a, q, w));
+      }
+      const s = S === 'Left' ? 1 : -1,
+        held = rising.legs[S];
+      let leg = legOf(out, S);
+      const t = unit(leg.knee),
+        x = clamp(t[0] * s, -held.in, held.out) * s,
+        z = Math.max(t[2], -held.behind);
+      if (x !== t[0] || z !== t[2]) {
+        const to = unit([x, t[1], z]),
+          ax = cross3(t, to);
+        if (Math.hypot(...ax) > 1e-9) turnLeg(out.rot, S + 'Leg', ax, Math.atan2(Math.hypot(...ax), dot3(t, to)));
+        leg = legOf(out, S);
+      }
+      if (held.round) {
+        // (a knee all but on the line from hip to ankle points nowhere in particular: turned back by less, the nearer it is)
+        const mid = (held.round[0] + held.round[1]) / 2,
+          half = (held.round[1] - held.round[0]) / 2,
+          off = wrap180(leg.round - mid),
+          by = (clamp(off, -half, half) - off) * smooth((leg.off - 0.02) / 0.06);
+        if (by) turnLeg(out.rot, S + 'Leg', leg.down, by * M.RAD * leg.way);
+      }
+      /* (and the foot not rolled over on its ankle further than it lay, or than ANKLE_ROLL: turned part of the way from how it
+         lay to how the rise has it, a foot lying rolled 29 degrees went through 35, past what an ankle rolls, in 5 frames) */
+      const G = fk(out),
+        shin = unit(M.sub(G.p[S + 'Shin'], G.p[S + 'Foot'])),
+        fx = M.app(G.R[S + 'Foot'], [1, 0, 0]),
+        roll = Math.asin(clamp(dot3(shin, fx), -1, 1)) / M.RAD,
+        over = Math.abs(roll) - held.roll;
+      if (over > 0) {
+        const k = cross3(fx, shin);
+        if (Math.hypot(...k) > 1e-9) turnLeg(out.rot, S + 'Foot', M.app(M.tr(G.R[S + 'Shin']), k), -Math.sign(roll) * over * M.RAD);
+      }
+    }
+    const F = fk(out);
+    out.at = F.p;
+    out.head = M.add(F.p.Head, M.app(F.R.Head, HEAD));
+    return out;
+  };
   /* A rise is the pose he lay in turning into the rise's own over its first part: the solver's inputs, blended (the hips
-     and the ends of his limbs moved straight, the joints turned the short way), and solved as anything is. */
+     and the ends of his limbs moved straight, the joints turned the short way), and solved as anything is (but his legs:
+     legsUnlying). */
+  /* (how far an arm being brought round has gone on its way out to his side, half way through the rise's blend (blendStance):
+     at an even pace, but for the last TURN of it, over which it comes to a stop out there, where its way turns, to set off
+     again as it stopped. Turned there at speed, the glove's going up became going down from one frame to the next, and his
+     centre of mass with it: 1.5 g, down-front with his health dropped 0.04 s after the jab) */
+  const TURN = 0.1;
+  const turnOut = w => {
+    const x = (w - (0.5 - TURN)) / TURN;
+    return x <= 0 ? w * 2 : 1 - 2 * TURN + 2 * TURN * (x + x * x - x * x * x);
+  };
   const blendStance = (rest, key, w) => {
     const out = { hips: M.lerp(rest.hips, key.hips, w), spine: {}, feet: {}, hands: key.hands, stretch: key.stretch };
     for (const j in rest.spine) {
@@ -579,7 +1187,7 @@ export function createAnimator(seed) {
            to the sky; lying on it, the arm is under him, and is drawn out to his side by his head, the shoulder rolled, not
            down past his belly) */
         aside = mirror(unit(a0))[0] < -0.2 ? unit(mirror(was.R[5] > -0.3 ? [0.45, -0.4, 0.8] : [0.75, 0.45, 0.1])) : across ? wide : swingTo(swingTo(unit(a0), unit(a1), 0.5), wide, 0.5),
-        way = w < 0.5 ? swingTo(unit(a0), aside, w * 2) : swingTo(aside, unit(a1), w * 2 - 1),
+        way = w < 0.5 ? swingTo(unit(a0), aside, turnOut(w)) : swingTo(aside, unit(a1), 1 - turnOut(1 - w)),
         arm = M.scale(way, l0 + (l1 - l0) * w - FREE * Math.sin(Math.PI * w));
       // (the elbow out to his side at once, and kept there through the first half)
       const elbowOut = Math.min(1, w * 6) * (1 - smooth((w - 0.5) * 2));
@@ -613,9 +1221,11 @@ export function createAnimator(seed) {
             tilt = [left * HIT.side, (ahead - HIT.ext * Math.max(0, up)) * HIT.lean];
           give.lean.v += (tilt[0] * Math.sin(y) + tilt[1] * Math.cos(y)) * HIT.give[0] * K;
           give.side.v += (tilt[0] * Math.cos(y) - tilt[1] * Math.sin(y)) * HIT.give[1] * K;
-          give.yaw.v += left * 300 * k;
+          give.yaw.v += left * 300 * k * (1 - HIT.waist);
         }
       });
+      // (and of the trunk's turn, the waist's share a moment after, between the chest's and the hips')
+      later.push({ at: clock + HIT.waisted, kick: () => (give.waist.v += left * 300 * k * HIT.waist) });
       later.push({
         at: clock + HIT.hips,
         kick: () => {
@@ -1059,7 +1669,11 @@ export function createAnimator(seed) {
       hurt += (clamp(view.hurt || 0, 0, 1) - hurt) * (1 - Math.exp(-dt * 1.5));
       tired += (clamp(view.tired || 0, 0, 1) - tired) * (1 - Math.exp(-dt * 1.5));
       cheer += ((view.cheer ? 1 : 0) - cheer) * (1 - Math.exp(-dt * 5));
-      gaze += ((form ? form.look : evading ? evading.look : cv.look !== null ? st.look + (cv.look - st.look) * cover : st.look) - gaze) * (1 - Math.exp(-dt * 20));
+      {
+        // (rocked, his eyes only so far on the other man)
+        const look = form ? form.look : evading ? evading.look : cv.look !== null ? st.look + (cv.look - st.look) * cover : st.look;
+        gaze += (look + (WOBBLE.look - look) * wobble.now - gaze) * (1 - Math.exp(-dt * 20));
+      }
       if (cover > 0.002) {
         for (const [ch, v] of Object.entries(sampleMove(MOVES.cover, 1, {}))) c[ch] += v * cover;
         // the guard as his grade holds it
@@ -1644,6 +2258,7 @@ export function createAnimator(seed) {
       c.lean += spring(give.lean, 0, dt, 2.1, 0.55);
       c.side += spring(give.side, 0, dt, 2.1, 0.55);
       c.yaw += spring(give.yaw, 0, dt, 2.1, 0.55);
+      c.waist += spring(give.waist, 0, dt, 2.1, 0.55);
       c.hy -= Math.abs(spring(give.sink, 0, dt, 2.4, 0.6)) * 0.5;
       c.hz += spring(give.hz, 0, dt, 2.1, 0.55);
       c.hx += spring(give.hx, 0, dt, 2.1, 0.55);
@@ -1705,6 +2320,9 @@ export function createAnimator(seed) {
       }
 
       // ---- what the fight has done to him: rocked by the last big blow, worn down by all of them, short of breath
+      // (down on the canvas, nothing of it is left to come back as he gets up: no foot out, no eyes off the other man)
+      if (floored) (brace.L = [0, 0]), (brace.R = [0, 0]), (brace.move = null), (wobble.now = 0), (droop.L = droop.R = 0);
+      (slow.on.L = slow.on.R = false), (slow.drawn = null);
       if (!floored) {
         wobble.t += dt;
         const w = wobble.amount * Math.exp(-wobble.t / WOBBLE.last) * smooth(clamp(wobble.t / WOBBLE.onset, 0, 1)),
@@ -1713,20 +2331,72 @@ export function createAnimator(seed) {
           free = { L: !(punchMove && punchMove.hand === 'L'), R: !(punchMove && punchMove.hand === 'R') },
           guardUp = 1 - 0.6 * cover,
           breath = Math.sin(TAU * (1 + 0.5 * tired) * clock);
+        wobble.now = w;
         if (w > 1e-3) {
-          /* the knees go and come back, the trunk swings from side to side over them, the head lolls, the gloves sag. (The
-             head itself goes only a little way: a rocked man is there to be hit, not harder to find.) */
-          // (the knees give, one and then the other, a quarter of a second apart, turned in toward each other)
-          c.lkf += w * (6 + 12 * Math.sin(TAU * T) ** 2);
-          c.rkf += w * (6 + 12 * Math.cos(TAU * T) ** 2);
-          c.lkx -= 12 * w;
-          c.rkx -= 12 * w;
-          c.side += 5 * w * Math.sin(TAU * 1.3 * T);
+          /* the knees go and come back, the trunk swings from side to side over them, the head lolls after it, the gloves
+             sag (WOBBLE) */
+          const W = WOBBLE,
+            sway = Math.sin(TAU * 1.3 * T);
+          // (the knees give, one and then the other, a quarter of a second apart, turned in toward each other; and not into the
+          // other man's legs: kneeRoom)
+          const room = kneeRoom(dt, view.foe);
+          c.lkf += w * room.Left * (W.knee[0] + W.knee[1] * Math.sin(TAU * T) ** 2);
+          c.rkf += w * room.Right * (W.knee[0] + W.knee[1] * Math.cos(TAU * T) ** 2);
+          c.lkx -= W.in * w * room.Left;
+          c.rkx -= W.in * w * room.Right;
+          // (the trunk over them, the waist turning against it, the hips going out the other way under it)
+          c.side += W.side * w * sway;
+          c.waist -= W.waist * w * sway;
+          c.hx -= W.hips * w * sway;
           c.lean += 5 * w;
-          c.hr += 12 * w * Math.sin(TAU * 1.05 * T + 0.8);
-          c.hp += 10 * w;
-          if (free.L) (c.ly -= 0.14 * w * guardUp), (c.lz -= 0.04 * w), (c.lx += 0.03 * w);
-          if (free.R) (c.ry -= 0.14 * w * guardUp), (c.rz -= 0.04 * w), (c.rx -= 0.03 * w);
+          // (the head rolling after the trunk, the chin down)
+          c.hr += W.roll * w * smooth(clamp(T / W.rolled, 0, 1)) * Math.sin(TAU * 1.3 * T - W.lag);
+          c.hp += W.chin * w;
+          if (free.L) (c.ly -= W.glove * w * guardUp), (c.lz -= 0.04 * w), (c.lx += 0.03 * w);
+          if (free.R) (c.ry -= W.glove * w * guardUp), (c.rz -= 0.04 * w), (c.rx -= 0.03 * w);
+        }
+        /* (and how far his arms hang past that, each of a hand that is free: come to over W.drooped from the blow, and let
+           go of, a hand that throws, in W.quick) */
+        for (const side of ['L', 'R']) {
+          const want = free[side] ? w * guardUp * smooth(clamp(wobble.t / WOBBLE.drooped, 0, 1)) : 0,
+            most = dt / WOBBLE.quick;
+          droop[side] += clamp(want - droop[side], -most, most);
+          slow.on[side] = free[side] && w >= WOBBLE.slowed;
+        }
+        /* (and a foot put out to catch him as he sways that way, every so often while he is badly rocked, and back under him
+           once he is over it: WOBBLE.brace) */
+        {
+          const B = WOBBLE.brace;
+          /* (not while he throws: a step put out to catch him as a punch of his own carries his weight on over it left him
+             where he would topple, 17 cm outside his feet for 4 frames past the 0.3 s, a jab thrown as the stun ran out; one
+             under way when he throws is cut short, the foot put down where it has got to) */
+          if (punchMove && brace.move) brace.move = null;
+          if (brace.move) {
+            const m = brace.move;
+            m.t += dt;
+            const e = smooth(m.t / B.time);
+            brace[m.side] = [m.from[0] + (m.to[0] - m.from[0]) * e, m.from[1] + (m.to[1] - m.from[1]) * e];
+            c[m.side === 'L' ? 'lfy' : 'rfy'] += B.lift * bump(m.t / B.time);
+            if (m.t >= B.time) brace.move = null;
+          } else if (w > B.from && (view.shoved || 0) <= B.shoved && !punchMove) {
+            if (wobble.t < B.first) brace.next = B.first - wobble.t;
+            else if ((brace.next -= dt) <= 0) {
+              // (a lead foot stood on stays where it is: the other is put out instead)
+              const side = Math.sin(TAU * 1.3 * T) > 0 && !view.pinned ? 'L' : 'R',
+                out = Math.hypot(...brace[side]) > B.out,
+                d = B.d[0] + (B.d[1] - B.d[0]) * roll(),
+                s = side === 'L' ? 1 : -1;
+              brace.move = { side, from: brace[side].slice(), to: out ? [0, 0] : [brace[side][0] + s * d * 0.8, brace[side][1] - d * 0.6], t: 0 };
+              brace.next = B.every;
+            }
+          } else if (w < 0.05) {
+            const side = Math.hypot(...brace.L) > 1e-4 ? 'L' : Math.hypot(...brace.R) > 1e-4 ? 'R' : null;
+            if (side) brace.move = { side, from: brace[side].slice(), to: [0, 0], t: 0 };
+          }
+          c.lfx += brace.L[0];
+          c.lfz += brace.L[1];
+          c.rfx += brace.R[0];
+          c.rfz += brace.R[1];
         }
         // hurt: the guard lower and wider, the head and shoulders forward and down
         c.lean += 8 * hurt;
@@ -2147,13 +2817,18 @@ export function createAnimator(seed) {
            and how far put down in the room, say which hand gives way: solve.mjs) */
         hands[side] = { at, toward: M.lerp(way, elbow[side] || [0, 0, 0], keep), round: { was: round[side], most: (poled ? ROUND : 1200) * dt }, shoulder: { was: arm[side], most: 900 * dt }, last: wrist[side], punch: !!mine && (action.chain.phase === 'coil' || action.chain.phase === 'throw') && !(pullIn(action) > 0 && action.chain.t < action.chain.wait), locked: !!mine && mine.arm === 'swing', chest: clamp(c[k + 'c'], 0, 1), room: clamp(c[k + 'g'], 0, 1), apart: { was: apart[side], most: APART * dt } };
       }
-      let stance = { hips, spine, feet, hands, stretch: 1 + c.st };
+      let stance = { hips, spine, feet, hands, stretch: 1 + c.st },
+        // (getting up, while the rise is still being blended out of how he lay: its own stance, and how far it has gone)
+        unlying = null;
       if (rising && action && rising.id === id) {
         const w = smooth(action.t / rising.blend);
-        if (w < 1) stance = blendStance(rising.rest, stance, w);
+        if (w < 1) (unlying = { key: stance, w }), (stance = blendStance(rising.rest, stance, w));
         else rising = null;
       } else if (rising && rising.id !== null) rising = null;
-      let pose = solve(stance);
+      // (rocked, his arms are slow and hang, before what his body can do with his weight is reckoned: FALL)
+      // (on the canvas, getting up or going down, his slowed arms are not kept out of the other man: rockedArms)
+      const solved = st => (unlying ? legsUnlying(solve(st), st, stance, unlying) : rockedArms(solve(st), droop, dt, st, action && MOVES[action.name].floor ? null : view.foe));
+      let pose = solved(stance);
       {
         const want = centre(pose)[1];
         if (!height || dt <= 0) height = { y: want, v: 0, want, vt: 0 };
@@ -2187,7 +2862,7 @@ export function createAnimator(seed) {
               const by = [0, h / (1 + c.st), 0],
                 moved = {};
               for (const side of ['L', 'R']) moved[side] = side === low ? stance.hands[side] : Object.assign({}, stance.hands[side], { at: M.add(stance.hands[side].at, by) });
-              return solve(Object.assign({}, stance, { hips: M.add(stance.hips, by), hands: moved }));
+              return solved(Object.assign({}, stance, { hips: M.add(stance.hips, by), hands: moved }));
             };
             let h = off / 0.85;
             pose = shifted(h);
@@ -2210,14 +2885,23 @@ export function createAnimator(seed) {
           if (pose.head) pose.head = M.add(pose.head, [0, up, 0]);
         }
       } else propped = 0;
+      // (and his knees, while the rise is blended out of how he lay: not let through the canvas, but kept on it: kneeUp)
+      if (unlying && rising && rising.legs) {
+        pose.rot = Object.assign({}, pose.rot);
+        for (const S of ['Left', 'Right']) kneeUp(pose, S, Math.min(RADIUS.Shin, rising.legs[S].knee));
+        const F = fk(pose);
+        for (const S of ['Left', 'Right']) for (const b of LEG) pose.at[S + b] = F.p[S + b];
+      }
       for (const [side, Side] of [['L', 'Left'], ['R', 'Right']]) {
-        const d = M.sub(pose.at[Side + 'ForeArm'], pose.at[Side + 'Arm']),
+        // (as the solver had them, where a rocked man's arms are drawn otherwise: rockedArms)
+        const o = pose.own ? pose.own[side] : { arm: pose.at[Side + 'Arm'], fore: pose.at[Side + 'ForeArm'], hand: pose.at[Side + 'Hand'] },
+          d = M.sub(o.fore, o.arm),
           l = Math.hypot(d[0], d[1], d[2]) || 1;
         elbow[side] = M.scale(d, 1 / l);
         round[side] = pose.round[side];
         arm[side] = pose.arms ? pose.arms[side] : null;
-        wrist[side] = pose.at[Side + 'Hand'];
-        apart[side] = pose.apart ? pose.apart[side] : null;
+        wrist[side] = o.hand;
+        apart[side] = pose.own ? pose.own[side].apart : pose.apart ? pose.apart[side] : null;
         knees[side] = pose.knees ? pose.knees[side] : null;
       }
       return remember(pose);

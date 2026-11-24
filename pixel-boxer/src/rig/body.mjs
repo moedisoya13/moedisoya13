@@ -28,7 +28,7 @@ export const RANGE = {
   spineBack: 30,
   spineSide: 35,
   spineTwist: 45, // the chest on the pelvis, the waist's turn and the chest's together
-  waistTwist: 25, // the waist (Spine1) on the pelvis: the animator keeps it inside 22 (anim/animator.mjs: WAIST)
+  waistTwist: 25, // the waist (Spine1) on the pelvis: the animator and a knockdown's fall keep it inside 22, three inside (anim/animator.mjs: WAIST, phys/fall.mjs: LIM.waist)
   neckDown: 60,
   neckUp: 65,
   neckTurn: 80,

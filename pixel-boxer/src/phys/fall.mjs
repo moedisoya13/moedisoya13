@@ -143,7 +143,7 @@ for (const p of PIECES) for (const j of [p.joint, ...p.carry]) OWNER[j] = p.name
 const R = RANGE;
 const LIMB = ['L', 'R'];
 const JOINTS = [
-  { parent: 'pelvis', child: 'belly', kind: 'spine', tone: [0.06, 0.22], stiff: 900 },
+  { parent: 'pelvis', child: 'belly', kind: 'spine', waist: true, tone: [0.06, 0.22], stiff: 900 },
   { parent: 'belly', child: 'chest', kind: 'spine', tone: [0.06, 0.22], stiff: 900 },
   { parent: 'chest', child: 'head', kind: 'neck', tone: [0.1, 0.26], stiff: 120 },
   ...LIMB.flatMap(s => [
@@ -156,6 +156,12 @@ const JOINTS = [
 ];
 const LIM = {
   spine: { fwd: [-(R.spineBack - 4) / 2, (R.spineForward - 6) / 2], side: (R.spineSide - 4) / 2, twist: (R.spineTwist - 4) / 2 },
+  /* (the lower half of it, the belly on the pelvis, is the waist (Spine1): its turn is held as the audit measures a waist's,
+     the way the belly's front points round the pelvis's up, inside the body's range for it (rig/body.mjs: RANGE.waistTwist),
+     as the animator holds it (anim/animator.mjs: WAIST); in an ordinary knockdown only. Out cold the waist is left to the
+     spine's own limits, as it was: held so too, a limp man's knees folded past their limit in 523 frames of the falls out
+     cold the scripts do not show, where they had in 192, and he came down faster than he falls) */
+  waist: R.waistTwist - 3,
   // (and the two together, the chest on the pelvis, as a whole: each half's limits do not add up to the whole's)
   trunk: { fwd: [-(R.spineBack - 4), R.spineForward - 6], side: R.spineSide - 4, twist: R.spineTwist - 5 },
   neck: { fwd: [-(R.neckUp - 6), R.neckDown - 6], side: R.neckTilt - 6, twist: R.neckTurn - 8 },
@@ -165,6 +171,28 @@ const LIM = {
   knee: { fold: 180 - R.kneeFolded - 4 },
   ankle: { up: R.ankleUp - 4, down: R.ankleDown - 4, roll: R.ankleRoll - 4, twist: 25 }
 };
+/* What still holds a hip whose muscles have let go: its ligaments and the sheets of tissue round it, which are slack through
+   the middle of its range and stiffen toward the end of it. Past `from` of the way to its limit (out, in, behind, or forward
+   from hanging with the knee straight: LIM.hip, ligament), the thigh is drawn back toward there as by a spring that is
+   `stiff` at the limit and stiffer the nearer it is (as the square of how far into that last stretch it has gone), so a limp
+   leg is not let swing all the way out to the end of its range and stop there. (docs/moves-plan-6.md §3.5 N25: a man caught
+   stepping in had his legs split 158 degrees apart, each thigh at the end of its range the other way.)
+   And a knee the same (`knee`): folded past `from` of the way to as far as it folds, it is pushed back open, the muscle over
+   the front of the thigh stretched over it; so a shin flung up as his knee comes down on the canvas does not stay folded
+   right up, its heel over his buttock and his foot up in the air. (With the hip's alone, from 0.53 of the way, that is how
+   the leg he left behind lay, in every such fall: folded to the knee's limit, where which way a knee points round its leg
+   turns on next to nothing, and it read the wrong way round for up to 81 frames of a fall and flipped half a turn in a
+   frame; and it was the folded leg that kept his ankles as near as they lay: with the knee let open and the hip's as it
+   was they lay 1.48 m apart, so the thigh is drawn in from sooner, 0.3 of the way. A man knocked down sideways by a
+   hook, his legs drawn together so, rolls on over onto his front, where he lay on his back.)
+   In an ordinary knockdown only: out cold, a log's and a twisted log's hips and knees are locked as they were until he is
+   down, a lifted man's held until he has crumpled, and their falls are left as they were.
+   Once he lies (`rest`: from when his middle has lain still rest[0] seconds), they push no more: the knee's only keeps the
+   knee from folding further than it lay, and the hip's lets go over rest[1] seconds. They are what a leg flung about in
+   the fall is held by; pushing on at a leg that lies still, against the canvas and the other leg, they kept it creeping,
+   1 to 3 cm a frame, so that 32 falls of 336 the scripts do not show had not come to rest in 8 s (19 before them, 13 now),
+   and the knee's let go of as well, the leg dropped and crept on as much. */
+const LIGAMENT = { from: 0.3, stiff: 4500, rest: [0.2, 0.5], knee: { from: 0.6, stiff: 1500 } };
 const MU = 0.9; // how the canvas grips
 const HEAD_SHARE = 0.4; // of a blow's impulse, what his head takes (the rest reaches his chest through the neck)
 const LOG_AT = [0, 0.07, 0]; // where a log, out cold and stiff, takes the shove: his chest (its own frame, from the chest joint)
@@ -178,6 +206,10 @@ const KEEP = { glove: 0.16, head: 0.13, limb: 0.1 };
 /* how fast a limb is pressed out of his trunk at the most (m/s: so much a pass, times the step; 4 mm a pass at twelve steps a
    frame. A pass that moves it further makes it go that much faster, so it is a speed, whatever the step) */
 const PRESS = 2.88;
+/* (a limb he went down with nearer his trunk or his head than those, as a guard's rear elbow tucked in front of his ribs is,
+   is let out to them over this long, seconds, from as near as it was: put out at once, it jumped three centimetres and more
+   in the first frame of the fall) */
+const EASE = 0.13;
 
 const inertia = (m, [a, b, c]) => [(m / 3) * (b * b + c * c), (m / 3) * (a * a + c * c), (m / 3) * (a * a + b * b)];
 
@@ -224,6 +256,19 @@ function angular(a, b, rot, compliance, h) {
 
 const at = (b, local) => M.add(b.x, qrot(b.q, M.sub(local, b.com))); // a point of a piece (local: in its own frame, from its joint)
 const off = (b, local) => qrot(b.q, M.sub(local, b.com)); // and its offset from the piece's middle
+/* How far a ball of a limb (local, r) is inside what keeps it out of his trunk's line and, a forearm's, out of his head, as
+   stepFall keeps them (metres; 0 if it is clear): { trunk, head } */
+function inside(bs, b, local, r) {
+  const lo = at(bs[INDEX.pelvis], [0, 0, 0]),
+    line = M.sub(at(bs[INDEX.chest], [0, 0, 0]), lo),
+    pnt = at(b, local),
+    k = clamp(dot(M.sub(pnt, lo), line) / dot(line, line), 0, 1),
+    glove = b.glove && r >= 0.1,
+    home = (b.leg && k < 0.25) || (b.name.endsWith('arm') && k > 0.8),
+    trunk = home ? 0 : Math.max(0, (glove ? KEEP.glove : KEEP.limb + r) - len(M.sub(pnt, M.add(lo, M.scale(line, k))))),
+    head = b.name.endsWith('fore') ? Math.max(0, (glove ? KEEP.head : KEEP.limb + r) - len(M.sub(pnt, at(bs[INDEX.head], [0, 0.18, 0.02])))) : 0;
+  return { trunk, head };
+}
 
 export function createFall(pose, before, dt, blow, out) {
   const now = fk(pose),
@@ -256,6 +301,10 @@ export function createFall(pose, before, dt, blow, out) {
   body.hold = JOINTS.map(j => qmul(qconj(bodies[INDEX[j.parent]].q), bodies[INDEX[j.child]].q));
   // where each child hangs from its parent: its joint, in the parent's frame (from the T-pose: everything between is rigid)
   body.hang = JOINTS.map(j => M.sub(TPOSE[PIECES[INDEX[j.child]].joint], TPOSE[PIECES[INDEX[j.parent]].joint]));
+  /* how far inside what keeps them out of his trunk and his head each of his limbs' balls went down: a guard's rear elbow,
+     tucked in front of his ribs, is nearer his trunk's line than a limb is kept, and put out at once it jumped three
+     centimetres and more in the first frame of the fall: it is let out over EASE (stepFall) */
+  for (const b of bodies) if (b.limb) b.room = b.balls.map(([local, r]) => inside(bodies, b, local, r));
   if (blow) {
     /* The shove the bout gave him is the speed of all of him; the blow itself lands on his head, and turns him: its
        momentum is taken out of the shove so that he goes, all told, as far as the shove says. */
@@ -324,6 +373,18 @@ export function createFall(pose, before, dt, blow, out) {
       b.w = M.add(b.w, iw(b, cross(r, p)));
     }
   }
+  /* (the leg he leaves behind: of his feet, the one furthest back from the way all of him is going, if he is going anywhere:
+     TRAIL) */
+  if (!out) {
+    const mass = bodies.reduce((m, b) => m + 1 / b.im, 0),
+      v = bodies.reduce((s, b) => M.add(s, M.scale(b.v, 1 / b.im / mass)), [0, 0, 0]),
+      com = bodies.reduce((s, b) => M.add(s, M.scale(b.x, 1 / b.im / mass)), [0, 0, 0]),
+      speed = Math.hypot(v[0], v[2]);
+    if (speed > TRAIL.speed) {
+      const d = [v[0] / speed, 0, v[2] / speed];
+      body.trail = LIMB.map(s => ({ s, by: dot(M.sub(bodies[INDEX[s + 'foot']].x, com), d) })).sort((x, y) => x.by - y.by)[0].s;
+    }
+  }
   /* (out cold from a hook: his neck wrenched round the way the glove went, his chin pulled down and his head tilted after
      it, by as much as the blow's size says (TWIST); from an uppercut: his head thrown back, and later dropping onto his
      chest (LIFT)) */
@@ -358,10 +419,10 @@ function neckAt(down, tilt, turn) {
    a man locked stiff with his neck wrenched round (a twisted log) is one rigid piece standing on his feet, so it reaches him
    at his chest and turns him over the foot it goes toward, as a body hinged there takes a blow so high: about the outside
    edge of that foot, the line from the outside of its heel to the outside of its ball (through the middles of the balls of
-   the sole there, so that they roll on the canvas and do not dig into it), by as much of it as goes across that line, and
-   none of it lifts him. Which foot is found the first time and kept (body.pivot). He is turned about the upright through
-   the middle of that edge too, the way his head was wrenched, so much for each metre a second of the shove (TWIST.spin):
-   a hook glances off him going round. */
+   the sole there, so that they roll on the canvas and do not dig into it), by as much of it as goes across that line
+   (TWIST.follow times it), and none of it lifts him. Which foot is found the first time and kept (body.pivot). He is
+   turned about the upright through the middle of that edge too, the way his head was wrenched, so much for each metre a
+   second of the shove (TWIST.spin): a hook glances off him going round. */
 export function shoveFall(body, v) {
   const bs = body.bodies;
   if (body.out !== 'twist') {
@@ -392,7 +453,7 @@ export function shoveFall(body, v) {
       return m + dot(o, o) / b.im;
     }, 0),
     high = at(bs[INDEX.chest], TWIST.at)[1] - pivot[1],
-    w = M.add(M.scale(axis, (across * M_all * high) / moment), [0, (body.neck ? body.neck.s : 1) * TWIST.spin * s, 0]);
+    w = M.add(M.scale(axis, (TWIST.follow * across * M_all * high) / moment), [0, (body.neck ? body.neck.s : 1) * TWIST.spin * s, 0]);
   for (const b of bs) (b.v = M.add(b.v, cross(w, M.sub(b.x, pivot)))), (b.w = M.add(b.w, w));
   return body;
 }
@@ -417,6 +478,24 @@ function limit(j, p, c) {
          that) */
       most = Math.atan(Math.tan(L.twist * RAD) * Math.cos(f2 * RAD) * Math.cos(s2 * RAD)) * DEG,
       t2 = clamp(((tw + 540) % 360) - 180, -most, most);
+    if (j.waist && !j.out) {
+      /* (the waist: its front as the pelvis sees it, kept inside LIM.waist; the swing as for the rest of the spine, and the
+         turn about the belly's own up that puts its front at that angle, given the swing. An ordinary knockdown's: out cold
+         the waist is held by the spine's own limits, as it was) */
+      const f = qrot(rel, [0, 0, 1]),
+        a = Math.atan2(f[0], f[2]),
+        a2 = clamp(a, -LIM.waist * RAD, LIM.waist * RAD);
+      if (f2 === fwd && s2 === sd && a2 === a) return null;
+      const u = unit([Math.tan(s2 * RAD), 1, Math.tan(f2 * RAD)]),
+        ax = cross([0, 1, 0], u),
+        swing = len(ax) > 1e-9 ? qaxis(unit(ax), Math.acos(clamp(u[1], -1, 1))) : [0, 0, 0, 1],
+        S = qToM3(swing),
+        T = Math.tan(a2);
+      // (its front S [sin t, 0, cos t] reads a2 where (S00 - T S20) sin t + (S02 - T S22) cos t = 0, the front ahead)
+      let t = Math.atan2(T * S[8] - S[2], S[0] - T * S[6]);
+      if (S[6] * Math.sin(t) + S[8] * Math.cos(t) < 0) t += Math.PI;
+      return toWorld(qvec(qmul(qmul(swing, qaxis([0, 1, 0], t)), qconj(rel))));
+    }
     if (f2 === fwd && s2 === sd && Math.abs(t2 - (((tw + 540) % 360) - 180)) < 1e-9) return null;
     const u = unit([Math.tan(s2 * RAD), 1, Math.tan(f2 * RAD)]),
       ax = cross([0, 1, 0], u),
@@ -488,6 +567,53 @@ function limit(j, p, c) {
   const out = M.add(toWorld(swing), tw || [0, 0, 0]);
   return len(out) > 1e-6 ? out : null;
 }
+/* A hip's ligaments (LIGAMENT): the thigh past `from` of the way to its limit, out, in or behind, drawn back toward there,
+   the stiffer the nearer the limit it is; and forward the same, as far as the back of the thigh holds it: with the knee
+   straight from `from` of the way up, with the knee bent a right angle not at all (a bent leg folds up to the chest). And
+   a knee's: its fold pushed back the same way. */
+function ligament(bs, j, p, c, h, body) {
+  if (j.kind === 'knee') {
+    // (the knee's: its fold about its hinge, the thigh's own x, pushed back toward `from` of the way to as far as it folds;
+    // once he has lain still, only toward the fold it lay at then: rest)
+    const K = LIGAMENT.knee,
+      fold = qvec(qmul(qconj(p.q), c.q))[0] * DEG,
+      lay = (body.lain || 0) >= LIGAMENT.rest[0] ? ((body.kneeLay = body.kneeLay || {})[j.s] = body.kneeLay[j.s] ?? fold) : -Infinity,
+      to = Math.max(K.from * LIM.knee.fold, lay),
+      into = (fold - K.from * LIM.knee.fold) / ((1 - K.from) * LIM.knee.fold);
+    if (into > 0 && fold > to) angular(c, p, qrot(p.q, [(to - fold) * RAD, 0, 0]), 1 / (K.stiff * Math.min(1, into) ** 2), h);
+    return;
+  }
+  // (the hip's, let go of once he lies: rest)
+  const held = 1 - smooth(((body.lain || 0) - LIGAMENT.rest[0]) / LIGAMENT.rest[1]);
+  if (held < 1e-3) return;
+  const L = LIM.hip,
+    s = LIGAMENT.from,
+    sOf = j.s === 'R' ? -1 : 1,
+    rel = qmul(qconj(p.q), c.q),
+    d = qrot(rel, [0, -1, 0]),
+    m = [d[0] * sOf, d[1], d[2]],
+    out = Math.asin(clamp(m[0], -1, 1)) * DEG,
+    behind = Math.asin(clamp(-m[2], -1, 1)) * DEG,
+    up = Math.acos(clamp(-m[1], -1, 1)) * DEG,
+    // (how straight the knee is, 1 straight .. 0 bent a right angle; and so where forward begins to be held)
+    bend = Math.acos(clamp(dot(qrot(c.q, [0, -1, 0]), qrot(bs[INDEX[j.s + 'shin']].q, [0, -1, 0])), -1, 1)) * DEG,
+    fwd = L.up * (1 - (1 - s) * clamp(1 - bend / 90, 0, 1)),
+    // (how far into the last stretch of each way it has gone: 0 at `from`, 1 at the limit)
+    into = Math.max((out - s * L.out) / ((1 - s) * L.out), (-out - s * L.in) / ((1 - s) * L.in), (behind - s * L.behind) / ((1 - s) * L.behind), m[2] > 0 ? (up - fwd) / ((1 - s) * L.up) : -1);
+  if (into <= 0) return;
+  // (where it is drawn back toward: the nearest place at `from` of the way, as limit puts a thigh at its limit)
+  const n = [clamp(m[0], -Math.sin(s * L.in * RAD), Math.sin(s * L.out * RAD)), m[1], Math.max(m[2], -Math.sin(s * L.behind * RAD))];
+  let dn = unit([n[0] * sOf, n[1], n[2]]);
+  if (m[2] > 0 && Math.acos(clamp(-dn[1], -1, 1)) * DEG > fwd) {
+    const flat = unit([dn[0], 0, dn[2]], [0, 0, 1]),
+      a = fwd * RAD;
+    dn = [flat[0] * Math.sin(a), -Math.cos(a), flat[2] * Math.sin(a)];
+  }
+  const fix = cross(d, dn),
+    a = Math.asin(clamp(len(fix), 0, 1));
+  if (a < 1e-6) return;
+  angular(c, p, qrot(p.q, M.scale(unit(fix), a)), 1 / (LIGAMENT.stiff * held * Math.min(1, into) ** 2), h);
+}
 // the twist of a relative turn about an axis (in the child's own terms), held within ±most degrees
 function twist(rel, axis, most, toWorld) {
   const a = qrot(rel, axis),
@@ -509,7 +635,7 @@ const KNEE_WAY = [RANGE.kneeAzimuth[0] + 6, RANGE.kneeAzimuth[1] - 6];
    the knee's way is measured from swings round as the leg goes out in front or behind, so a leg can find itself well
    outside it in a step without having turned at all, and putting that right at once flings the leg) */
 const KNEE_TURN = 360;
-function kneeWay(bs, s, h) {
+function kneeWay(bs, s, h, out) {
   const pelvis = bs[INDEX.pelvis],
     thigh = bs[INDEX[s + 'thigh']],
     shin = bs[INDEX[s + 'shin']],
@@ -528,10 +654,24 @@ function kneeWay(bs, s, h) {
     front = unit(M.sub(ref, M.scale(d, dot(ref, d)))),
     outward = unit(M.sub(px, M.scale(d, dot(px, d)))),
     a = Math.atan2(dot(off, outward), dot(off, front)) * DEG,
-    a2 = clamp(a, KNEE_WAY[0], KNEE_WAY[1]);
-  if (a2 === a) return;
+    a2 = clamp(a, KNEE_WAY[0], KNEE_WAY[1]),
+    ref2 = Math.abs(ahead) < 0.8 ? pz : M.scale(py, ahead > 0 ? 1 : -1),
+    front2 = unit(M.sub(ref2, M.scale(d, dot(ref2, d)))),
+    aa = a + ((((Math.atan2(dot(off, outward), dot(off, front2)) * DEG - a) % 360) + 540) % 360) - 180,
+    aa2 = clamp(aa, KNEE_WAY[0], KNEE_WAY[1]);
+  if (a2 === a && (out || aa2 === aa)) return;
+  /* (it is read the audit's way too, from the front of the thigh taken the one way or the other (aa): the two readings part
+     where the leg is three fifths to nine tenths of the way out in front or behind, and a leg the one way kept inside could
+     lie outside the other, pinned there on the canvas with its knee the wrong way round. Where either is outside, the leg
+     is turned by the least that puts both inside, the turn about d moving both alike; where the two cannot both be had, by
+     what puts this one's inside, if it is outside, and not at all if it is not. In an ordinary knockdown only: out cold it
+     is read the one way, as it was, and his knees left to go as they did) */
+  const lo = Math.max(KNEE_WAY[0] - a, KNEE_WAY[0] - aa),
+    hi = Math.min(KNEE_WAY[1] - a, KNEE_WAY[1] - aa),
+    by = out || lo > hi ? a2 - a : clamp(0, lo, hi);
+  if (!by) return;
   // (turning about d by +phi carries the front toward d x front, which is outward for the right leg and inward for the left)
-  const phi = clamp((a2 - a) * 0.5, -KNEE_TURN * h, KNEE_TURN * h) * RAD * (dot(cross(d, front), outward) > 0 ? 1 : -1),
+  const phi = clamp(by * 0.5, -KNEE_TURN * h, KNEE_TURN * h) * RAD * (dot(cross(d, front), outward) > 0 ? 1 : -1),
     rq = qaxis(d, phi);
   for (const b of [thigh, shin]) {
     b.x = M.add(hip, qrot(rq, M.sub(b.x, hip)));
@@ -552,14 +692,21 @@ function waistOf(pelvis, belly) {
    range, so a belly that comes down on the canvas on one side first is spun by it about the spine's line, and would go on
    spinning until its range stops it; what it turns further than that in a step is turned back, the belly and the pelvis
    sharing it as their inertias do, and the joints round them carry it on to the rest of him in the steps after. (The turn
-   back is reckoned to the first order, so a step can be left a few hundredths of a degree a second over.) */
-function waistRate(pelvis, belly, from, h) {
-  const { at, g } = waistOf(pelvis, belly),
-    d = ((at - from + 3 * Math.PI) % (2 * Math.PI)) - Math.PI,
-    over = Math.abs(d) - RATE.waist * RAD * h;
-  if (over <= 0 || !g) return;
-  const gl = len(g);
-  angular(belly, pelvis, M.scale(g, (-Math.sign(d) * over) / (gl * gl)), 0, h);
+   back is reckoned to the first order, so a step can be left a few hundredths of a degree a second over.) In an ordinary
+   knockdown, where the waist is held to LIM.waist as well, it is held to WAIST_UNDER degrees a second under the rate,
+   and the turn back is reckoned again from where it has left the waist, `times` times at most, until nothing is over:
+   once only and to the rate itself, 24 falls of 336 the scripts do not show were left up to 0.9 degrees a second over
+   it (and reckoned again to the rate itself, 22 a hair over). */
+const WAIST_UNDER = 0.5;
+function waistRate(pelvis, belly, from, h, times = 1, under = 0) {
+  for (let n = 0; n < times; n++) {
+    const { at, g } = waistOf(pelvis, belly),
+      d = ((at - from + 3 * Math.PI) % (2 * Math.PI)) - Math.PI,
+      over = Math.abs(d) - (RATE.waist - under) * RAD * h;
+    if (over <= 0 || !g) return;
+    const gl = len(g);
+    angular(belly, pelvis, M.scale(g, (-Math.sign(d) * over) / (gl * gl)), 0, h);
+  }
 }
 
 /* A joint found past its range is turned back by no more than this in one pass, as Box2D caps its angular corrections: in
@@ -591,8 +738,11 @@ function energy(bs) {
   return { kin, pot, total: kin + pot };
 }
 // how much of his muscles' hold on joint j is left at time t: all of it, and gone over its span
-const tone = (j, t) => 1 - smooth((t - j.tone[0]) / (j.tone[1] - j.tone[0]));
-
+const tone = (j, t, sooner) => 1 - smooth((t - j.tone[0]) / (j.tone[1] - (sooner || 0) - j.tone[0]));
+/* (the knee of the leg he leaves behind (createFall: body.trail), as he is carried on past it, lets go `by` seconds sooner
+   than the other's, so that it folds under him rather than staying straight as a prop he goes on over; he is going
+   somewhere if all of him is going faster than `speed` m/s: docs/moves-plan-6.md §3.5 N25) */
+const TRAIL = { by: 0.05, speed: 0.5 };
 /* ---- Out cold (createFall's `out`; docs/moves-plan-4.md §6).
      limp   every joint's hold gone in OUT.limp seconds, all at once: he folds where he stands and goes over whichever way he
             is going, and nothing of him tries to stop it
@@ -608,7 +758,8 @@ const tone = (j, t) => 1 - smooth((t - j.tone[0]) / (j.tone[1] - j.tone[0]));
    OUT.down seconds (the canvas, or his own body, stopping it where it meets them), and the hold goes out of it in OUT.fade. */
 const OUT = { limp: 0.04, hold: 0.5, most: 1.5, let: 0.04, lock: 30000, lay: { speed: 0.1, arm: 0.2, for: 0.25, most: 4 }, rise: 0.3, raised: 1.5, down: 1.6, open: 10, fade: 0.3, stiff: 400 };
 const LOCKED = ['spine', 'hip', 'knee', 'shoulder', 'elbow'];
-/* ---- Out cold from a hook (docs/moves-plan-5.md §1.2): a log, whose neck is not let go but wrenched round.
+/* ---- Out cold from a hook (docs/moves-plan-5.md §1.2, docs/moves-plan-6.md §3.5 N26): a log, whose neck is not let go but
+   wrenched round.
      twist  in the first TWIST.time his neck alone moves: his head turned the way the glove went (TWIST.turn: degrees at
             TWIST.ref newton-seconds, in proportion, kept between the two after it), his chin pulled down (down) and his head
             tilted that way (tilt), the rest of him locked as a log's from the blow on, and his ankles too (a log's go at
@@ -616,10 +767,26 @@ const LOCKED = ['spine', 'hip', 'knee', 'shoulder', 'elbow'];
             is locked as it has come to be, and he goes over in one piece, turned over the outside edge of the foot the
             glove's shove goes toward (shoveFall: the shove taken at his breastbone, TWIST.at on his chest, a little lower
             than a log takes his: higher, he lands too hard) and round the upright through it, the way his head went,
-            TWIST.spin radians a second for each metre a second of the shove; let go of as a log is (OUT), neck and all.
+            TWIST.spin radians a second for each metre a second of the shove, and over it by `follow` times the shove's
+            share across the edge; let go of as a log is (OUT), neck and all.
             The back of his head does not come up off the canvas (BOUNCE): his head is turned, and it is his upper arm and
-            shoulder that meet the canvas first; he rolls onto his back, and a forearm is put up as a limp man's is. */
-const TWIST = { ref: 85, turn: [55, 45, 65], down: [22, 15, 28], tilt: [8, 5, 11], time: 0.06, spin: 0.5, at: [0, -0.05, 0], locked: [...LOCKED, 'ankle'] };
+            shoulder that meet the canvas first; he rolls onto his back, and a forearm is put up as a limp man's is.
+            (His chin: pulled to 24 degrees, 23.1 measured at the card's 90 newton-seconds, not the plan's 32 at 85 and its
+            24 to 40 (docs/moves-plan-6.md §3.5 N26). Pulled further down, it turns him back against the shove as it is
+            wrenched, and he goes over slower: with the plan's 32 his head was on the canvas at 0.98 s, past the 0.55-0.85 he
+            is held to; and from 24 on, his rear glove, locked under his chin and kept off his face, is pushed into the
+            forearm of the hook that has just landed (8.3 cm, past the 8 the audit lets a glove be in the other man).
+            Shoved over harder to make up the time (`follow`), at 1.2 times and more his head is down in time with the chin
+            at 30 and 32, but he rolls on over onto his face with no forearm up, or lands at 14 to 16 g, past what a landing
+            is let reach (tests/audit.test.mjs); turned round the upright faster (spin 0.75) he is no sooner down. Three
+            hundredths more of the shove keep his head down at 0.83 s with this chin, and his landing at 9.5 g.)
+            (A weaker hook is wrenched round as it was, in proportion, kept above what it was kept above before: the chin's
+            24 is had at the card's 90.1 newton-seconds, not as the least any hook pulls it, and the turn and the tilt are
+            kept above 45 and 5 degrees, not the plan's 52 and 6, which only a hook weaker than the card's reaches. Every
+            hook pulled at least the plan's least so, the falls out cold of the hooks the scripts do not show came down
+            worse than they had: knees folded past their limit in 13 falls of 336, where 5 had, and a part of him 2 cm
+            and more under the canvas in 100 frames, where 15 had.) */
+const TWIST = { ref: 85, turn: [58, 45, 70], down: [(24 * 85) / 90.1, 15, 40], tilt: [8, 5, 13], time: 0.06, spin: 0.5, follow: 1.03, at: [0, -0.05, 0], locked: [...LOCKED, 'ankle'] };
 /* ---- Out cold from an uppercut (§1.3): lifted, held, and let go of slowly from the knees up.
      lift   thrown up onto his toes as the animator lifts a man hit from under (THROW times physics, so high as that throws
             a body, as far as his legs reach: knee, most metres), pushed up over LIFT.time and let fly, his head thrown back
@@ -697,10 +864,14 @@ function clearOf(body, p) {
 }
 /* The way the forearm comes down from where it is held up: the elbow opening, or closing, or the upper arm turning about
    itself one way or the other (as far as the shoulder lets it), or turning and opening together, whichever takes the glove
-   lowest without its ever going up on the way or into his trunk or head; -> { shoulder, bend } where it ends (the canvas or
-   his body stop it short of there), or null if every way goes up or into him. */
+   lowest without its ever going up on the way or into his trunk or head, and of those, the one that gets it there the
+   latest, as far along it as gets it there; -> { shoulder, bend } where it ends (the canvas or his body stop it short of
+   there), or null if every way goes up or into him. */
 function downward(body, p) {
-  const s = p.s,
+  // (the latest way, and only so far along it, for a twisted log's forearm: docs/moves-plan-6.md §3.5 N26; the rest's
+  // forearms come down as they did)
+  const late = body.out === 'twist',
+    s = p.s,
     sOf = p.sOf,
     ways = [{ shoulder: p.shoulder, bend: OUT.open }, { shoulder: p.shoulder, bend: 135 }];
   for (const turn of [90, 60, -90, -60]) ways.push({ shoulder: qnorm(qmul(p.shoulder, qaxis([sOf, 0, 0], turn * RAD))), bend: p.bend });
@@ -708,7 +879,8 @@ function downward(body, p) {
   let best = null;
   for (const to of ways) {
     let last = gloveAt(body, s, p.shoulder, p.bend)[1],
-      fine = true;
+      fine = true,
+      at = 0; // (how far along the way the glove is lowest)
     for (let i = 1; i <= 12 && fine; i++) {
       const k = i / 12,
         rel = qslerp(p.shoulder, to.shoulder, k),
@@ -718,11 +890,16 @@ function downward(body, p) {
         z = qrot(rel, [0, 0, 1]),
         sh = shoulderOf([d[0] * sOf, d[1], d[2]], [z[0] * sOf, z[1], z[2]], LIM.shoulder + 2);
       if (Math.max(g[1], 0.1) > last + 0.005 || c.trunk < KEEP.glove || c.head < KEEP.head || sh.zone > 0 || sh.turned > 0) fine = false;
+      if (Math.max(g[1], 0.1) < last - 0.005) at = k;
       last = Math.min(last, Math.max(g[1], 0.1));
     }
-    if (fine && (!best || last < best.y - 0.01)) best = { y: last, to };
+    /* (of ways down that take it as low, the one that gets there the latest: one that would have it under the canvas has it
+       there early, and stopped on it, all at once) */
+    if (fine && (!best || last < best.y - 0.01 || (late && last < best.y + 0.01 && at > best.at))) best = { y: last, to, at };
   }
-  return best ? best.to : null;
+  // (and only so far along it as takes it that low: the rest of the way would be pressed into the canvas, and it would
+  // come down onto it in the first part of the time it is let down over, all at once)
+  return best ? (late && best.at > 0 && best.at < 1 ? { shoulder: qslerp(p.shoulder, best.to.shoulder, best.at), bend: p.bend + (best.to.bend - p.bend) * best.at } : best.to) : null;
 }
 /* What holds joint k now: how much (w, 0..1), to what (the child's turn on its parent) and how stiffly. */
 function holdOf(body, j, k, t) {
@@ -730,7 +907,7 @@ function holdOf(body, j, k, t) {
     stiff = j.stiff,
     to = body.hold[k];
   const wrung = body.out === 'twist' && j.kind === 'neck';
-  if (!body.out) w = tone(j, t);
+  if (!body.out) w = tone(j, t, j.kind === 'knee' && j.s === body.trail ? TRAIL.by : 0);
   else if (body.out === 'lift') ({ w, to, stiff } = lifted(body, j, k, t));
   else if ((body.out === 'log' && LOCKED.includes(j.kind)) || (body.out === 'twist' && (TWIST.locked.includes(j.kind) || wrung))) {
     (w = body.freed === undefined ? 1 : 1 - smooth((t - body.freed) / OUT.let)), (stiff = body.freed === undefined ? OUT.lock : j.stiff);
@@ -907,14 +1084,16 @@ export function stepFall(body, dt, obstacles) {
             rot = qrot(p.q, qvec(qmul(m.to, qconj(rel))));
           angular(c, p, rot, 1 / (m.stiff * m.w * m.w), h);
         }
-        const fix = limit(Object.assign({ sOf: j.s === 'R' ? -1 : 1 }, j), p, c);
+        // (an ordinary knockdown's: LIGAMENT)
+        if (!body.out && (j.kind === 'hip' || j.kind === 'knee')) ligament(bs, j, p, c, h, body);
+        const fix = limit(Object.assign({ sOf: j.s === 'R' ? -1 : 1, out: body.out }, j), p, c);
         if (fix) angular(c, p, most(fix, h), 0, h);
       });
       {
         const fix = limit({ kind: 'trunk' }, pelvis, chest);
         if (fix) angular(chest, pelvis, most(fix, h), 0, h);
       }
-      for (const s of LIMB) if (!bs[INDEX[s + 'thigh']].frozen) kneeWay(bs, s, h);
+      for (const s of LIMB) if (!bs[INDEX[s + 'thigh']].frozen) kneeWay(bs, s, h, body.out);
       if (body.lift && body.t < body.lift.land) for (const s in body.lift.feet) tiptoe(body, s);
       // ---- the canvas, which holds him up and grips him
       for (const b of bs)
@@ -940,15 +1119,19 @@ export function stepFall(body, dt, obstacles) {
         spineHi = at(chest, [0, 0, 0]),
         line = M.sub(spineHi, spineLo),
         ll = dot(line, line),
-        headC = at(head, [0, 0.18, 0.02]);
+        headC = at(head, [0, 0.18, 0.02]),
+        // (what is left of the room a limb went down with inside those: EASE)
+        eased = 1 - smooth(body.t / EASE);
       for (const b of bs) {
         if (!b.limb) continue;
-        for (const [local, r] of b.balls) {
-          const pnt = at(b, local),
+        b.balls.forEach(([local, r], n) => {
+          // (an ordinary knockdown's: out cold, his arms are locked or held as they went down, and let go of as they were)
+          const room = !body.out && eased > 0 && b.room ? b.room[n] : null,
+            pnt = at(b, local),
             k = clamp(dot(M.sub(pnt, spineLo), line) / ll, 0, 1),
             near = M.add(spineLo, M.scale(line, k)),
             glove = b.glove && r >= 0.1,
-            keep = glove ? KEEP.glove : KEEP.limb + r,
+            keep = (glove ? KEEP.glove : KEEP.limb + r) - (room ? room.trunk * eased : 0),
             d = M.sub(pnt, near),
             dl = len(d),
             // (a thigh joins the trunk at the hip, and an upper arm at the shoulder: only their far ends are kept out)
@@ -964,10 +1147,10 @@ export function stepFall(body, dt, obstacles) {
             const p2 = at(b, local),
               dh = M.sub(p2, headC),
               l2 = len(dh),
-              most = glove ? KEEP.head : KEEP.limb + r;
+              most = (glove ? KEEP.head : KEEP.limb + r) - (room ? room.head * eased : 0);
             if (l2 < most) positional(b, M.sub(p2, b.x), head, M.sub(headC, head.x), M.scale(unit(dh), l2 - most), 0, h), pressed.push([b, local, head, unit(dh)]);
           }
-        }
+        });
       }
       /* (and the shoulders once more, after all that: a man who lands on his own arm does not have it shoved past where the
          shoulder lets it go, the canvas or his trunk making room for it instead) */
@@ -995,7 +1178,8 @@ export function stepFall(body, dt, obstacles) {
           }
     }
     // (and the waist turned no further in the step than a waist turns in so long: after all of that, which it is the step's)
-    waistRate(pelvis, bs[INDEX.belly], waist, h);
+    if (body.out) waistRate(pelvis, bs[INDEX.belly], waist, h);
+    else waistRate(pelvis, bs[INDEX.belly], waist, h, 3, WAIST_UNDER);
     // ---- what that comes to: the velocities, a little damped (a limp body is not a spring)
     for (const b of bs) {
       b.v = M.scale(M.sub(b.x, b.xp), 1 / h);
@@ -1084,6 +1268,8 @@ export function stepFall(body, dt, obstacles) {
   // how long he has lain still (his middle hardly moving)
   const v = len(bs[INDEX.belly].v) + 0.3 * len(bs[INDEX.belly].w);
   body.still = v < 0.05 ? body.still + dt : 0;
+  // (and the longest he has: LIGAMENT.rest)
+  body.lain = Math.max(body.lain || 0, body.still);
   // (out cold: he has come to lie once no part of him is going anywhere, for a moment, or once he has been down so long)
   // (a lifted man is not lying until all of him has been let go of: he hangs there a moment first, still)
   if (body.out && body.lay === undefined && (body.out === 'limp' || body.freed !== undefined || (body.out === 'lift' && body.t >= LIFTED - 1e-9))) {
