@@ -179,9 +179,10 @@ test('the options\' cards: each names an option of its item and carries its word
         n++;
       }
   // (the cards of the options of seven items, and the clips of the manifest: what the work of 2026-11-24 added; and the defence
-  // effects' samples, 19 cards of options of three items more and six clips)
-  assert.equal(n, 55, 'cards of options');
-  assert.equal(CLIPS.length, 54, 'clips');
+  // effects' samples, 19 cards of options of three items more and six clips; and the samples of two options not recorded before
+  // (downside-front's from04, rocked-slow's mid) and of the cross counter's first round, 12 cards of options and 12 clips more)
+  assert.equal(n, 67, 'cards of options');
+  assert.equal(CLIPS.length, 66, 'clips');
   // (a row of two whose second is the blank: its first is a card, as beckon-room's)
   for (const item of ITEMS) for (const g of item.groups || []) for (const [a, b] of g.rows) if (b.fill) assert.ok(!a.fill && (a.clip || a.entry || a.image), `${item.id}: a blank row`);
 });

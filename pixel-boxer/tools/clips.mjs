@@ -207,6 +207,13 @@ export const MEASURES = {
   taken: run => ({ blows: blowsOn(run, 0).map(b => said(b, run)) }),
   // the boxer's own blows on the other man
   thrown: run => ({ blows: blowsOn(run, 1).map(b => said(b, run)) }),
+  /* the cross counter (stage Y): every punch of the clip as it ended, either man's (the jab it goes over and the cross on him),
+     with by how much a miss missed (the bout's margin, centimetres) and whether a blow was a counter */
+  over: run => ({
+    blows: run.events
+      .filter(([, e]) => ['hit', 'block', 'graze', 'whiff'].includes(e.type))
+      .map(b => Object.assign(said(b, run), { who: b[1].who, counter: !!b[1].counter }, typeof b[1].margin === 'number' ? { margin: r4(b[1].margin * 100) } : {}))
+  }),
   /* the other man's punches at the boxer as they ended, the ones that missed him too, and by how much each missed (the bout's
      margin, centimetres: the glove's surface to his head's at the closest); and whether the boxer's defence was found
      brilliant (a defence clip's: defence: true) */

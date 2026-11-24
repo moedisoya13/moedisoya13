@@ -12,15 +12,16 @@
              seconds of the run, measure (tools/clips.mjs MEASURES), of (what the measure is told: move, the punch whose
              waist is timed), defence (true: its events keep what the defence effects are drawn from, render/guard.mjs) }
    Record them all again, when the stages change (every root made by edits with it):
-     node tools/clips.mjs --write --root prem=<before M> --root pren=<before N> --root u1=<U, first round> --root u2=<U, last round> --root v1=<V, last round>
+     node tools/clips.mjs --write --root prem=<before M> --root pren=<before N> --root u1=<U, first round> --root u2=<U, last round> --root v1=<V, last round> --root y1=<Y, last round>
    (`now` is this checkout.) */
 export const ROOTS = {
   now: { say: '지금 (게시된 동작)', where: 'this checkout' },
   prem: { say: 'M 전 (합치기 전의 동작)', where: 'before stage M was merged: git archive 8b17869 src tools' },
   pren: { say: 'N 전 (합치기 전의 동작)', where: 'before stage N was merged: git archive cd8dbe4 src tools' },
   u1: { say: 'U 1차 (첫 구현)', where: 'stage U, first round: scratchpad/wt-u/pixel-boxer (4c726b9 + its changes)' },
-  u2: { say: 'U 5차 (합치기 전, 따로의 점검 중)', where: 'stage U, round 5 on the head: scratchpad/pcwork/u5.tmp/pixel-boxer (0ac7c0c + the staged and unstaged change of scratchpad/u3)' },
-  v1: { say: 'V 5차 (합치기 전, 따로의 점검 중)', where: 'stage V, round 5 on the head: scratchpad/pcwork/v5.tmp/pixel-boxer (0ac7c0c + the staged and unstaged change of scratchpad/v3)' },
+  u2: { say: 'U 6차 (합치기 전, 답을 기다림)', where: 'stage U, round 6 on the head: scratchpad/pcwork/u6/pixel-boxer (0ac7c0c + the staged change of scratchpad/u3)' },
+  v1: { say: 'V 6차 (합치기 전, 답을 기다림)', where: 'stage V, round 6 on the head: scratchpad/pcwork/v6/pixel-boxer (0ac7c0c + the staged change of scratchpad/v3)' },
+  y1: { say: 'Y 1차 (크로스 카운터의 첫 구현, 합치기 전)', where: 'stage Y, round 1: scratchpad/pcwork/y1/pixel-boxer (ff592fa + the staged change of scratchpad/ywt)' },
   /* (the options of the decisions, each the checkout with the one change the option is: src/pending.data.mjs, the items'
      own groups) */
   // inside-rule: the rule that keeps a pressed inside chain on it, at every grade, and off (game/bout.mjs RULES.insideTo)
@@ -29,13 +30,20 @@ export const ROOTS = {
   // waist-bound: the inside hook's waist sent faster, to the plan's 450 deg/s at a pro's (anim/moves.mjs hookIn chain.waist)
   waistFast: { say: '지금 + 숏 훅의 허리 근육 84 → 98 rad/s', from: 'now', edits: [{ file: 'src/anim/moves.mjs', find: "waist: { rate: 84, from: 'drive' }", replace: "waist: { rate: 98, from: 'drive' }" }] },
   // twist-chin: the twisted log's chin pulled to 28 degrees and shoved over 1.2 times, and to 32 (V's phys/fall.mjs TWIST)
-  chin28: { say: 'V 5차 + 턱 28°, 밀기 1.2배 (TWIST.down 24 → 28, follow 1.03 → 1.2)', from: 'v1', edits: [{ file: 'src/phys/fall.mjs', find: 'down: [(24 * 85) / 90.1, 15, 40]', replace: 'down: [28, 15, 40]' }, { file: 'src/phys/fall.mjs', find: 'follow: 1.03,', replace: 'follow: 1.2,' }] },
-  chin32: { say: 'V 5차 + 턱 32° (TWIST.down 24 → 32, 점검 쪽의 시험판과 같은 값)', from: 'v1', edits: [{ file: 'src/phys/fall.mjs', find: 'down: [(24 * 85) / 90.1, 15, 40]', replace: 'down: [32, 15, 40]' }] },
+  chin28: { say: 'V 6차 + 턱 28°, 밀기 1.2배 (TWIST.down 24 → 28, follow 1.03 → 1.2)', from: 'v1', edits: [{ file: 'src/phys/fall.mjs', find: 'down: [(24 * 85) / 90.1, 15, 40]', replace: 'down: [28, 15, 40]' }, { file: 'src/phys/fall.mjs', find: 'follow: 1.03,', replace: 'follow: 1.2,' }] },
+  chin32: { say: 'V 6차 + 턱 32° (TWIST.down 24 → 32, 점검 쪽의 시험판과 같은 값)', from: 'v1', edits: [{ file: 'src/phys/fall.mjs', find: 'down: [(24 * 85) / 90.1, 15, 40]', replace: 'down: [32, 15, 40]' }] },
   /* combo-tempo: the combination's card pressed by the clock as the head presses now (src/combos.mjs: 'clock'), its first beat
      pressed on his beat as the card's is ('tempo'), so that the two start together and only the clock between beats differs */
   clockFirst: { say: '지금 + 둘째 주먹부터 시계로 누름 (첫 주먹은 카드처럼 그의 박자에)', from: 'now', edits: [{ file: 'src/combos.mjs', find: "first = how === 'tempo' ? cue(", replace: "first = how !== 'fast' ? cue(" }] },
-  // rocked-slow: a rocked man's arms slowed only once he is rocked 0.1 and more (V's anim/animator.mjs WOBBLE.slowed)
-  slowed01: { say: 'V 5차 + 느린 팔이 켜지는 정도 0.02 → 0.1 (WOBBLE.slowed)', from: 'v1', edits: [{ file: 'src/anim/animator.mjs', find: 'slowed: 0.02,', replace: 'slowed: 0.1,' }] }
+  // rocked-slow: a rocked man's arms slowed only once he is rocked 0.1 and more, or 0.05 (V's anim/animator.mjs WOBBLE.slowed)
+  slowed01: { say: 'V 6차 + 느린 팔이 켜지는 정도 0.02 → 0.1 (WOBBLE.slowed)', from: 'v1', edits: [{ file: 'src/anim/animator.mjs', find: 'slowed: 0.02,', replace: 'slowed: 0.1,' }] },
+  slowed005: { say: 'V 6차 + 느린 팔이 켜지는 정도 0.02 → 0.05 (WOBBLE.slowed)', from: 'v1', edits: [{ file: 'src/anim/animator.mjs', find: 'slowed: 0.02,', replace: 'slowed: 0.05,' }] },
+  // downside-front: the hip's ligament taken up later, from 0.4 of the way (V's phys/fall.mjs LIGAMENT.from)
+  hip04: { say: 'V 6차 + 엉덩이 인대를 늦게 건다 (LIGAMENT.from 0.3 → 0.4)', from: 'v1', edits: [{ file: 'src/phys/fall.mjs', find: 'const LIGAMENT = { from: 0.3,', replace: 'const LIGAMENT = { from: 0.4,' }] },
+  /* xc-gain: the cross counter's own switch for the counter's gain (stage Y's game/bout.mjs CROSSING.counter), none. (Its
+     trade, CROSSING.through 0.5, was recorded on the late card too and threw the same: the jab lands while the cross has barely
+     started, so the cross is cut either way; no root for it.) */
+  xcNever: { say: 'Y 1차 + 카운터의 값 없음 (CROSSING.counter out → never)', from: 'y1', edits: [{ file: 'src/game/bout.mjs', find: "counter: 'out', elbow: 0.8, through: 0 }", replace: "counter: 'never', elbow: 0.8, through: 0 }" }] }
 };
 
 // (each pair is the same script, the same window, of two checkouts: what differs between them is the motion)
@@ -77,14 +85,14 @@ export const CLIPS = [
     { id: `tw-${o}`, root, script: 'out-twist', window: [1.0, 2.4], measure: 'fall' }
   ]),
   // downside-front: the hook knockdown, the fall and the getting up, and the straight's, the fall and lying: now (as before V's
-  // ligament) and V's
-  ...[['revert', 'now'], ['accept', 'v1']].flatMap(([o, root]) => [
+  // ligament), V's, and V's with the ligament taken up later
+  ...[['revert', 'now'], ['accept', 'v1'], ['from04', 'hip04']].flatMap(([o, root]) => [
     { id: `ds-${o}`, root, script: 'down-side', window: [0.95, 5.15], measure: 'lying', of: { at: 2.8 } },
     { id: `db-${o}`, root, script: 'down-back', window: [0.5, 3.0], measure: 'lying', of: { at: 2.4 } }
   ]),
   // rocked-slow: the rocked card with a third press of his 0.4 s after the hook (the checker's scene): before V, V's, and V's
-  // slowed only from 0.1
-  ...[['before', 'now'], ['keep', 'v1'], ['shorter', 'slowed01']].map(([o, root]) => ({ id: `rk-${o}`, root, script: 'stagger', change: { also: [[1.55, 'power']], loop: 4 }, window: [0.7, 2.0], measure: 'guard' })),
+  // slowed only from 0.05 and from 0.1
+  ...[['before', 'now'], ['keep', 'v1'], ['mid', 'slowed005'], ['shorter', 'slowed01']].map(([o, root]) => ({ id: `rk-${o}`, root, script: 'stagger', change: { also: [[1.55, 'power']], loop: 4 }, window: [0.7, 2.0], measure: 'guard' })),
   // combo-tempo: the one-two and hook of a pro and of a great clean one, pressed on contact (the card's tempo, the plan's) and
   // by the clock (as the head presses now), the first beat on the same frame; each from four frames before it
   ...[['3', [0.9, 1.9]], ['5m', [0.5833, 1.5833]]].flatMap(([lv, window]) => [
@@ -106,5 +114,14 @@ export const CLIPS = [
   { id: 'dg-far', root: 'now', script: 'duck@5a', window: [1.0, 1.55], measure: 'missed', defence: true },
   { id: 'dg-edge', root: 'now', script: 'slip@3', window: [0.7, 1.2], measure: 'missed', defence: true },
   // a brilliant defence: 4명's slip under the jab by 2.9 cm and the cross back at once (the catalogue's replay card)
-  { id: 'dg-brilliant', root: 'now', script: 'counter@4m', window: [0.7, 1.35], measure: 'missed', defence: true }
+  { id: 'dg-brilliant', root: 'now', script: 'counter@4m', window: [0.7, 1.35], measure: 'missed', defence: true },
+  /* the cross counter (stage Y, round 1; docs/cross-counter-plan.md): the card of each grade it opens at, against the same pro's
+     jab pressed at 0.8 s; a pro's with no counter's gain (xc-gain); a pro's pressed two frames early and two late (xc-trade); and
+     the knockout (a great clean one's, pressed on the last frame of his window). Kept as the defence clips are (defence: the
+     bout's margin of the jab's miss, which the line says; the page draws no defence style for a card with no fx) */
+  ...['3', '4m', '4a', '5m', '5a'].map(lv => ({ id: `xc-${lv}`, root: 'y1', script: `crossCounter@${lv}`, window: [0.55, 1.35], measure: 'over', defence: true })),
+  { id: 'xc-3-never', root: 'xcNever', script: 'crossCounter@3', window: [0.55, 1.35], measure: 'over', defence: true },
+  { id: 'xc-early', root: 'y1', script: 'crossCounter-early@3', window: [0.55, 1.35], measure: 'over', defence: true },
+  { id: 'xc-late', root: 'y1', script: 'crossCounter-late@3', window: [0.55, 1.35], measure: 'over', defence: true },
+  { id: 'xc-out', root: 'y1', script: 'out-counter', window: [0.6, 2.8], measure: 'over', defence: true }
 ];

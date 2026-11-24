@@ -179,7 +179,7 @@ function cardEl(card) {
 }
 /* ---- a recorded card: where it came from, what it is, the line it was measured to show (its numbers from the very run it
    was recorded from: tools/clips.mjs MEASURES), and what became of the blow as it plays */
-const PUNCH = { jab: '잽', cross: '스트레이트', hook: '훅', hookR: '뒷손 훅', upper: '어퍼', hookIn: '숏 훅', upperIn: '숏 어퍼', hookBody: '바디 훅', flicker: '플리커' };
+const PUNCH = { jab: '잽', cross: '스트레이트', hook: '훅', hookR: '뒷손 훅', upper: '어퍼', hookIn: '숏 훅', upperIn: '숏 어퍼', hookBody: '바디 훅', flicker: '플리커', crossOver: '크로스 카운터' };
 const FACE = { up: '등으로 누움', down: '엎드림', side: '옆으로 누움' };
 const s2 = x => (x === null || x === undefined ? '–' : (+x).toFixed(2));
 const n1 = x => (x === null || x === undefined ? '–' : (+x).toFixed(1));
@@ -208,6 +208,8 @@ const CLIP_SAY = {
   tempo: m => `닿음 사이 <b>${(m.gaps || []).join(' · ')}</b> ms · ${(m.blows || []).map(b => `${PUNCH[b.name] || b.name} ${SAID[b.type] || b.type} ${n1(b.J)}`).join(', ')} N·s`,
   lying: m => `${FACE[m.face] || '–'} · 넓적다리 사이 <b>${f0(m.thighs)}</b>° · 머리 닿음 ${s2(m.down)} s${m.stood === null ? '' : ` · 일어섬 ${s2(m.stood)} s`}`,
   guard: m => `한 프레임 글러브 이동: ${(m.after || []).map(a => `${PUNCH[a.name] || a.name} 뒤 <b>${n1(a.step)}</b> cm`).join(' · ')}`,
+  // (the cross counter: the jab it went over, by how much that missed or what it did, then the cross: how hard, a counter or not)
+  over: m => (m.blows || []).map(b => `${PUNCH[b.name] || b.name} ${b.type === 'whiff' && b.margin !== undefined ? `빗나감 <b>${n1(b.margin)}</b> cm` : `${SAID[b.type] || b.type} <b>${n1(b.J)}</b> N·s${b.counter ? ' (카운터)' : ''}${b.out ? ' · 실신' : b.down ? ' · 다운' : ''}`}`).join(' → ') || '–',
   // (a miss: by how much, the bout's own margin; and a defence the bout found brilliant)
   missed: (m, card) => {
     const b = blowOf(m, card.blow);
