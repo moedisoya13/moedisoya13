@@ -348,6 +348,17 @@ A+B 실신·위빙, C1 몸통 판정, C2 바디 주먹·뒷손 훅, E 파도, F 
 - **타격 이펙트 확정.** 열려 있던 타격 이펙트의 결정 `fx-twice`를 지금 그대로(0.1초 간격, 두 발 모두 채택한 수: 기준 타격에 덩이 11·불티 18씩)로 닫음: 미결 카탈로그 저장소 `decisions/fx-twice` = keep. 이펙트 시안 v8과 모션 카탈로그가 그리는 것이 확정본. `fx-ground-ring-game`(확정된 바닥 고리가 게임 화면에서 약한 것)은 권장안 "밝힌 입자를 앞에 그림"으로 작은 수정을 진행(따로의 작업 폴더 `scratchpad/fxring`, 렌더러만). 방어 이펙트(`fx-defence-*`, `fx-parry-white`, `fx-brilliant-game`)는 별개의 논의로 열린 채.
 - **미결 카탈로그 v18.** 비교 클립을 각 단계의 마지막으로 끝난 라운드로 다시 녹화(N 4차·U 4차·V 4b차; 작업 폴더의 스테이지된 변경을 0ac7c0c 위에 얹은 얼린 사본 `scratchpad/pcwork/{n4,u4,v4b}.tmp`): 출처 이름표를 고침(`n1` → "N 4차", `u2` → "U 4차", `v1` → "V 4b차", `u1`은 "U 1차(첫 구현)"로 남김), 으쓱·뒷목 잡기 클립은 U 4차로(`shrug-u2`, `collar-u2`). 잰 값: 뒷손 훅 89.3 → 96.1 N·s(가슴 799 → 1076 °/s), 롤 카운터 67.6 → 84.5, 크로스암 늦은 굴림 막음 59.7 → 몸에 42.0, 숏 훅 46.6 → 59.9, 손짓 1.0 m 10.1 cm·1.2 m 19.6 cm, 으쓱 87.3 cm, 뒷목 잡기 102.2 N·s·머리 18.4 cm, 다운 · 앞으로 누워서 넓적다리 72°·발목 92 cm. 항목의 현재 상태를 고침: `order-memo-first`, `hookr-bound`(정해짐: 묶음 안 1.04배), `beckon-room`(정해짐: 자리만큼), `shrug-view`, `pull-test`(지금 수), `inside-rule`·`waist-bound`(지금 구현 표시), `jump-watch`(단계별 수), `merge-bar`(정해짐 B), `fx-twice`(정해짐), `fx-ground-ring-game`, `impl-final-integration`(H2는 게시됨).
 
+## 사용자 요청: 팔방 시스템 반영 확인 (2026-11-24 새벽)
+
+컨테이너가 다시 시작되어 N·U·V 5차 구현과 바닥 고리 수정 에이전트가 멈췄다가, 같은 에이전트(구현 모델·xhigh로 지정해 띄운 것)를 이어 시켜 재개(파일은 그대로였음).
+
+확인한 것:
+- **기초(단계 O)는 들어가 있다.** `src/game/bearing.mjs`(방위·여덟 칸·거리 띠·돈 칸·잡은 칸·추적), `tools/bearing.mjs`(`--reface`, `--worth`, `--walk`, `--write`), `src/bearing.data.mjs`, `tests/bearing.test.mjs` 12/12, 모션 카탈로그의 "팔방" 부(v33부터, 게시본 v36), 검토 시트 `bearing=1`, README의 도구 줄·설명·파일 표.
+- **시합은 아직 쓰지 않는다**(기획대로): `bout.mjs`·`brain.mjs`·`ai.mjs`·`techniques.mjs`·`animator.mjs` 어디도 `bearing.mjs`를 읽지 않는다. 축 다시 잡기의 규칙(§4.1), 머리의 자리 잡기(`repositionOf`), `reposition`·`cell` 사건은 단계 R, 시프트 두 칸과 파도의 빠르기는 단계 S, 피벗은 R2.
+- **고친 것 둘**: (1) `src/bearing.data.mjs`가 M을 합친 엔진보다 조금 낡아 있었다(`shift@4m`의 끝 1.6 → 1.7칸, 길이 1~2 cm; 시험은 통과하던 크기). 다시 써서 모션 카탈로그의 "팔방" 그림을 지금 엔진에 맞춤. (2) 팔방 기획 §10.3("조정자가 고칠 것": 6차 기획 §3.1 N02·N03·N05·N06·N07, §4, §9, §10의 17)이 6차 기획에 옮겨져 있지 않았다. 각 자리에 "팔방 기획이 이 숫자를 바꾼다"는 안내를 넣음(본문의 숫자 자체는 R·S 기획을 시작할 때 옮겨 적는다).
+- 사용자 답을 기다리는 것: 미결 카탈로그의 `bearing-side`(옆 칸 72°면 되는가), `bearing-pinned`(묶인 발은 못 돈다), `bearing-wave-speed`, `bearing-names`, `bearing-hud`, `bearing-dark-side`. 답이 없으면 기본값.
+- 관련 메모(R·S에서 답함): `side`, `circle`, `dash`, `dashSide`("돌아오지 않고 그 자리에서 다시 축을 잡는다"), `inout`, `shift`("축 이동이 크게"), `wave`.
+
 ## 사용자 지적: 모션 카탈로그의 메모가 거의 반영되지 않았다 (2026-11-23)
 
 사실이다. 메모 27건(26줄; `feedback`을 다시 읽음, 11-22 뒤로 새 메모 없음) 가운데 **카탈로그의 동작에 보이는 것은 0건.** 끝난 것은 J(이펙트)와 K(허리 엔진: `hookIn` 메모의 "허리를 분리해 돌 수 있는 변수로"만 엔진에 생겼고 어느 주먹도 아직 쓰지 않음)뿐이고, 그 뒤의 시간은 이펙트(데미지 비례, 다운 효과, 용암·불티), K의 착지 수리, 소스 기획 둘에 썼다. 메모의 단계: M(`crossArm`의 audit) → N(`hookIn`, `hookR`, `upperIn`, `flicker`) → P(`crossArm`의 모양) → Q(`duck`, `pull`, `parry`, `parryDown`, `rollCounter`) → R(`inout`, `side`, `circle`, `dash`, `dashSide`) → S(`shift`, `wave`) → U(`collar`, `beckon`, `chinOut`, `wind`, `shrug`, `tapChin`) → V(`stagger`, `down-front`, `out-twist`).
