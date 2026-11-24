@@ -425,6 +425,14 @@ A+B 실신·위빙, C1 몸통 판정, C2 바디 주먹·뒷손 훅, E 파도, F 
 - **미결 카탈로그 v22**: 새 항목 `n-way` — 알려진 한계로 적고 합침(권장; B의 예외를 N에 한 번) / 인사이드 연타를 기준으로 되돌리고 뒷손 훅·플리커의 허리만 합침 / 새 접근으로 더 고침 / 잠시 두고 다른 단계로.
 - 내 재실행: `scratchpad/n7out/`(진행 중).
 
+## 사용자 결정: N을 알려진 한계로 합침, 나머지는 권장안 (2026-11-24)
+
+"n-way는 accept, 나머지는 권장안대로 진행." → 미결 카탈로그 저장소 `decisions/`에 적음(note "채팅으로 답함"):
+- `n-way` = accept: N의 남은 "단계의 결함"을 알려진 한계로 적고 합친다(합치는 기준 B (4)의 예외를 N에 한 번).
+- 바로 앞 보고에서 N을 합치는 데 필요하다고 든 다섯: `crossarm-weak` = accept(크로스암 시험의 k = 0을 "몸에 맞는다"로 뒤집는 것 승인), `third-hook-frame` = keep, `upperbody-waist` = accept, `grid-test-scope` = asbuilt, `merge-classes` = iii.
+- "나머지"를 이 다섯으로 읽었다. 다른 열린 항목(`twist-chin`, `downside-front`, `rocked-slow`, `fx-ground-ring-game`, `jump-watch`, `bearing-*`, 방어 이펙트 등)은 정해진 것으로 적지 않음 → 사용자에게 확인.
+→ N 마지막 따로의 점검(구현 모델·xhigh, 브리프 `scratchpad/wfout2/brief-N-check6.md`, 작업 `scratchpad/st-n9/`): 7차 수치 재현, 6·7차의 가름 확인, 범위 한 걸음 밖, AI 96판, 정해진 항목이 만든 대로인지, 시트와 메모; 문서에 옮길 **알려진 한계 목록**을 완전하게. 합치기: N의 패치는 지금 브랜치 위에 `src/bearing.data.mjs`만 걸림(다시 써서 해결).
+
 ## 사용자 지적: 모션 카탈로그의 메모가 거의 반영되지 않았다 (2026-11-23)
 
 사실이다. 메모 27건(26줄; `feedback`을 다시 읽음, 11-22 뒤로 새 메모 없음) 가운데 **카탈로그의 동작에 보이는 것은 0건.** 끝난 것은 J(이펙트)와 K(허리 엔진: `hookIn` 메모의 "허리를 분리해 돌 수 있는 변수로"만 엔진에 생겼고 어느 주먹도 아직 쓰지 않음)뿐이고, 그 뒤의 시간은 이펙트(데미지 비례, 다운 효과, 용암·불티), K의 착지 수리, 소스 기획 둘에 썼다. 메모의 단계: M(`crossArm`의 audit) → N(`hookIn`, `hookR`, `upperIn`, `flicker`) → P(`crossArm`의 모양) → Q(`duck`, `pull`, `parry`, `parryDown`, `rollCounter`) → R(`inout`, `side`, `circle`, `dash`, `dashSide`) → S(`shift`, `wave`) → U(`collar`, `beckon`, `chinOut`, `wind`, `shrug`, `tapChin`) → V(`stagger`, `down-front`, `out-twist`).
