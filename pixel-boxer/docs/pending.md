@@ -488,6 +488,15 @@ V 네 번째 점검, U 6차, N 8차 에이전트가 멈춤 → 같은 에이전�
 
 "트레이닝 체육복(회색 후드)을 입은 버전도 만들어 주세요." → 겉모습만(시합·물리·점검·시험은 그대로). 설계(브리프 `scratchpad/wfout2/brief-hood.md`): `sculptBoxer(S, bind, { wear })`에 두 벌 — `training`(후드 내림: 후드 티, 소매와 골지 소매 끝, 캥거루 주머니, 끈, 목 뒤에 뭉친 후드, 긴 운동 바지와 발목 골지, 낮은 운동화)과 `training-up`(후드 씀: 머리 뼈에 붙은 후드, 깃과 겹쳐 고개를 돌려도 구멍이 안 나게). 색은 팔레트 칸을 새로 쓰지 않음(남은 4칸은 바닥 고리 등 몫): 천을 트렁크 색 칸(8~11)으로 조각하고 입은 선수만 팔레트를 회색으로 바꿔 그림(`RIVAL`과 같은 방식). 새 메시 `assets/boxer-training*.splats.txt`만 굽고, **기존 `boxer.splats.txt`·`ring.splats.txt`는 그대로**(지금 굽기는 커밋된 것과 4개 다름: 8,653 대 8,657, 가드 자세가 구운 뒤 조금 움직였음). 게임 `?wear=training` / `training-up`(코너별 `training,none`), 검토 시트도 같은 인자. 구현: 구현 모델·xhigh, 작업 폴더 `scratchpad/hoodwt`(브랜치 머리 cd8dbe4), 조각 도구는 `scratchpad/hood/dep/node_modules`에 설치(`npm ci`, 패키지 잠금 그대로). 끝나면 시트를 사용자에게 보인다.
 
+## N을 합침 (2026-11-24)
+
+- 확인 점검(`scratchpad/st-n9/log/rep8.txt`): 4암 팔꿈치 뒤집힘이 없어졌고(점검의 side45 10 → 0, 옆걸음 쓸기 74 → 0, 다른 묶음 0), 알려진 한계 목록에서 움직인 것은 4암의 줄뿐(긴 어퍼 넓적다리 7 → 9판, 치는 사람 떨어짐 없어짐, 새 한 프레임 떨어짐 하나 1.69 대 1.41 g: 옮겨 심기로 (ii)), 주석 고침은 주장을 바꾸지 않음(주석을 지우고 견줌), 기준 (1)(5)(6)을 깨는 것 없음.
+- 합치기: 작업 폴더의 스테이지된 패치를 브랜치에 얹음(`src/bearing.data.mjs`만 다시 씀: 작업 폴더의 것과 같음). 합친 트리 = 점검받은 트리(src·tests·tools 견줌). **397/397 통과**(클립 다시 녹화 뒤), feel 기준과 같음, audit(exit 0)·events는 점검받은 것과 바이트까지 같음. 카드 47장, 지켜보는 튐 784.
+- 문서: `docs/stage-n.md`(메모와 답, 만든 것, 시험, 알려진 한계 전부, AI 96판), README "알려진 한계"의 N 문단과 지켜보는 튐의 수, 6차 기획 §3.3 머리의 만든 것 안내.
+- 모션 카탈로그 v38: `SINCE`에 N이 움직인 줄(관절 1 mm 넘게: `scratchpad/nmerge/moved.txt`), `memo.actions`의 hookIn·hookR·upperIn·flicker "반영됨".
+- 미결 카탈로그 v25: N의 비교 클립을 "N 전(`pren`) 대 지금"으로, `n1` 출처 없앰, 항목 상태를 합친 것으로.
+- 남은 것: `inside-rule`·`waist-bound`는 권장안으로 만든 채(사용자가 아직 고르지 않음). U·V는 기준이 이제 N을 합친 브랜치: 합칠 때 그 위에 얹어 다시 잰다.
+
 ## 사용자 지적: 모션 카탈로그의 메모가 거의 반영되지 않았다 (2026-11-23)
 
 사실이다. 메모 27건(26줄; `feedback`을 다시 읽음, 11-22 뒤로 새 메모 없음) 가운데 **카탈로그의 동작에 보이는 것은 0건.** 끝난 것은 J(이펙트)와 K(허리 엔진: `hookIn` 메모의 "허리를 분리해 돌 수 있는 변수로"만 엔진에 생겼고 어느 주먹도 아직 쓰지 않음)뿐이고, 그 뒤의 시간은 이펙트(데미지 비례, 다운 효과, 용암·불티), K의 착지 수리, 소스 기획 둘에 썼다. 메모의 단계: M(`crossArm`의 audit) → N(`hookIn`, `hookR`, `upperIn`, `flicker`) → P(`crossArm`의 모양) → Q(`duck`, `pull`, `parry`, `parryDown`, `rollCounter`) → R(`inout`, `side`, `circle`, `dash`, `dashSide`) → S(`shift`, `wave`) → U(`collar`, `beckon`, `chinOut`, `wind`, `shrug`, `tapChin`) → V(`stagger`, `down-front`, `out-twist`).

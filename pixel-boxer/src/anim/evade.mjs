@@ -79,8 +79,14 @@ export const PULLED = {
   '5a': { back: 0.19, duck: 1, in: 0.06 }
 };
 const OVER = 0.3;
+/* (the rear hook's way back bends him 24 degrees to the lead side: its own wind-up turns his waist back to his right,
+   docs/moves-plan-6.md §3.3 N15, which takes his head 2 to 3 cm back toward the rear side; at 22, as it was before the
+   waist, his head came out of the sway 3.9 to 5.5 cm to the lead side, not the 7 to 11 it went (tests/body.test.mjs holds
+   5). At 24 it comes out 5.3 to 10.6 cm to that side (7.1 to 11.2 at 0ac7c0c); at 26 it came out 6.7 to 11.9, and the
+   rear hook out of it landed lighter than it did, 74.7 against 76.6 N·s at a pro's, 119.9 against 122.6 at a legend's, 122.6
+   against 124.3 at a dirty legend's; at 24, 76.1, 120.8 and 124.3) */
 const RETURN = {
-  hookR: { back: 1.1, at: { lkf: 18, rkf: 6, side: 22, lean: 8, yaw: -8, hz: 0.02 } },
+  hookR: { back: 1.1, at: { lkf: 18, rkf: 6, side: 24, lean: 8, yaw: -8, hz: 0.02 } },
   cross: { back: 0.8, at: { rkf: 12 } },
   hookBody: { back: 1.2, at: { hz: 0.03 }, to: 0.74 }
 };

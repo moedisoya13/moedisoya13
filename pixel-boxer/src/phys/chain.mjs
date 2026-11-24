@@ -5,15 +5,18 @@
    moment, and what a punch does when it lands is worked out from that state (see impulse()).
    A sixth joint, the waist (the belt and the belly turning on the pelvis, under the chest), is a branch off the chain, not a
    link in it: the joint that sets the trunk off sets the waist off with it ('hips'; or 'drive': the legs set it off with
-   the hips), and the waist hands on to nothing. Its muscle is quicker than the trunk's, so it peaks between the hips and the
-   trunk, and the five joints of the chain fire when they did without it (a waist put in line would hand on once more, and
-   every punch would land later). It is number 5, at the end, so that the numbers of the other five are what they were;
-   ORDER is the six as they are shown, from the canvas up. A punch whose move has no chain.waist holds the waist still (as if
-   it were in skip).
+   the hips as they hand on; or 'legs': it goes with the legs themselves, as the throw starts), and the waist hands on to
+   nothing. Its muscle is quicker than the trunk's, so it peaks between the hips and the trunk (set off with the hips or the
+   legs, before the hips), and the five joints of the chain fire when they did without it (a waist put in line would hand on
+   once more, and every punch would land later). It is number 5, at the end, so that the numbers of the other five are what
+   they were; ORDER is the six as they are shown, from the canvas up. A punch whose move has no chain.waist holds the waist
+   still (as if it were in skip). How much of a punch's waist a man turns on its own, ahead of his chest, is his grade's
+   (anim/skill.mjs chain.waist, c.own here: a beginner none of it, the chest turning it with itself, all of a piece; an
+   amateur most of it).
 
      const chain = createChain(move, quick, skill)
                                               move.chain: { coil (seconds), rate: [5] natural frequencies in rad/s, skip,
-                                              waist: { rate (rad/s), from: 'hips' | 'drive', damp } }
+                                              waist: { rate (rad/s), from: 'hips' | 'drive' | 'legs', damp } }
                                               quick: his muscles' speed; skill: how well he throws it (anim/skill.mjs:
                                               the order the joints go in, when each hands on, how far each turns, how
                                               each springs)
@@ -39,10 +42,10 @@ const NATURAL = [[0], { 0: [1], 1: [5, 2], 2: [3], 3: [4], 4: [], 5: [] }];
 // a number for every joint, or one for all of them (a list of the five of the chain: the waist's is the trunk's)
 const each = x => (Array.isArray(x) ? (x.length < N ? [...x, x[2]] : x) : new Array(N).fill(x || 0));
 /* The order a punch's joints go in, with its waist put where it goes off: with the trunk (whoever sets the trunk off sets the
-   waist off too), or, from the legs ('drive'), with the hips. A grade's own order (anim/skill.mjs: ARM_FIRST) is written for
-   the five; this is where the waist is put into it. */
+   waist off too), or, from the legs ('drive'), with the hips, or with the legs themselves ('legs'). A grade's own order
+   (anim/skill.mjs: ARM_FIRST) is written for the five; this is where the waist is put into it. */
 function branch(order, from) {
-  const by = from === 'drive' ? 1 : 2,
+  const by = from === 'legs' ? 0 : from === 'drive' ? 1 : 2,
     put = list => list.filter(j => j !== WAIST).flatMap(j => (j === by ? [WAIST, j] : [j])),
     next = {};
   for (let i = 0; i < N; i++) next[i] = i === WAIST ? [] : put(order[1][i] || []);
@@ -71,12 +74,15 @@ export function createChain(move, quick, skill, variant) {
   return {
     quick: quick || 1,
     // how he throws it (the textbook if nothing is said), the waist put in where this punch sets it off
-    order: (k.order || (waist && waist.from === 'drive')) ? branch(k.order || NATURAL, waist && waist.from) : NATURAL,
+    order: (k.order || (waist && (waist.from === 'drive' || waist.from === 'legs'))) ? branch(k.order || NATURAL, waist && waist.from) : NATURAL,
     natural: !k.order,
     early: each(k.early),
     lag: each(k.lag),
     thrownAt: -1, // when the throw ended (it arrived, or it landed)
     damp, // (a joint each: the trunk's is how the body springs back off its turn; the waist's is the trunk's unless it says)
+    own: k.waist ?? 1, // the share of the punch's waist turned by the waist on its own; the chest turns the rest with itself
+    // (and how much of its waist the punch turns at his grade at all, where it says: move.whip, [4암, 5암], the flicker's)
+    whip: move.whip ? move.whip[Math.max(0, ((skill && skill.form && skill.form.dirty) || 1) - 1)] : 1,
     // (a punch swung by the body, a hook, can use only so much of a better man's turn: past the target is past the target)
     amp: each((k.amp || [1, 1, 1, 1, 1]).map(a => (a > 1 ? 1 + (a - 1) * ((move.body && move.body.turn) ?? 1) : a))),
     back: k.back || 1,
@@ -247,7 +253,8 @@ export function stepChain(c, move, dt) {
      move.chain.turn: degrees the hips and trunk each turn through (a small turn carries less of the body: each carries all
                       it can from 30 degrees); a punch that turns its waist turns links.waist.waist of the trunk's with the
                       waist, and that share of the trunk's weight is behind the glove for as long as the waist's turn is fresh
-                      (the rest for as long as the chest's is): the same weight as without it, gone sooner
+                      (the rest for as long as the chest's is): the same weight as without it, gone sooner (of the waist a man
+                      turns on its own: c.own)
      move.chain.locked: the arm is held bent and stiff (hook, uppercut), so it carries the body from the start */
 const MASS = { fist: 0.75, forearm: 1.2, upper: 2.0, trunk: 32, legs: 25 };
 const FRESH = 0.11; // seconds a joint's turn stays behind the punch after its peak
@@ -258,7 +265,7 @@ export function effectiveMass(c, move, part) {
     behind = i => (c.peakAt[i] < 0 ? 0 : Math.min(1, Math.max(0, c.q[i])) * Math.exp(-Math.max(0, c.t - c.peakAt[i] - 0.04) / FRESH)),
     amp = c.amp || [1, 1, 1, 1, 1, 1],
     hips = behind(1) * Math.min(1, (Math.abs(spec.turn[0]) * amp[1]) / 30),
-    share = spec.waist && move.links.waist ? Math.min(1, Math.abs(move.links.waist.waist || 0) / (Math.abs(spec.turn[1]) || 1)) : 0,
+    share = spec.waist && move.links.waist ? Math.min(1, (Math.abs(move.links.waist.waist || 0) * (c.whip ?? 1)) / (Math.abs(spec.turn[1]) || 1)) * (c.own ?? 1) : 0,
     trunk = (share > 0 ? behind(2) * (1 - share) + behind(WAIST) * share : behind(2)) * Math.min(1, (Math.abs(spec.turn[1]) * amp[2]) / 30),
     legs = behind(0) * Math.min(1, amp[0]);
   /* (an elbow, a show-off's (anim/show.mjs): no wrist or forearm to give, and the lever from the shoulder short: the upper arm

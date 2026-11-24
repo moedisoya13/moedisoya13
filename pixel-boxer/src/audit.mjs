@@ -383,11 +383,11 @@ export function auditor(o) {
         } else unbalanced[i] = 0;
         // ---- the knockdowns, frame by frame
         if (i === 0 && entry.fall) (falls[entry.id] = falls[entry.id] || []).push({ t: where.t, doing, com: m.com, head: m.at.head, hips: m.at.Hips, angles: a, at: m.at, held, rise: f.action && f.action.rise });
-        // ---- how fast the joints of a punch turn, and how far
+        // ---- how fast the joints of a punch turn, and how far (own: the chest on the waist, the chest's own turn above it)
         if (i === 0 && entry.level && before && !held && f.action && MOVES[f.action.name].punch && f.action.chain.phase === 'throw') {
           const S = MOVES[f.action.name].hand === 'L' ? 'Left' : 'Right',
             turn = (x, y) => ((x - y + 540) % 360) - 180,
-            rates = { hips: Math.abs(turn(a.PelvisYaw, before.angles.PelvisYaw)) / DT, chest: Math.abs(turn(a.ChestYaw, before.angles.ChestYaw)) / DT, trunk: Math.abs(a.SpineTwist - before.angles.SpineTwist) / DT, waist: Math.abs(a.WaistTwist - before.angles.WaistTwist) / DT, elbow: Math.abs(a[S + 'Elbow'] - before.angles[S + 'Elbow']) / DT, glove: dist(m.at['glove' + S], before.at['glove' + S]) / DT },
+            rates = { hips: Math.abs(turn(a.PelvisYaw, before.angles.PelvisYaw)) / DT, chest: Math.abs(turn(a.ChestYaw, before.angles.ChestYaw)) / DT, trunk: Math.abs(a.SpineTwist - before.angles.SpineTwist) / DT, waist: Math.abs(a.WaistTwist - before.angles.WaistTwist) / DT, own: Math.abs(a.SpineTwist - a.WaistTwist - before.angles.SpineTwist + before.angles.WaistTwist) / DT, elbow: Math.abs(a[S + 'Elbow'] - before.angles[S + 'Elbow']) / DT, glove: dist(m.at['glove' + S], before.at['glove' + S]) / DT },
             // (a combination's card under its own name, src/combos.mjs; anything else under the punch it throws)
             by = entry.combo || entry.punch,
             slot = ((turning[by] = turning[by] || {})[entry.level] = turning[by][entry.level] || {});

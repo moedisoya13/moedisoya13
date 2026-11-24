@@ -33,9 +33,14 @@
               for all of them, or one each: the trunk's is the recoil of the body, how it springs back off the turn)
      amp      how far each joint turns, times what is written: legs, hips, trunk, shoulder, elbow (and the waist as the trunk,
               unless a sixth number says; early, lag and damp the same)
+     waist    the share of a punch's turn of the waist that his waist makes on its own, ahead of his chest (1 unless said):
+              the rest his chest turns with itself, as one piece with it (a beginner turns all of a piece, an amateur
+              mostly apart)
      coil     the wind-up, times what is written (a wind-up that sets the arm, a hook's or an uppercut's, never under 0.9 of
               it: that much is mechanics, not a tell); least: seconds of wind-up even a punch written with none has
      hold     seconds the punch stays out once it has got there (a dirty one stays for its foul)
+     spent    out of an inside hook stopped by what it met, how far driven out his legs are taken up by the next punch of that
+              hand, at the most, and still (0 unless said: from rest; game/bout.mjs begin)
      shown    how much of the wind-up's movement shows, times what is written (what sets the arm is always all there)
      back     how fast it comes home, times; backLag: how long each joint waits to start home, times
      firm     how solid the arm and the wrist are at the instant of contact: the share of the weight behind the fist that
@@ -463,7 +468,7 @@ const SHIFT_5M = Object.assign({}, SHIFT_4M, { with: 'shoulder', off: 0, step: 0
 export const LEVEL = {
   1: {
     grade: 1, side: null, name: '입문', label: '1',
-    chain: { order: ARM_FIRST, lag: [0.03, 0.03, 0, 0, 0], damp: 0.95, amp: [0.3, 0.45, 0.4, 1, 1], coil: 1.8, least: 0.08, back: 0.6, backLag: 2.4, firm: 0.75, spring: { down: 1.3 } },
+    chain: { order: ARM_FIRST, lag: [0.03, 0.03, 0, 0, 0], damp: 0.95, amp: [0.3, 0.45, 0.4, 1, 1], waist: 0, coil: 1.8, least: 0.08, back: 0.6, backLag: 2.4, firm: 0.75, spring: { down: 1.3 } },
     form: form({ guard: 1, chin: 1, over: 2.5, tell: 1, lively: 0, dip: 0.015, sep: 0, off: -0.02, with: 'trunk', look: 0.25, exit: 'stumble', level: DOWN_1 }),
     // stiff and square on, flat on his feet, the hands low and the chin up, his weight shifting about off the beat
     // (his knees locked: his hips as high as his legs will go with his feet still on the canvas)
@@ -478,7 +483,7 @@ export const LEVEL = {
   },
   2: {
     grade: 2, side: null, name: '아마추어', label: '2',
-    chain: { lag: [0.01, 0, 0, 0, 0], damp: 0.66, amp: [0.8, 0.8, 0.8, 1, 1], coil: 1.3, least: 0.035, back: 0.8, backLag: 1.5, firm: 0.86, spring: { down: 1.22, pause: 0.05 } },
+    chain: { lag: [0.01, 0, 0, 0, 0], damp: 0.66, amp: [0.8, 0.8, 0.8, 1, 1], waist: 0.6, coil: 1.3, least: 0.035, back: 0.8, backLag: 1.5, firm: 0.86, spring: { down: 1.22, pause: 0.05 } },
     form: form({ guard: 0.4, chin: 0.35, over: 0.35, tell: 0.4, lively: 0.15, dip: -0.005, late: 0.05, sep: 0, off: 0, look: 0.6, exit: 'flat', level: DOWN_2 }),
     // a small, even bounce, all of a piece: the head and the gloves go up and down with the hips
     stance: stance({ bounce: 0.45, knee: 4, hop: 0.4, rock: 0.4, lag: 0.3, hips: 0.01, lean: -3, yaw: 4, guard: { y: 0.01, elbow: 0.1 }, look: 0.6, head: null, travel: { cycle: 1.15, halting: 0.7, width: 0.75, face: 0.08, pivot: 9 } }),
@@ -503,7 +508,10 @@ export const LEVEL = {
   },
   '4m': {
     grade: 4, side: 'm', name: '일류 · 명', label: '4명', wave: WAVE_4M, pat: PAT_4M, fire: FIRE_4M, shell: SHELL_4M, shift: SHIFT_4M,
-    chain: { early: [0.25, 0.25, 0, 0, 0], damp: [0.6, 0.6, 0.56, 0.6, 0.6], amp: [1.1, 1.15, 1.1, 1, 1], coil: 0.55, shown: 0.65, back: 1.12, backLag: 1, firm: 1.08, spring: { down: 0.6, wait: true } },
+    /* (his waist turns as far as it is written to and no further, the sixth of amp: what a great one turns further than a pro
+       is his chest. Given his chest's too, the rear hook out of his roll (docs/moves-plan-6.md §3.3 N15) wound its waist far
+       enough to knock his own lead glove out of its way faster than the audit allows, 3.7 m/s in a frame at rollCounter@4명) */
+    chain: { early: [0.25, 0.25, 0, 0, 0], damp: [0.6, 0.6, 0.56, 0.6, 0.6], amp: [1.1, 1.15, 1.1, 1, 1, 1], coil: 0.55, shown: 0.65, back: 1.12, backLag: 1, firm: 1.08, spring: { down: 0.6, wait: true } },
     form: form({ guard: -0.3, chin: -0.5, lively: 0.5, dip: -0.03, drop: true, sep: 7, off: 0.07, with: 'hips', tuck: 4, look: 1, bend: 4, exit: 'roll', beat: 'on', level: DOWN_4M }),
     // strong and weak, the lead foot's landing the heavy one; the head an end on every lead foot, under in between
     stance: stance({ bounce: 1.15, knee: 6.2, lag: 1.1, accent: [1.3, 0.8], guard: { chin: 4 }, look: 1, head: { A: 0.045, D: 0.025, T: 4, beat: 'locked', level: { every: 8, depth: 0.07, lean: 5 } } }),
@@ -516,7 +524,12 @@ export const LEVEL = {
   },
   '4a': {
     grade: 4, side: 'a', name: '일류 · 암', label: '4암', vary: VARY_4A,
-    chain: { early: [0.25, 0.25, 0, 0, 0], damp: [0.6, 0.6, 0.56, 0.6, 0.6], amp: [1.1, 1.15, 1.1, 1, 1], coil: 0.55, shown: 0.65, back: 1.05, backLag: 1, firm: 1.08, hold: 0.1, spring: { down: 0.6, wait: true } },
+    /* (his legs taken up 0.3 of the way driven out, at the most, after an inside hook stopped by what it met: spent; from
+       rest, his long hook out of it landed a frame later and lighter than it did, in 40 of 224 moments; taken up as the hook
+       left them, its elbow flipped round under the arm, 56 degrees in a frame, in 5 of 162 moments of the inside chain; and
+       half driven out, 75 to 78 degrees in the first frame of its wind-up at a man side-stepping the other way, 82 of 280
+       moments of a side-step sweep, the arm sent from his chest to beside his head in that frame) */
+    chain: { early: [0.25, 0.25, 0, 0, 0], damp: [0.6, 0.6, 0.56, 0.6, 0.6], amp: [1.1, 1.15, 1.1, 1, 1, 1], coil: 0.55, shown: 0.65, back: 1.05, backLag: 1, firm: 1.08, hold: 0.1, spent: 0.3, spring: { down: 0.6, wait: true } },
     form: form({ guard: -0.2, chin: -0.4, over: 0.15, dirty: 1, lively: 0.5, dip: -0.03, drop: true, sep: 7, off: 0.07, with: 'hips', tuck: 4, look: 1, bend: 4, exit: 'roll', level: DOWN_4A }),
     // the beat rubbed out: low and heavy, the feet dragged and lurching, the head rolling low in its own time
     stance: stance({ bounce: 0.45, knee: 2.4, hop: 0.6, rock: 0.8, jitter: 0.25, drag: 0.6, hips: -0.03, travel: { width: 0.95, face: 0.1, pivot: 8 }, look: 1, head: { A: 0.055, D: 0.04, T: 4, beat: 'roll', level: { every: 2.6, depth: 0.08, lean: 5 } }, show: SHOW_4A }),

@@ -89,15 +89,18 @@ export function sampleMove(move, t, out) {
           'swing'     the arm is held bent and locked to the chest, the body carries it round, the shoulder closes the last of it
                       (land: the share of the trunk's turn at which the turn brings the locked fist onto the head; most: the
                       furthest round it is held, degrees, and ahead: no further round than this off the front of the chest;
-                      tight: the fist is kept in at the chest through the wind-up and raised to the target only with the drive)
+                      tight: the fist is kept in at the chest through the wind-up and raised to the target only with the drive, all
+                      the way up by this share of the drive)
           'lift'      the arm is held bent, the legs and trunk drive it up, the shoulder closes the last of it
      chain: { coil: seconds of wind-up, rate: how fast each joint's muscle is (rad/s natural frequency), skip: joints held
               still, turn: degrees the hips and trunk turn through (the trunk's: the waist's and the chest's together),
               locked: the arm is stiff from the start,
               waist: { rate (rad/s), from: 'hips' | 'drive' (which joint's handing on sets it off, together with the one
-              that joint sets off), damp } : the waist as a sixth joint, a branch off the chain (phys/chain.mjs). A punch
-              without it holds the waist still, as if it were in skip; with it, links.waist: { waist: degrees } is what it
-              adds, taken out of the trunk's twist and not on top of it, and coil.waist its wind-up }
+              that joint sets off) | 'legs' (it goes with the legs, as the throw starts), damp } : the waist as a sixth
+              joint, a branch off the chain (phys/chain.mjs). A punch without it holds the waist still, as if it were in
+              skip; with it, links.waist: { waist: degrees } is what it adds, and coil.waist its wind-up: in most punches
+              taken out of the trunk's twist and not put on top of it (docs/moves-plan-6.md §1.4), in the three the
+              catalogue asked for more waist in (the inside hook, the rear hook, the flicker: §3.3) partly on top of it }
      reach: about how far away, centre to centre, it can land (the rival's judgment and the step in; the hit itself is
             the glove meeting the head); close: the distance he steps in to
      body: how much of a grade's way of using the body (anim/skill.mjs: form) this punch takes, times: turn (of the extra
@@ -112,6 +115,9 @@ export function sampleMove(move, t, out) {
 const PUNCHES = {
   jab: {
     hand: 'L', arm: 'straight', kind: 'straight', reach: 1.15, close: 1.0,
+    /* (no waist of its own, docs/moves-plan-6.md §1.4: the jab that catches a man coming in and puts him down on his front is
+       the card's own, and any share of its chest's turn moved to the waist, even a degree, changes how he falls, a knee
+       turned the wrong way round, tests/audit.test.mjs; so its share is none) */
     chain: { coil: 0, rate: [58, 50, 56, 46, 44], turn: [9, 14] },
     body: { off: 0.6, dip: 0.5 },
     coil: {},
@@ -124,6 +130,9 @@ const PUNCHES = {
   },
   cross: {
     hand: 'R', arm: 'straight', kind: 'straight', reach: 1.15, close: 1.0,
+    /* (no waist of its own, docs/moves-plan-6.md §1.4: moving even 2 degrees of its chest's turn to the waist shifts its way
+       enough that a legend's cross from too close, 0.8 m, lands a frame later and in full, harder than the elbow he throws
+       on it, tests/show.test.mjs; so its share is none) */
     chain: { coil: 0.05, rate: [58, 36, 50, 54, 54], turn: [41, 38] },
     coil: { yaw: -7, hz: -0.025, rkf: 10, rz: -0.04, ry: -0.02 }, // (the rear knee loaded)
     links: {
@@ -136,6 +145,9 @@ const PUNCHES = {
   },
   hook: {
     hand: 'L', arm: 'swing', kind: 'hook', reach: 0.9, close: 0.82, land: 0.7,
+    /* (no waist of its own, docs/moves-plan-6.md §1.4: 4 degrees or more of its chest's turn moved to the waist takes the hook
+       of the liver knockdown's card from 79 to 40 N·s, and 2 puts its glove 8.2 cm into the arm of the man it has put down,
+       tests/body.test.mjs; so its share is none) */
     chain: { coil: 0.085, rate: [58, 42, 52, 60, 0], skip: ['elbow'], turn: [41, 32], locked: true },
     /* (the arm is locked to the chest, so the body's turn is the fist's path, and the animator puts that path through the
        head: the fist is raised to the jaw, and sent out as far as the head and held round to the lead side as the legs drive,
@@ -163,6 +175,10 @@ const PUNCHES = {
   },
   upper: {
     hand: 'R', arm: 'lift', kind: 'upper', reach: 0.9, close: 0.8,
+    /* (no waist of its own, docs/moves-plan-6.md §1.4: the uppercut that knocks a man out cold and limp is the card's own, and
+       any share of its chest's turn moved to the waist that was tried changes how he falls past what the audit allows,
+       tests/audit.test.mjs: 2 degrees, a glove 2.05 cm into the canvas; 4, a knee flipping round 43 degrees in a frame; 6, a
+       glove 2.07 cm into the canvas; so its share is none) */
     chain: { coil: 0.09, rate: [44, 36, 52, 52, 0], skip: ['elbow'], turn: [32, 26], locked: true },
     /* (a punch that comes up out of the knees goes down into them further, and is lifted enough by them to need little more
        of a better man's turn, or of his head off the line, before the chin is over it; and with the bounce in it already,
@@ -183,12 +199,17 @@ const PUNCHES = {
      glove goes on with it). Quick and light: the arm is loose (`firm`), and so little of the body is behind it. A great dirty
      fighter swings it big (his body behind it as written), a legend flicks it off the wrist (`body`, [4암, 5암]: how much of
      the written turn each puts into it). */
+  /* (and a legend cracks it like a whip, docs/moves-plan-6.md §3.3 N17: the waist set off with the hips, quick and loose, so
+     that it has turned and is already coming back before the fist gets there, the handle stopped as the tip goes fastest;
+     `whip`, [4암, 5암], how much of the waist's turn each puts into it, on top of the little the hips and chest turn; and the
+     wrist snapped over the further, `snap`, [4암, 5암]. 13 degrees of it, the plan's 10 and a little more: at 10 the
+     legend's first flick came out 10.8% harder than it was, on the plan's lower edge) */
   flicker: {
-    hand: 'L', arm: 'straight', kind: 'straight', low: true, reach: 1.15, close: 1.0, snap: 0.03, flick: [0.6, 0.4],
-    chain: { coil: 0, rate: [40, 40, 46, 48, 56], turn: [5, 6], firm: 0.15 },
+    hand: 'L', arm: 'straight', kind: 'straight', low: true, reach: 1.15, close: 1.0, snap: [0.03, 0.045], flick: [0.6, 0.4], whip: [0.3, 1],
+    chain: { coil: 0, rate: [40, 40, 46, 48, 56], turn: [5, 6], firm: 0.15, waist: { rate: 80, from: 'drive', damp: 0.45 } },
     body: { off: 0.3, dip: 0.3, sep: 0.2, tuck: 0.5, over: 0.3 },
     coil: {},
-    links: { drive: { hz: 0.03, lfz: 0.03, lkf: 3 }, hips: { yaw: -5 }, trunk: { twist: -8, lean: 2, lkf: -4 }, shoulder: {}, elbow: {} }
+    links: { drive: { hz: 0.03, lfz: 0.03, lkf: 3 }, hips: { yaw: -5 }, trunk: { twist: -8, lean: 2, lkf: -4 }, shoulder: {}, elbow: {}, waist: { waist: -13 } }
   },
   /* ---- right up close (game/bout.mjs: RULES.inside, centre to centre; the power chain there is the inside hook and the inside
      uppercut, in turn). Each is its long-range punch thrown with more of the body and less of the arm. */
@@ -201,17 +222,29 @@ const PUNCHES = {
     hand: 'L', arm: 'swing', kind: 'hook', reach: 0.74, close: 0.64, land: 0.7, tight: true, most: 30, ahead: 35,
     // (set: the share of the wind-up that is the arm being set, which no grade leaves out: a hook's is most of it, this one's,
     // its arm half folded at the chest already, a little over half)
-    chain: { coil: 0.085, rate: [48, 28, 36, 60, 0], skip: ['elbow'], turn: [40, 36], locked: true, set: 0.6 },
+    /* (the waist set off with the hips, as the legs hand on: right up close there is neither room nor time for the hips to
+       turn before it lands, so the waist does the hitting, docs/moves-plan-6.md §3.3 N14; quick, it is turning its fastest as
+       the glove gets there. 10 degrees are the waist's, the chest's 27 on top of it (written a degree more than the long hook's
+       chest, tests/inside.test.mjs, for the written order only: it lands before the chest turns, and no rung's or chain's
+       number moves with it). Raised only as the legs
+       drive, `tight` (true: by the square of the drive), and no less far than the waist has turned (animator.mjs), the fist
+       comes up into the jaw from under it at every grade: raised all the way by half the drive, it came in level, met the
+       head from in front and knocked him straight back, out of the inside range before the next press, and the waist swung
+       it on into his guard off the card's spot) */
+    chain: { coil: 0.085, rate: [48, 28, 36, 60, 0], skip: ['elbow'], turn: [40, 36], locked: true, set: 0.6, waist: { rate: 84, from: 'drive' } },
     body: { turn: 1, off: 0, bend: 0, tuck: 0, sep: 0.5, dip: 1.5, lively: 0, over: 0.2 },
-    // (the fist kept low at the chest and the elbow only half out through the wind-up: right up close, a glove raised out of
-    // the guard is in his face; it is raised and sent out with the drive: tight)
-    coil: { yaw: 22, twist: 10, lkf: 16, lean: 2, hz: 0.02, lx: 0.05, ly: -0.03, lz: 0, le: 0.6, lc: 1 },
+    /* (the fist kept low at the chest and the elbow only half out through the wind-up: right up close, a glove raised out of
+       the guard is in his face; it is raised and sent out with the drive: tight. The waist wound back the other way, 8 degrees,
+       the chest 4 on it and the hips 20: as far round in all as before the waist (the hips 22, the chest 10), so that the fist
+       does not jump back any further as the wind-up lets go, tests/stance.test.mjs) */
+    coil: { yaw: 20, twist: 4, waist: 8, lkf: 16, lean: 2, hz: 0.02, lx: 0.05, ly: -0.03, lz: 0, le: 0.6, lc: 1 },
     links: {
       drive: { lfw: -50, lfp: 28, lkx: -32, lkf: -24, rkf: 8, rfw: 14, hz: 0.02, le: 1, lc: 1 },
       hips: { yaw: -40, hx: -0.03, hy: -0.02 },
-      trunk: { twist: -36, side: -4, hx: -0.02, hz: -0.03, rz: -0.02, ry: 0.03 },
+      trunk: { twist: -27, side: -4, hx: -0.02, hz: -0.03, rz: -0.02, ry: 0.03 },
       shoulder: {},
-      elbow: {}
+      elbow: {},
+      waist: { waist: -10 }
     }
   },
   /* The inside uppercut (§2): the knees are the spring. Down onto both knees (the rear one more), the waist hardly bent, the
@@ -221,17 +254,33 @@ const PUNCHES = {
      legs drive, `under` metres short of it so that it comes up in front of his chest, and the last of its way is upright;
      the bent arm reaches `bent` from the shoulder). How it goes down and comes up is the grade's (skill.mjs: chain.spring). */
   upperIn: {
-    hand: 'R', arm: 'lift', kind: 'upper', reach: 0.74, close: 0.64, under: 0.18, bent: 0.5,
-    chain: { coil: 0.18, rate: [40, 36, 52, 52, 0], skip: ['elbow'], turn: [20, 22], locked: true, set: 0, spring: true },
+    /* (and the U's way up, a man's who uses his knees: the foot of it `foot` short of the target, so that sent `through` the
+       chin the glove does not come up into the other man's chest, even with him a few centimetres nearer or moving, and the
+       last of its way stays upright; along its bottom `scoop`; the bottom itself `hang` below his shoulder, a little short of
+       the bent arm's reach, so that an amateur's hand has no further to come up in its last frames than it can without a
+       jump: animator.mjs. `through` 6 cm: at 2 and 3, in the inside chain, the glove got to a chin that had come up 4 cm since
+       the punch was aimed a frame late and all but stopped, or not at all, in more of the moments it can be pressed at than
+       before the U; with 6 it gets there in every moment it did, from 0.56 to 0.70 m, tests/inside.test.mjs. `inward` 0.9: in
+       under the target nine tenths of the way across from his shoulder; at 0.8 a legend's glove went 8.0 to 8.1 cm into the
+       chest of a man he was side-stepping on its way up, and all the way across a dirty legend's went 2.4 to 3.2 cm into his
+       own lead arm. `downFrom` 0.4: the hand starts down only once that much of the wind-up is done, animator.mjs) */
+    hand: 'R', arm: 'lift', kind: 'upper', reach: 0.74, close: 0.64, under: 0.18, bent: 0.5, scoop: 0.12, downFrom: 0.4, inward: 0.9, hang: 0.48, foot: 0.24, through: 0.06,
+    chain: { coil: 0.18, rate: [40, 36, 52, 52, 0], skip: ['elbow'], turn: [20, 22], locked: true, set: 0, spring: true, waist: { rate: 64, from: 'hips' } },
     body: { dip: 0.5, turn: 0.3, off: 0.5, lively: 0, over: 0.2 },
-    coil: { lkf: 30, rkf: 34, lean: 9, yaw: -6, side: -4, rx: 0.06, ry: -0.3, rz: 0.1, re: -0.2, hp: 4, st: -0.01 },
+    /* (further down into the knees than it was, the rear one most, and up off them onto the balls of the feet, the heels up:
+       docs/moves-plan-6.md §3.3 N16. The lead glove kept 3 cm to its own side as he goes down: from as close as the bout lets
+       them stand, 0.62 m, the deeper crouch took it down through the other man's lead shoulder. And the lead knee turned 4
+       degrees out as it bends: bent that far straight ahead, his shin went 5.0 to 5.4 cm into the other man's as he
+       side-stepped) */
+    coil: { lkf: 40, rkf: 47, lkx: 4, lean: 9, yaw: -6, side: -4, lx: 0.03, rx: 0.06, ry: -0.3, rz: 0.1, re: -0.2, hp: 4, st: -0.01 },
     links: {
       // (the hand kept down at his belt as the legs drive, as low as the bent arm lets it: the shoulder brings it up, all of it)
-      drive: { lkf: -38, rkf: -42, st: 0.02, rfw: 30, rfp: 30, lfp: 14, ry: -0.6 },
+      drive: { lkf: -48, rkf: -54, st: 0.02, rfw: 30, rfp: 30, lfp: 14, ry: -0.6 },
       hips: { yaw: 20, hz: 0.08 },
-      trunk: { twist: 22, lean: -8, side: 3, lz: -0.06 },
+      trunk: { twist: 18, lean: -8, side: 3, lz: -0.06 },
       shoulder: {},
-      elbow: {}
+      elbow: {},
+      waist: { waist: 4 }
     }
   },
   /* ---- to the body (docs/moves-plan-5.md §3.3). A punch to the body is thrown from lower down: he goes down into his
@@ -246,27 +295,28 @@ const PUNCHES = {
   // the body jab: down into both knees and a little at the waist, the lead arm straight out level into the pit of his stomach
   jabBody: {
     hand: 'L', arm: 'straight', kind: 'straight', zone: 'solar', of: 'jab', reach: 1.12, close: 1.0,
-    chain: { coil: 0.07, rate: [58, 50, 56, 46, 44], turn: [9, 14], set: 0.8 },
+    chain: { coil: 0.07, rate: [58, 50, 56, 46, 44], turn: [9, 14], set: 0.8, waist: { rate: 70, from: 'hips' } },
     body: { off: 0.6, dip: 0.5 },
     // (the hand let down with him, under the other man's lead arm, and held there until the shoulder sends it)
     level: { lkf: 22, rkf: 20, lean: 14, bow: 8, ly: -0.2, lz: -0.04, lx: -0.02 },
     spot: [1.8, -10],
     coil: {},
-    links: { drive: { hz: 0.06, lfz: 0.07 }, hips: { yaw: -9, rx: 0.02, ry: 0.03 }, trunk: { twist: -14, lean: 4, hp: 3 }, shoulder: {}, elbow: {} }
+    links: { drive: { hz: 0.06, lfz: 0.07 }, hips: { yaw: -9, rx: 0.02, ry: 0.03 }, trunk: { twist: -10, lean: 4, hp: 3 }, shoulder: {}, elbow: {}, waist: { waist: -4 } }
   },
   // the body cross: down further, the shoulder brought down to the height of the target so that the arm goes out level
   crossBody: {
     hand: 'R', arm: 'straight', kind: 'straight', zone: 'solar', of: 'cross', reach: 1.1, close: 0.98,
-    chain: { coil: 0.1, rate: [58, 36, 50, 54, 54], turn: [41, 38], set: 0.8 },
+    chain: { coil: 0.1, rate: [58, 36, 50, 54, 54], turn: [41, 38], set: 0.8, waist: { rate: 64, from: 'hips' } },
     level: { lkf: 32, rkf: 36, lean: 16, bow: 14 },
     spot: [2.1, -20],
     coil: { yaw: -7, hz: -0.025, rz: -0.04, ry: -0.1 },
     links: {
       drive: { rfw: 40, rfp: 24, rfz: 0.05, rkx: -22, hz: 0.11, st: 0.02 },
       hips: { yaw: 34, hx: 0.03 },
-      trunk: { twist: 38, lean: 5, side: 3, lx: -0.04, ly: 0.03, lz: -0.1 },
+      trunk: { twist: 28, lean: 5, side: 3, lx: -0.04, ly: 0.03, lz: -0.1 },
       shoulder: {},
-      elbow: {}
+      elbow: {},
+      waist: { waist: 10 }
     }
   },
   /* The liver hook: down onto the bent lead knee (the rear one less), bent over to the lead side and a little at the waist,
@@ -276,6 +326,8 @@ const PUNCHES = {
      from the shoulder). It turns a little further than the hook. */
   hookBody: {
     hand: 'L', arm: 'swing', kind: 'hook', zone: 'liver', of: 'hook', reach: 0.84, close: 0.8, land: 0.7, bent: 0.46,
+    // (no waist of its own: its contact is a knife edge at 4 and a share of even 2 degrees moved to the waist lands it a
+    // frame later and a third softer at 4명 and 4암, docs/moves-plan-6.md §1.4's rule: so the share is none)
     chain: { coil: 0.13, rate: [58, 42, 52, 60, 0], skip: ['elbow'], turn: [41, 34], locked: true },
     body: { turn: 0.4, off: 0, bend: 0, tuck: 0, sep: 0.5, dip: 0, lively: 0 },
     level: { lkf: 38, rkf: 28, side: 20, lean: 18, hz: -0.08, hx: 0.08, bow: 14 },
@@ -292,16 +344,17 @@ const PUNCHES = {
   // the body uppercut: the inside uppercut (the knees the spring), come up into the pit of his stomach from under it
   upperBody: {
     hand: 'R', arm: 'lift', kind: 'upper', zone: 'solar', of: 'upper', reach: 0.76, close: 0.64, under: 0, into: 0.2, bent: 0.5, spot: [2.4, -15],
-    chain: { coil: 0.18, rate: [40, 36, 52, 52, 0], skip: ['elbow'], turn: [20, 22], locked: true, set: 0, spring: true },
+    chain: { coil: 0.18, rate: [40, 36, 52, 52, 0], skip: ['elbow'], turn: [20, 22], locked: true, set: 0, spring: true, waist: { rate: 64, from: 'hips' } },
     body: { dip: 0.5, turn: 0.3, off: 0.5, lively: 0, over: 0.2 },
     level: {},
     coil: { lkf: 30, rkf: 34, lean: 9, yaw: -6, side: -4, rx: 0.06, ry: -0.3, rz: 0.1, re: -0.2, hp: 4, st: -0.01 },
     links: {
       drive: { lkf: -30, rkf: -34, st: 0.01, rfw: 30, rfp: 26, lfp: 10, ry: -0.6 },
       hips: { yaw: 20, hz: 0.08 },
-      trunk: { twist: 22, lean: -8, side: 3, lz: -0.06 },
+      trunk: { twist: 18, lean: -8, side: 3, lz: -0.06 },
       shoulder: {},
-      elbow: {}
+      elbow: {},
+      waist: { waist: 4 }
     }
   },
   /* ---- the Tyson shift's body hook (docs/moves-plan-5.md §4.4; anim/shift.mjs): the lead hand's hook to the body, thrown out
@@ -312,6 +365,8 @@ const PUNCHES = {
      by name, in the shift (game/bout.mjs). */
   shiftHook: {
     hand: 'L', arm: 'swing', kind: 'hook', zone: 'liver', of: 'hook', reach: 0.82, close: 0.68, land: 0.7, bent: 0.44,
+    // (no waist of its own, docs/moves-plan-6.md §1.4: any share of its chest's turn moved to the waist takes its glove 8 cm and
+    // more into the chest of the man it is thrown at out of the shell, tests/clean.test.mjs; so its share is none)
     chain: { coil: 0.1, rate: [58, 42, 52, 60, 0], skip: ['elbow'], turn: [52, 46], locked: true },
     body: { turn: 0.4, off: 0, bend: 0, tuck: 0, sep: 0.5, dip: 0, lively: 0 },
     // (no way down of its own: he is down in the shift's crouch already)
@@ -334,15 +389,23 @@ const PUNCHES = {
      roll (the roll counter), which press it by name (game/bout.mjs: a power press that names a punch). */
   hookR: {
     hand: 'R', arm: 'swing', kind: 'hook', of: 'hook', reach: 0.92, close: 0.8, land: 0.7,
-    chain: { coil: 0.14, rate: [58, 42, 52, 60, 0], skip: ['elbow'], turn: [44, 40], locked: true },
+    /* (wound further by the waist, docs/moves-plan-6.md §3.3 N15: the waist turned back to his right in the wind-up, further
+       than the hips and the chest, and round to his left as it goes, set off with the hips as the legs hand on and so ahead
+       of the chest, which goes on round on top of it: the trunk 45 degrees in all, 17 of them the waist's. Ahead of the chest
+       and not with it, the chest on the pelvis turns no faster than it did, the plan's bound (§1.3: a tenth faster at the
+       most): set off with the chest, the two turns added up to 1.18 times what it was. Wound 12 degrees and not further: at
+       16 the lead glove, carried by the chest, was knocked out of the way of the rear arm faster than the audit allows in
+       the roll counter) */
+    chain: { coil: 0.14, rate: [58, 42, 52, 60, 0], skip: ['elbow'], turn: [44, 45], locked: true, waist: { rate: 50, from: 'drive' } },
     body: { turn: 1, off: 0, bend: 0, tuck: 0, sep: 0.5, dip: 1.5, lively: 0 },
-    coil: { yaw: -10, twist: -6, rkf: 12, lean: 2, rx: -0.1, ry: 0, rz: 0.12, re: 0.9, rc: 1 },
+    coil: { yaw: -10, waist: -12, twist: -4, rkf: 12, lean: 2, rx: -0.1, ry: 0, rz: 0.12, re: 0.9, rc: 1 },
     links: {
       drive: { rfw: 44, rfp: 26, rkx: -24, rkf: -6, hz: 0.05, rx: -0.02, ry: 0.02, rz: 0.06, re: 1, rc: 1 },
       hips: { yaw: 38, hx: 0.02, hy: -0.02 },
-      trunk: { twist: 40, side: 4, lz: -0.02, ly: 0.03 },
+      trunk: { twist: 28, side: 4, lz: -0.02, ly: 0.03 },
       shoulder: {},
-      elbow: {}
+      elbow: {},
+      waist: { waist: 17 }
     }
   }
 };

@@ -53,7 +53,7 @@ import { fk } from '../src/rig/skeleton.mjs';
 import { where, middle, aimed, balls, TRUNK } from '../src/game/trunk.mjs';
 import { BODY_LADDER, REAR_LADDER } from '../src/ladder.mjs';
 import { LIVER_BLOCK } from '../src/bodyshots.mjs';
-import { guardOf, across } from '../src/measure.mjs';
+import { guardOf, across, rung } from '../src/measure.mjs';
 import { createBout, local } from '../src/game/bout.mjs';
 import { TECHNIQUES } from '../src/game/techniques.mjs';
 import { PLANS } from '../src/game/brain.mjs';
@@ -501,6 +501,14 @@ test('the rear hook: every grade lands it on his head from 0.80 m; down, he fall
   }
   const pro = rungOf('hookR@3').blow;
   assert.ok(pro.J >= 85 && pro.s <= 0.22 + 1e-9, `${pro.J} N·s, ${pro.s.toFixed(3)} s`);
+  /* (wound further by the waist, plan 6 §3.3 N15 ("허리를 더 써서 감듯"): the pro's 95 to 105 N·s, 89 at 4c726b9 and 7fa3003;
+     his waist turned back to his right in the wind-up and on round to his left, 10 degrees and more past his guard on the
+     pelvis as it lands (the plan's) and turning 500 deg/s and more; the chest on the pelvis no faster than a tenth over what
+     it was: tests/skill.test.mjs) */
+  const r = rung('hookR@3'),
+    wound = Math.min(...r.frames.slice(r.pressTick, r.hitTick + 1).map(f => f.waist));
+  assert.ok(pro.J >= 95 && pro.J <= 105, `hookR@3: ${pro.J} N·s`);
+  assert.ok(r.frames[r.hitTick].waist >= 10 && wound <= -8 && r.waist >= 500, `hookR@3: the waist from ${wound.toFixed(1)} to ${r.frames[r.hitTick].waist.toFixed(1)} deg, ${r.waist} deg/s`);
   // (his health all but gone as it lands: laid out, he goes the way the glove goes on through him, to his right)
   const entry = { id: 'down-rear', loop: 3, hurt: true, me: () => HOME, him: () => [HOME[0] + 0.8, HOME[1]], against: [[0.6, 'power', 'hookR']], setup: b => (b.knockdowns = true), keep: (b, t) => (b.fighters[0].hp = t < 0.7 ? 100 : Math.min(b.fighters[0].hp, 1.5)) },
     bout = freshBout(entry),

@@ -7,12 +7,12 @@
              against, also, press, loop), window: [from, to] seconds of the run, measure (tools/clips.mjs MEASURES), of
              (what the measure is told: move, the punch whose waist is timed) }
    Record them all again, when the stages change:
-     node tools/clips.mjs --write --root prem=<before M> --root n1=<N, last round> --root u1=<U, first round> --root u2=<U, last round> --root v1=<V, last round> --root vchin=<V, chin 32>
+     node tools/clips.mjs --write --root prem=<before M> --root pren=<before N> --root u1=<U, first round> --root u2=<U, last round> --root v1=<V, last round> --root vchin=<V, chin 32>
    (`now` is this checkout.) */
 export const ROOTS = {
   now: { say: '지금 (게시된 동작)', where: 'this checkout' },
   prem: { say: 'M 전 (합치기 전의 동작)', where: 'before stage M was merged: git archive 8b17869 src tools' },
-  n1: { say: 'N 7차 (합치기로 정함, 마지막 점검 중)', where: 'stage N, round 7 on the head: scratchpad/pcwork/n7.tmp/pixel-boxer (0ac7c0c + the staged change of scratchpad/n3)' },
+  pren: { say: 'N 전 (합치기 전의 동작)', where: 'before stage N was merged: git archive cd8dbe4 src tools' },
   u1: { say: 'U 1차 (첫 구현)', where: 'stage U, first round: scratchpad/wt-u/pixel-boxer (4c726b9 + its changes)' },
   u2: { say: 'U 5차 (합치기 전, 따로의 점검 중)', where: 'stage U, round 5 on the head: scratchpad/pcwork/u5.tmp/pixel-boxer (0ac7c0c + the staged and unstaged change of scratchpad/u3)' },
   v1: { say: 'V 5차 (합치기 전, 따로의 점검 중)', where: 'stage V, round 5 on the head: scratchpad/pcwork/v5.tmp/pixel-boxer (0ac7c0c + the staged and unstaged change of scratchpad/v3)' },
@@ -32,8 +32,8 @@ export const CLIPS = [
   ...pair('beckon10', ['now', 'u1', 'u2'], { script: 'beckon@4a', change: { him: 1.0 }, window: [0.4, 2.2], measure: 'reach' }),
   ...pair('beckon12', ['now', 'u2'], { script: 'beckon@4a', change: { him: 1.2 }, window: [0.4, 2.2], measure: 'reach' }),
   // hookr-bound: the rear hook of grade 3 and the counter out of 4명's shoulder roll, with the waist and before it
-  ...pair('hookr', ['now', 'n1'], { script: 'hookR@3', window: [0.45, 1.3], measure: 'turning', of: { move: 'hookR' } }),
-  ...pair('rollc', ['now', 'n1'], { script: 'rollCounter@4m', window: [0.75, 1.55], measure: 'thrown' }),
+  ...pair('hookr', ['pren', 'now'], { script: 'hookR@3', window: [0.45, 1.3], measure: 'turning', of: { move: 'hookR' } }),
+  ...pair('rollc', ['pren', 'now'], { script: 'rollCounter@4m', window: [0.75, 1.55], measure: 'thrown' }),
   // twist-chin: the twisted knockout, its first moments (the neck locked turned and tucked) and the whole fall
   ...pair('twistc', ['now', 'vchin'], { script: 'out-twist', window: [1.1, 1.45], measure: 'fall' }),
   ...pair('twist', ['now', 'vchin'], { script: 'out-twist', window: [1.0, 2.4], measure: 'fall' }),
@@ -44,10 +44,10 @@ export const CLIPS = [
   { id: 'jump-onetwo', root: 'now', script: 'onetwo@5a', window: [0.9, 1.3], measure: 'jump', of: { who: 1 } },
   { id: 'jump-cross', root: 'now', script: 'crossArm@5m', window: [1.05, 1.45], measure: 'jump' },
   // crossarm-weak: the rear hook at a legend's cross-arm guard, rolled as it is pressed
-  ...pair('weak', ['now', 'n1'], { script: WEAK, window: [0.6, 1.3], measure: 'taken' }),
+  ...pair('weak', ['pren', 'now'], { script: WEAK, window: [0.6, 1.3], measure: 'taken' }),
   // order-memo-first: what three of the stages look like so far (V's legs in the fall forward, U's collar tie, N's hook
   // in close)
   ...pair('front', ['now', 'v1'], { script: 'down-front', window: [0.6, 2.8], measure: 'legs', of: { at: 2.6 } }),
   ...pair('collar', ['now', 'u2'], { script: 'collar@4a', window: [0.2, 1.1], measure: 'pull' }),
-  ...pair('hookin', ['now', 'n1'], { script: 'hookIn@3', window: [0.7, 1.4], measure: 'turning', of: { move: 'hookIn' } })
+  ...pair('hookin', ['pren', 'now'], { script: 'hookIn@3', window: [0.7, 1.4], measure: 'turning', of: { move: 'hookIn' } })
 ];

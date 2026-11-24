@@ -242,6 +242,26 @@ const REACH = LEN.upperArm + LEN.foreArm - 0.03; // as far as a wrist gets from 
 /* how fast a hand is put off where it is sent, or let back, to keep its glove out of his other arm, and how much faster that
    may move its glove (solve.mjs): metres a second, under 4 cm a frame */
 const APART = 2.2;
+// (the bottom of an inside uppercut's U kept this far in front of the other man's elbow where that elbow is in the way: clearOf)
+const CLEAR = 0.08;
+/* Where the other man's elbow is, right up close, in front of this man's rear hand (no further from him than the hand is,
+   and within 12 cm of it across and 25 cm below it, his elbow as he holds his guard up at 0.62 to 0.66 m): how near himself
+   the bottom of the inside uppercut's U may be taken, CLEAR in front of that elbow; -Infinity where nothing is in the way.
+   (Taken back toward him to the U's own bottom, the hand went down onto that elbow and into the forearm above it, 8 to 13 cm,
+   a great dirty fighter's and a legend's, in the wind-up of the inside chain's uppercut at a man who guards; or, sent down
+   late and fast, `downFrom`, it went across into his own lead upper arm, crossed in front of him after the inside hook, 2.5
+   to 4.1 cm, and turned his upper arm 18 degrees past its range.) In his own terms, as the target is (view.foe, game/
+   bout.mjs); read once, as the punch starts */
+function clearOf(view, free, wide, tall) {
+  const el = view.foe && view.foe.elbow;
+  let z = -Infinity;
+  if (el)
+    for (const q of [el.L, el.R]) {
+      const p = [q[0] * wide, q[1] / tall, q[2] * wide];
+      if (p[2] < free[2] + 0.06 && Math.abs(p[0] - free[0]) < 0.12 && p[1] > free[1] - 0.25) z = Math.max(z, p[2] + CLEAR);
+    }
+  return z;
+}
 const HOLD_ROUND = 750; // degrees a second: the fastest a hook's fist is taken round to its side as the legs drive (sweep)
 const BENT = 0.4; // and as far as it gets with the elbow held at a right angle
 /* A shoulder shrugged up (the cross-arm guard's lead shoulder: show.mjs): the collarbone (LeftShoulder, from the chest to the
@@ -814,11 +834,27 @@ export function createAnimator(seed) {
            stretch between his hips and his shoulders, winds up all of a piece too.) */
         // (and a beginner does not use his knees at all: what the wind-up and the chain do to his height is not done)
         const knees = form.dip > 0 ? 0 : 1,
-          height = ch => (ch === 'hy' || ch === 'lkf' || ch === 'rkf' ? knees : 1);
-        for (const ch in move.coil) c[(ch === 'twist' || ch === 'waist') && !form.sep ? 'yaw' : ch] += move.coil[ch] * chain.coil.q * (ch === 'lc' || ch === 'le' || ch === 'rc' || ch === 're' || ((ch === 'twist' || ch === 'waist') && move.chain.locked) || (ch === 'yaw' && move.arm === 'swing') ? 1 : chain.shown ?? 1) * height(ch);
-        // (a flicker's body: a great dirty fighter's swing, a legend's wrist: moves.mjs)
-        const flick = move.flick ? move.flick[Math.max(0, (form.dirty || 1) - 1)] : 1;
+          height = ch => (ch === 'hy' || ch === 'lkf' || ch === 'rkf' ? knees : 1),
+          // (of the punch's waist, what his waist turns on its own; his chest turns the rest with itself: his grade's, chain.mjs)
+          own = chain.own ?? 1;
+        for (const ch in move.coil) {
+          const v = move.coil[ch] * chain.coil.q * (ch === 'lc' || ch === 'le' || ch === 'rc' || ch === 're' || ((ch === 'twist' || ch === 'waist') && move.chain.locked) || (ch === 'yaw' && move.arm === 'swing') ? 1 : chain.shown ?? 1) * height(ch);
+          // (a man who turns all of a piece winds up all of a piece: what his chest and his waist would add to the wind-up goes
+          // with his hips, all of it, the waist's share his chest would carry as well as the share his waist turns on its own)
+          if ((ch === 'twist' || ch === 'waist') && !form.sep) c.yaw += v;
+          else if (ch === 'waist') (c.waist += v * own), (c.twist += v * (1 - own));
+          else c[ch] += v;
+        }
+        // (a flicker's body: a great dirty fighter's swing, a legend's wrist; and how much of its waist each cracks, its own
+        // share and not the body's: moves.mjs)
+        const flick = move.flick ? move.flick[Math.max(0, (form.dirty || 1) - 1)] : 1,
+          whip = chain.whip ?? 1;
         LINKS.forEach((link, i) => {
+          if (link === 'waist') {
+            // (the waist's own turn, as the waist goes; the rest of it as the chest goes, the chest carrying it)
+            for (const ch in move.links.waist) (c[ch] += move.links.waist[ch] * chain.q[i] * amp[i] * own * whip), (c.twist += move.links.waist[ch] * chain.q[2] * amp[2] * (1 - own) * whip);
+            return;
+          }
           for (const ch in move.links[link]) c[ch] += move.links[link][ch] * chain.q[i] * amp[i] * height(ch) * flick;
         });
         // (a punch to the body: the way down to it, his grade's, body.mjs)
@@ -911,7 +947,8 @@ export function createAnimator(seed) {
            lands is the bout's to judge (game/bout.mjs: fouls); this is the body that does it. */
         /* (a flicker's wrist snaps over at the end of it: the glove goes on a few centimetres, up and in, as the elbow gets
            straight, and back as it comes home) */
-        if (move.snap) extra[me] = M.add(extra[me] || [0, 0, 0], [0, move.snap * 0.4, move.snap].map(v => v * smooth(clamp((chain.q[4] - 0.75) / 0.25, 0, 1)) * (chain.phase === 'recover' ? 1 - smooth(chain.since / 0.12) : 1)));
+        const snap = Array.isArray(move.snap) ? move.snap[Math.max(0, (form.dirty || 1) - 1)] : move.snap;
+        if (snap) extra[me] = M.add(extra[me] || [0, 0, 0], [0, snap * 0.4, snap].map(v => v * smooth(clamp((chain.q[4] - 0.75) / 0.25, 0, 1)) * (chain.phase === 'recover' ? 1 - smooth(chain.since / 0.12) : 1)));
         /* (rolled off his shoulder: carried on after it while it is held out, game/bout.mjs; moves.mjs rolled. The fist goes on
            with him, up and over the shoulder it was turned off, ROLLED metres, so that it is the fist that goes past and not the
            elbow folded into the shoulder) */
@@ -1429,8 +1466,8 @@ export function createAnimator(seed) {
         headTo(c, at.x * hw, at.y * hw);
         if (head.level) (c.hy -= head.level.depth * level * hw), (c.lean += head.level.lean * level * hw);
         /* (with the chest: turned at the waist instead, which is where it belongs, the gloves of a guard held through it move
-           a few millimetres, enough to change what some blocks take by a newton-second, so it stays the chest's until the
-           punches' waist is in) */
+           a few millimetres. That changed eleven of the cards' events (a legend's counter cross by 10 N·s) and put a slipping
+           legend's lead glove 2.3 cm into his own rear forearm, so it stays the chest's: docs/moves-plan-6.md §1.6) */
         if (head.beat !== 'free') c.twist += 4 * X * hw;
       }
       if (st.head && st.head.beat === 'roll') loose += (dt / (st.head.T * H)) * (1 + 0.35 * Math.sin(TAU * 0.11 * clock + (seed || 0) * 2.1));
@@ -1943,14 +1980,21 @@ export function createAnimator(seed) {
                the last of it onto the target.) */
             if (target && mine.arm === 'swing') {
               const drove = smooth(clamp(chain.q[0], 0, 1)),
-                // (an inside hook's is raised only as the legs drive, late in it: right up close, a glove raised from the guard is in
-                // his face, and one raised high before the body turns under it takes the upper arm up past where it can go)
-                set = mine.tight ? drove * drove : smooth(clamp(Math.max(chain.coil.q, chain.q[0]), 0, 1)),
+                /* (an inside hook's is raised only as the legs drive: right up close, a glove raised from the guard is in his face,
+                   and one raised high before the body turns under it takes the upper arm up past where it can go; all the way up
+                   by `tight` of the legs' drive (true: by the square of the drive). And where its waist turns on its own, raised at
+                   least as far as the waist has turned: what the waist brings round is up at the jaw by the time it is round. A
+                   quick man's waist turns in a frame, and with the fist still on its way up it went round under the jaw of a man
+                   standing a few centimetres off the line, and on through his lead shoulder) */
+                raised = mine.tight ? (mine.tight === true ? drove * drove : smooth(clamp(chain.q[0] / mine.tight, 0, 1))) : smooth(clamp(Math.max(chain.coil.q, chain.q[0]), 0, 1)),
+                set = mine.tight && mine.chain.waist ? Math.max(raised, smooth(clamp(chain.q[5] * (chain.own ?? 1), 0, 1))) : raised,
                 ring = [to[0] - s * 0.05, to[1] + 0.03, to[2] + 0.1],
                 amp = chain.amp || [1, 1, 1, 1, 1, 1],
                 wound = ((mine.coil.yaw || 0) + (mine.coil.twist || 0) + (mine.coil.waist || 0)) * chain.coil.q,
-                // (and the waist's, where the punch turns it: all of it, the waist being quick)
-                still = mine.links.hips.yaw * amp[1] * (1 - chain.q[1]) + mine.links.trunk.twist * amp[2] * ((mine.land ?? 1) - chain.q[2]) + (mine.links.waist ? mine.links.waist.waist * amp[5] * (1 - chain.q[5]) : 0) - wound,
+                // (and the waist's, where the punch turns it: all of what it turns on its own, the waist being quick, and the
+                // rest as the chest's)
+                own = chain.own ?? 1,
+                still = mine.links.hips.yaw * amp[1] * (1 - chain.q[1]) + mine.links.trunk.twist * amp[2] * ((mine.land ?? 1) - chain.q[2]) + (mine.links.waist ? mine.links.waist.waist * (chain.whip ?? 1) * (amp[5] * own * (1 - chain.q[5]) + amp[2] * (1 - own) * ((mine.land ?? 1) - chain.q[2])) : 0) - wound,
                 round = p => (Math.atan2(p[0] - chest.p[0], p[2] - chest.p[2]) * 180) / Math.PI,
                 wrap = a => ((((a + 180) % 360) + 360) % 360) - 180,
                 // (and never further round than a shoulder can hold it: `most` degrees, and, close in, `ahead` degrees off the
@@ -1965,6 +2009,59 @@ export function createAnimator(seed) {
                 was = held[side] === null || chain.t <= dt + 1e-9 ? 0 : held[side];
               held[side] = s * (want - was) > fastest ? was + s * fastest : want;
               thrown = sweep(free, ring, chest.p, drove, set, held[side]);
+            } else if (target && mine.scoop && form && !(form.dip > 0)) {
+              /* The inside uppercut's U (docs/moves-plan-6.md §3.3 N16), for a man who uses his knees: the hand goes down with
+                 them on its own side (half way across from his shoulder to the target), held `scoop` metres back toward him
+                 so that it goes down and not out; at the bottom it goes forward that far along it and in under the target
+                 (`inward` of the way across to it from his shoulder) as the legs drive, over the legs' drive and not before (slid at the end
+                 of the wind-up, it went in a frame and back, a jump of 3 to 4 cm: tests/stance.test.mjs), no lower than the
+                 bent arm will carry it at the end of it, to the foot of its way up (`foot` short of the target); and up from
+                 there as the shoulder closes, the pro's way up, sent `through` metres past where the glove meets the chin, so
+                 that it lands on its way up and not at the end of it. In under the target before it goes up, and not on the
+                 way up: coming up from its own side, it crossed in front of the other man's chest on the way, into it with him
+                 a few centimetres nearer, and came onto the chin from the side. The floor is held until the shoulder is a
+                 third of the way through and let go by the time it is two thirds: let go as the shoulder fires, the hand
+                 dropped off it under the legs' drive in the frame it was meant to start up, and went up 34 cm in the next one
+                 (12 more than it did before the U). Retraced on the way home, the arm dropped back down to the bottom of the U
+                 and took him down faster than he can fall, a frame of 1.5 g with the other man a few centimetres nearer. */
+              /* (half way across, and no further than 15 cm from his shoulder: at the card's own spot that is 13 to 15 cm, but
+                 off it, at a man stepping back with his guard up as the inside hook is still coming home, the target is off to
+                 his lead side and half way across was 19 cm: sent there, the hand went into his own lead arm, 2.8 to 3.3 cm,
+                 a legend's) */
+              const ux = shoulder[0] - s * Math.min(0.15, (s * (shoulder[0] - to[0])) / 2),
+                /* (and in under it no further across him than 8 cm past the middle of his own chest, about as far as it goes
+                   at the card's own spot: the rest of the way across it goes as it comes up. Taken all the way in under a man
+                   side-stepping to his lead side, 15 to 22 cm past the middle, the hand crossed his body low, through his own
+                   lead upper arm, 5.4 to 7.2 cm, and took his upper arm where the shoulder cannot put it, 13 degrees: an
+                   amateur's inside chain at a man side-stepping 16 cm as he is hit) */
+                across = shoulder[0] + (to[0] - shoulder[0]) * (mine.inward ?? 1),
+                under = s * (across - chest.p[0]) < -0.08 ? chest.p[0] - s * 0.08 : across,
+                uz = to[2] - (mine.foot ?? mine.under ?? 0),
+                wound = chain.phase === 'coil' ? clamp(chain.coil.q, 0, 1) : 1,
+                // (coming home it goes back as a guard's hand does, not back down the U: let go of over the first 0.15 s)
+                keep = chain.phase === 'recover' ? 1 - smooth(clamp(chain.since / 0.15, 0, 1)) : 1,
+                /* (and not before `downFrom` of the wind-up is done: out of an inside hook his guard blocked, the rear hand sent
+                   down and back toward him in the first frames of it went through his own lead arm on its way, 2.4 to 4.3 cm,
+                   and turned his upper arm past its range) */
+                down = smooth(clamp((wound - (mine.downFrom || 0)) / 0.6, 0, 1)) * keep,
+                along = smooth(clamp(chain.q[0], 0, 1)) * keep,
+                // (`hang`: how far below his shoulder the hand hangs at the bottom of it, where the move says: the bent arm's reach)
+                reach = mine.hang || mine.bent || BENT,
+                floor = shoulder[1] - Math.sqrt(Math.max(0, reach * reach - (ux - shoulder[0]) ** 2 - (uz - shoulder[2]) ** 2)),
+                level = (1 - smooth(clamp((swingQ - 0.3) / 0.3, 0, 1))) * keep,
+                /* (and not back past the other man's elbow, where it is in front of the hand: the bottom kept in front of it,
+                   clearOf. Off the card's spot, right up close at a man holding his guard up, his lead elbow is a few
+                   centimetres in front of the rear hand and in front of his chest) */
+                bottom = Math.max(uz - mine.scoop, (chain.clear ??= clearOf(view, free, wide, tall))),
+                hx = free[0] + (ux - free[0]) * down + (under - ux) * along,
+                hz = free[2] + (bottom - free[2]) * down + (uz - bottom) * along;
+              // (and the legs' drive does not push it down past where the wind-up left it: the bottom of the U)
+              /* (thrown already wound up, out of an evasion or off his arms (game/bout.mjs: preload), the wind-up has not taken
+                 it down: its bottom is the U's own, or a crossed counter from the rear glove at his chin was held up there as
+                 his body went down and met the other man's head from below in the first frame up, 14 N·s for 83) */
+              if (chain.phase === 'coil' || chain.low === undefined) chain.low = chain.load > 0 ? floor : Math.max(free[1], floor);
+              const low = Math.max(floor, chain.low);
+              thrown = M.lerp([hx, free[1] + Math.max(0, low - free[1]) * level, hz], [to[0], to[1] + (mine.through || 0), to[2]], swingQ);
             } else {
               // (an inside uppercut's hand is taken in under the target as the legs drive, so the last of its way is straight up)
               const under = target && mine.under ? smooth(clamp(chain.q[0], 0, 1)) : 0;

@@ -14,13 +14,14 @@ import { where } from '../src/game/trunk.mjs';
 import { local } from '../src/game/bout.mjs';
 import { audit, measure } from '../src/audit.mjs';
 import { fk } from '../src/rig/skeleton.mjs';
-import { run } from '../src/measure.mjs';
+import { run, rung } from '../src/measure.mjs';
 import { STANCES, SHOWOFF, TAUNTING } from '../src/ladder.mjs';
 import { WINDOWS } from '../src/windows.data.mjs';
 import * as M from '../src/rig/m3.mjs';
 import { createBout, settle } from '../src/game/bout.mjs';
 import { choose } from '../src/anim/show.mjs';
 import { MOVES } from '../src/anim/moves.mjs';
+import { createChain, stepChain } from '../src/phys/chain.mjs';
 import { dice } from '../src/anim/stance.mjs';
 
 const DT = 1 / 60;
@@ -321,6 +322,12 @@ test('roll & counter: the rear hook out of the roll lands as a counter, as soon 
     }
     assert.ok(bare.landed && bare.landed.type === 'hit' && bare.dt - wound.dt >= 0.04 - 1e-9, `${lv}: wound up ${wound.dt}, not ${bare.dt}`);
   }
+  // (and the catalogue's cards: the counter out of the roll wound further by the waist, plan 6 §3.3 N15, 80 N·s and more at 4;
+  // 68 at 4c726b9, weaker than the rear hook thrown on its own)
+  for (const e of ROLLING.filter(x => x.level[0] === '4')) {
+    const hook = fight(e).find(x => x.who === 0 && x.type === 'hit' && x.name === 'hookR');
+    assert.ok(hook && hook.counter && hook.J >= 80, `${e.id}: ${hook && hook.J} N·s`);
+  }
 });
 test('roll & counter: no roll, no counter wound up; the press (the head names the rear hook) is the plain rear hook', () => {
   for (const lv of ROLLERS) {
@@ -426,10 +433,20 @@ test('cross-arm guard: its weak places, the rear hook to his head, and a rear ho
   assert.ok(standing.type === 'block' && standing.part === 'elbow', `4a standing: ${JSON.stringify(standing)}`);
   const rolling = [-4, -2, 0].map(k => what('4a', 'hookR', { aim: LEFT, roll: k }));
   for (const e of rolling) assert.ok(e.type === 'hit' && e.part === 'body' && e.side <= -60 && e.J > 50, `4a rolling: ${JSON.stringify(e)}`);
-  for (const k of [-4, -2, 0]) {
+  for (const k of [-4, -2]) {
     const e = what('5a', 'hookR', { aim: LEFT, roll: k });
     assert.ok(e.type === 'block' && e.part === 'elbow', `5a rolling ${k}: ${JSON.stringify(e)}`);
   }
+  /* (changed in plan 6 stage N, and approved by the user on 2026-11-24 (`crossarm-weak`). Before the rear hook's waist this
+     held a legend rolling as late as the hook is pressed (k 0) to block it at the elbow too, 59.7 N·s at 0ac7c0c:
+       for (const k of [-4, -2, 0]) { const e = what('5a', 'hookR', { aim: LEFT, roll: k }); assert.ok(e.type === 'block' && e.part === 'elbow') }
+     With the rear hook's waist as built, §3.3 N15, it comes round a little wider and glances off his side round behind the
+     elbow, 42 N·s at -85 degrees. It still blocks, 58.7, with 2 degrees of the chest's 40 moved to the waist and the wind-up
+     as it was, and 58.0 with 6 of them and the waist's wind-up of 12; it goes at 12 (36 at -82), and with 2 degrees put on
+     top of the chest's 40 (33 at -80): the stage's report has the table. Well under what a great one's open side takes; a
+     change to the game all the same, held here as it is now so that it cannot move again unseen) */
+  const late = what('5a', 'hookR', { aim: LEFT, roll: 0 });
+  assert.ok(late.type === 'hit' && late.part === 'body' && late.side <= -60 && late.J < 50, `5a rolling 0: ${JSON.stringify(late)}`);
 });
 
 /* The hammering parry: the guard put up fresh is the rear fist brought down on the jab coming in, and it turns it aside only
@@ -501,6 +518,46 @@ test('flicker: thrown at 4암 and 5암 only; quick and light, out of the waist a
   }
   // (a great dirty fighter's is the bigger swing: more body behind it)
   assert.ok(trick('flicker', '4a').hits[0].J > trick('flicker', '5a').hits[0].J);
+});
+
+/* ---- plan 6 §3.3 N17: a legend's flicker cracked like a whip by the waist ("5D는 허리를 더 써서 더 채찍처럼 때립니다."): his
+   waist set off with the hips, quick and loose, peaks well before his elbow does and is already coming back as the glove
+   lands (the handle stopped as the tip goes fastest); the glove meets him 10 to 20% faster and harder than it did (8.87 m/s,
+   20.4 N·s at 4c726b9 and 7fa3003), with a margin: 12% and more, still lighter than his jab and no later; a great dirty
+   fighter's waist puts 3 degrees into his. */
+test('flicker: a legend\'s waist cracks it like a whip, a great dirty fighter\'s hardly turns', () => {
+  const t = trick('flicker', '5a'),
+    hit = t.hits[0],
+    i = hit.i,
+    jab = rung('jab@5a');
+  assert.ok(hit.speed >= 8.87 * 1.12 && hit.speed <= 8.87 * 1.2 && hit.J >= 20.4 * 1.12 && hit.J <= 20.4 * 1.2 && hit.J < jab.J, `5a: ${hit.speed} m/s, ${hit.J} N·s (his jab ${jab.J})`);
+  assert.ok(msOf(t, t.punches[0], hit) <= 83, `5a: ${msOf(t, t.punches[0], hit)} ms`);
+  // (the waist on the pelvis as the glove lands: turned back to his left, against the flicker's way, since the frame before)
+  const live = t.frames.slice(0, i + 1).filter(f => !f.held);
+  assert.ok(live[live.length - 1].waist - live[live.length - 2].waist > 0, `5a: the waist ${live[live.length - 2].waist.toFixed(2)} -> ${live[live.length - 1].waist.toFixed(2)} deg as it lands`);
+  // (its peak, as the chain throws it, at least 20 ms before the elbow's)
+  const c = createChain(MOVES.flicker, 1, LEVEL['5a']);
+  for (let k = 0; k < 480 && c.phase !== 'done'; k++) stepChain(c, MOVES.flicker, 1 / 240);
+  assert.ok(c.peakAt[4] - c.peakAt[5] >= 0.02, `5a: the waist peaks at ${c.peakAt[5].toFixed(3)} s, the elbow at ${c.peakAt[4].toFixed(3)}`);
+  // (and a great dirty fighter's: 3 degrees of waist, the furthest it is turned his right on the pelvis from the press to the
+  // contact; the beat's sway is the chest's, and not in it)
+  const g = trick('flicker', '4a'),
+    p = g.punches[0].i,
+    turned = Math.max(...g.frames.slice(p, g.hits[0].i + 1).map(f => -f.waist));
+  assert.ok(turned >= 2 && turned <= 4.5, `4a: the waist turned ${turned.toFixed(1)} deg`);
+});
+/* (and the three of them, the frame each lands in and how hard, as the cards throw them. The legend's second, pressed with no
+   wind-up while the first comes home, meets the head with the waist's whip in it as well, a frame sooner and as hard as a
+   first one (it came at the end of its reach before, 8.6 N·s); his third, later in its whip, is about what it was. A great
+   dirty fighter's, his swing with only 3 degrees of waist, are each about a newton-second harder. At 7fa3003: 4암 22.9, 18.9,
+   16.3 N·s in frames 34, 56, 78; 5암 20.4, 8.6, 8.0 in frames 34, 54, 74.) */
+const FLICKS = { '4a': [[34, 23.7], [56, 19.4], [78, 17.3]], '5a': [[34, 23.0], [53, 21.7], [73, 9.3]] };
+test('flicker: the three hits, where each lands and how hard', () => {
+  for (const [lv, hits] of Object.entries(FLICKS)) {
+    const t = trick('flicker', lv);
+    assert.deepEqual(t.hits.map(h => h.i), hits.map(h => h[0]), `${lv}: ${t.hits.map(h => `${h.i}: ${h.J}`).join(', ')}`);
+    for (const [k, [, J]] of hits.entries()) assert.ok(Math.abs(t.hits[k].J - J) <= 1, `${lv}, hit ${k + 1}: ${t.hits[k].J} N·s, ${J} measured`);
+  }
 });
 
 /* Pushing his guard out of the way: the lead hand meets his glove (a 'paw' event: only when the gloves touch) and pushes it

@@ -88,6 +88,6 @@ if (flag('falls'))
     }
   }
 if (flag('turning')) {
-  console.log('\nfastest each joint turned while a punch was thrown (degrees a second: the pelvis and the chest on the canvas, the waist and the chest on the pelvis, the elbow; the glove in m/s)');
-  for (const [punch, grades] of Object.entries(turning)) for (const [lv, r] of Object.entries(grades)) console.log(`${punch.padEnd(6)} ${lv.padEnd(3)} pelvis ${r.hips.toFixed(0).padStart(5)}  chest ${r.chest.toFixed(0).padStart(5)}  waist on pelvis ${r.waist.toFixed(0).padStart(5)}  chest on pelvis ${r.trunk.toFixed(0).padStart(5)}  elbow ${r.elbow.toFixed(0).padStart(5)}  glove ${r.glove.toFixed(1).padStart(5)}`);
+  console.log('\nfastest each joint turned while a punch was thrown (degrees a second: the pelvis and the chest on the canvas, the waist and the chest on the pelvis, the chest on the waist, the elbow; the glove in m/s)');
+  for (const [punch, grades] of Object.entries(turning)) for (const [lv, r] of Object.entries(grades)) console.log(`${punch.padEnd(6)} ${lv.padEnd(3)} pelvis ${r.hips.toFixed(0).padStart(5)}  chest ${r.chest.toFixed(0).padStart(5)}  waist on pelvis ${r.waist.toFixed(0).padStart(5)}  chest on pelvis ${r.trunk.toFixed(0).padStart(5)}  chest on waist ${r.own.toFixed(0).padStart(5)}  elbow ${r.elbow.toFixed(0).padStart(5)}  glove ${r.glove.toFixed(1).padStart(5)}`);
 }

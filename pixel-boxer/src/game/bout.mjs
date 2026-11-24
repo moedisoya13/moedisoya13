@@ -117,6 +117,18 @@ export const RULES = {
   // turn: no straight punch is thrown from there
   inside: 0.72,
   chainIn: ['hookIn', 'upperIn'],
+  /* and once he is in it, the next press of the chain goes on with it while the man he is knocking back is still within
+     insideOn: he steps back in for it (stepIn), and does not throw a long-range punch from a few centimetres outside the
+     inside range. The inside hook turned by the waist (docs/moves-plan-6.md §3.3 N14) knocks a man back to 0.69-0.73 m by
+     the next press from where the inside chain is thrown, 0.62 to 0.68 m (0.68-0.71 before it). Only the power press that
+     goes on with a pressed inside chain (f.inChain), and only up to a pro's grade (insideTo): a great one and a legend,
+     who threw the long hook and the long uppercut from 0.64 m on before it, still do; kept on the inside two, a legend
+     stepping back in for the third stood where he would topple and whiffed it. And not while the other man holds his guard
+     up: stepping back in at a covered man from 0.72 to 0.74 m, the inside uppercut's glove went 8 to 10.6 cm into his forearm
+     where the long hook thrown there did not touch it. The counters out of an evasion, a parry, a block or the shell, and
+     the tricks, read the distance alone, as they did */
+  insideOn: 0.8,
+  insideTo: 3,
   dash: { reach: 1.2 },
   stepIn: 2.6, // metres a second he closes at while throwing, down to the punch's own range
   lunge: 60, // metres a second a second: how quickly a step in gathers speed and sheds it
@@ -275,6 +287,25 @@ function begin(f, name, more, bout) {
   if (COST[name]) f.stamina = Math.max(0, f.stamina - COST[name]);
   // a punch thrown with the hand that has just punched starts from where that arm's joints still are (a double jab)
   if (chain && before && before.chain && MOVES[before.name].hand === move.hand) (chain.q = before.chain.q.slice()), (chain.v = before.chain.v.slice());
+  /* (but out of an inside hook whose body was stopped by what it met, strike: `spent`, the legs drive the next punch of that
+     hand afresh: their drive was spent in what the hook hit (the waist's turn with it), and the hips and the trunk are taken up
+     where the hook was stopped. Taken up driven out already, a great one's and a legend's long hook out of it had its fist
+     sent out round in its wind-up, which only its own drive should do (anim/animator.mjs: a hook's reach and angle come with
+     the legs' drive), and the elbow went round under the arm and back in three frames, 93 to 108 degrees a frame, the upper
+     arm past its range; taken up where the legs, hips and trunk would have got to had they not been stopped, a legend's long
+     hook landed a third lighter, 35 N·s on the average; and with the hips from rest as well, a pro's long uppercut after it
+     took his upper arm where the shoulder cannot put it. A great dirty fighter's legs are taken up no further driven out than
+     his grade's `spent` (anim/skill.mjs), and still: from rest, his long hook out of it landed a frame later than it did and
+     lighter, 3.6 N·s on the average in 40 of 224 moments, 6.2 at the most. From a great one up only: up to a pro's grade the
+     long hook comes out of the inside hook only where the rule does not keep him on the inside chain (RULES.insideOn: the man
+     he presses holds his guard up, or is knocked past 0.80 m), and taken up afresh there it got onto his guard sooner than it
+     did, and the long uppercut after it went into his lead forearm, 10.0 to
+     11.4 cm, where 0ac7c0c's touches it 2.4 to 2.6) */
+  if (chain && before && before.chain && before.chain.spent && MOVES[before.name].hand === move.hand && level.grade >= 4) {
+    const kept = (level.chain && level.chain.spent) || 0;
+    chain.q[0] = kept > 0 ? Math.min(chain.q[0], kept) : 0;
+    chain.v[0] = chain.q[5] = chain.v[5] = 0;
+  }
   // out of the end of an evasion or a parry: wound up already
   let loaded = chain && bout ? loadOf(f, bout, move, more) : null;
   // (but not by a legend's going: a punch to the body has to go down to it first, anim/body.mjs)
@@ -744,13 +775,15 @@ function decide(bout, f, input, dt, who) {
         begin(f, 'dash', { dir: local(f, d[0], d[1]), go: d }, bout);
         bout.events.push({ type: 'dash', who });
       } else {
-        let name = 'jab';
+        let name = 'jab',
+          plain = false; // (a power press of the chain itself, no counter's and no technique's punch)
         // (out of an evasion, a power punch is the one it has wound up: the rear hand's straight, the lead hook off a slip
         // or a weave to the left, the uppercut out of a duck)
         const out = f.action && isEvasion(f.action.name) ? f.action : f.lastEvade && f.lastEvade.endedAt !== null && bout.t - f.lastEvade.endedAt <= GRACE ? f.lastEvade.action : null;
         // (right up close, the inside chain: the lead hand's the inside hook, the rear hand's the inside uppercut)
         const other = bout.fighters[1 - who],
-          inside = Math.hypot(other.x - f.x, other.z - f.z) < RULES.inside,
+          far = Math.hypot(other.x - f.x, other.z - f.z),
+          inside = far < RULES.inside,
           chain = inside ? RULES.chainIn : RULES.chain;
         /* (out of a sway back, the pull counter, game/techniques.mjs, at every grade: the straight, or the liver hook asked for
            the body, or the rear hook it names; anim/evade.mjs PULLED) */
@@ -795,8 +828,16 @@ function decide(bout, f, input, dt, who) {
           name = patCounter(bout, f, inside);
           f.link = Math.max(0, chain.indexOf(name));
         } else if (what === 'power') {
-          f.link = f.sinceLast < RULES.combo && f.lastPower ? (f.link + 1) % chain.length : 0;
-          name = chain[f.link];
+          /* (the pressed chain; and the press soon after one of the pressed inside chain goes on with it out to
+             RULES.insideOn, where the punch it comes to is his at a pro's grade or below and the other man's guard is not up:
+             f.inChain, RULES.insideTo) */
+          const on = f.sinceLast < RULES.combo && f.lastPower,
+            next = RULES.chainIn[(f.link + 1) % RULES.chainIn.length],
+            kept = !inside && on && !!f.inChain && far < RULES.insideOn && levelOf(f.skills, next).grade <= RULES.insideTo && !other.cover,
+            pressed = kept ? RULES.chainIn : chain;
+          f.link = on ? (f.link + 1) % pressed.length : 0;
+          name = pressed[f.link];
+          plain = true;
         }
         /* a show-off's trick (anim/show.mjs, docs/moves-plan-4.md §5.2): the one the press names, or one his dice turn up; a
            flicker pressed again within FLICK.again of the last one arriving is another, with no wind-up, up to FLICK.most */
@@ -822,6 +863,7 @@ function decide(bout, f, input, dt, who) {
         // a loaded punch answering a defence: what makes the defence brilliant, if it was close enough
         if (f.action.loaded && f.action.loaded.load > 0 && f.action.loaded.from !== 'legend' && f.action.loaded.from !== 'wave' && f.defence && f.defence.counterAt === null && bout.t - f.defence.start <= BRILLIANT.within + 1e-9) (f.defence.counterAt = bout.t), (f.defence.counter = f.action.id), judge(bout, f, who);
         f.lastPower = what === 'power';
+        f.inChain = plain && !named && !trick && RULES.chainIn.includes(name);
         f.counter = 0;
         bout.events.push({ type: 'punch', who, name });
       }
@@ -1101,8 +1143,8 @@ function viewOf(bout, i) {
       shoved: Math.hypot(f.kx, f.kz),
       reach: null,
       // the other man, in his own terms: his lead foot's instep (what a dirty man stands on), and whether this man's own lead
-      // foot is stood on
-      foe: f.place && other.pose && other.points ? { foot: mine(f, at(other, 'LeftFoot', [0, -0.02, 0.07])), glove: { L: mine(f, other.points.L), R: mine(f, other.points.R) }, head: mine(f, other.points.head), nape: mine(f, napeOf(other)), right: dirIn(f, [-Math.cos(other.yaw), Math.sin(other.yaw)]) } : null,
+      // foot is stood on (and his elbows: what the bottom of an inside uppercut's U is kept clear of, anim/animator.mjs)
+      foe: f.place && other.pose && other.points ? { foot: mine(f, at(other, 'LeftFoot', [0, -0.02, 0.07])), glove: { L: mine(f, other.points.L), R: mine(f, other.points.R) }, head: mine(f, other.points.head), elbow: { L: mine(f, other.points.LE), R: mine(f, other.points.RE) }, nape: mine(f, napeOf(other)), right: dirIn(f, [-Math.cos(other.yaw), Math.sin(other.yaw)]) } : null,
       pinned: f.pinned > 0,
       // the down parry his guard is put up for, if it is (anim/clean.mjs): how soon the glove coming in will be on his rear glove
       pat: f.pat ? patView(bout, f, other) : null,
@@ -1544,6 +1586,12 @@ function strike(bout, f, other, who, dt) {
   fireNext(bout, f);
   shellNext(bout, f);
   action.chain.v[3] = action.chain.v[4] = 0; // the arm is stopped by what it hit
+  /* (and an inside hook's body with it, the waist and the hips that swung it, on whatever it met: his head, or the glove,
+     forearm or shoulder that blocked it, as the arm is. Right up close the turn is spent in what it hit, and run on round,
+     the forearm goes on into the glove he holds up beside it, which nothing here stops; the waist that drives it, docs/
+     moves-plan-6.md §3.3 N14, took it 8 to 10 cm into that glove when he stood a few centimetres nearer or further than the
+     card has him, or moved) */
+  if (move.name === 'hookIn') action.chain.v.fill(0), (action.chain.spent = true);
   // (an elbow that has landed comes away off his jaw at once: the arm starts home, it does not lean on into his head; and so
   // does a punch to the body, his trunk folding round where it was: anim/body.mjs)
   if (elbow || move.level) (action.chain.phase = 'recover'), (action.chain.since = 0);
