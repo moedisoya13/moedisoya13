@@ -359,6 +359,12 @@ A+B 실신·위빙, C1 몸통 판정, C2 바디 주먹·뒷손 훅, E 파도, F 
 - 사용자 답을 기다리는 것: 미결 카탈로그의 `bearing-side`(옆 칸 72°면 되는가), `bearing-pinned`(묶인 발은 못 돈다), `bearing-wave-speed`, `bearing-names`, `bearing-hud`, `bearing-dark-side`. 답이 없으면 기본값.
 - 관련 메모(R·S에서 답함): `side`, `circle`, `dash`, `dashSide`("돌아오지 않고 그 자리에서 다시 축을 잡는다"), `inout`, `shift`("축 이동이 크게"), `wave`.
 
+## 바닥 고리 파문(`fx-ground-ring-game`): 권장안이 듣지 않음 → 사용자 결정으로 (2026-11-24)
+
+구현 에이전트(구현 모델·xhigh, 작업 폴더 `scratchpad/fxring`, 기록 `scratchpad/st-fx/`)가 "밝힌 입자를 앞에 그림"을 만들어 게임 화면(시드 1·2, 고리 있음/없음을 프레임마다 견줌)에서 잼: 밝힌 픽셀 +30~45%, 고리 둘레를 덮은 몫 0.449 → 0.466(시드 2: 0.389 → 0.391) — 이어지지 않음. 원인: 셰이더가 바닥 입자를 "한 단계 밝게" 하는데 링 캔버스의 밝은 칸(팔레트 25, 입자 1,229개)은 바닥 색의 맨 위라 밝아질 곳이 없고, 어두운 칸(24)은 밝아지면 밝은 칸의 색이 됨. 타일 바닥(카탈로그·시안·검토 시트)은 22·23·24만 써서 잘 읽힘. 시험으로 25도 밝히면 둘레 0.665(시드 2 0.640, 최대 0.93)로 거의 닫힘. 고리가 꺼진 뒤 0.38~0.6 s의 점들은 설계대로. **작업 폴더에는 아무것도 남기지 않음**(시험 변경은 `scratchpad/st-fx/bias-second-pass.trial.diff`). 그림을 직접 봄(`scratchpad/st-fx/game-before-after-diff.png`): 지금·"앞에 그림"은 끊긴 호, 시험은 거의 닫힌 타원.
+→ 미결 카탈로그 항목을 고침: 선택지 `lighter`(바닥 색에 한 단계 밝은 색 하나 더: 평소 바닥은 그대로, 팔레트 48칸 중 44칸 사용 중; 권장), `darker`(링 바닥을 한 단계 어둡게 다시 굽기), `keep`. 비교 그림 `docs/ref/ground-ring-game-{1,2}.jpg`. 새 색이 들어가므로 사용자 결정 후에 만든다.
+- 에이전트가 알린 것: 히어독으로 파일을 쓰고 돌리는 명령 하나가 안전 점검에 거절되어, 같은 스크립트를 파일 도구로 쓰고 따로 돌림(지운 것 없음).
+
 ## 사용자 지적: 모션 카탈로그의 메모가 거의 반영되지 않았다 (2026-11-23)
 
 사실이다. 메모 27건(26줄; `feedback`을 다시 읽음, 11-22 뒤로 새 메모 없음) 가운데 **카탈로그의 동작에 보이는 것은 0건.** 끝난 것은 J(이펙트)와 K(허리 엔진: `hookIn` 메모의 "허리를 분리해 돌 수 있는 변수로"만 엔진에 생겼고 어느 주먹도 아직 쓰지 않음)뿐이고, 그 뒤의 시간은 이펙트(데미지 비례, 다운 효과, 용암·불티), K의 착지 수리, 소스 기획 둘에 썼다. 메모의 단계: M(`crossArm`의 audit) → N(`hookIn`, `hookR`, `upperIn`, `flicker`) → P(`crossArm`의 모양) → Q(`duck`, `pull`, `parry`, `parryDown`, `rollCounter`) → R(`inout`, `side`, `circle`, `dash`, `dashSide`) → S(`shift`, `wave`) → U(`collar`, `beckon`, `chinOut`, `wind`, `shrug`, `tapChin`) → V(`stagger`, `down-front`, `out-twist`).
