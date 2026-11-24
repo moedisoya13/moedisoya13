@@ -527,6 +527,10 @@ V 네 번째 점검, U 6차, N 8차 에이전트가 멈춤 → 같은 에이전�
 - 판단: N처럼 고침마다 맞바꿈. **미결 카탈로그 v26**: `u-way`(알려진 한계로 합침 권장 / 더 고침 / 잠시 둠), `u-wind-room`(이 방은 지켜보는 줄로: 기준도 넘는 것은 watched라는 규칙, 권장 / 고친 것을 씀 / 실패한 채 둠).
 - 내 재실행: `scratchpad/u7out/`(진행 중).
 
+## 사용자 지시: 기술 구현 — 크로스 카운터 (2026-11-24)
+
+참고 사진 `docs/ref/cross-counter.jpg`(흰 셔츠가 앞손 잽, 웃통 벗은 쪽이 같은 순간 뒷손 크로스를 잽 팔 **위로** 넘겨 얼굴에 닿게 하고, 크로스로 몸이 돌며 머리가 제 왼쪽으로 선을 벗어나 잽은 오른 어깨 위로 지나감). 엔진에 이미 있는 "슬립 뒤 카운터"(`defense.mjs` `counter`: 빠진 뒤 친다)와 달리 **들어오는 주먹에 맞춰 동시에** 치는 카운터. 진행: ① 기획(기획 모델·high, 브리프 `scratchpad/wfout2/brief-xcounter-plan.md`, 산출 `scratchpad/xcounter/cross-counter-plan.md` → `docs/`로) — 동작의 박자, 던질 수 있는 때(잽·앞손 스트레이트, 거리, 너무 이르거나 늦을 때), 세기와 대가, 등급(1~5, 명·암)과 로드아웃 기술 여부·AI의 확률, 카드·구간·시험·점검, 위험(상대 팔을 지나는 글러브, 머리와 잽의 거리, 팔꿈치, 허리 속도, 다운 연출), 단계 이름과 자리, 사용자에게 물을 선택지; ② 사용자 확인 → 구현(구현 모델·xhigh); ③ 따로의 점검.
+
 ## 사용자 지적: 모션 카탈로그의 메모가 거의 반영되지 않았다 (2026-11-23)
 
 사실이다. 메모 27건(26줄; `feedback`을 다시 읽음, 11-22 뒤로 새 메모 없음) 가운데 **카탈로그의 동작에 보이는 것은 0건.** 끝난 것은 J(이펙트)와 K(허리 엔진: `hookIn` 메모의 "허리를 분리해 돌 수 있는 변수로"만 엔진에 생겼고 어느 주먹도 아직 쓰지 않음)뿐이고, 그 뒤의 시간은 이펙트(데미지 비례, 다운 효과, 용암·불티), K의 착지 수리, 소스 기획 둘에 썼다. 메모의 단계: M(`crossArm`의 audit) → N(`hookIn`, `hookR`, `upperIn`, `flicker`) → P(`crossArm`의 모양) → Q(`duck`, `pull`, `parry`, `parryDown`, `rollCounter`) → R(`inout`, `side`, `circle`, `dash`, `dashSide`) → S(`shift`, `wave`) → U(`collar`, `beckon`, `chinOut`, `wind`, `shrug`, `tapChin`) → V(`stagger`, `down-front`, `out-twist`).
