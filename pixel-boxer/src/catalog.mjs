@@ -330,16 +330,49 @@ const SINCE = {
      tools/combos.mjs --cards; 3 · 4명 · 5명) */
   '1-2': { since: 'new', stage: 'C0', at: '2026-11-23', note: '닿음 사이 233 · 200 · 183 ms, 든 가드에 잽 6 · 49 · 44, 스트레이트 22 · 25 · 26 N·s' },
   '1-1-2': { since: 'new', stage: 'C0', at: '2026-11-23', note: '잽 → 잽 200 · 200 · 267 ms에 둘째 잽 0 · 1 · 53 N·s(같은 손: 앞 잽이 멈춘 가드 앞에서 출발), 스트레이트 22 · 24 · 26 N·s로 막힘(가드 없으면 99 · 105 · 105)' },
-  '1-2-3': { since: 'new', stage: 'C0', at: '2026-11-23', note: '스트레이트 → 훅 283 · 233 · 233 ms, 훅이 81 · 111 · 123 N·s로 막힘(가드 없으면 100 · 106 · 112)' },
-  '1-2-3-2': { since: 'new', stage: 'C0', at: '2026-11-23', note: '끝 스트레이트 22 · 9 · 28 N·s로 막힘(0.91 · 0.89 · 0.91 m). 붙은 채로(0.66~0.67 m, 가드 없음) 17 · 18 · 106: 길게 치기는 C2에서' },
-  '1-6-3-2': { since: 'new', stage: 'C0', at: '2026-11-23', note: '어퍼 56 · 58 · 93, 훅 42 · 88 · 96, 끝 스트레이트 20 · 10 · 12 N·s로 막힘(가드 없으면 어퍼 21 · 75 · 100, 훅 97 · 123 · 136)' },
-  '2-3-2': { since: 'new', stage: 'C0', at: '2026-11-23', note: '0.86 m에서. 훅 51 · 101 · 117 N·s로 막힘, 끝 스트레이트 8 · 11 · 10(발 박기와 길게 치기는 C2에서)' },
-  chain: { since: 'new', stage: 'C0', at: '2026-11-23', note: '훅 → 어퍼 283 · 250 · 233 ms, 어퍼 61 · 77 · 79 N·s로 막힘' },
+  '1-2-3': [
+    { since: 'changed', stage: 'V', at: '2026-11-24', cards: ['2', '3', '4m', '4a', '5m', '5a'], note: '맞은 사람이 휘청여 팔이 느리게 늘어지고 무릎이 꺾임(V; 관절 최대 0.4 cm)' },
+    { since: 'new', stage: 'C0', at: '2026-11-23', note: '스트레이트 → 훅 283 · 233 · 233 ms, 훅이 81 · 111 · 123 N·s로 막힘(가드 없으면 100 · 106 · 112)' }
+  ],
+  '1-2-3-2': [
+    { since: 'changed', stage: 'V', at: '2026-11-24', cards: ['3', '4m', '4a', '5m', '5a'], note: '맞은 사람이 휘청여 팔이 느리게 늘어지고 무릎이 꺾임(V; 관절 최대 4.6 cm)' },
+    { since: 'new', stage: 'C0', at: '2026-11-23', note: '끝 스트레이트 22 · 9 · 28 N·s로 막힘(0.91 · 0.89 · 0.91 m). 붙은 채로(0.66~0.67 m, 가드 없음) 17 · 18 · 106: 길게 치기는 C2에서' }
+  ],
+  '1-6-3-2': [
+    { since: 'changed', stage: 'V', at: '2026-11-24', cards: ['3', '4m', '4a', '5m', '5a'], note: '맞은 사람이 휘청여 팔이 느리게 늘어지고 무릎이 꺾임(V; 관절 최대 0.5 cm); 5암의 훅이 막히며 83 → 82 N·s' },
+    { since: 'new', stage: 'C0', at: '2026-11-23', note: '어퍼 56 · 58 · 93, 훅 42 · 88 · 96, 끝 스트레이트 20 · 10 · 12 N·s로 막힘(가드 없으면 어퍼 21 · 75 · 100, 훅 97 · 123 · 136)' }
+  ],
+  '2-3-2': [
+    { since: 'changed', stage: 'V', at: '2026-11-24', cards: ['3', '4m', '4a', '5m', '5a'], note: '맞은 사람이 휘청여 팔이 느리게 늘어지고 무릎이 꺾임(V; 관절 최대 0.4 cm)' },
+    { since: 'new', stage: 'C0', at: '2026-11-23', note: '0.86 m에서. 훅 51 · 101 · 117 N·s로 막힘, 끝 스트레이트 8 · 11 · 10(발 박기와 길게 치기는 C2에서)' }
+  ],
+  chain: [
+    { since: 'changed', stage: 'V', at: '2026-11-24', cards: ['2', '3', '4m', '4a', '5m', '5a'], note: '맞은 사람이 휘청여 팔이 느리게 늘어지고 무릎이 꺾임(V; 관절 최대 0.7 cm)' },
+    { since: 'new', stage: 'C0', at: '2026-11-23', note: '훅 → 어퍼 283 · 250 · 233 ms, 어퍼 61 · 77 · 79 N·s로 막힘' }
+  ],
   /* new: the cross counter (docs/cross-counter-plan.md §7.1, stage Y); what its cards measured (node tools/crosscounter.mjs; 3 ·
      4명 · 4암 · 5명 · 5암) */
   crossCounter: { since: 'new', stage: 'Y', at: '2026-11-24', note: '구간 +3~+4 · +1~+4 · +1~+4 · +1~+4 · +1~+4, 잽이 2.8 · 3.2 · 1.6 · 2.4 · 1.8 cm로 빗나가고 +9에 96 · 100 · 106 · 107 · 122 N·s, 카운터(스트레이트 88 · 93 · 101 · 105 · 112). 뒷손이 넘어가는 높이는 상대 잽이 뻗어 올 자리에서 읽고, 머리는 잽이 지나간 뒤에야 앞으로 들어갑니다. 잽이 조준까지 5스텝 넘게 걸리면(1 · 2단계의 잽), 조준 뒤 2스텝째부터, 또 3단계가 조준이 굳기 전에 누르면 보통 스트레이트' },
   'crossCounter-off': { since: 'new', stage: 'Y', at: '2026-11-24', note: '3단계가 +1에 누르면 조준이 굳기 전이라 보통 스트레이트가 나가고 들어가는 머리에 잽 61 N·s(선 채 46)에 끊김. +6에 누르면 잽이 이미 이겨 보통 스트레이트가 나가고 잽 45 N·s에 끊김' },
   'out-counter': { since: 'new', stage: 'Y', at: '2026-11-24', note: '4명의 크로스 카운터(구간 끝 +4에 누름) 89 N·s에 잽을 내던 선수가 실신(통나무)' },
+  /* changed: the rocked man, the knockdown's legs, the twisted knockout (plan 6 N24-N26, stage V: the joints of both men
+     compared frame by frame with the scripts before it, the cards listed moved more than 1 mm; cm are the most a joint moved) */
+  cross: { since: 'changed', stage: 'V', at: '2026-11-24', cards: ['2', '3', '4m', '4a', '5m', '5a'], note: '맞은 사람이 휘청여 팔이 느리게 늘어지고 무릎이 꺾임(V; 관절 최대 35.6 cm)' },
+  hook: { since: 'changed', stage: 'V', at: '2026-11-24', cards: ['1', '2', '3', '4m', '4a', '5m', '5a'], note: '맞은 사람이 휘청여 팔이 느리게 늘어지고 무릎이 꺾임(V; 관절 최대 8.3 cm)' },
+  upper: { since: 'changed', stage: 'V', at: '2026-11-24', cards: ['3', '4m', '4a', '5m', '5a'], note: '맞은 사람이 휘청여 팔이 느리게 늘어지고 무릎이 꺾임(V; 관절 최대 31.5 cm)' },
+  stomp: { since: 'changed', stage: 'V', at: '2026-11-24', cards: ['2', '3', '4m', '4a', '5m', '5a'], note: '맞은 사람이 휘청여 팔이 느리게 늘어지고 무릎이 꺾임(V; 관절 최대 10.3 cm)' },
+  thumb: { since: 'changed', stage: 'V', at: '2026-11-24', cards: ['3', '4m', '4a', '5m', '5a'], note: '맞은 사람이 휘청여 팔이 느리게 늘어지고 무릎이 꺾임(V; 관절 최대 0.1 cm)' },
+  stepjab: { since: 'changed', stage: 'V', at: '2026-11-24', cards: ['4m', '4a', '5m', '5a'], note: '맞은 사람이 휘청여 팔이 느리게 늘어지고 무릎이 꺾임(V; 관절 최대 0.1 cm)' },
+  pawDown: { since: 'changed', stage: 'V', at: '2026-11-24', cards: ['4a', '5a'], note: '맞은 사람이 휘청여 팔이 느리게 늘어지고 무릎이 꺾임(V; 관절 최대 16.6 cm)' },
+  pawUp: { since: 'changed', stage: 'V', at: '2026-11-24', cards: ['3', '4m', '4a', '5m', '5a'], note: '맞은 사람이 휘청여 팔이 느리게 늘어지고 무릎이 꺾임(V; 관절 최대 8.3 cm)' },
+  elbow: { since: 'changed', stage: 'V', at: '2026-11-24', cards: ['1', '4a', '5a'], note: '맞은 사람이 휘청여 팔이 느리게 늘어지고 무릎이 꺾임(V; 관절 최대 0.5 cm)' },
+  tapChin: { since: 'changed', stage: 'V', at: '2026-11-24', cards: ['4a'], note: '맞은 사람이 휘청여 팔이 느리게 늘어지고 무릎이 꺾임(V; 관절 최대 0.8 cm)' },
+  parryDown: { since: 'changed', stage: 'V', at: '2026-11-24', cards: ['4m', '5m'], note: '맞은 사람이 휘청여 팔이 느리게 늘어지고 무릎이 꺾임(V; 관절 최대 14.6 cm); 5명의 스트레이트 56 → 57 N·s' },
+  pullCross: { since: 'changed', stage: 'V', at: '2026-11-24', cards: ['1', '2', '3', '4m', '4a', '5m'], note: '맞은 사람이 휘청여 팔이 느리게 늘어지고 무릎이 꺾임(V; 관절 최대 27.3 cm)' },
+  blockFire: { since: 'changed', stage: 'V', at: '2026-11-24', cards: ['4m', '5m'], note: '맞은 사람이 휘청여 팔이 느리게 늘어지고 무릎이 꺾임(V; 관절 최대 29.3 cm); 4명의 어퍼 77 → 76, 5명의 훅 134 → 136 · 131 → 127, 어퍼 90 → 88 N·s' },
+  shell: { since: 'changed', stage: 'V', at: '2026-11-24', cards: ['4m', '5m'], note: '맞은 사람이 휘청여 팔이 느리게 늘어지고 무릎이 꺾임(V; 관절 최대 9 cm); 4명의 훅이 한 프레임 일찍 95 → 99 N·s' },
+  'shell-hook': { since: 'changed', stage: 'V', at: '2026-11-24', cards: ['4m', '5m'], note: '맞은 사람이 휘청여 팔이 느리게 늘어지고 무릎이 꺾임(V; 관절 최대 0.3 cm)' },
+  'shell-upper': { since: 'changed', stage: 'V', at: '2026-11-24', cards: ['4m', '5m'], note: '맞은 사람이 휘청여 팔이 느리게 늘어지고 무릎이 꺾임(V; 관절 최대 0.3 cm)' },
   // changed: the waist (stage K)
   dashSide: { since: 'changed', stage: 'K', at: '2026-11-22', cards: ['5m', '5a'], note: '5명·5암의 대시 중 U자 위빙을 허리가 돌림(머리·글러브 최대 0.42·0.71 cm, 허리 6.2°·8.4°)' },
   circle: { since: 'changed', stage: 'K', at: '2026-11-22', cards: ['5m', '5a'], note: '5명·5암의 걸음마다 위빙을 허리가 돌림(최대 0.64·0.42 cm, 허리 6.8°·6.0°)' },
@@ -349,14 +382,20 @@ const SINCE = {
   inout: { since: 'changed', stage: 'K', at: '2026-11-22', cards: ['5a'], note: '5암의 어깨 페인트를 허리가 돌림(최대 0.48 cm, 허리 7.9°)' },
   turn: { since: 'changed', stage: 'K', at: '2026-11-22', cards: ['5a'], note: '5암의 어깨 페인트를 허리가 돌림(최대 0.24 cm, 허리 6.0°)' },
   bounce: { since: 'changed', stage: 'K', at: '2026-11-22', cards: ['5a'], note: '5암의 어깨 페인트를 허리가 돌림(최대 0.22 cm, 허리 6.0°)' },
-  onetwo: { since: 'changed', stage: 'K', at: '2026-11-22', cards: ['5a'], note: '5암의 어깨 페인트를 허리가 돌림(최대 0.11 cm)' },
+  onetwo: [
+    { since: 'changed', stage: 'V', at: '2026-11-24', cards: ['2', '3', '4m', '4a', '5m', '5a'], note: '맞은 사람이 휘청여 팔이 느리게 늘어지고 무릎이 꺾임(V; 관절 최대 32.5 cm); 4암의 잽 41 → 42 N·s' },
+    { since: 'changed', stage: 'K', at: '2026-11-22', cards: ['5a'], note: '5암의 어깨 페인트를 허리가 돌림(최대 0.11 cm)' }
+  ],
   wave: { since: 'changed', stage: 'K', at: '2026-11-22', cards: ['4m', '5m'], note: '파도의 흔들림과 어깨 페인트를 허리가 돌림(최대 0.37·0.54 cm, 허리 4.0°·9.3°)' },
   slick: { since: 'changed', stage: 'K', at: '2026-11-22', cards: ['4m', '5m'], note: '파도의 흔들림을 허리가 돌림(최대 0.37·0.54 cm)' },
   // changed: his own glove kept out of his other arm (plan 6 stage M: the joints of both men compared frame by frame with the
   // scripts before it, the cards listed moved more than 1 mm; cm are the most a joint moved)
   slip: { since: 'changed', stage: 'M', at: '2026-11-23', cards: ['4m', '4a', '5m', '5a'], note: '슬립의 앞 글러브가 뒷팔을 지나지 않게 8 cm만 감(관절 최대 1.4 · 6.8 · 15.5 · 10.4 cm)' },
   'slip-cross': { since: 'changed', stage: 'M', at: '2026-11-23', cards: ['4m', '4a', '5m', '5a'], note: '슬립의 앞 글러브가 뒷팔을 지나지 않게 8 cm만 감(최대 1.3 · 6.3 · 12.4 · 9.2 cm)' },
-  counter: { since: 'changed', stage: 'M', at: '2026-11-23', cards: ['4m', '4a', '5m', '5a'], note: '슬립의 앞 글러브가 뒷팔을 지나지 않게 8 cm만 감(최대 15.5 cm); 5명·5암의 카운터 103 → 104, 112 → 111 N·s' },
+  counter: [
+    { since: 'changed', stage: 'V', at: '2026-11-24', cards: ['1', '2', '3', '4m', '4a', '5m', '5a'], note: '맞은 사람이 휘청여 팔이 느리게 늘어지고 무릎이 꺾임(V; 관절 최대 29 cm)' },
+    { since: 'changed', stage: 'M', at: '2026-11-23', cards: ['4m', '4a', '5m', '5a'], note: '슬립의 앞 글러브가 뒷팔을 지나지 않게 8 cm만 감(최대 15.5 cm); 5명·5암의 카운터 103 → 104, 112 → 111 N·s' }
+  ],
   shrug: { since: 'changed', stage: 'M', at: '2026-11-23', cards: ['4m', '4a', '5m', '5a'], note: '앞선 슬립의 앞 글러브가 뒷팔을 지나지 않게(최대 15.2 cm)' },
   duck: { since: 'changed', stage: 'M', at: '2026-11-23', cards: ['4m', '4a', '5a'], note: '자기 글러브가 다른 팔 안으로 들지 않게 풀이가 천천히 밀어냄(최대 2.7 cm)' },
   roll: { since: 'changed', stage: 'M', at: '2026-11-23', cards: ['4m', '4a', '5a'], note: '자기 글러브가 다른 팔 안으로 들지 않게 풀이가 천천히 밀어냄(최대 6.2 cm)' },
@@ -364,50 +403,110 @@ const SINCE = {
   block: { since: 'changed', stage: 'M', at: '2026-11-23', cards: ['4m', '4a', '5a'], note: '자기 글러브가 다른 팔 안으로 들지 않게 풀이가 천천히 밀어냄(최대 3.1 cm)' },
   guard: { since: 'changed', stage: 'M', at: '2026-11-23', cards: ['2', '4m', '4a', '5a'], note: '자기 글러브가 다른 팔 안으로 들지 않게 풀이가 천천히 밀어냄(최대 1.9 cm)' },
   stalk: { since: 'changed', stage: 'M', at: '2026-11-23', cards: ['4m', '4a', '5a'], note: '자기 글러브가 다른 팔 안으로 들지 않게 풀이가 천천히 밀어냄(최대 3.4 cm)' },
-  collar: { since: 'changed', stage: 'M', at: '2026-11-23', cards: ['4a', '5a'], note: '자기 글러브가 다른 팔 안으로 들지 않게 풀이가 천천히 밀어냄(최대 1.5 cm)' },
+  collar: [
+    { since: 'changed', stage: 'V', at: '2026-11-24', cards: ['3', '4m', '4a', '5m', '5a'], note: '맞은 사람이 휘청여 팔이 느리게 늘어지고 무릎이 꺾임(V; 관절 최대 32.7 cm)' },
+    { since: 'changed', stage: 'M', at: '2026-11-23', cards: ['4a', '5a'], note: '자기 글러브가 다른 팔 안으로 들지 않게 풀이가 천천히 밀어냄(최대 1.5 cm)' }
+  ],
   'block-elbow': { since: 'changed', stage: 'M', at: '2026-11-23', cards: ['2', '4a', '5a'], note: '2단계 두 팔 블록의 아래팔이 서로를 지나지 않고 나란히 내려옴(10.1 cm; 전에는 글러브가 서로의 아래팔을 지남)' },
-  'block-liver': { since: 'changed', stage: 'M', at: '2026-11-23', cards: ['2', '4a', '5a'], note: '2단계 두 팔 블록의 아래팔이 나란히 내려옴(11.9 cm)' },
+  'block-liver': [
+    { since: 'changed', stage: 'V', at: '2026-11-24', cards: ['4a', '5a'], note: '맞은 사람이 휘청여 팔이 느리게 늘어지고 무릎이 꺾임(V; 관절 최대 0.4 cm)' },
+    { since: 'changed', stage: 'M', at: '2026-11-23', cards: ['2', '4a', '5a'], note: '2단계 두 팔 블록의 아래팔이 나란히 내려옴(11.9 cm)' }
+  ],
   crossArm: { since: 'changed', stage: 'M', at: '2026-11-23', cards: ['3', '4m', '4a', '5m', '5a'], note: '크로스암으로 드나드는 길: 앞손이 뒷팔 위로 돌아 들어감(최대 4.2 cm). 가드를 잡은 동안 글러브가 팔에 6.0 → 0 cm' },
-  'crossArm-hook': { since: 'changed', stage: 'M', at: '2026-11-23', cards: ['3', '4m', '4a', '5m', '5a'], note: '크로스암으로 드나드는 길(최대 4.2 cm)' },
+  'crossArm-hook': [
+    { since: 'changed', stage: 'V', at: '2026-11-24', cards: ['3', '4a', '5a'], note: '맞은 사람이 휘청여 팔이 느리게 늘어지고 무릎이 꺾임(V; 관절 최대 0.2 cm)' },
+    { since: 'changed', stage: 'M', at: '2026-11-23', cards: ['3', '4m', '4a', '5m', '5a'], note: '크로스암으로 드나드는 길(최대 4.2 cm)' }
+  ],
   // (rows two stages changed: a mark each, the later first; N's cards are those it moved more than the mark's millimetre)
   'crossBody-jab': [
+    { since: 'changed', stage: 'V', at: '2026-11-24', cards: ['4m', '4a', '5m', '5a'], note: '맞은 사람이 휘청여 팔이 느리게 늘어지고 무릎이 꺾임(V; 관절 최대 11.8 cm)' },
     { since: 'changed', stage: 'N', at: '2026-11-24', cards: [], note: '크로스 바디의 회전 일부를 허리가(0.4 cm)' },
     { since: 'changed', stage: 'M', at: '2026-11-23', cards: ['3', '4m', '4a', '5m', '5a'], note: '크로스암으로 드나드는 길(최대 4.7 cm)' }
   ],
   'crossBody-cross': [
+    { since: 'changed', stage: 'V', at: '2026-11-24', cards: ['4m', '4a', '5a'], note: '맞은 사람이 휘청여 팔이 느리게 늘어지고 무릎이 꺾임(V; 관절 최대 0.2 cm)' },
     { since: 'changed', stage: 'N', at: '2026-11-24', cards: ['3', '4m', '4a', '5m', '5a'], note: '크로스 바디의 회전 일부를 허리가(막힘 15 → 14 등 1 N·s 안, 5명은 1 → 9 N·s로 막혀 그 뒤 자리가 달라짐)' },
     { since: 'changed', stage: 'M', at: '2026-11-23', cards: ['3', '4m', '4a', '5m', '5a'], note: '크로스암으로 드나드는 길(최대 4.7 cm)' }
   ],
-  'crossBody-liver': { since: 'changed', stage: 'M', at: '2026-11-23', cards: ['3', '4m', '4a', '5m', '5a'], note: '크로스암으로 드나드는 길(최대 5.7 cm)' },
+  'crossBody-liver': [
+    { since: 'changed', stage: 'V', at: '2026-11-24', cards: ['3', '4m', '4a', '5m', '5a'], note: '맞은 사람이 휘청여 팔이 느리게 늘어지고 무릎이 꺾임(V; 관절 최대 31.5 cm)' },
+    { since: 'changed', stage: 'M', at: '2026-11-23', cards: ['3', '4m', '4a', '5m', '5a'], note: '크로스암으로 드나드는 길(최대 5.7 cm)' }
+  ],
   rollCounter: [
+    { since: 'changed', stage: 'V', at: '2026-11-24', cards: ['4m', '4a', '5m', '5a'], note: '맞은 사람이 휘청여 팔이 느리게 늘어지고 무릎이 꺾임(V; 관절 최대 39.6 cm); 5명의 반격 뒷손 훅 138 → 137 N·s(N과의 조합)' },
     { since: 'changed', stage: 'N', at: '2026-11-24', cards: ['4m', '4a', '5m', '5a'], note: '반격의 뒷손 훅에 허리(N): 4명·4암 68 → 85·84, 5명·5암 128·131 → 138·142 N·s' },
     { since: 'changed', stage: 'M', at: '2026-11-23', cards: ['4m', '4a', '5m', '5a'], note: '크로스암으로 드나드는 길(M)' }
   ],
-  shift: { since: 'changed', stage: 'N', at: '2026-11-24', cards: ['4m', '5m'], note: '숏 어퍼의 U자 길(N): 가드에 막히며 통과하는 것이 4명 22 → 62, 5명 32 → 50 N·s, 그 뒤의 자리가 달라짐(최대 15.1 · 14.6 cm)' },
+  shift: [
+    { since: 'changed', stage: 'V', at: '2026-11-24', cards: ['4m'], note: '맞은 사람이 휘청여 팔이 느리게 늘어지고 무릎이 꺾임(V; 관절 최대 5.8 cm); 4명의 숏 어퍼가 막히며 62 → 57 N·s' },
+    { since: 'changed', stage: 'N', at: '2026-11-24', cards: ['4m', '5m'], note: '숏 어퍼의 U자 길(N): 가드에 막히며 통과하는 것이 4명 22 → 62, 5명 32 → 50 N·s, 그 뒤의 자리가 달라짐(최대 15.1 · 14.6 cm)' }
+  ],
   // changed: the waist in four punches (plan 6 stage N: the memos on hookIn, hookR, upperIn and the flicker; cards moved more
   // than 1 mm, joints compared frame by frame with the scripts before it; N·s are the cards' blows before → after)
-  hookIn: { since: 'changed', stage: 'N', at: '2026-11-24', cards: ['1', '2', '3', '4m', '4a', '5m', '5a'], note: '허리가 골반보다 먼저 감겼다 풀리며 침: 2단계 36 → 43, 3단계 47 → 60, 4명·4암 55·59 → 73·74, 5명·5암 57·65 → 78·86 N·s, 닿는 때는 그대로' },
-  hookR: { since: 'changed', stage: 'N', at: '2026-11-24', cards: ['1', '2', '3', '4m', '4a', '5m', '5a'], note: '허리로 12° 감았다가 17° 돌려 침: 2단계 55 → 66, 3단계 89 → 96 N·s(가슴 799 → 1076 °/s). 4명·4암은 117·114 → 113·112(알려진 한계)' },
-  upperIn: { since: 'changed', stage: 'N', at: '2026-11-24', cards: ['1', '2', '3', '4m', '4a', '5m', '5a'], note: '무릎을 더 굽혀 내려갔다가 U자로 올라옴: 2단계 55 → 60, 3단계 90 → 95, 4명·4암 97 → 102·101, 5명·5암 108·109 → 114 N·s' },
-  flicker: { since: 'changed', stage: 'N', at: '2026-11-24', cards: ['4a', '5a'], note: '5암의 허리가 먼저 튀고 주먹이 채찍처럼 따라옴: 세 번 20 · 9 · 8 → 23 · 22 · 9 N·s(4암 23 · 16 → 24 · 17)' },
-  pullHook: { since: 'changed', stage: 'N', at: '2026-11-24', cards: ['1', '2', '3', '4m', '4a', '5m', '5a'], note: '반격의 뒷손 훅에 허리(N): 2단계 60 → 73, 4명·4암 85·86 → 89·90 N·s; 3단계 77 → 76, 5명 123 → 121(알려진 한계)' },
+  hookIn: [
+    { since: 'changed', stage: 'V', at: '2026-11-24', cards: ['2', '3', '4m', '4a', '5m', '5a'], note: '맞은 사람이 휘청여 팔이 느리게 늘어지고 무릎이 꺾임(V; 관절 최대 10.8 cm)' },
+    { since: 'changed', stage: 'N', at: '2026-11-24', cards: ['1', '2', '3', '4m', '4a', '5m', '5a'], note: '허리가 골반보다 먼저 감겼다 풀리며 침: 2단계 36 → 43, 3단계 47 → 60, 4명·4암 55·59 → 73·74, 5명·5암 57·65 → 78·86 N·s, 닿는 때는 그대로' }
+  ],
+  hookR: [
+    { since: 'changed', stage: 'V', at: '2026-11-24', cards: ['1', '2', '3', '4m', '4a', '5m', '5a'], note: '맞은 사람이 휘청여 팔이 느리게 늘어지고 무릎이 꺾임(V; 관절 최대 25.4 cm)' },
+    { since: 'changed', stage: 'N', at: '2026-11-24', cards: ['1', '2', '3', '4m', '4a', '5m', '5a'], note: '허리로 12° 감았다가 17° 돌려 침: 2단계 55 → 66, 3단계 89 → 96 N·s(가슴 799 → 1076 °/s). 4명·4암은 117·114 → 113·112(알려진 한계)' }
+  ],
+  upperIn: [
+    { since: 'changed', stage: 'V', at: '2026-11-24', cards: ['2', '3', '4m', '4a', '5m', '5a'], note: '맞은 사람이 휘청여 팔이 느리게 늘어지고 무릎이 꺾임(V; 관절 최대 27.5 cm)' },
+    { since: 'changed', stage: 'N', at: '2026-11-24', cards: ['1', '2', '3', '4m', '4a', '5m', '5a'], note: '무릎을 더 굽혀 내려갔다가 U자로 올라옴: 2단계 55 → 60, 3단계 90 → 95, 4명·4암 97 → 102·101, 5명·5암 108·109 → 114 N·s' }
+  ],
+  flicker: [
+    { since: 'changed', stage: 'V', at: '2026-11-24', cards: ['5m'], note: '맞은 사람이 휘청여 팔이 느리게 늘어지고 무릎이 꺾임(V; 관절 최대 0.1 cm)' },
+    { since: 'changed', stage: 'N', at: '2026-11-24', cards: ['4a', '5a'], note: '5암의 허리가 먼저 튀고 주먹이 채찍처럼 따라옴: 세 번 20 · 9 · 8 → 23 · 22 · 9 N·s(4암 23 · 16 → 24 · 17)' }
+  ],
+  pullHook: [
+    { since: 'changed', stage: 'V', at: '2026-11-24', cards: ['1', '2', '3', '4m', '4a', '5m', '5a'], note: '맞은 사람이 휘청여 팔이 느리게 늘어지고 무릎이 꺾임(V; 관절 최대 29.8 cm)' },
+    { since: 'changed', stage: 'N', at: '2026-11-24', cards: ['1', '2', '3', '4m', '4a', '5m', '5a'], note: '반격의 뒷손 훅에 허리(N): 2단계 60 → 73, 4명·4암 85·86 → 89·90 N·s; 3단계 77 → 76, 5명 123 → 121(알려진 한계)' }
+  ],
   'shift-shell': { since: 'changed', stage: 'N', at: '2026-11-24', cards: ['4m', '5m'], note: '숏 어퍼의 U자 길(N): 가드에 막히며 통과 22 → 44, 13 → 30 N·s' },
   jabBody: { since: 'changed', stage: 'N', at: '2026-11-24', cards: ['4m', '5m', '5a'], note: '몸통 잽의 회전 일부를 허리가 돌림(N, 기획 §1.4: 관절 최대 1.2 cm, 세기는 1 N·s 안)' },
   crossBody: { since: 'changed', stage: 'N', at: '2026-11-24', cards: ['3', '4m', '4a', '5m', '5a'], note: '크로스 바디의 회전 일부를 허리가 돌림(N, §1.4): 4명·4암 59·70 → 60·71, 5명·5암 76·77 → 79 N·s' },
   upperBody: { since: 'changed', stage: 'N', at: '2026-11-24', cards: ['4m', '4a', '5m'], note: '바디 어퍼의 회전 일부를 허리가 돌림(N, §1.4): 5명 80 → 79, 5암 91 → 90 N·s(받아들인 대가)' },
   // changed: the blow's effect (stage J)
   'hit-jab': { since: 'changed', stage: 'J', at: '2026-11-22', note: FX_NOTE },
-  'hit-cross': { since: 'changed', stage: 'J', at: '2026-11-22', note: FX_NOTE },
-  'hit-hook': { since: 'changed', stage: 'J', at: '2026-11-22', note: FX_NOTE },
+  'hit-cross': [
+    { since: 'changed', stage: 'V', at: '2026-11-24', note: '맞은 뒤 휘청임(V): 느리게 늘어지는 팔과 꺾이는 무릎(관절 최대 26.8 cm)' },
+    { since: 'changed', stage: 'J', at: '2026-11-22', note: FX_NOTE }
+  ],
+  'hit-hook': [
+    { since: 'changed', stage: 'V', at: '2026-11-24', note: '맞은 뒤 휘청임(V): 느리게 늘어지는 팔과 꺾이는 무릎(관절 최대 4.8 cm)' },
+    { since: 'changed', stage: 'J', at: '2026-11-22', note: FX_NOTE }
+  ],
   'hit-upper': { since: 'changed', stage: 'J', at: '2026-11-22', note: FX_NOTE },
-  'stagger': { since: 'changed', stage: 'J', at: '2026-11-22', note: FX_NOTE },
-  'down-back': { since: 'changed', stage: '2.4B', at: '2026-11-23', note: DOWN_NOTE },
-  'down-knee': { since: 'changed', stage: '2.4B', at: '2026-11-23', note: DOWN_NOTE },
-  'down-side': { since: 'changed', stage: '2.4B', at: '2026-11-23', note: DOWN_NOTE },
-  'down-front': { since: 'changed', stage: '2.4B', at: '2026-11-23', note: DOWN_NOTE },
-  'out-twist': { since: 'changed', stage: '2.4B', at: '2026-11-23', note: DOWN_NOTE },
+  'stagger': [
+    { since: 'changed', stage: 'V', at: '2026-11-24', note: '휘청임의 단서(V): 팔이 느리게 늘어지고(초당 600° 안), 무릎이 꺾이며 안으로 돌고, 발 하나가 나가 받침(관절 최대 27.5 cm); 훅 81 → 83 N·s' },
+    { since: 'changed', stage: 'J', at: '2026-11-22', note: FX_NOTE }
+  ],
+  'down-back': [
+    { since: 'changed', stage: 'V', at: '2026-11-24', note: '다운(V): 엉덩이 인대를 일찍 걸고 누운 뒤 다리 인대가 쉼, 일어날 때 발목이 누운 것보다 더 구르지 않음(관절 최대 60.2 cm)' },
+    { since: 'changed', stage: '2.4B', at: '2026-11-23', note: DOWN_NOTE }
+  ],
+  'down-knee': [
+    { since: 'changed', stage: 'V', at: '2026-11-24', note: '다운(V): 엉덩이 인대를 일찍 걸고 누운 뒤 다리 인대가 쉼, 일어날 때 발목이 누운 것보다 더 구르지 않음(관절 최대 10.5 cm)' },
+    { since: 'changed', stage: '2.4B', at: '2026-11-23', note: DOWN_NOTE }
+  ],
+  'down-side': [
+    { since: 'changed', stage: 'V', at: '2026-11-24', note: '다운(V): 엉덩이 인대를 일찍 걸어 대개 엎드려 눕고 엎드린 데서 일어남(받아들인 것), 누운 뒤 다리 인대가 쉼(관절 최대 177.9 cm)' },
+    { since: 'changed', stage: '2.4B', at: '2026-11-23', note: DOWN_NOTE }
+  ],
+  'down-front': [
+    { since: 'changed', stage: 'V', at: '2026-11-24', note: '다운(V): 엉덩이 인대를 일찍 걸고 누운 뒤 다리 인대가 쉬어, 다리가 찢어지거나 무릎이 뒤집히지 않고 누운 다리가 가라앉음(관절 최대 80 cm)' },
+    { since: 'changed', stage: '2.4B', at: '2026-11-23', note: DOWN_NOTE }
+  ],
+  'out-twist': [
+    { since: 'changed', stage: 'V', at: '2026-11-24', note: '실신 · 통나무 · 훅(V): 턱 23.1°, 비틀린 쓰러짐(관절 최대 32.4 cm; 턱의 깊이 `twist-chin`은 아직 열림)' },
+    { since: 'changed', stage: '2.4B', at: '2026-11-23', note: DOWN_NOTE }
+  ],
   'out-log': { since: 'changed', stage: '2.4B', at: '2026-11-23', note: DOWN_NOTE },
-  'out-limp': { since: 'changed', stage: '2.4B', at: '2026-11-23', note: DOWN_NOTE },
+  'out-limp': [
+    { since: 'changed', stage: 'V', at: '2026-11-24', note: '다운(V): 엉덩이 인대를 일찍 걸고 누운 뒤 다리 인대가 쉼, 일어날 때 발목이 누운 것보다 더 구르지 않음(관절 최대 6.2 cm)' },
+    { since: 'changed', stage: '2.4B', at: '2026-11-23', note: DOWN_NOTE }
+  ],
   'body-solar': { since: 'changed', stage: 'J', at: '2026-11-22', note: FX_NOTE },
   'body-liver': { since: 'changed', stage: 'J', at: '2026-11-22', note: FX_NOTE },
   'body-ribs': { since: 'changed', stage: 'J', at: '2026-11-22', note: FX_NOTE },

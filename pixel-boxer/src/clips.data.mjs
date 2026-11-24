@@ -12,16 +12,17 @@
              seconds of the run, measure (tools/clips.mjs MEASURES), of (what the measure is told: move, the punch whose
              waist is timed), defence (true: its events keep what the defence effects are drawn from, render/guard.mjs) }
    Record them all again, when the stages change (every root made by edits with it):
-     node tools/clips.mjs --write --root prem=<before M> --root pren=<before N> --root u1=<U, first round> --root u2=<U, last round> --root v1=<V, last round> --root y1=<Y, last round>
+     node tools/clips.mjs --write --root prem=<before M> --root pren=<before N> --root prey=<before Y and V> --root u1=<U, first round> --root u2=<U, last round> --root v1=<V, last round> --root y1=<Y, last round>
    (`now` is this checkout.) */
 export const ROOTS = {
   now: { say: '지금 (게시된 동작)', where: 'this checkout' },
   prem: { say: 'M 전 (합치기 전의 동작)', where: 'before stage M was merged: git archive 8b17869 src tools' },
   pren: { say: 'N 전 (합치기 전의 동작)', where: 'before stage N was merged: git archive cd8dbe4 src tools' },
+  prey: { say: 'Y·V 전 (합치기 전의 동작)', where: 'before stages Y and V were merged: git archive bdd9347 src tools' },
   u1: { say: 'U 1차 (첫 구현)', where: 'stage U, first round: scratchpad/wt-u/pixel-boxer (4c726b9 + its changes)' },
-  u2: { say: 'U 6차 (합치기 전, 답을 기다림)', where: 'stage U, round 6 on the head: scratchpad/pcwork/u6/pixel-boxer (0ac7c0c + the staged change of scratchpad/u3)' },
-  v1: { say: 'V 6차 (합치기 전, 답을 기다림)', where: 'stage V, round 6 on the head: scratchpad/pcwork/v6/pixel-boxer (0ac7c0c + the staged change of scratchpad/v3)' },
-  y1: { say: 'Y 1차 (크로스 카운터의 첫 구현, 합치기 전)', where: 'stage Y, round 1: scratchpad/pcwork/y1/pixel-boxer (ff592fa + the staged change of scratchpad/ywt)' },
+  u2: { say: 'U 6차 (N 없이 만든 그대로; 합치기를 멈춤 11-24)', where: 'stage U, round 6 on the head: scratchpad/pcwork/u6/pixel-boxer (0ac7c0c + the staged change of scratchpad/u3)' },
+  v1: { say: 'V 6차 (N 없이 만든 그대로; 11-24 합침)', where: 'stage V, round 6 on the head: scratchpad/pcwork/v6/pixel-boxer (0ac7c0c + the staged change of scratchpad/v3)' },
+  y1: { say: 'Y 1차 (크로스 카운터의 첫 구현; 11-24 3차를 합침)', where: 'stage Y, round 1: scratchpad/pcwork/y1/pixel-boxer (ff592fa + the staged change of scratchpad/ywt)' },
   /* (the options of the decisions, each the checkout with the one change the option is: src/pending.data.mjs, the items'
      own groups) */
   // inside-rule: the rule that keeps a pressed inside chain on it, at every grade, and off (game/bout.mjs RULES.insideTo)
@@ -84,15 +85,15 @@ export const CLIPS = [
     { id: `twc-${o}`, root, script: 'out-twist', window: [1.1, 1.45], measure: 'fall' },
     { id: `tw-${o}`, root, script: 'out-twist', window: [1.0, 2.4], measure: 'fall' }
   ]),
-  // downside-front: the hook knockdown, the fall and the getting up, and the straight's, the fall and lying: now (as before V's
-  // ligament), V's, and V's with the ligament taken up later
-  ...[['revert', 'now'], ['accept', 'v1'], ['from04', 'hip04']].flatMap(([o, root]) => [
+  // downside-front: the hook knockdown, the fall and the getting up, and the straight's, the fall and lying: before V (prey,
+  // as before V's ligament), V's, and V's with the ligament taken up later
+  ...[['revert', 'prey'], ['accept', 'v1'], ['from04', 'hip04']].flatMap(([o, root]) => [
     { id: `ds-${o}`, root, script: 'down-side', window: [0.95, 5.15], measure: 'lying', of: { at: 2.8 } },
     { id: `db-${o}`, root, script: 'down-back', window: [0.5, 3.0], measure: 'lying', of: { at: 2.4 } }
   ]),
-  // rocked-slow: the rocked card with a third press of his 0.4 s after the hook (the checker's scene): before V, V's, and V's
-  // slowed only from 0.05 and from 0.1
-  ...[['before', 'now'], ['keep', 'v1'], ['mid', 'slowed005'], ['shorter', 'slowed01']].map(([o, root]) => ({ id: `rk-${o}`, root, script: 'stagger', change: { also: [[1.55, 'power']], loop: 4 }, window: [0.7, 2.0], measure: 'guard' })),
+  // rocked-slow: the rocked card with a third press of his 0.4 s after the hook (the checker's scene): before V (prey), V's, and
+  // V's slowed only from 0.05 and from 0.1
+  ...[['before', 'prey'], ['keep', 'v1'], ['mid', 'slowed005'], ['shorter', 'slowed01']].map(([o, root]) => ({ id: `rk-${o}`, root, script: 'stagger', change: { also: [[1.55, 'power']], loop: 4 }, window: [0.7, 2.0], measure: 'guard' })),
   // combo-tempo: the one-two and hook of a pro and of a great clean one, pressed on contact (the card's tempo, the plan's) and
   // by the clock (as the head presses now), the first beat on the same frame; each from four frames before it
   ...[['3', [0.9, 1.9]], ['5m', [0.5833, 1.5833]]].flatMap(([lv, window]) => [
