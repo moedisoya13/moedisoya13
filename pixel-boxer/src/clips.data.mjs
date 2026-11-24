@@ -12,10 +12,10 @@
 export const ROOTS = {
   now: { say: '지금 (게시된 동작)', where: 'this checkout' },
   prem: { say: 'M 전 (합치기 전의 동작)', where: 'before stage M was merged: git archive 8b17869 src tools' },
-  n1: { say: 'N 4차 (합치기 전, 5차를 고치는 중)', where: 'stage N, round 4 on the head: scratchpad/pcwork/n4.tmp/pixel-boxer (0ac7c0c + the staged change of scratchpad/n3)' },
+  n1: { say: 'N 7차 (합치기로 정함, 마지막 점검 중)', where: 'stage N, round 7 on the head: scratchpad/pcwork/n7.tmp/pixel-boxer (0ac7c0c + the staged change of scratchpad/n3)' },
   u1: { say: 'U 1차 (첫 구현)', where: 'stage U, first round: scratchpad/wt-u/pixel-boxer (4c726b9 + its changes)' },
-  u2: { say: 'U 4차 (합치기 전, 5차를 고치는 중)', where: 'stage U, round 4 on the head: scratchpad/pcwork/u4.tmp/pixel-boxer (0ac7c0c + the staged change of scratchpad/u3)' },
-  v1: { say: 'V 4b차 (합치기 전, 5차를 고치는 중)', where: 'stage V, round 4b on the head: scratchpad/pcwork/v4b.tmp/pixel-boxer (0ac7c0c + the staged change of scratchpad/v3)' },
+  u2: { say: 'U 5차 (합치기 전, 따로의 점검 중)', where: 'stage U, round 5 on the head: scratchpad/pcwork/u5.tmp/pixel-boxer (0ac7c0c + the staged and unstaged change of scratchpad/u3)' },
+  v1: { say: 'V 5차 (합치기 전, 따로의 점검 중)', where: 'stage V, round 5 on the head: scratchpad/pcwork/v5.tmp/pixel-boxer (0ac7c0c + the staged and unstaged change of scratchpad/v3)' },
   vchin: { say: 'V 1차 + 기획의 턱 32° (점검 쪽의 시험판)', where: "the checker's variant: scratchpad/st-v/check/x-chin32 (V's first round, TWIST.down 22 -> 32)" }
 };
 

@@ -433,6 +433,13 @@ A+B 실신·위빙, C1 몸통 판정, C2 바디 주먹·뒷손 훅, E 파도, F 
 - "나머지"를 이 다섯으로 읽었다. 다른 열린 항목(`twist-chin`, `downside-front`, `rocked-slow`, `fx-ground-ring-game`, `jump-watch`, `bearing-*`, 방어 이펙트 등)은 정해진 것으로 적지 않음 → 사용자에게 확인.
 → N 마지막 따로의 점검(구현 모델·xhigh, 브리프 `scratchpad/wfout2/brief-N-check6.md`, 작업 `scratchpad/st-n9/`): 7차 수치 재현, 6·7차의 가름 확인, 범위 한 걸음 밖, AI 96판, 정해진 항목이 만든 대로인지, 시트와 메모; 문서에 옮길 **알려진 한계 목록**을 완전하게. 합치기: N의 패치는 지금 브랜치 위에 `src/bearing.data.mjs`만 걸림(다시 써서 해결).
 
+## 사용자 요청: 미결 카탈로그 최신화 → v23 (2026-11-24)
+
+- 비교 클립을 각 단계의 마지막으로 끝난 라운드로 다시 녹화: `n1` = N 7차(`scratchpad/pcwork/n7.tmp`), `u2` = U 5차(`u5.tmp`), `v1` = V 5차(`v5.tmp`) — 작업 폴더를 그대로 얼린 사본. 잰 값은 앞 녹화와 같음(으쓱 87.2851 → 87.2843 cm만): 이 클립들이 보이는 동작은 N 4차·U 4차·V 4b차 뒤에 바뀌지 않았다. 29클립, 969 KB.
+- 사용자가 정한 여섯에 "정해짐 (사용자, 11-24)": `n-way`, `crossarm-weak`, `third-hook-frame`, `upperbody-waist`, `grid-test-scope`, `merge-classes`.
+- 열린 항목의 상태를 지금으로: `order-memo-first`, `jump-watch`(N 7차 784·U 5차 734·V 5차 619, 새 지켜보는 줄), `hookr-bound`, `beckon-room`, `shrug-view`, `twist-chin`(V 5차의 약한 훅 낮은 값), `rocked-slow`(V 5차: 4.0초·27%, 막은 몫 0.401 → 0.381, AI 96판 다운 160 → 140 → 125·KO 34 → 31 → 25), `downside-front`(V 5차의 무릎·팔꿈치), `pull-test`(V 5차 44·39·27), `inside-rule`·`waist-bound`(N은 이 구현으로 합침; 다른 것을 고르면 합친 뒤에 바꿈), `merge-bar`.
+- 미결 시험 7/7(클립 재녹화 시험 포함).
+
 ## 사용자 지적: 모션 카탈로그의 메모가 거의 반영되지 않았다 (2026-11-23)
 
 사실이다. 메모 27건(26줄; `feedback`을 다시 읽음, 11-22 뒤로 새 메모 없음) 가운데 **카탈로그의 동작에 보이는 것은 0건.** 끝난 것은 J(이펙트)와 K(허리 엔진: `hookIn` 메모의 "허리를 분리해 돌 수 있는 변수로"만 엔진에 생겼고 어느 주먹도 아직 쓰지 않음)뿐이고, 그 뒤의 시간은 이펙트(데미지 비례, 다운 효과, 용암·불티), K의 착지 수리, 소스 기획 둘에 썼다. 메모의 단계: M(`crossArm`의 audit) → N(`hookIn`, `hookR`, `upperIn`, `flicker`) → P(`crossArm`의 모양) → Q(`duck`, `pull`, `parry`, `parryDown`, `rollCounter`) → R(`inout`, `side`, `circle`, `dash`, `dashSide`) → S(`shift`, `wave`) → U(`collar`, `beckon`, `chinOut`, `wind`, `shrug`, `tapChin`) → V(`stagger`, `down-front`, `out-twist`).
