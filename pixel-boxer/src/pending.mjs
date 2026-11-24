@@ -25,6 +25,7 @@
 import { createRenderer, paletteArray, rgb } from './render/renderer.mjs';
 import { createFx } from './render/fx.mjs';
 import { blow, met, rippleOf, rippleRow } from './render/blow.mjs';
+import { createGuard, styleOf, warpOf } from './render/guard.mjs';
 import { unpack, fromBase64 } from './render/splats.mjs';
 import { fk, NAMES } from './rig/skeleton.mjs';
 import { RIVAL } from './rig/boxer.mjs';
@@ -206,7 +207,12 @@ const CLIP_SAY = {
   },
   tempo: m => `닿음 사이 <b>${(m.gaps || []).join(' · ')}</b> ms · ${(m.blows || []).map(b => `${PUNCH[b.name] || b.name} ${SAID[b.type] || b.type} ${n1(b.J)}`).join(', ')} N·s`,
   lying: m => `${FACE[m.face] || '–'} · 넓적다리 사이 <b>${f0(m.thighs)}</b>° · 머리 닿음 ${s2(m.down)} s${m.stood === null ? '' : ` · 일어섬 ${s2(m.stood)} s`}`,
-  guard: m => `한 프레임 글러브 이동: ${(m.after || []).map(a => `${PUNCH[a.name] || a.name} 뒤 <b>${n1(a.step)}</b> cm`).join(' · ')}`
+  guard: m => `한 프레임 글러브 이동: ${(m.after || []).map(a => `${PUNCH[a.name] || a.name} 뒤 <b>${n1(a.step)}</b> cm`).join(' · ')}`,
+  // (a miss: by how much, the bout's own margin; and a defence the bout found brilliant)
+  missed: (m, card) => {
+    const b = blowOf(m, card.blow);
+    return b ? `${PUNCH[b.name] || b.name} ${SAID[b.type] || b.type} ${b.margin !== undefined ? `<b>${n1(b.margin)}</b> cm` : `<b>${n1(b.J)}</b> N·s`}${m.brilliant ? ' · 기막힌 수비' : ''}` : '–';
+  }
 };
 function clipEl(card, el) {
   const made = CLIPS_MADE[card.clip],
@@ -733,6 +739,11 @@ function start({ manifest, boxer }) {
       blow(cell.motes[e.on].fx, e, men[e.on]);
       cell.ripples[e.on] = rippleOf(e, men[e.on]);
       cell.shake = e.down ? 5 : 1 + 2.5 * k;
+    } else if (cell.guard) {
+      // (a card drawn in a defence style of its own, card.fx: render/guard.mjs; the screen's white is the card's own, white)
+      const d = cell.guard.meet(e, men, cell.fx, cell.motes.map(m => m.fx));
+      if (d.ripple) cell.ripples[d.ripple.on] = d.ripple.ripple;
+      if (e.type === 'block' || e.type === 'parry') cell.shake = e.type === 'parry' ? 2 : 1;
     } else if (e.type === 'block') (met(cell.fx, e), (cell.shake = 1));
     else if (e.type === 'parry') (met(cell.fx, e), (cell.shake = 2));
   }
@@ -846,7 +857,11 @@ function start({ manifest, boxer }) {
         at: 0, // where it is now, in frames (fractional)
         seen: -1, // the last frame whose blows have been thrown
         men: null,
-        data: null
+        data: null,
+        // (a card in a defence style of its own: render/guard.mjs, which sees every frame; its brilliant slow, warp)
+        guard: card.fx ? createGuard(styleOf(card.fx)) : null,
+        warp: null,
+        pace: 1
       };
       cell.fx = createFx();
       cell.mesh = R.mesh(cell.fx.rows, 0, true);
@@ -865,7 +880,7 @@ function start({ manifest, boxer }) {
     return (reel.ready = Promise.all(reel.cells.map(cell => LOAD[cell.id]().then(mod => (cell.data = decode(mod, cell.card)))))
       .then(() => {
         // (how long one play of each is, at its speed; the comparison goes round once in the longest of them)
-        for (const cell of reel.cells) (cell.n = cell.data.frames.length), (cell.span = cell.n / 60 / cell.s);
+        for (const cell of reel.cells) (cell.n = cell.data.frames.length), (cell.warp = cell.guard && warpOf(cell.guard.style, cell.data.frames)), (cell.span = cell.warp ? cell.warp.span / cell.s : cell.n / 60 / cell.s);
         reel.play = Math.max(...reel.cells.map(c => c.span));
         for (const cell of reel.cells) (cell.loops = Math.max(1, Math.round(reel.play / cell.span))), across(cell);
         reel.state = 'ready';
@@ -893,15 +908,17 @@ function start({ manifest, boxer }) {
   }
   // where a card of the comparison is when the comparison is u seconds in: a slow card once round, a full speed one as often
   // as goes into the same time, and each on its last frame for the moment held at the end
-  const frameAt = (reel, cell, u) => (u >= reel.play ? cell.n - 1 : Math.min(cell.n - 1, ((u * 60 * cell.s) % (cell.loops > 1 ? cell.n : Infinity))));
+  const frameAt = (reel, cell, u) => (u >= reel.play ? cell.n - 1 : cell.warp ? Math.min(cell.n - 1, cell.warp.at((u * cell.s) % (cell.loops > 1 ? cell.warp.span : Infinity))) : Math.min(cell.n - 1, ((u * 60 * cell.s) % (cell.loops > 1 ? cell.n : Infinity))));
   function seek(reel, u) {
     reel.u = u;
     for (const cell of reel.cells) {
       const at = frameAt(reel, cell, u),
         i = Math.floor(at);
       // (the blows of the frames it has come to since it was last asked, thrown as it comes to them; gone round: from the start)
-      if (i < cell.seen) (cell.seen = -1), (cell.whiteAt = null);
+      if (i < cell.seen) (cell.seen = -1), (cell.whiteAt = null), cell.guard && (cell.guard = createGuard(cell.guard.style));
+      if (cell.warp) cell.pace = u >= reel.play ? 1 : cell.warp.pace((u * cell.s) % (cell.loops > 1 ? cell.warp.span : Infinity));
       for (let k = cell.seen + 1; k <= i; k++) {
+        if (cell.guard) cell.guard.see(cell.data.frames[k].men);
         if (!cell.data.frames[k].events.length) continue;
         // (the men as they were on that frame: what the blow throws off comes off them as they were then)
         cell.men = cell.men || cell.data.frames[k].men.map(m => Object.assign({}, m));
@@ -922,7 +939,7 @@ function start({ manifest, boxer }) {
     let u = reel.u + elapsed;
     if (u >= reel.play + HOLD) {
       u = 0;
-      for (const cell of reel.cells) (cell.seen = -1), (cell.ripples = [null, null]), (cell.whiteAt = null);
+      for (const cell of reel.cells) (cell.seen = -1), (cell.ripples = [null, null]), (cell.whiteAt = null), cell.guard && (cell.guard = createGuard(cell.guard.style));
     }
     const before = reel.cells.map(c => c.at);
     seek(reel, u);
@@ -945,7 +962,7 @@ function start({ manifest, boxer }) {
       const white = cell.whiteAt === null || cell.at < cell.whiteAt ? 0 : cell.card.white * Math.exp((-16 * (cell.at - cell.whiteAt)) / 60);
       cell.flash.style.opacity = white > 0.02 ? white.toFixed(3) : '0';
     }
-    draw(cell, box, dpr, grid, elapsed * cell.s, cam.dist);
+    draw(cell, box, dpr, grid, elapsed * cell.s * cell.pace, cam.dist);
   }
 
   function theme() {
@@ -1063,7 +1080,7 @@ function start({ manifest, boxer }) {
     // (the recorded cards: all of them loaded now, and a comparison put at u seconds into its play)
     loadAll: () => Promise.all(reels.map(r => (r.state === 'idle' ? load(r) : r.ready))),
     seek: (u, within) => reels.filter(r => r.state === 'ready' && (!within || r.cells.some(c => within.contains(c.el)))).forEach(r => {
-      for (const c of r.cells) (c.seen = -1), (c.ripples = [null, null]), (c.whiteAt = null);
+      for (const c of r.cells) (c.seen = -1), (c.ripples = [null, null]), (c.whiteAt = null), c.guard && (c.guard = createGuard(c.guard.style));
       seek(r, u);
     }),
     renderer: R,

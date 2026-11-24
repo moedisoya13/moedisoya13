@@ -6,7 +6,8 @@
    a knockdown's own: its lava in place of the sparks, thrown twice in quick succession, the second ripple where he comes
    down and the ring through the canvas, which is then drawn under them), left out by default so that the pose is what is looked at; turn=1: the camera's yaw is taken from
    where the man in focus faces, so a man going round is seen from the same side all the way; solo=1: the other man is not
-   drawn; replay=1: the first replay the script makes (src/replay.mjs: a knockdown's, or a brilliant defence's), as the
+   drawn; defence=lines-sparks,wind-line (with fx=1: a block, a parry, a miss drawn in that style, render/guard.mjs styleOf;
+   today's by default); replay=1: the first replay the script makes (src/replay.mjs: a knockdown's, or a brilliant defence's), as the
    motion catalogue draws it, with the effects: from and to are then seconds of real time into it, a picture every sixtieth
    of a second, so that from=1&to=1.1&n=7 is seven pictures running; a knockdown's from the camera it cuts to (its view:
    dist is then the live distance it is drawn closer than, and vyaw, vpitch put it somewhere else, to compare; live=1 draws
@@ -24,7 +25,8 @@
    globalThis.__review.ready when it is drawn. */
 import { createRenderer, paletteArray, rgb } from './render/renderer.mjs';
 import { createFx } from './render/fx.mjs';
-import { blow, met, rippleOf, rippleRow, fallOf, landed, landRipple, groundOf, groundRow, quietOf, ringsOn, FX } from './render/blow.mjs';
+import { blow, rippleOf, rippleRow, fallOf, landed, landRipple, groundOf, groundRow, quietOf, ringsOn, FX } from './render/blow.mjs';
+import { createGuard, styleOf } from './render/guard.mjs';
 import { floor } from './render/floor.mjs';
 import { createReplay, distOf } from './replay.mjs';
 import { unpack, fromBase64 } from './render/splats.mjs';
@@ -69,7 +71,8 @@ const dice = seed => () => {
 /* What a blow throws, as the game draws it (render/blow.mjs): the sparks where gloves met, what a blow throws off each man,
    the ripple through each, a knocked-down man watched until he comes down, and the ring through the canvas from there. */
 function effectsOf(rnd) {
-  const E = { sparks: createFx(rnd), motes: [createFx(rnd), createFx(rnd)], ripples: [null, null], falls: [null, null], ground: null };
+  // (and the defences, in the style ?defence= asks for: render/guard.mjs; today's if it asks for none)
+  const E = { sparks: createFx(rnd), motes: [createFx(rnd), createFx(rnd)], ripples: [null, null], falls: [null, null], ground: null, guard: createGuard(styleOf(q.get('defence'))) };
   const keep = f => {
     const k = f.update(0);
     return { rows: f.rows.slice(0, k * 12), count: k };
@@ -82,9 +85,13 @@ function effectsOf(rnd) {
       if (E.ground) E.ground.age += dt;
     },
     blows(events, men) {
+      E.guard.see(men);
       for (const e of events) {
         if (e.type === 'hit') (blow(E.motes[e.on], e, men[e.on]), (E.ripples[e.on] = rippleOf(e, men[e.on])), fallOf(e) && (E.falls[e.on] = fallOf(e)));
-        else if (e.type === 'block' || e.type === 'parry') met(E.sparks, e);
+        else {
+          const d = E.guard.meet(e, men, E.sparks, E.motes);
+          if (d.ripple) E.ripples[d.ripple.on] = d.ripple.ripple;
+        }
       }
     },
     // (where a man knocked down comes down: found on the step, or kept with the step by a replay)

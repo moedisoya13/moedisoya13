@@ -22,7 +22,8 @@
    punch that line is about), slow (0.25: a quarter of the speed), cam ({ yaw, pitch, dist (metres, fixed), on (what it looks
    at: the middle of the two men, man0 / man1 (at height y), head0 / head1 (y above it)), y }), option (the id of the option
    of its item it is the motion of: OPTIONS; the page writes the option's own words on it, choice), white (the screen's white
-   flash at a parry drawn over it, as the game draws it: its strength) }. The recorded cards of a group play together. */
+   flash at a parry drawn over it, as the game draws it: its strength), fx (the defence effects drawn in a style of their own:
+   { amount, evade, parryWhite, brilliant }, over today's, render/guard.mjs) }. The recorded cards of a group play together. */
 import { NUMBERS } from './pending.numbers.mjs';
 
 const N = NUMBERS || {};
@@ -141,6 +142,41 @@ const CHAIN_CAM = { yaw: 0.25, pitch: 0.2 };
 // (from above, close on the boxer's waist and chest; and over the two of them, for the flicker that reaches across)
 const WAIST_TOP = { yaw: 0.6, pitch: 1.45, dist: 2.2, on: 'man0', y: 1.0 };
 const FLICK_TOP = { yaw: 0.6, pitch: 1.45, dist: 2.6, y: 1.0 };
+/* ---- the defence effects' samples (render/guard.mjs): the same recording played once for each style, the style the card's
+   own (fx: { amount, evade, brilliant }, over today's, render/guard.mjs DEFENCE); today's drawing on the card that is no
+   option ("지금"), the screen's white at a parry on it as the game draws it (white). Close on the man defending, from the side
+   the punch comes in on. */
+const GUARD_CAM = { yaw: 0.6, pitch: 0.2, dist: 2.4, y: 1.3 };
+const BLOCK_CAM = { yaw: 0.1, pitch: 0.3, dist: 2.4, y: 1.3 };
+const ROLL_CAM = { yaw: 0.25, pitch: 0.6, dist: 2.6, y: 1.3 };
+const SLIP_CAM = { yaw: 0.45, pitch: 0.3, dist: 2.4, y: 1.35 };
+// (a hook over a ducked head goes across the line between them: seen from behind his shoulder and above, it goes across the picture)
+const DUCK_CAM = { yaw: 1.1, pitch: 0.6, dist: 2.6, y: 1.2 };
+const amounts = (id, say, line, more) => [
+  [clip(id, `${say} · 지금 그대로 (선택지가 아님)`, line, Object.assign({ fx: { amount: 'now' } }, more, more.now)), opt(id, 'keep-no-white', say, line, Object.assign({ fx: { amount: 'keep-no-white' } }, more))],
+  [opt(id, 'lines-sparks', say, line, Object.assign({ fx: { amount: 'lines-sparks' } }, more)), opt(id, 'lines', say, line, Object.assign({ fx: { amount: 'lines' } }, more))]
+].map(row => row.map(card => (delete card.now, card)));
+const DEFENCE_GROUPS = {
+  'fx-defence-amount': [
+    { title: '막음 3단계(`block@3`): 스트레이트를 글러브로 막음, 같은 녹화를 선택지마다 한 번씩 (왼쪽 위는 지금 그대로)', rows: amounts('dg-block', '막음 3단계', 'blow', { blow: 'cross', cam: BLOCK_CAM }) },
+    { title: '패리 3단계(`parry@3`): 잽을 쳐냄, `fx-parry-white`와 같은 녹화 (지금 그대로에는 본편의 화면 흰빛)', rows: amounts('pw-parry', '패리 3단계', 'blow', { cam: GUARD_CAM, now: { white: 0.25 } }) },
+    { title: '숄더 롤 4명(`rollCounter@4m`): 스트레이트를 어깨로 흘리고 뒷손 훅 반격, `hookr-bound`와 같은 녹화', rows: amounts('rollc-now', '숄더 롤 4명', 'blow', { blow: 'hookR', cam: ROLL_CAM }) }
+  ],
+  'fx-defence-evade': [
+    { title: '슬립 5명(`slip@5m`): 잽이 머리 2.8 cm 옆을 지나감', rows: [[opt('dg-slip', 'none', '슬립 5명, 잽', 'missed', { fx: { evade: 'none' }, cam: SLIP_CAM }), opt('dg-slip', 'wind-line', '슬립 5명, 잽', 'missed', { fx: { evade: 'wind-line' }, cam: SLIP_CAM })]] },
+    { title: '더킹 2단계(`duck@2`): 훅이 머리 2.3 cm 위를 지나감', rows: [[opt('dg-duck', 'none', '더킹 2단계, 훅', 'missed', { blow: 'hook', fx: { evade: 'none' }, cam: DUCK_CAM }), opt('dg-duck', 'wind-line', '더킹 2단계, 훅', 'missed', { blow: 'hook', fx: { evade: 'wind-line' }, cam: DUCK_CAM })]] },
+    { title: '멀리 빗나감: 더킹 5암(`duck@5a`, 17.4 cm)과 슬립 3단계(`slip@3`, 6.1 cm로 6 cm를 조금 넘음). 둘 다 바람 선으로 그려도 선이 없음', rows: [[opt('dg-far', 'wind-line', '더킹 5암, 훅', 'missed', { blow: 'hook', fx: { evade: 'wind-line' }, cam: DUCK_CAM }), opt('dg-edge', 'wind-line', '슬립 3단계, 잽', 'missed', { fx: { evade: 'wind-line' }, cam: SLIP_CAM })]] }
+  ],
+  'fx-brilliant-game': [
+    {
+      title: '기막힌 수비: 카운터 4명(`counter@4m`), 잽을 2.9 cm로 빼고 바로 스트레이트. 게임에서처럼 제 속도 (슬로는 선택지의 일부). 셋은 피하기 그림을 "바람 선"으로, 마지막은 "그리지 않음"으로',
+      rows: [
+        [opt('dg-brilliant', 'none', '카운터 4명', 'missed', { fx: { evade: 'wind-line', brilliant: 'none' }, cam: SLIP_CAM }), opt('dg-brilliant', 'line', '카운터 4명', 'missed', { fx: { evade: 'wind-line', brilliant: 'line' }, cam: SLIP_CAM })],
+        [opt('dg-brilliant', 'slow', '카운터 4명', 'missed', { fx: { evade: 'wind-line', brilliant: 'slow' }, cam: SLIP_CAM }), opt('dg-brilliant', 'line', '카운터 4명, 피하기 그림 없음', 'missed', { fx: { evade: 'none', brilliant: 'line' }, cam: SLIP_CAM })]
+      ]
+    }
+  ]
+};
 const OPTIONS = {
   'inside-rule': ['3', '5m'].map(lv => ({
     title: `${lv === '3' ? '3단계' : '5명'}: 0.64 m에서 강타 버튼을 0.3초 간격으로 세 번 (상대는 가드를 내림, 밀린 데서 다시 들어감: \`tests/inside.test.mjs\`의 장면)`,
@@ -173,7 +209,8 @@ const OPTIONS = {
   })),
   'fx-parry-white': [
     { title: '패리 3단계(`parry@3`): 같은 녹화를 두 번, 오른쪽에만 본편의 화면 흰빛(0.25에서 시작해 초당 e^−16으로 사라짐)', rows: [[opt('pw-parry', 'remove', '패리 3단계, 흰빛 없음', 'blow', { cam: { yaw: 0.6, pitch: 0.2 } }), opt('pw-parry', 'keep', '패리 3단계, 화면 흰빛', 'blow', { white: 0.25, cam: { yaw: 0.6, pitch: 0.2 } })]] }
-  ]
+  ],
+  ...DEFENCE_GROUPS
 };
 const COMPARE = {
   'low2-block': [
@@ -218,11 +255,11 @@ export const ITEMS = [
       [['keep', '0.1초, 두 발 모두 전량', '지금 그대로.'], ['half', '0.1초, 둘째 발은 절반', '둘째 발을 절반으로(센 타격에서 덜 번잡).'], ['split', '0.1초, 나눠 쏘기', '채택한 수를 둘로 나눠 합이 그대로.'], ['fast', '0.05초로 되돌림', '더 빠르지만 슬로가 아니면 한 덩어리로 보입니다.']],
       'keep', '둘로 읽히는 가장 짧은 간격입니다. 센 타격의 번잡함이 거슬리면 "둘째 발은 절반"을 권합니다.'],
     ['fx-defence-amount', '방어 이펙트를 얼마나 줄일지',
-      '지금: 막음은 글러브가 만난 곳에 불꽃 4개(흰색·파랑), 패리는 불꽃 14개(흰색·노랑·호박)와 화면 흰빛, 피하기·숄더 롤·커버는 그림이 없습니다. 제안은 "공격은 튀는 것과 파문, 방어는 선과 작은 파문"입니다: 막은 팔뚝에 작은 파문, 쳐낸 주먹의 꺾인 궤적 선, 크기는 막은 충격량에 비례, 잽의 타격 효과보다 크지 않게.',
+      '지금: 막음은 글러브가 만난 곳에 불꽃 4개(흰색·파랑), 패리는 불꽃 14개(흰색·노랑·호박)와 화면 흰빛, 피하기·숄더 롤·커버는 그림이 없습니다. 제안은 "공격은 튀는 것과 파문, 방어는 선과 작은 파문"입니다: 막은 팔뚝에 작은 파문, 쳐낸 주먹의 꺾인 궤적 선, 크기는 막은 충격량에 비례, 잽의 타격 효과보다 크지 않게. 아래 샘플은 같은 녹화를 선택지마다 한 번씩 그린 것으로(왼쪽 위는 지금 그대로, 선택지가 아님), 막음(23.4 N·s)은 지금 불꽃 4개, "흰색만 뺌"은 같은 4개를 흰색 없이, "선과 파문"은 막힌 주먹의 선 15 cm와 막은 글러브의 파문(흔들림 0.9 cm, 잽 타격의 1.5 cm보다 작음)에 "불꽃 조금"이면 불꽃 1개, 패리(39 N·s)는 지금 14개와 화면 흰빛 0.25, 선 쪽은 쳐낸 글러브의 꺾인 선 54 cm에 불꽃 4개(선만이면 0개), 숄더 롤은 어깨가 빠지는 길의 선 20 cm에 불꽃 3개이고, 선은 1~2픽셀 굵기의 회청색(31→29)으로 막는 사람의 윤곽 위에는 그리지 않습니다(숄더 롤의 선만 그의 어깨 위에).',
       [['lines-sparks', '선과 파문 + 불꽃 조금', '막음 0~2개, 패리 3~4개(쳐낸 방향으로).'], ['lines', '선과 파문만', '불꽃 없음.'], ['keep-no-white', '지금 불꽃에서 흰색만 뺌', '모양은 그대로, 흰색과 화면 흰빛만 없앱니다.']],
       'lines-sparks', '막음과 패리가 눈으로 갈리고, 타격보다 작게 읽힙니다.'],
     ['fx-defence-evade', '닿지 않은 피하기의 그림',
-      '슬립·더킹·위빙·스웨이 백으로 주먹이 빗나갈 때는 지금 아무것도 그리지 않습니다.',
+      '슬립·더킹·위빙·스웨이 백으로 주먹이 빗나갈 때는 지금 아무것도 그리지 않습니다. 아래 샘플에서 바람 선은 슬립 5명(잽이 2.8 cm로 빗나감)에 24 cm, 더킹 2단계(훅 2.3 cm)에 23 cm로 주먹이 지나간 길 위에 1~2픽셀 굵기의 회청색으로 0.3초쯤 남고, 17.4 cm와 6.1 cm로 빗나간 것에는 선이 없습니다(게임의 옆 카메라에서는 머리 위를 가로지르는 훅의 선이 짧게 줄어 보입니다).',
       [['wind-line', '스친 주먹에만 바람 선', '6 cm 안으로 스친 주먹의 길에 가는 선. 가까울수록 선명하고 멀리 빗나가면 없음.'], ['none', '그리지 않음', '지금 그대로.']],
       'wind-line', '아슬아슬하게 피한 것만 보이게 됩니다.'],
     ['fx-parry-white', '패리의 화면 흰빛',
@@ -230,7 +267,7 @@ export const ITEMS = [
       [['remove', '없앰', '타격 쪽과 맞춥니다.'], ['keep', '둠', '패리의 신호로 남깁니다.']],
       'remove', '"흰 번쩍임 없이"라는 앞선 지시와 맞습니다.'],
     ['fx-brilliant-game', '기막힌 수비의 게임 안 표시',
-      '기막힌 수비(아주 가깝게 피하거나 쳐내고 바로 받아친 것)는 카탈로그에서만 리플레이로 보이고, 게임 안에는 표시가 없습니다.',
+      '기막힌 수비(아주 가깝게 피하거나 쳐내고 바로 받아친 것)는 카탈로그에서만 리플레이로 보이고, 게임 안에는 표시가 없습니다. 아래 샘플(카운터 4명: 잽을 2.9 cm로 빼고 바로 스트레이트, 제 속도)에서 "표시 없음"은 보통의 바람 선 24 cm, "바람 선만 더 선명하게"는 그 선을 거두고 같은 길에 한 단계 밝고(13) 굵은 42 cm 선을 0.45초, "아주 짧은 슬로"는 시합의 0.1초를 0.3배 속도로(0.63초 녹화가 0.85초에 재생), 피하기 그림이 없을 때 "더 선명하게"는 선명한 선 42 cm만 그립니다.',
       [['slow', '아주 짧은 슬로', '0.1초쯤, 다운의 슬로보다 훨씬 짧게.'], ['line', '바람 선만 더 선명하게', '슬로 없이.'], ['none', '표시 없음', '지금 그대로.']],
       'slow', '드문 장면이라 짧게 짚어 줄 만합니다.'],
     ['fx-ground-shake', '쓰러질 때 바닥의 파문: 빛 대신 픽셀 진동, 몸통과 머리 따로',

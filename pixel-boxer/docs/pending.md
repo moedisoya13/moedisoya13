@@ -607,6 +607,16 @@ V 네 번째 점검, U 6차, N 8차 에이전트가 멈춤 → 같은 에이전�
 - 시험 +3(`fx.test.mjs`: 바닥 입자만·화면 평면·정한 픽셀 안·바깥쪽·밝아지지 않음; 두 고리의 때; `light`는 전과 같음), 미결 83항목. 팀의 작업 폴더에서 419/419, feel·audit·events 같음. 브랜치에 합친 뒤 페이지·이펙트 시험 49/49.
 - 안전 점검: 팀의 `pkill -f qc.sh; pkill -f game.cjs`가 거절됨(다른 팀도 같은 이름의 스크립트를 돌림) → 돌려 하지 않고, 이미 멈춘 것을 확인.
 
+## 방어 이펙트 시안과 샘플: 합침 (2026-11-24)
+
+보고와 샷 `scratchpad/defence/`(`png/sheet-*.png`, 잰 값 `measure.txt`). 새 모듈 `src/render/guard.mjs`(`blow.mjs`·`fx.mjs`·`renderer.mjs`는 그대로), 스위치 `DEFENCE = { amount: 'now', evade: 'none', parryWhite: 'keep', brilliant: 'none' }`(기본은 지금 그대로: 14개 대본에서 줄 단위로 같음을 시험), 주소 `?defence=lines-sparks,wind-line,line`(게임·검토 시트 `fx=1`·이펙트 시안), 미결 카탈로그의 카드별 `fx`.
+- 방식: `now`(막음 불꽃 4·패리 14 + 화면 흰빛 0.25) / `keep-no-white`(같은 불꽃에서 흰색만 다음 색으로, 화면 흰빛 없음) / `lines-sparks`(막음: 막힌 주먹의 길 11~18 cm 선 + 막은 곳의 파문(잽 타격의 1.5 cm 이하) + 불꽃 0~2; 패리: 쳐낸 글러브의 꺾인 선(54 cm까지) + 불꽃 3~4; 숄더 롤: 어깨가 빠지는 길의 선 30 cm까지 + 파문 + 불꽃 3) / `lines`(불꽃 없음). 선은 1~2픽셀, 회청색 31→29, 흰색·빛 없음, 막는 사람의 윤곽 위에는 그리지 않음. 제안에는 막음에 선이 없었으나 파문만으로는 1픽셀 아래라 **막힌 주먹의 선을 더함**(구현자).
+- `wind-line`: 6 cm 안으로 빗나간(또는 스친) 주먹에만, 머리 가까운 구간 12~30 cm, 0.22~0.4 s. 기막힌 수비: `line`(같은 길에 더 밝고 굵은 선 42 cm, 0.45 s) / `slow`(시합의 0.1 s를 0.3배로) / `none`.
+- **빠진 것**: 기막힌 수비의 `slow`는 게임에 연결하지 않음 — "다운의 라이브는 제 속도" 시험이 `main.mjs`의 그 줄을 글자 그대로 묶고 있어, 바꾸면 그 시험을 고쳐야 함(사용자가 `slow`를 고르면 한 줄과 시험의 그 문장을 고침). 미결 카드에서는 슬로가 그대로 보임.
+- 샘플: `fx-defence-amount`(막음 `block@3` 23.4 N·s, 패리 `parry@3` 39 N·s, 숄더 롤 `rollCounter@4m`: 방식마다 한 장, 왼쪽 위는 "지금 그대로"), `fx-defence-evade`(슬립 `slip@5m` 2.8 cm, 더킹 `duck@2` 2.3 cm, 멀리 빗나간 두 장은 선 없음), `fx-brilliant-game`(`counter@4m` 제 속도: 없음 / 선 / 슬로 / 피하기 그림 없이 선). 새 클립 6개.
+- 한계(구현자): 새 그림은 모두 1~2픽셀이라 페이지의 밝은 바탕에서는 약하게 읽힘(게임의 어두운 홀에서는 더 잘 보임); 막음의 파문은 정지 그림에서 1픽셀 아래; 패리의 불꽃 4개 가운데 대개 하나만 보임; 숄더 롤은 어느 방식에서도 잘 안 보임; 수비 직후 다운이 나면 새 선이 남아 있는 동안(최대 0.45 s) 다운 리플레이가 늦어질 수 있음.
+- 시험 +10(`tests/guard-fx.test.mjs`), 팀의 작업 폴더에서 426/426, events·feel·audit 같음. 바닥 고리를 합친 머리에서 419/419·feel·audit·events 같음을 확인한 뒤, 방어 이펙트를 그 위에 합침(겹친 곳: `fxlab`·`main`·`review`의 import 한 줄씩; 페이지·이펙트 시험 51/51).
+
 ## 사용자 지적: 모션 카탈로그의 메모가 거의 반영되지 않았다 (2026-11-23)
 
 사실이다. 메모 27건(26줄; `feedback`을 다시 읽음, 11-22 뒤로 새 메모 없음) 가운데 **카탈로그의 동작에 보이는 것은 0건.** 끝난 것은 J(이펙트)와 K(허리 엔진: `hookIn` 메모의 "허리를 분리해 돌 수 있는 변수로"만 엔진에 생겼고 어느 주먹도 아직 쓰지 않음)뿐이고, 그 뒤의 시간은 이펙트(데미지 비례, 다운 효과, 용암·불티), K의 착지 수리, 소스 기획 둘에 썼다. 메모의 단계: M(`crossArm`의 audit) → N(`hookIn`, `hookR`, `upperIn`, `flicker`) → P(`crossArm`의 모양) → Q(`duck`, `pull`, `parry`, `parryDown`, `rollCounter`) → R(`inout`, `side`, `circle`, `dash`, `dashSide`) → S(`shift`, `wave`) → U(`collar`, `beckon`, `chinOut`, `wind`, `shrug`, `tapChin`) → V(`stagger`, `down-front`, `out-twist`).

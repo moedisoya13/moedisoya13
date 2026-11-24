@@ -10,7 +10,7 @@
      CLIPS   { id, root (a key of ROOTS), script (a catalogue script id of that checkout, or a scene built by the recorder:
              tools/clips.mjs SCENES), change (tools/clips.mjs scriptOf: him, against, also, press, loop), window: [from, to]
              seconds of the run, measure (tools/clips.mjs MEASURES), of (what the measure is told: move, the punch whose
-             waist is timed) }
+             waist is timed), defence (true: its events keep what the defence effects are drawn from, render/guard.mjs) }
    Record them all again, when the stages change (every root made by edits with it):
      node tools/clips.mjs --write --root prem=<before M> --root pren=<before N> --root u1=<U, first round> --root u2=<U, last round> --root v1=<V, last round>
    (`now` is this checkout.) */
@@ -92,5 +92,19 @@ export const CLIPS = [
     { id: `ct${lv}-keep`, root: 'clockFirst', script: { scene: 'combo', row: '1-2-3', level: lv, press: 'clock' }, window, measure: 'tempo' }
   ]),
   // fx-parry-white: a pro's parry (played twice, the screen's white flash drawn on one: src/pending.mjs)
-  { id: 'pw-parry', root: 'now', script: 'parry@3', window: [0.6, 1.4], measure: 'taken' }
+  { id: 'pw-parry', root: 'now', script: 'parry@3', window: [0.6, 1.4], measure: 'taken' },
+
+  /* ---- the defence effects (fx-defence-amount, fx-defence-evade, fx-brilliant-game): the motion as it is, each clip played
+     once for each style of render/guard.mjs (the card's fx), and recorded with what those are drawn from (defence: true:
+     tools/clips.mjs DEFENCE_KEEP). The parry is pw-parry's, the shoulder roll rollc-now's. */
+  // a pro's block of the cross on his glove
+  { id: 'dg-block', root: 'now', script: 'block@3', window: [0.7, 1.3], measure: 'taken', defence: true },
+  // a slip under the jab and a duck under the hook that miss him by 2.8 and 2.3 cm, and a duck it misses by 17.4 cm, and a
+  // slip it misses by 6.1 cm (just past where a wind line is drawn)
+  { id: 'dg-slip', root: 'now', script: 'slip@5m', window: [0.7, 1.2], measure: 'missed', defence: true },
+  { id: 'dg-duck', root: 'now', script: 'duck@2', window: [1.0, 1.55], measure: 'missed', defence: true },
+  { id: 'dg-far', root: 'now', script: 'duck@5a', window: [1.0, 1.55], measure: 'missed', defence: true },
+  { id: 'dg-edge', root: 'now', script: 'slip@3', window: [0.7, 1.2], measure: 'missed', defence: true },
+  // a brilliant defence: 4명's slip under the jab by 2.9 cm and the cross back at once (the catalogue's replay card)
+  { id: 'dg-brilliant', root: 'now', script: 'counter@4m', window: [0.7, 1.35], measure: 'missed', defence: true }
 ];

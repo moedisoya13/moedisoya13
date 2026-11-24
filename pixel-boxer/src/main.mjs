@@ -7,7 +7,8 @@
    the bout is not stepped meanwhile, any key, tap or button skips it, and it cuts back; the result comes after it. */
 import { createRenderer, paletteArray, rgb } from './render/renderer.mjs';
 import { createFx } from './render/fx.mjs';
-import { blow, met, rippleOf, rippleRow, fallOf, landed, landRipple, groundOf, groundRow, quietOf, ringsOn, FX } from './render/blow.mjs';
+import { blow, rippleOf, rippleRow, fallOf, landed, landRipple, groundOf, groundRow, quietOf, ringsOn, FX } from './render/blow.mjs';
+import { createGuard, styleOf } from './render/guard.mjs';
 import { captureBout, blend, createReplay, distOf, backOf, FALL } from './replay.mjs';
 import { unpack, fromBase64 } from './render/splats.mjs';
 import * as M from './rig/m3.mjs';
@@ -78,6 +79,10 @@ function start({ manifest, ring, boxers }) {
      a blow throws off each of them, apart from the rest, to be kept off his own silhouette (render/blow.mjs) */
   const fx = [createFx(), createFx(), createFx()],
     motes = [createFx(), createFx()];
+  /* what a defence draws (a block, a parry, a miss, a brilliant defence), in the style ?defence= asks for (render/guard.mjs
+     styleOf: ?defence=lines-sparks,wind-line,line), today's if it asks for none. (Not the brilliant defence's slow motion:
+     the picture here plays at the true speed, as tests/fx.test.mjs holds it; the pending catalogue's cards show it.) */
+  let guard = createGuard(styleOf(query.get('defence')));
   const meshes = { ring: R.mesh(ring, manifest.ring.count), fx: fx.map(f => R.mesh(f.rows, 0, true)), motes: motes.map(f => R.mesh(f.rows, 0, true)) };
   for (const w in boxers) meshes[w ? 'boxer-' + w : 'boxer'] = R.mesh(boxers[w].rows, boxers[w].count);
   const palettes = [0, 1].map(i => paletteArray(dress(manifest.palette, i)));
@@ -121,6 +126,7 @@ function start({ manifest, ring, boxers }) {
     ripples = [null, null];
     falls = [null, null];
     ground = again = null;
+    guard = createGuard(guard.style);
     replayEnd = -Infinity;
     replay.reset();
     show('replay', false);
@@ -167,6 +173,12 @@ function start({ manifest, ring, boxers }) {
       }
     });
   }
+  // (a defence drawn: its ripple, if it has one, put through the man defending as a hit's is) -> what it asks for
+  const defend = e => {
+    const d = guard.meet(e, bout.fighters, fx[0], motes);
+    if (d.ripple) ripples[d.ripple.on] = d.ripple.ripple;
+    return d;
+  };
   function react(e) {
     const f = bout.fighters;
     if (e.type === 'punch') audio.play('swing');
@@ -196,15 +208,14 @@ function start({ manifest, ring, boxers }) {
       if (e.down) phase = 'over';
     } else if (e.type === 'block') {
       audio.play('whiff');
-      met(fx[0], e);
+      defend(e);
       shake.amp = 1.2;
     } else if (e.type === 'parry') {
       audio.play('deflect');
-      met(fx[0], e);
+      white = defend(e).white;
       shake.amp = 2.5;
-      white = 0.25;
       if (e.who === 0) setTimeout(() => audio.play('chance'), 100);
-    }
+    } else if (e.type === 'whiff' || e.type === 'graze' || e.type === 'brilliant') defend(e);
   }
 
   function fit() {
@@ -239,6 +250,7 @@ function start({ manifest, ring, boxers }) {
         }
         first = false;
         step(bout, [mine, spar ? {} : think(rival, bout, DT)], DT);
+        guard.see(bout.fighters);
         if (spar) bout.fighters[1].hp = Math.max(bout.fighters[1].hp, 25); // a sparring partner does not go down
         for (const e of bout.events) react(e);
         // (where a knocked-down man first comes down on the canvas: a second ripple through him, and a ring through the canvas)

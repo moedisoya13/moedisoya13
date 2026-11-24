@@ -10,6 +10,7 @@
      node tools/clips.mjs --root m=<dir> ...             what each clip of those roots would hold, printed (nothing written)
      node tools/clips.mjs --write --root m=<dir> ...      recorded and written to src/clips/ (src/clips/index.mjs: what the
                                                           page knows before it loads one; src/clips/<id>.mjs: the frames)
+     node tools/clips.mjs --write --only <id>,<id> ...    only those clips recorded and written, every other kept as it was
      node tools/clips.mjs --events <clip id> --root ...   the events of a clip's whole run, frame by frame (to choose a window),
                                                           and what it measured; or of a clip written out: --events '{"root":
                                                           "m", "script": "block-elbow@2", "window": [0, 2], "measure": "block"}'
@@ -36,6 +37,11 @@ export const FIELDS = JOINTS * 4 + 3 + 1 + 4 + 3 + 3;
 // what of an event the page needs: to draw what the blow throws off, to say what it was, and to count it
 const KEEP = ['type', 'who', 'on', 'name', 'part', 'zone', 'J', 'damage', 'down', 'out', 'roll', 'hammer', 'counter', 'at', 'vec', 'dir', 'trunk'];
 const TYPES = ['hit', 'block', 'parry', 'graze', 'whiff', 'taunt'];
+/* (and, for a clip of the defence effects (defence: true), what they are drawn from as well: the hand that threw it, by how
+   much a miss missed, and a defence the bout found brilliant, render/guard.mjs; kept only in those, so that every other clip
+   is recorded again as it was written) */
+const DEFENCE_KEEP = ['hand', 'margin', 'brilliant', 'of'],
+  DEFENCE_TYPES = ['brilliant'];
 const r4 = x => Math.round(x * 1e4) / 1e4;
 const round = v => (typeof v === 'number' ? r4(v) : Array.isArray(v) ? v.map(round) : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, round(x)])) : v);
 
@@ -201,6 +207,13 @@ export const MEASURES = {
   taken: run => ({ blows: blowsOn(run, 0).map(b => said(b, run)) }),
   // the boxer's own blows on the other man
   thrown: run => ({ blows: blowsOn(run, 1).map(b => said(b, run)) }),
+  /* the other man's punches at the boxer as they ended, the ones that missed him too, and by how much each missed (the bout's
+     margin, centimetres: the glove's surface to his head's at the closest); and whether the boxer's defence was found
+     brilliant (a defence clip's: defence: true) */
+  missed: run => ({
+    blows: run.events.filter(([, e]) => e.who === 1 && ['hit', 'block', 'graze', 'whiff'].includes(e.type)).map(b => Object.assign(said(b, run), typeof b[1].margin === 'number' ? { margin: r4(b[1].margin * 100) } : {})),
+    brilliant: run.events.some(([, e]) => e.type === 'brilliant' && e.who === 0)
+  }),
   /* the grade-2 two-arm block: the blows as taken, and how far his gloves crossed as the guard came down: the lead glove past
      the rear one, across his chest as it sees them (centimetres; nothing if they never crossed) */
   block: run => {
@@ -479,6 +492,8 @@ export async function record(clip, root, E) {
     bout = E.freshBout(entry),
     [a, b] = bout.fighters,
     exchange = entry.punch !== undefined || !!entry.fresh,
+    keep = clip.defence ? KEEP.concat(DEFENCE_KEEP) : KEEP,
+    types = clip.defence ? TYPES.concat(DEFENCE_TYPES) : TYPES,
     first = Math.round(clip.window[0] / DT) + 1,
     last = Math.round(clip.window[1] / DT),
     n = last - first + 1,
@@ -500,9 +515,9 @@ export async function record(clip, root, E) {
       if (['hit', 'block', 'parry'].includes(e.type)) (since[e.on] = 0), (since[e.who] = 0);
       // (the punches started, with how far apart the two stood: what a measure may read, not kept in the clip)
       if (e.type === 'punch') punches.push({ k, who: e.who, name: e.name, apart: Math.hypot(a.x - b.x, a.z - b.z) });
-      if (!TYPES.includes(e.type)) continue;
+      if (!types.includes(e.type)) continue;
       const x = {};
-      for (const key of KEEP) if (e[key] !== undefined && e[key] !== null && e[key] !== false) x[key] = round(e[key]);
+      for (const key of keep) if (e[key] !== undefined && e[key] !== null && e[key] !== false) x[key] = round(e[key]);
       events.push([k, x]);
     }
     // (what the measures read: copied, since the bout goes on changing the very objects)
@@ -542,6 +557,8 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.a
   }
   const write = args.includes('--write'),
     only = args.includes('--events') ? args[args.indexOf('--events') + 1] : null,
+    // (--only: just these clips, the rest kept as they were written)
+    just = args.includes('--only') ? new Set(args[args.indexOf('--only') + 1].split(',')) : null,
     engines = {},
     origins = {},
     made = {};
@@ -576,6 +593,10 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.a
   }
   let bytes = 0;
   for (const clip of CLIPS) {
+    if (just && !just.has(clip.id)) {
+      if (old[clip.id]) index[clip.id] = old[clip.id];
+      continue;
+    }
     const at = dirOf(clip.root);
     if (!at) {
       if (old[clip.id]) index[clip.id] = old[clip.id];

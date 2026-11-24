@@ -46,6 +46,7 @@ node tools/combos.mjs     # 콤비네이션: 카드마다 박·사이·충격량
 타이틀에서 **스파링**을 고르면 상대가 가만히 서 있습니다. 모션만 볼 때 씁니다.
 주소 옵션: `?spar=1`, `?speed=0.25`(슬로모션), `?rows=160`(아트 격자 세로 픽셀, 기본 216), `?fps=1` 또는 `#fps`, `?seed=3`, `?auto=1`,
 `?wear=training`(두 선수 모두 회색 트레이닝복: 후드티와 트레이닝 바지, 후드는 내림; `training-up`은 후드를 씀; `?wear=training,none`처럼 쉼표로 코너마다 따로, 홍코너 먼저. 없으면 지금 그대로이고 옷 파일은 받지 않음).
+`?defence=lines-sparks,wind-line,line`(방어 이펙트의 시안, `src/render/guard.mjs`: 막음·패리·숄더 롤은 `now`·`keep-no-white`·`lines-sparks`·`lines`, 빗나간 주먹은 `wind-line`·`evade:none`, 패리의 화면 흰빛은 `keep`·`remove`, 기막힌 수비는 `line`·`brilliant:none`. 없으면 지금 그대로. 검토 시트(`fx=1`)와 이펙트 시안도 같은 주소 옵션을 읽음. 기막힌 수비의 `slow`는 미결 카탈로그의 카드에서만 보이고, 게임 화면은 제 속도 그대로).
 
 ## 주먹의 물리: 순차적 관절 회전
 

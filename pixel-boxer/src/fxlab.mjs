@@ -14,7 +14,8 @@
    is drawn between its last two steps, and a replay between the steps it kept, so neither shows a picture twice running. */
 import { createRenderer, paletteArray, rgb } from './render/renderer.mjs';
 import { createFx } from './render/fx.mjs';
-import { blow, met, lavaOf, rippleOf, rippleRow, scaleOf, FX, fallOf, landed, landRipple, groundOf, groundRow, quietOf, ringsOn } from './render/blow.mjs';
+import { blow, lavaOf, rippleOf, rippleRow, scaleOf, FX, fallOf, landed, landRipple, groundOf, groundRow, quietOf, ringsOn } from './render/blow.mjs';
+import { createGuard, styleOf } from './render/guard.mjs';
 import { captureBout, blend, createReplay, distOf } from './replay.mjs';
 import { unpack, fromBase64 } from './render/splats.mjs';
 import { floor } from './render/floor.mjs';
@@ -108,6 +109,8 @@ function start({ manifest, boxer }) {
       cell = { entry, version, el, stage: el.querySelector('.stage'), blow: el.querySelector('[data-blow]'), beads: el.querySelector('[data-beads]'), head: el.querySelector('[data-head]'), fx, mesh: R.mesh(fx.rows, 0, true), motes, bones: [new Float32Array(R.maxBones * 12), new Float32Array(R.maxBones * 12)], seed, rnd: dice(seed), bout: null, t: 0, acc: 0, shake: 0, ripples: [null, null], whites: [0, 0], falls: [null, null], ground: null, replay: null, again: null, shown: null, was: null, now: null, struck: entry.id.includes('@') ? 1 : 0, cam: { target: [entry.id.includes('@') ? 1.2 : -0.45, 1.3, 0], yaw: entry.view.yaw, pitch: 0.14, dist: 2.9 } };
     cell.bout = freshBout(entry);
     cell.was = cell.now = captureBout(cell.bout);
+    // (a defence, in the style ?defence= asks for: render/guard.mjs, today's by default)
+    cell.guard = createGuard(styleOf(new URLSearchParams(location.search).get('defence')));
     // (a knockdown's, as the game shows it: its replay once everything has gone out, src/replay.mjs)
     if (version === 'final' && entry.fall) cell.replay = createReplay({ yaw: () => cell.cam.yaw });
     return cell;
@@ -123,6 +126,7 @@ function start({ manifest, boxer }) {
     cell.falls = [null, null];
     cell.ground = cell.shown = cell.again = null;
     if (cell.replay) cell.replay.reset();
+    cell.guard = createGuard(cell.guard.style);
     cell.was = cell.now = captureBout(cell.bout);
   }
   /* May a card take a step? Not at the end of its loop until the other card of its row is there too (it may be behind, in
@@ -139,6 +143,7 @@ function start({ manifest, boxer }) {
       bout = cell.bout,
       [a, b] = bout.fighters;
     step(bout, drive(entry, bout, cell.t, DT), DT);
+    cell.guard.see(bout.fighters);
     cell.t += DT;
     // (the step before and this one: what is drawn lies between them)
     cell.was = cell.now;
@@ -179,7 +184,11 @@ function start({ manifest, boxer }) {
         cell.blow.textContent = String(Math.round(e.J));
         cell.el.querySelector('[data-dmg]').textContent = (e.damage ?? e.J * 0.035).toFixed(1);
         if (cell.beads) cell.beads.textContent = String(n);
-      } else if (e.type === 'block' || e.type === 'parry') (met(cell.fx, e), (cell.shake = e.type === 'parry' ? 2 : 1));
+      } else {
+        const d = cell.guard.meet(e, bout.fighters, cell.fx, cell.motes.map(m => m.fx));
+        if (d.ripple) cell.ripples[d.ripple.on] = d.ripple.ripple;
+        if (e.type === 'block' || e.type === 'parry') cell.shake = e.type === 'parry' ? 2 : 1;
+      }
     }
     // (where a knocked-down man first comes down on the canvas: a second ripple through him, and a ring through the canvas)
     cell.falls.forEach((fall, i) => {
