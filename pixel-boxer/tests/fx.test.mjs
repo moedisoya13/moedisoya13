@@ -10,10 +10,11 @@
      and the flash of white is gone: from the bout and from the renderer;
    and a knockdown's own (docs/moves-plan-6.md §2.4B): where the falling man first comes down (down-back, out-log: one step, a part of him within 6 cm of the canvas, none of
    him before it) a second ripple and a ring through the canvas, the ring's lift the same all round at one distance; and
-   its slow motion: 0.25 s of the bout's time shown in a real second (to 0.05 s), 0.35 s for a knockout;
-   every slow motion smooth (§2.4B 7): a replay at a quarter of the speed never shows the same picture twice running, turns
-   no joint further in a picture than a quarter of what it turns in a step of the bout, and still starts and ends on the
-   steps it always did;
+   the live picture of it at the true speed (§2.4D, the user's instruction of 2026-11-24: no slow motion live; its slow
+   replay, after, is held in tests/replay.test.mjs);
+   every slow motion smooth (§2.4B 7): a brilliant defence's replay at a quarter of the speed never shows the same picture
+   twice running, turns no joint further in a picture than a quarter of what it turns in a step of the bout, and still
+   starts and ends on the steps it always did;
    and its motes are lava (§2.4C), every other hit's the coloured motes they always were, with nothing hot about them: a
    knockdown throws globs and embers in their place, as many as the damage says, in the colours of heat and charcoal alone;
    a hot glob shows two colours or three, its head the hottest, from whichever side it is seen; cooling, it crusts over,
@@ -25,7 +26,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { exitOf, blow, lavaOf, rippleOf, rippleRow, scaleOf, FX, fallOf, landed, landingOf, landRipple, groundOf, groundRow, groundLift, slowOf, paceOf, slowOn } from '../src/render/blow.mjs';
+import * as BLOW from '../src/render/blow.mjs';
+import { exitOf, blow, lavaOf, rippleOf, rippleRow, scaleOf, FX, fallOf, landed, landingOf, landRipple, groundOf, groundRow, groundLift } from '../src/render/blow.mjs';
 import { createFx, heatOf } from '../src/render/fx.mjs';
 import { createReplay } from '../src/replay.mjs';
 import { fk, NAMES } from '../src/rig/skeleton.mjs';
@@ -360,35 +362,16 @@ test('the ring through the canvas: measured flat along it, the same lift all rou
   for (const bit of ['length(world.xz - u_ground.xy) - u_ground.z', 'exp(-(x * x) / (0.09 * w * w)) : exp(-(x * x) / (w * w))', 'cos(6.2832 * x / (1.4 * w))', '(1.0 - smoothstep(0.03, 0.12, abs(world.y)))']) assert.ok(src.includes(bit), `the shader has ${bit}`);
 });
 
-test('a knockdown\'s slow motion: 0.25 s of the bout in a second (to 0.05 s), from half the speed to a quarter and back, 0.35 s for a knockout', () => {
-  const run = e => {
-    let s = slowOf(e),
-      since = 0,
-      real = 0,
-      lowest = 1;
-    assert.equal(paceOf(s), 1, 'the held moment of the blow goes as it always did');
-    s = slowOn(s, 0.1, 0, true);
-    assert.equal(paceOf(s), 1);
-    s = slowOn(s, 0, 0, false);
-    assert.ok(Math.abs(paceOf(s) - 0.5) < 1e-12, 'it starts from half the speed');
-    const dt = 1 / 2400;
-    let at = null;
-    while (s) {
-      const p = paceOf(s);
-      lowest = Math.min(lowest, p);
-      since += dt * p;
-      real += dt;
-      if (at === null && since >= s.span - 1e-12) at = real;
-      s = slowOn(s, dt, since, false);
-    }
-    return { at, real, lowest };
-  };
-  const down = run({ type: 'hit', down: true, damage: 3 }),
-    out = run({ type: 'hit', down: true, out: 'outStiff', damage: 3 });
-  assert.ok(Math.abs(down.at - 1) <= 0.05, `0.25 s of the bout shown in ${down.at.toFixed(3)} s`);
-  assert.ok(Math.abs(out.at - 1.4) <= 0.05, `a knockout's 0.35 s in ${out.at.toFixed(3)} s`);
-  assert.ok(Math.abs(down.lowest - 0.25) < 1e-9 && Math.abs(down.real - down.at - 0.1) < 0.002, `a quarter at the slowest, back to full speed in 0.1 s (${(down.real - down.at).toFixed(3)})`);
-  assert.equal(slowOf({ type: 'hit', damage: 3 }), null, 'an ordinary blow has none');
+test('the live picture of a knockdown plays at the true speed: no slow motion in the game or the effect study, the held moment of the blow its own', () => {
+  // (there is nothing left to slow it with)
+  for (const name of ['slowOf', 'paceOf', 'slowOn']) assert.ok(!(name in BLOW), `render/blow.mjs has no ${name}`);
+  assert.ok(!('slow' in FX), 'FX has no slow motion');
+  // (the game and the effect study move their bout on by the real time, as it passes; the bout holds the moment of a blow itself)
+  const src = f => readFileSync(new URL('../src/' + f, import.meta.url), 'utf8');
+  for (const [f, bits] of [['main.mjs', ['elapsed = Math.min(0.1, (now - last) / 1000 || 0) * SPEED', 'acc += elapsed;']], ['fxlab.mjs', ['cell.acc += elapsed;']]]) {
+    for (const no of ['slowOf', 'paceOf', 'slowOn']) assert.ok(!src(f).includes(no), `${f} has no ${no}`);
+    for (const bit of bits) assert.ok(src(f).includes(bit), `${f}: ${bit}`);
+  }
 });
 
 /* What is drawn of a man, joint by joint: where each joint is in the world, and how each is turned (its local turn). */
@@ -412,35 +395,27 @@ const moved = (a, b) => {
   return { far, turned };
 };
 
-test('a replay at a quarter of the speed is smooth: no picture twice running, no joint turned further in one than a quarter of a step\'s, the steps it starts and ends on as before', () => {
-  for (const id of ['down-back', 'down-side', 'out-log', 'down-liver', 'counter@4m']) {
+test('a brilliant defence\'s replay at a quarter of the speed is smooth: no picture twice running, no joint turned further in one than a quarter of a step\'s, the steps it starts and ends on as before', () => {
+  // (a knockdown's replay is the user's new one, docs/moves-plan-6.md §2.4D: tests/replay.test.mjs)
+  for (const id of ['counter@4m']) {
     const r = createReplay(),
       steps = [];
     let started = null,
-      blowAt = null,
-      cameDown = null,
-      counterAt = null,
-      fall = null;
+      counterAt = null;
     fight(id, (bout, i) => {
       steps.push({ i, t: bout.t });
-      for (const e of bout.events) {
-        if (fallOf(e)) (fall = fallOf(e)), (blowAt = bout.t);
-        if (e.type === 'hit' && e.who === 0) counterAt = i;
-      }
-      if (fall && landed(fall, bout.fighters[fall.on])) cameDown = i;
+      for (const e of bout.events) if (e.type === 'hit' && e.who === 0) counterAt = i;
       if (r.watch(bout, DT)) return (started = i), false;
     });
     assert.ok(started !== null, `${id}: it replays`);
-    // (it starts as it always did: a knockdown's 0.3 s after he comes down, a brilliant defence's 0.25 s after the counter lands)
-    if (fall) assert.equal(started - cameDown, 18, `${id}: 0.3 s after he comes down`);
-    else assert.equal(started - counterAt, 15, `${id}: 0.25 s after the counter lands`);
+    // (it starts as it always did: 0.25 s after the counter lands)
+    assert.equal(started - counterAt, 15, `${id}: 0.25 s after the counter lands`);
     const drawn = [],
       kept = [];
     while (r.playing) {
       const snap = r.next(DT);
       kept.push(...r.crossed);
       drawn.push(drawnOf(snap));
-      if (drawn.length === 1) assert.ok(Math.abs(snap.t - (fall ? blowAt - 0.2 : snap.t)) <= DT + 1e-9, `${id}: from 0.2 s before the blow (${snap.t.toFixed(3)})`);
     }
     // (from the first step it kept to the last, which is the step it started on, each once: the held moment of a blow left out)
     const all = steps.filter(s => s.t >= kept[0].t - 1e-9 && s.i <= started),

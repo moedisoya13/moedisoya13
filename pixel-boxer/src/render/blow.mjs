@@ -41,7 +41,8 @@
    A knockdown's blow (a hit that puts him down, or out cold: e.down, e.out) is drawn as its own (docs/moves-plan-6.md §2.4B),
    with no light in any of it, and nothing of the bout changed: where his falling body first comes down on the canvas, a
    second ripple goes through him from the part that came down, and a large ring goes out through the canvas from under it,
-   lifting the tiles as it passes; and the game and the effect study show the moment of the blow at a quarter of the speed.
+   lifting the tiles as it passes. It is shown live at the true speed; a replay of it, slow and closer, comes once all of this
+   has gone out (src/replay.mjs, docs/moves-plan-6.md §2.4D).
    Its motes are lava (§2.4C): in place of the two kinds of coloured mote every other hit throws, globs of it and embers, in
    the colours of heat and of charcoal alone (never the palette's white or blues), from the same far side of him and the
    same way. A glob is never one colour: hot, its head is the hottest, its body a step cooler and its tail two; as it cools
@@ -56,7 +57,7 @@
    then: from the part it struck as he is at that moment if the fx is handed him as he goes on (the game, a live card, the
    effect study, the review sheet), or from where it was if he is a step kept for a replay; the same way, scattered by the
    fx's own dice when it is thrown, drawn in his own layer like the first so that it too shows first at his outline. The
-   ripple, the slow motion and what happens where he comes down are each once.
+   ripple and what happens where he comes down are each once.
      fallOf(e)             a knockdown blow's watch for where he comes down: { on, q, out, landed: null }, or null for any
                            other event
      landingOf(man)        the part of him nearest the canvas, if it is within FX.land.near of it: { joint, clear (metres
@@ -68,11 +69,10 @@
      groundRow(ground, set)           the canvas layer's ground wave for it now: [x, y, z, front, width, lift, glow] (glow: the
                            lift past which a tile is drawn a step lighter, 0 none), or null once it is over
      groundLift(row, p)    how high that lifts a point of the canvas (the renderer's own reckoning, for checking it)
-     slowOf(e)             the slow motion a knockdown's blow starts: { span (bout seconds), u, back, held }, or null
-     paceOf(slow)          the speed the picture is to play at now (1 is as it happens)
-     slowOn(slow, real, since, held)  moved on by `real` seconds of real time, the bout now `since` seconds past the blow
-                           (its own time: the held moment of the blow is not counted), held while that moment is held ->
-                           the slow motion, or null once it is over */
+     quietOf(motes, ripples, ground)  has everything a blow threw gone out? motes: the fxs its motes and lava went into (none
+                           left in the air or on the canvas, and none still to be thrown: a second volley), ripples: each
+                           man's (none still going through him), ground: the ring through the canvas (over) -> true or false.
+                           What a knockdown's replay waits for (src/replay.mjs watch) */
 import * as M from '../rig/m3.mjs';
 import { RADIUS } from '../rig/body.mjs';
 import { toWorld } from '../anim/pose.mjs';
@@ -111,11 +111,7 @@ export const FX = {
      of waves (metres), how high it lifts the tiles (metres: at the measure, FX.ref, in proportion to the damage below it,
      never more than that and never less than `least`), the share of the lift past which a tile is drawn a step lighter, and
      a knockout's (how long, times the lift) */
-  ground: { speed: 4, last: 0.6, width: 0.35, lift: 0.03, least: 0.01, glow: 0.3, out: { last: 0.75, lift: 1.3 } },
-  /* a knockdown's slow motion: the speed it is shown at, the speed it starts from and the real seconds it takes to get from
-     that to it, the real seconds it takes to get back to full speed once it is over, and how long it lasts (bout seconds)
-     for a knockdown and for a knockout */
-  slow: { rate: 0.25, from: 0.5, ease: 0.05, back: 0.1, down: 0.25, out: 0.35 }
+  ground: { speed: 4, last: 0.6, width: 0.35, lift: 0.03, least: 0.01, glow: 0.3, out: { last: 0.75, lift: 1.3 } }
 };
 // health a newton-second takes off a man with an ordinary chin (game/bout.mjs RULES.damage): for a hit that carries no damage
 const PER_NS = 0.035;
@@ -127,7 +123,6 @@ export const scaleOf = e => Math.min(FX.most, Math.max(0, (e.damage ?? e.J * PER
 
 const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 const len = a => Math.sqrt(dot(a, a));
-const smooth = x => ((x = Math.max(0, Math.min(1, x))), x * x * (3 - 2 * x));
 // a point of him by name, in the world: one the bout keeps (his head, hips, chest, belly...), or else a joint of his pose
 const pointOf = (man, joint) => (man.points && man.points[joint]) || toWorld(man.place, man.pose.at[joint], man.pose.stretch);
 
@@ -341,22 +336,4 @@ export function groundLift(row, p) {
   return row[5] * env * Math.cos((6.2832 * x) / (1.4 * w)) * (1 - above * above * (3 - 2 * above));
 }
 
-export const slowOf = e => (e.type === 'hit' && (e.down || e.out) ? { span: e.out ? FX.slow.out : FX.slow.down, u: 0, back: -1, held: true } : null);
-
-/* (from half the speed down to a quarter as it starts, eased, in its first FX.slow.ease real seconds; a quarter until the
-   bout is so far past the blow; then back up to the full speed, eased, in FX.slow.back real seconds) */
-export function paceOf(slow) {
-  const S = FX.slow;
-  if (!slow || slow.held) return 1;
-  if (slow.back < 0) return S.from + (S.rate - S.from) * smooth(slow.u / S.ease);
-  return S.rate + (1 - S.rate) * smooth((slow.u - slow.back) / S.back);
-}
-
-export function slowOn(slow, real, since, held) {
-  if (!slow) return null;
-  slow.held = held;
-  if (held) return slow; // (the moment of the blow, held as it always is: the slow motion is of the bout's own time)
-  slow.u += real;
-  if (slow.back < 0 && since >= slow.span - 1e-9) slow.back = slow.u;
-  return slow.back >= 0 && slow.u - slow.back >= FX.slow.back ? null : slow;
-}
+export const quietOf = (motes, ripples, ground) => motes.every(f => !f.live) && ripples.every(r => !r || r.age >= r.last) && (!ground || ground.age >= ground.last);

@@ -4,17 +4,18 @@
    the game now draws it (render/blow.mjs): the same sparks from where the line of the blow comes out of his far side, along
    the way the glove was going, never seen over him (an fx of his own drawn `outside` his silhouette), and a ripple through
    him from where it landed in place of the white; the motes in their own colours, as they always were. A knockdown's blow is
-   its own (docs/moves-plan-6.md §2.4B, §2.4C): shown a moment at a quarter of the speed, lava in place of its motes (globs
-   of it, each in three colours of heat, hottest at its head, cooling as they fall and lying cooling where they come down on
-   the canvas, and flickering embers), and where he comes down on the canvas a second ripple through him and a ring through
-   the canvas. Every card is a real bout from the catalogue (src/defense.mjs, src/ladder.mjs, src/bodyshots.mjs), looped;
-   the two cards of a row are the same exchange, frame for frame (one that has played its loop waits for the other, slowed
-   in its knockdown, so that they start again together). A card is drawn between its last two steps, so a slow motion is as
-   smooth as the rest. */
+   its own (docs/moves-plan-6.md §2.4B, §2.4C, §2.4D): lava in place of its motes (globs of it, each in three colours of heat,
+   hottest at its head, cooling as they fall and lying cooling where they come down on the canvas, and flickering embers),
+   and where he comes down on the canvas a second ripple through him and a ring through the canvas; all of it live, at the
+   true speed, and then, once it has all gone out, the replay the game shows (src/replay.mjs): cut to a closer camera, slowly
+   from the press of the punch to him falling away, and cut back. Every card is a real bout from the catalogue
+   (src/defense.mjs, src/ladder.mjs, src/bodyshots.mjs), looped; the two cards of a row are the same exchange, frame for
+   frame (one that has played its loop waits for the other, held in its replay, so that they start again together). A card
+   is drawn between its last two steps, and a replay between the steps it kept, so neither shows a picture twice running. */
 import { createRenderer, paletteArray, rgb } from './render/renderer.mjs';
 import { createFx } from './render/fx.mjs';
-import { blow, met, lavaOf, rippleOf, rippleRow, scaleOf, FX, fallOf, landed, landRipple, groundOf, groundRow, slowOf, paceOf, slowOn } from './render/blow.mjs';
-import { captureBout, blend } from './replay.mjs';
+import { blow, met, lavaOf, rippleOf, rippleRow, scaleOf, FX, fallOf, landed, landRipple, groundOf, groundRow, quietOf } from './render/blow.mjs';
+import { captureBout, blend, createReplay, distOf } from './replay.mjs';
 import { unpack, fromBase64 } from './render/splats.mjs';
 import { floor } from './render/floor.mjs';
 import { fk, NAMES } from './rig/skeleton.mjs';
@@ -30,7 +31,7 @@ import { BODYSHOTS } from './bodyshots.mjs';
 const DT = 1 / 60;
 const VERSIONS = [
   { id: 'before', name: '전', note: '접촉점에서 튀는 색 입자와, 맞은 선수의 흰 번쩍임(0.07초).' },
-  { id: 'final', name: '확정', note: '같은 색 입자(색은 그대로, 속도는 5% 빠르게, 수·굵기·수명은 데미지에 비례)가 타격선이 맞은 몸을 빠져나가는 반대쪽 면에서 시작해, 주먹이 가던 방향(위아래 포함)으로 날아갑니다. 맞은 선수의 윤곽 안에서는 보이지 않아 윤곽에서 처음 나타납니다. 흰 번쩍임 대신 닿은 점에서 파문이 빛 없이 몸(머리 포함)에 퍼집니다: 초속 3 m, 0.4초(다운은 0.55초, 흔들림 1.3배), 흔들림과 폭은 데미지에 비례. 다운은 1/4 속도의 슬로, 입자 대신 용암 덩이와 불티를 빠르게 두 번 잇달아(0.1초 간격; 덩이는 머리가 가장 뜨겁고 몸과 꼬리가 한 단계씩 식은 세 색, 떨어지며 숯빛 껍질이 불씨를 감싸 검게 식고 캔버스에 닿으면 붙어서 식음; 불티는 깜빡이며 떠다니다 주황에서 꺼짐), 착지의 두 번째 파문과 바닥의 고리 파문. 막음과 패리의 불꽃은 닿은 점 그대로입니다.' }
+  { id: 'final', name: '확정', note: '같은 색 입자(색은 그대로, 속도는 5% 빠르게, 수·굵기·수명은 데미지에 비례)가 타격선이 맞은 몸을 빠져나가는 반대쪽 면에서 시작해, 주먹이 가던 방향(위아래 포함)으로 날아갑니다. 맞은 선수의 윤곽 안에서는 보이지 않아 윤곽에서 처음 나타납니다. 흰 번쩍임 대신 닿은 점에서 파문이 빛 없이 몸(머리 포함)에 퍼집니다: 초속 3 m, 0.4초(다운은 0.55초, 흔들림 1.3배), 흔들림과 폭은 데미지에 비례. 다운은 제 속도로 끝까지 쓰러지고, 입자 대신 용암 덩이와 불티를 빠르게 두 번 잇달아(0.1초 간격; 덩이는 머리가 가장 뜨겁고 몸과 꼬리가 한 단계씩 식은 세 색, 떨어지며 숯빛 껍질이 불씨를 감싸 검게 식고 캔버스에 닿으면 붙어서 식음; 불티는 깜빡이며 떠다니다 주황에서 꺼짐), 착지의 두 번째 파문과 바닥의 고리 파문; 이펙트가 다 꺼진 뒤 조감 또는 옆에서 다가간 슬로 리플레이(주먹을 누른 때부터 쓰러지기 전까지). 막음과 패리의 불꽃은 닿은 점 그대로입니다.' }
 ];
 /* The rows: a light blow, the two hard ones, an uppercut under the chin (the inside uppercut of the skill ladder, the one
    that comes straight up: there it is the other man who is struck), a hook to the liver, and a knockdown. */
@@ -102,9 +103,11 @@ function start({ manifest, boxer }) {
         const m = createFx(() => cell.rnd());
         return { fx: m, mesh: R.mesh(m.rows, 0, true) };
       }),
-      cell = { entry, version, el, stage: el.querySelector('.stage'), blow: el.querySelector('[data-blow]'), beads: el.querySelector('[data-beads]'), head: el.querySelector('[data-head]'), fx, mesh: R.mesh(fx.rows, 0, true), motes, bones: [new Float32Array(R.maxBones * 12), new Float32Array(R.maxBones * 12)], seed, rnd: dice(seed), bout: null, t: 0, acc: 0, shake: 0, ripples: [null, null], whites: [0, 0], falls: [null, null], ground: null, slow: null, slowAt: 0, was: null, now: null, struck: entry.id.includes('@') ? 1 : 0, cam: { target: [entry.id.includes('@') ? 1.2 : -0.45, 1.3, 0], yaw: entry.view.yaw, pitch: 0.14, dist: 2.9 } };
+      cell = { entry, version, el, stage: el.querySelector('.stage'), blow: el.querySelector('[data-blow]'), beads: el.querySelector('[data-beads]'), head: el.querySelector('[data-head]'), fx, mesh: R.mesh(fx.rows, 0, true), motes, bones: [new Float32Array(R.maxBones * 12), new Float32Array(R.maxBones * 12)], seed, rnd: dice(seed), bout: null, t: 0, acc: 0, shake: 0, ripples: [null, null], whites: [0, 0], falls: [null, null], ground: null, replay: null, again: null, shown: null, was: null, now: null, struck: entry.id.includes('@') ? 1 : 0, cam: { target: [entry.id.includes('@') ? 1.2 : -0.45, 1.3, 0], yaw: entry.view.yaw, pitch: 0.14, dist: 2.9 } };
     cell.bout = freshBout(entry);
     cell.was = cell.now = captureBout(cell.bout);
+    // (a knockdown's, as the game shows it: its replay once everything has gone out, src/replay.mjs)
+    if (version === 'final' && entry.fall) cell.replay = createReplay({ yaw: () => cell.cam.yaw });
     return cell;
   });
 
@@ -116,7 +119,8 @@ function start({ manifest, boxer }) {
     cell.ripples = [null, null];
     cell.whites = [0, 0];
     cell.falls = [null, null];
-    cell.ground = cell.slow = null;
+    cell.ground = cell.shown = cell.again = null;
+    if (cell.replay) cell.replay.reset();
     cell.was = cell.now = captureBout(cell.bout);
   }
   /* May a card take a step? Not at the end of its loop until the other card of its row is there too (it may be behind, in
@@ -159,8 +163,8 @@ function start({ manifest, boxer }) {
           if (lava && cell.el.querySelector('[data-globs]')) (cell.el.querySelector('[data-globs]').textContent = String(lava.volleys[0].globs)), (cell.el.querySelector('[data-embers]').textContent = String(lava.volleys[0].embers)), (cell.el.querySelector('[data-gap]').textContent = lava.gap.toFixed(2));
           cell.el.querySelector('[data-sway]').textContent = (r.strength * r.sway * 100).toFixed(1);
           cell.el.querySelector('[data-wide]').textContent = (r.width * 100).toFixed(0);
-          // (a knockdown: watched until he comes down on the canvas, and shown a moment slowly from the blow on)
-          if (fallOf(e)) (cell.falls[e.on] = fallOf(e)), (cell.slow = slowOf(e)), (cell.slowAt = bout.t);
+          // (a knockdown: watched until he comes down on the canvas)
+          if (fallOf(e)) cell.falls[e.on] = fallOf(e);
         } else {
           // as it was drawn before: the sparks where the glove met him, and he goes white
           cell.fx.sparks(e.at, Math.round(5 + 12 * k), [38, 39, 40, 41], 2.5 + 3 * k, e.dir);
@@ -180,7 +184,47 @@ function start({ manifest, boxer }) {
       const at = landed(fall, bout.fighters[i]);
       if (at) (cell.ripples[i] = landRipple(fall, bout.fighters[i], at)), (cell.ground = groundOf(fall, at));
     });
+    // (the step kept for its replay, and whether that starts: once all of this has gone out)
+    if (cell.replay) cell.replay.watch(bout, DT, quietOf(cell.motes.map(m => m.fx), cell.ripples, cell.ground));
     cell.shake *= 0.82;
+  }
+  /* A card's replay as it plays (src/replay.mjs): the picture it shows `elapsed` seconds of real time on, what its steps
+     threw thrown again as it comes to them into a set of its own, in its own time; from the camera it cut to. */
+  function replayScene(cell, elapsed, rect) {
+    const r = cell.replay,
+      shown = r.next(elapsed);
+    if (!cell.again || r.started) {
+      const set = () => {
+        const f = createFx(dice(cell.seed + 99));
+        return { fx: f, mesh: R.mesh(f.rows, 0, true) };
+      };
+      cell.again = { motes: [set(), set()], ripples: [null, null] };
+    }
+    const A = cell.again,
+      time = r.moved;
+    for (const k of r.crossed) for (const e of k.events) if (e.type === 'hit') (blow(A.motes[e.on].fx, e, k.men[e.on]), (A.ripples[e.on] = rippleOf(e, k.men[e.on])));
+    const layers = [{ mesh: meshes.floor, palette: palettes[0], mask: 0.5 }],
+      shadows = [];
+    shown.men.forEach((f, i) => {
+      R.packBones(boneMatrices(f.pose, bind, f.place, mats, 0), cell.bones[i]);
+      shadows.push({ x: f.x + f.pose.at.Hips[2] * Math.sin(f.yaw), z: f.z + f.pose.at.Hips[2] * Math.cos(f.yaw), yaw: f.yaw, long: 0.3, wide: 0.24 });
+    });
+    cell.mesh.update(cell.fx.rows, cell.fx.update(0, shadows, 22));
+    for (const m of A.motes) m.mesh.update(m.fx.rows, m.fx.update(time));
+    const waves = shown.men.map((f, i) => {
+      const w = A.ripples[i];
+      if (!w) return null;
+      w.age += time;
+      return rippleRow(w, f) || (A.ripples[i] = null);
+    });
+    layers.push(
+      { mesh: cell.mesh, palette: palettes[0], mask: 0.6 },
+      { mesh: meshes.boxer, bones: cell.bones[0], palette: palettes[0], mask: 1, wave: waves[0], silhouette: 1 },
+      { mesh: meshes.boxer, bones: cell.bones[1], palette: palettes[1], mask: 1, wave: waves[1], silhouette: 2 },
+      ...A.motes.map((m, i) => ({ mesh: m.mesh, palette: palettes[0], mask: 0.6, outside: i + 1 }))
+    );
+    const v = r.view;
+    return { camera: { target: v.target, yaw: v.yaw, pitch: v.pitch, dist: distOf(v, cell.cam.dist, rect.w / rect.h, r.progress) }, layers };
   }
 
   function theme() {
@@ -244,9 +288,14 @@ function start({ manifest, boxer }) {
     for (const cell of cells) {
       const box = cell.stage.getBoundingClientRect();
       if (box.bottom < 0 || box.top > innerHeight || box.width < 8) continue;
-      // (its own time: the real time, or less of it in a knockdown's slow motion)
-      const time = elapsed * paceOf(cell.slow);
-      cell.acc += time;
+      const rect = { x: Math.round((box.left * dpr) / grid.scale), y: Math.round(((innerHeight - box.bottom) * dpr) / grid.scale), w: Math.round((box.width * dpr) / grid.scale), h: Math.round((box.height * dpr) / grid.scale) };
+      // (a knockdown's replay, while it plays: its bout is not stepped, and what is in the air live waits as it was)
+      if (cell.replay && cell.replay.playing) {
+        R.cell(rect, replayScene(cell, elapsed, rect));
+        continue;
+      }
+      // (its own time: the real time, as it happens)
+      cell.acc += elapsed;
       let steps = 0;
       while (cell.acc >= DT && steps++ < 6) {
         if (!due(cell)) {
@@ -255,14 +304,11 @@ function start({ manifest, boxer }) {
         }
         cell.acc -= DT;
         tick(cell);
-        // (the held moment of a knockdown's blow over: the rest of this picture's time is the slow motion's already)
-        if (cell.slow && cell.slow.held && cell.bout.stop <= 0) (cell.slow.held = false), (cell.acc *= paceOf(cell.slow));
+        if (cell.replay && cell.replay.playing) break;
       }
       if (steps > 6) cell.acc = 0;
-      cell.slow = slowOn(cell.slow, elapsed, cell.bout.t - cell.slowAt, cell.bout.stop > 0);
-      const rect = { x: Math.round((box.left * dpr) / grid.scale), y: Math.round(((innerHeight - box.bottom) * dpr) / grid.scale), w: Math.round((box.width * dpr) / grid.scale), h: Math.round((box.height * dpr) / grid.scale) };
       // (held through the moment of a blow where it is; else between its last two steps, by how far it is to the next)
-      R.cell(rect, scene(cell, time, cell.bout.stop > 0 ? 1 : Math.min(1, cell.acc / DT)));
+      R.cell(rect, scene(cell, elapsed, cell.bout.stop > 0 ? 1 : Math.min(1, cell.acc / DT)));
     }
     R.end({ hall: ground, ink });
   }
@@ -279,7 +325,7 @@ function start({ manifest, boxer }) {
     cells,
     hold: false,
     reset: () => cells.forEach(cell => (restart(cell), (cell.acc = 0))),
-    advance: sec => cells.forEach(cell => { for (let i = 0; i < Math.round(sec / DT); i++) if (due(cell)) (tick(cell), cell.fx.update(DT, [], 22), cell.motes.forEach(m => m.fx.update(DT)), cell.ripples.forEach(r => r && (r.age += DT)), cell.ground && (cell.ground.age += DT)); }),
+    advance: sec => cells.forEach(cell => { for (let i = 0; i < Math.round(sec / DT); i++) if (due(cell) && !(cell.replay && cell.replay.playing)) (tick(cell), cell.fx.update(DT, [], 22), cell.motes.forEach(m => m.fx.update(DT)), cell.ripples.forEach(r => r && (r.age += DT)), cell.ground && (cell.ground.age += DT)); }),
     frame: sec => draw(sec, performance.now()),
     renderer: R,
     scene,

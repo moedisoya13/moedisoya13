@@ -161,6 +161,10 @@ export function createFx(random) {
     rows,
     items, // (what is live, for checking it: tests/fx.test.mjs reads a glob's T and an ember's colours off these)
     count: 0,
+    // (how many are in the air or on the canvas, or still to be thrown: none once all of it has gone out)
+    get live() {
+      return items.length + due.length;
+    },
     /* throwIt(late) is called once this fx has been moved on by `seconds` more of its own time (render/blow.mjs: a
        knockdown's second volley), as part of that update, after what was already in the air has moved: late is how far
        past the moment the update went, so what it throws can start that far along, the same however the time was cut */

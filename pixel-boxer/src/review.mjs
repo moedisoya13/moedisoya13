@@ -8,7 +8,10 @@
    where the man in focus faces, so a man going round is seen from the same side all the way; solo=1: the other man is not
    drawn; replay=1: the first replay the script makes (src/replay.mjs: a knockdown's, or a brilliant defence's), as the
    motion catalogue draws it, with the effects: from and to are then seconds of real time into it, a picture every sixtieth
-   of a second, so that from=1&to=1.1&n=7 is seven pictures running); bearing=1: the eight bearings laid on the canvas round
+   of a second, so that from=1&to=1.1&n=7 is seven pictures running; a knockdown's from the camera it cuts to (its view:
+   dist is then the live distance it is drawn closer than, and vyaw, vpitch put it somewhere else, to compare; live=1 draws
+   it from the sheet's own camera), started when it starts in the catalogue: the live bout's effects run, and waited for,
+   on the bout's own clock); bearing=1: the eight bearings laid on the canvas round
    one man (of=1, the other man, by default; game/bearing.mjs, docs/bearing-system-plan.md §8.2): the edges of the eight cells
    as he faces in that picture, his front marked, the rings of the distance bands, the path the other man's centre has taken
    since the first picture, and in the corner of each picture the cell the other man is in (with the margin the cells change
@@ -21,9 +24,9 @@
    globalThis.__review.ready when it is drawn. */
 import { createRenderer, paletteArray, rgb } from './render/renderer.mjs';
 import { createFx } from './render/fx.mjs';
-import { blow, met, rippleOf, rippleRow, fallOf, landed, landRipple, groundOf, groundRow } from './render/blow.mjs';
+import { blow, met, rippleOf, rippleRow, fallOf, landed, landRipple, groundOf, groundRow, quietOf } from './render/blow.mjs';
 import { floor } from './render/floor.mjs';
-import { createReplay } from './replay.mjs';
+import { createReplay, distOf } from './replay.mjs';
 import { unpack, fromBase64 } from './render/splats.mjs';
 import { fk, NAMES } from './rig/skeleton.mjs';
 import { dress } from './rig/boxer.mjs';
@@ -94,7 +97,9 @@ function effectsOf(rnd) {
           if (l) (E.ripples[i] = landRipple(fall, men[i], l)), (E.ground = groundOf(fall, l));
         });
     },
-    keep: () => ({ sparks: keep(E.sparks), motes: E.motes.map(keep), ground: groundRow(E.ground) })
+    keep: () => ({ sparks: keep(E.sparks), motes: E.motes.map(keep), ground: groundRow(E.ground) }),
+    // (has everything a blow threw gone out?)
+    quiet: () => quietOf(E.motes, E.ripples, E.ground)
   });
 }
 // one moment of both men, for a cell
@@ -150,27 +155,38 @@ function run(bind) {
 function runReplay(bind) {
   const bout = freshBout(entry),
     mats = new Float32Array(NAMES.length * 12),
-    r = createReplay(),
+    r = createReplay({ yaw: () => num('yaw', entry.view.yaw) }),
     want = Array.from({ length: n }, (_, i) => Math.round((from + (n > 1 ? ((to - from) * i) / (n - 1) : 0)) / DT)),
     frames = [],
+    // (the live bout's effects, a step at a time, for the replay to wait for; and those it throws again, in its own time)
+    live = effectsOf(dice(7)),
     E = effectsOf(dice(7));
   let tick = 0;
   for (; tick < Math.round(entry.loop / DT) && !r.playing; tick++) {
+    live.age(DT);
     step(bout, drive(entry, bout, tick * DT, DT), DT);
     bout.fighters[1].hp = 1000;
     if (!entry.hurt) bout.fighters[0].hp = 1000;
-    r.watch(bout, DT);
+    live.blows(bout.events, bout.fighters), live.land(bout.fighters);
+    r.watch(bout, DT, live.quiet());
   }
   if (!r.playing) throw new Error(`${entry.id}: no replay in its loop`);
-  const kind = r.kind;
+  const kind = r.kind,
+    started = bout.t;
+  let view = null;
   for (let i = 0; r.playing && i <= want[want.length - 1]; i++) {
-    E.age((DT * r.slow) * (i > 0));
     const shown = r.next(DT);
+    // (a knockdown's camera, with its first picture)
+    view = view || r.view;
+    // (what it threw again goes on by the bout's time the picture moved on: none at the first)
+    E.age(i > 0 ? r.moved : 0);
     for (const k of r.crossed) E.blows(k.events, k.men), k.landed && E.land(k.men, k.landed);
-    while (want[frames.length] === i) frames.push({ tick: i, label: `${(i * DT).toFixed(3)} · ${shown.t.toFixed(3)}`, men: momentOf(shown.men, bind, mats, E), fx: E.keep(), said: [] });
+    while (want[frames.length] === i) frames.push({ tick: i, label: `${(i * DT).toFixed(3)} · ${shown.t.toFixed(3)}`, men: momentOf(shown.men, bind, mats, E), fx: E.keep(), said: [], progress: r.progress });
   }
   frames.kind = kind;
   frames.on = r.on;
+  frames.view = view;
+  frames.started = started;
   return frames;
 }
 
@@ -197,7 +213,9 @@ async function start() {
     w = Math.floor((innerWidth - gap * (cols + 1)) / cols),
     h = Math.round(w * num('aspect', 0.8)),
     dpr = Math.min(devicePixelRatio || 1, 3);
-  document.getElementById('title').textContent = `${entry.name} · ${entry.id} · ${replay ? `리플레이(${frames.kind}) ` : ''}${from}–${to}s${wears.some(Boolean) ? ' · ' + wears.map(w => w || 'none').join(', ') : ''}`;
+  const V = frames.view,
+    deg = a => Math.round((a * 180) / Math.PI);
+  document.getElementById('title').textContent = `${entry.name} · ${entry.id} · ${replay ? `리플레이(${frames.kind}${V ? `, 타격 뒤 ${(frames.started - V.blow).toFixed(3)} s에 시작, ${V.name === 'above' ? '조감' : '옆'} ${deg(V.yaw)}° · ${deg(V.pitch)}°` : ''}) ` : ''}${from}–${to}s${wears.some(Boolean) ? ' · ' + wears.map(w => w || 'none').join(', ') : ''}`;
   sheet.style.gridTemplateColumns = `repeat(${cols}, ${w}px)`;
   const cells = frames.map(f => {
     const el = document.createElement('figure');
@@ -223,9 +241,13 @@ async function start() {
       [a, b] = f.men,
       // (on the two of them, or on one: focus=0 or 1)
       on = q.has('focus') ? [f.men[num('focus', 0)], f.men[num('focus', 0)]] : [a, b],
+      // (a knockdown's replay from the camera it cuts to, as the catalogue draws it: closer, pushed in as it goes)
+      V = replay && frames.view && q.get('live') !== '1' ? frames.view : null,
       cam = f.bearing
         ? bearingCamera(f.bearing, frames)
-        : { target: [(on[0].x + on[1].x) / 2, num('y', 0.95), (on[0].z + on[1].z) / 2], yaw: num('yaw', entry.view.yaw) + (q.get('turn') === '1' ? on[0].yaw - Math.PI / 2 : 0), pitch: num('pitch', entry.view.pitch), dist: num('dist', 3.4) };
+        : V
+          ? { target: V.target, yaw: num('vyaw', V.yaw), pitch: num('vpitch', V.pitch), dist: distOf(V, num('dist', 3.4), box.width / box.height, f.progress) }
+          : { target: [(on[0].x + on[1].x) / 2, num('y', 0.95), (on[0].z + on[1].z) / 2], yaw: num('yaw', entry.view.yaw) + (q.get('turn') === '1' ? on[0].yaw - Math.PI / 2 : 0), pitch: num('pitch', entry.view.pitch), dist: num('dist', 3.4) };
     const ring = f.fx && f.fx.ground,
       layers = [{ mesh: shadows, palette: palettes[0], mask: 0.6, ground: ring && [...ring.slice(0, 6), 0] }];
     if (ground) layers.unshift({ mesh: ground, palette: palettes[0], mask: 0.5, ground: ring });
@@ -240,7 +262,7 @@ async function start() {
     if (f.bearing) laid(el.querySelector('.stage'), f.bearing, cam, box);
   }
   R.end({ hall, ink: new Float32Array(rgb(manifest.palette[0])) });
-  globalThis.__review = { ready: true, frames: frames.map(f => ({ t: f.tick * DT, label: f.label, said: f.said, ground: f.fx && f.fx.ground, waves: f.men.map(m => m.wave) })) };
+  globalThis.__review = { ready: true, view: frames.view || null, started: frames.started, frames: frames.map(f => ({ t: f.tick * DT, label: f.label, said: f.said, ground: f.fx && f.fx.ground, waves: f.men.map(m => m.wave) })) };
 }
 
 /* ---- the bearings laid on the canvas (bearing=1): seen from above and behind the man in the middle, far enough back that the

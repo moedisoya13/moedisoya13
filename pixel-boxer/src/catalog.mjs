@@ -6,15 +6,16 @@
    its own bout; a row is stepped while any card of it is on screen, and only the cards on screen are drawn. An exchange
    starts from a fresh bout every loop, so what each card shows is what its test checks.
    A brilliant defence (game/bout.mjs) is shown again at a quarter of the speed in its own card (src/replay.mjs): its time
-   stands still meanwhile, and the row waits for it at the end of the loop. So is a knockdown, a moment after the man comes
-   down on the canvas (docs/moves-plan-6.md §2.4B), from a moment before the blow, the camera drawn in closer on him, and
-   what the blow threw (its motes, the ripple through him, the second one where he came down and the ring through the
-   canvas) thrown again as it comes, in the replay's own time. A card draws its bout between its last two steps, and a
-   replay between the steps it kept, so neither ever shows the same picture twice running however slowly it is played. */
+   stands still meanwhile, and the row waits for it at the end of the loop. So is a knockdown (docs/moves-plan-6.md §2.4D):
+   live at the true speed all the way down, and then, once everything the blow and the landing threw has gone out and he
+   is all but still, cut to a closer camera, from above or from the side the blow is seen best from (src/replay.mjs
+   viewOf), slowly and briefly from the press of the punch to him falling away, ending before he comes down, what the blow
+   threw (its motes or lava, the ripple through him) thrown again as it comes, in the replay's own time; and cut back. A
+   card draws its bout between its last two steps, and a replay between the steps it kept, so neither ever shows the same
+   picture twice running however slowly it is played. */
 import { createRenderer, paletteArray, rgb } from './render/renderer.mjs';
-import * as M from './rig/m3.mjs';
 import { createFx } from './render/fx.mjs';
-import { blow, met, rippleOf, rippleRow, fallOf, landed, landRipple, groundOf, groundRow } from './render/blow.mjs';
+import { blow, met, rippleOf, rippleRow, fallOf, landed, landRipple, groundOf, groundRow, quietOf } from './render/blow.mjs';
 import { unpack, fromBase64 } from './render/splats.mjs';
 import { floor } from './render/floor.mjs';
 import { fk, NAMES } from './rig/skeleton.mjs';
@@ -33,7 +34,7 @@ import { LINKS, ORDER, skipped } from './phys/chain.mjs';
 import { MOVES } from './anim/moves.mjs';
 import { H } from './anim/stance.mjs';
 import { WINDOWS } from './windows.data.mjs';
-import { createReplay } from './replay.mjs';
+import { createReplay, distOf } from './replay.mjs';
 import { across, lineAngle, guardOf } from './measure.mjs';
 import { attachMemos } from './memo.mjs';
 import { ACTIONS, STATES } from './memo.actions.mjs';
@@ -305,7 +306,7 @@ function planOf(m) {
 
 const FX_NOTE = '이펙트: 예전 색의 입자가 맞은 몸의 반대쪽 면에서 타격 방향으로 나가고, 흰 번쩍임 대신 닿은 점에서 파문이 퍼짐';
 // (a knockdown's own, plan 6 §2.4B and §2.4C: what its cards show now besides)
-const DOWN_NOTE = '이펙트: 입자 대신 용암 덩이와 불티를 빠르게 두 번 잇달아. 덩이는 머리가 뜨겁고 꼬리로 갈수록 식은 여러 색으로 날다가 숯처럼 검게 식고, 불티는 깜빡이며 떠다니다 꺼짐. 흰 번쩍임 대신 파문, 캔버스에 닿는 곳에서 두 번째 파문과 바닥의 큰 고리 파문, 닿고 0.3초 뒤 ¼ 속도·1.2배 줌 리플레이';
+const DOWN_NOTE = '이펙트: 입자 대신 용암 덩이와 불티를 빠르게 두 번 잇달아. 덩이는 머리가 뜨겁고 꼬리로 갈수록 식은 여러 색으로 날다가 숯처럼 검게 식고, 불티는 깜빡이며 떠다니다 꺼짐. 흰 번쩍임 대신 파문, 캔버스에 닿는 곳에서 두 번째 파문과 바닥의 큰 고리 파문. 쓰러짐은 제 속도로 끝까지, 이펙트가 다 꺼진 뒤 조감 또는 옆에서 다가간 슬로 리플레이(주먹을 누른 때부터 쓰러지기 전까지)';
 /* ---- what is new or changed since the catalogue was last published as the user reviewed it (version 22, commit 14594d1),
    by row: measured, not guessed. A row is changed where a card of it moved (every joint of both men compared frame by frame
    with the scripts at 14594d1: the cards listed moved more than 1 mm, the waist of plan 6 stage K turning what the chest used
@@ -750,7 +751,7 @@ function gradeCard(e, item) {
   // (a card of a changed row that came out otherwise than it did: its own mark)
   const changed = item.sinceCards && item.sinceCards.includes(e.level);
   if (changed) card.classList.add('changed');
-  card.innerHTML = `<div class="stage" role="img" aria-label="${item.name} ${level.label} 애니메이션"><span class="replay" hidden>리플레이 ¼</span>${changed ? '<span class="mark">바뀜</span>' : ''}</div>
+  card.innerHTML = `<div class="stage" role="img" aria-label="${item.name} ${level.label} 애니메이션"><span class="replay" hidden>리플레이</span>${changed ? '<span class="mark">바뀜</span>' : ''}</div>
     <div class="info"><h3>${level.label} <span class="en">${level.name}</span></h3>${stats}${beat && FOOTWORK_STATS.includes(item.stat) ? `<div class="feet">${beat}<span>강박</span></div>` : ''}</div>`;
   return card;
 }
@@ -760,7 +761,7 @@ function singleCard(e, item = {}) {
   card.className = 'card' + (item.since ? ' since-' + item.since : ' folded');
   card.dataset.entry = e.id;
   card.id = `row-${e.id}`;
-  card.innerHTML = `<div class="stage" role="img" aria-label="${e.name} 애니메이션"><span class="replay" hidden>리플레이 ¼</span></div>
+  card.innerHTML = `<div class="stage" role="img" aria-label="${e.name} 애니메이션"><span class="replay" hidden>리플레이</span></div>
     <div class="info"><h3>${e.name}${badge(item.since)} <span class="en">${e.en}</span>${item.since ? '' : FOLD}</h3>${item.since ? `<p class="since-note">${esc(item.sinceNote)}</p>` : ''}<p>${e.note}</p>
       ${e.status ? `<div class="feet result"><span class="tag">${e.status}</span></div>` : `<div class="feet result"><span class="tag" data-tag>–</span><span class="pace"><b data-blow>–</b> N·s</span></div>`}${e.out ? `<div class="feet stats"><span>머리가 닿기까지 <b data-a>–</b> s</span></div>` : ''}${e.liver ? `<div class="feet stats"><span>무릎이 닿기까지 <b data-a>–</b> s</span></div>` : ''}</div>`;
   return card;
@@ -797,7 +798,7 @@ function start({ manifest, boxer }) {
   const makeCell = (entry, item) => {
     const el = document.querySelector(`[data-entry="${entry.id}"]`),
       fx = createFx();
-    return {
+    const cell = {
       entry,
       item,
       el,
@@ -822,14 +823,14 @@ function start({ manifest, boxer }) {
       ground: null, // and the ring through the canvas from where he did
       again: null, // what a replay throws again, apart from what the live bout threw (made the first time it is needed)
       bones: [new Float32Array(R.maxBones * 12), new Float32Array(R.maxBones * 12)],
-      replay: createReplay(),
+      replay: createReplay({ yaw: () => cell.cam.yaw }),
       shown: null, // what is being drawn, while a replay plays
-      held: null, // the camera's target before a knockdown's replay drew it in
 
       cam: { target: [0.45, entry.view.y ?? (entry.level ? 0.95 : entry.punch !== undefined ? 0.85 : 0.52), 0], yaw: entry.view.yaw, pitch: entry.view.pitch, dist: 5.4 },
       shake: 0,
       t: 0
     };
+    return cell;
   };
   const rows = ROWS.map(r => ({ item: r.item, cells: r.ids.map(id => makeCell(byId[id], r.item)), acc: 0 }));
   const cells = rows.flatMap(r => r.cells);
@@ -864,7 +865,6 @@ function start({ manifest, boxer }) {
       controls = over ? [{}, {}] : drive(entry, bout, cell.t, DT);
     cell.t += DT;
     step(bout, controls, DT);
-    if (cell.replay.watch(bout, DT) && cell.replayTag) cell.replayTag.hidden = false;
     b.hp = 1000; // he is here to be stood in front of, not beaten
     if (!entry.hurt) a.hp = 1000;
     const r = a.animator.rhythm,
@@ -892,6 +892,8 @@ function start({ manifest, boxer }) {
       const at = landed(fall, bout.fighters[i]);
       if (at) (cell.ripples[i] = landRipple(fall, bout.fighters[i], at)), (cell.ground = groundOf(fall, at));
     });
+    // (the step kept for a replay, and whether one starts: a knockdown's once all of this has gone out, src/replay.mjs)
+    if (cell.replay.watch(bout, DT, quietOf(cell.motes.map(m => m.fx), cell.ripples, cell.ground)) && cell.replayTag) (cell.replayTag.textContent = cell.replay.kind === 'fall' ? '리플레이' : '리플레이 ¼'), (cell.replayTag.hidden = false);
     cell.shake *= 0.82;
     // (the strong beat: his lead foot coming down)
     if (cell.beat && newHalf && r.landed === 'L') flash(cell.beat);
@@ -1318,7 +1320,7 @@ function start({ manifest, boxer }) {
     const live = cell.replay.live(between),
       men = cell.shown ? cell.shown.men : live ? live.men : cell.bout.fighters,
       fx = cell.shown && cell.again ? cell.again : cell,
-      time = cell.shown ? elapsed * cell.replay.slow : elapsed,
+      time = cell.shown ? cell.replay.moved : elapsed,
       layers = [],
       shadows = [];
     men.forEach((f, i) => {
@@ -1353,23 +1355,19 @@ function start({ manifest, boxer }) {
       // (an exchange is framed on the two of them, close; footwork on the boxer whose feet these are; or on the man the card
       // says: the eight bearings', on the man round whom the other goes)
       mine = cell.entry.view.on !== undefined ? 1 - cell.entry.view.on : cell.exchange ? 0.5 : 0.6,
-      // (a knockdown's replay is framed on him, between his head and his hips, drawn 1.2 times closer: cut to, and back from)
-      close = cell.shown && cell.replay.kind === 'fall' ? men[cell.replay.on] : null;
-    if (close) {
-      const mid = M.lerp(close.points.head, close.points.hips, 0.5);
-      if (!cell.held) (cell.held = cell.cam.target.slice()), cell.cam.target.splice(0, 3, ...mid);
-      for (let k = 0; k < 3; k++) cell.cam.target[k] += (mid[k] - cell.cam.target[k]) * ease;
-    } else {
-      if (cell.held) cell.cam.target.splice(0, 3, ...cell.held), (cell.held = null);
+      // (a knockdown's replay: cut to its own camera, closer, and pushed in a little as it goes; the live one waits as it was)
+      view = cell.shown && cell.replay.view;
+    if (!view) {
       cell.cam.target[0] += (a.x * mine + b.x * (1 - mine) - cell.cam.target[0]) * ease;
       cell.cam.target[2] += (a.z * mine + b.z * (1 - mine) - cell.cam.target[2]) * ease;
     }
     // far enough back that both men are in the picture from the feet up, whatever shape the window is
     // (or as much as the card asks for: the eight bearings' cards, seen from above)
     const [near, wide] = cell.entry.view.frame || (cell.entry.level ? [3.4, 2.1] : cell.exchange ? [3.3, 2.5] : [5.2, 3.6]);
-    cell.cam.dist = Math.max(near, wide / (2 * Math.tan((19 * Math.PI) / 180) * (rect.w / rect.h))) / (close ? 1.2 : 1);
-    const jolt = !cell.shown && cell.shake > 0.3 ? [Math.sin(cell.t * 97) * cell.shake, Math.cos(cell.t * 83) * cell.shake * 0.6] : null;
-    R.cell(rect, { camera: cell.cam, layers, shake: jolt });
+    cell.cam.dist = Math.max(near, wide / (2 * Math.tan((19 * Math.PI) / 180) * (rect.w / rect.h)));
+    const jolt = !cell.shown && cell.shake > 0.3 ? [Math.sin(cell.t * 97) * cell.shake, Math.cos(cell.t * 83) * cell.shake * 0.6] : null,
+      camera = view ? { target: view.target, yaw: view.yaw, pitch: view.pitch, dist: distOf(view, cell.cam.dist, rect.w / rect.h, cell.replay.progress) } : cell.cam;
+    R.cell(rect, { camera, layers, shake: jolt });
   }
 
   for (const button of document.querySelectorAll('[data-speed]'))
