@@ -593,7 +593,7 @@ V 네 번째 점검, U 6차, N 8차 에이전트가 멈춤 → 같은 에이전�
 - **구현자가 낡았다고 본 항목(지우지 않음, 사용자에게 올림)**: `chain-row`(C0가 이미 체인 줄을 넣음), `cleanup-fx-versions`·`cleanup-fxlab-now`(이펙트 확정 뒤 뜻이 없어짐), `wave-speed`·`shift-angle`(S 단계와 `bearing-*`가 같은 것을 물음), `source-a-script`와 `cd-six-beats`(같은 질문), `shrug-view`(글이 이미 "U를 합칠 때 돌린다"), `cd-hook-cross`(콤보 기획 C2에 있음), `combo-loadout`·`pull-test`(권장안이 이미 만들어짐), `fx-parry-white`(`fx-defence-amount`의 "흰색만 뺌"과 겹침).
 - **모션**: `SINCE`마다 단계와 날짜, `REVIEWED` = J·K·2.4B·O·C0·M(사용자의 11-24 지시; O는 구현자가 더함: 오늘 전에 게시된 팔방). 기본으로 열린 것 15줄: N이 바꾼 13줄 + 새 샘플 2줄. 접힌 것 47줄 + 카드 16장; 단추 "펼침: 이번 변경 / 검토한 변경까지 / 모두". 두 단계가 바꾼 줄(rollCounter, crossBody-jab, crossBody-cross)은 N의 글이 먼저, M의 글은 "검토함"으로 흐리게.
 - **새 샘플** 칸(`src/samples.data.mjs`): 트레이닝복 — `guard@3`·`hook@3`에 맨몸 대 후드 내림, 맨몸 대 후드 씀(카탈로그의 렌더러가 카드의 선수에게 옷을 입힘; 옷 파일은 입는 카드가 있을 때만 받음).
-- KO 연출과 겹친 `catalog.mjs` 두 곳(리플레이 표시의 글)은 양쪽을 살림. 페이지 시험 29/29(미결·옷·리플레이·메모).
+- KO 연출과 겹친 `catalog.mjs` 두 곳(리플레이 표시의 글)은 양쪽을 살림. 페이지 시험 29/29(미결·옷·리플레이·메모). 게시: 모션 카탈로그 v39, 미결 카탈로그 v28 → v29(크로스 카운터의 선택 넷 `xc-gain`·`xc-who`·`xc-dirty`·`xc-trade`), 이펙트 시안 v9. 합친 머리(504e37b)에서 전체 시험 416/416.
 
 ## 사용자 지적: 모션 카탈로그의 메모가 거의 반영되지 않았다 (2026-11-23)
 
