@@ -25,7 +25,7 @@ import { guardPose } from './anim/animator.mjs';
 import { step } from './game/bout.mjs';
 
 import { ENTRIES, freshBout, drive } from './footwork.mjs';
-import { DEFENSE, ITEMS as GUARDS, PARRY_DOWN, CROSS_ARM, CROSS_BODY, CROSS_BODY_ROWS, ROLLING, CROSS_LEVELS, ROLL_LEVELS, PULL_WAYS, PULL_COUNTER, BLOCK_FIRE, FIRE_LEVELS, SHELL, SHELL_ROWS, SHELL_LEVELS } from './defense.mjs';
+import { DEFENSE, ITEMS as GUARDS, PARRY_DOWN, CROSS_ARM, CROSS_BODY, CROSS_BODY_ROWS, ROLLING, CROSS_LEVELS, ROLL_LEVELS, PULL_WAYS, PULL_COUNTER, BLOCK_FIRE, FIRE_LEVELS, SHELL, SHELL_ROWS, SHELL_LEVELS, CROSS_COUNTER, OUT_COUNTER, OVER_LEVELS } from './defense.mjs';
 import { LADDER, STANCES, DIRTY, FOOTWORK, PUNCHES, TECHNIQUES, ENTRY, MOVING, TRICKS, SHOWOFF, TAUNT_ROWS, TAUNTING, BODY_PUNCHES, BODY_LADDER, REAR, REAR_LADDER, WAVE_ROWS, WAVING, SHIFT_ROWS, SHIFT_LEVELS, SHIFTING, WALKING, walkRound, waveCard } from './ladder.mjs';
 import { BODYSHOTS, LIVER_BLOCK } from './bodyshots.mjs';
 import { COMBO_ROWS, COMBINATIONS, comboCard, comboStep } from './combos.mjs';
@@ -66,7 +66,7 @@ const FOOTWORK_STATS = ['pendulum', 'inout', 'stalk', 'side', 'circle', 'turn', 
 // (the dashes each way are dash cards)
 const STAT = { bounce: 'stance', dashIn: 'dash', dashSide: 'dash' };
 // (the liver block cards have no punch of the other man's to fight round: each loop is a fresh bout all the same)
-const byId = Object.fromEntries([...ENTRIES, ...DEFENSE, ...STANCES, ...LADDER, ...DIRTY, ...FOOTWORK, ...ENTRY, ...SHOWOFF, ...TAUNTING, ...BODY_LADDER, ...REAR_LADDER, ...BODYSHOTS, ...LIVER_BLOCK.map(e => Object.assign({}, e, { fresh: true })), ...WAVING, ...PARRY_DOWN, ...CROSS_ARM, ...CROSS_BODY.map(e => Object.assign({}, e, { fresh: true })), ...ROLLING, ...PULL_COUNTER, ...[...BLOCK_FIRE, ...SHELL].map(e => Object.assign({}, e, { fresh: true })), ...SHIFTING, ...WALKING].map(e => [e.id, e]));
+const byId = Object.fromEntries([...ENTRIES, ...DEFENSE, ...STANCES, ...LADDER, ...DIRTY, ...FOOTWORK, ...ENTRY, ...SHOWOFF, ...TAUNTING, ...BODY_LADDER, ...REAR_LADDER, ...BODYSHOTS, ...LIVER_BLOCK.map(e => Object.assign({}, e, { fresh: true })), ...WAVING, ...PARRY_DOWN, ...CROSS_ARM, ...CROSS_BODY.map(e => Object.assign({}, e, { fresh: true })), ...ROLLING, ...PULL_COUNTER, ...[...BLOCK_FIRE, ...SHELL].map(e => Object.assign({}, e, { fresh: true })), ...SHIFTING, ...WALKING, ...CROSS_COUNTER, OUT_COUNTER].map(e => [e.id, e]));
 
 /* ---- what is in the catalogue: parts, and in each the techniques, each a row of seven grades (or, being hit, one card) */
 const FOOT_NOTE = {
@@ -335,6 +335,11 @@ const SINCE = {
   '1-6-3-2': { since: 'new', stage: 'C0', at: '2026-11-23', note: '어퍼 56 · 58 · 93, 훅 42 · 88 · 96, 끝 스트레이트 20 · 10 · 12 N·s로 막힘(가드 없으면 어퍼 21 · 75 · 100, 훅 97 · 123 · 136)' },
   '2-3-2': { since: 'new', stage: 'C0', at: '2026-11-23', note: '0.86 m에서. 훅 51 · 101 · 117 N·s로 막힘, 끝 스트레이트 8 · 11 · 10(발 박기와 길게 치기는 C2에서)' },
   chain: { since: 'new', stage: 'C0', at: '2026-11-23', note: '훅 → 어퍼 283 · 250 · 233 ms, 어퍼 61 · 77 · 79 N·s로 막힘' },
+  /* new: the cross counter (docs/cross-counter-plan.md §7.1, stage Y); what its cards measured (node tools/crosscounter.mjs; 3 ·
+     4명 · 4암 · 5명 · 5암) */
+  crossCounter: { since: 'new', stage: 'Y', at: '2026-11-24', note: '구간 +3~+4 · +1~+4 · +1~+4 · +1~+4 · +1~+4, 잽이 2.8 · 3.2 · 1.6 · 2.4 · 1.8 cm로 빗나가고 +9에 96 · 100 · 106 · 107 · 122 N·s, 카운터(스트레이트 88 · 93 · 101 · 105 · 112). 뒷손이 넘어가는 높이는 상대 잽이 뻗어 올 자리에서 읽고, 머리는 잽이 지나간 뒤에야 앞으로 들어갑니다. 잽이 조준까지 5스텝 넘게 걸리면(1 · 2단계의 잽), 조준 뒤 2스텝째부터, 또 3단계가 조준이 굳기 전에 누르면 보통 스트레이트' },
+  'crossCounter-off': { since: 'new', stage: 'Y', at: '2026-11-24', note: '3단계가 +1에 누르면 조준이 굳기 전이라 보통 스트레이트가 나가고 들어가는 머리에 잽 61 N·s(선 채 46)에 끊김. +6에 누르면 잽이 이미 이겨 보통 스트레이트가 나가고 잽 45 N·s에 끊김' },
+  'out-counter': { since: 'new', stage: 'Y', at: '2026-11-24', note: '4명의 크로스 카운터(구간 끝 +4에 누름) 89 N·s에 잽을 내던 선수가 실신(통나무)' },
   // changed: the waist (stage K)
   dashSide: { since: 'changed', stage: 'K', at: '2026-11-22', cards: ['5m', '5a'], note: '5명·5암의 대시 중 U자 위빙을 허리가 돌림(머리·글러브 최대 0.42·0.71 cm, 허리 6.2°·8.4°)' },
   circle: { since: 'changed', stage: 'K', at: '2026-11-22', cards: ['5m', '5a'], note: '5명·5암의 걸음마다 위빙을 허리가 돌림(최대 0.64·0.42 cm, 허리 6.8°·6.0°)' },
@@ -438,6 +443,19 @@ function folding() {
   if (location.hash.startsWith('#row-')) unfold(document.getElementById(location.hash.slice(1)), true);
 }
 
+/* the cross counter (docs/cross-counter-plan.md §7.1, stage Y): a technique, carried by the cards' boxer from 3 up (game/
+   techniques.mjs crossCounter, src/defense.mjs CROSS_COUNTER), and a pro's two presses out of his window */
+const OVER_NOTE = {
+  crossCounter:
+    '상대의 잽이 나오는 순간 뒷손 스트레이트를 잽 팔 위로 넘겨 얼굴에 꽂습니다. 슬립 뒤 카운터는 빠지고 나서 치지만 이것은 한 동작입니다: 잽의 조준이 굳는 스텝에 머리가 왼쪽(잽의 안쪽)으로 그 등급 슬립의 빠르기로 빠지고, 뒷글러브는 머리를 따라가지 않고 제자리에서 위 · 바깥으로 올라 그의 팔 위로 넘어가며, 뒤로 감지 않습니다(머리를 빼는 것이 감기). 잽이 다 뻗어 있는 동안 닿아 카운터(1.8배)가 되고, 늦게 닿으면 보통의 타격입니다. 3은 몸통이 도는 것을 보고 누르고, 4·5는 일찍 눌러도 조준이 굳기를 기다립니다. 4암·5암은 더 붙어 낮게 들어갑니다. 카드 아래는 구간(잽을 누른 뒤 프레임), 잽이 빗나간 거리, 닿은 때(잽을 누른 뒤 프레임)와 그때 잽 팔이 어깨에서 나와 있던 길이, 충격량과 값(카운터면 1.8배)입니다.',
+  'crossCounter-off':
+    '같은 장면에서 3단계가 구간 밖에 누릅니다. 이르면(잽의 조준이 굳기 전) 크로스 카운터가 아니라 보통 스트레이트가 나가 잽이 앞으로 들어가는 머리를 따라와 닿고, 늦으면(조준 뒤 2스텝째부터) 잽이 이미 이겨 역시 보통 스트레이트가 나가다 끊깁니다. 어느 쪽이든 잽에 맞고 숨은 이미 썼습니다. 카드 아래는 누른 프레임, 맞은 잽의 충격량입니다.'
+};
+const OVER_ROWS = [
+  graded({ id: 'crossCounter', name: '크로스 카운터', en: 'The cross counter' }, OVER_NOTE.crossCounter, 'over', OVER_LEVELS),
+  { id: 'crossCounter-off', name: '크로스 카운터 · 때를 놓침', en: 'The cross counter, mistimed', note: OVER_NOTE['crossCounter-off'], stat: 'over', cards: ['crossCounter-early@3', 'crossCounter-late@3'] }
+];
+
 const PARTS = [
   {
     id: 'footwork',
@@ -455,7 +473,7 @@ const PARTS = [
     part: '수비',
     note: '상대는 일곱 장 모두 같은 프로(3단계)이고 같은 순간에 같은 주먹을 던집니다. 수비하는 쪽은 그 등급 자기 구간의 가운데에서 누르고(구간은 tools/windows.mjs로 잰 값), 피했는지 막았는지는 글러브와 머리의 실제 접촉입니다. 아슬아슬하게 피하고 0.4초 안에 장전된 카운터가 나간 수비는 그 카드에서만 1/4 속도로 다시 보여 줍니다.',
     groups: [
-      ...['피하기', '막기', '카운터'].map(group => [group, GUARDS.filter(i => i.group === group).map(i => ({ id: i.id, name: i.name, en: i.en, note: i.note, stat: i.id, cards: LEVELS.map(lv => `${i.id}@${lv}`) }))]),
+      ...['피하기', '막기', '카운터'].map(group => [group, GUARDS.filter(i => i.group === group).map(i => ({ id: i.id, name: i.name, en: i.en, note: i.note, stat: i.id, cards: LEVELS.map(lv => `${i.id}@${lv}`) })).concat(group === '카운터' ? OVER_ROWS : [])]),
       // (the pull counter: a technique, game/techniques.mjs, every grade's; the cards name the way, no dice)
       ['풀백 3형제', PULL_WAYS.map(w => graded(w, PULL_NOTE[w.id], 'pulled', LEVELS))]
     ]
@@ -542,7 +560,7 @@ const PARTS = [
     groups: [
       ['맞기', DEFENSE.filter(e => !e.level && e.group === '맞기').map(single)],
       ['다운', DEFENSE.filter(e => !e.level && e.group === '다운' && !e.out).map(single)],
-      ['실신', DEFENSE.filter(e => !e.level && e.out).map(single)]
+      ['실신', [...DEFENSE.filter(e => !e.level && e.out), OUT_COUNTER].map(single)]
     ]
   }
 ];
@@ -805,6 +823,13 @@ function gradeCard(e, item) {
     case 'pulled':
       stats = `<div class="feet result"><span class="tag" data-tag>–</span></div>` + pair('<b data-a>–</b> ms', '<b data-b>–</b> N·s');
       break;
+    // (the cross counter: its window, or the frame a mistimed one was pressed on; the jab's miss; when it landed and how far out
+    // the jab's arm was then; the impulse and what it was worth)
+    case 'over': {
+      const w = WINDOWS.crossCounter && WINDOWS.crossCounter[e.level];
+      stats = `<div class="feet result"><span class="tag" data-tag>–</span></div>` + pair(e.off ? `누름 <b>${signed(e.answer, true)}</b> f` : `<b>${w && w.from !== null ? `${signed(w.from, true)}–${signed(w.to, true)}` : '–'}</b> f`, '잽 <b data-a>–</b>') + pair('닿음 <b data-b>–</b> f', '팔 <b data-c>–</b> cm') + pair('<b data-d>–</b> N·s', '값 <b data-e>–</b>');
+      break;
+    }
     // (block and fire: from the block to the uppercut landing, and how hard; the shell: how far down his head goes, how soon)
     case 'fired':
       stats = `<div class="feet result"><span class="tag" data-tag>–</span></div>` + pair('막은 뒤 <b data-a>–</b> ms', '<b data-b>–</b> N·s');
@@ -1086,6 +1111,20 @@ function start({ manifest, boxer, suits = {} }) {
         if (e.type === 'parry' && e.on === 1 && e.down) m.downAt = cell.bout.t;
         if (e.type === 'hit' && e.who === 0 && m.downAt !== undefined && !m.said) (m.said = true), put(cell, 'a', String(Math.round((cell.bout.t - m.downAt) * 1000))), put(cell, 'b', String(Math.round(e.J)));
         break;
+      case 'over': {
+        // (the jab's miss, or what it did to him; his punch: the frame after the jab's press it got there, the jab's arm then,
+        // the impulse, and what it was worth: the counter's gain only while the arm was out, game/bout.mjs CROSSING)
+        if (e.type === 'punch' && e.who === 1 && m.jabAt === undefined) m.jabAt = cell.bout.t;
+        if (e.type === 'whiff' && e.who === 1) put(cell, 'a', `${(e.margin * 100).toFixed(1)} cm`);
+        if ((e.type === 'hit' || e.type === 'graze') && e.who === 1) put(cell, 'a', `맞음 ${Math.round(e.J)}`);
+        if (e.type === 'hit' && e.who === 0 && m.jabAt !== undefined && !m.said) {
+          m.said = true;
+          const arm = Math.hypot(...[0, 1, 2].map(i => b.points.L[i] - b.points.LS[i]));
+          put(cell, 'b', `+${Math.round((cell.bout.t - m.jabAt) / DT)}`), put(cell, 'c', String(Math.round(arm * 100))), put(cell, 'd', String(Math.round(e.J))), put(cell, 'e', String(Math.round(e.J * (e.counter ? 1.8 : 1))));
+          tell(cell, e.counter ? '카운터' : SAID.hit);
+        }
+        break;
+      }
       case 'pulled':
         // (from the jab all the way out, as it goes by him, to his counter landing: on the bout's clock, as tests/body.test.mjs)
         if (e.type === 'whiff' && e.who === 1 && m.extAt === undefined) m.extAt = cell.bout.t;

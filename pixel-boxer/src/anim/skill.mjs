@@ -294,6 +294,38 @@ const ROLL_5A = Object.assign({}, ROLL_4, { turn: [-6, -7], go: 0.07, hold: 0.06
 const ROLL_5M = Object.assign({}, ROLL_5A, { side: -22, tuck: [-0.05, -0.06], counter: Object.assign({}, ROLL_5A.counter, { in: 0 }) });
 export const ROLL = { '4m': ROLL_4, '4a': ROLL_4A, '5m': ROLL_5M, '5a': ROLL_5A };
 
+/* The cross counter (anim/over.mjs: the body; moves.mjs crossOver; game/bout.mjs: when it goes; docs/cross-counter-plan.md §3,
+   §6.1; stage Y), the rear straight thrown over a jab as it comes, the head off inside it in the same movement, from 3 up
+   (game/techniques.mjs crossCounter):
+     wait     a great one and a legend wait for the jab's aim to be set before anything moves (pressed early, the punch waits
+              for it: the bout's), a pro goes on the step he presses
+     go       seconds the head takes to go off the line, his grade's slip's going (evade.out of the written 0.1 s): no quicker
+     in low   metres a dirty man goes in toward him once the jab has gone by (anim/over.mjs), and down as he goes
+     elbow    how much of the rear elbow's lift (re, 1 level with the shoulder) and of its pole (below) he puts in
+     tuck     degrees the rear shoulder is turned in to the chin as the arm goes
+     step     [across to his left, ahead] metres the lead foot is pushed on its ball as the weight comes onto it
+     exit     how he comes out: 'back' (the way he came), 'low' (back and down to his left), 'stay' (the glove left on the face
+              his grade's hold, and back from there), 'angle' (a half step off to his left, turned back in)
+     head     how much of the slip's far point the head goes off by (1: all of it; a pro's a little less, the cross's own turn
+              taking it on across at once, no quicker in a frame than his slip; a great one's a little further, his chain pulling
+              it back onto the jab's way sooner; a dirty one's, in on him, less. This is how far a great one goes, as far as he
+              has to: the plan's run-time stop at a margin (its `just`, as a slip's) is not built, each grade's share puts the jab's
+              miss in its band from the middle of his window)
+     out      metres the rear glove is taken out to his right as it goes up off his guard: the overhand's arc, how wide. How high
+              it goes is not his grade's: it is read off the other man's arm, whatever it is doing (over.mjs overRaise, CLEAR),
+              at the least RISE up
+     lead     [x, y, z] metres the lead glove is put further out of the rear elbow's way as the head goes (a dirty man's, in on
+              him: his rear elbow comes over where his lead glove is)
+     pole     which way the rear elbow is pointed as the hand goes up, as the chest sees it (out, up, ahead; out mirrored to his
+              right), turned up and in as the shoulder sends it (over.mjs POLE), his grade's way of bringing it over (the
+              elbow is not read off the other man's arm: over.mjs overElbow) */
+const OVER_3 = { wait: false, go: 0.1, in: 0, low: 0, elbow: 0.8, tuck: 3, step: [0.035, 0.05], exit: 'back', head: 0.95, out: 0.1, pole: [0.3, 0.9, 0] };
+const OVER_4M = Object.assign({}, OVER_3, { wait: true, go: 0.07, elbow: 0.9, tuck: 4, exit: 'low', head: 1.15, out: 0.13, pole: [0.4, 0.9, 0.4] });
+const OVER_4A = Object.assign({}, OVER_4M, { go: 0.075, in: 0.04, low: 0.01, step: [0.03, 0.07], exit: 'stay', head: 0.9, out: 0.1, lead: [0.06, 0, 0], elbow: 1, pole: [0.2, 0.9, 0.4] });
+const OVER_5M = Object.assign({}, OVER_4M, { go: 0.055, elbow: 0.9, tuck: 6, exit: 'angle', head: 1.1, out: 0.22, lead: [0.06, 0, 0] });
+const OVER_5A = Object.assign({}, OVER_5M, { go: 0.062, in: 0.08, low: 0.01, step: [0.03, 0.08], exit: 'stay', head: 0.9, out: 0.24, lead: [0.06, 0, 0], elbow: 1, pole: [0.3, 0.9, 0.4] });
+export const OVER = { 3: OVER_3, '4m': OVER_4M, '4a': OVER_4A, '5m': OVER_5M, '5a': OVER_5A };
+
 /* the tricks a show-off's press may turn into (anim/show.mjs: choose, docs/moves-plan-4.md §5.2), each button's, the table's
    bottom row first: [trick, chance] */
 const VARY_4A = { jab: [['thumb', 0.2], ['flicker', 0.35]], power: [['pawUp', 0.15], ['pawDown', 0.25], ['collar', 0.3], ['elbow', 0.2], ['stomp', 0.3]] };

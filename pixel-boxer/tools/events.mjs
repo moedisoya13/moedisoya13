@@ -32,7 +32,10 @@ async function scripts(root) {
       body.BODYSHOTS,
       body.LIVER_BLOCK,
       // (the combinations, each a row of its own: src/combos.mjs, docs/combos-plan.md §9.1)
-      combos.COMBINATIONS
+      combos.COMBINATIONS,
+      // (the cross counter's, stage Y: its cards, and out cold off it)
+      defense.CROSS_COUNTER,
+      defense.OUT_COUNTER
     ];
   const { step } = await src('game/bout.mjs');
   return { all: lists.filter(Boolean).flat(), step, freshBout: foot.freshBout, drive: foot.drive };

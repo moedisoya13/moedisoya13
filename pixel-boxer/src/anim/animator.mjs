@@ -51,6 +51,7 @@ import { stance as showStance, crossGuard, ear, shoulderRoll, hammer, paw, PAW, 
 import { bodyState, struck as foldUp, give as bodyGive, coverLow, lower } from './body.mjs';
 import { createWave, waveBeat, waveLand, waveLanding, waveDrag, waveBody, createPat, patDown, pattedArm, fireBody, createShell, shellBody } from './clean.mjs';
 import { createShift, shiftHold, shiftFoot, shiftBody } from './shift.mjs';
+import { overBody, overHand, overRaise, overElbow, hisArm, hisNext, ROUND } from './over.mjs';
 
 const TAU = Math.PI * 2;
 /* The feet keep time. One beat is one foot coming down; a cycle is both. Standing, the boxer rocks between his feet on that
@@ -446,7 +447,8 @@ export function createAnimator(seed) {
     dropFor = null, // the punch whose start put a foot down
     dropAt = 0,
     dropHalf = -1,
-    approach = null; // the punching glove closing on its target: { gap, v, a }
+    approach = null, // the punching glove closing on its target: { gap, v, a }
+    wentFor = null; // the cross counter that went after waiting (over.mjs)
   /* a legend on the move (legend.mjs): the foot that came down at each half beat (by its count), how much of the shape of
      his going there is (followed), the dash he is shaping (and when it started), and how wound up all that leaves him */
   const legend = { feet: {}, sides: {}, w: 0, across: 0, bent: 0, dash: null, load: 0, k: { L: 0, R: 0 }, air: { L: 0, R: 0 } };
@@ -863,6 +865,8 @@ export function createAnimator(seed) {
         if (action.loaded && action.loaded.pulled) pullBack(c, action, move);
         // (off an elbow block, block and fire: the crunch is its wind-up, anim/clean.mjs)
         if (action.loaded && action.loaded.fired) fireBody(c, action, move);
+        // (the cross counter: the head off inside the jab, the elbow up, the lead foot in, by his grade, anim/over.mjs)
+        if (move.over) overBody(c, action, form);
         /* How the rest of him is held while it goes, by how good he is (skill.mjs): all of it grows with the arm, so it is
            there as the punch is and gone as it comes home. */
         const me = move.hand,
@@ -937,7 +941,7 @@ export function createAnimator(seed) {
         // (the way out of it starts as the hand starts home, and a head that moves on after punching is the way out's from then)
         // (a man who loses his balance after it, or stands flat, does so as soon as it has got there)
         const comingOut = chain.phase === 'recover' || ((form.exit === 'stumble' || form.exit === 'flat') && chain.phase === 'hold');
-        if (comingOut && (!exit || exit.id !== id) && form.exit) exit = { kind: form.exit, id, from: halves + u, t: 0, x: off.x, y: off.y, side: off.x >= 0 ? -1 : 1, done: null };
+        if (comingOut && (!exit || exit.id !== id) && form.exit && !move.over) exit = { kind: form.exit, id, from: halves + u, t: 0, x: off.x, y: off.y, side: off.x >= 0 ? -1 : 1, done: null };
         if (!(chain.phase === 'recover' && (form.exit === 'roll' || form.exit === 'angle'))) {
           headTo(c, ox, oy);
           off.x = ox;
@@ -1176,7 +1180,8 @@ export function createAnimator(seed) {
          the beat), or halfway between two (off it); and, on the beat, the hand home again on the next. Where the glove is
          going to meet the head is judged from how fast it is closing on it, and how fast that is growing. */
       let want = 1;
-      if (punchMove && form && form.beat && view.reach != null && (action.chain.phase === 'coil' || action.chain.phase === 'throw')) {
+      // (but not a cross counter: when it goes is the jab's, anim/over.mjs)
+      if (punchMove && form && form.beat && !punchMove.over && view.reach != null && (action.chain.phase === 'coil' || action.chain.phase === 'throw')) {
         const gap = Math.max(0, view.reach),
           was = approach && approach.id === id ? approach : null,
           v = was && dt > 0 ? (was.gap - gap) / dt : 0,
@@ -1746,7 +1751,10 @@ export function createAnimator(seed) {
         fall = null;
       }
       // ---- one move handing over to another: what was showing is let go of, not dropped
-      const handover = id !== doing;
+      // (and a cross counter that waited for the jab's aim, going now, as if it had been pressed now: over.mjs)
+      const goes = !!action && !!action.crossing && !!action.crossing.go && wentFor !== id;
+      if (goes) wentFor = id;
+      const handover = id !== doing || goes;
       if (handover) {
         doing = id;
         for (const ch of CHANNELS) {
@@ -1936,6 +1944,8 @@ export function createAnimator(seed) {
         c.re += ELBOW.raise[n] * go;
         c.rx += ELBOW.draw[n] * go;
       }
+      // (a cross counter's rear arm goes over the other man's lead arm, read off where his jab is going: over.mjs)
+      const his = punchMove && punchMove.over ? hisNext(action, hisArm(view, wide, tall)) : null;
       for (const side of ['L', 'R']) {
         const k = side === 'L' ? 'l' : 'r',
           s = side === 'L' ? 1 : -1,
@@ -1943,9 +1953,10 @@ export function createAnimator(seed) {
           open = M.add(GUARD.hands[side], [c[k + 'x'], c[k + 'y'], c[k + 'z']]),
           // held to the face, or locked to the chest and swung with it, or part way between
           // (or put on the canvas: where its channels say, in the room)
-          kept = M.lerp(M.lerp(M.add(open, carried), M.add(chest.p, M.app(swung, M.sub(open, CHEST.p))), clamp(c[k + 'c'], 0, 1)), open, clamp(c[k + 'g'], 0, 1)),
-          free = reach && side === 'L' && reach.w > 0 ? M.lerp(kept, [reach.to[0] * wide, reach.to[1] / tall, reach.to[2] * wide], reach.w) : kept,
-          mine = punchMove && punchMove.hand === side ? punchMove : null;
+          mine = punchMove && punchMove.hand === side ? punchMove : null,
+          // (a cross counter's rear hand: left where it was as he went, not carried with his head, and lifted over: over.mjs)
+          kept = mine && mine.over ? overHand(action, open, carried) : M.lerp(M.lerp(M.add(open, carried), M.add(chest.p, M.app(swung, M.sub(open, CHEST.p))), clamp(c[k + 'c'], 0, 1)), open, clamp(c[k + 'g'], 0, 1)),
+          free = reach && side === 'L' && reach.w > 0 ? M.lerp(kept, [reach.to[0] * wide, reach.to[1] / tall, reach.to[2] * wide], reach.w) : kept;
         if (mine) {
           /* The punching arm is not sent anywhere: it is thrown. The shoulder and elbow are the last two joints of the
              chain, and where the fist is follows from how far each has turned, on top of wherever the body has carried the
@@ -1965,6 +1976,11 @@ export function createAnimator(seed) {
               folded = Math.hypot(from[0], from[1], from[2]),
               out = Math.min(REACH, Math.hypot(line[0], line[1], line[2]));
             thrown = M.add(shoulder, M.scale(swingTo(unit(from), unit(line), swingQ), folded + (out - folded) * extend));
+            // (a cross counter's: lifted over his arm on the way, over.mjs)
+            if (mine.over) {
+              const raised = overRaise(action, his, shoulder, thrown, to, dt);
+              if (raised) thrown = M.add(thrown, raised);
+            }
           } else {
             // the arm stays bent and the body brings it: the shoulder only closes what is left between the fist and the target
             const to = target || M.add(free, mine.arm === 'lift' ? [s * -0.1, 0.36, 0.38] : [s * -0.1, 0.02, 0.06]);
@@ -2102,8 +2118,7 @@ export function createAnimator(seed) {
           // (and the peek-a-boo shell: the elbows in at his sides, under the gloves: clean.mjs)
           tucked = shelled > 0.002 && shell.sh && !(mine && action.shifted) ? shelled * (mine ? 1 - smooth(action.t / 0.2) : 1) : 0,
           asked = M.app(chest.R, M.lerp(M.lerp(M.lerp(M.lerp([s * (0.5 + 0.8 * flare), -1 + 1.3 * flare, -0.2 - 0.25 * flare], [s * 0.45, -0.35, -0.85], pushing), [s * 0.15, -1, -0.2], hang), crossed ? shape.pole[side] : [0, 0, 0], crossed), tucked ? [s * shell.sh.pole[0], shell.sh.pole[1], shell.sh.pole[2]] : [0, 0, 0], tucked)),
-          l = Math.hypot(asked[0], asked[1], asked[2]) || 1,
-          keep = elbow[side] ? Math.exp(-dt * 16) : 0;
+          l = Math.hypot(asked[0], asked[1], asked[2]) || 1;
         /* One punch handing over to the next (a double jab, a jab into a cross) starts the new chain from the guard while the
            hand is still out: what the hand was doing is carried over and let go of, the way the channels are, so it goes on
            from where it is instead of snapping home first. */
@@ -2122,11 +2137,15 @@ export function createAnimator(seed) {
         const at = M.add(raw, hc.x);
         if (hand[side] && dt > 0) handSpeed[side] = M.scale(M.sub(at, hand[side]), 1 / dt);
         hand[side] = at;
+        // (and a cross counter's rear elbow up and out as the hand goes up, up and in as the shoulder sends it: over.mjs)
+        const poled = mine && mine.over ? overElbow(action, s, chest.R) : null,
+          way = poled ? unit(M.lerp(M.scale(asked, 1 / l), poled.to, poled.w)) : M.scale(asked, 1 / l),
+          keep = elbow[side] ? Math.exp(-dt * (poled ? poled.rate : 16)) : 0;
         // (and it goes round the arm no faster than an elbow can, 1200 degrees a second, and the shoulder swings it no faster
         // than 900)
         /* (and, kept out of the other arm, it is put off where it is sent no faster than APART: how locked to the chest it is,
            and how far put down in the room, say which hand gives way: solve.mjs) */
-        hands[side] = { at, toward: M.lerp(M.scale(asked, 1 / l), elbow[side] || [0, 0, 0], keep), round: { was: round[side], most: 1200 * dt }, shoulder: { was: arm[side], most: 900 * dt }, last: wrist[side], punch: !!mine && (action.chain.phase === 'coil' || action.chain.phase === 'throw') && !(pullIn(action) > 0 && action.chain.t < action.chain.wait), locked: !!mine && mine.arm === 'swing', chest: clamp(c[k + 'c'], 0, 1), room: clamp(c[k + 'g'], 0, 1), apart: { was: apart[side], most: APART * dt } };
+        hands[side] = { at, toward: M.lerp(way, elbow[side] || [0, 0, 0], keep), round: { was: round[side], most: (poled ? ROUND : 1200) * dt }, shoulder: { was: arm[side], most: 900 * dt }, last: wrist[side], punch: !!mine && (action.chain.phase === 'coil' || action.chain.phase === 'throw') && !(pullIn(action) > 0 && action.chain.t < action.chain.wait), locked: !!mine && mine.arm === 'swing', chest: clamp(c[k + 'c'], 0, 1), room: clamp(c[k + 'g'], 0, 1), apart: { was: apart[side], most: APART * dt } };
       }
       let stance = { hips, spine, feet, hands, stretch: 1 + c.st };
       if (rising && action && rising.id === id) {

@@ -149,6 +149,71 @@ function pick(card, lv, works) {
   }
   return Object.assign({}, mid, { unclean });
 }
+/* The cross counter's window (docs/cross-counter-plan.md §7.2; stage Y): the frames after the jab's press on which a power press
+   meant as it works, in the cross counter's own card (src/defense.mjs CROSS_COUNTER: the boxer carrying it, the pro's jab from
+   1.0 m): the jab does not land (it misses, only touches him, or is cut short by his punch), the cross counter lands on his
+   head, and as hard as 0.85 of what it does from the middle of the run (a press on the edge that lands, but off the end of
+   his arm, is not counted). `hit`: the frame after the jab's press his punch got there, from the middle. */
+const OVER_GAP = 1.0;
+export function overDrill(k, lv) {
+  const at = AT.jab;
+  return {
+    id: `crossCounter@${lv}+${k}`,
+    loop: at + 0.9,
+    me: () => HOME,
+    him: t => (t > at + 0.3 ? null : [HOME[0] + OVER_GAP, HOME[1]]),
+    against: [[at, 'jab']],
+    press: k === null ? [] : [[at + k * F, 'power'], [at + k * F, 'tech', 'crossCounter']],
+    setup: b => ((b.fighters[0].skills = { all: lv }), (b.fighters[0].techniques = ['crossCounter']), (b.fighters[1].stands = true))
+  };
+}
+export function overOutcome(entry) {
+  const bout = freshBout(entry),
+    P0 = Math.round(AT.jab / F) - 1;
+  let jab = null,
+    mine = null;
+  for (let tick = 0; tick < Math.round(entry.loop / F); tick++) {
+    step(bout, drive(entry, bout, tick * F, F), F);
+    bout.fighters[0].hp = Math.max(bout.fighters[0].hp, 50);
+    bout.fighters[1].hp = 1000;
+    for (const e of bout.events) {
+      if (e.who === 1 && !jab && ['hit', 'block', 'parry', 'whiff', 'graze'].includes(e.type)) jab = { type: e.type, margin: e.margin ?? null };
+      if (e.who === 0 && !mine && ['hit', 'block', 'whiff', 'graze'].includes(e.type)) mine = { type: e.type, name: e.name, J: e.J, n: tick - P0, part: e.part };
+    }
+  }
+  return { jab, mine };
+}
+export function overGrade(lv) {
+  const base = overOutcome(overDrill(null, lv)),
+    lands = 20,
+    seen = {};
+  for (let k = -4; k <= 10; k++) seen[k] = overOutcome(overDrill(k, lv));
+  const lands0 = o => o.mine && o.mine.type === 'hit' && o.mine.name === 'crossOver' && o.mine.part !== 'body' && (!o.jab || o.jab.type !== 'hit');
+  let works = Object.keys(seen).map(Number).filter(k => lands0(seen[k]));
+  const mid0 = middle(works),
+    J0 = mid0 ? seen[mid0.at].mine.J : 0;
+  works = works.filter(k => seen[k].mine.J >= 0.85 * J0 - 1e-9);
+  const mid = middle(works);
+  // (and the frame nearest the middle whose exchange is clean, as the other cards' are: pick)
+  let at = null;
+  const unclean = [];
+  if (mid) {
+    const run = [];
+    for (let k = mid.from; k <= mid.to; k++) run.push(k);
+    run.sort((a, b) => Math.abs(a - mid.at) - Math.abs(b - mid.at) || a - b);
+    for (const k of run) {
+      const { found } = audit([Object.assign(overDrill(k, lv), { loop: 2.4 })]);
+      if (!Object.values(found).some(c => c.bad)) {
+        at = k;
+        break;
+      }
+      unclean.push(k);
+    }
+  }
+  const m = at !== null ? seen[at] : null;
+  return { works, lands: base.jab ? lands : lands, from: mid ? mid.from : null, to: mid ? mid.to : null, at, margin: m && m.jab && m.jab.margin !== null ? +(m.jab.margin * 100).toFixed(1) : null, unclean, hit: m ? m.mine.n : null, J: m ? m.mine.J : null, clear: null, tied: null };
+}
+export const OVER_LEVELS = ['3', '4m', '4a', '5m', '5a'];
 export function grades() {
   const out = {};
   for (const card of CARDS) {
@@ -170,6 +235,8 @@ export function grades() {
       };
     }
   }
+  // (the cross counter's, stage Y: its own drill and its own measure of what works, above)
+  out.crossCounter = Object.fromEntries(OVER_LEVELS.map(lv => [lv, overGrade(lv)]));
   return out;
 }
 
@@ -186,7 +253,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       console.log('(frames after the press that throws the punch: the window, and @ the frame the card presses on; under it the margin at that frame, cm, and the head clear / tied up, ms)');
     }
     if (process.argv.includes('--write')) {
-      const slim = Object.fromEntries(Object.entries(g).map(([id, row]) => [id, Object.fromEntries(Object.entries(row).map(([lv, r]) => [lv, { from: r.from, to: r.to, at: r.at, margin: r.margin, unclean: r.unclean }]))]));
+      // (and, of the cross counter's row only, the frame his punch got there from the middle: stage X reads it)
+      const slim = Object.fromEntries(Object.entries(g).map(([id, row]) => [id, Object.fromEntries(Object.entries(row).map(([lv, r]) => [lv, Object.assign({ from: r.from, to: r.to, at: r.at, margin: r.margin, unclean: r.unclean }, r.hit !== undefined ? { hit: r.hit } : {})]))]));
       writeFileSync(
         new URL('../src/windows.data.mjs', import.meta.url),
         `/* Written by node tools/windows.mjs --write: for each card of the catalogue's defence (src/defense.mjs) and each grade of the

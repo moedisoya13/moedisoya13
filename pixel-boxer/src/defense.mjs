@@ -432,3 +432,61 @@ export const SHELL = SHELL_ROWS.flatMap(row =>
     )
   )
 );
+
+/* The cross counter (docs/cross-counter-plan.md §7.1; stage Y; game/techniques.mjs crossCounter, game/bout.mjs CROSSING, anim/
+   over.mjs): the rear straight thrown over a jab as it comes, the head off inside it in the same movement. The same pro throws
+   the same jab as the slip and counter cards, at the same moment, from 1.0 m; the boxer carries the technique and presses his
+   power punch meant as it on the frame in the middle of his window (WINDOWS.crossCounter, node tools/windows.mjs --write:
+   frames after the jab's press on which the press makes the jab miss and the cross counter land, harder than 0.85 of what it
+   does from the middle), as his head would; the other man only takes it, and is left where it puts him. A pro's two presses
+   out of his window (crossCounter-off, a frame of it each: early, before the jab's aim is set, the press is the plain cross,
+   and the jab follows his head in and lands on him harder than on a man standing still; late, the jab has won, and it is
+   the plain cross again, cut short as the jab lands: game/bout.mjs CROSSING early, late) show what missing it costs. And out cold off
+   it (out-counter, being hit and going down): the card's boxer throws the jab, and the other man, a great one carrying it,
+   throws it over him, as he is left as much health as it takes (the knockdowns' way, `down`); caught throwing, he goes stiff.
+   The card's numbers: the window, how far the jab missed by, when it landed (frames after the jab's press) and how far out the
+   jab's arm was then (cm from his shoulder), the impulse and what it was worth (the counter's gain, only while the arm is
+   out). */
+export const OVER_LEVELS = ['3', '4m', '4a', '5m', '5a'];
+const OVER_JAB = 0.8,
+  OVER_GAP = 1.0;
+// (the frame a grade presses on: the middle of his window, or, before it is measured, a pro's +3 and a great one's +2)
+const overW = lv => (WINDOWS.crossCounter && WINDOWS.crossCounter[lv] && WINDOWS.crossCounter[lv].at !== null ? WINDOWS.crossCounter[lv] : lv === '3' ? { from: 3, to: 3, at: 3 } : { from: 1, to: 3, at: 2 }),
+  overAt = lv => overW(lv).at;
+const overCard = (id, item, lv, k, more) =>
+  Object.assign(
+    {
+      id, item, level: lv, card: 'crossCounter', answer: k, name: '크로스 카운터', en: 'The cross counter', group: '카운터', kind: 'over', turning: 'crossOver',
+      loop: 2.4, punch: ['jab', OVER_JAB], outcome: 'whiff', view: { yaw: 0.2, pitch: 0.24 },
+      me: () => HOME,
+      // (countered, he is left where the counter puts him: the end of the exchange)
+      him: t => (t > OVER_JAB + 0.3 ? null : [HOME[0] + OVER_GAP, HOME[1]]),
+      against: [[OVER_JAB, 'jab']],
+      press: [[OVER_JAB + k * F, 'power'], [OVER_JAB + k * F, 'tech', 'crossCounter']],
+      setup: b => ((b.fighters[0].skills = { all: lv }), (b.fighters[0].techniques = ['crossCounter']), (b.fighters[1].stands = true))
+    },
+    more
+  );
+export const CROSS_COUNTER = [
+  ...OVER_LEVELS.map(lv => overCard(`crossCounter@${lv}`, 'crossCounter', lv, overAt(lv))),
+  // (a pro's, out of his window: two frames before it, where the jab's aim follows his head, and two after it, where it lands first)
+  overCard('crossCounter-early@3', 'crossCounter-off', '3', overW('3').from - 2, { name: '크로스 카운터 · 이름', en: 'The cross counter, early', outcome: 'hit', off: 'early' }),
+  overCard('crossCounter-late@3', 'crossCounter-off', '3', overW('3').to + 2, { name: '크로스 카운터 · 늦음', en: 'The cross counter, late', outcome: 'hit', off: 'late' })
+];
+/* (out cold off it: the boxer of the card jabs, at the moment the cards' pro does, and the other man, a great one (4명) carrying it,
+   throws it over the jab on the last frame of his window; the boxer is left 0.05 of his health just before it lands. The last
+   frame and not the middle: off the middle and the frame after it, the stiff body's own glove went 2.5 to 2.7 cm into his head
+   as he came to rest, which the audit holds to 2) */
+const OUT_GREAT = '4m',
+  OUT_K = overW(OUT_GREAT).to,
+  OUT_AT = OVER_JAB + (OUT_K + 6) * F;
+export const OUT_COUNTER = Object.assign(down(0.05, OUT_AT - 0.02, 3.0), {
+  id: 'out-counter', name: '실신 · 크로스 카운터에', en: 'Out cold, countered over the jab', group: '다운', out: true, kind: 'over',
+  note: '잽을 내다가 그 잽 위로 넘어온 크로스 카운터에 맞습니다. 주먹을 내는 중에 맞은 마무리 타격이라 실신이고, 스트레이트라 통나무로 굳습니다(뻗은 앞팔도 그대로). 상대는 4명이고 크로스 카운터를 가졌으며, 구간의 마지막 프레임에 누릅니다.',
+  loop: 7.2, punch: ['jab', OVER_JAB], outcome: 'hit', fall: 'outStiff', view: { yaw: 0.5, pitch: 0.3 },
+  me: () => HOME,
+  him: t => (t > OVER_JAB + 0.3 ? null : [HOME[0] + OVER_GAP, HOME[1]]),
+  press: [[OVER_JAB, 'jab']],
+  against: [[OVER_JAB + OUT_K * F, 'power'], [OVER_JAB + OUT_K * F, 'tech', 'crossCounter']],
+  setup: b => ((b.knockdowns = true), (b.fighters[1].skills = { all: OUT_GREAT }), (b.fighters[1].techniques = ['crossCounter']))
+});

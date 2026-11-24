@@ -75,7 +75,7 @@ import { RING } from '../world/ring.mjs';
 import { LEN } from '../rig/solve.mjs';
 import { body, blank, fatigue, COST, loadout } from './profile.mjs';
 import { asked, has, gradeOf } from './techniques.mjs';
-import { levelOf, CROSS, ROLL } from '../anim/skill.mjs';
+import { levelOf, CROSS, ROLL, OVER } from '../anim/skill.mjs';
 import { timeline, evadeTime, progress, LOADED, pullWait, pullTo } from '../anim/evade.mjs';
 import { choose, THROWS, PAW, COLLAR, ELBOW } from '../anim/show.mjs';
 import { waveOf, waveTravel, waveTurn, waveBlocked, patOf, presses, fireOf, shellOf } from '../anim/clean.mjs';
@@ -685,6 +685,96 @@ function shouldered(bout, f, other, who, action, blow, J, felt, stop, dt, s) {
   return bout.events.push(Object.assign({ type: 'block' }, blow, { part: 'shoulder', roll, margin: +margin.toFixed(4) }));
 }
 
+/* ---- The cross counter (docs/cross-counter-plan.md §4.5; stage Y; anim/over.mjs, moves.mjs crossOver): a power press meant
+   as crossCounter (game/techniques.mjs) by a man who carries it, standing in his guard (doing nothing else), at a jab coming at
+   his head (the lead hand's straight: a jab, a face jab, a flicker; not one to the body) from `near` to `far` metres centre to
+   centre, is the rear straight thrown over it (crossOver), a counter. Anywhere else the press is the power punch it would have
+   been. And only at a jab whose aim is set no more than `aim` steps after it started (stepsFromStart: the jab's own chain,
+   run on where it is not set yet): a pro's, a great one's and a legend's are set on its 4th step, an amateur's on its 8th, a
+   beginner's on its 9th. At a jab that takes that long to come the press is the power punch it would have been, the
+   straight, which lands before such a jab is out: the cross counter, timed to the aim, waited for it or went before it was
+   out, and landed lighter than that straight or not at all in 908 of the 12,320 bouts of the plan's §9.2 sweep, every one of
+   them at an amateur's or a beginner's jab, and its arm went through his in most of the rest there. Nor once the jab has
+   won: pressed more than `late` steps after its aim is set (the windows end a step after it), the jab lands before the head
+   can go, and the press is the power punch it would have been (the cross counter's head, going all the same, took him on into
+   the jab: harder, and his arm in the other man, in 29 bouts of the sweep).
+   A grade whose table says so (skill.mjs OVER wait: a great one's and a legend's) waits, pressed before the jab's aim
+   is set, for the step it is set on, and no longer than `wait` seconds; the jab gone while he waits (cut short, or landed),
+   he lets it go and is back in his guard, nothing thrown. A grade that does not wait (a pro) throws it only once the jab's
+   aim is set, or will be by the end of this step (no more than `early` steps before it): pressed before that, the press is
+   the power punch it would have been (his head going before the aim was set, the jab followed it and landed, and the rear
+   arm he had lifted over it came home through the jab's forearm: 34 bouts of the sweep, the two men's arms in each other).
+   The jab gone by (`by`: its elbow that far straight, the step a pro's reaches a head that stood where his was, or it is no
+   longer coming: crossBy) is what his head waits for to go on in at him (anim/over.mjs); going in from the moment he went,
+   it took him into a jab that had not gone by, and a cross counter that lost was hit harder than the plain cross. The rules the plan leaves to the user (§0.3), each one switch here:
+     counter  the counter's gain (RULES.counterGain, its held moment and its step in): 'out', only if it lands while the jab's
+              arm is still out (the jab still his action, on its way, held out, or coming home with its elbow `elbow` or
+              more of the way straight); 'never', a plain blow (the plan's (나))
+              (the plan's (다), a gain of its own, 1.4, would be a third value here and its own multiplier in strike)
+     through  0: the first blow cuts the other man's punch short, as it always has (no trade). Over 0 (the plan's (나)): a cross
+              counter that is hit when its elbow is that far straight goes on (a trade); the switch is wired and off, and nothing
+              has been fought with it on
+   The other two, who carries it (game/techniques.mjs: crossCounter open, not standard) and the dirty grades' body (skill.mjs
+   OVER), are a table entry each. f.action.crossing: { of (the jab's id), at, go (chain.t it went at, null while it waits) } */
+export const CROSSING = { near: 0.88, far: 1.16, wait: 0.12, aim: 5, late: 1, early: 0, by: 0.6, counter: 'out', elbow: 0.8, through: 0 };
+// (the jab he can throw it over: coming at his head, lead hand, straight, its aim soon set, and he where it can be thrown from)
+function crossingOf(f, other, far, who) {
+  const jab = !f.action && f.stun <= 0 && has(f, 'crossCounter') && far >= CROSSING.near - 1e-9 && far <= CROSSING.far + 1e-9 ? incoming(other) : null,
+    move = jab && MOVES[jab.name];
+  return move && move.hand === 'L' && move.kind === 'straight' && !move.zone && !(jab.asked && jab.asked.body) && stepsFromStart(jab, who) <= CROSSING.aim && !won(jab, who) && (waits(f) || stepsToAim(jab, who, CROSSING.early) <= CROSSING.early) ? jab : null;
+}
+// (a grade that waits for the jab's aim, skill.mjs OVER wait: at the cross's grade, as begin has it)
+const waits = f => !!(OVER[levelOf(f.skills, f.skills && f.skills.crossOver ? 'crossOver' : MOVES.crossOver.of).id] || OVER[3]).wait;
+// (and the jab has not won already: its aim set more than CROSSING.late steps before the end of this one)
+const won = (jab, who) => jab.aimAge !== undefined && Math.round(jab.chain.t / DT) + (who < 1 - who ? 1 : 0) - jab.aimAge > CROSSING.late;
+/* (how many steps from its start the jab's aim is set: as it was, set already; or the steps it will have been going by the end
+   of this one and those after this one it takes to set, its chain run on; Infinity, more than CROSSING.aim) */
+function stepsFromStart(jab, who) {
+  if (jab.aimAge !== undefined) return jab.aimAge;
+  const age = Math.round(jab.chain.t / DT) + (who < 1 - who ? 1 : 0);
+  return age > CROSSING.aim ? Infinity : age + stepsToAim(jab, who, CROSSING.aim - age);
+}
+/* (how many steps after this one the jab's aim is set: its shoulder on; 0, set already or on this step; Infinity, not within
+   `most`. Its chain is run on, a copy of it, as he will run it: fought in turn, a man still to come this step has not moved
+   yet, and his is run on this step's first) */
+function stepsToAim(jab, who, most) {
+  if (jab.aim || jab.chain.on[3]) return 0;
+  const c = jab.chain,
+    ahead = who < 1 - who ? 1 : 0,
+    copy = Object.assign({}, c, { q: c.q.slice(), v: c.v.slice(), a: c.a.slice(), push: c.push.slice(), ready: c.ready.slice(), handed: c.handed.slice(), on: c.on.slice(), fired: c.fired.slice(), peak: c.peak.slice(), peakAt: c.peakAt.slice(), coil: Object.assign({}, c.coil) });
+  for (let n = 1; n <= most + ahead; n++) {
+    stepChain(copy, MOVES[jab.name], DT);
+    if (copy.on[3]) return Math.max(0, n - ahead);
+  }
+  return Infinity;
+}
+// (has the jab's aim been set, or will it be on this step)
+const aimSet = (bout, f, jab, who) => stepsToAim(jab, who, 0) === 0;
+// (each step, before his chain is: a cross counter waiting for the jab's aim goes now, or is let go of)
+function crossWait(bout, f, who) {
+  const a = f.action,
+    c = a.crossing,
+    other = bout.fighters[1 - who],
+    jab = other.action && other.action.id === c.of && !other.action.struck ? other.action : null;
+  if (!jab) return void (f.action = null);
+  if (aimSet(bout, f, jab, who) || a.chain.t >= CROSSING.wait - 1e-9) (c.go = a.chain.t), (a.chain.wait = a.chain.t);
+}
+const waiting = action => !!action && !!action.crossing && action.crossing.go === null;
+/* (the jab gone by: out as far as it reaches a head that stood where his did, its elbow `elbow` of the way straight, or on its
+   way home, or gone; marked once, on his chain's clock, as both men's steps are done (viewOf), so that it is the same step
+   from either corner: action.crossing.by. Until then his head goes across and down, not in: anim/over.mjs) */
+function crossBy(f, other) {
+  const c = f.action.crossing,
+    jab = other.action && other.action.id === c.of && other.action.chain ? other.action : null;
+  if (c.go !== null && (!jab || !["coil", "throw"].includes(jab.chain.phase) || jab.chain.q[4] >= CROSSING.by - 1e-9)) c.by = f.action.chain.t;
+}
+// (does it land as a counter: the plan's §0.3 (1), CROSSING.counter)
+function crossCounted(action, other) {
+  if (CROSSING.counter !== 'out') return false;
+  const jab = other.action;
+  return !!jab && jab.id === action.crossing.of && !!jab.chain && (['coil', 'throw', 'hold'].includes(jab.chain.phase) || (jab.chain.phase === 'recover' && jab.chain.q[4] >= CROSSING.elbow - 1e-9));
+}
+
 /* The wave from step to step (anim/clean.mjs): held while it is asked for; the ropes in the way he is going are the end of it,
    and so is his lead foot stood on (at once). Gone once he is doing anything that is not the wave or a jab out of it (a
    moment's grace, for the wave to be taken up again as a jab out of it comes home). */
@@ -800,7 +890,10 @@ function decide(bout, f, input, dt, who) {
         const fired = what === 'power' && !pulled && !shifted && typeof dir !== 'string' ? firedOf(bout, f, sign) : null,
           // (out of the peek-a-boo shell: the lead hook, the inside one right up close; the body uppercut after it by name)
           shelled = what === 'power' && !pulled && !fired && !shifted ? (typeof dir === 'string' ? (dir === 'upperBody' && sign && sign.tech === 'shell' ? { follow: true } : null) : shellCounter(bout, f, sign)) : null;
-        if (pulled) (name = sign.body ? 'hookBody' : 'cross'), (f.link = 0);
+        // (a jab coming at his head, and a power press meant as the cross counter: the rear straight over it, CROSSING)
+        const crossing = what === 'power' && typeof dir !== 'string' && !!sign && sign.tech === 'crossCounter' && !sign.body ? crossingOf(f, other, far, who) : null;
+        if (crossing) (name = 'crossOver'), (f.link = 0);
+        else if (pulled) (name = sign.body ? 'hookBody' : 'cross'), (f.link = 0);
         else if (rollOut) (name = Math.hypot(other.x - f.x, other.z - f.z) < ROLL_IN ? 'upperIn' : 'hookR'), (f.link = 0);
         else if (crossed) {
           const far = Math.hypot(other.x - f.x, other.z - f.z);
@@ -848,7 +941,7 @@ function decide(bout, f, input, dt, who) {
         if (named) name = named;
         else if (low) name = TO_BODY[name];
         const again = !named && !low && what === 'jab' && f.flicks && f.flicks.n < FLICK.most && f.wantAt - f.flicks.at <= FLICK.again + 1e-9,
-          trick = again ? 'flicker' : named || low ? null : trickOf(f, other, what, name, dir);
+          trick = again ? 'flicker' : named || low || crossing ? null : trickOf(f, other, what, name, dir);
         if (trick && THROWS[trick]) name = trick === 'pawUp' && inside ? 'upperIn' : THROWS[trick];
         if (name === 'flicker') f.flicks = { n: again ? f.flicks.n + 1 : 1, at: Infinity };
         else if (what === 'jab') f.flicks = null;
@@ -856,8 +949,14 @@ function decide(bout, f, input, dt, who) {
         const fromWave = !!f.wave && what === 'jab' && !!f.action && f.action.name === 'wave';
         if (f.wave && !fromWave) f.wave = null;
         if (shifted && !f.shift) f.shift = shiftBegin(bout, f, other, shifted);
-        begin(f, name, { counter: f.counter > 0 || !!fired || !!rollOut, variant: trick, wave: fromWave || undefined, pulled: pulled || undefined, fired: fired || undefined, shelled: shelled || undefined, shifted: shifted ? true : undefined, rollOut: rollOut ? { t: rollOut.t, roll: rollOut.roll, at: bout.t } : undefined, crossed: crossed || undefined }, bout);
+        begin(f, name, { counter: f.counter > 0 || !!fired || !!rollOut || (!!crossing && CROSSING.counter !== 'never'), variant: trick, wave: fromWave || undefined, pulled: pulled || undefined, fired: fired || undefined, shelled: shelled || undefined, shifted: shifted ? true : undefined, rollOut: rollOut ? { t: rollOut.t, roll: rollOut.roll, at: bout.t } : undefined, crossed: crossed || undefined, crossing: crossing ? { of: crossing.id, at: bout.t, go: 0 } : undefined }, bout);
         if (crossed) f.crossed = null;
+        if (crossing) {
+          /* (a grade that waits for the jab's aim, pressed before it is set: nothing moves until it is, CROSSING; and what he got
+             out of the way of, his counter with it: a miss by a whisker makes it brilliant, judge) */
+          if ((OVER[f.action.level.id] || OVER[3]).wait) (f.action.crossing.go = null), (f.action.chain.wait = CROSSING.wait);
+          f.defence = { kind: 'evade', start: bout.t, of: crossing.id, from: crossing.at, margin: null, late: false, counterAt: bout.t, counter: f.action.id, event: null, said: false };
+        }
         if (fired) (f.elbowed = null), (f.fireFollow = null);
         if (shelled && !shelled.follow) (f.shellOpen = null), (f.shellFollow = null), (f.action.shellOut = shelled.sh);
         // a loaded punch answering a defence: what makes the defence brilliant, if it was close enough
@@ -971,7 +1070,8 @@ function travel(f, input, dt, other) {
   }
   let ix = 0,
     iz = 0;
-  if (incoming(f) && other && !other.down && !f.shift) {
+  // (not a cross counter waiting for the jab's aim: nothing of him moves until it goes, CROSSING)
+  if (incoming(f) && other && !other.down && !f.shift && !waiting(f.action)) {
     /* A punch is stepped into: he closes on a head that is just out of range, so a combination follows its target back
        and a counter reaches a man who has been thrown onto his heels. (It is the head he measures to, not the feet.) */
     // (a punch to the body measures to his trunk: moves.mjs zone)
@@ -1033,6 +1133,9 @@ function advance(bout, f, dt, who) {
   f.action.t += dt;
   // (doubled up by a blow to the body, his legs go only now: { type: 'buckle', who })
   if (f.action.name === 'dropLiver' && f.action.t >= RULES.body.late - 1e-9 && f.action.t - dt < RULES.body.late - 1e-9) bout.events.push({ type: 'buckle', who });
+  // (a cross counter waiting for the jab's aim: it goes now, or, the jab gone, is let go of: CROSSING)
+  if (waiting(f.action)) crossWait(bout, f, who);
+  if (!f.action) return;
   if (move.punch) {
     const was = f.action.chain.phase,
       now = stepChain(f.action.chain, move, dt);
@@ -1143,8 +1246,9 @@ function viewOf(bout, i) {
       shoved: Math.hypot(f.kx, f.kz),
       reach: null,
       // the other man, in his own terms: his lead foot's instep (what a dirty man stands on), and whether this man's own lead
-      // foot is stood on (and his elbows: what the bottom of an inside uppercut's U is kept clear of, anim/animator.mjs)
-      foe: f.place && other.pose && other.points ? { foot: mine(f, at(other, 'LeftFoot', [0, -0.02, 0.07])), glove: { L: mine(f, other.points.L), R: mine(f, other.points.R) }, head: mine(f, other.points.head), elbow: { L: mine(f, other.points.LE), R: mine(f, other.points.RE) }, nape: mine(f, napeOf(other)), right: dirIn(f, [-Math.cos(other.yaw), Math.sin(other.yaw)]) } : null,
+      // foot is stood on (and his elbows: what the bottom of an inside uppercut's U is kept clear of, anim/animator.mjs; and
+      // his shoulders, elbows and gloves: what a cross counter's rear arm goes over, anim/over.mjs)
+      foe: f.place && other.pose && other.points ? { foot: mine(f, at(other, 'LeftFoot', [0, -0.02, 0.07])), glove: { L: mine(f, other.points.L), R: mine(f, other.points.R) }, head: mine(f, other.points.head), elbow: { L: mine(f, other.points.LE), R: mine(f, other.points.RE) }, shoulder: { L: mine(f, other.points.LS), R: mine(f, other.points.RS) }, aim: leadAim(bout, f, other), lag: i === 0 ? 1 : 0, nape: mine(f, napeOf(other)), right: dirIn(f, [-Math.cos(other.yaw), Math.sin(other.yaw)]) } : null,
       pinned: f.pinned > 0,
       // the down parry his guard is put up for, if it is (anim/clean.mjs): how soon the glove coming in will be on his rear glove
       pat: f.pat ? patView(bout, f, other) : null,
@@ -1198,6 +1302,8 @@ function viewOf(bout, i) {
       view.wave.clear = segment(f.points.head, other.points[hand], to) - RULES.glove - RULES.head;
     }
   }
+  // (a cross counter: the moment the jab has gone by, what his head waits for to go on in, anim/over.mjs: CROSSING)
+  if (f.action && f.action.crossing && f.action.crossing.by === undefined) crossBy(f, other);
   if (punching(f) && !other.down && other.points) {
     /* Where the punch is thrown: at the head as it is now, wherever that is. The wrist is sent so that the glove's centre
        would end at the middle of the head (it will meet it before then): straight through for a straight punch, onto the
@@ -1228,7 +1334,7 @@ function viewOf(bout, i) {
          drifts.) A straight punch and an uppercut are steered by the shoulder to the last; a hook is an arm locked to a
          body that is already turning, and its path is set when the hips go. (So a hook is ducked; an uppercut finds a
          ducking head.) */
-      if (f.action.chain.on[move.arm === 'swing' ? 1 : 3]) f.action.aim = view.aim;
+      if (f.action.chain.on[move.arm === 'swing' ? 1 : 3]) (f.action.aim = view.aim), (f.action.aimAt ??= bout.t), (f.action.aimAge ??= Math.round(f.action.chain.t / DT));
     }
   }
   return view;
@@ -1245,6 +1351,14 @@ const dirIn = (f, d) => {
   return [v[0], 0, v[2]];
 };
 const NEAR = [['Hips', 0.14], ['Spine2', 0.14], ['Chest', 0.15], ['LeftShin', 0.07], ['RightShin', 0.07], ['LeftLeg', 0.1], ['RightLeg', 0.1], ['LeftFoot', 0.06], ['RightFoot', 0.06]];
+/* (where the other man's lead straight is sent, once its aim is set, in this man's terms: where the arm coming in will be at
+   its end, what a cross counter's rear arm goes over, anim/over.mjs) */
+function leadAim(bout, f, other) {
+  const a = other.action,
+    move = a && MOVES[a.name];
+  // (set on an earlier step: the man fought second would see it the step it is set, the man fought first a step after)
+  return a && a.aim && a.aimAt !== undefined && a.aimAt < bout.t - 1e-9 && other.place && move && move.hand === 'L' && move.arm === 'straight' ? mine(f, M.add(other.place.p, M.app(other.place.R, a.aim))) : null;
+}
 // a point on the canvas in boxer f's own space (as he was last drawn), and a point of his on the canvas (a joint, and so far on
 // from it in that joint's terms)
 const mine = (f, p) => {
@@ -1684,7 +1798,8 @@ function strike(bout, f, other, who, dt) {
     // (and what of his guard it met: a glove, or a show-off's crossed forearm)
     return bout.events.push(Object.assign({ type: 'block' }, blow, { part: first.c0 === other.before[first.key] ? 'glove' : 'forearm' }));
   }
-  const counter = !!action.counter,
+  // (a cross counter is one only while the jab's arm is still out: CROSSING)
+  const counter = action.crossing ? !!action.counter && crossCounted(action, other) : !!action.counter,
     worth = J * (counter ? RULES.counterGain : 1),
     damage = worth * (spot ? RULES.body.damage : RULES.damage) * other.k.chin,
     had = other.hp,
@@ -1692,7 +1807,8 @@ function strike(bout, f, other, who, dt) {
        who walks onto a punch already coming has not been countered) */
     caught = punching(other) && !!other.action.chain && ['coil', 'throw', 'hold'].includes(other.action.chain.phase) && other.action.at < action.at - 1e-9;
   other.hp = Math.max(0, other.hp - damage);
-  other.action = null;
+  // (a cross counter hit once its elbow is that far straight goes on, if the plan's §0.3 (4) is answered with a trade: CROSSING)
+  if (!(CROSSING.through > 0 && !!other.action && !!other.action.crossing && !!other.action.chain && other.action.chain.q[4] >= CROSSING.through)) other.action = null;
   // (hit in the middle of the Tyson shift: it is over, and his feet are put back under him, anim/shift.mjs)
   other.shift = null;
   other.cover = false;

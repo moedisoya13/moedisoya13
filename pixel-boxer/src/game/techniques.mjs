@@ -303,3 +303,11 @@ define('rollCounter', {
   opening: s => (s.used && s.used.id === 'rollCounter' && since(s, s.mem.kept, 0.3) && s.mem.kept.roll ? 'rollCounter:' + s.mem.kept.at : null),
   counter: s => ({ power: s.far < ROLLED.inside ? 'upperIn' : 'hookR', tech: 'rollCounter' })
 });
+
+/* the cross counter (docs/cross-counter-plan.md; stage Y): a power press meant as it, standing in his guard, at a jab coming at
+   his head from 0.88 to 1.16 m, is the rear straight thrown over the jab, the head off inside it in the same movement (game/
+   bout.mjs CROSSING, anim/over.mjs, moves.mjs crossOver); anywhere else the press is the power punch it would have been. Built
+   in stage Y1, its motion and its rules; the head's picking it (an answer to a jab it has read, a share of the slip's) is stage
+   Y2's, and until then nothing picks it (not ready). Opened from a pro up, in no default loadout (§0.3 (2): `open`, and no
+   `standard`, is the user's answer to who carries it) */
+define('crossCounter', { name: '크로스 카운터', section: 'cross-counter-plan', open: ['3', '4m', '4a', '5m', '5a'], as: 'cross', cost: 1, ready: false });

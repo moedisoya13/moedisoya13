@@ -38,7 +38,7 @@ import { fk, TPOSE } from './rig/skeleton.mjs';
 import { RANGE as LIMIT, RATE, RADIUS, SEGMENTS, HEAD, GLOVE, shoulderOf, gloveInArm } from './rig/body.mjs';
 import { step } from './game/bout.mjs';
 import { ENTRIES, freshBout, drive } from './footwork.mjs';
-import { DEFENSE, PARRY_DOWN, CROSS_ARM, CROSS_BODY, ROLLING, PULL_COUNTER, BLOCK_FIRE, SHELL } from './defense.mjs';
+import { DEFENSE, PARRY_DOWN, CROSS_ARM, CROSS_BODY, ROLLING, PULL_COUNTER, BLOCK_FIRE, SHELL, CROSS_COUNTER, OUT_COUNTER } from './defense.mjs';
 import { LADDER, DIRTY, STANCES, FOOTWORK, ENTRY, SHOWOFF, TAUNTING, BODY_LADDER, REAR_LADDER, WAVING, SHIFTING, WALKING } from './ladder.mjs';
 import { BODYSHOTS, LIVER_BLOCK } from './bodyshots.mjs';
 import { COMBINATIONS } from './combos.mjs';
@@ -74,8 +74,9 @@ const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2],
   into = (R, v) => M.app(M.tr(R), v), // a direction, as the joint sees it
   angle = (a, b) => Math.acos(Math.max(-1, Math.min(1, dot(unit(a), unit(b))))) * DEG,
   reject = (v, d) => M.sub(v, M.scale(d, dot(v, d)));
-// (and the combinations: src/combos.mjs)
+// (and the combinations: src/combos.mjs; and the cross counter's, stage Y: src/defense.mjs)
 SCRIPTS.push(...COMBINATIONS);
+SCRIPTS.push(...CROSS_COUNTER, OUT_COUNTER);
 
 /* One man in one frame: where everything is on the canvas, and every angle the checks need. */
 export function measure(f) {
@@ -388,8 +389,9 @@ export function auditor(o) {
           const S = MOVES[f.action.name].hand === 'L' ? 'Left' : 'Right',
             turn = (x, y) => ((x - y + 540) % 360) - 180,
             rates = { hips: Math.abs(turn(a.PelvisYaw, before.angles.PelvisYaw)) / DT, chest: Math.abs(turn(a.ChestYaw, before.angles.ChestYaw)) / DT, trunk: Math.abs(a.SpineTwist - before.angles.SpineTwist) / DT, waist: Math.abs(a.WaistTwist - before.angles.WaistTwist) / DT, own: Math.abs(a.SpineTwist - a.WaistTwist - before.angles.SpineTwist + before.angles.WaistTwist) / DT, elbow: Math.abs(a[S + 'Elbow'] - before.angles[S + 'Elbow']) / DT, glove: dist(m.at['glove' + S], before.at['glove' + S]) / DT },
-            // (a combination's card under its own name, src/combos.mjs; anything else under the punch it throws)
-            by = entry.combo || entry.punch,
+            // (a combination's card under its own name, src/combos.mjs; the cross counter's under its punch, src/defense.mjs; anything
+            // else under the punch it throws)
+            by = entry.turning || entry.combo || entry.punch,
             slot = ((turning[by] = turning[by] || {})[entry.level] = turning[by][entry.level] || {});
           for (const k in rates) slot[k] = Math.max(slot[k] || 0, rates[k]);
         }

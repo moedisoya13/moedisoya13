@@ -407,6 +407,29 @@ const PUNCHES = {
       elbow: {},
       waist: { waist: 17 }
     }
+  },
+  /* ---- the cross counter (docs/cross-counter-plan.md §3; stage Y): the rear straight thrown over the other man's jab as it
+     comes, the head going off to his left, inside it, in the same movement. Not the cross: a punch of its own, at the cross's
+     grade (`of`), pressed by the bout only (game/bout.mjs: a power press meant as crossCounter at a jab on its way, from
+     where it can be). No wind-up: the head going off the line is the wind-up (anim/over.mjs, the grade's table: skill.mjs
+     OVER). The chain is the cross's, the hips and the chest turned as far, but 10 of the chest's 38 degrees are the waist's
+     (docs/moves-plan-6.md §1.4, the share the plan meant for the straight; moved, not added), set off with the hips; the
+     legs drive the hips on in less (the head goes across first, and forward only after the jab has gone by); the lead foot
+     steps in and across a little as the weight comes onto it (over.mjs). `over`: the body is over.mjs's to add to; body.off
+     0, the grade's head off the line left out (over.mjs moves it); tuck 0, over.mjs turns the shoulder in by its own table */
+  crossOver: {
+    hand: 'R', arm: 'straight', kind: 'straight', of: 'cross', over: true, reach: 1.15, close: 0.95,
+    chain: { coil: 1 / 60, rate: [58, 36, 50, 54, 54], turn: [41, 38], waist: { rate: 64, from: 'hips' } },
+    body: { off: 0, tuck: 0 },
+    coil: {},
+    links: {
+      drive: { rfw: 40, rfp: 24, rfz: 0.05, rkx: -22, hy: -0.03, st: 0.02 },
+      hips: { yaw: 34, hx: 0.03 },
+      trunk: { twist: 28, lean: 7, side: 3, lx: -0.04, ly: 0.03, lz: -0.1 },
+      shoulder: {},
+      elbow: {},
+      waist: { waist: 10 }
+    }
   }
 };
 // (the body punch each punch of the chains becomes, thrown to the body: game/bout.mjs decide)
@@ -446,8 +469,9 @@ export const LIE = { back: 'rise', front: 'riseFront', side: 'riseSide' };
    part (`blend`, seconds). */
 export const UP = { rise: { hips: [0, -0.22], heading: Math.PI }, riseFront: { hips: [0, -0.02], heading: 0 }, riseSide: { hips: [0, -0.02], heading: 0 } };
 
-// the far points of the evasions (the duck's knees come after its waist, so they are keyed apart)
-const SLIP = { side: 11, hx: 0.13, lean: 6, hw: 8, hr: 6, lx: 0.02, rx: 0.02, lkf: 14, rkf: -4 };
+// the far points of the evasions (the duck's knees come after its waist, so they are keyed apart; the slip's is the cross
+// counter's head too, anim/over.mjs)
+export const SLIP = { side: 11, hx: 0.13, lean: 6, hw: 8, hr: 6, lx: 0.02, rx: 0.02, lkf: 14, rkf: -4 };
 const DUCK = { lean: 34, hp: 12, hz: -0.22, hx: 0.14, lfp: 6, rfp: 10 };
 const PULL = { hz: -0.17, lean: -17, hp: -9, lfp: 10, lfz: 0.01, ly: 0.02, ry: 0.02, lkf: -10, rkf: 16 };
 

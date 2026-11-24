@@ -49,7 +49,7 @@ const near = (got, want, tol, what) => assert.ok(Math.abs((got || 0) - want) <= 
 const unready = () => Object.keys(TECHNIQUES).filter(id => !TECHNIQUES[id].ready);
 
 test('techniques: every one in the plan is registered, with the grades that open it', () => {
-  const open = { pullCounter: GRADES, wave: ['4m', '5m'], parryDown: ['4m', '5m'], blockFire: ['4m', '5m'], shift: ['4m', '5m'], shell: ['4m', '5m'], crossArm: ['3', '4m', '4a', '5m', '5a'], rollCounter: ['4m', '4a', '5m', '5a'] };
+  const open = { pullCounter: GRADES, wave: ['4m', '5m'], parryDown: ['4m', '5m'], blockFire: ['4m', '5m'], shift: ['4m', '5m'], shell: ['4m', '5m'], crossArm: ['3', '4m', '4a', '5m', '5a'], rollCounter: ['4m', '4a', '5m', '5a'], crossCounter: ['3', '4m', '4a', '5m', '5a'] };
   assert.deepEqual(Object.keys(TECHNIQUES).sort(), Object.keys(open).sort());
   for (const [id, grades] of Object.entries(open)) {
     assert.deepEqual([...TECHNIQUES[id].open].sort(), [...grades].sort(), id);

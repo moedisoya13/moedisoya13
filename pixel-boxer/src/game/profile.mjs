@@ -62,7 +62,7 @@ export function body(sheet) {
 }
 
 // what a punch or a move costs him in stamina (a punch to the body, the punch it is a form of and a little for the knees)
-export const COST = { jab: 4, cross: 7, hook: 8, upper: 9, dash: 6, slip: 3, jabBody: 5, crossBody: 8, hookBody: 9, upperBody: 9, hookR: 8 };
+export const COST = { jab: 4, cross: 7, hook: 8, upper: 9, dash: 6, slip: 3, jabBody: 5, crossBody: 8, hookBody: 9, upperBody: 9, hookR: 8, crossOver: 9 };
 
 /* How fresh he is, 0..1. Above a third of his stamina he is fresh; below it he slows down toward a floor, never to a stop. */
 export function fatigue(f) {

@@ -37,7 +37,7 @@ import { guardPose } from './anim/animator.mjs';
 import { step } from './game/bout.mjs';
 import { createTracker, track, cellName, cellSaid, BANDS } from './game/bearing.mjs';
 import { ENTRIES, freshBout, drive } from './footwork.mjs';
-import { DEFENSE, PARRY_DOWN, CROSS_ARM, CROSS_BODY, ROLLING, PULL_COUNTER, BLOCK_FIRE, SHELL } from './defense.mjs';
+import { DEFENSE, PARRY_DOWN, CROSS_ARM, CROSS_BODY, ROLLING, PULL_COUNTER, BLOCK_FIRE, SHELL, CROSS_COUNTER, OUT_COUNTER } from './defense.mjs';
 import { LADDER, STANCES, DIRTY, FOOTWORK, ENTRY, SHOWOFF, TAUNTING, BODY_LADDER, REAR_LADDER, WAVING, SHIFTING, WALKING } from './ladder.mjs';
 import { BODYSHOTS, LIVER_BLOCK } from './bodyshots.mjs';
 import { COMBINATIONS } from './combos.mjs';
@@ -45,7 +45,7 @@ import { COMBINATIONS } from './combos.mjs';
 const DT = 1 / 60,
   q = new URLSearchParams(location.search),
   num = (name, d) => (q.has(name) ? Number(q.get(name)) : d),
-  all = [...ENTRIES, ...DEFENSE, ...STANCES, ...LADDER, ...DIRTY, ...FOOTWORK, ...ENTRY, ...SHOWOFF, ...TAUNTING, ...BODYSHOTS, ...LIVER_BLOCK, ...BODY_LADDER, ...REAR_LADDER, ...PARRY_DOWN, ...WAVING, ...CROSS_ARM, ...CROSS_BODY, ...ROLLING, ...PULL_COUNTER, ...BLOCK_FIRE, ...SHELL, ...SHIFTING, ...WALKING, ...COMBINATIONS],
+  all = [...ENTRIES, ...DEFENSE, ...STANCES, ...LADDER, ...DIRTY, ...FOOTWORK, ...ENTRY, ...SHOWOFF, ...TAUNTING, ...BODYSHOTS, ...LIVER_BLOCK, ...BODY_LADDER, ...REAR_LADDER, ...PARRY_DOWN, ...WAVING, ...CROSS_ARM, ...CROSS_BODY, ...ROLLING, ...PULL_COUNTER, ...BLOCK_FIRE, ...SHELL, ...SHIFTING, ...WALKING, ...COMBINATIONS, ...CROSS_COUNTER, OUT_COUNTER],
   entry = all.find(e => e.id === q.get('entry')) || all[0],
   n = num('n', 12),
   from = num('from', 0),
