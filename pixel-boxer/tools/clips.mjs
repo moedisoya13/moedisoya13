@@ -14,11 +14,15 @@
                                                           and what it measured; or of a clip written out: --events '{"root":
                                                           "m", "script": "block-elbow@2", "window": [0, 2], "measure": "block"}'
    `now` is this checkout unless given. A clip whose root is not given is left as it is (and said so). Each root is a
-   pixel-boxer folder: its own src is what is imported, as tools/events.mjs --root does.
+   pixel-boxer folder: its own src is what is imported, as tools/events.mjs --root does. A root made from another (ROOTS:
+   from, edits) is no folder of its own: its source root's src is copied to a folder of the system's temporary space, each
+   edit made there, the clips recorded from it, and the folder taken away again (derive); its clips are recorded whenever
+   its source root is given (`now` always is).
    The frames, as written: a base64 string of little-endian int16, FIELDS numbers a man and two men a frame: each joint's turn
    as a quaternion (x, y, z, w times 32767, in skeleton order), the root and where he stands (millimetres), the stretch
    (times 10000), the turn of where he stands (a quaternion), and x, z (millimetres) and yaw (radians times 10000). */
-import { readFileSync, writeFileSync, readdirSync, statSync, existsSync, mkdirSync, unlinkSync } from 'node:fs';
+import { readFileSync, writeFileSync, readdirSync, statSync, existsSync, mkdirSync, unlinkSync, mkdtempSync, cpSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -40,10 +44,12 @@ async function engine(root) {
   const src = f => import(pathToFileURL(path.resolve(root, 'src', f)).href);
   const [{ step }, foot, { SCRIPTS, measure }, { NAMES, fk }, defense, body, M, { RADIUS }] = await Promise.all(['game/bout.mjs', 'footwork.mjs', 'audit.mjs', 'rig/skeleton.mjs', 'defense.mjs', 'bodyshots.mjs', 'rig/m3.mjs', 'rig/body.mjs'].map(src));
   const { MOVES } = await src('anim/moves.mjs');
+  // (the combinations' cards, where the checkout has them: SCENES.combo)
+  const combos = existsSync(path.resolve(root, 'src', 'combos.mjs')) ? await src('combos.mjs') : null;
   // (the scripts the page starts afresh each loop though the boxer throws nothing: src/pending.mjs byId)
   const fresh = new Set([...(body.LIVER_BLOCK || []), ...(defense.CROSS_BODY || []), ...(defense.BLOCK_FIRE || []), ...(defense.SHELL || [])].map(e => e.id));
   if (NAMES.length !== JOINTS) throw new Error(`${root}: ${NAMES.length} joints, not ${JOINTS}`);
-  return { step, freshBout: foot.freshBout, drive: foot.drive, HOME: foot.HOME, SCRIPTS, measure, NAMES, fk, fresh, M, MOVES, defense, body, RADIUS };
+  return { step, freshBout: foot.freshBout, drive: foot.drive, HOME: foot.HOME, SCRIPTS, measure, NAMES, fk, fresh, M, MOVES, defense, body, RADIUS, combos };
 }
 // where a checkout came from: its commit (and whether the engine's files differ from it), or its folder; and a digest of them
 function origin(root) {
@@ -71,6 +77,45 @@ function origin(root) {
   return { commit, folder: path.basename(root) === 'pixel-boxer' ? path.basename(path.dirname(root)) : path.basename(root), digest: hash.digest('hex').slice(0, 12) };
 }
 
+/* A root made from another by edits (ROOTS: { from, edits: [{ file, find, replace }] }): the source root's src (all of it but
+   the recorded clips: nothing of the engine reads a file, or imports from outside src) copied to a folder of its own in the
+   system's temporary space, and each edit made in the copy: `find`, which must be in that file exactly once, put as
+   `replace`. The source root's own files are never touched. Anything else fails loudly, the copy taken away first.
+   -> { dir (a pixel-boxer folder, as a root is), done() (takes the copy away) }, or null where the source root is not given */
+export function derive(key, roots) {
+  const R = ROOTS[key];
+  if (!R || !R.from || !Array.isArray(R.edits) || !R.edits.length) throw new Error(`${key}: not a root made by edits`);
+  if (ROOTS[R.from] && ROOTS[R.from].from) throw new Error(`${key}: made from ${R.from}, itself made by edits`);
+  const base = roots[R.from];
+  if (!base) return null;
+  const dir = mkdtempSync(path.join(tmpdir(), `clips-${key}-`)),
+    done = () => rmSync(dir, { recursive: true, force: true }),
+    from = path.join(base, 'src'),
+    clips = path.join(from, 'clips');
+  try {
+    cpSync(from, path.join(dir, 'src'), { recursive: true, filter: f => f !== clips && !f.startsWith(clips + path.sep) });
+    for (const e of R.edits) {
+      if (!/^src\/[\w./-]+\.mjs$/.test(e.file) || e.file.includes('..')) throw new Error(`${key}: ${e.file}: an edit is to a module of src`);
+      const file = path.join(dir, e.file);
+      if (!existsSync(file)) throw new Error(`${key}: ${e.file}: no such file in ${R.from}`);
+      const text = readFileSync(file, 'utf8'),
+        n = text.split(e.find).length - 1;
+      if (n !== 1) throw new Error(`${key}: ${e.file}: ${JSON.stringify(e.find)} is there ${n} times, not once`);
+      writeFileSync(file, text.replace(e.find, () => e.replace));
+    }
+  } catch (error) {
+    done();
+    throw error;
+  }
+  return { dir, done };
+}
+// (where a root made by edits came from: its source's commit or folder and digest, and the digest of the engine as edited)
+function originOf(key, roots, dir) {
+  const R = ROOTS[key],
+    base = origin(roots[R.from]);
+  return { commit: base.commit, folder: base.folder, digest: origin(dir).digest, base: base.digest, from: R.from, edits: R.edits.length };
+}
+
 /* A clip's script: the checkout's own, changed as the manifest says.
      him: metres       the other man stood that far in front of the boxer's place (centre to centre), all through
      against: [...]    the other man's presses, [seconds, button, value] (in place of the script's)
@@ -94,8 +139,35 @@ function scriptOf(clip, E) {
 /* The scripts built here. aimed: a rear punch thrown at a cross-arm guard held up from early on, or put up `roll` frames after
    the punch is pressed meant as a shoulder roll, aimed at a place on him ([height, degrees round him]: bodyshots.mjs aimAt),
    from 0.85 m: the scene of tests/show.test.mjs's "cross-arm guard: its weak places" (stage N's: aimed(level, punch, { aim,
-   roll })), with what his grade gives him and the cross-arm guard and the roll counter carried. */
+   roll })), with what his grade gives him and the cross-arm guard and the roll counter carried.
+   chain: the power button pressed `n` times, `every` seconds apart from `at`, by a man of grade `level` standing `gap` metres
+   (centre to centre) from a man whose guard is down, neither walked back to his place once it starts: the scene of
+   tests/inside.test.mjs's chainFrom (right up close, the chain is the inside hook and the inside uppercut: game/bout.mjs
+   RULES.inside, insideOn, insideTo).
+   combo: a combination's card (src/combos.mjs comboScript) of row `row` at grade `level`, pressed as `press` says: 'tempo'
+   (the card's own: each beat when it should land after the one before, the plan's tempo) or 'clock' (as the head presses now:
+   0.2 s after a jab, 0.3 s after anything else, landed or not). */
 export const SCENES = {
+  chain: ({ level, gap, at = 0.6, every = 0.3, n = 3, loop = 2.4 }, E) => {
+    const spot = [E.HOME[0] + gap, E.HOME[1]];
+    return {
+      id: `chain@${level} ${gap}`,
+      level,
+      loop,
+      me: t => (t === 0 ? E.HOME : null),
+      him: t => (t === 0 ? spot : null),
+      press: Array.from({ length: n }, (_, i) => [at + i * every, 'power']),
+      setup: b => {
+        b.fighters[0].skills = { all: level };
+      }
+    };
+  },
+  combo: ({ row, level, press }, E) => {
+    if (!E.combos) throw new Error('no src/combos.mjs in this checkout');
+    const r = E.combos.COMBO_ROWS.find(x => x.id === row);
+    if (!r || !r.levels.includes(level)) throw new Error(`no combination ${row} at ${level}`);
+    return E.combos.comboScript(r, level, { press });
+  },
   aimed: ({ level, punch, aim, roll }, E) => {
     const at = 0.8,
       press = roll !== undefined ? at + roll * DT : null;
@@ -246,6 +318,91 @@ export const MEASURES = {
       ang = (Math.acos(Math.max(-1, Math.min(1, (l[0] * r[0] + l[1] * r[1] + l[2] * r[2]) / Math.hypot(...l) / Math.hypot(...r)))) * 180) / Math.PI;
     return { blows: blowsOn(run, 0).map(b => said(b, run)), thighs: r4(ang), ankles: r4(dist(p.LeftFoot, p.RightFoot) * 100), frame: fr.k };
   },
+  /* a chain of presses (SCENES.chain): what each press threw and how far apart the two stood as it was pressed (metres, centre
+     to centre), the boxer's blows, and what his hits came to together (newton-seconds) */
+  chain: run => {
+    const blows = blowsOn(run, 1);
+    return {
+      presses: run.punches.filter(p => p.who === 0).map(p => ({ name: p.name, apart: r4(p.apart), frame: p.k })),
+      blows: blows.map(b => said(b, run)),
+      sum: r4(blows.filter(([, e]) => e.type === 'hit').reduce((s, [, e]) => s + e.J, 0))
+    };
+  },
+  /* the waist in a punch (the move `of.move`), as tools/audit.mjs --turning reads it over its throw, the whole run: the fastest the waist turned
+     on the pelvis, the chest on the waist and the chest on the pelvis (degrees a second), and how far the waist turned on the
+     pelvis through the throw (degrees); and the boxer's blows */
+  waist: run => {
+    const top = { waist: 0, own: 0, trunk: 0 },
+      seen = [];
+    for (let i = 1; i < run.all.length; i++) {
+      const fr = run.all[i],
+        was = run.all[i - 1],
+        f = fr.men[0].f;
+      // (the frame the glove lands on is the first held at the blow: counted, as the audit counts it; the held ones after it
+      // are the same pose, no turn at all)
+      if (!f.action || f.action.name !== run.of.move || f.action.phase !== 'throw') continue;
+      const [a, b] = [fr.men[0].m.angles, was.men[0].m.angles],
+        rate = { waist: Math.abs(a.WaistTwist - b.WaistTwist) / DT, own: Math.abs(a.SpineTwist - a.WaistTwist - b.SpineTwist + b.WaistTwist) / DT, trunk: Math.abs(a.SpineTwist - b.SpineTwist) / DT };
+      for (const k of Object.keys(top)) top[k] = Math.max(top[k], rate[k]);
+      seen.push(a.WaistTwist, b.WaistTwist);
+    }
+    return { blows: blowsOn(run, 1).map(b => said(b, run)), waist: Math.round(top.waist), own: Math.round(top.own), trunk: Math.round(top.trunk), turned: seen.length ? r4(Math.max(...seen) - Math.min(...seen)) : null };
+  },
+  // a combination's tempo: the boxer's blows, and the time from each landing to the next (ms, on the step clock: the moments
+  // held at a blow counted, as the card's numbers count them, src/combos.mjs tally)
+  tempo: run => {
+    const blows = blowsOn(run, 1);
+    return { presses: run.punches.filter(p => p.who === 0).map(p => ({ name: p.name, frame: p.k })), blows: blows.map(b => said(b, run)), gaps: blows.slice(1).map(([k], i) => Math.round(((k - blows[i][0]) * 1000) / 60)) };
+  },
+  /* a man knocked down: how he lies at `of.at` seconds (his chest's front: up, down, or on his side, from where his shoulders,
+     hips and neck are; the angle between his thighs and his ankles apart), and when, after the blow, his head is first down
+     on the canvas (its middle under 0.3 m) and up again (over 1.45 m: on his feet) */
+  lying: run => {
+    const hit = run.events.find(([, e]) => e.type === 'hit' && e.on === 0 && e.down),
+      fr = run.all.find(x => x.k === Math.round(run.of.at / DT)) || run.all[run.all.length - 1],
+      p = fr.men[0].m.at,
+      v = (a, b) => [b[0] - a[0], b[1] - a[1], b[2] - a[2]],
+      cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]],
+      front = cross(v(p.RightArm, p.LeftArm), v(p.Hips, p.Neck1)),
+      up = front[1] / (Math.hypot(...front) || 1),
+      l = v(p.LeftLeg, p.LeftShin),
+      r = v(p.RightLeg, p.RightShin),
+      ang = (Math.acos(Math.max(-1, Math.min(1, (l[0] * r[0] + l[1] * r[1] + l[2] * r[2]) / Math.hypot(...l) / Math.hypot(...r)))) * 180) / Math.PI;
+    let down = null,
+      stood = null;
+    for (const x of run.all) {
+      if (!hit || x.k <= hit[0]) continue;
+      const y = x.men[0].m.at.head[1];
+      if (down === null && y < 0.3) down = x.k;
+      if (down !== null && stood === null && y > 1.45) stood = x.k;
+    }
+    return { blows: hit ? [said(hit, run)] : [], face: up > 0.5 ? 'up' : up < -0.5 ? 'down' : 'side', up: r4(up), thighs: r4(ang), ankles: r4(Math.hypot(...v(p.LeftFoot, p.RightFoot)) * 100), frame: fr.k, down: down === null ? null : r4((down - hit[0]) * DT), stood: stood === null ? null : r4((stood - hit[0]) * DT) };
+  },
+  /* a rocked man's guard: after each blow he takes in the window, until the next, the largest step either glove takes in a
+     frame as his chest sees it (centimetres; a frame held at a blow is no step, the one after it is), which glove, and how
+     long after the blow (seconds) */
+  guard: run => {
+    const taken = blowsOn(run, 0).filter(([k]) => k >= run.first && k <= run.last);
+    return {
+      blows: taken.map(b => said(b, run)),
+      after: taken.map(([k0], n) => {
+        const until = n + 1 < taken.length ? taken[n + 1][0] : run.last;
+        let most = 0,
+          at = null,
+          glove = null;
+        for (let i = 1; i < run.all.length; i++) {
+          const fr = run.all[i],
+            was = run.all[i - 1];
+          if (fr.held || fr.k <= k0 || fr.k > until) continue;
+          for (const S of ['Left', 'Right']) {
+            const d = dist(fr.men[0].g[S], was.men[0].g[S]);
+            if (d > most) (most = d), (at = fr.k), (glove = S === 'Left' ? 'L' : 'R');
+          }
+        }
+        return { name: taken[n][1].name, step: r4(most * 100), glove, frame: at, t: at === null ? null : r4((at - k0) * DT) };
+      })
+    };
+  },
   // the collar tie: the boxer's blow, and how far the other man's head was pulled from where it stood, before the blow lands
   pull: run => {
     const h0 = run.window[0].men[1].f.points.head,
@@ -327,6 +484,7 @@ export async function record(clip, root, E) {
     n = last - first + 1,
     data = new Int16Array(n * 2 * FIELDS),
     events = [],
+    punches = [],
     all = [],
     since = [99, 99];
   let t = 0,
@@ -340,6 +498,8 @@ export async function record(clip, root, E) {
     if (!entry.hurt) a.hp = 1000;
     for (const e of bout.events) {
       if (['hit', 'block', 'parry'].includes(e.type)) (since[e.on] = 0), (since[e.who] = 0);
+      // (the punches started, with how far apart the two stood: what a measure may read, not kept in the clip)
+      if (e.type === 'punch') punches.push({ k, who: e.who, name: e.name, apart: Math.hypot(a.x - b.x, a.z - b.z) });
       if (!TYPES.includes(e.type)) continue;
       const x = {};
       for (const key of KEEP) if (e[key] !== undefined && e[key] !== null && e[key] !== false) x[key] = round(e[key]);
@@ -355,7 +515,7 @@ export async function record(clip, root, E) {
       w++;
     }
   }
-  const run = { all, window: all.filter(fr => fr.k >= first), events, first, last, E, of: clip.of || {} },
+  const run = { all, window: all.filter(fr => fr.k >= first), events, punches, first, last, E, of: clip.of || {} },
     measured = clip.measure ? MEASURES[clip.measure](run) : null;
   return {
     frames: n,
@@ -377,17 +537,29 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.a
     roots = { now: here };
   for (let i = 0; i < args.length; i++) if (args[i] === '--root') {
     const [k, ...v] = args[++i].split('=');
+    if (ROOTS[k] && ROOTS[k].from) throw new Error(`--root ${k}: made from ${ROOTS[k].from} by edits, not a folder: give ${ROOTS[k].from}`);
     roots[k] = path.resolve(v.join('='));
   }
   const write = args.includes('--write'),
     only = args.includes('--events') ? args[args.indexOf('--events') + 1] : null,
     engines = {},
-    origins = {};
-  const engineOf = async key => (engines[key] = engines[key] || (await engine(roots[key])));
+    origins = {},
+    made = {};
+  // (a root made by edits: its copy made the first time a clip of it is recorded, and taken away at the end, whatever happens)
+  const dirOf = key => {
+    if (!ROOTS[key] || !ROOTS[key].from) return roots[key];
+    if (!(key in made)) made[key] = derive(key, roots);
+    return made[key] ? made[key].dir : null;
+  };
+  const engineOf = async key => (engines[key] = engines[key] || (await engine(dirOf(key))));
+  const cleanUp = () => Object.values(made).forEach(m => m && m.done());
+  process.on('exit', cleanUp);
   if (only) {
-    // (a clip of the manifest by its id, or one written out as JSON: { root, script, change, window, measure })
+    // (a clip of the manifest by its id, or one written out as JSON: { root, script, change, window, measure, of }; with
+    // edits, the root it names (from) with those edits made, as a root of the manifest made by edits is)
     const clip = only.startsWith('{') ? Object.assign({ id: 'try', root: 'now', window: [0, 2] }, JSON.parse(only)) : CLIPS.find(c => c.id === only) || { id: only, root: 'now', script: only, window: [0, 2] };
-    const r = await record(clip, roots[clip.root], await engineOf(clip.root));
+    if (clip.edits) (ROOTS.try = { say: 'try', from: clip.root, edits: clip.edits }), (clip.root = 'try');
+    const r = await record(clip, dirOf(clip.root), await engineOf(clip.root));
     for (const [k, e] of r.all) console.log(k, (k * DT).toFixed(3), e.type, e.who, e.name || '', e.part || '', e.J !== undefined ? e.J.toFixed(1) : '', e.down ? 'down' : '', e.out ? 'out' : '');
     console.log(JSON.stringify(r.measured));
     process.exit(0);
@@ -404,19 +576,22 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.a
   }
   let bytes = 0;
   for (const clip of CLIPS) {
-    if (!roots[clip.root]) {
+    const at = dirOf(clip.root);
+    if (!at) {
       if (old[clip.id]) index[clip.id] = old[clip.id];
-      console.error(`${clip.id}: no --root ${clip.root}; ${old[clip.id] ? 'kept as it was' : 'NOT RECORDED'}`);
+      const need = ROOTS[clip.root] && ROOTS[clip.root].from ? ROOTS[clip.root].from : clip.root;
+      console.error(`${clip.id}: no --root ${need}; ${old[clip.id] ? 'kept as it was' : 'NOT RECORDED'}`);
       continue;
     }
     const E = await engineOf(clip.root),
-      from = (origins[clip.root] = origins[clip.root] || origin(roots[clip.root])),
-      r = await record(clip, roots[clip.root], E),
-      text = b64(r.data);
+      from = (origins[clip.root] = origins[clip.root] || (ROOTS[clip.root].from ? originOf(clip.root, roots, at) : origin(at))),
+      r = await record(clip, at, E),
+      text = b64(r.data),
+      name = typeof clip.script === 'object' ? JSON.stringify(clip.script) : clip.script;
     index[clip.id] = { root: clip.root, script: clip.script, window: clip.window, frames: r.frames, from, measured: r.measured };
-    const file = `/* Recorded by tools/clips.mjs: do not edit. ${clip.id}: ${clip.script} of ${clip.root} (${from.commit || from.folder}, engine ${from.digest}), ${clip.window[0]}-${clip.window[1]} s. */\nexport const FRAMES = ${r.frames};\nexport const MEN = '${text}';\nexport const EVENTS = ${JSON.stringify(r.events)};\n`;
+    const file = `/* Recorded by tools/clips.mjs: do not edit. ${clip.id}: ${name} of ${clip.root} (${from.commit || from.folder}${from.edits ? ` + ${from.edits} edit${from.edits > 1 ? 's' : ''}` : ''}, engine ${from.digest}), ${clip.window[0]}-${clip.window[1]} s. */\nexport const FRAMES = ${r.frames};\nexport const MEN = '${text}';\nexport const EVENTS = ${JSON.stringify(r.events)};\n`;
     bytes += file.length;
-    console.log(`${clip.id.padEnd(22)} ${clip.root.padEnd(6)} ${String(r.frames).padStart(4)} frames ${String(Math.round(file.length / 1024)).padStart(4)} KB  ${JSON.stringify(r.measured)}`);
+    console.log(`${clip.id.padEnd(22)} ${clip.root.padEnd(9)} ${String(r.frames).padStart(4)} frames ${String(Math.round(file.length / 1024)).padStart(4)} KB  ${JSON.stringify(r.measured)}`);
     if (write) writeFileSync(path.join(dir, `${clip.id}.mjs`), file);
   }
   console.log(`${Object.keys(index).length} clips, ${Math.round(bytes / 1024)} KB recorded this time`);

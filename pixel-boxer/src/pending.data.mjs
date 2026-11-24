@@ -18,8 +18,9 @@
    A recorded card (part 5: COMPARE, the motion of a stage not merged yet, src/clips.data.mjs): { clip (a clip id), say (what
    it is), line (what its line under it says, from what the clip was measured to show: src/pending.mjs CLIP_SAY), blow (the
    punch that line is about), slow (0.25: a quarter of the speed), cam ({ yaw, pitch, dist (metres, fixed), on (what it looks
-   at: the middle of the two men, man0 / man1 (at height y), head0 / head1 (y above it)), y }) }. The recorded cards of a group
-   play together. */
+   at: the middle of the two men, man0 / man1 (at height y), head0 / head1 (y above it)), y }), option (the id of the option
+   of its item it is the motion of: OPTIONS; the page writes the option's own words on it, choice), white (the screen's white
+   flash at a parry drawn over it, as the game draws it: its strength) }. The recorded cards of a group play together. */
 import { NUMBERS } from './pending.numbers.mjs';
 
 const N = NUMBERS || {};
@@ -28,7 +29,7 @@ const f0 = x => (x === undefined || x === null ? '–' : String(Math.round(x)));
 const at = (o, ...keys) => keys.reduce((v, k) => (v && v[k] !== undefined ? v[k] : undefined), o);
 
 export const PARTS = [
-  { n: 5, mark: '새', title: '오늘 생긴 결정 (2026-11-23)', note: '오늘의 작업에서 나온 것입니다. 항목마다 지금의 상태와 기본값이 적혀 있고, 몇 항목에는 녹화한 비교가 있습니다: 아직 합치지 않은 단계의 동작을 그 작업 폴더에서 돌려 프레임마다 적어 둔 것으로, 왼쪽이 지금(게시된 동작), 오른쪽이 그 단계입니다. 카드 밑의 숫자는 그 녹화를 만든 같은 실행에서 잰 것입니다. 고르지 않으면 "권장"(기본값)으로 진행합니다.' },
+  { n: 5, mark: '새', title: '오늘 생긴 결정 (2026-11-23)', note: '오늘의 작업에서 나온 것입니다. 항목마다 지금의 상태와 기본값이 적혀 있고, 몇 항목에는 녹화한 비교가 있습니다: 아직 합치지 않은 단계의 동작을 그 작업 폴더에서 돌려 프레임마다 적어 둔 것으로, 왼쪽이 지금(게시된 동작), 오른쪽이 그 단계입니다. 결정의 선택지를 보여 주는 녹화에는 카드 위에 그 선택지의 이름이 적혀 있습니다: 같은 장면을, 그 선택지대로 바꾼 코드(바꾼 값은 카드의 출처 줄)에서 녹화한 것입니다. 카드 밑의 숫자는 그 녹화를 만든 같은 실행에서 잰 것입니다. 고르지 않으면 "권장"(기본값)으로 진행합니다.' },
   { n: 1, title: '남은 구현', note: '카드가 없습니다. 고르는 것은 진행 여부와 순서입니다.' },
   { n: 2, title: '결정을 기다리는 것', note: '기획자가 정한 기본값과 균형. 비교 쌍은 왼쪽이 지금, 오른쪽이 조정안입니다. 조정안 카드는 같은 엔진에 표의 값 하나둘만 바꿔 돌린 것이고, 게임의 기본값은 그대로입니다.' },
   { n: 3, title: '엔진 한계로 기획과 다른 것', note: '고르는 것은 대체로 같습니다: 수용(README의 알려진 한계에 남김), 다시 시도(방법은 한 줄로 적힘), 목표를 지움. 카드는 카탈로그의 대본 그대로이고, 참고 영상의 접촉 시트가 있으면 왼쪽에 기획 쪽으로 놓습니다.' },
@@ -110,8 +111,8 @@ const VIEW = {
   // (from the side of the glove held out, close on the other man's head)
   head: { yaw: 0.35, pitch: 0.15, dist: 2.2, on: 'head1', y: -0.15 },
   top: { yaw: 0.6, pitch: 1.45 },
-  // (close on his head as it turns, in profile from the side the glove does not come from)
-  chin: { yaw: 3.14, pitch: 0.1, dist: 1.8, on: 'head0', y: -0.05 },
+  // (close on his head as it turns, in profile from the side the glove comes from: his face as it is wrenched round)
+  chin: { yaw: 0, pitch: 0.1, dist: 1.8, on: 'head0', y: -0.05 },
   // (in front of him, from above the other man's shoulder: his arms spread across the picture)
   wide: { yaw: 1.3, pitch: 0.65, dist: 2.8, on: 'man0', y: 1.1 },
   // (from his left, a little above: where the rear hook comes round to his side)
@@ -121,7 +122,57 @@ const VIEW = {
   // (from behind him and above: a man on the canvas, his legs toward us, the other man beyond him)
   fallen: { yaw: -1.45, pitch: 0.8, dist: 3.4, on: 'man0', y: 0.2 }
 };
+// (from above a man on the canvas, a little off straight down: how he lies, his legs and which way his chest faces; and the
+// hook's knockdown from the side he lies across, the other man not in front of him, and from above it)
+const DOWN_TOP = { yaw: 0.5, pitch: 1.3, dist: 3.6, on: 'man0', y: 0.2 };
+const SIDE_ACROSS = { yaw: 1.5, pitch: 0.35, dist: 3.4, on: 'man0', y: 0.5 };
+const SIDE_ABOVE = { yaw: 1.5, pitch: 1.0, dist: 3.2, on: 'man0', y: 0.2 };
+// (a rocked man's guard, from in front of him on his rear hand's side: both his gloves in sight, the other man beside him)
+const ROCKED = { yaw: 2.8, pitch: 0.15, dist: 2.4, on: 'man0', y: 1.25 };
 const clip = (id, say, line, more) => Object.assign({ clip: id, say, line }, more);
+/* ---- the options of a decision, each its own clip (src/clips.data.mjs: recorded from the code that does what the option
+   says): a card that is an option's carries it (option: its id), and the page writes the option's own name on it (choice,
+   put in once the items are made, below). A card of the motion before the stage, which is no option, carries none. */
+const opt = (id, option, say, line, more) => clip(id, say, line, Object.assign({ option }, more));
+const FILL = { fill: true };
+const CHAIN_CAM = { yaw: 0.25, pitch: 0.2 };
+// (from above, close on the boxer's waist and chest; and over the two of them, for the flicker that reaches across)
+const WAIST_TOP = { yaw: 0.6, pitch: 1.45, dist: 2.2, on: 'man0', y: 1.0 };
+const FLICK_TOP = { yaw: 0.6, pitch: 1.45, dist: 2.6, y: 1.0 };
+const OPTIONS = {
+  'inside-rule': ['3', '5m'].map(lv => ({
+    title: `${lv === '3' ? '3단계' : '5명'}: 0.64 m에서 강타 버튼을 0.3초 간격으로 세 번 (상대는 가드를 내림, 밀린 데서 다시 들어감: \`tests/inside.test.mjs\`의 장면)`,
+    rows: [
+      [opt(`in${lv}-low`, 'low', `숏 훅에 이은 강타 둘 ${lv === '3' ? '3단계' : '5명'}`, 'chain', { cam: CHAIN_CAM }), opt(`in${lv}-all`, 'all', `숏 훅에 이은 강타 둘 ${lv === '3' ? '3단계' : '5명'}`, 'chain', { cam: CHAIN_CAM })],
+      [opt(`in${lv}-none`, 'none', `숏 훅에 이은 강타 둘 ${lv === '3' ? '3단계' : '5명'}`, 'chain', { cam: CHAIN_CAM }), FILL]
+    ]
+  })),
+  'waist-bound': [
+    { title: '숏 훅 3단계(`hookIn@3`), 위에서 가까이 (¼ 속도): 허리가 골반보다 먼저 도는 것', rows: [[opt('wb3-own', 'own', '숏 훅 3단계, 위에서', 'waist', { blow: 'hookIn', slow: 0.25, cam: WAIST_TOP }), opt('wb3-plan', 'plan', '숏 훅 3단계, 위에서 (N 전: 허리를 쓰지 않음)', 'waist', { blow: 'hookIn', slow: 0.25, cam: WAIST_TOP })], [opt('wb3-speed', 'speed', '숏 훅 3단계, 위에서', 'waist', { blow: 'hookIn', slow: 0.25, cam: WAIST_TOP }), FILL]] },
+    { title: '같은 것을 옆에서, 제 속도', rows: [[opt('wb3-own', 'own', '숏 훅 3단계', 'waist', { blow: 'hookIn', cam: { yaw: 0.12, pitch: 0.2 } }), opt('wb3-plan', 'plan', '숏 훅 3단계 (N 전)', 'waist', { blow: 'hookIn', cam: { yaw: 0.12, pitch: 0.2 } })], [opt('wb3-speed', 'speed', '숏 훅 3단계', 'waist', { blow: 'hookIn', cam: { yaw: 0.12, pitch: 0.2 } }), FILL]] },
+    { title: '플리커 5암(`flicker@5a`), 위에서 (¼ 속도): 허리는 지금도 450 °/s를 넘어 "허리 속도를 목표까지"는 바꿀 것이 없음', rows: [[opt('wbf-own', 'own', '플리커 5암, 위에서', 'waist', { blow: 'flicker', slow: 0.25, cam: FLICK_TOP }), opt('wbf-plan', 'plan', '플리커 5암, 위에서 (N 전)', 'waist', { blow: 'flicker', slow: 0.25, cam: FLICK_TOP })]] }
+  ],
+  'twist-chin': [
+    { title: '맞은 직후: 고개가 돌고 턱이 숙는 것 (가까이, ¼ 속도). 셋 다 V 5차 위에서', rows: [[opt('twc-chin28', 'chin28', '실신 · 통나무 · 훅, 맞은 직후', 'chin', { slow: 0.25, cam: VIEW.chin }), opt('twc-chin32', 'chin32', '실신 · 통나무 · 훅, 맞은 직후', 'chin', { slow: 0.25, cam: VIEW.chin })], [opt('twc-keep', 'keep', '실신 · 통나무 · 훅, 맞은 직후', 'chin', { slow: 0.25, cam: VIEW.chin }), FILL]] },
+    { title: '쓰러짐 전체 (맞은 때부터 머리가 캔버스에 닿기까지; 기획의 기준 0.55~0.85 s)', rows: [[opt('tw-chin28', 'chin28', '실신 · 통나무 · 훅', 'head', { cam: VIEW.over }), opt('tw-chin32', 'chin32', '실신 · 통나무 · 훅', 'head', { cam: VIEW.over })], [opt('tw-keep', 'keep', '실신 · 통나무 · 훅', 'head', { cam: VIEW.over }), FILL]] }
+  ],
+  'downside-front': [
+    { title: '다운 · 옆으로(`down-side`): 훅에 쓰러져 누웠다가 일어나기까지, 누운 몸의 옆에서. "다운 · 뒤로만 고친다"는 만든 것이 없어 샘플이 없습니다(둘 다 되는 인대 값을 아직 찾지 못함)', rows: [[opt('ds-accept', 'accept', '다운 · 옆으로', 'lying', { cam: SIDE_ACROSS }), opt('ds-revert', 'revert', '다운 · 옆으로 (V 전: 지금 게시된 동작)', 'lying', { cam: SIDE_ACROSS })]] },
+    { title: '같은 것을 위에서', rows: [[opt('ds-accept', 'accept', '다운 · 옆으로, 위에서', 'lying', { cam: SIDE_ABOVE }), opt('ds-revert', 'revert', '다운 · 옆으로, 위에서 (V 전)', 'lying', { cam: SIDE_ABOVE })]] },
+    { title: '다운 · 뒤로(`down-back`): 쓰러져 누운 다리 (위에서)', rows: [[opt('db-accept', 'accept', '다운 · 뒤로, 위에서', 'lying', { cam: DOWN_TOP }), opt('db-revert', 'revert', '다운 · 뒤로, 위에서 (V 전)', 'lying', { cam: DOWN_TOP })]] }
+  ],
+  'rocked-slow': [
+    { title: '휘청임(`stagger`)에 상대가 1.55 s에 한 번 더 강타 (점검 쪽의 장면 `hit2`): 스트레이트와 훅을 맞은 직후의 가드, 제 속도', rows: [[opt('rk-keep', 'keep', '휘청임, 가드', 'guard', { cam: ROCKED }), opt('rk-shorter', 'shorter', '휘청임, 가드', 'guard', { cam: ROCKED })], [clip('rk-before', '휘청임, 가드 (V 전: 느린 팔 없음, 선택지가 아님)', 'guard', { cam: ROCKED }), FILL]] },
+    { title: '같은 것을 ¼ 속도로', rows: [[opt('rk-keep', 'keep', '휘청임, 가드', 'guard', { slow: 0.25, cam: ROCKED }), opt('rk-shorter', 'shorter', '휘청임, 가드', 'guard', { slow: 0.25, cam: ROCKED })], [clip('rk-before', '휘청임, 가드 (V 전, 선택지가 아님)', 'guard', { slow: 0.25, cam: ROCKED }), FILL]] }
+  ],
+  'combo-tempo': ['3', '5m'].map(lv => ({
+    title: `원투 훅(\`1-2-3\`) ${lv === '3' ? '3단계' : '5명'}: 콤보 카드의 장면(상대는 가드를 듦), 첫 누름 4프레임 전부터`,
+    rows: [[opt(`ct${lv}-faster`, 'faster', `원투 훅 ${lv === '3' ? '3단계' : '5명'}, 닿음에 맞춰 누름`, 'tempo', { cam: { yaw: 0.25, pitch: 0.25 } }), opt(`ct${lv}-keep`, 'keep', `원투 훅 ${lv === '3' ? '3단계' : '5명'}, 시계로 누름`, 'tempo', { cam: { yaw: 0.25, pitch: 0.25 } })]]
+  })),
+  'fx-parry-white': [
+    { title: '패리 3단계(`parry@3`): 같은 녹화를 두 번, 오른쪽에만 본편의 화면 흰빛(0.25에서 시작해 초당 e^−16으로 사라짐)', rows: [[opt('pw-parry', 'remove', '패리 3단계, 흰빛 없음', 'blow', { cam: { yaw: 0.6, pitch: 0.2 } }), opt('pw-parry', 'keep', '패리 3단계, 화면 흰빛', 'blow', { white: 0.25, cam: { yaw: 0.6, pitch: 0.2 } })]] }
+  ]
+};
 const COMPARE = {
   'low2-block': [
     { title: '막은 뒤 가드가 내려오는 순간 (`block-elbow@2`의 0.80~1.20 s, ¼ 속도)', rows: [[clip('low2-prem', '바디 훅을 팔꿈치로 막은 뒤 두 팔을 내림', 'cross', { slow: 0.25, cam: VIEW.arms }), clip('low2-now', '바디 훅을 팔꿈치로 막은 뒤 두 팔을 내림', 'cross', { slow: 0.25, cam: VIEW.arms })]] },
@@ -135,10 +186,6 @@ const COMPARE = {
     { title: '뒷손 훅 3단계: 위에서 (가슴 속도는 이 카드 하나를 녹화하며 잰 값; 본문의 1071 → 1267 °/s는 3단계 뒷손 훅 대본 전체의 최댓값)', rows: [[clip('hookr-pren', '뒷손 훅 3단계, 위에서', 'chest', { blow: 'hookR', cam: VIEW.top }), clip('hookr-now', '뒷손 훅 3단계, 위에서', 'chest', { blow: 'hookR', cam: VIEW.top })]] },
     { title: '같은 것을 카드의 카메라로', rows: [[clip('hookr-pren', '뒷손 훅 3단계', 'chest', { blow: 'hookR', cam: { yaw: 0.6, pitch: 0.2 } }), clip('hookr-now', '뒷손 훅 3단계', 'chest', { blow: 'hookR', cam: { yaw: 0.6, pitch: 0.2 } })]] },
     { title: '숄더 롤 & 카운터 4명 (`rollCounter@4m`)', rows: [[clip('rollc-pren', '롤로 흘린 뒤 뒷손 훅 반격', 'blow', { blow: 'hookR', cam: { yaw: 0.25, pitch: 0.26 } }), clip('rollc-now', '롤로 흘린 뒤 뒷손 훅 반격', 'blow', { blow: 'hookR', cam: { yaw: 0.25, pitch: 0.26 } })]] }
-  ],
-  'twist-chin': [
-    { title: '맞은 직후: 고개가 돌고 턱이 숙는 것 (가까이, ¼ 속도)', rows: [[clip('twistc-now', '실신 · 통나무 · 훅, 맞은 직후', 'chin', { slow: 0.25, cam: VIEW.chin }), clip('twistc-vchin', '실신 · 통나무 · 훅, 맞은 직후', 'chin', { slow: 0.25, cam: VIEW.chin })]] },
-    { title: '쓰러짐 전체 (맞은 때부터 머리가 캔버스에 닿기까지; 기획의 기준 0.55~0.85 s)', rows: [[clip('twist-now', '실신 · 통나무 · 훅', 'head', { cam: VIEW.over }), clip('twist-vchin', '실신 · 통나무 · 훅', 'head', { cam: VIEW.over })]] }
   ],
   'shrug-view': [{ title: 'U 4차의 으쓱 4암, 두 카메라', rows: [[clip('shrug-u2', '카드의 카메라', 'across', { cam: VIEW.card }), clip('shrug-u2', '그의 앞쪽에서 비스듬히', 'across', { cam: VIEW.wide })]] }],
   'fx-ground-ring-game': [{ title: '게임 화면(시드 1·2), 고리가 바꾼 픽셀을 자홍색으로: 왼쪽 지금, 가운데 "앞에 그림"을 만들어 본 것, 오른쪽 밝은 칸도 밝아지게 한 시험', rows: [[{ image: 'docs/ref/ground-ring-game-1.jpg', say: '시드 1, 다운 0.30 s: 지금과 "앞에 그림"은 끊긴 조각, 밝은 칸도 밝히면 거의 닫힌 고리. 누르면 원본' }, { image: 'docs/ref/ground-ring-game-2.jpg', say: '시드 2, 다운 0.25 s: 같은 비교. 누르면 원본' }]] }],
@@ -175,7 +222,7 @@ export const ITEMS = [
       [['wind-line', '스친 주먹에만 바람 선', '6 cm 안으로 스친 주먹의 길에 가는 선. 가까울수록 선명하고 멀리 빗나가면 없음.'], ['none', '그리지 않음', '지금 그대로.']],
       'wind-line', '아슬아슬하게 피한 것만 보이게 됩니다.'],
     ['fx-parry-white', '패리의 화면 흰빛',
-      '타격의 흰 번쩍임은 모두 지웠는데, 패리 때 화면 전체의 흰빛(0.25)은 남아 있습니다.',
+      '타격의 흰 번쩍임은 모두 지웠는데, 패리 때 화면 전체의 흰빛(0.25)은 남아 있습니다. 아래 두 카드는 같은 패리 녹화이고, 오른쪽에만 본편과 같은 흰빛(0.25에서 시작해 초당 e^−16으로 사라짐)을 그 카드 위에 그립니다.',
       [['remove', '없앰', '타격 쪽과 맞춥니다.'], ['keep', '둠', '패리의 신호로 남깁니다.']],
       'remove', '"흰 번쩍임 없이"라는 앞선 지시와 맞습니다.'],
     ['fx-brilliant-game', '기막힌 수비의 게임 안 표시',
@@ -279,7 +326,7 @@ export const ITEMS = [
       [['with-hook', '훅이 간 쪽으로 기울어 명치·갈비', '기본값.'], ['to-lead', '앞손 쪽으로 기울어 간', '간은 70 N·s에 무릎을 꿇려 다운이 늡니다.']],
       'with-hook', '지시의 글 그대로입니다. 데이터 한 줄로 바꿀 수 있습니다.'],
     ['combo-tempo', '콤보: 주먹 사이의 빠르기',
-      '선수는 지금 시계로 다음 주먹을 누릅니다(잽 뒤 0.2초, 강타 뒤 0.3초). 닿음에 맞춰 누르게 하면 3단계 이상은 지금보다 1~6프레임 빨라집니다(원투 233 / 200 / 183 ms, 스트레이트 → 훅 267 / 233 / 217 ms). 1·2단계는 느려집니다.',
+      '선수는 지금 시계로 다음 주먹을 누릅니다(잽 뒤 0.2초, 강타 뒤 0.3초). 닿음에 맞춰 누르게 하면 3단계 이상은 지금보다 1~6프레임 빨라집니다(원투 233 / 200 / 183 ms, 스트레이트 → 훅 267 / 233 / 217 ms). 1·2단계는 느려집니다. **샘플(11-24, 아래 카드: 원투 훅 카드, 첫 주먹은 같은 프레임에 누름)**: 닿음 사이(막힌 순간의 멈춤 포함)가 닿음에 맞추면 3단계 233 · 283 ms, 5명 183 · 233; 시계로 누르면 3단계 300 · 333, 5명 217 · 367 ms.',
       [['faster', '닿음에 맞춰(빨라짐)', '기획의 값.'], ['keep', '지금 빠르기', '순서와 고르는 법만 바꿉니다.']],
       'faster', '엔진은 이미 그 빠르기를 받습니다. 균형은 콤보의 마지막 단계에서 잽니다.'],
     ['combo-loadout', '콤보: 기본 지식인가, 로드아웃의 칸인가',
@@ -304,7 +351,7 @@ export const ITEMS = [
       [['room', '자리가 있는 만큼만 뻗는다', '상대의 머리와 몸에서 5 cm는 남깁니다. 가까우면 손짓이 작아집니다.'], ['far', '먼 거리에서만 손짓한다', '1.15 m 이상일 때만 이 도발을 고릅니다. 손짓은 늘 큽니다.'], ['both', '둘 다', '멀 때 고르고, 그래도 가까워지면 줄입니다.']],
       'room', '머리의 판단을 바꾸지 않고 동작만으로 풀립니다. 고침 라운드는 이쪽으로 진행 중입니다.'],
     ['twist-chin', '실신(통나무 · 훅): 턱의 깊이와 머리가 닿는 때',
-      '메모는 "턱이 더 세게 숙여 돌아가며, 온몸이 뻣뻣해진 채 공격이 온 방향으로 쓰러진다"입니다. V를 네 차례 고친 지금도 턱은 22.4 → 23.1°(기획 24~40)이고, 따로의 점검은 머리와 쓰러지는 방향이 기준과 구별되지 않는다고 봅니다(고개 61 → 64°만 달라짐): 메모에 답하지 못했습니다. 턱을 더 당기면 맞은 쪽으로 몸이 되돌아 머리가 늦게 닿습니다. 구현 팀의 표: 턱 32° → 머리 0.98초, 30° → 0.95초(기준 0.85초 안), 28°에 따라 밀기를 1.2배로 → 0.77초. 밀기를 키우면 착지가 세집니다(가까운 타이밍들이 지금도 14.2~14.9 g로 예외의 14 g 근처). V 5차는 카드보다 약한 훅의 통나무 실신을 기준의 낮은 값(돌림 45°·기울기 5°, 턱은 카드의 세기에서 24°로 비례)으로 되돌렸고, 카드 자체(턱 23.1°, 머리 0.83초)는 그대로입니다.',
+      '메모는 "턱이 더 세게 숙여 돌아가며, 온몸이 뻣뻣해진 채 공격이 온 방향으로 쓰러진다"입니다. V를 네 차례 고친 지금도 턱은 22.4 → 23.1°(기획 24~40)이고, 따로의 점검은 머리와 쓰러지는 방향이 기준과 구별되지 않는다고 봅니다(고개 61 → 64°만 달라짐): 메모에 답하지 못했습니다. 턱을 더 당기면 맞은 쪽으로 몸이 되돌아 머리가 늦게 닿습니다. 구현 팀의 표: 턱 32° → 머리 0.98초, 30° → 0.95초(기준 0.85초 안), 28°에 따라 밀기를 1.2배로 → 0.77초. 밀기를 키우면 착지가 세집니다(가까운 타이밍들이 지금도 14.2~14.9 g로 예외의 14 g 근처). V 5차는 카드보다 약한 훅의 통나무 실신을 기준의 낮은 값(돌림 45°·기울기 5°, 턱은 카드의 세기에서 24°로 비례)으로 되돌렸고, 카드 자체(턱 23.1°, 머리 0.83초)는 그대로입니다. **샘플(11-24, 아래 카드: 셋 다 V 5차에 값을 넣어 녹화)**: 지금대로 턱 23.1° · 고개 64° · 머리 0.83초, 턱 28°(`TWIST.down` 28) + 밀기 1.2배 28.0° · 65° · 0.77초, 턱 32°(점검 쪽 시험판의 값) 31.8° · 66° · 1.03초. 착지 세기는 녹화에서 재지 않았습니다.',
       [['chin28', '턱 28°, 밀기 1.2배', '0.85초를 지키며 턱이 기준보다 6° 깊어집니다. 착지 세기를 다시 재서 예외(14 g) 안이어야 합칩니다.'], ['chin32', '턱 32°, 닿는 때를 1.0초까지 늦춤', '기획의 턱이 됩니다. 머리가 늦게 닿는 실신이 됩니다.'], ['keep', '지금대로 (23°)', '메모는 반영되지 않은 채 남습니다.']],
       'chin28', '메모의 "더 세게 숙여"가 보이는 가장 가까운 길이고 시간 기준도 지킵니다. 착지가 한계를 넘으면 숫자를 들고 다시 묻습니다.'],
     ['low2-block', '2단계 두 팔 블록의 막는 범위',
@@ -320,19 +367,19 @@ export const ITEMS = [
       [['sum', '합계 기준 그대로', '지금 값의 절반 남짓을 기준으로 둡니다.'], ['tight', '기준을 더 높게', '예: 14·12·8번. 단계마다 흔들려 자주 다시 재게 됩니다.'], ['one', '시드 하나로 되돌린다', '깨질 때마다 시드를 다시 고르게 됩니다.']],
       'sum', '"기술이 시합에서 나오고 맞는다"는 취지를 지키면서, 무관한 변화에는 깨지지 않습니다.'],
     ['inside-rule', '인사이드 연타를 잇는 새 규칙: 어느 등급까지',
-      'N에서 인사이드 훅이 세져(3단계 47 → 60 N·s) 맞은 상대가 0.72 m 밖으로 밀려나고, 둘째 주먹이 숏 어퍼가 아닌 긴 훅으로 바뀌었습니다. 그래서 규칙을 하나 넣었습니다: 방금 친 것이 인사이드 연타의 강타이고 거리가 0.80 m 안이면 다음 강타도 인사이드로 잇습니다(동작이 아니라 시합 규칙). 3단계 이하는 이 규칙으로 연타가 이어집니다(0.64 m에서 세 주먹 합계 3단계 193 → 223 N·s). 4·5단계는 규칙이 없을 때 긴 주먹으로 가서 더 셉니다: 0.64 m에서 규칙 있음 / 없음이 4명 240 / 272, 4암 245 / 248, 5명 274 / 325, 5암 265 / 335 N·s(전에는 250 · 207 · 300 · 229). N 6차부터 규칙에 조건 하나가 더 붙었습니다: 상대의 가드가 내려가 있을 때만 잇습니다(가드를 든 상대에게 0.72~0.74 m에서 이어 치면 제 글러브가 상대 아래팔에 8~11 cm 들던 11판 가운데 8판이 없어짐). N은 이 구현(3단계 이하, 상대 가드가 내려가 있을 때)으로 합쳤습니다(11-24). 다른 것을 고르시면 바꿉니다.',
+      'N에서 인사이드 훅이 세져(3단계 47 → 60 N·s) 맞은 상대가 0.72 m 밖으로 밀려나고, 둘째 주먹이 숏 어퍼가 아닌 긴 훅으로 바뀌었습니다. 그래서 규칙을 하나 넣었습니다: 방금 친 것이 인사이드 연타의 강타이고 거리가 0.80 m 안이면 다음 강타도 인사이드로 잇습니다(동작이 아니라 시합 규칙). 3단계 이하는 이 규칙으로 연타가 이어집니다(0.64 m에서 세 주먹 합계 3단계 193 → 223 N·s). 4·5단계는 규칙이 없을 때 긴 주먹으로 가서 더 셉니다: 0.64 m에서 규칙 있음 / 없음이 4명 240 / 272, 4암 245 / 248, 5명 274 / 325, 5암 265 / 335 N·s(전에는 250 · 207 · 300 · 229). N 6차부터 규칙에 조건 하나가 더 붙었습니다: 상대의 가드가 내려가 있을 때만 잇습니다(가드를 든 상대에게 0.72~0.74 m에서 이어 치면 제 글러브가 상대 아래팔에 8~11 cm 들던 11판 가운데 8판이 없어짐). N은 이 구현(3단계 이하, 상대 가드가 내려가 있을 때)으로 합쳤습니다(11-24). 다른 것을 고르시면 바꿉니다. **샘플(11-24, 아래 카드)**: 같은 장면(0.64 m에서 0.3초 간격으로 세 번, 상대 가드 내림)의 한 번을 세 규칙으로 녹화했습니다. 3단계는 지금과 "모든 등급"이 같고(숏 훅 → 숏 어퍼 → 숏 훅 226 N·s), 규칙 없이는 숏 훅 → 훅 → 어퍼 193. 5명은 지금과 "규칙 없이"가 같고(숏 훅 → 훅 → 어퍼 329), 모든 등급은 숏 훅 → 숏 어퍼 → 숏 훅 258(셋째 숏 훅 55).',
       [['low', '3단계 이하만 (지금 구현, N 6차: 상대의 가드가 내려가 있을 때)', '4·5단계는 전처럼 0.64 m부터 긴 훅과 긴 어퍼로 갑니다(합계가 더 큼).'], ['all', '모든 등급', '4·5단계도 0.68 m까지 숏 어퍼 → 숏 훅으로 잇습니다. 연타의 모양은 같아지고 합계는 낮아집니다.'], ['none', '규칙 없이', '3단계의 연타가 0.68 m부터는 긴 훅으로 끊깁니다(223 → 196 N·s).']],
       'low', '4·5단계는 고치기 전에도 그 거리에서 긴 주먹을 골랐고, 그쪽이 더 셉니다. 규칙은 연타가 끊기던 3단계 이하에만 필요합니다.'],
     ['waist-bound', '허리를 따로 돌리는 주먹의 속도 묶음',
-      '6차 기획은 두 가지를 같이 요구합니다: 가슴이 골반 위에서 도는 속도는 전의 1.10배 이하, 그리고 인사이드 훅과 플리커의 허리는 450 °/s 이상. 이 두 주먹은 전에 가슴이 거의 돌지 않았으므로(62 · 169 °/s) 둘은 같이 설 수 없습니다(기획의 잣대로는 7.0배 · 3.1배). 구현 팀은 이 둘에만 "가슴이 허리 위에서 도는 속도"를 잣대로 썼습니다(훅 41 °/s, 전 62). 지금 인사이드 훅의 허리는 396 °/s(목표 450), 세기는 3단계 60 · 5암 86 N·s(기획의 띠 70~85를 1 넘음)입니다. N은 이 구현(가슴-허리 잣대)으로 합쳤습니다(11-24). 다른 것을 고르시면 바꿉니다.',
+      '6차 기획은 두 가지를 같이 요구합니다: 가슴이 골반 위에서 도는 속도는 전의 1.10배 이하, 그리고 인사이드 훅과 플리커의 허리는 450 °/s 이상. 이 두 주먹은 전에 가슴이 거의 돌지 않았으므로(62 · 169 °/s) 둘은 같이 설 수 없습니다(기획의 잣대로는 7.0배 · 3.1배). 구현 팀은 이 둘에만 "가슴이 허리 위에서 도는 속도"를 잣대로 썼습니다(훅 41 °/s, 전 62). 지금 인사이드 훅의 허리는 396 °/s(목표 450), 세기는 3단계 60 · 5암 86 N·s(기획의 띠 70~85를 1 넘음)입니다. N은 이 구현(가슴-허리 잣대)으로 합쳤습니다(11-24). 다른 것을 고르시면 바꿉니다. **샘플(11-24, 아래 카드)**: 숏 훅 3단계의 허리(골반 위) · 가슴(허리 위) · 가슴(골반 위) 최고 속도와 세기: 지금 396 · 41 · 437 °/s, 59.9 N·s. N 전(기획의 묶음을 지키면 허리를 거의 쓰지 못하므로 그 동작) 0 · 62 · 62 °/s, 46.6 N·s. 허리 근육을 84 → 98 rad/s로 올리면 454 · 41 · 495 °/s, 67.8 N·s(3단계 띠 56~68의 끝); 같은 변형에서 5암은 86.0 → 99.0 N·s(띠 70~85를 14 넘음). 플리커 5암의 허리는 지금 483 °/s(N 전 0)로 이미 450을 넘습니다.',
       [['own', '이 둘은 가슴-허리 잣대로 (지금 구현, N 4차)', '허리가 따로 도는 것은 허용하고, 그 위에서 가슴이 더 빨라지지 않는 것만 묶습니다.'], ['plan', '기획의 묶음 그대로', '허리를 거의 쓰지 못합니다(메모의 "허리를 강하게"와 어긋남).'], ['speed', '허리 속도를 목표까지 올린다', '450 °/s까지 올리면 세기가 기획의 띠를 더 넘습니다(지금도 5암이 1 넘음).']],
       'own', '메모가 바란 것은 허리가 따로 강하게 도는 것이고, 묶음의 취지(상체가 휙 돌아 튀지 않게)는 가슴-허리 잣대로도 지켜집니다.'],
     ['downside-front', '다운 · 옆으로: 엎드려 눕게 됨',
-      'V에서 쓰러질 때 무릎이 접힘 한계에 누워 한 프레임에 100° 넘게 뒤집히고 발이 31 cm 떠 있던 것을 고치려고, 엉덩이 인대를 일찍(범위의 0.3부터) 걸었습니다. 그 결과 넓적다리가 모여 다리가 몸을 받치지 못해, 훅 다운(down-side)이 등이 아니라 엎드려 눕고 엎드린 데서 일어납니다(무릎 인대는 관계없음). 기획 4차는 "훅 다운은 옆이나 등으로 눕고 엎드리지 않는다"였고, 카드 설명은 "굴러 엎드립니다"입니다. 기준에서도 가까운 훅 타이밍 7가지 가운데 3가지는 엎드리거나 옆으로 눕습니다(지금은 5가지가 엎드림). 다운 · 뒤로도 다리가 모여 눕습니다(넓적다리 사이 36 → 3°, "차려 자세"). 따로의 점검은 엎드린 모습은 자연스러운 실신으로 읽히고, 다리를 모은 다운 · 뒤로는 덜 자연스럽다고 봅니다. V 5차: 일어날 때 무릎을 바닥 위에 두었습니다(정강이가 바닥 아래로 가던 55프레임 → 0). **받아들이면 함께 받는 것(V의 네 번째 점검, 11-24)**: 같은 엉덩이 인대 때문에 가까운 타이밍의 보통 다운에서 팔꿈치가 한 프레임에 뒤집힘(다운 · 옆 +0.02/+0.04/+0.06에 57/43/71°, 다운 · 뒤 +0.04/+0.06에 42°; 지키는 한계 40°; 인대를 끄면 다섯 모두 없어짐), 엎드린 데서 일어날 때 글러브가 한 프레임 튐(다운 · 옆 +0.06, 39 cm; 시트에 보임), 일어난 뒤 한 프레임 글러브가 상대 안 8.6 cm(한 타이밍). V 6차가 이것들을 없애는 인대 설정을 한 번 더 찾는 중입니다(엎드림은 바꾸지 않음).',
+      'V에서 쓰러질 때 무릎이 접힘 한계에 누워 한 프레임에 100° 넘게 뒤집히고 발이 31 cm 떠 있던 것을 고치려고, 엉덩이 인대를 일찍(범위의 0.3부터) 걸었습니다. 그 결과 넓적다리가 모여 다리가 몸을 받치지 못해, 훅 다운(down-side)이 등이 아니라 엎드려 눕고 엎드린 데서 일어납니다(무릎 인대는 관계없음). 기획 4차는 "훅 다운은 옆이나 등으로 눕고 엎드리지 않는다"였고, 카드 설명은 "굴러 엎드립니다"입니다. 기준에서도 가까운 훅 타이밍 7가지 가운데 3가지는 엎드리거나 옆으로 눕습니다(지금은 5가지가 엎드림). 다운 · 뒤로도 다리가 모여 눕습니다(넓적다리 사이 36 → 3°, "차려 자세"). 따로의 점검은 엎드린 모습은 자연스러운 실신으로 읽히고, 다리를 모은 다운 · 뒤로는 덜 자연스럽다고 봅니다. V 5차: 일어날 때 무릎을 바닥 위에 두었습니다(정강이가 바닥 아래로 가던 55프레임 → 0). **받아들이면 함께 받는 것(V의 네 번째 점검, 11-24)**: 같은 엉덩이 인대 때문에 가까운 타이밍의 보통 다운에서 팔꿈치가 한 프레임에 뒤집힘(다운 · 옆 +0.02/+0.04/+0.06에 57/43/71°, 다운 · 뒤 +0.04/+0.06에 42°; 지키는 한계 40°; 인대를 끄면 다섯 모두 없어짐), 엎드린 데서 일어날 때 글러브가 한 프레임 튐(다운 · 옆 +0.06, 39 cm; 시트에 보임), 일어난 뒤 한 프레임 글러브가 상대 안 8.6 cm(한 타이밍). V 6차가 이것들을 없애는 인대 설정을 한 번 더 찾는 중입니다(엎드림은 바꾸지 않음). **샘플(11-24, 아래 카드)**: 다운 · 옆으로는 V 전(지금 게시된 동작)이 등으로 눕고(넓적다리 사이 39°) V 5차가 엎드립니다(8°); 머리가 닿는 때(0.70 s)와 일어서는 때(3.6 s)는 거의 같습니다. 다운 · 뒤로는 둘 다 등으로 눕고 넓적다리 사이 33° 대 3°.',
       [['accept', '받아들인다', '훅 다운이 대개 엎드립니다. 무릎과 발의 문제는 고쳐진 채입니다.'], ['revert', '되돌린다', '등으로 눕습니다. 다운 · 앞으로의 무릎이 다시 접힘 한계에 누워 뒤집히고, 발이 31 cm 뜨며, 넓적다리가 113°/74°로 벌어집니다.'], ['back', '다운 · 뒤로만 고친다', '엎드림은 받아들이고, 다운 · 뒤로의 모인 다리만 덜 모이게 다시 맞춥니다(구현 팀이 열 가지 설정을 해 봤으나 둘 다 되는 값은 아직 없음).']],
       'accept', '무릎이 뒤집히는 것은 눈에 보이는 결함이고, 엎드린 훅 다운은 실제 시합에서도 흔합니다.'],
     ['rocked-slow', '그로기 선수의 느린 팔: 얼마나 오래',
-      'V에서 그로기인 선수의 팔은 초당 600° 넘게 돌지 않습니다. 맞은 직후 가드가 한 프레임에 30 cm 튀던 것이 이것으로 6 cm 안이 되었습니다. 그로기 정도가 0.02만 되어도 켜져, 한 번 휘청일 때마다 4.0초쯤, 싸우는 시간의 27% 동안 켜져 있습니다. 그동안 막는 비율이 조금 낮습니다(AI 96판: 그로기인 선수의 막은 몫 0.401 → 0.381, 5%쯤). V 5차는 느린 팔의 글러브가 상대 몸을 돌아가게 했습니다(32판에서 상대 안 110 → 27프레임). **따로의 점검이 192판으로 다시 잼(11-24): 느린 팔이 AI끼리의 시합에서 다운을 18%쯤 줄입니다(기준 324 → 4b차 272 → 5차 266, 우연이 아님: 짝지은 t −2.8). KO는 잡음 안(59 → 56 → 51).** 느린 팔을 끄면 기준과 같아집니다(1~96판 160 대 155). 5차의 "상대를 돌아감"은 잡음(−6). 주먹의 세기나 던지는 수가 아니라, 맞음 −4%·막음 −6%·잃은 체력 −4.6%, 다운 하나에 드는 체력이 102 → 119로 늘어서입니다(줄어든 다운은 대개 그때 흔들리지 않던 사람: 167 → 122). V 6차가 켜지는 정도 0.02 / 0.05 / 0.1 / 끔의 표를 재는 중이라, 그 수를 보고 권장을 다시 적습니다.',
+      'V에서 그로기인 선수의 팔은 초당 600° 넘게 돌지 않습니다. 맞은 직후 가드가 한 프레임에 30 cm 튀던 것이 이것으로 6 cm 안이 되었습니다. 그로기 정도가 0.02만 되어도 켜져, 한 번 휘청일 때마다 4.0초쯤, 싸우는 시간의 27% 동안 켜져 있습니다. 그동안 막는 비율이 조금 낮습니다(AI 96판: 그로기인 선수의 막은 몫 0.401 → 0.381, 5%쯤). V 5차는 느린 팔의 글러브가 상대 몸을 돌아가게 했습니다(32판에서 상대 안 110 → 27프레임). **따로의 점검이 192판으로 다시 잼(11-24): 느린 팔이 AI끼리의 시합에서 다운을 18%쯤 줄입니다(기준 324 → 4b차 272 → 5차 266, 우연이 아님: 짝지은 t −2.8). KO는 잡음 안(59 → 56 → 51).** 느린 팔을 끄면 기준과 같아집니다(1~96판 160 대 155). 5차의 "상대를 돌아감"은 잡음(−6). 주먹의 세기나 던지는 수가 아니라, 맞음 −4%·막음 −6%·잃은 체력 −4.6%, 다운 하나에 드는 체력이 102 → 119로 늘어서입니다(줄어든 다운은 대개 그때 흔들리지 않던 사람: 167 → 122). V 6차가 켜지는 정도 0.02 / 0.05 / 0.1 / 끔의 표를 재는 중이라, 그 수를 보고 권장을 다시 적습니다. **샘플(11-24, 아래 카드, 점검 쪽의 장면 `hit2`)**: 맞은 직후 한 프레임에 글러브가 가는 거리(가슴에서 봄)가 스트레이트 뒤 / 훅 뒤로 V 전 18.5 / 7.2 cm, 지금대로(0.02) 6.3 / 5.2, 0.1로 올리면 17.5 / 13.2 cm: 이 장면에서는 0.1이면 맞은 직후의 튐이 돌아옵니다. 느린 팔이 켜져 있는 시간은 애니메이터 밖에서 읽히지 않아 재지 않았습니다.',
       [['keep', '지금대로', '그로기의 단서(느리게 늘어진 팔)가 잘 보이고, 막기가 5%쯤 줄어듭니다. AI 시합의 다운이 18%쯤 줄어듭니다.'], ['shorter', '눈에 띄게 휘청일 때만', '켜지는 정도를 높여(예: 0.1) 느린 시간을 줄입니다. 막기 손해가 줄고, 끝무렵의 튐이 돌아오는지 다시 재야 합니다.']],
       'keep', '그로기에서 가드가 늦는 것은 메모("그로기의 단서를 더 드러나게")와 맞습니다. 다만 다운이 18% 준다는 것이 새로 밝혀져, V 6차의 표가 오면 권장을 다시 봅니다.'],
     ['third-hook-frame', '인사이드 연타의 셋째 주먹: 제 박자에 닿아 기준보다 약한 칸',
@@ -367,7 +414,7 @@ export const ITEMS = [
       '정해짐 (사용자, 11-24) · (iii)만 막는다. "기준보다 나쁜 경우"를 따로의 점검이 셋으로 가릅니다. (i) 잡음: 기준의 같은 판보다 0.2 cm·0.2°·1 N·s 안, 또는 둘 다 깨끗하던 데서 시합이 다르게 흘러감. (ii) 이어진 것: 단계의 주먹이 더 세게 들어가, 건드리지 않은 다른 부분이 기준의 코드가 같은 처지에서 하는 대로 함(새 트리의 상태를 기준의 코드에 옮겨 심어 같은 깨짐이 나오면 증명). (iii) 단계의 결함. N 5차의 다섯 번째 점검: chainstep 55판 = (i) 11 · (ii) 15 · (iii) 29, 연타 점검 72판 = (ii) 60 · (iii) 12. (iii)은 어느 쪽을 골라도 막습니다.',
       [['iii', '(iii)만 막는다', '(i)(ii)는 증명과 함께 알려진 한계로 적고 합칩니다.'], ['ii', '(ii)도 막는다', '단계의 주먹이 세져 생긴 다른 부분의 깨짐도 그 단계에서 고칩니다. 라운드가 더 듭니다.']],
       'iii', '(ii)는 기준의 코드가 같은 처지에서도 똑같이 깨지는 것이라, 단계가 만든 결함이 아니라 이미 있던 한계가 드러난 것입니다.']
-  ].map(([id, title, state, options, recommend, why]) => Object.assign({ id, part: 5, title, state, options: options.map(([oid, name, says]) => ({ id: oid, name, says })), recommend, why }, COMPARE[id] ? { groups: COMPARE[id] } : {})),
+  ].map(([id, title, state, options, recommend, why]) => Object.assign({ id, part: 5, title, state, options: options.map(([oid, name, says]) => ({ id: oid, name, says })), recommend, why }, COMPARE[id] || OPTIONS[id] ? { groups: [...(COMPARE[id] || []), ...(OPTIONS[id] || [])] } : {})),
 
   // ===== 1. what is left to build
   {
@@ -737,6 +784,16 @@ export const ITEMS = [
     recommend, why
   }))
 ];
+
+// (an option's card carries the option's own name, the words of its button)
+for (const item of ITEMS)
+  for (const g of item.groups || [])
+    for (const card of g.rows.flat())
+      if (card.option) {
+        const o = item.options.find(x => x.id === card.option);
+        if (!o) throw new Error(`${item.id}: a card of the option ${card.option}, which it has not`);
+        card.choice = o.name;
+      }
 
 // the line at the end of part 4: not an item (it is not ours to clear away)
 export const STASH_NOTE = '`git stash`의 `stash@{0}`은 사용자의 것이라 정리 후보가 아닙니다.';

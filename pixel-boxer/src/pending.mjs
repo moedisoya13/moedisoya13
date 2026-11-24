@@ -14,7 +14,9 @@
    frames between two kept ones blended (src/replay.mjs blend) so that it plays as smoothly at a quarter of the speed. The
    clips of a comparison are one clock: they start together, go at their own speeds (a slow one's beside its full speed one
    goes round once while the other goes round four times), and start again together after a moment held on the last frame.
-   A clip's frames are loaded only as its row comes near the screen.
+   A clip's frames are loaded only as its row comes near the screen. A recorded card that is one option of a decision has the
+   option's own words over the rest (choice: the words of its button); and one that asks for it (white) has the game's white
+   flash at a parry drawn over its picture, as main.mjs draws it over the screen.
    The decisions: a document an item in the artifact's store (collection `decisions`, the item's id: { choice, note, at }),
    read once as the page opens and written one at a time, only when changed; where there is no store, this browser's
    localStorage (`pending:<id>`) in the same shape. */
@@ -163,7 +165,9 @@ function cardEl(card) {
 }
 /* ---- a recorded card: where it came from, what it is, the line it was measured to show (its numbers from the very run it
    was recorded from: tools/clips.mjs MEASURES), and what became of the blow as it plays */
-const PUNCH = { jab: '잽', cross: '스트레이트', hook: '훅', hookR: '뒷손 훅', upper: '어퍼', hookIn: '숏 훅', hookBody: '바디 훅' };
+const PUNCH = { jab: '잽', cross: '스트레이트', hook: '훅', hookR: '뒷손 훅', upper: '어퍼', hookIn: '숏 훅', upperIn: '숏 어퍼', hookBody: '바디 훅', flicker: '플리커' };
+const FACE = { up: '등으로 누움', down: '엎드림', side: '옆으로 누움' };
+const s2 = x => (x === null || x === undefined ? '–' : (+x).toFixed(2));
 const n1 = x => (x === null || x === undefined ? '–' : (+x).toFixed(1));
 const blowSaid = b => (b ? `${PUNCH[b.name] || b.name} ${b.type === 'hit' ? (b.part === 'body' ? '몸에 명중' : '명중') : `${SAID[b.type] || b.type}${b.part && MET[b.part] ? `(${MET[b.part]})` : ''}`} <b>${n1(b.J)}</b> N·s` : '–');
 // (the blow a card is about: the punch it names, the last of them; or the last blow of the run)
@@ -179,14 +183,24 @@ const CLIP_SAY = {
   across: (m, card, cell) => `화면 가로로 <b data-across>${cell && cell.across !== undefined ? n1(cell.across) : '–'}</b> cm · 글러브 사이 ${n1(m.gloves)}`,
   jump: m => `${m.glove === 'L' ? '앞' : '뒤'} 글러브 <b>${n1(m.jump)}</b> m/s · ${m.frame - 1}f`,
   legs: m => `누워서 넓적다리 사이 <b>${f0(m.thighs)}</b>° · 발목 ${f0(m.ankles)} cm`,
-  pull: (m, card) => `${blowSaid(blowOf(m, card.blow))} · 상대 머리 <b>${n1(m.head)}</b> cm`
+  pull: (m, card) => `${blowSaid(blowOf(m, card.blow))} · 상대 머리 <b>${n1(m.head)}</b> cm`,
+  // (the options' clips: what each press threw and the blows, the waist, the tempo, how he lies, the guard of a rocked man)
+  chain: m => `${(m.blows || []).map(b => `${PUNCH[b.name] || b.name} <b>${n1(b.J)}</b>${b.type === 'hit' ? '' : ` (${SAID[b.type] || b.type})`}`).join(' → ')} · 합 <b>${f0(m.sum)}</b> N·s`,
+  waist: (m, card) => {
+    // (a punch thrown again and again, the flicker: each of them)
+    const all = ((m && m.blows) || []).filter(b => b.name === card.blow);
+    return `${all.length > 1 ? `${PUNCH[card.blow] || card.blow} <b>${all.map(b => n1(b.J)).join(' · ')}</b> N·s` : blowSaid(blowOf(m, card.blow))} · 허리(골반 위) <b>${f0(m.waist)}</b> °/s · 가슴(허리 위) ${f0(m.own)} · 가슴(골반 위) ${f0(m.trunk)} °/s`;
+  },
+  tempo: m => `닿음 사이 <b>${(m.gaps || []).join(' · ')}</b> ms · ${(m.blows || []).map(b => `${PUNCH[b.name] || b.name} ${SAID[b.type] || b.type} ${n1(b.J)}`).join(', ')} N·s`,
+  lying: m => `${FACE[m.face] || '–'} · 넓적다리 사이 <b>${f0(m.thighs)}</b>° · 머리 닿음 ${s2(m.down)} s${m.stood === null ? '' : ` · 일어섬 ${s2(m.stood)} s`}`,
+  guard: m => `한 프레임 글러브 이동: ${(m.after || []).map(a => `${PUNCH[a.name] || a.name} 뒤 <b>${n1(a.step)}</b> cm`).join(' · ')}`
 };
 function clipEl(card, el) {
   const made = CLIPS_MADE[card.clip],
     root = made ? ROOTS[made.root] : null;
   el.className = 'card rec' + (made && made.root !== 'now' ? ' tuned' : '');
-  el.innerHTML = `<div class="stage" role="img" aria-label="${esc((root ? root.say + ': ' : '') + card.say.replace(/`/g, ''))} 녹화 애니메이션"><span class="mark">${card.slow ? '녹화 · ¼' : '녹화'}</span></div>
-    <div class="info"><p class="from">${esc(root ? root.say : card.clip)}</p><p class="say">${fmt(card.say)}</p>
+  el.innerHTML = `<div class="stage" role="img" aria-label="${esc((card.choice ? card.choice + ': ' : root ? root.say + ': ' : '') + card.say.replace(/`/g, ''))} 녹화 애니메이션"><span class="mark">${card.slow ? '녹화 · ¼' : '녹화'}</span>${card.white ? '<span class="white" data-white aria-hidden="true"></span>' : ''}</div>
+    <div class="info">${card.choice ? `<p class="choice">${fmt(card.choice)}</p>` : ''}<p class="from">${esc(root ? root.say : card.clip)}</p><p class="say">${fmt(card.say)}</p>
       <div class="feet result"><span class="tag" data-tag>–</span><span class="line" data-line>${made ? CLIP_SAY[card.line](made.measured, card) : '녹화 없음'}</span></div></div>`;
   return el;
 }
@@ -754,6 +768,9 @@ function start({ manifest, boxer }) {
         stage: q(el, '.stage'),
         tag: q(el, '[data-tag]'),
         out: { across: q(el, '[data-across]') },
+        // (the screen's white flash at a parry, where the card draws it: as the game does, main.mjs)
+        flash: q(el, '[data-white]'),
+        whiteAt: null, // (the frame of the parry it is flashing for)
         bones: [new Float32Array(R.maxBones * 12), new Float32Array(R.maxBones * 12)],
         ripples: [null, null],
         shake: 0,
@@ -815,28 +832,29 @@ function start({ manifest, boxer }) {
       const at = frameAt(reel, cell, u),
         i = Math.floor(at);
       // (the blows of the frames it has come to since it was last asked, thrown as it comes to them; gone round: from the start)
-      if (i < cell.seen) cell.seen = -1;
+      if (i < cell.seen) (cell.seen = -1), (cell.whiteAt = null);
       for (let k = cell.seen + 1; k <= i; k++) {
         if (!cell.data.frames[k].events.length) continue;
         // (the men as they were on that frame: what the blow throws off comes off them as they were then)
         cell.men = cell.men || cell.data.frames[k].men.map(m => Object.assign({}, m));
         cell.data.frames[k].men.forEach((m, n) => Object.assign(cell.men[n], m));
-        for (const e of cell.data.frames[k].events) clipBlow(cell, e);
+        for (const e of cell.data.frames[k].events) clipBlow(cell, e, k);
       }
       cell.seen = i;
       cell.at = at;
     }
   }
-  function clipBlow(cell, e) {
+  function clipBlow(cell, e, k) {
     const by = e.type === 'parry' ? e.on : e.who;
     if (SAID[e.type] && by !== undefined) tell(cell, e.down && e.type !== 'parry' ? (e.out ? '실신' : '다운') : e.roll ? '굴림' : SAID[e.type]);
     struck(cell, e, cell.men);
+    if (e.type === 'parry' && cell.flash) cell.whiteAt = k;
   }
   function stepReel(reel, elapsed) {
     let u = reel.u + elapsed;
     if (u >= reel.play + HOLD) {
       u = 0;
-      for (const cell of reel.cells) (cell.seen = -1), (cell.ripples = [null, null]);
+      for (const cell of reel.cells) (cell.seen = -1), (cell.ripples = [null, null]), (cell.whiteAt = null);
     }
     const before = reel.cells.map(c => c.at);
     seek(reel, u);
@@ -854,6 +872,11 @@ function start({ manifest, boxer }) {
     snap.men.forEach((m, n) => Object.assign(cell.men[n], m));
     const cam = cell.card.cam || {};
     cell.cam.target = look[i].map((x, n) => x + (look[j][n] - x) * k);
+    // (the white over the picture, from the parry's frame on going as the game's goes: e^-16 a second of the bout's time)
+    if (cell.flash) {
+      const white = cell.whiteAt === null || cell.at < cell.whiteAt ? 0 : cell.card.white * Math.exp((-16 * (cell.at - cell.whiteAt)) / 60);
+      cell.flash.style.opacity = white > 0.02 ? white.toFixed(3) : '0';
+    }
     draw(cell, box, dpr, grid, elapsed * cell.s, cam.dist);
   }
 
@@ -972,7 +995,7 @@ function start({ manifest, boxer }) {
     // (the recorded cards: all of them loaded now, and a comparison put at u seconds into its play)
     loadAll: () => Promise.all(reels.map(r => (r.state === 'idle' ? load(r) : r.ready))),
     seek: (u, within) => reels.filter(r => r.state === 'ready' && (!within || r.cells.some(c => within.contains(c.el)))).forEach(r => {
-      for (const c of r.cells) (c.seen = -1), (c.ripples = [null, null]);
+      for (const c of r.cells) (c.seen = -1), (c.ripples = [null, null]), (c.whiteAt = null);
       seek(r, u);
     }),
     renderer: R,

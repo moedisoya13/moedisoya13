@@ -3,10 +3,13 @@
 // as it does alone; its data (src/pending.data.mjs) names only fields that are there and scripts the catalogue has, with ids
 // fit to save decisions under; and what the variant cards show is what tools/pending.mjs measured (src/pending.numbers.mjs).
 // The recorded cards (src/clips.data.mjs, tools/clips.mjs): every clip of the manifest is there, as long as its window says,
-// whole, and named by a card; and a clip recorded from this checkout is recorded again the same from it.
+// whole, and named by a card; a card that is one option of a decision names an option its item has, and carries its words;
+// a clip recorded from this checkout, or from this checkout with a root's edits made in a copy of it, is recorded again the
+// same; and a root's edit that is not in its file exactly once fails, the copy taken away.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { withTune, patchesOf, guardAt } from '../src/tune.mjs';
@@ -20,7 +23,7 @@ import { CROSS, LEVEL } from '../src/anim/skill.mjs';
 import { TECHNIQUES } from '../src/game/techniques.mjs';
 import { CLIPS, ROOTS } from '../src/clips.data.mjs';
 import { CLIPS_MADE, LOAD } from '../src/clips/index.mjs';
-import { record, encode, FIELDS } from '../tools/clips.mjs';
+import { record, encode, FIELDS, derive } from '../tools/clips.mjs';
 
 const DT = 1 / 60;
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -164,6 +167,23 @@ test('the recorded clips: each of the manifest written, as many frames as its wi
   assert.deepEqual(Object.keys(CLIPS_MADE).sort(), [...ids].sort());
 });
 
+test('the options\' cards: each names an option of its item and carries its words; a comparison\'s third card has the blank beside it', () => {
+  let n = 0;
+  for (const item of ITEMS)
+    for (const g of item.groups || [])
+      for (const card of g.rows.flat().filter(c => c.option !== undefined)) {
+        const o = item.options.find(x => x.id === card.option);
+        assert.ok(o && card.clip, `${item.id}: ${card.option} is no option of it, or the card no clip`);
+        assert.equal(card.choice, o.name, `${item.id}: ${card.option}: the option's own words on its card`);
+        n++;
+      }
+  // (the cards of the options of seven items, and the clips of the manifest: what the work of 2026-11-24 added)
+  assert.equal(n, 36, 'cards of options');
+  assert.equal(CLIPS.length, 54, 'clips');
+  // (a row of two whose second is the blank: its first is a card, as beckon-room's)
+  for (const item of ITEMS) for (const g of item.groups || []) for (const [a, b] of g.rows) if (b.fill) assert.ok(!a.fill && (a.clip || a.entry || a.image), `${item.id}: a blank row`);
+});
+
 test('a clip recorded from this checkout is recorded again the same: the frames, the blows and what it measured', async () => {
   for (const clip of CLIPS.filter(c => c.root === 'now')) {
     const mod = await LOAD[clip.id](),
@@ -172,6 +192,48 @@ test('a clip recorded from this checkout is recorded again the same: the frames,
     assert.deepEqual(again.events, mod.EVENTS, `${clip.id}: the blows`);
     assert.deepEqual(again.measured, CLIPS_MADE[clip.id].measured, `${clip.id}: what it measured`);
   }
+});
+
+/* (a root made from this checkout by edits: its src copied away and the edits made in the copy; recorded from there, each of
+   its clips is what was written, and the copy is gone again after) */
+test('a clip of a root made from this checkout by edits is recorded again the same, from a copy that is taken away', async () => {
+  const derived = Object.keys(ROOTS).filter(k => ROOTS[k].from === 'now');
+  assert.ok(derived.length >= 3, derived.join(' '));
+  for (const key of derived) {
+    const clips = CLIPS.filter(c => c.root === key);
+    assert.ok(clips.length, `${key}: no clip`);
+    const made = derive(key, { now: root });
+    try {
+      assert.ok(made.dir.startsWith(tmpdir()) && !made.dir.startsWith(root), `${key}: copied to ${made.dir}`);
+      for (const clip of clips) {
+        const mod = await LOAD[clip.id](),
+          again = await record(clip, made.dir);
+        assert.equal(encode(again.data), mod.MEN, `${clip.id}: the frames`);
+        assert.deepEqual(again.events, mod.EVENTS, `${clip.id}: the blows`);
+        assert.deepEqual(again.measured, CLIPS_MADE[clip.id].measured, `${clip.id}: what it measured`);
+        assert.equal(CLIPS_MADE[clip.id].from.edits, ROOTS[key].edits.length, `${clip.id}: written as made by its edits`);
+      }
+    } finally {
+      made.done();
+    }
+    assert.ok(!existsSync(made.dir), `${key}: the copy left behind`);
+  }
+  // (and every root made by edits names one that is a folder, edits of its src only)
+  for (const [key, R] of Object.entries(ROOTS).filter(([, R]) => R.from))
+    for (const e of R.edits) assert.ok(ROOTS[R.from] && !ROOTS[R.from].from && /^src\/[\w./-]+\.mjs$/.test(e.file) && typeof e.find === 'string' && e.find && typeof e.replace === 'string', `${key}: ${e.file}`);
+});
+
+test('a root\'s edit that is not in its file exactly once fails, and leaves no copy behind', () => {
+  const left = () => readdirSync(tmpdir()).filter(n => n.startsWith('clips-__try-'));
+  for (const [find, said] of [['insideTo: 99', 'nowhere'], ['RULES', 'many times']]) {
+    ROOTS.__try = { say: 'try', from: 'now', edits: [{ file: 'src/game/bout.mjs', find, replace: 'x' }] };
+    try {
+      assert.throws(() => derive('__try', { now: root }), /not once/, `${find}: ${said}`);
+    } finally {
+      delete ROOTS.__try;
+    }
+  }
+  assert.deepEqual(left(), []);
 });
 
 test('the game\'s tables are their defaults after all of it', () => {
