@@ -30,18 +30,23 @@ writeFileSync(outFile, page + '\n');
 
 // every module the page reaches from src/main.mjs, found by following its imports
 const seen = new Set(),
-  sheets = new Set();
+  sheets = new Set(),
+  wears = new Set(),
+  outfits = Object.keys(JSON.parse(readFileSync(path.join(root, 'assets/manifest.json'), 'utf8')).wear || {});
 (function follow(file) {
   if (seen.has(file)) return;
   seen.add(file);
   const text = readFileSync(path.join(root, file), 'utf8');
   // (a reference sheet a module names is loaded by the page from the same path)
   for (const m of text.matchAll(/docs\/ref\/[\w-]+\.jpg/g)) sheets.add(m[0]);
+  // (and an outfit a module dresses a card in by name, its outfits' list: the motion catalogue's new samples, src/samples.data.mjs)
+  if (/\bwear: /.test(text)) for (const w of outfits) if (text.includes(`'${w}'`)) wears.add(w);
   // (and a module it loads only when it is wanted, import('./...'): the pending catalogue's recorded clips, src/clips/index.mjs)
   for (const m of text.matchAll(/(?:from |import\()'(\.[^']+)'/g)) follow(path.posix.join(path.posix.dirname(file), m[1]));
 })(entry);
 const files = Object.fromEntries([...seen].sort().map(f => [f, { from: f, contentType: 'text/javascript' }]));
 files['assets/manifest.json'] = 'assets/manifest.json';
 for (const part of /catalog|pending|fxlab/.test(entry) ? ['boxer'] : ['boxer', 'ring']) files[`assets/${part}.splats.txt`] = `assets/${part}.splats.txt`;
+for (const w of [...wears].sort()) files[`assets/boxer-${w}.splats.txt`] = `assets/boxer-${w}.splats.txt`;
 for (const sheet of [...sheets].sort()) files[sheet] = sheet;
 console.log(JSON.stringify(files, null, 1));

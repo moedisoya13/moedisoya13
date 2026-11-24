@@ -586,6 +586,15 @@ V 네 번째 점검, U 6차, N 8차 에이전트가 멈춤 → 같은 에이전�
 - 구현자가 짚은 것: 길이가 2 s에 조금 못 미침(끝을 0.4 s로 하면 +0.2 s); 리버 다운은 주저앉기 전에 끝남(간은 0.4 s 뒤 작용), 축 늘어지는 실신은 발끝이 들린 데서 끝남; 게임에서 로프를 피하느라 좌우가 바뀌어 보일 수 있음; "거의 멈춤"은 카드에서 결정하지 않음(0.3 m/s에서는 node와 브라우저가 달라 0.5로 둠).
 - 건너뛰기는 지시에 없던 것(사용자에게 알림). "KO"를 다운·실신 전부로 읽음(확인 구함).
 
+## 카탈로그 정리: 합침 (2026-11-24)
+
+보고와 샷 `scratchpad/refresh/`. 
+- **미결**: 답한 항목 15개를 숨김(저장소의 결정 11 + 데이터의 `decided`: 채팅으로 정해진 것과 "권장대로 만듦" `hookr-bound`·`beckon-room`), 각 부의 끝 "답한 항목 N개 보기"로만 열림(고른 것은 다음에 열 때 숨음, "고르지 않음"으로 되돌리면 다시 열림). 기본으로 63항목(5부 40, 1부 1, 2부 6, 3부 12, 4부 4). 지운 것: `fx-ground-ring-game`, `order-memo-first`와 그것만 쓰던 클립 여섯(`front-*`, `collar-*`, `hookin-*`); 전체 78항목, 클립 48개.
+- **구현자가 낡았다고 본 항목(지우지 않음, 사용자에게 올림)**: `chain-row`(C0가 이미 체인 줄을 넣음), `cleanup-fx-versions`·`cleanup-fxlab-now`(이펙트 확정 뒤 뜻이 없어짐), `wave-speed`·`shift-angle`(S 단계와 `bearing-*`가 같은 것을 물음), `source-a-script`와 `cd-six-beats`(같은 질문), `shrug-view`(글이 이미 "U를 합칠 때 돌린다"), `cd-hook-cross`(콤보 기획 C2에 있음), `combo-loadout`·`pull-test`(권장안이 이미 만들어짐), `fx-parry-white`(`fx-defence-amount`의 "흰색만 뺌"과 겹침).
+- **모션**: `SINCE`마다 단계와 날짜, `REVIEWED` = J·K·2.4B·O·C0·M(사용자의 11-24 지시; O는 구현자가 더함: 오늘 전에 게시된 팔방). 기본으로 열린 것 15줄: N이 바꾼 13줄 + 새 샘플 2줄. 접힌 것 47줄 + 카드 16장; 단추 "펼침: 이번 변경 / 검토한 변경까지 / 모두". 두 단계가 바꾼 줄(rollCounter, crossBody-jab, crossBody-cross)은 N의 글이 먼저, M의 글은 "검토함"으로 흐리게.
+- **새 샘플** 칸(`src/samples.data.mjs`): 트레이닝복 — `guard@3`·`hook@3`에 맨몸 대 후드 내림, 맨몸 대 후드 씀(카탈로그의 렌더러가 카드의 선수에게 옷을 입힘; 옷 파일은 입는 카드가 있을 때만 받음).
+- KO 연출과 겹친 `catalog.mjs` 두 곳(리플레이 표시의 글)은 양쪽을 살림. 페이지 시험 29/29(미결·옷·리플레이·메모).
+
 ## 사용자 지적: 모션 카탈로그의 메모가 거의 반영되지 않았다 (2026-11-23)
 
 사실이다. 메모 27건(26줄; `feedback`을 다시 읽음, 11-22 뒤로 새 메모 없음) 가운데 **카탈로그의 동작에 보이는 것은 0건.** 끝난 것은 J(이펙트)와 K(허리 엔진: `hookIn` 메모의 "허리를 분리해 돌 수 있는 변수로"만 엔진에 생겼고 어느 주먹도 아직 쓰지 않음)뿐이고, 그 뒤의 시간은 이펙트(데미지 비례, 다운 효과, 용암·불티), K의 착지 수리, 소스 기획 둘에 썼다. 메모의 단계: M(`crossArm`의 audit) → N(`hookIn`, `hookR`, `upperIn`, `flicker`) → P(`crossArm`의 모양) → Q(`duck`, `pull`, `parry`, `parryDown`, `rollCounter`) → R(`inout`, `side`, `circle`, `dash`, `dashSide`) → S(`shift`, `wave`) → U(`collar`, `beckon`, `chinOut`, `wind`, `shrug`, `tapChin`) → V(`stagger`, `down-front`, `out-twist`).

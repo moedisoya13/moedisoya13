@@ -8,12 +8,12 @@
 // same; and a root's edit that is not in its file exactly once fails, the copy taken away.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, readdirSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { withTune, patchesOf, guardAt } from '../src/tune.mjs';
-import { ITEMS, PARTS, TUNES, VERSIONS, FX_SCENES } from '../src/pending.data.mjs';
+import { ITEMS, PARTS, TUNES, VERSIONS, FX_SCENES, DECIDED, answered, sortOut, ANSWERED_LINE } from '../src/pending.data.mjs';
 import { NUMBERS } from '../src/pending.numbers.mjs';
 import { SCRIPTS } from '../src/audit.mjs';
 import { step, RULES } from '../src/game/bout.mjs';
@@ -84,10 +84,10 @@ test('a card stepped between the steps of a variant fights as it does alone (liv
 });
 
 test('the data: every override names a field that is there, every card a catalogue script, every id fit to save under', () => {
-  assert.equal(ITEMS.length, 80);
+  assert.equal(ITEMS.length, 78);
   // (in the page's order: what the work of 2026-11-23 left open first, then the four parts)
   assert.deepEqual(PARTS.map(P => P.n), [5, 1, 2, 3, 4]);
-  assert.deepEqual(PARTS.map(P => ITEMS.filter(i => i.part === P.n).length), [52, 2, 7, 13, 6]);
+  assert.deepEqual(PARTS.map(P => ITEMS.filter(i => i.part === P.n).length), [50, 2, 7, 13, 6]);
   const ids = new Set();
   for (const item of ITEMS) {
     assert.match(item.id, /^[a-z0-9]+(-[a-z0-9]+)*$/, item.id);
@@ -179,9 +179,64 @@ test('the options\' cards: each names an option of its item and carries its word
       }
   // (the cards of the options of seven items, and the clips of the manifest: what the work of 2026-11-24 added)
   assert.equal(n, 36, 'cards of options');
-  assert.equal(CLIPS.length, 54, 'clips');
+  assert.equal(CLIPS.length, 48, 'clips');
   // (a row of two whose second is the blank: its first is a card, as beckon-room's)
   for (const item of ITEMS) for (const g of item.groups || []) for (const [a, b] of g.rows) if (b.fill) assert.ok(!a.fill && (a.clip || a.entry || a.image), `${item.id}: a blank row`);
+});
+
+/* Answered: an item the store holds a choice for, or, with no document, one the data says was decided, is left out of its
+   part's open items (and so of the page's list and counts) and is in the part's answered ones, which the line at the part's
+   end opens; a document whose choice is none takes it back. */
+test('an answered item is hidden by default and shown by its part\'s line; a choice taken back on the page opens it again', () => {
+  // (what was decided away from the page: an item each, one of its own choices; every item whose state says so has it)
+  for (const [id, d] of Object.entries(DECIDED)) {
+    const item = ITEMS.find(i => i.id === id);
+    assert.ok(item && item.decided === d, `${id}: no such item`);
+    assert.ok(item.options.some(o => o.id === d.choice) && /^\d{4}-\d\d-\d\d$/.test(d.at) && ['chat', 'built'].includes(d.how), `${id}: ${d.choice} ${d.at} ${d.how}`);
+  }
+  assert.deepEqual(ITEMS.filter(i => /^정해짐/.test(i.state)).map(i => i.id).sort(), Object.keys(DECIDED).sort(), 'the items whose state says decided');
+  // (the store as it may stand: one item chosen there, one decided item taken back to none, one with a choice it has not)
+  const docs = { 'cross-arm-shape': { choice: 'upright', note: '', at: '2026-11-22T15:30:39.105Z' }, 'merge-bar': { choice: null, note: '', at: '2026-11-24T08:00:00.000Z' }, 'wave-speed': { choice: 'gone', note: 'x', at: '2026-11-24T08:00:00.000Z' } };
+  let hidden = 0;
+  for (const P of PARTS) {
+    const { open, answered: done } = sortOut(P.n, docs);
+    assert.deepEqual([...open, ...done].map(i => i.id).sort(), ITEMS.filter(i => i.part === P.n).map(i => i.id).sort(), `part ${P.n}: every item once`);
+    for (const i of done) assert.ok(answered(i, docs[i.id]) && !open.includes(i), i.id);
+    assert.match(ANSWERED_LINE(done.length), new RegExp(`^답한 항목 ${done.length}개 보기$`));
+    hidden += done.length;
+  }
+  const where = id => (sortOut(ITEMS.find(i => i.id === id).part, docs).answered.some(i => i.id === id) ? 'answered' : 'open');
+  assert.equal(where('cross-arm-shape'), 'answered', 'chosen in the store');
+  assert.equal(where('hookr-bound'), 'answered', 'decided in the data, nothing in the store');
+  assert.equal(where('merge-bar'), 'open', 'decided, then taken back to none on the page');
+  assert.equal(where('wave-speed'), 'open', 'a choice it has not');
+  assert.equal(where('liver-hook-power'), 'open', 'nothing anywhere');
+  // (the decided ones, merge-bar taken back and cross-arm-shape chosen instead)
+  assert.equal(hidden, Object.keys(DECIDED).length);
+  // (with nothing in the store, what the data decided is hidden, and nothing else)
+  assert.deepEqual(PARTS.flatMap(P => sortOut(P.n).answered).map(i => i.id).sort(), Object.keys(DECIDED).sort());
+});
+
+/* (what was taken away for good: the ground ring's light-or-darker question, and the order of the stages; and what only they
+   used, their clips: nothing of them is left in the data, the clips or the groups, and the recorded files are gone) */
+test('no deleted item is named anywhere: the data, the clips, the groups', () => {
+  const GONE = ['fx-ground-ring-game', 'order-memo-first'],
+    CLIPS_GONE = ['front-now', 'front-v1', 'collar-now', 'collar-u2', 'hookin-pren', 'hookin-now'];
+  for (const id of GONE) assert.ok(!ITEMS.some(i => i.id === id), `${id}: still an item`);
+  for (const id of CLIPS_GONE) {
+    assert.ok(!CLIPS.some(c => c.id === id) && !CLIPS_MADE[id] && !LOAD[id], `${id}: still a clip`);
+    assert.ok(!existsSync(path.join(root, 'src', 'clips', `${id}.mjs`)), `${id}: its file`);
+  }
+  for (const card of allCards) assert.ok(!(card.image || '').includes('ground-ring-game') && !CLIPS_GONE.includes(card.clip), JSON.stringify(card));
+  for (const file of ['src/pending.data.mjs', 'src/clips.data.mjs', 'src/clips/index.mjs']) {
+    const text = readFileSync(path.join(root, file), 'utf8');
+    // (the ground ring's item and its two pictures, docs/ref/ground-ring-game-*.jpg; the order's item; their clips)
+    for (const name of ['ground-ring-game', ...GONE]) assert.ok(!text.includes(name), `${file} names ${name}`);
+    for (const id of CLIPS_GONE) assert.ok(!text.includes(`'${id}'`), `${file} names ${id}`);
+    for (const id of ['front', 'collar', 'hookin']) assert.ok(!text.includes(`pair('${id}'`), `${file} makes the clips ${id}-*`);
+  }
+  // (the two pictures stay in the repository, out of the page)
+  for (const n of [1, 2]) assert.ok(existsSync(path.join(root, 'docs', 'ref', `ground-ring-game-${n}.jpg`)));
 });
 
 test('a clip recorded from this checkout is recorded again the same: the frames, the blows and what it measured', async () => {

@@ -140,6 +140,14 @@
   .item-head .since-note, .info .since-note { margin: 0; font-size: 13px; color: var(--fg); padding-left: 8px; border-left: 3px solid var(--changed); }
   .since-new .since-note { border-left-color: var(--new); }
   .card.changed { border-color: var(--changed); }
+  /* a mark the user has reviewed: dim, and on a folded row not shown at all; what the page shows, said at the top */
+  .since.seen { color: var(--dim); }
+  .item.folded .since.seen, .card.folded .since.seen { display: none; }
+  .since-note .stage { font: 600 11px/1 var(--data); letter-spacing: .02em; margin-right: 4px; }
+  .since-note.seen { color: var(--dim); border-left-color: var(--line); }
+  .labelled { display: inline-flex; align-items: center; gap: 10px; }
+  .shown { margin: 0; max-width: 92ch; font-size: 14px; color: var(--dim); }
+  .shown b { color: var(--fg); font-weight: 600; margin-right: 4px; }
   .mark { position: absolute; right: 6px; top: 6px; font: 600 11px/1 var(--body); letter-spacing: .06em; padding: 4px 6px; background: var(--changed); color: var(--bg); }
   [id^="row-"], h2.part, #toc { scroll-margin-top: 12px; }
   .to-toc { position: fixed; right: max(12px, env(safe-area-inset-right, 0px)); bottom: calc(14px + env(safe-area-inset-bottom, 0px)); z-index: 2; background: var(--fg); color: var(--bg); font: 600 12px/1 var(--body); letter-spacing: .04em; padding: 10px 12px; text-decoration: none; }
@@ -243,14 +251,16 @@
 <div class="page">
   <header>
     <h1>모션 <em>카탈로그</em></h1>
-    <p class="lede">복서의 발은 박자를 탑니다. 제자리 바운스에서 스텝, 주먹까지 같은 박자가 이어지고, 그 위에서 주먹을 피하고, 막고, 맞고, 쓰러집니다. 기술마다 일곱 단계(1 입문, 2 아마추어, 3 프로, 4명·4암 일류, 5명·5암 전설)가 한 줄로 놓입니다. 아래 동작은 녹화가 아니라 지금 계산되고 있는 실제 시합입니다. 피했는지 맞았는지는 글러브가 머리(바디샷은 몸통)에 실제로 닿았는지로 정해집니다. 이번 판(6차 기획 J·K)에서는 맞는 그림이 바뀌었고(입자가 맞은 몸의 반대쪽 면에서, 흰 번쩍임 대신 파문, 다운은 용암과 불티, 착지의 파문과 바닥의 고리 파문, 리플레이), 허리가 골반·가슴과 따로 도는 관절로 들어왔습니다. 지난 게시본(v22)과 달라진 줄에는 표시가 붙습니다. 새 부 「팔방」은 상대의 정면을 기준으로 한 여덟 칸으로, 자리를 옮기는 동작마다 그의 둘레로 돈 칸과 그가 내준 방위를 재어 위에서 본 길로 보여 줍니다(동작은 그대로).</p>
+    <p class="lede">복서의 발은 박자를 탑니다. 제자리 바운스에서 스텝, 주먹까지 같은 박자가 이어지고, 그 위에서 주먹을 피하고, 막고, 맞고, 쓰러집니다. 기술마다 일곱 단계(1 입문, 2 아마추어, 3 프로, 4명·4암 일류, 5명·5암 전설)가 한 줄로 놓입니다. 아래 동작은 녹화가 아니라 지금 계산되고 있는 실제 시합입니다. 피했는지 맞았는지는 글러브가 머리(바디샷은 몸통)에 실제로 닿았는지로 정해집니다. 이번 판(6차 기획 J·K)에서는 맞는 그림이 바뀌었고(입자가 맞은 몸의 반대쪽 면에서, 흰 번쩍임 대신 파문, 다운은 용암과 불티, 착지의 파문과 바닥의 고리 파문, 리플레이), 허리가 골반·가슴과 따로 도는 관절로 들어왔습니다. 아직 검토하지 않은 단계가 바꾼 줄에는 표시가 붙고, 검토가 끝난 변경은 접혀 있습니다. 새 부 「팔방」은 상대의 정면을 기준으로 한 여덟 칸으로, 자리를 옮기는 동작마다 그의 둘레로 돈 칸과 그가 내준 방위를 재어 위에서 본 길로 보여 줍니다(동작은 그대로).</p>
     <div class="controls">
       <span>속도</span>
       <span class="seg"><button id="speed-1" data-speed="1" aria-pressed="true">1×</button><button id="speed-half" data-speed="0.5" aria-pressed="false">½×</button><button id="speed-quarter" data-speed="0.25" aria-pressed="false">¼×</button></span>
       <button id="prints" aria-pressed="true">발자국</button>
-      <button id="fold-all" aria-pressed="false">모두 펼치기</button>
+      <span class="labelled"><span>펼침</span>
+      <span class="seg" id="open-level"><button data-open="new" aria-pressed="true">이번 변경</button><button data-open="seen" aria-pressed="false">검토한 변경까지</button><button data-open="all" aria-pressed="false">모두</button></span></span>
       <span id="memo-store" class="store" role="status">메모를 불러오는 중…</span>
     </div>
+    <p id="shown" class="shown"></p>
   </header>
   <nav id="toc" class="toc" aria-label="차례"></nav>
   <main id="catalog"></main>

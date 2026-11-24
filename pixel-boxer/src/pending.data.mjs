@@ -9,6 +9,8 @@
      VERSIONS   the hit effect's versions, and MIST, the colours of its spray, as they were compared (the item is decided:
                 the game draws the blow by render/blow.mjs, and src/fxlab.mjs no longer has them: these are the originals)
      FX_SCENES  the three scenes the versions are compared in
+     DECIDED    what was decided away from the page, put on its item as decided; answered and sortOut, which items the
+                page folds away as answered (by the store's documents, or by decided)
    A card: { entry (a catalogue script id), say (a line: what it is), kind (what its numbers are: tag, liver, cross, pd, fx,
    wave), key (its expected numbers in src/pending.numbers.mjs: NUMBERS.cards), tune, guard and gap (the down parry's frame
    and distance: tune.mjs guardAt), scene and version (an effect card), band (the plan's range for a liver hook) }, or
@@ -188,18 +190,12 @@ const COMPARE = {
     { title: '숄더 롤 & 카운터 4명 (`rollCounter@4m`)', rows: [[clip('rollc-pren', '롤로 흘린 뒤 뒷손 훅 반격', 'blow', { blow: 'hookR', cam: { yaw: 0.25, pitch: 0.26 } }), clip('rollc-now', '롤로 흘린 뒤 뒷손 훅 반격', 'blow', { blow: 'hookR', cam: { yaw: 0.25, pitch: 0.26 } })]] }
   ],
   'shrug-view': [{ title: 'U 4차의 으쓱 4암, 두 카메라', rows: [[clip('shrug-u2', '카드의 카메라', 'across', { cam: VIEW.card }), clip('shrug-u2', '그의 앞쪽에서 비스듬히', 'across', { cam: VIEW.wide })]] }],
-  'fx-ground-ring-game': [{ title: '게임 화면(시드 1·2), 고리가 바꾼 픽셀을 자홍색으로: 왼쪽 지금, 가운데 "앞에 그림"을 만들어 본 것, 오른쪽 밝은 칸도 밝아지게 한 시험', rows: [[{ image: 'docs/ref/ground-ring-game-1.jpg', say: '시드 1, 다운 0.30 s: 지금과 "앞에 그림"은 끊긴 조각, 밝은 칸도 밝히면 거의 닫힌 고리. 누르면 원본' }, { image: 'docs/ref/ground-ring-game-2.jpg', say: '시드 2, 다운 0.25 s: 같은 비교. 누르면 원본' }]] }],
   'jump-watch': [
     { title: '`guard@5a`: 커버를 한 프레임에 내림 (왼쪽 제 속도, 오른쪽 ¼)', rows: [[clip('jump-guard', '가드 5암, 커버를 내리는 때', 'jump', { cam: VIEW.guard }), clip('jump-guard', '가드 5암, 커버를 내리는 때', 'jump', { slow: 0.25, cam: VIEW.guard })]] },
     { title: '`onetwo@5a`: 원투를 맞는 상대의 앞 글러브 (최악 값)', rows: [[clip('jump-onetwo', '스텝 원투 5암, 상대의 가드', 'jump', { cam: { yaw: 2.2, pitch: 0.15, dist: 2.6, on: 'man1', y: 1.0 } }), clip('jump-onetwo', '스텝 원투 5암, 상대의 가드', 'jump', { slow: 0.25, cam: { yaw: 2.2, pitch: 0.15, dist: 2.6, on: 'man1', y: 1.0 } })]] },
     { title: '`crossArm@5m`: 크로스암을 내림', rows: [[clip('jump-cross', '크로스암 가드 5명, 막은 뒤', 'jump', { cam: VIEW.guard }), clip('jump-cross', '크로스암 가드 5명, 막은 뒤', 'jump', { slow: 0.25, cam: VIEW.guard })]] }
   ],
-  'crossarm-weak': [{ title: '5암 크로스암, 누르는 프레임에 롤: 왼 옆구리를 노린 뒷손 훅 (N의 시험 장면)', rows: [[clip('weak-pren', '낮은 뒷손 훅이 크로스암으로', 'blow', { blow: 'hookR', cam: VIEW.left }), clip('weak-now', '낮은 뒷손 훅이 크로스암으로', 'blow', { blow: 'hookR', cam: VIEW.left })]] }],
-  'order-memo-first': [
-    { title: '지금까지의 단계: V 4b차, 앞으로 쓰러진 다리 (`down-front`)', rows: [[clip('front-now', '다운 · 앞으로', 'legs', { cam: VIEW.fallen }), clip('front-v1', '다운 · 앞으로', 'legs', { cam: VIEW.fallen })]] },
-    { title: 'U 4차, 뒷목 잡고 어퍼 4암 (`collar@4a`)', rows: [[clip('collar-now', '뒷목을 당기고 어퍼', 'pull', { blow: 'upper', cam: { yaw: 0.25, pitch: 0.25 } }), clip('collar-u2', '뒷목을 당기고 어퍼', 'pull', { blow: 'upper', cam: { yaw: 0.25, pitch: 0.25 } })]] },
-    { title: '숏 훅 3단계 (`hookIn@3`): N 전 대 지금', rows: [[clip('hookin-pren', '숏 훅 3단계', 'chest', { blow: 'hookIn', cam: { yaw: 0.12, pitch: 0.2 } }), clip('hookin-now', '숏 훅 3단계', 'chest', { blow: 'hookIn', cam: { yaw: 0.12, pitch: 0.2 } })]] }
-  ]
+  'crossarm-weak': [{ title: '5암 크로스암, 누르는 프레임에 롤: 왼 옆구리를 노린 뒷손 훅 (N의 시험 장면)', rows: [[clip('weak-pren', '낮은 뒷손 훅이 크로스암으로', 'blow', { blow: 'hookR', cam: VIEW.left }), clip('weak-now', '낮은 뒷손 훅이 크로스암으로', 'blow', { blow: 'hookR', cam: VIEW.left })]] }]
 };
 
 export const ITEMS = [
@@ -209,10 +205,6 @@ export const ITEMS = [
       '정해짐 (사용자, 11-24: "타격 이펙트 확정") · 0.1초 간격, 두 발 모두 채택한 수 그대로(기준 타격에 덩이 11·불티 18씩, 가장 센 타격에서 덩이 48·불티 80). 0.05초는 제 속도에서 한 덩어리로 보여 0.1초로 했습니다. 모션 카탈로그·이펙트 시안·본편이 같은 함수로 그립니다.',
       [['keep', '0.1초, 두 발 모두 전량', '지금 그대로.'], ['half', '0.1초, 둘째 발은 절반', '둘째 발을 절반으로(센 타격에서 덜 번잡).'], ['split', '0.1초, 나눠 쏘기', '채택한 수를 둘로 나눠 합이 그대로.'], ['fast', '0.05초로 되돌림', '더 빠르지만 슬로가 아니면 한 덩어리로 보입니다.']],
       'keep', '둘로 읽히는 가장 짧은 간격입니다. 센 타격의 번잡함이 거슬리면 "둘째 발은 절반"을 권합니다.'],
-    ['fx-ground-ring-game', '게임 화면의 바닥 고리 파문',
-      '타격 이펙트는 확정되었고(11-24), 이것은 확정된 고리가 실제 게임의 링 바닥에서도 보이게 하는 일입니다. 카탈로그·시안·검토 시트의 타일 바닥에서는 고리가 잘 읽히지만, 게임의 링 캔버스에서는 끊긴 조각으로만 보입니다. 권장했던 "밝힌 입자를 앞에 그림"을 만들어 재 보니 밝힌 픽셀은 30~45% 늘지만 고리 둘레가 이어지지 않았습니다(둘레를 덮은 몫 0.45 → 0.47). 원인은 그리는 순서가 아니라 색입니다: 고리는 바닥 입자를 "한 단계 밝게" 하는데, 링 캔버스의 밝은 칸(입자 1,229개)은 이미 바닥 색의 가장 밝은 단계라 더 밝아질 곳이 없습니다. 어두운 칸만 밝아지고, 밝아진 색이 밝은 칸의 색과 같아 띠가 조각으로 보입니다. 시험으로 밝은 칸도 밝아지게 하면 고리가 거의 닫힙니다(둘레 0.67, 아래 그림의 오른쪽 열). 고리가 꺼진 뒤 0.38~0.6초의 점들은 설계대로(빛이 꺼지고 들림만 남음)입니다.',
-      [['lighter', '바닥 색에 한 단계 더 밝은 색을 더한다', '밝은 칸도 밝아질 수 있게 합니다. 평소 바닥은 그대로 보이고, 고리가 날 때만 쓰이는 새 색 하나가 팔레트에 들어갑니다(48칸 가운데 44칸 사용 중).'], ['darker', '링 바닥을 한 단계 어둡게 다시 굽는다', '타일 바닥과 같은 관계가 되어 모든 칸이 밝아질 수 있습니다. 게임의 바닥 전체가 한 단계 어두워집니다.'], ['keep', '그대로', '게임에서는 끊긴 조각으로 둡니다.']],
-      'lighter', '평소 화면은 바뀌지 않고 고리만 이어집니다. 새 색은 고리를 밝힐 때만 나타납니다.'],
     ['fx-defence-amount', '방어 이펙트를 얼마나 줄일지',
       '지금: 막음은 글러브가 만난 곳에 불꽃 4개(흰색·파랑), 패리는 불꽃 14개(흰색·노랑·호박)와 화면 흰빛, 피하기·숄더 롤·커버는 그림이 없습니다. 제안은 "공격은 튀는 것과 파문, 방어는 선과 작은 파문"입니다: 막은 팔뚝에 작은 파문, 쳐낸 주먹의 꺾인 궤적 선, 크기는 막은 충격량에 비례, 잽의 타격 효과보다 크지 않게.',
       [['lines-sparks', '선과 파문 + 불꽃 조금', '막음 0~2개, 패리 3~4개(쳐낸 방향으로).'], ['lines', '선과 파문만', '불꽃 없음.'], ['keep-no-white', '지금 불꽃에서 흰색만 뺌', '모양은 그대로, 흰색과 화면 흰빛만 없앱니다.']],
@@ -229,10 +221,6 @@ export const ITEMS = [
       '기막힌 수비(아주 가깝게 피하거나 쳐내고 바로 받아친 것)는 카탈로그에서만 리플레이로 보이고, 게임 안에는 표시가 없습니다.',
       [['slow', '아주 짧은 슬로', '0.1초쯤, 다운의 슬로보다 훨씬 짧게.'], ['line', '바람 선만 더 선명하게', '슬로 없이.'], ['none', '표시 없음', '지금 그대로.']],
       'slow', '드문 장면이라 짧게 짚어 줄 만합니다.'],
-    ['order-memo-first', '단계의 순서',
-      '메모가 걸린 단계를 새 소스의 단계보다 먼저 하는 것으로 진행 중입니다. M은 합쳐 게시했습니다(크로스암의 메모). N은 여덟 차례 끝에 합쳐 게시했습니다(11-24; 남은 것은 알려진 한계로 `docs/stage-n.md`에). U 5차·V 5차는 따로의 점검 중이고, 합치는 기준(B)을 넘는 대로 합칩니다. 그다음 P(크로스암 세워 잡기), R(풋워크 메모 다섯 줄), Q(수비 메모 다섯 줄), S(시프트·파도) 순서입니다. 아래 클립에서 N은 합치기 전 대 지금이고, U·V는 마지막으로 끝난 라운드(U 5차, V 5차)입니다. 단계를 합치면 녹화도 다시 합니다.',
-      [['memo-first', '메모 단계 먼저', '지금 진행 중인 방식.'], ['leap-after-n', '도약 훅은 N 바로 뒤', '원래 계획대로 도약 훅을 주먹의 허리(N) 다음에.'], ['combos-early', '콤보를 앞당김', '기본 콤보와 같은 손 훅 → 바디를 N 다음에 바로.']],
-      'memo-first', '메모가 가장 오래 기다렸습니다.'],
     ['pivot-kind', '피벗(인사이드·아웃사이드)을 어떻게 줄지',
       '소스 B의 피벗은 원투 뒤에 앞발을 디디고 돌아 상대의 옆을 잡는 동작입니다(단계 R2, 팔방 위치 시스템 위에서).',
       [['technique', '고르는 기술', '로드아웃 1칸. 4·5단계가 갖고, 5단계의 기본 로드아웃에 넣습니다.'], ['basic', '4단계 이상의 기본 동작', '누구나 등급만 되면 씁니다.']],
@@ -784,6 +772,38 @@ export const ITEMS = [
     recommend, why
   }))
 ];
+
+/* ---- what was decided away from the page (the item's state says "정해짐"), with no document in the store for some of them:
+   each { choice (an option of the item: what was decided, or the nearest of them), at (the day), how ('chat': the user said
+   so in chat; 'built': built as recommended and written so in the state), note (what the option does not say) }. Put on
+   the item as `decided`. */
+export const DECIDED = {
+  'fx-twice': { choice: 'keep', at: '2026-11-24', how: 'chat' },
+  'hookr-bound': { choice: 'bound', at: '2026-11-24', how: 'built' },
+  'crossarm-weak': { choice: 'accept', at: '2026-11-24', how: 'chat' },
+  'beckon-room': { choice: 'room', at: '2026-11-24', how: 'built' },
+  'third-hook-frame': { choice: 'keep', at: '2026-11-24', how: 'chat' },
+  'upperbody-waist': { choice: 'accept', at: '2026-11-24', how: 'chat' },
+  'grid-test-scope': { choice: 'asbuilt', at: '2026-11-24', how: 'chat' },
+  'n-way': { choice: 'accept', at: '2026-11-24', how: 'chat' },
+  'merge-bar': { choice: 'bar', at: '2026-11-23', how: 'chat' },
+  'merge-classes': { choice: 'iii', at: '2026-11-24', how: 'chat' },
+  'impl-fx-attach': { choice: 'both', at: '2026-11-22', how: 'chat' },
+  'fx-version': { choice: 'mix', at: '2026-11-22', how: 'chat', note: '입자는 지금 것(반대쪽 면에서), 파문은 A' }
+};
+for (const item of ITEMS) if (DECIDED[item.id]) item.decided = DECIDED[item.id];
+
+/* An item is answered when the store holds a decision for it (its document `decisions/<id>`, whose choice is one of its
+   options), or, with no document, when the data says it was decided (decided). A document whose choice is none (taken back
+   on the page) leaves it open, whatever the data says. The page lays itself out by this once, from the documents as they
+   were read when it opened (sortOut): what is chosen during a visit stays where it is until the next. */
+export const answered = (item, doc) => (doc && typeof doc === 'object' ? item.options.some(o => o.id === doc.choice) : !!item.decided);
+// a part's items, still open and answered (the answered folded away at the part's end, behind ANSWERED_LINE)
+export const sortOut = (part, docs = {}) => {
+  const items = ITEMS.filter(i => i.part === part);
+  return { open: items.filter(i => !answered(i, docs[i.id])), answered: items.filter(i => answered(i, docs[i.id])) };
+};
+export const ANSWERED_LINE = n => `답한 항목 ${n}개 보기`;
 
 // (an option's card carries the option's own name, the words of its button)
 for (const item of ITEMS)

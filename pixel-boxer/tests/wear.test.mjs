@@ -159,3 +159,23 @@ test('the committed boxer and ring are the bytes they were', () => {
   assert.equal(sha(asset('boxer.splats.txt')), 'd2f0d0fa5d1567667aafe82de04a76b768699a3bd2ba2176f780ae63fed5abee');
   assert.equal(sha(asset('ring.splats.txt')), '4457724a341d03725940c03efd9de1fbd5be25cfc4ff4dde5af53f069f97fc06');
 });
+
+// (the motion catalogue's new samples, src/samples.data.mjs: each on a script the catalogue has, each card's wear an outfit
+// that is baked here, and said on its card)
+test("the catalogue's new samples dress their cards in outfits that are baked, on scripts the catalogue has", async () => {
+  const { SAMPLES, WEAR_SAID } = await import('../src/samples.data.mjs'),
+    { SCRIPTS } = await import('../src/audit.mjs'),
+    scripts = new Set(SCRIPTS.map(e => e.id));
+  for (const s of SAMPLES) {
+    assert.match(s.id, /^[a-z0-9]+(-[a-z0-9]+)*$/, s.id);
+    assert.ok(s.name && /^\d{4}-\d\d-\d\d$/.test(s.at), `${s.id}: its name and its day`);
+    if (!s.script) continue;
+    assert.ok(scripts.has(s.script), `${s.id}: ${s.script} is no catalogue script`);
+    for (const w of s.wear) {
+      for (const one of w.split(',').map(x => x.trim()).filter(x => x && x !== 'none')) assert.ok(OUTFITS.includes(one) && manifest.wear[one], `${s.id}: ${one}`);
+      assert.ok(w in WEAR_SAID, `${s.id}: what its card says for ${w || 'bare'}`);
+    }
+  }
+  // (the training suit, hood down and up, each beside the bare fighter, on a pro's guard and hook)
+  for (const script of ['guard@3', 'hook@3']) assert.deepEqual(SAMPLES.find(s => s.script === script).wear, ['', 'training', '', 'training-up'], script);
+});

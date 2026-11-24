@@ -61,11 +61,6 @@ export const CLIPS = [
   { id: 'jump-cross', root: 'now', script: 'crossArm@5m', window: [1.05, 1.45], measure: 'jump' },
   // crossarm-weak: the rear hook at a legend's cross-arm guard, rolled as it is pressed
   ...pair('weak', ['pren', 'now'], { script: WEAK, window: [0.6, 1.3], measure: 'taken' }),
-  // order-memo-first: what three of the stages look like so far (V's legs in the fall forward, U's collar tie, N's hook
-  // in close)
-  ...pair('front', ['now', 'v1'], { script: 'down-front', window: [0.6, 2.8], measure: 'legs', of: { at: 2.6 } }),
-  ...pair('collar', ['now', 'u2'], { script: 'collar@4a', window: [0.2, 1.1], measure: 'pull' }),
-  ...pair('hookin', ['pren', 'now'], { script: 'hookIn@3', window: [0.7, 1.4], measure: 'turning', of: { move: 'hookIn' } }),
 
   /* ---- the options of the decisions still open, each recorded from code that does what the option says (the items' groups:
      src/pending.data.mjs OPTIONS) */

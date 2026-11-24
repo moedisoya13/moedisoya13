@@ -19,7 +19,7 @@ import { blow, met, rippleOf, rippleRow, fallOf, landed, landRipple, groundOf, g
 import { unpack, fromBase64 } from './render/splats.mjs';
 import { floor } from './render/floor.mjs';
 import { fk, NAMES } from './rig/skeleton.mjs';
-import { RIVAL } from './rig/boxer.mjs';
+import { RIVAL, dress } from './rig/boxer.mjs';
 import { boneMatrices, toWorld } from './anim/pose.mjs';
 import { guardPose } from './anim/animator.mjs';
 import { step } from './game/bout.mjs';
@@ -40,6 +40,14 @@ import { attachMemos } from './memo.mjs';
 import { ACTIONS, STATES } from './memo.actions.mjs';
 import { BEARING } from './bearing.data.mjs';
 import { createTracker, track, CELLS, BANDS, cellSaid } from './game/bearing.mjs';
+import { SAMPLES, WEAR_SAID } from './samples.data.mjs';
+
+/* What the user has reviewed: the stages whose marks (SINCE, below) are folded away like the rows with nothing new or
+   changed. Reviewed 2026-11-24, in chat ("모션: 검토가 끝난 것은 숨기고 변경 및 신규 샘플만"): every stage published before
+   that day (J v23, K v25, 2.4B v28, O v33, C0 v34, M v36). Only the marks of a stage not in it are open, with the new samples
+   (src/samples.data.mjs) above everything; one control at the top shows the rest, the reviewed marks and then everything. */
+const REVIEWED = ['J', 'K', '2.4B', 'O', 'C0', 'M'];
+const REVIEWED_SAID = '사용자 11-24 대화: "검토가 끝난 것은 숨기고 변경 및 신규 샘플만"';
 
 const DT = 1 / 60;
 // the fouls, as a card names them
@@ -188,7 +196,7 @@ const bearingRow = r => {
     far = Math.max(...move.levels[r.level].path.map(p => Math.hypot(p[1], p[2]))),
     entry = Object.assign({}, base, { id: `top-${base.id}`, view: { yaw: r.yaw ?? BEHIND, pitch: 1.3, y: 0.3, on: 1 - move.mover, frame: [(far + 0.55) / 0.33, 1] } });
   byId[entry.id] = entry;
-  return { id, name: move.name + (rows.length > 1 ? ' ' + LEVEL[r.level].label : ''), en: move.en, note: r.note, stat: 'bearing', mover: move.mover, cards: [entry.id], plan: { move: r.move, level: r.level }, since: 'new', sinceNote: BEARING_NEW, sinceCards: null };
+  return { id, name: move.name + (rows.length > 1 ? ' ' + LEVEL[r.level].label : ''), en: move.en, note: r.note, stat: 'bearing', mover: move.mover, cards: [entry.id], plan: { move: r.move, level: r.level }, marks: [{ since: 'new', stage: 'O', at: '2026-11-23', note: BEARING_NEW }] };
 };
 
 /* ---- the eight bearings: the part's two tables, and each row's path from above (src/bearing.data.mjs) */
@@ -308,7 +316,9 @@ const FX_NOTE = '이펙트: 예전 색의 입자가 맞은 몸의 반대쪽 면�
 // (a knockdown's own, plan 6 §2.4B and §2.4C: what its cards show now besides)
 const DOWN_NOTE = '이펙트: 입자 대신 용암 덩이와 불티를 빠르게 두 번 잇달아. 덩이는 머리가 뜨겁고 꼬리로 갈수록 식은 여러 색으로 날다가 숯처럼 검게 식고, 불티는 깜빡이며 떠다니다 꺼짐. 흰 번쩍임 대신 파문, 캔버스에 닿는 곳에서 두 번째 파문과 바닥의 큰 고리 파문. 쓰러짐은 제 속도로 끝까지, 이펙트가 다 꺼진 뒤 조감 또는 옆에서 다가간 슬로 리플레이(주먹을 누른 때부터 쓰러지기 전까지)';
 /* ---- what is new or changed since the catalogue was last published as the user reviewed it (version 22, commit 14594d1),
-   by row: measured, not guessed. A row is changed where a card of it moved (every joint of both men compared frame by frame
+   by row, each mark with the stage that made it and the day it was published (stage, at; a row two stages changed has a
+   mark each, the later first): measured, not guessed. A mark of a stage in REVIEWED is folded away (top of this file).
+   A row is changed where a card of it moved (every joint of both men compared frame by frame
    with the scripts at 14594d1: the cards listed moved more than 1 mm, the waist of plan 6 stage K turning what the chest used
    to) or where what it exists to show is drawn otherwise (the being-hit and knockdown cards: the blow's effect of stage J,
    and the knockdown's own effect, its lava and its replay, §2.4B and §2.4C).
@@ -318,80 +328,92 @@ const DOWN_NOTE = '이펙트: 입자 대신 용암 덩이와 불티를 빠르게
 const SINCE = {
   /* new: the combinations (docs/combos-plan.md §9.1, stage C0), each a row of its own; what its cards measured (node
      tools/combos.mjs --cards; 3 · 4명 · 5명) */
-  '1-2': { since: 'new', note: '닿음 사이 233 · 200 · 183 ms, 든 가드에 잽 6 · 49 · 44, 스트레이트 22 · 25 · 26 N·s' },
-  '1-1-2': { since: 'new', note: '잽 → 잽 200 · 200 · 267 ms에 둘째 잽 0 · 1 · 53 N·s(같은 손: 앞 잽이 멈춘 가드 앞에서 출발), 스트레이트 22 · 24 · 26 N·s로 막힘(가드 없으면 99 · 105 · 105)' },
-  '1-2-3': { since: 'new', note: '스트레이트 → 훅 283 · 233 · 233 ms, 훅이 81 · 111 · 123 N·s로 막힘(가드 없으면 100 · 106 · 112)' },
-  '1-2-3-2': { since: 'new', note: '끝 스트레이트 22 · 9 · 28 N·s로 막힘(0.91 · 0.89 · 0.91 m). 붙은 채로(0.66~0.67 m, 가드 없음) 17 · 18 · 106: 길게 치기는 C2에서' },
-  '1-6-3-2': { since: 'new', note: '어퍼 56 · 58 · 93, 훅 42 · 88 · 96, 끝 스트레이트 20 · 10 · 12 N·s로 막힘(가드 없으면 어퍼 21 · 75 · 100, 훅 97 · 123 · 136)' },
-  '2-3-2': { since: 'new', note: '0.86 m에서. 훅 51 · 101 · 117 N·s로 막힘, 끝 스트레이트 8 · 11 · 10(발 박기와 길게 치기는 C2에서)' },
-  chain: { since: 'new', note: '훅 → 어퍼 283 · 250 · 233 ms, 어퍼 61 · 77 · 79 N·s로 막힘' },
+  '1-2': { since: 'new', stage: 'C0', at: '2026-11-23', note: '닿음 사이 233 · 200 · 183 ms, 든 가드에 잽 6 · 49 · 44, 스트레이트 22 · 25 · 26 N·s' },
+  '1-1-2': { since: 'new', stage: 'C0', at: '2026-11-23', note: '잽 → 잽 200 · 200 · 267 ms에 둘째 잽 0 · 1 · 53 N·s(같은 손: 앞 잽이 멈춘 가드 앞에서 출발), 스트레이트 22 · 24 · 26 N·s로 막힘(가드 없으면 99 · 105 · 105)' },
+  '1-2-3': { since: 'new', stage: 'C0', at: '2026-11-23', note: '스트레이트 → 훅 283 · 233 · 233 ms, 훅이 81 · 111 · 123 N·s로 막힘(가드 없으면 100 · 106 · 112)' },
+  '1-2-3-2': { since: 'new', stage: 'C0', at: '2026-11-23', note: '끝 스트레이트 22 · 9 · 28 N·s로 막힘(0.91 · 0.89 · 0.91 m). 붙은 채로(0.66~0.67 m, 가드 없음) 17 · 18 · 106: 길게 치기는 C2에서' },
+  '1-6-3-2': { since: 'new', stage: 'C0', at: '2026-11-23', note: '어퍼 56 · 58 · 93, 훅 42 · 88 · 96, 끝 스트레이트 20 · 10 · 12 N·s로 막힘(가드 없으면 어퍼 21 · 75 · 100, 훅 97 · 123 · 136)' },
+  '2-3-2': { since: 'new', stage: 'C0', at: '2026-11-23', note: '0.86 m에서. 훅 51 · 101 · 117 N·s로 막힘, 끝 스트레이트 8 · 11 · 10(발 박기와 길게 치기는 C2에서)' },
+  chain: { since: 'new', stage: 'C0', at: '2026-11-23', note: '훅 → 어퍼 283 · 250 · 233 ms, 어퍼 61 · 77 · 79 N·s로 막힘' },
   // changed: the waist (stage K)
-  dashSide: { since: 'changed', cards: ['5m', '5a'], note: '5명·5암의 대시 중 U자 위빙을 허리가 돌림(머리·글러브 최대 0.42·0.71 cm, 허리 6.2°·8.4°)' },
-  circle: { since: 'changed', cards: ['5m', '5a'], note: '5명·5암의 걸음마다 위빙을 허리가 돌림(최대 0.64·0.42 cm, 허리 6.8°·6.0°)' },
-  side: { since: 'changed', cards: ['5m', '5a'], note: '5명·5암의 걸음마다 위빙을 허리가 돌림(최대 0.48·0.20 cm)' },
-  dash: { since: 'changed', cards: ['5a'], note: '5암의 어깨 페인트를 허리가 돌림(최대 0.63 cm, 허리 7.7°)' },
-  dashIn: { since: 'changed', cards: ['5a'], note: '5암의 어깨 페인트를 허리가 돌림(최대 0.42 cm, 허리 7.5°)' },
-  inout: { since: 'changed', cards: ['5a'], note: '5암의 어깨 페인트를 허리가 돌림(최대 0.48 cm, 허리 7.9°)' },
-  turn: { since: 'changed', cards: ['5a'], note: '5암의 어깨 페인트를 허리가 돌림(최대 0.24 cm, 허리 6.0°)' },
-  bounce: { since: 'changed', cards: ['5a'], note: '5암의 어깨 페인트를 허리가 돌림(최대 0.22 cm, 허리 6.0°)' },
-  onetwo: { since: 'changed', cards: ['5a'], note: '5암의 어깨 페인트를 허리가 돌림(최대 0.11 cm)' },
-  wave: { since: 'changed', cards: ['4m', '5m'], note: '파도의 흔들림과 어깨 페인트를 허리가 돌림(최대 0.37·0.54 cm, 허리 4.0°·9.3°)' },
-  slick: { since: 'changed', cards: ['4m', '5m'], note: '파도의 흔들림을 허리가 돌림(최대 0.37·0.54 cm)' },
+  dashSide: { since: 'changed', stage: 'K', at: '2026-11-22', cards: ['5m', '5a'], note: '5명·5암의 대시 중 U자 위빙을 허리가 돌림(머리·글러브 최대 0.42·0.71 cm, 허리 6.2°·8.4°)' },
+  circle: { since: 'changed', stage: 'K', at: '2026-11-22', cards: ['5m', '5a'], note: '5명·5암의 걸음마다 위빙을 허리가 돌림(최대 0.64·0.42 cm, 허리 6.8°·6.0°)' },
+  side: { since: 'changed', stage: 'K', at: '2026-11-22', cards: ['5m', '5a'], note: '5명·5암의 걸음마다 위빙을 허리가 돌림(최대 0.48·0.20 cm)' },
+  dash: { since: 'changed', stage: 'K', at: '2026-11-22', cards: ['5a'], note: '5암의 어깨 페인트를 허리가 돌림(최대 0.63 cm, 허리 7.7°)' },
+  dashIn: { since: 'changed', stage: 'K', at: '2026-11-22', cards: ['5a'], note: '5암의 어깨 페인트를 허리가 돌림(최대 0.42 cm, 허리 7.5°)' },
+  inout: { since: 'changed', stage: 'K', at: '2026-11-22', cards: ['5a'], note: '5암의 어깨 페인트를 허리가 돌림(최대 0.48 cm, 허리 7.9°)' },
+  turn: { since: 'changed', stage: 'K', at: '2026-11-22', cards: ['5a'], note: '5암의 어깨 페인트를 허리가 돌림(최대 0.24 cm, 허리 6.0°)' },
+  bounce: { since: 'changed', stage: 'K', at: '2026-11-22', cards: ['5a'], note: '5암의 어깨 페인트를 허리가 돌림(최대 0.22 cm, 허리 6.0°)' },
+  onetwo: { since: 'changed', stage: 'K', at: '2026-11-22', cards: ['5a'], note: '5암의 어깨 페인트를 허리가 돌림(최대 0.11 cm)' },
+  wave: { since: 'changed', stage: 'K', at: '2026-11-22', cards: ['4m', '5m'], note: '파도의 흔들림과 어깨 페인트를 허리가 돌림(최대 0.37·0.54 cm, 허리 4.0°·9.3°)' },
+  slick: { since: 'changed', stage: 'K', at: '2026-11-22', cards: ['4m', '5m'], note: '파도의 흔들림을 허리가 돌림(최대 0.37·0.54 cm)' },
   // changed: his own glove kept out of his other arm (plan 6 stage M: the joints of both men compared frame by frame with the
   // scripts before it, the cards listed moved more than 1 mm; cm are the most a joint moved)
-  slip: { since: 'changed', cards: ['4m', '4a', '5m', '5a'], note: '슬립의 앞 글러브가 뒷팔을 지나지 않게 8 cm만 감(관절 최대 1.4 · 6.8 · 15.5 · 10.4 cm)' },
-  'slip-cross': { since: 'changed', cards: ['4m', '4a', '5m', '5a'], note: '슬립의 앞 글러브가 뒷팔을 지나지 않게 8 cm만 감(최대 1.3 · 6.3 · 12.4 · 9.2 cm)' },
-  counter: { since: 'changed', cards: ['4m', '4a', '5m', '5a'], note: '슬립의 앞 글러브가 뒷팔을 지나지 않게 8 cm만 감(최대 15.5 cm); 5명·5암의 카운터 103 → 104, 112 → 111 N·s' },
-  shrug: { since: 'changed', cards: ['4m', '4a', '5m', '5a'], note: '앞선 슬립의 앞 글러브가 뒷팔을 지나지 않게(최대 15.2 cm)' },
-  duck: { since: 'changed', cards: ['4m', '4a', '5a'], note: '자기 글러브가 다른 팔 안으로 들지 않게 풀이가 천천히 밀어냄(최대 2.7 cm)' },
-  roll: { since: 'changed', cards: ['4m', '4a', '5a'], note: '자기 글러브가 다른 팔 안으로 들지 않게 풀이가 천천히 밀어냄(최대 6.2 cm)' },
-  parry: { since: 'changed', cards: ['1', '2', '4a', '5a'], note: '자기 글러브가 다른 팔 안으로 들지 않게 풀이가 천천히 밀어냄(최대 7.7 cm)' },
-  block: { since: 'changed', cards: ['4m', '4a', '5a'], note: '자기 글러브가 다른 팔 안으로 들지 않게 풀이가 천천히 밀어냄(최대 3.1 cm)' },
-  guard: { since: 'changed', cards: ['2', '4m', '4a', '5a'], note: '자기 글러브가 다른 팔 안으로 들지 않게 풀이가 천천히 밀어냄(최대 1.9 cm)' },
-  stalk: { since: 'changed', cards: ['4m', '4a', '5a'], note: '자기 글러브가 다른 팔 안으로 들지 않게 풀이가 천천히 밀어냄(최대 3.4 cm)' },
-  collar: { since: 'changed', cards: ['4a', '5a'], note: '자기 글러브가 다른 팔 안으로 들지 않게 풀이가 천천히 밀어냄(최대 1.5 cm)' },
-  'block-elbow': { since: 'changed', cards: ['2', '4a', '5a'], note: '2단계 두 팔 블록의 아래팔이 서로를 지나지 않고 나란히 내려옴(10.1 cm; 전에는 글러브가 서로의 아래팔을 지남)' },
-  'block-liver': { since: 'changed', cards: ['2', '4a', '5a'], note: '2단계 두 팔 블록의 아래팔이 나란히 내려옴(11.9 cm)' },
-  crossArm: { since: 'changed', cards: ['3', '4m', '4a', '5m', '5a'], note: '크로스암으로 드나드는 길: 앞손이 뒷팔 위로 돌아 들어감(최대 4.2 cm). 가드를 잡은 동안 글러브가 팔에 6.0 → 0 cm' },
-  'crossArm-hook': { since: 'changed', cards: ['3', '4m', '4a', '5m', '5a'], note: '크로스암으로 드나드는 길(최대 4.2 cm)' },
-  'crossBody-jab': { since: 'changed', cards: ['3', '4m', '4a', '5m', '5a'], note: '크로스암으로 드나드는 길(최대 4.7 cm); N: 크로스 바디의 회전 일부를 허리가(0.4 cm)' },
-  'crossBody-cross': { since: 'changed', cards: ['3', '4m', '4a', '5m', '5a'], note: '크로스암으로 드나드는 길(최대 4.7 cm); N: 크로스 바디의 회전 일부를 허리가(막힘 15 → 14 등 1 N·s 안, 5명은 1 → 9 N·s로 막혀 그 뒤 자리가 달라짐)' },
-  'crossBody-liver': { since: 'changed', cards: ['3', '4m', '4a', '5m', '5a'], note: '크로스암으로 드나드는 길(최대 5.7 cm)' },
-  rollCounter: { since: 'changed', cards: ['4m', '4a', '5m', '5a'], note: '반격의 뒷손 훅에 허리(N): 4명·4암 68 → 85·84, 5명·5암 128·131 → 138·142 N·s; 크로스암으로 드나드는 길(M)' },
-  shift: { since: 'changed', cards: ['4m', '5m'], note: '숏 어퍼의 U자 길(N): 가드에 막히며 통과하는 것이 4명 22 → 62, 5명 32 → 50 N·s, 그 뒤의 자리가 달라짐(최대 15.1 · 14.6 cm)' },
+  slip: { since: 'changed', stage: 'M', at: '2026-11-23', cards: ['4m', '4a', '5m', '5a'], note: '슬립의 앞 글러브가 뒷팔을 지나지 않게 8 cm만 감(관절 최대 1.4 · 6.8 · 15.5 · 10.4 cm)' },
+  'slip-cross': { since: 'changed', stage: 'M', at: '2026-11-23', cards: ['4m', '4a', '5m', '5a'], note: '슬립의 앞 글러브가 뒷팔을 지나지 않게 8 cm만 감(최대 1.3 · 6.3 · 12.4 · 9.2 cm)' },
+  counter: { since: 'changed', stage: 'M', at: '2026-11-23', cards: ['4m', '4a', '5m', '5a'], note: '슬립의 앞 글러브가 뒷팔을 지나지 않게 8 cm만 감(최대 15.5 cm); 5명·5암의 카운터 103 → 104, 112 → 111 N·s' },
+  shrug: { since: 'changed', stage: 'M', at: '2026-11-23', cards: ['4m', '4a', '5m', '5a'], note: '앞선 슬립의 앞 글러브가 뒷팔을 지나지 않게(최대 15.2 cm)' },
+  duck: { since: 'changed', stage: 'M', at: '2026-11-23', cards: ['4m', '4a', '5a'], note: '자기 글러브가 다른 팔 안으로 들지 않게 풀이가 천천히 밀어냄(최대 2.7 cm)' },
+  roll: { since: 'changed', stage: 'M', at: '2026-11-23', cards: ['4m', '4a', '5a'], note: '자기 글러브가 다른 팔 안으로 들지 않게 풀이가 천천히 밀어냄(최대 6.2 cm)' },
+  parry: { since: 'changed', stage: 'M', at: '2026-11-23', cards: ['1', '2', '4a', '5a'], note: '자기 글러브가 다른 팔 안으로 들지 않게 풀이가 천천히 밀어냄(최대 7.7 cm)' },
+  block: { since: 'changed', stage: 'M', at: '2026-11-23', cards: ['4m', '4a', '5a'], note: '자기 글러브가 다른 팔 안으로 들지 않게 풀이가 천천히 밀어냄(최대 3.1 cm)' },
+  guard: { since: 'changed', stage: 'M', at: '2026-11-23', cards: ['2', '4m', '4a', '5a'], note: '자기 글러브가 다른 팔 안으로 들지 않게 풀이가 천천히 밀어냄(최대 1.9 cm)' },
+  stalk: { since: 'changed', stage: 'M', at: '2026-11-23', cards: ['4m', '4a', '5a'], note: '자기 글러브가 다른 팔 안으로 들지 않게 풀이가 천천히 밀어냄(최대 3.4 cm)' },
+  collar: { since: 'changed', stage: 'M', at: '2026-11-23', cards: ['4a', '5a'], note: '자기 글러브가 다른 팔 안으로 들지 않게 풀이가 천천히 밀어냄(최대 1.5 cm)' },
+  'block-elbow': { since: 'changed', stage: 'M', at: '2026-11-23', cards: ['2', '4a', '5a'], note: '2단계 두 팔 블록의 아래팔이 서로를 지나지 않고 나란히 내려옴(10.1 cm; 전에는 글러브가 서로의 아래팔을 지남)' },
+  'block-liver': { since: 'changed', stage: 'M', at: '2026-11-23', cards: ['2', '4a', '5a'], note: '2단계 두 팔 블록의 아래팔이 나란히 내려옴(11.9 cm)' },
+  crossArm: { since: 'changed', stage: 'M', at: '2026-11-23', cards: ['3', '4m', '4a', '5m', '5a'], note: '크로스암으로 드나드는 길: 앞손이 뒷팔 위로 돌아 들어감(최대 4.2 cm). 가드를 잡은 동안 글러브가 팔에 6.0 → 0 cm' },
+  'crossArm-hook': { since: 'changed', stage: 'M', at: '2026-11-23', cards: ['3', '4m', '4a', '5m', '5a'], note: '크로스암으로 드나드는 길(최대 4.2 cm)' },
+  // (rows two stages changed: a mark each, the later first; N's cards are those it moved more than the mark's millimetre)
+  'crossBody-jab': [
+    { since: 'changed', stage: 'N', at: '2026-11-24', cards: [], note: '크로스 바디의 회전 일부를 허리가(0.4 cm)' },
+    { since: 'changed', stage: 'M', at: '2026-11-23', cards: ['3', '4m', '4a', '5m', '5a'], note: '크로스암으로 드나드는 길(최대 4.7 cm)' }
+  ],
+  'crossBody-cross': [
+    { since: 'changed', stage: 'N', at: '2026-11-24', cards: ['3', '4m', '4a', '5m', '5a'], note: '크로스 바디의 회전 일부를 허리가(막힘 15 → 14 등 1 N·s 안, 5명은 1 → 9 N·s로 막혀 그 뒤 자리가 달라짐)' },
+    { since: 'changed', stage: 'M', at: '2026-11-23', cards: ['3', '4m', '4a', '5m', '5a'], note: '크로스암으로 드나드는 길(최대 4.7 cm)' }
+  ],
+  'crossBody-liver': { since: 'changed', stage: 'M', at: '2026-11-23', cards: ['3', '4m', '4a', '5m', '5a'], note: '크로스암으로 드나드는 길(최대 5.7 cm)' },
+  rollCounter: [
+    { since: 'changed', stage: 'N', at: '2026-11-24', cards: ['4m', '4a', '5m', '5a'], note: '반격의 뒷손 훅에 허리(N): 4명·4암 68 → 85·84, 5명·5암 128·131 → 138·142 N·s' },
+    { since: 'changed', stage: 'M', at: '2026-11-23', cards: ['4m', '4a', '5m', '5a'], note: '크로스암으로 드나드는 길(M)' }
+  ],
+  shift: { since: 'changed', stage: 'N', at: '2026-11-24', cards: ['4m', '5m'], note: '숏 어퍼의 U자 길(N): 가드에 막히며 통과하는 것이 4명 22 → 62, 5명 32 → 50 N·s, 그 뒤의 자리가 달라짐(최대 15.1 · 14.6 cm)' },
   // changed: the waist in four punches (plan 6 stage N: the memos on hookIn, hookR, upperIn and the flicker; cards moved more
   // than 1 mm, joints compared frame by frame with the scripts before it; N·s are the cards' blows before → after)
-  hookIn: { since: 'changed', cards: ['1', '2', '3', '4m', '4a', '5m', '5a'], note: '허리가 골반보다 먼저 감겼다 풀리며 침: 2단계 36 → 43, 3단계 47 → 60, 4명·4암 55·59 → 73·74, 5명·5암 57·65 → 78·86 N·s, 닿는 때는 그대로' },
-  hookR: { since: 'changed', cards: ['1', '2', '3', '4m', '4a', '5m', '5a'], note: '허리로 12° 감았다가 17° 돌려 침: 2단계 55 → 66, 3단계 89 → 96 N·s(가슴 799 → 1076 °/s). 4명·4암은 117·114 → 113·112(알려진 한계)' },
-  upperIn: { since: 'changed', cards: ['1', '2', '3', '4m', '4a', '5m', '5a'], note: '무릎을 더 굽혀 내려갔다가 U자로 올라옴: 2단계 55 → 60, 3단계 90 → 95, 4명·4암 97 → 102·101, 5명·5암 108·109 → 114 N·s' },
-  flicker: { since: 'changed', cards: ['4a', '5a'], note: '5암의 허리가 먼저 튀고 주먹이 채찍처럼 따라옴: 세 번 20 · 9 · 8 → 23 · 22 · 9 N·s(4암 23 · 16 → 24 · 17)' },
-  pullHook: { since: 'changed', cards: ['1', '2', '3', '4m', '4a', '5m', '5a'], note: '반격의 뒷손 훅에 허리(N): 2단계 60 → 73, 4명·4암 85·86 → 89·90 N·s; 3단계 77 → 76, 5명 123 → 121(알려진 한계)' },
-  'shift-shell': { since: 'changed', cards: ['4m', '5m'], note: '숏 어퍼의 U자 길(N): 가드에 막히며 통과 22 → 44, 13 → 30 N·s' },
-  jabBody: { since: 'changed', cards: ['4m', '5m', '5a'], note: '몸통 잽의 회전 일부를 허리가 돌림(N, 기획 §1.4: 관절 최대 1.2 cm, 세기는 1 N·s 안)' },
-  crossBody: { since: 'changed', cards: ['3', '4m', '4a', '5m', '5a'], note: '크로스 바디의 회전 일부를 허리가 돌림(N, §1.4): 4명·4암 59·70 → 60·71, 5명·5암 76·77 → 79 N·s' },
-  upperBody: { since: 'changed', cards: ['4m', '4a', '5m'], note: '바디 어퍼의 회전 일부를 허리가 돌림(N, §1.4): 5명 80 → 79, 5암 91 → 90 N·s(받아들인 대가)' },
+  hookIn: { since: 'changed', stage: 'N', at: '2026-11-24', cards: ['1', '2', '3', '4m', '4a', '5m', '5a'], note: '허리가 골반보다 먼저 감겼다 풀리며 침: 2단계 36 → 43, 3단계 47 → 60, 4명·4암 55·59 → 73·74, 5명·5암 57·65 → 78·86 N·s, 닿는 때는 그대로' },
+  hookR: { since: 'changed', stage: 'N', at: '2026-11-24', cards: ['1', '2', '3', '4m', '4a', '5m', '5a'], note: '허리로 12° 감았다가 17° 돌려 침: 2단계 55 → 66, 3단계 89 → 96 N·s(가슴 799 → 1076 °/s). 4명·4암은 117·114 → 113·112(알려진 한계)' },
+  upperIn: { since: 'changed', stage: 'N', at: '2026-11-24', cards: ['1', '2', '3', '4m', '4a', '5m', '5a'], note: '무릎을 더 굽혀 내려갔다가 U자로 올라옴: 2단계 55 → 60, 3단계 90 → 95, 4명·4암 97 → 102·101, 5명·5암 108·109 → 114 N·s' },
+  flicker: { since: 'changed', stage: 'N', at: '2026-11-24', cards: ['4a', '5a'], note: '5암의 허리가 먼저 튀고 주먹이 채찍처럼 따라옴: 세 번 20 · 9 · 8 → 23 · 22 · 9 N·s(4암 23 · 16 → 24 · 17)' },
+  pullHook: { since: 'changed', stage: 'N', at: '2026-11-24', cards: ['1', '2', '3', '4m', '4a', '5m', '5a'], note: '반격의 뒷손 훅에 허리(N): 2단계 60 → 73, 4명·4암 85·86 → 89·90 N·s; 3단계 77 → 76, 5명 123 → 121(알려진 한계)' },
+  'shift-shell': { since: 'changed', stage: 'N', at: '2026-11-24', cards: ['4m', '5m'], note: '숏 어퍼의 U자 길(N): 가드에 막히며 통과 22 → 44, 13 → 30 N·s' },
+  jabBody: { since: 'changed', stage: 'N', at: '2026-11-24', cards: ['4m', '5m', '5a'], note: '몸통 잽의 회전 일부를 허리가 돌림(N, 기획 §1.4: 관절 최대 1.2 cm, 세기는 1 N·s 안)' },
+  crossBody: { since: 'changed', stage: 'N', at: '2026-11-24', cards: ['3', '4m', '4a', '5m', '5a'], note: '크로스 바디의 회전 일부를 허리가 돌림(N, §1.4): 4명·4암 59·70 → 60·71, 5명·5암 76·77 → 79 N·s' },
+  upperBody: { since: 'changed', stage: 'N', at: '2026-11-24', cards: ['4m', '4a', '5m'], note: '바디 어퍼의 회전 일부를 허리가 돌림(N, §1.4): 5명 80 → 79, 5암 91 → 90 N·s(받아들인 대가)' },
   // changed: the blow's effect (stage J)
-  'hit-jab': { since: 'changed', note: FX_NOTE },
-  'hit-cross': { since: 'changed', note: FX_NOTE },
-  'hit-hook': { since: 'changed', note: FX_NOTE },
-  'hit-upper': { since: 'changed', note: FX_NOTE },
-  'stagger': { since: 'changed', note: FX_NOTE },
-  'down-back': { since: 'changed', note: DOWN_NOTE },
-  'down-knee': { since: 'changed', note: DOWN_NOTE },
-  'down-side': { since: 'changed', note: DOWN_NOTE },
-  'down-front': { since: 'changed', note: DOWN_NOTE },
-  'out-twist': { since: 'changed', note: DOWN_NOTE },
-  'out-log': { since: 'changed', note: DOWN_NOTE },
-  'out-limp': { since: 'changed', note: DOWN_NOTE },
-  'body-solar': { since: 'changed', note: FX_NOTE },
-  'body-liver': { since: 'changed', note: FX_NOTE },
-  'body-ribs': { since: 'changed', note: FX_NOTE },
-  'down-liver': { since: 'changed', note: DOWN_NOTE }
+  'hit-jab': { since: 'changed', stage: 'J', at: '2026-11-22', note: FX_NOTE },
+  'hit-cross': { since: 'changed', stage: 'J', at: '2026-11-22', note: FX_NOTE },
+  'hit-hook': { since: 'changed', stage: 'J', at: '2026-11-22', note: FX_NOTE },
+  'hit-upper': { since: 'changed', stage: 'J', at: '2026-11-22', note: FX_NOTE },
+  'stagger': { since: 'changed', stage: 'J', at: '2026-11-22', note: FX_NOTE },
+  'down-back': { since: 'changed', stage: '2.4B', at: '2026-11-23', note: DOWN_NOTE },
+  'down-knee': { since: 'changed', stage: '2.4B', at: '2026-11-23', note: DOWN_NOTE },
+  'down-side': { since: 'changed', stage: '2.4B', at: '2026-11-23', note: DOWN_NOTE },
+  'down-front': { since: 'changed', stage: '2.4B', at: '2026-11-23', note: DOWN_NOTE },
+  'out-twist': { since: 'changed', stage: '2.4B', at: '2026-11-23', note: DOWN_NOTE },
+  'out-log': { since: 'changed', stage: '2.4B', at: '2026-11-23', note: DOWN_NOTE },
+  'out-limp': { since: 'changed', stage: '2.4B', at: '2026-11-23', note: DOWN_NOTE },
+  'body-solar': { since: 'changed', stage: 'J', at: '2026-11-22', note: FX_NOTE },
+  'body-liver': { since: 'changed', stage: 'J', at: '2026-11-22', note: FX_NOTE },
+  'body-ribs': { since: 'changed', stage: 'J', at: '2026-11-22', note: FX_NOTE },
+  'down-liver': { since: 'changed', stage: '2.4B', at: '2026-11-23', note: DOWN_NOTE }
 };
 const SINCE_SAID = { new: '새', changed: '바뀜' };
-/* What has nothing new or changed is folded away (the user's rule: only what moved is open): a row or a card on its own shows
-   its name alone, with this button to open it; a link to it (the contents, the list of changes) opens it; and one button at the
-   top opens or folds them all. A folded card's stage has no size, so it is neither stepped nor drawn. */
+/* What has nothing new or changed, or only what the user has reviewed, is folded away (the user's rules: only what moved is
+   open, and of that only what is not reviewed yet): a row or a card on its own shows its name alone, with this button to open
+   it; a link to it (the contents, the list of changes) opens it; and one control at the top opens the rest, the reviewed
+   marks and then everything (data-seen: a row whose marks are all reviewed). A folded card's stage has no size, so it is
+   neither stepped nor drawn. */
 const FOLD = '<button type="button" class="fold" aria-expanded="false">펼치기</button>';
 function unfold(el, open) {
   if (!el || !(el.classList.contains('folded') || el.dataset.unfolded)) return;
@@ -407,12 +429,11 @@ function folding() {
     const link = ev.target.closest && ev.target.closest('a[href^="#row-"]');
     if (link) unfold(document.getElementById(link.getAttribute('href').slice(1)), true);
   });
-  const all = document.getElementById('fold-all');
-  if (all)
-    all.addEventListener('click', () => {
-      const open = all.getAttribute('aria-pressed') !== 'true';
-      all.setAttribute('aria-pressed', String(open));
-      for (const el of document.querySelectorAll('.item, .card')) unfold(el, open);
+  for (const button of document.querySelectorAll('[data-open]'))
+    button.addEventListener('click', () => {
+      const level = button.dataset.open;
+      for (const other of document.querySelectorAll('[data-open]')) other.setAttribute('aria-pressed', String(other === button));
+      for (const el of document.querySelectorAll('.item, .card')) unfold(el, level === 'all' || (level === 'seen' && el.dataset.seen === '1'));
     });
   if (location.hash.startsWith('#row-')) unfold(document.getElementById(location.hash.slice(1)), true);
 }
@@ -525,12 +546,49 @@ const PARTS = [
     ]
   }
 ];
+/* ---- the new samples (src/samples.data.mjs): above the parts, a row each, its cards the script it names as the row it is
+   in has it, each card dressed as it says (wear: what the men wear, as the game's ?wear= says it); a new row until it is
+   taken out of the list */
+const rowOf = id => PARTS.flatMap(P => P.groups.flatMap(([, items]) => items)).find(i => i.cards && i.cards.includes(id));
+const sampleRow = sm => {
+  const from = sm.script ? rowOf(sm.script) : null,
+    cards = from
+      ? (sm.wear || ['']).map((w, k) => {
+          const id = `sample-${sm.id}-${k}`;
+          byId[id] = Object.assign({}, byId[sm.script], { id, wear: w, say: WEAR_SAID[w] ?? w });
+          return id;
+        })
+      : [];
+  return { id: `sample-${sm.id}`, name: sm.name, en: sm.en || '', note: sm.note, stat: from ? from.stat : null, knee: from && from.knee, drop: from && from.drop, cards, sample: true, marks: [{ since: 'new', stage: '샘플', at: sm.at, note: sm.say }] };
+};
+PARTS.unshift({
+  id: 'samples',
+  part: '새 샘플',
+  note: SAMPLES.length ? '줄의 동작이 바뀐 것이 아니라 새로 보여 드리는 것입니다. 한 줄의 카드는 같은 대본을 한 시계로 돌리고, 다른 것은 카드에 적힌 것(입은 옷)뿐입니다.' : '아직 없습니다.',
+  groups: [...new Set(SAMPLES.map(sm => sm.group || '새 샘플'))].map(group => [group, SAMPLES.filter(sm => (sm.group || '새 샘플') === group).map(sampleRow)])
+});
+/* Each row's marks (SINCE, a bearing row's or a sample's own), those of a stage not reviewed first: the row is open if it has
+   one (its mark, its note and its cards' marks are theirs), folded with its reviewed marks under it if it has only those
+   (seen), and folded with nothing if it has none. */
+const reviewed = m => REVIEWED.includes(m.stage);
 for (const P of PARTS)
   for (const [, items] of P.groups)
     for (const item of items) {
-      const s = SINCE[item.id];
-      if (s) Object.assign(item, { since: s.since, sinceNote: s.note, sinceCards: s.cards || null });
+      const marks = [].concat(SINCE[item.id] || item.marks || []),
+        fresh = marks.filter(m => !reviewed(m)),
+        seen = marks.filter(reviewed),
+        lead = fresh.length ? fresh : seen;
+      Object.assign(item, {
+        marks: [...fresh, ...seen],
+        since: lead.length ? (lead.some(m => m.since === 'new') ? 'new' : 'changed') : null,
+        open: fresh.length > 0,
+        seen: !fresh.length && seen.length > 0,
+        sinceCards: lead.some(m => m.cards) ? [...new Set(lead.flatMap(m => m.cards || []))] : null
+      });
     }
+const day = at => (/^\d{4}-(\d\d)-(\d\d)$/.test(at || '') ? `${+at.slice(5, 7)}-${at.slice(8)}` : '');
+// a row's marks as its heading writes them: the stage and its day, then what changed; a reviewed one says so
+const marksSaid = item => item.marks.map(m => `<p class="since-note${reviewed(m) ? ' seen' : ''}"><b class="stage">${esc(m.stage)} · ${day(m.at)}${reviewed(m) ? ' · 검토함' : ''}</b> ${esc(m.note)}</p>`).join('');
 
 /* ---- the page, written from the parts (so the page and the bouts cannot disagree about what is in the catalogue): the
    contents first, a link to every part and every row (and to each row that is new or changed, with what changed), and each
@@ -538,15 +596,29 @@ for (const P of PARTS)
 const main = document.getElementById('catalog'),
   ROWS = [], // { item, ids }
   badge = s => (s ? `<span class="since ${s}">${SINCE_SAID[s]}</span>` : ''),
+  // (a row's mark: open, or, its marks all reviewed, one that shows only once the row is opened)
+  badgeOf = i => (i.open ? badge(i.since) : i.seen ? `<span class="since ${i.since} seen">${SINCE_SAID[i.since]}</span>` : ''),
   esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
 function contents() {
   const toc = document.getElementById('toc'),
-    marked = PARTS.flatMap(P => P.groups.flatMap(([, items]) => items.filter(i => i.since).map(i => Object.assign({ part: P.part }, i))));
+    all = PARTS.flatMap(P => P.groups.flatMap(([, items]) => items)),
+    open = all.filter(i => i.open),
+    seen = all.filter(i => i.seen),
+    // (what is open, stage by stage, as its first mark not reviewed says: "N 단계에서 바뀐 13줄"; and the new samples)
+    by = new Map();
+  for (const i of open.filter(i => !i.sample)) {
+    const m = i.marks[0],
+      k = `${m.stage} 단계에서 ${i.since === 'new' ? '새로 든' : '바뀐'}`;
+    by.set(k, (by.get(k) || 0) + 1);
+  }
+  const samples = open.filter(i => i.sample).length,
+    said = [...[...by].map(([k, n]) => `${k} ${n}줄`), ...(samples ? [`새 샘플 ${samples}줄`] : [])].join(' · ') || '새로 바뀐 줄 없음';
+  document.getElementById('shown').innerHTML = `<b>보이는 것</b> ${esc(said)}. 검토가 끝난 변경 ${seen.length}줄(${REVIEWED.join('·')}; ${esc(REVIEWED_SAID)})과 바뀌지 않은 줄은 접어 두었습니다.`;
   toc.innerHTML = `<h2 class="toc-title">차례</h2>
-    <p class="legend"><span>${badge('new')} 지난 게시본(v22, <code>14594d1</code>)에 없던 줄</span><span>${badge('changed')} 같은 대본을 그때와 지금 돌려 몸이 1 mm 넘게 움직인 줄(허리), 또는 맞는 그림이 달라진 줄(이펙트)</span></p>
-    <details class="changes" open><summary>이번에 새로 들어오고 바뀐 것: 새 줄 <b>${marked.filter(i => i.since === 'new').length}</b> · 바뀐 줄 <b>${marked.filter(i => i.since === 'changed').length}</b></summary>
-      <ul>${marked.sort((x, y) => (x.since === y.since ? 0 : x.since === 'changed' ? -1 : 1)).map(i => `<li>${badge(i.since)}<a href="#row-${i.id}">${i.name}</a><span>${esc(i.sinceNote)}</span></li>`).join('')}</ul></details>
-    <ol class="toc-parts">${PARTS.map(P => `<li><a class="toc-part" href="#part-${P.id}">${P.part}</a><ul class="toc-rows">${P.groups.flatMap(([, items]) => items).map(i => `<li><a href="#row-${i.id}">${i.name}${badge(i.since)}</a></li>`).join('')}</ul></li>`).join('')}</ol>`;
+    <p class="legend"><span>${badge('new')}${badge('changed')} 아직 검토하지 않은 단계가 들이거나 바꾼 줄(단계 · 게시한 날, 바뀐 카드에 표시)</span><span><span class="since changed seen">검토함</span> 검토가 끝난 단계(${REVIEWED.join('·')})의 표시: 그 줄은 접혀 있고, 위의 "검토한 변경까지"로 펼칩니다</span></p>
+    <details class="changes" open><summary>이번에 볼 것: ${esc(said)}</summary>
+      <ul>${open.map(i => `<li>${badge(i.since)}<a href="#row-${i.id}">${i.name}</a><span>${esc(i.marks.filter(m => !reviewed(m)).map(m => m.note).join(' / '))}</span></li>`).join('')}</ul></details>
+    <ol class="toc-parts">${PARTS.map(P => `<li><a class="toc-part" href="#part-${P.id}">${P.part}</a><ul class="toc-rows">${P.groups.flatMap(([, items]) => items).map(i => `<li><a href="#row-${i.id}">${i.name}${i.open ? badge(i.since) : ''}</a></li>`).join('')}</ul></li>`).join('')}</ol>`;
 }
 contents();
 for (const P of PARTS) {
@@ -574,10 +646,11 @@ for (const P of PARTS) {
     }
     for (const item of rows) {
       const block = document.createElement('div');
-      block.className = 'item' + (item.since ? ' since-' + item.since : ' folded'); // (a row with nothing new or changed is folded away: its name alone, until it is asked for)
+      block.className = 'item' + (item.open ? ' since-' + item.since : ' folded'); // (a row with nothing new or changed, or only what is reviewed, is folded away: its name alone, until it is asked for)
       block.dataset.item = item.id;
+      if (item.seen) block.dataset.seen = '1';
       block.id = `row-${item.id}`;
-      block.innerHTML = `<div class="item-head"><h3>${item.name}${badge(item.since)} <span class="en">${item.en}</span>${item.since ? '' : FOLD}</h3>${item.since ? `<p class="since-note">${esc(item.sinceNote)}</p>` : ''}<p>${item.note}</p></div><div class="row7" role="list"></div>`;
+      block.innerHTML = `<div class="item-head"><h3>${item.name}${badgeOf(item)} <span class="en">${item.en}</span>${item.open ? '' : FOLD}</h3>${marksSaid(item)}<p>${item.note}</p></div><div class="row7" role="list"></div>`;
       if (item.plan) block.lastElementChild.append(planCard(item));
       for (const id of item.cards) block.lastElementChild.append(gradeCard(byId[id], item));
       section.append(block);
@@ -752,25 +825,36 @@ function gradeCard(e, item) {
   const changed = item.sinceCards && item.sinceCards.includes(e.level);
   if (changed) card.classList.add('changed');
   card.innerHTML = `<div class="stage" role="img" aria-label="${item.name} ${level.label} 애니메이션"><span class="replay" hidden>리플레이</span>${changed ? '<span class="mark">바뀜</span>' : ''}</div>
-    <div class="info"><h3>${level.label} <span class="en">${level.name}</span></h3>${stats}${beat && FOOTWORK_STATS.includes(item.stat) ? `<div class="feet">${beat}<span>강박</span></div>` : ''}</div>`;
+    <div class="info"><h3>${e.say !== undefined ? `${esc(e.say)} <span class="en">${level.label} · ${level.name}</span>` : `${level.label} <span class="en">${level.name}</span>`}</h3>${stats}${beat && FOOTWORK_STATS.includes(item.stat) ? `<div class="feet">${beat}<span>강박</span></div>` : ''}</div>`;
   return card;
 }
 // a card on its own (being hit, going down), its anchor and its mark with it
 function singleCard(e, item = {}) {
   const card = document.createElement('article');
-  card.className = 'card' + (item.since ? ' since-' + item.since : ' folded');
+  card.className = 'card' + (item.open ? ' since-' + item.since : ' folded');
   card.dataset.entry = e.id;
+  if (item.seen) card.dataset.seen = '1';
   card.id = `row-${e.id}`;
   card.innerHTML = `<div class="stage" role="img" aria-label="${e.name} 애니메이션"><span class="replay" hidden>리플레이</span></div>
-    <div class="info"><h3>${e.name}${badge(item.since)} <span class="en">${e.en}</span>${item.since ? '' : FOLD}</h3>${item.since ? `<p class="since-note">${esc(item.sinceNote)}</p>` : ''}<p>${e.note}</p>
+    <div class="info"><h3>${e.name}${badgeOf(item)} <span class="en">${e.en}</span>${item.open ? '' : FOLD}</h3>${item.marks ? marksSaid(item) : ''}<p>${e.note}</p>
       ${e.status ? `<div class="feet result"><span class="tag">${e.status}</span></div>` : `<div class="feet result"><span class="tag" data-tag>–</span><span class="pace"><b data-blow>–</b> N·s</span></div>`}${e.out ? `<div class="feet stats"><span>머리가 닿기까지 <b data-a>–</b> s</span></div>` : ''}${e.liver ? `<div class="feet stats"><span>무릎이 닿기까지 <b data-a>–</b> s</span></div>` : ''}</div>`;
   return card;
 }
 
+/* What each man of a card wears: a card's wear as the game's ?wear= says it ('training': both men; 'training,none': each corner
+   his own, the first man's first; '' or none: as they are; src/main.mjs). */
+const wearsOf = w => {
+  const each = (w || '').split(',').map(x => (x.trim() === 'none' ? '' : x.trim()));
+  return [each[0], each.length > 1 ? each[1] : each[0]];
+};
 async function load() {
   const manifest = await (await fetch('assets/manifest.json')).json();
-  const boxer = unpack(fromBase64(await (await fetch('assets/' + manifest.boxer.file)).text()), manifest.boxer);
-  return { manifest, boxer };
+  const splats = async part => unpack(fromBase64(await (await fetch('assets/' + part.file)).text()), part);
+  // (the boxer as he is, and only the outfits a card wears: rig/boxer.mjs WEAR, assets/manifest.json wear)
+  const worn = [...new Set(Object.values(byId).flatMap(e => (e.wear ? wearsOf(e.wear) : [])).filter(Boolean))];
+  for (const w of worn) if (!manifest.wear || !Object.hasOwn(manifest.wear, w)) throw new Error(`no outfit called ${w}`);
+  const [boxer, ...suits] = await Promise.all([splats(manifest.boxer), ...worn.map(w => splats(manifest.wear[w]))]);
+  return { manifest, boxer, suits: Object.fromEntries(worn.map((w, i) => [w, suits[i]])) };
 }
 
 const wrap = a => Math.atan2(Math.sin(a), Math.cos(a));
@@ -780,7 +864,7 @@ const flash = el => {
   el.classList.add('on');
 };
 
-function start({ manifest, boxer }) {
+function start({ manifest, boxer, suits = {} }) {
   const canvas = document.getElementById('view'),
     R = createRenderer(canvas),
     bind = fk(guardPose()),
@@ -788,6 +872,9 @@ function start({ manifest, boxer }) {
     meshes = { boxer: R.mesh(boxer, manifest.boxer.count), floor: R.mesh(tiles.rows, tiles.count) },
     palettes = [paletteArray(manifest.palette), paletteArray(manifest.palette.map((hex, i) => RIVAL[i] ?? hex))],
     mats = new Float32Array(NAMES.length * 12);
+  // (a man in an outfit: its mesh, and his colours with the suit's in place of the trunks', rig/boxer.mjs dress)
+  for (const w in suits) meshes['boxer-' + w] = R.mesh(suits[w], manifest.wear[w].count);
+  const dressed = (w, i) => (w ? { mesh: meshes['boxer-' + w], palette: paletteArray(dress(manifest.palette, i, w)) } : { mesh: meshes.boxer, palette: palettes[i] });
   let speed = 1,
     prints = true,
     last = 0,
@@ -827,6 +914,7 @@ function start({ manifest, boxer }) {
       shown: null, // what is being drawn, while a replay plays
 
       cam: { target: [0.45, entry.view.y ?? (entry.level ? 0.95 : entry.punch !== undefined ? 0.85 : 0.52), 0], yaw: entry.view.yaw, pitch: entry.view.pitch, dist: 5.4 },
+      worn: wearsOf(entry.wear).map(dressed), // (each man's mesh and colours: as he is, or what the card dresses him in)
       shake: 0,
       t: 0
     };
@@ -1343,8 +1431,8 @@ function start({ manifest, boxer }) {
       { mesh: meshes.floor, palette: palettes[0], mask: 0.5, ground: ring },
       // (the shadows and the prints on the canvas ride the ring through it, never lit by it)
       { mesh: cell.mesh, palette: palettes[0], mask: 0.6, ground: ring && [...ring.slice(0, 6), 0] },
-      { mesh: meshes.boxer, bones: cell.bones[0], palette: palettes[0], mask: 1, wave: waves[0], silhouette: 1 },
-      { mesh: meshes.boxer, bones: cell.bones[1], palette: palettes[1], mask: 1, wave: waves[1], silhouette: 2 },
+      { mesh: cell.worn[0].mesh, bones: cell.bones[0], palette: cell.worn[0].palette, mask: 1, wave: waves[0], silhouette: 1 },
+      { mesh: cell.worn[1].mesh, bones: cell.bones[1], palette: cell.worn[1].palette, mask: 1, wave: waves[1], silhouette: 2 },
       // (what a blow threw off each man is never seen over him: it shows first at his outline)
       ...(cell.shown && cell.again ? cell.again : cell).motes.map((m, i) => ({ mesh: m.mesh, palette: palettes[0], mask: 0.6, outside: i + 1 }))
     );

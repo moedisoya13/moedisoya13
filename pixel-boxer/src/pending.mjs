@@ -19,7 +19,9 @@
    flash at a parry drawn over its picture, as main.mjs draws it over the screen.
    The decisions: a document an item in the artifact's store (collection `decisions`, the item's id: { choice, note, at }),
    read once as the page opens and written one at a time, only when changed; where there is no store, this browser's
-   localStorage (`pending:<id>`) in the same shape. */
+   localStorage (`pending:<id>`) in the same shape. The page is written once they are read: an item answered (a document
+   with one of its choices, or with none, decided in the data: src/pending.data.mjs answered) is left out of its part and of
+   the counts, and folded at the part's end behind one line, where its choice can still be changed. */
 import { createRenderer, paletteArray, rgb } from './render/renderer.mjs';
 import { createFx } from './render/fx.mjs';
 import { blow, met, rippleOf, rippleRow } from './render/blow.mjs';
@@ -37,7 +39,7 @@ import { MOVES } from './anim/moves.mjs';
 import { CROSS, LEVEL } from './anim/skill.mjs';
 import { TECHNIQUES } from './game/techniques.mjs';
 import { withTune, patchesOf, guardAt, rearTilt } from './tune.mjs';
-import { PARTS, ITEMS, VERSIONS, MIST, FX_SCENES, STASH_NOTE } from './pending.data.mjs';
+import { PARTS, ITEMS, VERSIONS, MIST, FX_SCENES, STASH_NOTE, sortOut, ANSWERED_LINE } from './pending.data.mjs';
 import { NUMBERS } from './pending.numbers.mjs';
 import { ROOTS } from './clips.data.mjs';
 import { CLIPS_MADE, LOAD } from './clips/index.mjs';
@@ -251,6 +253,8 @@ function article(item, no) {
     el.insertAdjacentHTML('beforeend', `<a class="banner" href="${esc(item.banner.image)}" target="_blank" rel="noopener"><img src="${esc(item.banner.image)}" alt="${esc(item.banner.say)}" loading="lazy"></a><p class="banner-note">${fmt(item.banner.say)}</p>`);
   }
   if (item.groups) el.append(clocks(item.groups));
+  // (one of two items that share a row of cards, written without the other: its card alone, the blank beside it)
+  else if (item.card) el.append(clocks([{ rows: [[item.card, { fill: true }]], apart: true }]));
   el.append(decide(item));
   return el;
 }
@@ -268,26 +272,66 @@ function pairing(a, b, no) {
   return el;
 }
 
-function contents() {
+/* The page is written once the saved decisions are in (or it is clear they will not come soon): each part's items still
+   open, and at its end, behind one line, those answered, folded away with what was chosen, so that a choice can still be
+   changed there (src/pending.data.mjs answered, sortOut). It is laid out by the decisions as they stood when it opened: an
+   item chosen during a visit stays where it is until the next, so a slip can be put right where it was made. */
+let SHOWN = []; // (the items written open)
+const day = iso => {
+  const m = /^\d{4}-(\d\d)-(\d\d)/.exec(iso || '');
+  return m ? `${+m[1]}월 ${+m[2]}일` : '';
+};
+const decidedSaid = d => `${d.how === 'chat' ? '대화로 정함' : '권장대로 만듦'} · ${day(d.at)}`;
+const optionSaid = (item, id) => ((item.options.find(o => o.id === id) || {}).name || '').replace(/`/g, '');
+function contents(parts) {
+  const folded = parts.reduce((n, p) => n + p.answered.length, 0);
   // (the contents are folded away until asked for: the count stays in sight on the fold's own line)
-  document.getElementById('toc').innerHTML = `<details class="toc-fold"><summary><span class="toc-title">차례</span><span class="toc-count" id="count">${ITEMS.length}개 가운데 <b>0</b>개를 정했습니다</span></summary>
-    <ol class="toc-parts">${PARTS.map(P => `<li><a class="toc-part" href="#part-${P.n}">${P.mark ? '' : P.n + '. '}${fmt(P.title)}</a><ul class="toc-rows">${ITEMS.filter(i => i.part === P.n).map(i => `<li><a href="#item-${i.id}" data-toc="${i.id}"><span class="dot" aria-hidden="true"></span><span>${fmt(i.title)}</span><span class="pick"></span></a></li>`).join('')}</ul></li>`).join('')}</ol></details>`;
+  document.getElementById('toc').innerHTML = `<details class="toc-fold"><summary><span class="toc-title">차례</span><span class="toc-count" id="count">${SHOWN.length}개 가운데 <b>0</b>개를 정했습니다</span>${folded ? `<span class="toc-folded">답한 ${folded}개는 부마다 끝에 접어 둠</span>` : ''}</summary>
+    <ol class="toc-parts">${parts.map(({ P, open }) => `<li><a class="toc-part" href="#part-${P.n}">${P.mark ? '' : P.n + '. '}${fmt(P.title)}</a><ul class="toc-rows">${open.map(i => `<li><a href="#item-${i.id}" data-toc="${i.id}"><span class="dot" aria-hidden="true"></span><span>${fmt(i.title)}</span><span class="pick"></span></a></li>`).join('')}</ul></li>`).join('')}</ol></details>`;
 }
-contents();
-for (const P of PARTS) {
-  main.insertAdjacentHTML('beforeend', `<h2 class="part" id="part-${P.n}"><span class="no">${P.mark || P.n}</span>${fmt(P.title)}</h2><p class="part-note">${fmt(P.note)}</p>`);
-  const items = ITEMS.filter(i => i.part === P.n);
+// a part's open items, numbered in the order they are written, two that share a row of cards side by side
+function lay(items) {
   for (let k = 0; k < items.length; k++) {
-    if (items[k].pair) {
-      main.append(pairing(items[k], items[k + 1], k + 1));
-      k++;
-    } else main.append(article(items[k], k + 1));
+    const a = items[k],
+      b = items[k + 1];
+    if (a.pair && b && b.id === a.pair) main.append(pairing(a, b, k + 1)), k++;
+    else main.append(article(a, k + 1));
   }
-  if (P.n === 4) main.insertAdjacentHTML('beforeend', `<p class="part-note" style="margin:0">${fmt(STASH_NOTE)}</p>`);
 }
-shownAsLD(document.body);
-// (opened at an item's address: the page is written by now, so go there; the browser's own jump came before it was)
-if (location.hash && document.getElementById(location.hash.slice(1))) document.getElementById(location.hash.slice(1)).scrollIntoView();
+// the answered items of a part, behind one line: each folded to its title and what was chosen, the whole item inside
+function answeredFold(items, docs) {
+  const box = document.createElement('details');
+  box.className = 'answered';
+  box.innerHTML = `<summary>${ANSWERED_LINE(items.length)}</summary><div class="answered-list"></div>`;
+  for (const item of items) {
+    const one = document.createElement('details'),
+      doc = docs[item.id],
+      said = doc ? `${optionSaid(item, doc.choice)} · 저장됨 · ${when(doc.at)}` : `${optionSaid(item, item.decided.choice)} · ${decidedSaid(item.decided)}`;
+    one.className = 'ans';
+    one.innerHTML = `<summary><span class="t">${fmt(item.title)}</span><span class="pick">${esc(said)}</span></summary>`;
+    one.append(article(item, '답함'));
+    box.lastElementChild.append(one);
+  }
+  return box;
+}
+function write(docs) {
+  const parts = PARTS.map(P => Object.assign({ P }, sortOut(P.n, docs)));
+  SHOWN = parts.flatMap(p => p.open);
+  contents(parts);
+  for (const { P, open, answered: done } of parts) {
+    main.insertAdjacentHTML('beforeend', `<h2 class="part" id="part-${P.n}"><span class="no">${P.mark || P.n}</span>${fmt(P.title)}</h2><p class="part-note">${fmt(P.note)}</p>`);
+    lay(open);
+    if (done.length) main.append(answeredFold(done, docs));
+    if (P.n === 4) main.insertAdjacentHTML('beforeend', `<p class="part-note" style="margin:0">${fmt(STASH_NOTE)}</p>`);
+  }
+  shownAsLD(document.body);
+  // (opened at an item's address: the page is written by now, so go there, opening the folds it is in)
+  const at = location.hash && document.getElementById(location.hash.slice(1));
+  if (at) {
+    for (let d = at.closest('details'); d; d = d.parentElement.closest('details')) d.open = true;
+    at.scrollIntoView();
+  }
+}
 
 /* ---- the decisions and where they are kept */
 const KEY = id => `pending:${id}`;
@@ -317,12 +361,9 @@ const store = {
   }
 };
 let readOnly = false;
-const state = Object.fromEntries(
-  ITEMS.map(item => {
-    const box = document.querySelector(`fieldset[data-item="${item.id}"]`);
-    return [item.id, { item, box, saved: null, choice: null, note: '', busy: false, again: false, failed: false, touched: false, timer: 0 }];
-  })
-);
+/* each item's choice as it stands (made once the page is written: wire): what is saved, what was decided away from the page
+   where nothing is saved (preset: the item's decided), what is shown, and how its saving goes */
+let state = {};
 const known = (item, choice) => item.options.some(o => o.id === choice);
 const when = iso => {
   const d = new Date(iso);
@@ -346,13 +387,17 @@ function status(id) {
     line.querySelector('[data-retry]').addEventListener('click', () => save(id, true));
   } else if (s.saved && known(s.item, s.saved.choice)) (line.textContent = `${where} · ${when(s.saved.at)}`), line.classList.add('ok');
   else if (s.saved && s.saved.note) (line.textContent = `고르지 않음 · 메모 ${store.mode === 'local' ? '이 브라우저에만 ' : ''}저장됨 · ${when(s.saved.at)}`), line.classList.add('ok');
+  else if (!s.saved && s.preset && s.choice === s.preset.choice && !s.note) (line.textContent = `정해짐 · ${decidedSaid(s.preset)}`), line.classList.add('ok');
   else line.textContent = store.mode === 'local' ? '아직 정하지 않음 · 이 브라우저에만 저장됨' : '아직 정하지 않음';
   const link = document.querySelector(`[data-toc="${id}"]`),
     chosen = s.saved && known(s.item, s.saved.choice);
-  link.classList.toggle('chosen', !!chosen);
-  link.querySelector('.pick').textContent = chosen ? asLD(s.item.options.find(o => o.id === s.saved.choice).name.replace(/`/g, '')) : '';
-  link.setAttribute('aria-label', `${asLD(s.item.title.replace(/`/g, ''))}: ${chosen ? '정함' : '정하지 않음'}`);
-  document.querySelector('#count b').textContent = String(ITEMS.filter(i => state[i.id].saved && known(i, state[i.id].saved.choice)).length);
+  // (an answered item, folded away, has no line in the contents)
+  if (link) {
+    link.classList.toggle('chosen', !!chosen);
+    link.querySelector('.pick').textContent = chosen ? asLD(s.item.options.find(o => o.id === s.saved.choice).name.replace(/`/g, '')) : '';
+    link.setAttribute('aria-label', `${asLD(s.item.title.replace(/`/g, ''))}: ${chosen ? '정함' : '정하지 않음'}`);
+  }
+  document.querySelector('#count b').textContent = String(SHOWN.filter(i => state[i.id].saved && known(i, state[i.id].saved.choice)).length);
 }
 // what is shown: the choice and the note as they stand
 function show(id) {
@@ -368,8 +413,9 @@ function save(id, force) {
   const s = state[id];
   if (readOnly) return;
   if (s.busy) return void (s.again = true);
-  const same = s.saved && s.saved.choice === s.choice && (s.saved.note || '') === s.note;
-  if ((same || (!s.saved && s.choice === null && !s.note)) && !force && !s.failed) return status(id);
+  const base = s.saved || (s.preset && { choice: s.preset.choice, note: '' }),
+    same = base && base.choice === s.choice && (base.note || '') === s.note;
+  if ((same || (!base && s.choice === null && !s.note)) && !force && !s.failed) return status(id);
   const doc = { choice: s.choice, note: s.note, at: new Date().toISOString() };
   s.busy = true;
   s.failed = false;
@@ -396,7 +442,18 @@ function lock(text) {
   storeSays(text, 'warn');
   for (const s of Object.values(state)) (s.box.disabled = true), s.box.setAttribute('data-readonly', '');
 }
-for (const s of Object.values(state)) {
+function wire(docs) {
+  state = Object.fromEntries(
+    ITEMS.map(item => {
+      const box = document.querySelector(`fieldset[data-item="${item.id}"]`),
+        preset = item.decided && !(docs && docs[item.id]) ? item.decided : null;
+      return [item.id, { item, box, saved: null, preset, choice: preset ? preset.choice : null, note: '', busy: false, again: false, failed: false, touched: false, timer: 0 }];
+    })
+  );
+  for (const s of Object.values(state)) listen(s);
+  if (readOnly) for (const s of Object.values(state)) (s.box.disabled = true), s.box.setAttribute('data-readonly', '');
+}
+function listen(s) {
   const id = s.item.id,
     note = s.box.querySelector('textarea');
   s.box.addEventListener('change', e => {
@@ -423,7 +480,7 @@ for (const s of Object.values(state)) {
     s.note = note.value.slice(0, 2000);
     save(id);
   });
-  status(id);
+  show(id);
 }
 // the saved decisions, put in: a choice the item no longer has shows as none, its note kept; an id that is no item is left be
 function fill(docs) {
@@ -431,6 +488,7 @@ function fill(docs) {
     const s = state[id];
     if (!s || !doc || typeof doc !== 'object' || s.touched) continue;
     s.saved = { choice: typeof doc.choice === 'string' ? doc.choice : null, note: typeof doc.note === 'string' ? doc.note : '', at: doc.at };
+    s.preset = null; // (what is saved is what counts)
     s.choice = known(s.item, s.saved.choice) ? s.saved.choice : null;
     s.note = s.saved.note;
     show(id);
@@ -449,6 +507,9 @@ async function connect() {
   } catch (error) {
     console.warn('pending: the store', error);
   }
+  let docs = {},
+    said = null,
+    later = null;
   if (db) {
     store.db = db;
     store.mode = 'db';
@@ -456,28 +517,24 @@ async function connect() {
     if (user) user.can('data.write').then(can => can === false && lock('읽기 전용: 결정을 볼 수만 있습니다'), () => {});
     const read = store.all();
     const got = await within(read, 10000).catch(error => ({ error }));
-    if (got === 'late') {
-      storeSays('저장된 결정을 아직 불러오지 못했습니다. 들어오는 대로 채웁니다', 'warn');
-      open();
-      read.then(docs => (fill(docs), storeSays('결정은 이 페이지에 저장되고, 함께 보는 사람과 같습니다', 'ok')), () => storeSays('저장된 결정을 불러오지 못했습니다', 'warn'));
-    } else if (got && got.error) {
-      console.warn('pending: reading the decisions', got.error);
-      storeSays('저장된 결정을 불러오지 못했습니다. 고르면 다시 저장을 시도합니다', 'warn');
-      open();
-    } else {
-      fill(got);
-      if (!readOnly) storeSays('결정은 이 페이지에 저장되고, 함께 보는 사람과 같습니다', 'ok');
-      open();
-    }
+    if (got === 'late') (said = ['저장된 결정을 아직 불러오지 못했습니다. 들어오는 대로 채웁니다', 'warn']), (later = read);
+    else if (got && got.error) console.warn('pending: reading the decisions', got.error), (said = ['저장된 결정을 불러오지 못했습니다. 고르면 다시 저장을 시도합니다', 'warn']);
+    else (docs = got || {}), (said = readOnly ? null : ['결정은 이 페이지에 저장되고, 함께 보는 사람과 같습니다', 'ok']);
   } else {
     store.mode = 'local';
-    fill(await store.all());
-    storeSays('이 브라우저에만 저장됨', 'warn');
-    open();
+    docs = await store.all();
+    said = ['이 브라우저에만 저장됨', 'warn'];
   }
+  // (the page, laid out by the decisions as they are now; and the decisions put in)
+  write(docs);
+  wire(docs);
+  fill(docs);
+  if (said && !(readOnly && said[1] === 'ok')) storeSays(...said);
+  open();
+  if (later) later.then(d => (fill(d), readOnly || storeSays('결정은 이 페이지에 저장되고, 함께 보는 사람과 같습니다', 'ok')), () => storeSays('저장된 결정을 불러오지 못했습니다', 'warn'));
   for (const id of Object.keys(state)) status(id);
 }
-connect();
+const written = connect();
 
 /* ---- the bouts */
 function floor(half, centre) {
@@ -1015,7 +1072,8 @@ function start({ manifest, boxer }) {
   requestAnimationFrame(frame);
 }
 
-load().then(start).catch(error => {
+// (the bouts once the page that holds their cards is written)
+Promise.all([load(), written]).then(([assets]) => start(assets)).catch(error => {
   console.error(error);
   document.getElementById('loading').textContent = '불러오지 못했습니다: ' + error.message;
 });
