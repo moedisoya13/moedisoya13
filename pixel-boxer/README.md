@@ -44,7 +44,8 @@ node tools/combos.mjs     # 콤비네이션: 카드마다 박·사이·충격량
 주먹이 맞으면 화면 위에 그 충격량(N·s)이 잠깐 뜹니다. 거리를 바꿔 가며 던져 보면 숫자가 달라집니다.
 
 타이틀에서 **스파링**을 고르면 상대가 가만히 서 있습니다. 모션만 볼 때 씁니다.
-주소 옵션: `?spar=1`, `?speed=0.25`(슬로모션), `?rows=160`(아트 격자 세로 픽셀, 기본 216), `?fps=1` 또는 `#fps`, `?seed=3`, `?auto=1`.
+주소 옵션: `?spar=1`, `?speed=0.25`(슬로모션), `?rows=160`(아트 격자 세로 픽셀, 기본 216), `?fps=1` 또는 `#fps`, `?seed=3`, `?auto=1`,
+`?wear=training`(두 선수 모두 회색 트레이닝복: 후드티와 트레이닝 바지, 후드는 내림; `training-up`은 후드를 씀; `?wear=training,none`처럼 쉼표로 코너마다 따로, 홍코너 먼저. 없으면 지금 그대로이고 옷 파일은 받지 않음).
 
 ## 주먹의 물리: 순차적 관절 회전
 
@@ -799,7 +800,8 @@ node tools/combos.mjs     # 콤비네이션: 카드마다 박·사이·충격량
 ```sh
 npx ink-studio sheet scenes/boxer.js --from 2.4 --to 2.9 --n 10 --zoom 2.2    # 스트레이트를 관절 순서대로
 npx ink-studio render scenes/ring.js --w 960 --h 540                          # 링과 구도
-npm run bake                                                                   # assets/ (복서 8,657 + 링 23,997 splat)
+npm run bake                                                                   # assets/ (복서 8,657 + 링 23,997 splat, 옷 두 벌)
+node tools/bake.mjs --wear                                                     # 옷만: assets/boxer-training(-up).splats.txt와 manifest.wear (복서·링은 그대로)
 ```
 
 `scenes/boxer.js`는 실제 시합을 돌리며 1.2초마다 동작 하나씩 보여 줍니다: 가드, 잽, 스트레이트, 훅, 어퍼, 전진, 후진, 좌우 이동, 대시, 가드 올리기, 피격 3종, KO.
@@ -807,7 +809,7 @@ npm run bake                                                                   #
 두 선수가 함께 나와야 하는 동작(피하기, 막기, 맞기)은 `review.html`로 봅니다. 카탈로그 대본 하나를 처음부터 돌려 고른 시각들의 프레임을
 게임 렌더러로 격자에 그리고, 칸마다 그 순간 시합에서 일어난 일을 적습니다.
 `?entry=` 대본 id, `from`·`to`·`n`·`cols` 시각과 칸, `yaw`·`pitch`·`dist`·`y` 카메라, `fx=1` 타격 이펙트(반대쪽 면의 달아오른 입자, 파문, 막음·패리의 불꽃, 다운의 착지 파문과 바닥의 고리 파문: 본편과 같은 `src/render/blow.mjs`; 바닥 타일도 그림; 기본은 꺼서 자세만 보이게), `replay=1` 그 대본의 첫 리플레이를 카탈로그처럼(이펙트 포함; `from`·`to`는 리플레이의 실제 초, 1/60초마다 한 그림이라 `from=1&to=1.1&n=7`이면 이어진 일곱 그림),
-`focus=0` 한 사람에게, `turn=1` 카메라 각을 그 사람이 향한 쪽에서 재기(돌아가는 사람을 늘 같은 쪽에서: `yaw=0` 옆, `yaw=1.57` 정면), `solo=1` 다른 사람은 그리지 않기, `aspect` 칸의 세로/가로.
+`wear=training` 옷(본편의 `?wear=`와 같음), `focus=0` 한 사람에게, `turn=1` 카메라 각을 그 사람이 향한 쪽에서 재기(돌아가는 사람을 늘 같은 쪽에서: `yaw=0` 옆, `yaw=1.57` 정면), `solo=1` 다른 사람은 그리지 않기, `aspect` 칸의 세로/가로.
 
 ## 알려진 한계
 

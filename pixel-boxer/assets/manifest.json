@@ -75,5 +75,35 @@
     ],
     "half": 2.55,
     "apron": 3.2
+  },
+  "wear": {
+    "training": {
+      "file": "boxer-training.splats.txt",
+      "count": 9967,
+      "min": [
+        -0.34228,
+        -0.00077,
+        -0.30043
+      ],
+      "size": [
+        0.65224,
+        1.72743,
+        0.79698
+      ]
+    },
+    "training-up": {
+      "file": "boxer-training-up.splats.txt",
+      "count": 11134,
+      "min": [
+        -0.34228,
+        -0.00077,
+        -0.30043
+      ],
+      "size": [
+        0.65224,
+        1.74824,
+        0.79698
+      ]
+    }
   }
 }

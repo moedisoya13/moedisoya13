@@ -10,7 +10,7 @@ import { captureBout, blend } from './replay.mjs';
 import { unpack, fromBase64 } from './render/splats.mjs';
 import * as M from './rig/m3.mjs';
 import { fk, NAMES } from './rig/skeleton.mjs';
-import { RIVAL } from './rig/boxer.mjs';
+import { dress } from './rig/boxer.mjs';
 import { boneMatrices } from './anim/pose.mjs';
 import { guardPose } from './anim/animator.mjs';
 import { MOVES } from './anim/moves.mjs';
@@ -22,6 +22,12 @@ import { createAudio } from './game/audio.mjs';
 const DT = 1 / 60;
 const query = new URLSearchParams(location.search);
 const SPEED = Number(query.get('speed')) || 1; // ?speed=0.25 for slow motion
+/* what each corner wears (rig/boxer.mjs WEAR): ?wear=training (both men; training-up: the hood up), ?wear=training,none (each
+   corner his own, the player's first); none, or no parameter, as they are. Only what is worn is fetched. */
+const WEARS = (() => {
+  const w = (query.get('wear') || '').split(',').map(x => (x.trim() === 'none' ? '' : x.trim()));
+  return [w[0], w.length > 1 ? w[1] : w[0]];
+})();
 const $ = id => document.getElementById(id);
 const canvas = $('view');
 const HALL = [0x171a2c, 0x11131f, 0x0c0d16, 0x090a11];
@@ -37,11 +43,15 @@ const wrap = a => Math.atan2(Math.sin(a), Math.cos(a));
 async function load() {
   const manifest = await (await fetch('assets/manifest.json')).json();
   const splats = async part => unpack(fromBase64(await (await fetch('assets/' + part.file)).text()), part);
-  const [boxer, ring] = await Promise.all([splats(manifest.boxer), splats(manifest.ring)]);
-  return { manifest, boxer, ring };
+  // (the boxer as he is, or in an outfit: '' is as he is)
+  const worn = [...new Set(WEARS)],
+    partOf = w => (!w ? manifest.boxer : manifest.wear && Object.hasOwn(manifest.wear, w) ? manifest.wear[w] : null);
+  for (const w of worn) if (!partOf(w)) throw new Error(`no outfit called ${w}`);
+  const [ring, ...boxers] = await Promise.all([splats(manifest.ring), ...worn.map(w => splats(partOf(w)))]);
+  return { manifest, ring, boxers: Object.fromEntries(worn.map((w, i) => [w, { rows: boxers[i], count: partOf(w).count }])) };
 }
 
-function start({ manifest, boxer, ring }) {
+function start({ manifest, ring, boxers }) {
   const R = createRenderer(canvas),
     audio = createAudio(),
     input = createInput($('controls')),
@@ -50,8 +60,12 @@ function start({ manifest, boxer, ring }) {
      a blow throws off each of them, apart from the rest, to be kept off his own silhouette (render/blow.mjs) */
   const fx = [createFx(), createFx(), createFx()],
     motes = [createFx(), createFx()];
-  const meshes = { ring: R.mesh(ring, manifest.ring.count), boxer: R.mesh(boxer, manifest.boxer.count), fx: fx.map(f => R.mesh(f.rows, 0, true)), motes: motes.map(f => R.mesh(f.rows, 0, true)) };
-  const palettes = [paletteArray(manifest.palette), paletteArray(manifest.palette.map((hex, i) => RIVAL[i] ?? hex))];
+  const meshes = { ring: R.mesh(ring, manifest.ring.count), fx: fx.map(f => R.mesh(f.rows, 0, true)), motes: motes.map(f => R.mesh(f.rows, 0, true)) };
+  for (const w in boxers) meshes[w ? 'boxer-' + w : 'boxer'] = R.mesh(boxers[w].rows, boxers[w].count);
+  const palettes = [0, 1].map(i => paletteArray(dress(manifest.palette, i)));
+  // (each man as he is dressed: his mesh, and his colours with the suit's in place of the trunks'; a glove's streak is in his own colours either way)
+  const men = WEARS.map(w => meshes[w ? 'boxer-' + w : 'boxer']),
+    worn = WEARS.map((w, i) => (w ? paletteArray(dress(manifest.palette, i, w)) : palettes[i]));
   const hall = new Float32Array(HALL.flatMap(rgb)),
     ink = new Float32Array(rgb(manifest.palette[0]));
   const bones = [new Float32Array(R.maxBones * 12), new Float32Array(R.maxBones * 12)],
@@ -240,7 +254,7 @@ function start({ manifest, boxer, ring }) {
         for (let k = 0; k < NAMES.length; k++) (mats[k * 12 + 9] += shudder * Math.cos(f.yaw)), (mats[k * 12 + 11] -= shudder * Math.sin(f.yaw));
       }
       R.packBones(mats, bones[i]);
-      layers.push({ mesh: meshes.boxer, bones: bones[i], palette: palettes[i], mask: 1, wave: rippleRow(ripples[i], m), silhouette: i + 1 });
+      layers.push({ mesh: men[i], bones: bones[i], palette: worn[i], mask: 1, wave: rippleRow(ripples[i], m), silhouette: i + 1 });
       shadows.push({ x: m.x + m.pose.at.Hips[2] * Math.sin(m.yaw), z: m.z + m.pose.at.Hips[2] * Math.cos(m.yaw), yaw: m.yaw, long: f.down ? 0.5 : 0.3, wide: f.down ? 0.32 : 0.24 });
     });
     meshes.fx[0].update(fx[0].rows, fx[0].update(fade, shadows, 22));

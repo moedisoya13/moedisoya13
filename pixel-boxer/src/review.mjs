@@ -12,7 +12,8 @@
    one man (of=1, the other man, by default; game/bearing.mjs, docs/bearing-system-plan.md §8.2): the edges of the eight cells
    as he faces in that picture, his front marked, the rings of the distance bands, the path the other man's centre has taken
    since the first picture, and in the corner of each picture the cell the other man is in (with the margin the cells change
-   by), the band and the bearing in degrees. It is read from above: unless told otherwise the camera looks almost straight down,
+   by), the band and the bearing in degrees; wear=training (or training-up, the hood up): both men in the training suit, as
+   the game has it (rig/boxer.mjs WEAR; wear=training,none or none,training-up: each corner his own, the first man's first). It is read from above: unless told otherwise the camera looks almost straight down,
    at 1.45 (the plan's 0.95 leaves the men standing over the rings), from behind the man in the middle as he faced in the first picture
    (turn=1: as he faces in each), on his feet and far enough back for the path)
    The bout is run once from the start of the script and the chosen moments are kept; nothing moves on the page after that.
@@ -25,7 +26,7 @@ import { floor } from './render/floor.mjs';
 import { createReplay } from './replay.mjs';
 import { unpack, fromBase64 } from './render/splats.mjs';
 import { fk, NAMES } from './rig/skeleton.mjs';
-import { RIVAL } from './rig/boxer.mjs';
+import { dress } from './rig/boxer.mjs';
 import { boneMatrices } from './anim/pose.mjs';
 import { guardPose } from './anim/animator.mjs';
 import { step } from './game/bout.mjs';
@@ -50,7 +51,9 @@ const DT = 1 / 60,
   effects = q.get('fx') === '1' || replay,
   // (the bearings round one man: the other man's by default)
   bearing = q.get('bearing') === '1' && !replay,
-  of = num('of', 1);
+  of = num('of', 1),
+  // (what each man wears: '' as he is)
+  wears = (w => [w[0], w.length > 1 ? w[1] : w[0]])((q.get('wear') || '').split(',').map(x => (x.trim() === 'none' ? '' : x.trim())));
 
 // (the effects' dice: the same sheet every time it is drawn)
 const dice = seed => () => {
@@ -173,12 +176,18 @@ function runReplay(bind) {
 
 async function start() {
   const manifest = await (await fetch('assets/manifest.json')).json(),
-    boxer = unpack(fromBase64(await (await fetch('assets/' + manifest.boxer.file)).text()), manifest.boxer),
+    partOf = w => (!w ? manifest.boxer : manifest.wear && Object.hasOwn(manifest.wear, w) ? manifest.wear[w] : null),
     canvas = document.getElementById('view'),
     R = createRenderer(canvas),
     bind = fk(guardPose()),
-    mesh = R.mesh(boxer, manifest.boxer.count),
-    palettes = [paletteArray(manifest.palette), paletteArray(manifest.palette.map((hex, i) => RIVAL[i] ?? hex))],
+    meshOf = {};
+  for (const w of new Set(wears)) {
+    if (!partOf(w)) throw new Error(`no outfit called ${w}`);
+    meshOf[w] = R.mesh(unpack(fromBase64(await (await fetch('assets/' + partOf(w).file)).text()), partOf(w)), partOf(w).count);
+  }
+  const meshes = wears.map(w => meshOf[w]),
+    palettes = [0, 1].map(i => paletteArray(dress(manifest.palette, i))),
+    worn = [0, 1].map(i => paletteArray(dress(manifest.palette, i, wears[i]))),
     frames = replay ? runReplay(bind) : run(bind),
     // (a ring through the canvas needs a canvas to go through: the catalogue's tiles, under any sheet with the effects)
     tiles = effects ? floor(3.2, [0.6, 0]) : null,
@@ -188,7 +197,7 @@ async function start() {
     w = Math.floor((innerWidth - gap * (cols + 1)) / cols),
     h = Math.round(w * num('aspect', 0.8)),
     dpr = Math.min(devicePixelRatio || 1, 3);
-  document.getElementById('title').textContent = `${entry.name} · ${entry.id} · ${replay ? `리플레이(${frames.kind}) ` : ''}${from}–${to}s`;
+  document.getElementById('title').textContent = `${entry.name} · ${entry.id} · ${replay ? `리플레이(${frames.kind}) ` : ''}${from}–${to}s${wears.some(Boolean) ? ' · ' + wears.map(w => w || 'none').join(', ') : ''}`;
   sheet.style.gridTemplateColumns = `repeat(${cols}, ${w}px)`;
   const cells = frames.map(f => {
     const el = document.createElement('figure');
@@ -223,7 +232,7 @@ async function start() {
     f.men.forEach((m, i) => {
       if (q.get('solo') === '1' && q.has('focus') && i !== num('focus', 0)) return;
       R.packBones(m.bones, bones[i]);
-      layers.push({ mesh, bones: bones[i].slice(), palette: palettes[i], mask: 1, wave: m.wave, silhouette: i + 1 });
+      layers.push({ mesh: meshes[i], bones: bones[i].slice(), palette: worn[i], mask: 1, wave: m.wave, silhouette: i + 1 });
     });
     // (what a blow threw off each man is never seen over him: render/blow.mjs)
     if (sparks) layers.push({ mesh: sparks, palette: palettes[0], mask: 0.6 }, ...motes.map((m, i) => ({ mesh: m, palette: palettes[0], mask: 0.6, outside: i + 1 })));
