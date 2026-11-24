@@ -7,15 +7,15 @@
              against, also, press, loop), window: [from, to] seconds of the run, measure (tools/clips.mjs MEASURES), of
              (what the measure is told: move, the punch whose waist is timed) }
    Record them all again, when the stages change:
-     node tools/clips.mjs --write --root prem=<before M> --root n1=<N> --root u1=<U> --root u2=<U fixed> --root v1=<V> --root vchin=<V, chin 32>
+     node tools/clips.mjs --write --root prem=<before M> --root n1=<N, last round> --root u1=<U, first round> --root u2=<U, last round> --root v1=<V, last round> --root vchin=<V, chin 32>
    (`now` is this checkout.) */
 export const ROOTS = {
   now: { say: '지금 (게시된 동작)', where: 'this checkout' },
   prem: { say: 'M 전 (합치기 전의 동작)', where: 'before stage M was merged: git archive 8b17869 src tools' },
-  n1: { say: 'N 1차 구현 (합치기 전, 고치는 중)', where: 'stage N, first round: scratchpad/wt-n/pixel-boxer (4c726b9 + its changes)' },
-  u1: { say: 'U 1차 구현 (합치기 전, 고치는 중)', where: 'stage U, first round: scratchpad/wt-u/pixel-boxer (4c726b9 + its changes)' },
-  u2: { say: 'U 고침 (점검 중)', where: "stage U's fix round: scratchpad/r-u/pixel-boxer (7fa3003, M, + its changes)" },
-  v1: { say: 'V 1차 구현 (합치기 전, 고치는 중)', where: 'stage V, first round: scratchpad/wt-v/pixel-boxer (4c726b9 + its changes)' },
+  n1: { say: 'N 4차 (합치기 전, 5차를 고치는 중)', where: 'stage N, round 4 on the head: scratchpad/pcwork/n4.tmp/pixel-boxer (0ac7c0c + the staged change of scratchpad/n3)' },
+  u1: { say: 'U 1차 (첫 구현)', where: 'stage U, first round: scratchpad/wt-u/pixel-boxer (4c726b9 + its changes)' },
+  u2: { say: 'U 4차 (합치기 전, 5차를 고치는 중)', where: 'stage U, round 4 on the head: scratchpad/pcwork/u4.tmp/pixel-boxer (0ac7c0c + the staged change of scratchpad/u3)' },
+  v1: { say: 'V 4b차 (합치기 전, 5차를 고치는 중)', where: 'stage V, round 4b on the head: scratchpad/pcwork/v4b.tmp/pixel-boxer (0ac7c0c + the staged change of scratchpad/v3)' },
   vchin: { say: 'V 1차 + 기획의 턱 32° (점검 쪽의 시험판)', where: "the checker's variant: scratchpad/st-v/check/x-chin32 (V's first round, TWIST.down 22 -> 32)" }
 };
 
@@ -38,16 +38,16 @@ export const CLIPS = [
   ...pair('twistc', ['now', 'vchin'], { script: 'out-twist', window: [1.1, 1.45], measure: 'fall' }),
   ...pair('twist', ['now', 'vchin'], { script: 'out-twist', window: [1.0, 2.4], measure: 'fall' }),
   // shrug-view: 4암's shrug as stage U made it (played from two cameras)
-  { id: 'shrug-u1', root: 'u1', script: 'shrug@4a', window: [1.15, 2.2], measure: 'spread' },
+  { id: 'shrug-u2', root: 'u2', script: 'shrug@4a', window: [1.15, 2.2], measure: 'spread' },
   // jump-watch: three frames of the engine as it is that stage M's watched check counts (each played at full speed and slow)
   { id: 'jump-guard', root: 'now', script: 'guard@5a', window: [2.05, 2.4], measure: 'jump' },
   { id: 'jump-onetwo', root: 'now', script: 'onetwo@5a', window: [0.9, 1.3], measure: 'jump', of: { who: 1 } },
   { id: 'jump-cross', root: 'now', script: 'crossArm@5m', window: [1.05, 1.45], measure: 'jump' },
   // crossarm-weak: the rear hook at a legend's cross-arm guard, rolled as it is pressed
   ...pair('weak', ['now', 'n1'], { script: WEAK, window: [0.6, 1.3], measure: 'taken' }),
-  // order-memo-first: what three of the first rounds look like so far (V's legs in the fall forward, U's collar tie, N's hook
+  // order-memo-first: what three of the stages look like so far (V's legs in the fall forward, U's collar tie, N's hook
   // in close)
   ...pair('front', ['now', 'v1'], { script: 'down-front', window: [0.6, 2.8], measure: 'legs', of: { at: 2.6 } }),
-  ...pair('collar', ['now', 'u1'], { script: 'collar@4a', window: [0.2, 1.1], measure: 'pull' }),
+  ...pair('collar', ['now', 'u2'], { script: 'collar@4a', window: [0.2, 1.1], measure: 'pull' }),
   ...pair('hookin', ['now', 'n1'], { script: 'hookIn@3', window: [0.7, 1.4], measure: 'turning', of: { move: 'hookIn' } })
 ];

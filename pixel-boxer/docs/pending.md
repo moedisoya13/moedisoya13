@@ -343,6 +343,11 @@ A+B 실신·위빙, C1 몸통 판정, C2 바디 주먹·뒷손 훅, E 파도, F 
 
 "기획 쪽 모델은 high, 구현·점검 쪽 모델은 xhigh로 통일." → 메시지로 이어 시켜 노력도가 high로 돌던 N·U·V 5차 구현 에이전트 셋을 멈추고(남아 돌던 U의 점검 스크립트 `st-u2/probe/qc8.sh`와 그 node도 멈춤), 구현 쪽 모델·xhigh를 지정한 새 에이전트 셋이 같은 작업 폴더에서 이어받음. 넘긴 것: `scratchpad/wfout2/standard.md`(합치는 기준 B와 규칙), `brief-{N,U,V}-round5.md`(5차 브리프), 멈춘 때의 반쯤 한 변경 `{n3,u3,v3}-round5-partial.diff`(작업 폴더에 스테이지 안 된 채로도 남음). 새 에이전트의 작업 폴더 `scratchpad/st-n6`, `st-u5`, `st-v5`. 규칙은 `docs/handoff.md` §2에.
 
+## 사용자 지시: 타격 이펙트 확정, 미결 카탈로그를 지금 기준으로 (2026-11-24)
+
+- **타격 이펙트 확정.** 열려 있던 타격 이펙트의 결정 `fx-twice`를 지금 그대로(0.1초 간격, 두 발 모두 채택한 수: 기준 타격에 덩이 11·불티 18씩)로 닫음: 미결 카탈로그 저장소 `decisions/fx-twice` = keep. 이펙트 시안 v8과 모션 카탈로그가 그리는 것이 확정본. `fx-ground-ring-game`(확정된 바닥 고리가 게임 화면에서 약한 것)은 권장안 "밝힌 입자를 앞에 그림"으로 작은 수정을 진행(따로의 작업 폴더 `scratchpad/fxring`, 렌더러만). 방어 이펙트(`fx-defence-*`, `fx-parry-white`, `fx-brilliant-game`)는 별개의 논의로 열린 채.
+- **미결 카탈로그 v18.** 비교 클립을 각 단계의 마지막으로 끝난 라운드로 다시 녹화(N 4차·U 4차·V 4b차; 작업 폴더의 스테이지된 변경을 0ac7c0c 위에 얹은 얼린 사본 `scratchpad/pcwork/{n4,u4,v4b}.tmp`): 출처 이름표를 고침(`n1` → "N 4차", `u2` → "U 4차", `v1` → "V 4b차", `u1`은 "U 1차(첫 구현)"로 남김), 으쓱·뒷목 잡기 클립은 U 4차로(`shrug-u2`, `collar-u2`). 잰 값: 뒷손 훅 89.3 → 96.1 N·s(가슴 799 → 1076 °/s), 롤 카운터 67.6 → 84.5, 크로스암 늦은 굴림 막음 59.7 → 몸에 42.0, 숏 훅 46.6 → 59.9, 손짓 1.0 m 10.1 cm·1.2 m 19.6 cm, 으쓱 87.3 cm, 뒷목 잡기 102.2 N·s·머리 18.4 cm, 다운 · 앞으로 누워서 넓적다리 72°·발목 92 cm. 항목의 현재 상태를 고침: `order-memo-first`, `hookr-bound`(정해짐: 묶음 안 1.04배), `beckon-room`(정해짐: 자리만큼), `shrug-view`, `pull-test`(지금 수), `inside-rule`·`waist-bound`(지금 구현 표시), `jump-watch`(단계별 수), `merge-bar`(정해짐 B), `fx-twice`(정해짐), `fx-ground-ring-game`, `impl-final-integration`(H2는 게시됨).
+
 ## 사용자 지적: 모션 카탈로그의 메모가 거의 반영되지 않았다 (2026-11-23)
 
 사실이다. 메모 27건(26줄; `feedback`을 다시 읽음, 11-22 뒤로 새 메모 없음) 가운데 **카탈로그의 동작에 보이는 것은 0건.** 끝난 것은 J(이펙트)와 K(허리 엔진: `hookIn` 메모의 "허리를 분리해 돌 수 있는 변수로"만 엔진에 생겼고 어느 주먹도 아직 쓰지 않음)뿐이고, 그 뒤의 시간은 이펙트(데미지 비례, 다운 효과, 용암·불티), K의 착지 수리, 소스 기획 둘에 썼다. 메모의 단계: M(`crossArm`의 audit) → N(`hookIn`, `hookR`, `upperIn`, `flicker`) → P(`crossArm`의 모양) → Q(`duck`, `pull`, `parry`, `parryDown`, `rollCounter`) → R(`inout`, `side`, `circle`, `dash`, `dashSide`) → S(`shift`, `wave`) → U(`collar`, `beckon`, `chinOut`, `wind`, `shrug`, `tapChin`) → V(`stagger`, `down-front`, `out-twist`).
