@@ -113,6 +113,17 @@ export const FX = {
      a knockout's (how long, times the lift) */
   ground: { speed: 4, last: 0.6, width: 0.35, lift: 0.03, least: 0.01, glow: 0.3, out: { last: 0.75, lift: 1.3 } }
 };
+/* the ring's kind ('light': the confirmed ring; 'shake': the prototype of shaken pixels), and the second kind's numbers: how
+   many art pixels its crest moves the canvas at the measure (FX.ref: in proportion to the damage below it, a knockout's
+   FX.ground.out.lift times, never more than that), the fewest any ring moves it (the head's too), its front's speed (m/s),
+   the width of its train of waves (metres: wider than the light ring's 0.35, so that a crest of 3 pixels can be had at the
+   game's camera without tearing the canvas), its dark line (1, or 0: none), how long it goes (FX.ground's, and a
+   knockout's FX.ground.out.last), the parts
+   of him whose coming down starts each ring, the head's ring (how long it goes and how far it moves the canvas, times the
+   trunk's: it goes as fast, so it reaches that share as far), and how long after he first comes down a part of him coming
+   down still starts one (s) */
+FX.ground.kind = 'light';
+FX.ground.shake = { push: 3, least: 1, speed: 4, width: 0.6, line: 1, parts: [['trunk', ['hips', 'chest']], ['head', ['head']]], head: { last: 0.6, push: 0.6 }, within: 0.6 };
 // health a newton-second takes off a man with an ordinary chin (game/bout.mjs RULES.damage): for a hit that carries no damage
 const PER_NS = 0.035;
 
@@ -307,7 +318,85 @@ export function landRipple(fall, man, landing) {
   return { joint: landing.joint, off: M.sub(landing.at, pointOf(man, landing.joint)), age: 0, strength: q, width: Math.max(set.thin, set.width * q), last: set.land.last, sway: set.sway * set.down.sway };
 }
 
+/* ---- The ring through the canvas has a second kind, a prototype beside the confirmed one (the user's question of
+   2026-11-24: the pending catalogue's fx-ground-shake), picked by FX.ground.kind ('light', the confirmed ring, by default;
+   'shake'): no light and no lift, the picture of the canvas shaken by whole art pixels as the ring goes out, the way water
+   shakes a reflection, with a dark line one art pixel wide at its front (render/renderer.mjs: shaken, crest; on the game's
+   ring canvas, 0.8 m squares, the shaking alone shows only at their edges), and two rings, one from where his trunk (his hips or his chest: his
+   back, his shoulders, his front) first comes down and a smaller, shorter one from where his head does, each once, the
+   second however soon after the first (within FX.ground.shake.within of his first coming down). His shins start none.
+     groundOf(fall, landing)          in this kind: the rings' own clock, from where he first comes down: { kind: 'shake',
+                           fall, age: 0, last, rings: [{ part ('trunk' or 'head'), at (world, on the canvas), start (the
+                           clock's age it began at), last, push (art pixels) }] }, a ring in it at once if what came down
+                           is his trunk or his head
+     ringsOn(ground, fall, man)       after each step of the bout, once landed has been asked: his trunk and his head each
+                           start their ring the first step they are within FX.land.near of the canvas -> the rings it
+                           started (none for the other kind, or another man's fall)
+     groundRow(ground)     in this kind: [x, y, z, front, width, 0, 0, push, x, z, front, push, line], the trunk's ring then
+                           the head's (push 0 where one has not begun or is over), line 1 for the dark line at their crests
+                           (FX.ground.shake.line), or null once the clock has run out */
+// (the lowest of these parts of him, if it is within FX.land.near of the canvas: as landingOf, among them alone)
+const RADII = Object.fromEntries(FX.land.parts);
+function downOf(man, joints) {
+  let low = null;
+  for (const joint of joints) {
+    const p = pointOf(man, joint),
+      clear = p[1] - RADII[joint];
+    if (!low || clear < low.clear) low = { joint, clear, at: [p[0], clear, p[2]] };
+  }
+  return low && low.clear < FX.land.near ? low : null;
+}
+// (a ring of the part that came down, starting now on the clock: as far as the blow was hard, a knockout's farther; the head's smaller)
+function ringOf(ground, part, landing) {
+  const S = FX.ground.shake,
+    fall = ground.fall,
+    out = fall.out ? FX.ground.out : null,
+    head = part === 'head',
+    ring = {
+      part,
+      at: [landing.at[0], 0, landing.at[2]],
+      start: ground.age,
+      last: (out ? out.last : FX.ground.last) * (head ? S.head.last : 1),
+      push: Math.max(S.least, Math.min(S.push, S.push * fall.q * (out ? out.lift : 1)) * (head ? S.head.push : 1))
+    };
+  ground.rings.push(ring);
+  ground.last = Math.max(ground.last, ring.start + ring.last);
+  return ring;
+}
+function shakeOf(fall, landing) {
+  const ground = { kind: 'shake', fall, age: 0, last: FX.ground.shake.within, rings: [] },
+    part = FX.ground.shake.parts.find(([, joints]) => joints.includes(landing.joint));
+  if (part) ringOf(ground, part[0], landing);
+  return ground;
+}
+export function ringsOn(ground, fall, man) {
+  const S = FX.ground.shake;
+  if (!ground || ground.kind !== 'shake' || ground.fall !== fall || ground.age >= S.within) return [];
+  const started = [];
+  for (const [part, joints] of S.parts) {
+    if (ground.rings.some(r => r.part === part)) continue;
+    const l = downOf(man, joints);
+    if (l) started.push(ringOf(ground, part, l));
+  }
+  return started;
+}
+function shakeRow(ground) {
+  if (ground.age >= ground.last) return null;
+  const S = FX.ground.shake,
+    row = [0, 0, 0, 0, S.width, 0, 0, 0, 0, 0, 0, 0, S.line ? 1 : 0];
+  for (const r of ground.rings) {
+    const age = ground.age - r.start;
+    if (age < 0 || age >= r.last) continue;
+    const front = S.speed * age,
+      push = r.push * (1 - age / r.last) ** 1.2;
+    if (r.part === 'trunk') (row[0] = r.at[0]), (row[2] = r.at[2]), (row[3] = front), (row[7] = push);
+    else (row[8] = r.at[0]), (row[9] = r.at[2]), (row[10] = front), (row[11] = push);
+  }
+  return row;
+}
+
 export function groundOf(fall, landing) {
+  if (FX.ground.kind === 'shake') return shakeOf(fall, landing);
   const set = FX.ground,
     out = fall.out ? set.out : null;
   // (as high as the blow was hard, a knockout's higher: up to the most it lifts them, which a pro's straight does)
@@ -315,6 +404,7 @@ export function groundOf(fall, landing) {
 }
 
 export function groundRow(ground, set) {
+  if (ground && ground.kind === 'shake') return shakeRow(ground);
   set = set || FX.ground;
   if (!ground || ground.age >= ground.last) return null;
   const fade = (1 - ground.age / ground.last) ** 1.2,

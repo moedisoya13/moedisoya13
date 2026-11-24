@@ -84,10 +84,10 @@ test('a card stepped between the steps of a variant fights as it does alone (liv
 });
 
 test('the data: every override names a field that is there, every card a catalogue script, every id fit to save under', () => {
-  assert.equal(ITEMS.length, 82);
+  assert.equal(ITEMS.length, 83);
   // (in the page's order: what the work of 2026-11-23 left open first, then the four parts)
   assert.deepEqual(PARTS.map(P => P.n), [5, 1, 2, 3, 4]);
-  assert.deepEqual(PARTS.map(P => ITEMS.filter(i => i.part === P.n).length), [54, 2, 7, 13, 6]);
+  assert.deepEqual(PARTS.map(P => ITEMS.filter(i => i.part === P.n).length), [55, 2, 7, 13, 6]);
   const ids = new Set();
   for (const item of ITEMS) {
     assert.match(item.id, /^[a-z0-9]+(-[a-z0-9]+)*$/, item.id);
@@ -106,6 +106,7 @@ test('the data: every override names a field that is there, every card a catalog
   }
   for (const card of allCards) {
     if (card.image) assert.ok(existsSync(path.join(root, card.image)), card.image);
+    if (card.video) assert.ok(card.image && existsSync(path.join(root, card.video)), card.video);
     if (card.image || card.fill) continue;
     // (a recorded card: a clip of the manifest, which has been recorded)
     if (card.clip) {

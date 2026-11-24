@@ -7,7 +7,7 @@
    the bout is not stepped meanwhile, any key, tap or button skips it, and it cuts back; the result comes after it. */
 import { createRenderer, paletteArray, rgb } from './render/renderer.mjs';
 import { createFx } from './render/fx.mjs';
-import { blow, met, rippleOf, rippleRow, fallOf, landed, landRipple, groundOf, groundRow, quietOf } from './render/blow.mjs';
+import { blow, met, rippleOf, rippleRow, fallOf, landed, landRipple, groundOf, groundRow, quietOf, ringsOn, FX } from './render/blow.mjs';
 import { captureBout, blend, createReplay, distOf, backOf, FALL } from './replay.mjs';
 import { unpack, fromBase64 } from './render/splats.mjs';
 import * as M from './rig/m3.mjs';
@@ -245,6 +245,7 @@ function start({ manifest, ring, boxers }) {
         falls.forEach((fall, i) => {
           const at = landed(fall, bout.fighters[i]);
           if (at) (ripples[i] = landRipple(fall, bout.fighters[i], at)), (ground = groundOf(fall, at));
+          ringsOn(ground, fall, bout.fighters[i]); // (the ring of shaken pixels: his trunk's and his head's, each as it comes down)
         });
         if (bout.stop <= 0 || bout.events.length) pose();
         // (the step kept for a replay; a knockdown's starts once all of what it threw has gone out, and the bout stops here)
@@ -368,6 +369,8 @@ function start({ manifest, ring, boxers }) {
   requestAnimationFrame(frame);
 }
 
+// (?ring=shake: the ring through the canvas as shaken pixels, the prototype beside the confirmed ring: render/blow.mjs)
+if (query.get('ring') === 'shake') FX.ground.kind = 'shake';
 load().then(start).catch(error => {
   console.error(error);
   $('loading').textContent = '불러오지 못했습니다: ' + error.message;

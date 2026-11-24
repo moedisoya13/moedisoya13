@@ -6,6 +6,7 @@
 const FOV = (38 * Math.PI) / 180; // ink-studio's own, so a splat is the size on screen it was sculpted to be
 const MAX_BONES = 24;
 const MAX_PALETTE = 48;
+const NO_RINGS = new Float32Array(8);
 
 const SPLAT_VS = `#version 300 es
 precision highp float;
@@ -25,12 +26,38 @@ uniform float u_mask;
 uniform vec3 u_waveK;  // its width (metres), its strength (0 is no ripple; by the damage, render/blow.mjs), and how far it sways what it passes (metres)
 uniform vec4 u_ground; // a ring through the canvas: where it began (world x, z), how far out its front is, and its width (metres)
 uniform vec2 u_groundK; // how high it lifts what it passes (metres; 0 is no ring), and the lift past which a tile is drawn a step lighter (0: never)
+uniform vec4 u_rings[2]; // the other kind of ring (render/blow.mjs FX.ground.kind 'shake'), two at once, his trunk's and his head's: where each began (world x, z), how far out its front is, and its width (metres)
+uniform vec3 u_ringsK;   // how many art pixels each moves what it passes, at its crest (0: none), and 1 for a dark line at their crests
 out vec2 v_d;
 out vec3 v_conic;
 flat out float v_pal;
 flat out float v_al;
 flat out float v_light;
+flat out vec3 v_floor; // (the rings' dark line: where on the canvas this splat lies, world x and z, and 1 if the line may darken it)
+flat out vec4 v_jac;   // (and the canvas round it: the metres along it, x and z, that an art pixel across and one up the picture go)
+/* The other kind of ring through the canvas (u_rings): no light and no lift, only the picture of the canvas shaken as the
+   ring's front passes, the way water shakes a reflection. A splat lying on the canvas is moved in the picture's own plane
+   along the line from where the ring began out through it: outward at the crest, back at the trough behind it and out
+   again at the smaller crest trailing (the light ring's train of waves, measured flat along the canvas). It is so many art
+   pixels however far the camera is, but never so many that the canvas is stretched between a trough and a crest by more
+   than 0.7 of its own length (the game's canvas is a splat every 10 cm, each 17 cm across: so no gap opens in it), and
+   less within half the ring's width of where it began, where the line out has no way to go. -> art pixels, across and up
+   the picture (before they are made whole) */
+vec2 shaken(vec4 ring, float most, vec3 world, vec3 c) {
+  vec2 r = world.xz - ring.xy;
+  float d = length(r), x = d - ring.z, w = ring.w;
+  float env = x > 0.0 ? exp(-(x * x) / (0.09 * w * w)) : exp(-(x * x) / (w * w));
+  // (a step of 5 cm out along the canvas from here, as the picture has it: the way out, and how many art pixels a metre)
+  vec3 c1 = (u_view * vec4(world + vec3(r.x, 0.0, r.y) * (0.05 / max(d, 1e-4)), 1.0)).xyz;
+  vec2 way = (c1.xy / -c1.z - c.xy / -c.z) * u_focal / 0.05;
+  float k = length(way);
+  if (k < 1e-4) return vec2(0.0);
+  float push = min(most, 0.7 * 1.4 * w * k / 6.2832);
+  return way / k * push * env * cos(6.2832 * x / (1.4 * w)) * smoothstep(0.0, 0.5 * w, d);
+}
 void main() {
+  v_floor = vec3(0.0);
+  v_jac = vec4(0.0);
   int b = int(max(a_misc.y, 0.0) + 0.5) * 3;
   vec4 r0 = u_bones[b], r1 = u_bones[b + 1], r2 = u_bones[b + 2];
   mat3 R = mat3(r0.x, r1.x, r2.x, r0.y, r1.y, r2.y, r0.z, r1.z, r2.z);
@@ -65,6 +92,23 @@ void main() {
     float env = x > 0.0 ? exp(-(x * x) / (w * w)) : exp(-(x * x) / (6.25 * w * w));
     c.x += u_waveK.z * u_waveK.y * env * sin(6.2832 * x / (3.2 * w)) * smoothstep(0.02, 0.10, length(from));
   }
+  /* (the other kind of ring: only the canvas's own colours, 22 to 25, lying on it, moved by whole art pixels, the two rings
+     together never further than the larger moves; nothing standing on the canvas, a post's foot or a man, moves. No colour
+     is changed here: the dark line is drawn a pixel at a time, SPLAT_FS crest) */
+  vec2 moved = vec2(0.0);
+  if (u_ringsK.x + u_ringsK.y > 0.0 && pal > 21.5 && pal < 25.5) {
+    float low = 1.0 - smoothstep(0.03, 0.12, abs(world.y));
+    moved = (shaken(u_rings[0], u_ringsK.x, world, c) + shaken(u_rings[1], u_ringsK.y, world, c)) * low;
+    moved = floor(moved * min(1.0, max(u_ringsK.x, u_ringsK.y) / max(length(moved), 1e-6)) + 0.5);
+    // (for the dark line, worked out a pixel at a time: the canvas round this splat, as flat as it lies, seen in the picture)
+    if (u_ringsK.z > 0.5 && low > 0.5) {
+      vec3 ax = (u_view * vec4(world + vec3(0.01, 0.0, 0.0), 1.0)).xyz, az = (u_view * vec4(world + vec3(0.0, 0.0, 0.01), 1.0)).xyz;
+      vec2 at = c.xy / -c.z;
+      mat2 J = inverse(mat2((ax.xy / -ax.z - at) * u_focal / 0.01, (az.xy / -az.z - at) * u_focal / 0.01));
+      v_floor = vec3(world.xz, 1.0);
+      v_jac = vec4(J[0], J[1]);
+    }
+  }
   float dist = -c.z;
   if (dist < u_depth.x) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
   /* (a loose splat may be taken as a little nearer the eye than it is, for deciding what is nearest only: the parts of one
@@ -84,7 +128,7 @@ void main() {
   float m2 = 2.0 * log(max(a_misc.z, 0.51) * 2.0);
   vec2 extent = sqrt(m2 * vec2(A, D)) + 1.0;
   v_d = a_corner * extent;
-  vec2 centre = c.xy * u_focal * iz + u_art * 0.5 + u_shake;
+  vec2 centre = c.xy * u_focal * iz + u_art * 0.5 + u_shake + moved;
   gl_Position = vec4((centre + v_d) / u_art * 2.0 - 1.0, (max(dist - pull, u_depth.x) - u_depth.x) / (u_depth.y - u_depth.x) * 2.0 - 1.0, 1.0);
 }`;
 const SPLAT_FS = `#version 300 es
@@ -94,14 +138,35 @@ in vec3 v_conic;
 flat in float v_pal;
 flat in float v_al;
 flat in float v_light;
+flat in vec3 v_floor;
+flat in vec4 v_jac;
 uniform vec3 u_palette[${MAX_PALETTE}];
 uniform float u_mask;  // what kind of thing this is, kept in alpha for the second pass
+uniform vec4 u_rings[2];
+uniform vec3 u_ringsK;
 out vec4 o;
+/* The rings' dark line (u_ringsK.z): the canvas a step darker on one art pixel along each ring's front, where the point of
+   the canvas this pixel shows (as it was before the ring moved it) is within half a pixel of it; thinned through a 4x4
+   dither as the ring's push falls below a pixel, and gone with it. */
+float crest(vec4 ring, float push, vec2 p, mat2 J) {
+  vec2 r = p - ring.xy;
+  float d = length(r);
+  if (push <= 0.0 || d < 1e-4) return 0.0;
+  int i = int(gl_FragCoord.x) & 3, j = int(gl_FragCoord.y) & 3;
+  int m[16] = int[16](0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5);
+  return abs(d - ring.z) < 0.5 * length(transpose(J) * (r / d)) && (float(m[j * 4 + i]) + 0.5) / 16.0 < push ? 1.0 : 0.0;
+}
 void main() {
   float pw = -0.5 * (v_conic.x * v_d.x * v_d.x + v_conic.z * v_d.y * v_d.y) - v_conic.y * v_d.x * v_d.y;
   if (v_al * exp(pw) < 0.5) discard;
+  float pal = v_pal;
+  if (v_floor.z > 0.5 && pal > 22.5) {
+    mat2 J = mat2(v_jac.xy, v_jac.zw);
+    vec2 p = v_floor.xy + J * v_d;
+    pal -= max(crest(u_rings[0], u_ringsK.x, p, J), crest(u_rings[1], u_ringsK.y, p, J));
+  }
   // (a speck of light keeps its own mark, 0.7: the second pass must not ink it where it crosses in front of a boxer)
-  o = vec4(u_palette[int(v_pal + 0.5)], v_light > 0.5 ? 0.7 : u_mask);
+  o = vec4(u_palette[int(pal + 0.5)], v_light > 0.5 ? 0.7 : u_mask);
 }`;
 const POST_VS = `#version 300 es
 void main() { gl_Position = vec4(vec2(gl_VertexID == 1 ? 3.0 : -1.0, gl_VertexID == 2 ? 3.0 : -1.0), 0.0, 1.0); }`;
@@ -159,6 +224,54 @@ function program(gl, vs, fs) {
     uniforms[name] = gl.getUniformLocation(p, name);
   }
   return { p, u: uniforms };
+}
+/* The camera's view, as the shader takes it (a 4x4 by columns): { target, yaw, pitch, dist } -> out */
+export function viewOf(cam, out) {
+  const cp = Math.cos(cam.pitch),
+    sp = Math.sin(cam.pitch),
+    cy = Math.cos(cam.yaw),
+    sy = Math.sin(cam.yaw),
+    // the camera's own axes in the world: x to its right, y up the picture, z back toward the eye
+    X = [cy, 0, -sy],
+    Z = [cp * sy, sp, cp * cy],
+    Y = [Z[1] * X[2] - Z[2] * X[1], Z[2] * X[0] - Z[0] * X[2], Z[0] * X[1] - Z[1] * X[0]],
+    e = [cam.target[0] + Z[0] * cam.dist, cam.target[1] + Z[1] * cam.dist, cam.target[2] + Z[2] * cam.dist],
+    dot = a => -(a[0] * e[0] + a[1] * e[1] + a[2] * e[2]);
+  out = out || new Float32Array(16);
+  out.set([X[0], Y[0], Z[0], 0, X[1], Y[1], Z[1], 0, X[2], Y[2], Z[2], 0, dot(X), dot(Y), dot(Z), 1]);
+  return out;
+}
+/* What the ring of shaken pixels does to one splat (the shader's own reckoning, for checking it): a layer's ground row of
+   that kind (render/blow.mjs groundRow), a splat's middle p (world) and its palette entry, seen by cam in a picture `rows`
+   art pixels high -> the whole art pixels it is moved by in the picture, [across, up] (raw: as it is before it is made
+   whole) */
+export function shakeOf(row, p, pal, cam, rows, raw) {
+  if (!row || row.length <= 7 || !(row[7] + row[11] > 0) || pal < 21.5 || pal > 25.5) return [0, 0];
+  const V = viewOf(cam),
+    focal = rows / 2 / Math.tan(FOV / 2),
+    see = q => [0, 1, 2].map(i => V[i] * q[0] + V[4 + i] * q[1] + V[8 + i] * q[2] + V[12 + i]),
+    c = see(p),
+    smooth = (a, b, x) => ((x = Math.max(0, Math.min(1, (x - a) / (b - a)))), x * x * (3 - 2 * x)),
+    out = [0, 0];
+  for (const [rx, rz, front, w, most] of [[row[0], row[2], row[3], row[4], row[7]], [row[8], row[9], row[10], row[4], row[11]]]) {
+    const r = [p[0] - rx, p[2] - rz],
+      d = Math.hypot(r[0], r[1]),
+      x = d - front,
+      env = x > 0 ? Math.exp(-(x * x) / (0.09 * w * w)) : Math.exp(-(x * x) / (w * w)),
+      s = 0.05 / Math.max(d, 1e-4),
+      c1 = see([p[0] + r[0] * s, p[1], p[2] + r[1] * s]),
+      way = [0, 1].map(i => ((c1[i] / -c1[2] - c[i] / -c[2]) * focal) / 0.05),
+      k = Math.hypot(way[0], way[1]);
+    if (k < 1e-4) continue;
+    const push = Math.min(most, (0.7 * 1.4 * w * k) / 6.2832),
+      f = push * env * Math.cos((6.2832 * x) / (1.4 * w)) * smooth(0, 0.5 * w, d);
+    out[0] += (way[0] / k) * f;
+    out[1] += (way[1] / k) * f;
+  }
+  const low = 1 - smooth(0.03, 0.12, Math.abs(p[1])),
+    top = Math.max(row[7], row[11]),
+    scale = low * Math.min(1, top / Math.max(Math.hypot(out[0] * low, out[1] * low), 1e-6));
+  return out.map(v => (raw ? v * scale : Math.floor(v * scale + 0.5)));
 }
 export const rgb = hex => [((hex >> 16) & 255) / 255, ((hex >> 8) & 255) / 255, (hex & 255) / 255];
 export function paletteArray(palette) {
@@ -242,7 +355,11 @@ export function createRenderer(canvas, o) {
                            wave: [x, y, z, front, width, strength, sway] (a ripple through it, from a point in the world: it sways, with no light),
                            ground: [x, y, z, front, width, lift, glow] (the other kind of ripple, through the canvas: a ring measured flat
                              along it, lifting what lies on it by up to `lift` metres, a tile of the canvas lifted past `glow` a step
-                             lighter; render/blow.mjs groundRow),
+                             lighter; render/blow.mjs groundRow); or, for the ring of shaken pixels (FX.ground.kind 'shake'), two
+                             rings at once: [x, y, z, front, width, 0, 0, push, x, z, front, push, line], the first ring's then
+                             the second's, push the art pixels it moves what lies on the canvas at its crest (0: none), line 1 for
+                             a dark line one art pixel wide at their crests (its first seven are a ring of the first kind that
+                             lifts nothing),
                            silhouette: k, 1 to 8 (every pixel of the cell this layer covers is kept as silhouette k, whether or not
                              something nearer hides it there: its whole outline in the picture, not only what shows of it),
                            outside: k (this layer is drawn only off silhouette k, in front of it or behind it alike; elsewhere depth
@@ -268,19 +385,8 @@ export function createRenderer(canvas, o) {
     gl.uniform2f(splat.u.u_depth, 0.3, 40);
   }
   function cell(rect, frame) {
-    const r = rect || { x: 0, y: 0, w: target.w, h: target.h },
-      cam = frame.camera,
-      cp = Math.cos(cam.pitch),
-      sp = Math.sin(cam.pitch),
-      cy = Math.cos(cam.yaw),
-      sy = Math.sin(cam.yaw),
-      // the camera's own axes in the world: x to its right, y up the picture, z back toward the eye
-      X = [cy, 0, -sy],
-      Z = [cp * sy, sp, cp * cy],
-      Y = [Z[1] * X[2] - Z[2] * X[1], Z[2] * X[0] - Z[0] * X[2], Z[0] * X[1] - Z[1] * X[0]],
-      e = [cam.target[0] + Z[0] * cam.dist, cam.target[1] + Z[1] * cam.dist, cam.target[2] + Z[2] * cam.dist],
-      dot = a => -(a[0] * e[0] + a[1] * e[1] + a[2] * e[2]);
-    view.set([X[0], Y[0], Z[0], 0, X[1], Y[1], Z[1], 0, X[2], Y[2], Z[2], 0, dot(X), dot(Y), dot(Z), 1]);
+    const r = rect || { x: 0, y: 0, w: target.w, h: target.h };
+    viewOf(frame.camera, view);
     gl.viewport(r.x, r.y, r.w, r.h);
     gl.enable(gl.SCISSOR_TEST);
     gl.scissor(r.x, r.y, r.w, r.h);
@@ -311,6 +417,9 @@ export function createRenderer(canvas, o) {
       const gr = layer.ground;
       gl.uniform4f(splat.u.u_ground, gr ? gr[0] : 0, gr ? gr[2] : 0, gr ? gr[3] : 0, gr ? gr[4] : 1);
       gl.uniform2f(splat.u.u_groundK, gr ? gr[5] : 0, gr ? gr[6] : 0);
+      const two = gr && gr.length > 7;
+      gl.uniform4fv(splat.u.u_rings, two ? [gr[0], gr[2], gr[3], gr[4], gr[8], gr[9], gr[10], gr[4]] : NO_RINGS);
+      gl.uniform3f(splat.u.u_ringsK, two ? gr[7] : 0, two ? gr[11] : 0, two ? gr[12] || 0 : 0);
       gl.bindVertexArray(layer.mesh.vao);
       gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, layer.mesh.count);
       drawn += layer.mesh.count;

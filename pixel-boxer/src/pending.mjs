@@ -115,6 +115,17 @@ function cardEl(card) {
     return el;
   }
   const el = document.createElement('article');
+  // (a recording of the game's own picture, its still the poster: played muted, the two of a row started again together)
+  if (card.video) {
+    el.className = 'card ref';
+    el.innerHTML = `<div class="stage"><video src="${esc(card.video)}" poster="${esc(card.image)}" muted autoplay playsinline preload="auto" aria-label="${esc(card.say.replace(/`/g, ''))}"></video></div><div class="info"><p class="say">${fmt(card.say)}</p></div>`;
+    const video = el.querySelector('video');
+    video.addEventListener('ended', () => {
+      const row = [...el.parentNode.querySelectorAll('video')];
+      if (row.every(v => v.ended)) row.forEach(v => ((v.currentTime = 0), v.play().catch(() => {})));
+    });
+    return el;
+  }
   if (card.image) {
     el.className = 'card ref';
     el.innerHTML = `<a class="stage" href="${esc(card.image)}" target="_blank" rel="noopener" aria-label="참고 이미지 원본 열기"><img src="${esc(card.image)}" alt="${esc(card.say)}" loading="lazy"></a><div class="info"><p class="say">${fmt(card.say)}</p></div>`;

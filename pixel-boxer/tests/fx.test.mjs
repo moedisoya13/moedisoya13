@@ -27,7 +27,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import * as BLOW from '../src/render/blow.mjs';
-import { exitOf, blow, lavaOf, rippleOf, rippleRow, scaleOf, FX, fallOf, landed, landingOf, landRipple, groundOf, groundRow, groundLift } from '../src/render/blow.mjs';
+import { exitOf, blow, lavaOf, rippleOf, rippleRow, scaleOf, FX, fallOf, landed, landingOf, landRipple, groundOf, groundRow, groundLift, ringsOn, quietOf } from '../src/render/blow.mjs';
+import { shakeOf } from '../src/render/renderer.mjs';
 import { createFx, heatOf } from '../src/render/fx.mjs';
 import { createReplay } from '../src/replay.mjs';
 import { fk, NAMES } from '../src/rig/skeleton.mjs';
@@ -855,4 +856,199 @@ test('the most a knockdown throws stays within what an fx draws: rows at a blow 
   // (both volleys in the air: twice what one was, so room in an fx for two such blows at once, no longer three)
   assert.ok(most[2.2] < 960 / 2, `at most ${most[0.5]}, ${most[1]} and ${most[2.2]} rows: well within the 960 an fx draws, even for two such blows at once`);
   assert.ok(most[0.5] < most[1] && most[1] < most[2.2], 'more for the harder blow');
+});
+
+/* ---- The ring through the canvas as shaken pixels (FX.ground.kind 'shake', a prototype beside the confirmed ring; the
+   user's question of 2026-11-24): it moves only what lies on the canvas (the canvas's own ramp, 22 to 25, near its height),
+   in the picture's own plane, by whole art pixels and never more than its push, outward at its crest along the line from
+   where it began; it never stretches the canvas between a trough and a crest by more than 0.7 of its length; it lightens
+   no colour (the one it changes is a step darker, on one art pixel along each ring's front: its dark line); two rings, his trunk's and his head's, each started once, on the first step that part of him comes down within
+   6 cm of the canvas (the real scripts: down-back his head at +40 steps from the blow and his back at +62, out-log +39 and
+   +47, down-front his front at +29 and his face at +33, down-side his head at +48 and his hips only at +120, as he gets up,
+   past the 0.6 s the rings wait: none); his shins start none; and the light kind is as it was. */
+const shaking = run => {
+  const was = FX.ground.kind;
+  FX.ground.kind = 'shake';
+  try {
+    return run();
+  } finally {
+    FX.ground.kind = was;
+  }
+};
+// (the game's camera, and its picture: 216 art pixels high)
+const GAME = { target: [0, 0.8, 0], yaw: 0.4, pitch: 0.5, dist: 8 },
+  ROWS = 216;
+const FOV = (38 * Math.PI) / 180;
+// (a point of the world in the picture, art pixels across and up from its middle: the renderer's projection)
+const onScreen = (cam, p) => {
+  const cp = Math.cos(cam.pitch),
+    sp = Math.sin(cam.pitch),
+    X = [Math.cos(cam.yaw), 0, -Math.sin(cam.yaw)],
+    Z = [cp * Math.sin(cam.yaw), sp, cp * Math.cos(cam.yaw)],
+    Y = [Z[1] * X[2] - Z[2] * X[1], Z[2] * X[0] - Z[0] * X[2], Z[0] * X[1] - Z[1] * X[0]],
+    e = cam.target.map((v, i) => v + Z[i] * cam.dist),
+    d = sub(p, e),
+    depth = -dot(Z, d),
+    focal = ROWS / 2 / Math.tan(FOV / 2);
+  return [(dot(X, d) * focal) / depth, (dot(Y, d) * focal) / depth];
+};
+
+test('the ring of shaken pixels: only the canvas moves, in the picture, by whole pixels and at most its push, outward at its crest, never torn; no colour lighter, a step darker on its line', () => {
+  shaking(() => {
+    const g = groundOf({ q: 1, out: false }, { joint: 'hips', at: [0.3, 0.02, -0.2] });
+    assert.deepEqual(g.rings.map(r => [r.part, r.push, r.last]), [['trunk', 3, 0.6]], 'his trunk came down: its ring at once, 3 pixels, 0.6 s');
+    // (his head comes down 0.1 s later, half a metre off: the second ring, 0.6 of the first)
+    g.age = 0.1;
+    const head = ringsOn(g, g.fall, { points: { hips: [0.3, 0.3, -0.2], chest: [0.5, 0.4, -0.3], head: [0.8, 0.13, -0.4] } });
+    assert.deepEqual(head.map(r => [r.part, +r.push.toFixed(9), +r.last.toFixed(9), r.start]), [['head', 1.8, 0.36, 0.1]], 'the head\'s ring: 0.6 of the push and of the time');
+    for (const age of [0.05, 0.12, 0.2, 0.3, 0.42, 0.55]) {
+      g.age = age;
+      const row = groundRow(g),
+        top = Math.max(row[7], row[11]);
+      assert.ok(row.length === 13 && row[12] === 1, 'two rings and the dark line');
+      assert.ok(row[5] === 0 && row[6] === 0, `at ${age} s nothing is lifted or lit: the light ring's seven read as no ring`);
+      for (let x = -2.4; x <= 2.4; x += 0.1)
+        for (let z = -2.4; z <= 2.4; z += 0.1)
+          for (const y of [0, 0.012, 0.025]) {
+            const p = [x, y, z],
+              m = shakeOf(row, p, 24, GAME, ROWS);
+            assert.ok(m.every(v => Number.isInteger(v)) && Math.abs(m[0]) <= Math.ceil(top) && Math.abs(m[1]) <= Math.ceil(top) && Math.hypot(...shakeOf(row, p, 24, GAME, ROWS, true)) <= top + 1e-9, `at ${age} s, [${x.toFixed(1)}, ${z.toFixed(1)}]: moved [${m}], at most ${top.toFixed(2)}`);
+            // (what is not the canvas's own does not move: a post's foot, a man, the sparks, anything above the canvas)
+            for (const pal of [3, 21, 26, 29, 38]) assert.deepEqual(shakeOf(row, p, pal, GAME, ROWS), [0, 0]);
+            assert.deepEqual(shakeOf(row, [x, 0.13, z], 24, GAME, ROWS), [0, 0]);
+          }
+    }
+    // (outward at a ring's crest, along the line from where it began as the picture has it: a ring alone, his trunk's and his head's)
+    for (const [joint, part] of [['hips', 'trunk'], ['head', 'head']]) {
+      const solo = groundOf({ q: 1, out: false }, { joint, at: [0.3, 0.02, -0.2] });
+      for (const share of [0.15, 0.35, 0.55]) {
+        const age = (solo.age = share * solo.rings[0].last);
+        const row = groundRow(solo),
+          [x0, z0, front] = part === 'trunk' ? [row[0], row[2], row[3]] : [row[8], row[9], row[10]];
+        let crest = 0;
+        for (let a = 0; a < 48; a++) {
+          const th = (a / 48) * 2 * Math.PI,
+            p = [x0 + front * Math.cos(th), 0, z0 + front * Math.sin(th)],
+            m = shakeOf(row, p, 23, GAME, ROWS, true),
+            out = sub([...onScreen(GAME, p), 0], [...onScreen(GAME, [x0, 0, z0]), 0]);
+          assert.ok(len([...m, 0]) > 0.3 && angle([...m, 0], out) < 1e-3, `${part} at ${age.toFixed(3)} s, ${((th * 180) / Math.PI).toFixed(0)}°: moved ${len([...m, 0]).toFixed(2)} px outward (${angle([...m, 0], out).toFixed(4)}° off)`);
+          crest++;
+        }
+        assert.equal(crest, 48);
+      }
+    }
+    // (never torn: along any line out from where it began, past its own width, what is next to what is never moved apart by
+    // more than 0.7 of the way between them in the picture)
+    const one = groundOf({ q: 2.2, out: true }, { joint: 'chest', at: [-0.4, 0.03, 0.5] });
+    for (const age of [0.1, 0.25, 0.4]) {
+      one.age = age;
+      const row = groundRow(one);
+      for (let a = 0; a < 36; a++) {
+        const th = (a / 36) * 2 * Math.PI,
+          at = s => [row[0] + s * Math.cos(th), 0, row[2] + s * Math.sin(th)];
+        for (let s = row[4]; s < 2.6; s += 0.01) {
+          const p = at(s),
+            q = at(s + 0.01),
+            way = sub([...onScreen(GAME, q), 0], [...onScreen(GAME, p), 0]),
+            gap = len(way),
+            along = v => dot([...v, 0], way) / gap;
+          if (Math.abs(q[0]) > 2.5 || Math.abs(q[2]) > 2.5) break;
+          const apart = along(shakeOf(row, q, 24, GAME, ROWS, true)) - along(shakeOf(row, p, 24, GAME, ROWS, true));
+          assert.ok(apart <= 0.7 * gap + 1e-9, `at ${age} s, ${a * 10}°, ${s.toFixed(2)} m out: pulled apart ${(apart / gap).toFixed(3)} of the way between`);
+        }
+      }
+    }
+  });
+  // (in the shader: the canvas moved in the picture alone, after it is placed in depth; no colour in the way it is worked out;
+  // and the one colour it changes, on its line, a step darker within the canvas's ramp and never lighter)
+  const src = readFileSync(new URL('../src/render/renderer.mjs', import.meta.url), 'utf8'),
+    shaken = src.slice(src.indexOf('vec2 shaken('), src.indexOf('void main()')),
+    crest = src.slice(src.indexOf('float crest('), src.indexOf('void main()', src.indexOf('float crest(')));
+  assert.ok(src.includes('vec2 centre = c.xy * u_focal * iz + u_art * 0.5 + u_shake + moved;') && !shaken.includes('pal') && !/world\s*[+\-*]?=|c\s*[+\-*]?=|c\.\w+\s*[+\-*]?=/.test(shaken), 'moved only on the picture, nothing of a colour or of where it is in the world');
+  assert.ok(src.includes('if (u_ringsK.x + u_ringsK.y > 0.0 && pal > 21.5 && pal < 25.5)') && src.includes('(1.0 - smoothstep(0.03, 0.12, abs(world.y)))') && src.includes('float push = min(most, 0.7 * 1.4 * w * k / 6.2832);'));
+  assert.ok(src.includes('if (v_floor.z > 0.5 && pal > 22.5) {') && src.includes('pal -= max(crest(u_rings[0], u_ringsK.x, p, J), crest(u_rings[1], u_ringsK.y, p, J));') && (crest.match(/return [^;]*;/g) || []).every(r => r === 'return 0.0;' || r.endsWith('? 1.0 : 0.0;')) && !crest.includes('pal'), 'its line: 23 to 25 a step darker, 22 left as it is, nothing lighter');
+  assert.deepEqual(src.match(/pal [+-]= /g), ['pal += ', 'pal -= '], 'the light ring\'s step lighter and this line\'s step darker: no other change of colour');
+});
+
+test('the two rings start where his trunk and his head first come down, each once (down-back, out-log, down-front, down-side); his shins start none; the light kind as it was', t => {
+  const RAD = Object.fromEntries(FX.land.parts),
+    low = (man, joints) => Math.min(...joints.map(j => man.points[j][1] - RAD[j])),
+    S = FX.ground.shake,
+    seen = {};
+  shaking(() => {
+    for (const id of ['down-back', 'out-log', 'down-front', 'down-side', 'down-knee']) {
+      let fall = null,
+        hitAt = null,
+        ground = null,
+        firstAt = null;
+      const started = [],
+        first = {};
+      fight(id, (bout, i) => {
+        if (ground) ground.age += DT;
+        for (const e of bout.events) if (fallOf(e)) (fall = fallOf(e)), (hitAt = i);
+        if (!fall) return;
+        const man = bout.fighters[fall.on];
+        // (where his trunk and his head first come within 6 cm, found apart from the rings)
+        for (const [part, joints] of S.parts) if (first[part] === undefined && low(man, joints) < FX.land.near) first[part] = { i, at: man.points[joints.reduce((a, j) => (man.points[j][1] - RAD[j] < man.points[a][1] - RAD[a] ? j : a))] };
+        const at = landed(fall, man);
+        if (at) {
+          ground = groundOf(fall, at);
+          firstAt = i;
+          started.push(...ground.rings.map(r => ({ r, i })));
+        }
+        started.push(...ringsOn(ground, fall, man).map(r => ({ r, i })));
+      });
+      const got = Object.fromEntries(started.map(({ r, i }) => [r.part, i - hitAt]));
+      seen[id] = got;
+      assert.equal(new Set(started.map(s => s.r.part)).size, started.length, `${id}: each ring once`);
+      assert.ok(started.every(s => s.i >= firstAt), `${id}: none before he first comes down`);
+      for (const [part] of S.parts) {
+        const f = first[part],
+          due = f && (f.i - firstAt) * DT < S.within - 1e-9;
+        if (!due) {
+          assert.equal(got[part], undefined, `${id}: no ${part} ring (${f ? `it comes down ${((f.i - firstAt) * DT).toFixed(2)} s after he does` : 'it never comes down'})`);
+          continue;
+        }
+        const s = started.find(x => x.r.part === part);
+        assert.equal(s.i, f.i, `${id}: the ${part}'s ring on the step it first comes within 6 cm (+${f.i - hitAt})`);
+        assert.deepEqual([s.r.at[0], s.r.at[2]], [f.at[0], f.at[2]], `${id}: from under it`);
+        assert.ok(Math.abs(s.r.start - (f.i - firstAt) * DT) < 1e-9, `${id}: started then on the rings' clock`);
+        const push = Math.max(S.least, Math.min(S.push, S.push * fall.q * (fall.out ? FX.ground.out.lift : 1)) * (part === 'head' ? S.head.push : 1));
+        assert.ok(Math.abs(s.r.push - push) < 1e-12, `${id}: ${part} pushes ${s.r.push.toFixed(2)} pixels`);
+      }
+    }
+  });
+  // (a card he goes down on his knees in and stays there has none; the others, where his back or his face comes down, have)
+  assert.deepEqual(seen['down-knee'], {});
+  for (const id of ['down-back', 'out-log', 'down-front']) assert.ok(seen[id].trunk && seen[id].head, `${id}: both rings`);
+  t.diagnostic(`steps from the blow: ${JSON.stringify(seen)}`);
+  // (the light kind: one ring from what came down first, his shins too, as before; no rings of the other kind)
+  const g = groundOf({ q: 1, out: false }, { joint: 'LeftShin', at: [0.2, 0.01, 0.1] });
+  assert.deepEqual(Object.keys(g).sort(), ['age', 'at', 'last', 'lift']);
+  assert.deepEqual(ringsOn(g, { q: 1 }, { points: { hips: [0, 0, 0], chest: [0, 0, 0], head: [0, 0, 0] } }), []);
+  g.age = 0.1;
+  assert.equal(groundRow(g).length, 7);
+  assert.equal(FX.ground.kind, 'light', 'the confirmed ring by default');
+});
+
+test('a knockdown\'s replay waits for both rings of shaken pixels: the clock runs until the later is over, and until no part of him may still start one', () => {
+  shaking(() => {
+    const man = y => ({ points: { hips: [0, 0.5, 0], chest: [0.3, 0.6, 0], head: [0.6, y, 0] } }),
+      g = groundOf({ q: 1, out: false }, { joint: 'hips', at: [0, 0.02, 0] }),
+      quiet = age => ((g.age = age), quietOf([], [], g));
+    // (his back at once, 0.6 s; his head 0.4 s later, 0.36 s: over at 0.76 s)
+    assert.equal(quiet(0.3), false);
+    g.age = 0.4;
+    assert.equal(ringsOn(g, g.fall, man(0.13)).length, 1);
+    assert.ok(!quiet(0.6) && !quiet(0.75) && quiet(0.76 + 1e-9), 'quiet only once the head\'s, the later, is over');
+    assert.equal(groundRow(g), null);
+    // (a man down on his knees alone: no ring, and quiet once no part of him may start one)
+    const k = groundOf({ q: 1, out: false }, { joint: 'LeftShin', at: [0, 0.01, 0] });
+    assert.deepEqual(k.rings, []);
+    k.age = 0.59;
+    assert.equal(quietOf([], [], k), false);
+    k.age = 0.6;
+    assert.equal(quietOf([], [], k), true);
+    assert.deepEqual(ringsOn(k, k.fall, man(0.13)), [], 'past the wait, his head starts none');
+  });
 });

@@ -37,8 +37,8 @@ const seen = new Set(),
   if (seen.has(file)) return;
   seen.add(file);
   const text = readFileSync(path.join(root, file), 'utf8');
-  // (a reference sheet a module names is loaded by the page from the same path)
-  for (const m of text.matchAll(/docs\/ref\/[\w-]+\.jpg/g)) sheets.add(m[0]);
+  // (a reference sheet a module names is loaded by the page from the same path; and a recording, docs/ref/*.webm)
+  for (const m of text.matchAll(/docs\/ref\/[\w-]+\.(?:jpg|webm)/g)) sheets.add(m[0]);
   // (and an outfit a module dresses a card in by name, its outfits' list: the motion catalogue's new samples, src/samples.data.mjs)
   if (/\bwear: /.test(text)) for (const w of outfits) if (text.includes(`'${w}'`)) wears.add(w);
   // (and a module it loads only when it is wanted, import('./...'): the pending catalogue's recorded clips, src/clips/index.mjs)

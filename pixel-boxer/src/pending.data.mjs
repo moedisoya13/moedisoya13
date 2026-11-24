@@ -198,6 +198,18 @@ const COMPARE = {
   'crossarm-weak': [{ title: '5암 크로스암, 누르는 프레임에 롤: 왼 옆구리를 노린 뒷손 훅 (N의 시험 장면)', rows: [[clip('weak-pren', '낮은 뒷손 훅이 크로스암으로', 'blow', { blow: 'hookR', cam: VIEW.left }), clip('weak-now', '낮은 뒷손 훅이 크로스암으로', 'blow', { blow: 'hookR', cam: VIEW.left })]] }]
 };
 
+/* (the ground ring as shaken pixels, fx-ground-shake: the same knockdowns on the game's own ring canvas, the ring as it is
+   beside the prototype, as recordings of review.html, canvas=ring, at the game's pixel density, its full speed and then a
+   quarter of it: a card { video (docs/ref, played muted, the two of a row started again together), image (its still, shown
+   before it plays), say }) */
+const SHAKE_VIDEO = (video, image, say) => ({ video, image, say });
+COMPARE['fx-ground-shake'] = [
+  { title: '다운 · 뒤로 (`down-back`): 무릎 0.57초, 머리 0.67초, 등 1.03초 (맞은 때부터). 게임의 링 바닥과 화면 밀도로, 제 속도 한 번 그리고 ¼ 속도', rows: [[SHAKE_VIDEO('docs/ref/ground-shake-back-light.webm', 'docs/ref/ground-shake-back-light.jpg', '지금 고리(빛): 처음 닿은 무릎에서 하나'), SHAKE_VIDEO('docs/ref/ground-shake-back-shake.webm', 'docs/ref/ground-shake-back-shake.jpg', '시안: 머리에서 작은 고리, 0.37초 뒤 등에서 큰 고리')]] },
+  { title: '다운 · 앞으로 (`down-front`): 몸통 0.48초, 얼굴 0.55초', rows: [[SHAKE_VIDEO('docs/ref/ground-shake-front-light.webm', 'docs/ref/ground-shake-front-light.jpg', '지금 고리(빛): 몸통에서 하나'), SHAKE_VIDEO('docs/ref/ground-shake-front-shake.webm', 'docs/ref/ground-shake-front-shake.jpg', '시안: 몸통과 얼굴, 거의 함께 둘')]] },
+  { title: '게임 화면 그대로(AI 시합, 시드 4, 실신, 216줄): 고리가 가장 잘 보이는 때. 누르면 원본과 고리가 바꾼 픽셀(자홍)', rows: [[{ image: 'docs/ref/ground-shake-game-light.jpg', say: '지금 고리, 0.35초: 둘레의 0.93에 밝힌 조각' }, { image: 'docs/ref/ground-shake-game-shake.jpg', say: '시안, 등의 고리 0.27초: 둘레의 0.94에 선' }]] },
+  { title: '시안 안에서, 다운 · 뒤로: 픽셀만 밀 때와 앞머리에 어두운 선을 더할 때', rows: [[SHAKE_VIDEO('docs/ref/ground-shake-back-bare.webm', 'docs/ref/ground-shake-back-bare.jpg', '픽셀만 밂: 타일 경계와 그림자 끝에서만 움직임'), SHAKE_VIDEO('docs/ref/ground-shake-back-shake.webm', 'docs/ref/ground-shake-back-shake.jpg', '어두운 선을 더함(시안의 기본)')]] }
+];
+
 export const ITEMS = [
   // ===== 5. what the work of 2026-11-23 left open (some with recorded comparisons: COMPARE)
   ...[
@@ -221,6 +233,10 @@ export const ITEMS = [
       '기막힌 수비(아주 가깝게 피하거나 쳐내고 바로 받아친 것)는 카탈로그에서만 리플레이로 보이고, 게임 안에는 표시가 없습니다.',
       [['slow', '아주 짧은 슬로', '0.1초쯤, 다운의 슬로보다 훨씬 짧게.'], ['line', '바람 선만 더 선명하게', '슬로 없이.'], ['none', '표시 없음', '지금 그대로.']],
       'slow', '드문 장면이라 짧게 짚어 줄 만합니다.'],
+    ['fx-ground-shake', '쓰러질 때 바닥의 파문: 빛 대신 픽셀 진동, 몸통과 머리 따로',
+      '사용자 질문(11-24)의 시안입니다. 지금 고리는 처음 닿은 부위 하나(무릎 포함)에서 캔버스를 1~3 cm 들고 마루를 한 단계 밝게 칠합니다. 시안은 빛도 들썩임도 없이 **바닥의 픽셀을 화면에서 고리 바깥쪽으로 밀었다 놓습니다**(마루에서 바깥, 골에서 안, 뒤따르는 작은 마루; 정수 픽셀, 마루에서 최대 3픽셀, 바닥이 찢어지지 않게 늘어남은 0.7배까지). 바닥(색 22~25인 캔버스와 앞치마)만 움직이고 선수·로프·기둥·그림자는 그대로입니다. 고리는 둘: **몸통**(골반이나 가슴)이 캔버스 6 cm 안에 처음 내려올 때 하나, **머리**가 처음 내려올 때 하나(세기와 시간 0.6배라 작고 짧음), 처음 닿은 뒤 0.6초 안에서 각각 한 번. 무릎(정강이)은 고리를 만들지 않습니다. 대본에서(맞은 때부터): 다운 · 뒤로 머리 0.67초 → 등 1.03초, 실신 · 통나무 머리 0.65 → 가슴 0.78, 다운 · 앞으로 몸통 0.48 → 얼굴 0.55, 다운 · 옆으로 머리 0.80만(골반은 일어나며 2.0초에야 내려옴), 무릎 다운과 리버 다운은 고리 없음. **재 본 것:** 미는 것만으로는 게임의 링 바닥(0.8 m 바둑판)에서 타일 경계와 그림자 끝만 짧게 움직여 고리로 읽히지 않았습니다(아래 "시안 안에서" 비교의 왼쪽). 그래서 고리 앞머리의 한 픽셀을 바닥 색 한 단계 **어둡게** 하는 선을 더했습니다(밝게 하는 곳은 없음; 미는 힘이 1픽셀 아래로 줄면 점점이 엷어져 사라짐). 게임 화면(216줄, AI 시합에서 선수가 쓰러지는 시드)에서 고리 둘레 72방향 가운데 바뀐 픽셀이 3픽셀 안에 있는 몫(고리가 있는 프레임의 평균, 가장 많을 때): 시드 2(다운, 시안 몸통 1.4픽셀) 지금 고리 0.32(0.73), 시안 몸통 0.65(1.00)·머리 0.50(1.00); 시드 4(실신, 3픽셀) 지금 0.51(1.00), 시안 몸통 0.75(0.97)·머리 0.52(0.89); 어두운 선 없이 픽셀만 밀면 시드 2 몸통 0.13·머리 0.18, 시드 4 몸통 0.30·머리 0.27로 지금 고리보다 못합니다. 시드 1은 무릎으로만 쓰러져 시안에는 고리가 없습니다(지금 고리는 무릎에서 나와 0.33). 바뀐 픽셀 수는 지금 고리가 3~4배 많습니다(넓은 띠를 밝히므로): 시안은 가는 선입니다. 바닥에 틈이 나 아래가 보인 픽셀 0. 비용: 팔레트 칸 0, 바닥 입자의 셰이더 계산 조금; 시합·동작·점검은 그대로.',
+      [['shake', '픽셀 진동 파문 (몸통·머리 따로)', '빛 없이 바닥 픽셀이 고리 바깥쪽으로 밀렸다 돌아오고 앞머리에 한 픽셀 어두운 선. 몸통이 닿을 때와 머리가 닿을 때 따로(머리는 작고 짧게). 팔레트 칸이 필요 없습니다. 무릎으로만 쓰러지면 고리가 없습니다.'], ['light', '지금의 빛 고리', '처음 닿은 부위(무릎 포함) 하나에서 캔버스를 들고 마루를 한 단계 밝게. 게임의 링 바닥에서는 끊긴 조각으로 보입니다.']],
+      'shake', '어두운 선과 함께라면 게임 화면에서 고리 둘레가 지금 고리보다 더 이어져 보이고(시드 2·4에서 0.65·0.75 대 0.32·0.51), 팔레트 칸 없이 몸통과 머리의 착지가 따로 보입니다.'],
     ['pivot-kind', '피벗(인사이드·아웃사이드)을 어떻게 줄지',
       '소스 B의 피벗은 원투 뒤에 앞발을 디디고 돌아 상대의 옆을 잡는 동작입니다(단계 R2, 팔방 위치 시스템 위에서).',
       [['technique', '고르는 기술', '로드아웃 1칸. 4·5단계가 갖고, 5단계의 기본 로드아웃에 넣습니다.'], ['basic', '4단계 이상의 기본 동작', '누구나 등급만 되면 씁니다.']],

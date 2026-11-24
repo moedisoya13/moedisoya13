@@ -24,7 +24,7 @@
    globalThis.__review.ready when it is drawn. */
 import { createRenderer, paletteArray, rgb } from './render/renderer.mjs';
 import { createFx } from './render/fx.mjs';
-import { blow, met, rippleOf, rippleRow, fallOf, landed, landRipple, groundOf, groundRow, quietOf } from './render/blow.mjs';
+import { blow, met, rippleOf, rippleRow, fallOf, landed, landRipple, groundOf, groundRow, quietOf, ringsOn, FX } from './render/blow.mjs';
 import { floor } from './render/floor.mjs';
 import { createReplay, distOf } from './replay.mjs';
 import { unpack, fromBase64 } from './render/splats.mjs';
@@ -95,6 +95,7 @@ function effectsOf(rnd) {
         E.falls.forEach((fall, i) => {
           const l = landed(fall, men[i]);
           if (l) (E.ripples[i] = landRipple(fall, men[i], l)), (E.ground = groundOf(fall, l));
+          ringsOn(E.ground, fall, men[i]);
         });
     },
     keep: () => ({ sparks: keep(E.sparks), motes: E.motes.map(keep), ground: groundRow(E.ground) }),
@@ -206,7 +207,7 @@ async function start() {
     worn = [0, 1].map(i => paletteArray(dress(manifest.palette, i, wears[i]))),
     frames = replay ? runReplay(bind) : run(bind),
     // (a ring through the canvas needs a canvas to go through: the catalogue's tiles, under any sheet with the effects)
-    tiles = effects ? floor(3.2, [0.6, 0]) : null,
+    tiles = effects ? (q.get('canvas') === 'ring' ? { rows: unpack(fromBase64(await (await fetch('assets/' + manifest.ring.file)).text()), manifest.ring), count: manifest.ring.count } : floor(3.2, [0.6, 0])) : null,
     ground = tiles ? R.mesh(tiles.rows, tiles.count) : null,
     sheet = document.getElementById('sheet'),
     gap = 6,
@@ -321,6 +322,9 @@ function laid(stage, B, cam, box) {
   );
 }
 
+/* ring=shake: the ring through the canvas (fx=1) as shaken pixels, the prototype beside the confirmed ring (render/blow.mjs
+   FX.ground.kind); canvas=ring: drawn on the game's own ring canvas, in place of the catalogue's tiles */
+if (q.get('ring') === 'shake') FX.ground.kind = 'shake';
 start().catch(error => {
   console.error(error);
   document.getElementById('title').textContent = 'failed: ' + error.message;
