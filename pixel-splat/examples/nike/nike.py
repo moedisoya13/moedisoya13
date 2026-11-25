@@ -34,6 +34,7 @@ from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import look  # noqa: E402
 import marble  # noqa: E402
 import wings  # noqa: E402
 from pixelsplat import sdf  # noqa: E402
@@ -486,8 +487,8 @@ def cmd_animate(a):
         mats, root = walk_pose(skel, phase, advance)
         pose = pose_splats(model, W, torch.as_tensor(mats))
         sc.shadow_center = (float(root[0]), float(root[2]))
-        return render_frame(model, cam, FrameConfig(raster=RasterConfig(tile=4, k=256, hard=app), shade=sc,
-                                                    snap=snap or app, mode=mode), pose=pose)
+        fc = FrameConfig(raster=RasterConfig(tile=4, k=256, hard=app), shade=sc, snap=snap or app, mode=mode)
+        return render_frame(model, cam, look.upgrade(fc, a.look), pose=pose)  # look.py: stylized | classic
 
     t0 = time.time()
     clips = set(a.clips.split(","))
@@ -553,6 +554,8 @@ def main():
     ap.add_argument("--cycle-frames", type=int, default=28, help="frames per walk cycle (2 steps)")
     ap.add_argument("--fps", type=int, default=24)
     ap.add_argument("--clips", default="cycle,across,orbit", help="which animations to render")
+    ap.add_argument("--look", default="stylized", choices=look.LOOKS,
+                    help="render look (examples/nike/look.py); classic = the original renderer settings")
     ap.add_argument("--app", action="store_true",
                     help='"Almost Pixel Perfect": bone-aware patch snapping + no-blend recombine (outputs *_app)')
     a = ap.parse_args()

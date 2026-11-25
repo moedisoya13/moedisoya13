@@ -15,6 +15,7 @@ from typing import List, Optional
 import numpy as np
 import torch
 
+from . import gbuffer as gbuf
 from .camera import Camera
 from .raster import RasterConfig, rasterize
 
@@ -50,6 +51,31 @@ class ShadeConfig:
     shadow_radius: tuple = (0.32, 0.22)  # (rx, rz)
     shadow_strength: float = 0.55
     shadow_steps: int = 3  # quantized (pixel-art) falloff
+    # ---- look options; every default below is neutral (= the original renderer). ``stylized()``
+    # returns a tuned set.  See docs/LOOK.md for what each one does and why.
+    terminator: float = 0.0  # 0..1: crisper light/shadow edge (two-tone ramp blended over Lambert)
+    terminator_width: float = 0.10  # softness of that edge in N·L units
+    ssao: float = 0.0  # screen-space ambient occlusion strength (folds, gaps between feathers)
+    ssao_radius: float = 3.0  # in art pixels
+    cavity: float = 0.0  # curvature shading: grooves darker ...
+    ridge: float = 0.0  # ... and ridges lighter (edge highlight)
+    rim: float = 0.0  # fresnel rim from lights that sit behind the model
+    rim_power: float = 2.5
+    spec_scale: float = 1.0  # multiplies the direct specular lobe (sheen control)
+    outline_silhouette: Optional[float] = None  # outline strength against the background; None = ``outline``
+    outline_tint: tuple = (1.0, 1.0, 1.0)  # outline pixels are multiplied by (1-outline)·tint
+    contrast: float = 0.0  # S-curve on luminance (hue preserved)
+    saturation: float = 1.0
+    shadow_tint: Optional[tuple] = None  # split toning: colour the darks drift towards ...
+    highlight_tint: Optional[tuple] = None  # ... and the lights (classic pixel-art hue shifting)
+    tint_strength: float = 0.5
+    palette_colors: Optional[np.ndarray] = None  # fixed (N,3) sRGB palette → stable across frames
+    flat_splats: bool = False  # all pixels of one splat get one colour (flat dabs, needs gb["id"])
+    bloom: float = 0.0  # glow around highlights, spills onto the background
+    bloom_threshold: float = 0.72
+    bloom_radius: float = 2.0  # art pixels
+    glow: float = 0.0  # faint halo of the model's own colour on the background
+    glow_radius: float = 10.0
 
 
 def _normalize(v, eps=1e-8):
@@ -97,7 +123,14 @@ def shade(gb: dict, cam: Camera, cfg: ShadeConfig, light_vis: Optional[list] = N
     for li, L in enumerate(cfg.lights):
         l = _normalize(np.asarray(L.direction, np.float32))
         h = _normalize(V + l)
-        nl = np.clip((n * l).sum(-1, keepdims=True), 0, 1)
+        nl_raw = (n * l).sum(-1, keepdims=True)
+        nl = np.clip(nl_raw, 0, 1)
+        if cfg.terminator > 0:
+            # two-tone ramp: the lit side stays bright almost up to the terminator, then drops fast
+            wdt = max(cfg.terminator_width, 1e-3)
+            band = np.clip((nl_raw + 0.5 * wdt) / wdt, 0, 1)
+            band = band * band * (3 - 2 * band)
+            nl = nl * (1 - cfg.terminator) + cfg.terminator * band * (0.62 + 0.38 * nl)
         if cfg.light_steps > 0:
             nl = np.ceil(nl * cfg.light_steps) / cfg.light_steps
         nh = np.clip((n * h).sum(-1, keepdims=True), 0, 1)
@@ -106,11 +139,19 @@ def shade(gb: dict, cam: Camera, cfg: ShadeConfig, light_vis: Optional[list] = N
         G = (nv / (nv * (1 - k) + k)) * (nl / (nl * (1 - k) + k) + 1e-6)
         F = f0 + (1 - f0) * (1 - vh) ** 5
         spec = D * G * F / (4 * nv * np.maximum(nl, 1e-4))
+        if cfg.spec_scale != 1.0:
+            spec = spec * cfg.spec_scale
         diff = (1 - F) * (1 - metal) * alb / np.pi
         vis = 1.0
         if light_vis is not None and li < len(light_vis) and light_vis[li] is not None:
             vis = light_vis[li][..., None]
-        col += (diff + spec) * nl * vis * np.asarray(L.color, np.float32) * L.intensity
+        lcol = np.asarray(L.color, np.float32) * L.intensity
+        col += (diff + spec) * nl * vis * lcol
+        if cfg.rim > 0:
+            # back light grazing the silhouette: only for lights behind the model as seen from here
+            back = np.clip(-(V * l).sum(-1, keepdims=True), 0, 1)
+            rim = back * (1 - nv) ** cfg.rim_power * np.clip(nl_raw + 0.35, 0, 1)
+            col += cfg.rim * rim * vis * lcol * (0.6 * alb + 0.4 * f0) / np.pi * 4.0
     # cheap environment: sky/ground gradient for diffuse ambient and reflections
     sky, gnd = np.asarray(cfg.sky, np.float32), np.asarray(cfg.ground, np.float32)
     amb = gnd + (sky - gnd) * (0.5 + 0.5 * n[..., 1:2])
@@ -118,7 +159,17 @@ def shade(gb: dict, cam: Camera, cfg: ShadeConfig, light_vis: Optional[list] = N
     env = gnd + (sky - gnd) * np.clip(0.5 + 0.8 * r[..., 1:2], 0, 1)
     env = env * (1 - rough) + amb * rough  # rough metals see the blurred average
     Fr = f0 + (np.maximum(1 - rough, f0) - f0) * (1 - nv) ** 5
-    col += cfg.env_strength * (amb * alb * (1 - metal) + env * Fr * 2.0)
+    ambient = cfg.env_strength * (amb * alb * (1 - metal) + env * Fr * 2.0)
+    if cfg.ssao > 0:
+        ao = gbuf.ssao(gb, gbuf.world_positions(cam, gb["depth"]), cfg.ssao_radius,
+                       alpha_threshold=cfg.alpha_threshold)
+        ao = 1 - cfg.ssao * (1 - ao[..., None])
+        ambient = ambient * ao
+        col = col * (0.45 + 0.55 * ao)  # a little of it on direct light too: reads as a contact shadow
+    col += ambient
+    if cfg.cavity > 0 or cfg.ridge > 0:
+        c = gbuf.curvature(gb, cam.viewmat, cfg.alpha_threshold)[..., None]
+        col = col * (1 - cfg.cavity * np.clip(-c * 1.2, 0, 1)) * (1 + cfg.ridge * np.clip(c * 1.2, 0, 1))
     return col * cfg.exposure
 
 
@@ -147,6 +198,64 @@ def ground_shadow(cam: Camera, cfg: ShadeConfig) -> np.ndarray:
     return np.where(t > 0, f * cfg.shadow_strength, 0).astype(np.float32)
 
 
+def _luma(c):
+    return c @ np.array([0.2126, 0.7152, 0.0722], np.float32)
+
+
+def grade(img: np.ndarray, cfg: ShadeConfig) -> np.ndarray:
+    """Colour grading in sRGB: luminance S-curve, saturation, split toning (dark → shadow_tint,
+    light → highlight_tint).  Neutral settings return the input unchanged."""
+    if cfg.contrast == 0 and cfg.saturation == 1 and cfg.shadow_tint is None and cfg.highlight_tint is None:
+        return img
+    img = np.clip(img, 0, 1)
+    L = _luma(img)[..., None]
+    if cfg.contrast != 0:
+        Lc = np.clip(L + cfg.contrast * (L * L * (3 - 2 * L) - L) * 2.0, 0, 1)
+        img = img * (Lc / np.maximum(L, 1e-4))
+        L = Lc
+    if cfg.saturation != 1:
+        img = L + (img - L) * cfg.saturation
+    if cfg.shadow_tint is not None or cfg.highlight_tint is not None:
+        def unit(t):
+            t = np.ones(3, np.float32) if t is None else np.asarray(t, np.float32)
+            return t / max(float(_luma(t)), 1e-4)  # same brightness, only the hue moves
+
+        t = np.clip((L - 0.15) / 0.6, 0, 1)
+        t = t * t * (3 - 2 * t)
+        tint = unit(cfg.shadow_tint) * (1 - t) + unit(cfg.highlight_tint) * t
+        img = img * (1 + cfg.tint_strength * (tint - 1))
+    return np.clip(img, 0, 1).astype(np.float32)
+
+
+def _blur(a: np.ndarray, sigma: float) -> np.ndarray:
+    from scipy.ndimage import gaussian_filter
+
+    return gaussian_filter(a, sigma=(sigma, sigma) + (0,) * (a.ndim - 2), mode="nearest")
+
+
+def fit_palette(images, n: int = 24, mask_bg: Optional[tuple] = None, seed: int = 0) -> np.ndarray:
+    """k-means palette (N,3) sRGB from one or more frames — fit it ONCE per clip and pass it as
+    ``ShadeConfig.palette_colors`` so the colours do not flicker from frame to frame."""
+    from sklearn.cluster import KMeans
+
+    px = np.concatenate([np.asarray(im, np.float32).reshape(-1, 3) for im in images])
+    if mask_bg is not None:
+        px = px[np.abs(px - np.asarray(mask_bg, np.float32)).sum(-1) > 0.03]
+    px = px[:: max(1, len(px) // 20000)]
+    return KMeans(n_clusters=min(n, len(px)), n_init=2, random_state=seed).fit(px).cluster_centers_.astype(np.float32)
+
+
+def apply_palette(px: np.ndarray, palette: np.ndarray) -> np.ndarray:
+    """Nearest palette colour for (M,3) sRGB pixels (luminance-weighted distance)."""
+    wgt = np.array([0.9, 1.2, 0.6], np.float32)
+    pal = np.asarray(palette, np.float32)
+    out = np.empty_like(px)
+    for i in range(0, len(px), 8192):
+        d = (((px[i:i + 8192, None] - pal[None]) * wgt) ** 2).sum(-1)
+        out[i:i + 8192] = pal[d.argmin(1)]
+    return out
+
+
 def postprocess(rgb_lin: np.ndarray, gb: dict, cfg: ShadeConfig, cam: Optional[Camera] = None,
                 background: Optional[np.ndarray] = None) -> np.ndarray:
     """Tonemap + pixel-art hacks → (H,W,3) sRGB in 0..1.
@@ -154,14 +263,30 @@ def postprocess(rgb_lin: np.ndarray, gb: dict, cfg: ShadeConfig, cam: Optional[C
     ``background`` = optional (H,W,3) sRGB image behind the model (sky, ground…)."""
     img = linear_to_srgb(aces(rgb_lin))
     mask = gb["alpha"] > cfg.alpha_threshold
-    if cfg.outline > 0:
+    img = grade(img, cfg)
+    if cfg.flat_splats and "id" in gb and mask.any():
+        # one colour per splat: pixels that show the same splat become one flat dab
+        _, inv = np.unique(gb["id"][mask], return_inverse=True)
+        cnt = np.bincount(inv).astype(np.float32)
+        px = img[mask]
+        img[mask] = np.stack([np.bincount(inv, px[:, c]) / cnt for c in range(3)], -1)[inv]
+    o_sil = cfg.outline if cfg.outline_silhouette is None else cfg.outline_silhouette
+    if cfg.outline > 0 or o_sil > 0:
         d = np.where(mask, gb["depth"], 1e9)
-        edge = np.zeros_like(mask)
+        edge = np.zeros_like(mask)  # inner edge: the neighbour is a farther part of the model
+        sil = np.zeros_like(mask)  # silhouette: the neighbour is background
         for dy, dx in ((0, 1), (0, -1), (1, 0), (-1, 0)):
             nb = np.roll(np.roll(d, dy, 0), dx, 1)
-            edge |= mask & ((nb - d) > cfg.outline_depth)  # neighbour is farther / background
-        img = np.where(edge[..., None], img * (1 - cfg.outline), img)
-    if cfg.palette > 0 and mask.sum() > cfg.palette:
+            far = mask & ((nb - d) > cfg.outline_depth)
+            sil |= far & (nb > 1e8)
+            edge |= far & (nb <= 1e8)
+        tint = np.asarray(cfg.outline_tint, np.float32)
+        for e, strength in ((edge & ~sil, cfg.outline), (sil, o_sil)):
+            if strength > 0:
+                img = np.where(e[..., None], img * (1 - strength) * tint, img)
+    if cfg.palette_colors is not None and mask.any():
+        img[mask] = apply_palette(img[mask], cfg.palette_colors)
+    elif cfg.palette > 0 and mask.sum() > cfg.palette:
         from sklearn.cluster import KMeans
 
         px = img[mask]
@@ -173,7 +298,35 @@ def postprocess(rgb_lin: np.ndarray, gb: dict, cfg: ShadeConfig, cam: Optional[C
         bg = np.asarray(cfg.background, np.float32)
         if cam is not None and cfg.ground_y is not None:
             bg = bg * (1 - ground_shadow(cam, cfg))[..., None]
-    return np.where(mask[..., None], img, bg)
+    out = np.where(mask[..., None], img, bg)
+    if cfg.glow > 0 and mask.any():
+        # the model lights the air around it a little (the reference has this faint halo)
+        halo = _blur(mask.astype(np.float32), cfg.glow_radius)[..., None] * img[mask].mean(0)
+        out = np.where(mask[..., None], out, out + cfg.glow * halo * (1 - out))
+    if cfg.bloom > 0 and mask.any():
+        bright = np.where(mask[..., None], np.clip(img - cfg.bloom_threshold, 0, None), 0) / (1 - cfg.bloom_threshold)
+        b = 0.6 * _blur(bright, cfg.bloom_radius) + 0.4 * _blur(bright, cfg.bloom_radius * 3)
+        out = 1 - (1 - out) * (1 - np.clip(cfg.bloom * b, 0, 1))  # screen blend
+    return out
+
+
+def stylized(base: Optional[ShadeConfig] = None, strength: float = 1.0, low_key: bool = True,
+             **overrides) -> ShadeConfig:
+    """A copy of ``base`` with the look options switched on at tuned values (see docs/LOOK.md).
+
+    ``strength`` scales all of them together (0 = unchanged ``base``); ``overrides`` win.
+    ``low_key`` also turns the ambient light and the exposure down, so that shadows go properly
+    dark and only the lit ridges are bright (the reference renders are lit like this); switch it
+    off for scenes that bring their own bright environment."""
+    base = ShadeConfig() if base is None else base
+    k = strength
+    opts = dict(terminator=0.8 * k, ssao=0.6 * k, cavity=0.35 * k, ridge=0.2 * k, rim=0.6 * k,
+                contrast=0.35 * k, saturation=1 + 0.1 * k, shadow_tint=(0.62, 0.52, 0.95),
+                highlight_tint=(1.0, 0.93, 0.78), tint_strength=0.22 * k, bloom=0.5 * k, glow=0.03 * k)
+    if low_key:
+        opts.update(exposure=base.exposure * (1 - 0.45 * k), env_strength=base.env_strength * (1 - 0.6 * k))
+    opts.update(overrides)
+    return replace(base, **opts)
 
 
 # ------------------------------------------------------------------ snapping
@@ -207,6 +360,20 @@ class FrameConfig:
     shade: ShadeConfig = field(default_factory=ShadeConfig)
     snap: bool = False
     mode: str = "lit"  # lit | albedo | normal | depth | patches
+    # ---- pixel decisions / G-buffer clean-up (defaults = off = the original behaviour)
+    supersample: int = 1  # rasterize S× larger, then each art pixel picks a representative sample
+    select: str = "mean"  # how: "mean" (area-average of the winning surface; steadiest) | "medoid" (one splat)
+    despeckle: bool = False  # replace isolated outlier pixels / pin-holes by a typical neighbour
+    normal_smooth: float = 0.0  # 0..1 edge-preserving blur of the normals at the art resolution
+    depth_tol: float = 0.04  # world-units depth difference that still counts as "same surface"
+
+
+def clean_frame(shade: Optional[ShadeConfig] = None, app: bool = True, supersample: int = 2,
+                despeckle: bool = True, normal_smooth: float = 0.6, **kw) -> FrameConfig:
+    """FrameConfig with the G-buffer clean-up on at the tuned values.  ``app`` = "Almost Pixel
+    Perfect" (no-blend compositing + patch snapping); the clean-up is what makes that mode calm."""
+    return FrameConfig(raster=RasterConfig(tile=4, k=256, hard=app), shade=shade or ShadeConfig(), snap=app,
+                       supersample=supersample, despeckle=despeckle, normal_smooth=normal_smooth, **kw)
 
 
 def render_gbuffer_frame(model, cam: Camera, cfg: FrameConfig, pose=None) -> dict:
@@ -224,12 +391,27 @@ def render_gbuffer_frame(model, cam: Camera, cfg: FrameConfig, pose=None) -> dic
         def go(rc):
             return rasterize(means, R, scales, model.opacity(), feats, R[..., 2], cam, rc, shift)
 
+        ss = max(1, int(cfg.supersample))
+        art_cam = cam
+        if ss > 1:
+            # the snap shift is decided on the ART grid (whole art pixels), then scaled: the
+            # sub-samples of an art pixel keep seeing the same splats while a patch moves
+            cam = cam.scaled(ss)
+            shift = shift * ss if shift is not None else None
         out = go(rc)
         # inference only: if some tiles ran out of slots, retry with more (never silently truncate much)
         while out["overflow"] > 0.01 and rc.k < 2048:
             rc = replace(rc, k=rc.k * 2)
             out = go(rc)
-    return gbuffer_from_render(out)
+    gb = gbuffer_from_render(out)
+    if ss > 1:
+        gb = gbuf.select_downsample(gb, ss, cfg.shade.alpha_threshold, cfg.select, cfg.depth_tol)
+        assert gb["alpha"].shape == (art_cam.height, art_cam.width)
+    if cfg.despeckle and cfg.mode != "patches":
+        gb = gbuf.despeckle(gb, cfg.shade.alpha_threshold, cfg.depth_tol)
+    if cfg.normal_smooth > 0:
+        gb = gbuf.smooth_normals(gb, cfg.normal_smooth, cfg.shade.alpha_threshold, cfg.depth_tol)
+    return gb
 
 
 def render_frame(model, cam: Camera, cfg: FrameConfig, pose=None) -> np.ndarray:
