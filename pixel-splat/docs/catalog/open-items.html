@@ -1,0 +1,313 @@
+<title>니케 미결 카탈로그</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap">
+<style>
+/* layout: one reading column of decision cards; build comparisons sit as equal-width pairs inside
+   the card they belong to; a sticky bar at the foot carries the answer count and the submit button. */
+:root{
+  --bg:#eceaf3; --panel:#f8f7fb; --ink:#1b1a30; --muted:#5c5a78; --line:#cfcbe0;
+  --accent:#b4531c; --accent-ink:#fff8f1; --pick:#2e3270; --pick-ink:#f3f1ff; --ok:#1f6b4f; --warn:#8a4b12; --stage:#13121c;
+  --display:"Gowun Batang","Noto Serif KR",Georgia,serif;
+  --body:"IBM Plex Sans KR","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#13121c; --panel:#1c1b2b; --ink:#ece5d6; --muted:#a39fbd; --line:#34324d;
+  --accent:#f0a35e; --accent-ink:#201305; --pick:#8f95e6; --pick-ink:#101022; --ok:#6fd0a6; --warn:#f0b56e; --stage:#0c0b13; color-scheme:dark } }
+:root[data-theme="dark"]{
+  --bg:#13121c; --panel:#1c1b2b; --ink:#ece5d6; --muted:#a39fbd; --line:#34324d;
+  --accent:#f0a35e; --accent-ink:#201305; --pick:#8f95e6; --pick-ink:#101022; --ok:#6fd0a6; --warn:#f0b56e; --stage:#0c0b13; color-scheme:dark }
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.65}
+.wrap{max-width:760px;margin:0 auto;padding-block:28px 120px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:22px}
+h1{font-family:var(--display);font-size:1.9rem;line-height:1.25;margin:0;text-wrap:balance}
+h2{font-family:var(--display);font-size:1.25rem;margin:0;text-wrap:balance}
+h3{font-size:1.02rem;font-weight:600;margin:0;text-wrap:balance}
+p{margin:0}
+.lede{color:var(--muted);max-width:62ch}
+.meta{font-family:var(--mono);font-size:.78rem;color:var(--muted);display:flex;flex-wrap:wrap;gap:4px 14px}
+.sec{display:flex;flex-direction:column;gap:12px}
+.sec>header{display:flex;flex-direction:column;gap:2px;border-bottom:1px solid var(--line);padding-bottom:8px}
+.sec>header p{color:var(--muted);font-size:.9rem}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:16px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.card.done{border-color:var(--pick)}
+.qhead{display:flex;gap:10px;align-items:baseline}
+.qid{font-family:var(--mono);font-size:.78rem;color:var(--accent);flex:none}
+.body{color:var(--ink);max-width:66ch}
+.body small{display:block;color:var(--muted);font-size:.86rem;margin-top:4px}
+.pair{display:grid;grid-template-columns:1fr 1fr;gap:10px;background:var(--stage);padding:10px;border-radius:4px}
+.pair.tall{max-width:560px}
+figure{margin:0;display:flex;flex-direction:column;gap:6px;min-width:0}
+figure video,figure img{width:100%;height:auto;display:block;image-rendering:pixelated;background:var(--stage)}
+figcaption{font-family:var(--mono);font-size:.74rem;color:#cfc8e6;display:flex;gap:6px;align-items:baseline}
+figcaption b{color:#f0a35e;font-weight:500}
+.still{background:var(--stage);padding:10px;border-radius:4px}
+.still img{width:100%;height:auto;display:block}
+.opts{display:flex;flex-wrap:wrap;gap:8px}
+.opt{font:inherit;font-size:.9rem;line-height:1.35;text-align:left;color:var(--ink);background:transparent;border:1px solid var(--line);border-radius:4px;padding:8px 11px;cursor:pointer;max-width:100%}
+.opt:hover{border-color:var(--pick)}
+.opt:focus-visible,.btn:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.opt[aria-pressed="true"]{background:var(--pick);color:var(--pick-ink);border-color:var(--pick)}
+.opt .rec{font-family:var(--mono);font-size:.7rem;margin-left:6px;opacity:.8}
+textarea{font:inherit;font-size:.9rem;width:100%;min-height:2.6em;resize:vertical;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:4px;padding:8px 10px;box-sizing:border-box}
+textarea::placeholder{color:var(--muted)}
+.bar{position:fixed;left:0;right:0;bottom:0;background:var(--panel);border-top:1px solid var(--line);padding-block:10px;padding-bottom:calc(10px + env(safe-area-inset-bottom,0px));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));z-index:5}
+.bar-in{max-width:760px;margin:0 auto;display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center}
+.count{font-family:var(--mono);font-size:.82rem;font-variant-numeric:tabular-nums}
+.status{font-size:.82rem;color:var(--muted);flex:1 1 180px;min-width:0}
+.status.ok{color:var(--ok)} .status.warn{color:var(--warn)}
+.btn{font:inherit;font-weight:600;font-size:.92rem;border-radius:4px;padding:9px 16px;cursor:pointer;border:1px solid var(--line);background:transparent;color:var(--ink)}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn[disabled]{opacity:.55;cursor:default}
+#copyout{font-family:var(--mono);font-size:.78rem;min-height:9em}
+.note{font-size:.86rem;color:var(--muted)}
+@media (max-width:420px){ h1{font-size:1.55rem} .card{padding:13px} }
+</style>
+
+<div class="wrap">
+  <header class="sec">
+    <p class="meta"><span>Pixel art 쿼드 가우시안 스플랫 모델링</span><span>handoff 2026-11-25</span><span>branch claude/vibrant-dijkstra-2srtrd</span></p>
+    <h1>걷는 니케 — 미결 사항 카탈로그</h1>
+    <p class="lede">아직 결정되지 않은 항목을 한곳에 모았습니다. 항목마다 선택지를 누르고, 필요하면 메모를 적은 뒤 맨 아래 <b>응답 제출</b>을 누르세요. 제출한 응답은 저장되어 새 세션이 그대로 읽어 갑니다. 일부만 답해도 되고, 나중에 고쳐서 다시 제출해도 됩니다.</p>
+    <p class="note">비교가 필요한 빌드는 같은 너비의 애니메이션을 좌우로 나란히 두었습니다. 왼쪽이 이전(A), 오른쪽이 최신(B)입니다.</p>
+  </header>
+  <main id="root" class="wrap" style="padding:0;gap:26px"></main>
+  <section class="sec" id="fallback">
+    <header><h2>응답 텍스트</h2><p>저장이 되지 않는 환경이면 이 글을 복사해 새 세션에 붙여 넣으세요.</p></header>
+    <textarea id="copyout" readonly aria-label="응답 요약 텍스트"></textarea>
+    <div><button class="btn" id="copybtn" type="button">응답 복사</button></div>
+  </section>
+</div>
+<div class="bar"><div class="bar-in">
+  <span class="count" id="count">0 / 0</span>
+  <span class="status" id="status">저장소 연결 중…</span>
+  <button class="btn primary" id="submit" type="button">응답 제출</button>
+</div></div>
+
+<script>
+const V = (src, tag, label) => ({src, tag, label});
+const SECTIONS = [
+ {id:"build", title:"빌드 비교", note:"같은 장면을 두 빌드로 렌더한 샘플입니다.", items:[
+  {id:"B1", title:"스튜디오 걷기: 어느 빌드를 기준으로 삼을까요?",
+   body:"A는 깃털을 규칙으로 배치한 날개·둥근 발·기존 렌더(28k splat, 128px). B는 사진에서 오려낸 날개·손 발·새 룩(60k splat, 256px).",
+   pair:{w:512,h:512,a:V("media/studio_v3.mp4","A","v3 · 절차적 날개"),b:V("media/studio_v4.mp4","B","v4 · 사진 날개 + 손 발")},
+   opts:[["v4","B(v4)를 기준으로",1],["v3","A(v3)로 되돌림"],["mix","섞기 (메모에 조합 적기)"]]},
+  {id:"B2", title:"룩: 기존 렌더와 새 룩 중 기본값은?",
+   body:"같은 v4 모델, 같은 프레임입니다. A는 기존 렌더러 그대로(classic), B는 2배 렌더 후 투표·잡티 제거·또렷한 명암·따뜻한 빛(stylized).",
+   small:"정지 화면은 B가 깨끗하지만, 카메라가 천천히 움직일 때 바뀌는 픽셀은 B가 조금 더 많습니다(pan 12.9% → 16.5%).",
+   pair:{w:512,h:512,a:V("media/studio_v4_classic.mp4","A","classic"),b:V("media/studio_v4.mp4","B","stylized")},
+   opts:[["stylized","B(stylized) 기본",1],["classic","A(classic) 기본"],["soft","stylized를 약하게 (대리석 무늬·대비 낮춤)"]]},
+  {id:"B3", title:"Almost Pixel Perfect: 기본으로 켤까요?",
+   body:"같은 v4 모델·같은 룩입니다. A는 조각 snap 없이 반투명 합성, B는 뼈 기준 81조각을 픽셀 격자에 맞추고 섞지 않고 합침(APP).",
+   pair:{w:512,h:512,a:V("media/studio_v4_noapp.mp4","A","APP 끔"),b:V("media/studio_v4.mp4","B","APP 켬")},
+   opts:[["on","B(APP 켬) 기본",1],["off","A(APP 끔) 기본"],["scene","장면마다 따로 (메모)"]]},
+  {id:"B4", title:"거상 걷기(아이폰 전체 화면): 어느 빌드?",
+   body:"A는 이전 날개·둥근 발·기존 렌더, B는 사진 날개·손 발·새 룩. 둘 다 131×284 격자입니다.",
+   pair:{w:524,h:1136,tall:1,a:V("media/colossus_walk_v3.mp4","A","거상 v3"),b:V("media/colossus_walk_v4.mp4","B","거상 v4")},
+   opts:[["v4","B(v4) 채택",1],["v3","A(v3) 유지"],["redo","둘 다 아님 — 다시 (메모)"]]},
+  {id:"B5", title:"거상 회전: 채택과 구도",
+   body:"걸으면서 카메라가 한 바퀴 돕니다. 옆·뒤에서는 날개가 화면 위로 잘립니다.",
+   pair:{w:524,h:1136,tall:1,a:V("media/colossus_orbit_v3.mp4","A","회전 v3"),b:V("media/colossus_orbit_v4.mp4","B","회전 v4")},
+   opts:[["v4","B(v4) 그대로 채택"],["far","B + 카메라를 멀리 해서 날개가 안 잘리게",1],["drop","회전 영상은 제외"]]},
+ ]},
+ {id:"shape", title:"형태", note:"조형(sculpt)에서 남은 결정입니다.", items:[
+  {id:"S1", title:"발 자리의 손 모양",
+   body:"지금은 손가락이 길고 벌어져 갈퀴처럼 보입니다. 요청하신 “달걀을 살짝 덮은 듯 둥글게”에는 덜 가깝습니다.",
+   still:"media/hands.jpg",
+   opts:[["round","손가락을 짧게, 손등을 더 둥글게",1],["keep","지금 그대로"],["big","손을 더 크게"],["feet","발로 되돌림"]]},
+  {id:"S2", title:"오른쪽 날개가 왼쪽보다 약 20% 긴 문제",
+   body:"좌우 날개를 각자의 옆모습 사진에서 그대로 옮긴 결과입니다. 오른쪽 날개는 왼쪽을 뒤집어 뜬 석고 복원품이라, 차이의 일부는 촬영 각도 차이일 수 있습니다(카메라 각도 추정 오차 ±6~10°).",
+   opts:[["keep","사진 그대로 유지"],["norm","오른쪽을 왼쪽 크기에 맞춤",1],["mirror","왼쪽 날개를 뒤집어 오른쪽으로 사용"],["refit","오른쪽 사진의 카메라 각도를 다시 추정"]]},
+  {id:"S3", title:"정면에서 본 날개 위치",
+   body:"정면 사진과 비교하면 모델의 날개가 몸통에 비해 조금 낮고 작게 붙어 있습니다. 옆으로 벌어진 정도는 눈으로 맞춘 값입니다. 또 3/4 정면(위 B1~B3 샘플의 시점)에서는 오른쪽 날개가 얇은 판의 옆면만 보여 막대처럼 보입니다.",
+   opts:[["fix","정면·뒷면 사진에 맞춰 보정",1],["keep","유지"]]},
+  {id:"S4", title:"몸통과 옷 주름",
+   body:"날개만 사진 기반이고 몸통·옷은 처음 조형 그대로입니다. 원작의 바람에 부푼 옷자락, 허리 망토의 굵은 주름은 단순화되어 있습니다.",
+   opts:[["later","지금은 유지, 나중에"],["cloth","옷자락·망토를 사진에 가깝게 개선",1],["photo","몸통도 사진에서 추출 시도"]]},
+  {id:"S5", title:"날개와 천의 움직임",
+   body:"날개는 살짝 펄럭이는 정도이고, 천은 뼈를 따라 늘어나기만 합니다(천 시뮬레이션 없음).",
+   opts:[["keep","유지",1],["cloth","천 흔들림을 더 자연스럽게"],["wing","날개 동작을 크게 (접기·퍼덕임)"]]},
+ ]},
+ {id:"look", title:"화질", note:"tomcc 샘플과의 남은 차이입니다.", items:[
+  {id:"L1", title:"손으로 찍은 듯한 색 덩어리",
+   body:"샘플은 이웃 픽셀의 55%가 같은 색인데 우리는 거의 픽셀마다 색이 다릅니다. splat이 픽셀만큼 작아서입니다. 한 번 시도(LOD 병합)했지만 더 차분해지지 않았습니다.",
+   opts:[["lod","splat 병합(LOD)을 다시 시도",1],["pal","팔레트 색 수 제한으로 접근"],["skip","보류"]]},
+  {id:"L2", title:"역광 쪽 흰 구멍",
+   body:"회전 영상에서 그늘진 천에 작은 흰 점이 남아 있습니다.",
+   opts:[["fix","고침",1],["skip","보류"]]},
+  {id:"L3", title:"밝기와 대비",
+   body:"샘플은 어둡고 그림자가 거의 검정입니다(밝기 중앙값 0.32). 우리는 대리석이 밝게 보이도록 0.5로 두었습니다.",
+   opts:[["bright","지금처럼 밝은 대리석",1],["low","샘플처럼 어둡고 강한 대비"],["both","두 버전 다 제공"]]},
+  {id:"L4", title:"거상 픽셀 크기와 기종",
+   body:"지금은 화면 픽셀 9개가 아트 픽셀 1개입니다(131×284 격자, iPhone 15/16 = 1179×2556). 숫자가 작을수록 세밀하고 렌더가 오래 걸립니다.",
+   opts:[["9","9 유지",1],["6","6 (더 세밀, 약 2.3배 느림)"],["12","12 (더 굵은 픽셀)"],["model","다른 기종 해상도 (메모에 기종)"]]},
+  {id:"L5", title:"배경화면 프레임",
+   body:"지금 배경화면은 걷는 도중이라 한 손이 들려 있습니다.",
+   opts:[["both","두 손이 모두 땅에 닿은 프레임으로",1],["keep","지금 그대로"]]},
+  {id:"L6", title:"거상 조명",
+   body:"지금은 옆에서 비추는 노을빛입니다. 역광은 극적이지만 대리석이 푸르스름하게 납작해지고, 세로 화면에서는 긴 그림자가 화면 밖으로 나갑니다.",
+   opts:[["side","옆 노을 유지",1],["back","역광으로"],["both","둘 다 제공"]]},
+ ]},
+ {id:"ops", title:"운영", note:"프로젝트를 어떻게 이어갈지에 대한 결정입니다.", items:[
+  {id:"O1", title:"저장 위치",
+   body:"지금은 moedisoya13/moedisoya13 repo의 pixel-splat/ 폴더, 작업 브랜치에만 있고 master에는 병합되지 않았습니다.",
+   opts:[["branch","지금처럼 작업 브랜치에서 계속",1],["pr","master로 PR 생성"],["split","별도 repo로 분리 (새로 만들어 주시면 이전)"]]},
+  {id:"O2", title:"학습된 모델 보관",
+   body:"out/ 폴더는 git에 올라가지 않아 새 세션에서는 사라집니다. v4 모델(4.1MB)은 handoff용으로 repo에 넣어 두었습니다. 다시 만들면 약 25분입니다.",
+   opts:[["keep","repo에 v4 모델 유지",1],["none","모델은 빼고 필요할 때 재생성"]]},
+  {id:"O3", title:"tomcc 원문 확인",
+   body:"x.com이 차단되어 원문 스레드를 읽지 못했습니다. “quad”의 정확한 뜻과 hack 목록은 추론입니다.",
+   opts:[["paste","스레드 본문을 직접 붙여 넣어 주겠음"],["allow","환경 네트워크에 x.com 허용 추가"],["skip","생략",1]]},
+  {id:"O4", title:"렌더 속도",
+   body:"CPU 4코어 전용입니다. 거상 걷기 72프레임에 약 24분, 회전 144프레임에 약 46분.",
+   opts:[["cpu","CPU로 계속",1],["opt","렌더 최적화부터 (그림자·2배 렌더 비용 줄이기)"],["gpu","GPU 환경으로 이전 검토"]]},
+  {id:"O5", title:"자체 점검(audit) — Opus(high) 10회",
+   body:"새 세션 시작 때 제안할 가벼운 점검입니다. 코드·수치·문서가 서로 맞는지 10개 관점으로 나눠 확인하고, 고칠 것은 목록으로만 보고합니다.",
+   opts:[["go","10회 그대로 실행",1],["half","5회로 축소"],["skip","생략"]]},
+ ]},
+ {id:"trash", title:"파기 승인", note:"승인한 것만 지웁니다. 답하지 않은 항목은 그대로 둡니다.", items:[
+  {id:"D1", title:"v3 산출물 (out/nike, 29MB)", body:"절차적 날개 시절의 모델·영상. 위 B1에서 v3를 고르면 보류하세요.", opts:[["del","파기 승인"],["hold","보류",1]]},
+  {id:"D2", title:"거상 v3 산출물 (out/nike_colossus, 88MB)", body:"이전 날개·둥근 발 거상 영상과 모델.", opts:[["del","파기 승인"],["hold","보류",1]]},
+  {id:"D3", title:"작업용 임시 파일 (scratchpad, 818MB)", body:"시험 렌더, agent 중간 결과, 내려받은 레퍼런스 소스(gsplat·2DGS). 세션이 끝나면 어차피 사라집니다.", opts:[["del","파기 승인",1],["hold","보류"]]},
+  {id:"D4", title:"내려받은 원본 사진 (50MB)", body:"Wikimedia Commons 사진. 날개 윤곽은 wings.npz로 이미 뽑아 두었습니다. 날개를 다시 추출하려면(S2의 재추정) 다시 받아야 합니다.", opts:[["del","파기 승인"],["hold","보류",1]]},
+  {id:"D5", title:"agent 작업 브랜치 (worktree-agent-…)", body:"화질 개선 agent의 로컬 브랜치. 내용은 작업 브랜치에 병합되어 있습니다.", opts:[["del","파기 승인",1],["hold","보류"]]},
+  {id:"D6", title:"문서의 옛 이미지", body:"README에서 더는 쓰지 않는 이전 빌드 이미지(데모 기사 포함 여부는 메모).", opts:[["del","파기 승인"],["hold","보류",1]]},
+  {id:"D7", title:"기존 세션", body:"새 세션이 handoff 문서와 이 카탈로그를 읽은 것을 확인한 뒤 정리합니다.", opts:[["del","확인 후 파기 승인",1],["hold","보류"]]},
+ ]},
+];
+
+const ITEMS = SECTIONS.flatMap(s => s.items);
+const LS = "nike-catalog-draft-v1";
+let answers = {};
+try { answers = JSON.parse(localStorage.getItem(LS) || "{}") || {}; } catch (e) { answers = {}; }
+let db = null, dirty = false;
+const $ = id => document.getElementById(id);
+const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
+const reduce = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+function video(v, w, h) {
+  const f = el("figure");
+  const vid = document.createElement("video");
+  vid.src = v.src; vid.width = w; vid.height = h; vid.muted = true; vid.playsInline = true; vid.preload = "metadata";
+  vid.setAttribute("muted", ""); vid.setAttribute("playsinline", "");
+  if (reduce) vid.controls = true; else vid.autoplay = true;
+  f.appendChild(vid);
+  const c = el("figcaption"); c.appendChild(el("b", null, v.tag)); c.appendChild(el("span", null, v.label)); f.appendChild(c);
+  return [f, vid];
+}
+function pair(p) {
+  const box = el("div", "pair" + (p.tall ? " tall" : ""));
+  const [fa, va] = video(p.a, p.w, p.h), [fb, vb] = video(p.b, p.w, p.h);
+  box.append(fa, fb);
+  // keep both clips in step: when the left one ends, restart both together
+  const restart = () => { try { va.currentTime = 0; vb.currentTime = 0; va.play().catch(() => {}); vb.play().catch(() => {}); } catch (e) {} };
+  va.addEventListener("ended", restart);
+  vb.addEventListener("ended", () => { if (va.ended || va.error) restart(); });
+  return box;
+}
+function card(it) {
+  const c = el("article", "card"); c.id = "card-" + it.id;
+  const h = el("div", "qhead"); h.append(el("span", "qid", it.id), el("h3", null, it.title)); c.appendChild(h);
+  const b = el("p", "body", it.body); if (it.small) b.appendChild(el("small", null, it.small)); c.appendChild(b);
+  if (it.pair) c.appendChild(pair(it.pair));
+  if (it.still) { const s = el("div", "still"); const im = document.createElement("img"); im.src = it.still; im.alt = it.title + " 현재 모습"; im.loading = "lazy"; s.appendChild(im); c.appendChild(s); }
+  const o = el("div", "opts"); o.setAttribute("role", "group"); o.setAttribute("aria-label", it.title);
+  for (const [k, label, rec] of it.opts) {
+    const bt = el("button", "opt", label); bt.type = "button"; bt.id = "opt-" + it.id + "-" + k; bt.dataset.q = it.id; bt.dataset.k = k;
+    if (rec) bt.appendChild(el("span", "rec", "제안"));
+    bt.addEventListener("click", () => { const a = answers[it.id] || (answers[it.id] = {}); a.choice = a.choice === k ? null : k; changed(); });
+    o.appendChild(bt);
+  }
+  c.appendChild(o);
+  const t = document.createElement("textarea"); t.id = "note-" + it.id; t.rows = 1; t.placeholder = "메모 (선택) — 다른 의견이나 조건";
+  t.setAttribute("aria-label", it.id + " 메모");
+  t.addEventListener("input", () => { (answers[it.id] || (answers[it.id] = {})).note = t.value; changed(true); });
+  c.appendChild(t);
+  return c;
+}
+function build() {
+  const root = $("root");
+  for (const s of SECTIONS) {
+    const sec = el("section", "sec"); sec.id = "sec-" + s.id;
+    const hd = el("header"); hd.append(el("h2", null, s.title), el("p", null, s.note)); sec.appendChild(hd);
+    for (const it of s.items) sec.appendChild(card(it));
+    root.appendChild(sec);
+  }
+}
+const answered = it => { const a = answers[it.id]; return !!(a && (a.choice || (a.note && a.note.trim()))); };
+function label(it, k) { const o = it.opts.find(o => o[0] === k); return o ? o[1] : k; }
+function summary() {
+  const lines = ["[니케 미결 카탈로그 응답]"];
+  for (const s of SECTIONS) for (const it of s.items) {
+    const a = answers[it.id]; if (!answered(it)) continue;
+    lines.push(it.id + " " + it.title + " → " + (a.choice ? label(it, a.choice) + " (" + a.choice + ")" : "선택 없음") + (a.note && a.note.trim() ? " | 메모: " + a.note.trim() : ""));
+  }
+  const rest = ITEMS.filter(it => !answered(it)).map(it => it.id);
+  if (rest.length) lines.push("미응답: " + rest.join(", "));
+  return lines.join("\n");
+}
+function paint(skipNotes) {
+  let n = 0;
+  for (const it of ITEMS) {
+    const a = answers[it.id] || {};
+    for (const [k] of it.opts) { const b = $("opt-" + it.id + "-" + k); if (b) b.setAttribute("aria-pressed", a.choice === k ? "true" : "false"); }
+    if (!skipNotes) { const t = $("note-" + it.id); if (t && t.value !== (a.note || "")) t.value = a.note || ""; }
+    const done = answered(it); if (done) n++;
+    const c = $("card-" + it.id); if (c) c.classList.toggle("done", done);
+  }
+  $("count").textContent = n + " / " + ITEMS.length + " 응답";
+  $("copyout").value = summary();
+}
+function changed(fromNote) {
+  dirty = true;
+  try { localStorage.setItem(LS, JSON.stringify(answers)); } catch (e) {}
+  paint(fromNote);
+  if (db) setStatus("제출하지 않은 변경이 있습니다.", "warn");
+}
+function setStatus(text, cls) { const s = $("status"); s.textContent = text; s.className = "status" + (cls ? " " + cls : ""); }
+function fmt(iso) { try { return new Date(iso).toLocaleString("ko-KR", {dateStyle: "medium", timeStyle: "short"}); } catch (e) { return iso; } }
+
+async function submit() {
+  const btn = $("submit");
+  if (!db) { setStatus("저장소에 연결되지 않았습니다. 아래 ‘응답 복사’를 쓰세요.", "warn"); $("fallback").scrollIntoView({behavior: reduce ? "auto" : "smooth"}); return; }
+  btn.disabled = true; setStatus("저장 중…");
+  const clean = {};
+  for (const it of ITEMS) if (answered(it)) { const a = answers[it.id]; clean[it.id] = {choice: a.choice || null, label: a.choice ? label(it, a.choice) : null, note: (a.note || "").trim(), title: it.title}; }
+  const doc = {answers: clean, answered: Object.keys(clean).length, total: ITEMS.length, submittedAt: new Date().toISOString(), text: summary(), schema: 1};
+  try {
+    await db.doc("responses/current").set(doc);
+    try { await db.collection("submissions").add(doc); } catch (e) {}
+    dirty = false; setStatus("제출됨 · " + fmt(doc.submittedAt) + " · " + doc.answered + "개 항목", "ok");
+  } catch (e) {
+    setStatus("저장하지 못했습니다 (" + ((e && e.code) || "오류") + "). 아래 ‘응답 복사’를 쓰세요.", "warn");
+  }
+  btn.disabled = false;
+}
+async function copy() {
+  const t = $("copyout");
+  try { await navigator.clipboard.writeText(t.value); $("copybtn").textContent = "복사됨"; }
+  catch (e) { t.focus(); t.select(); $("copybtn").textContent = "선택됨 — 복사하세요"; }
+  setTimeout(() => { $("copybtn").textContent = "응답 복사"; }, 2200);
+}
+
+build(); paint();
+$("submit").addEventListener("click", submit);
+$("copybtn").addEventListener("click", copy);
+
+(async () => {
+  let cap = null;
+  try { cap = window.claude && window.claude.use ? await window.claude.use("db") : null; } catch (e) { cap = null; }
+  if (!cap) { setStatus("저장소 없이 보는 중입니다. 응답은 이 기기에만 남습니다 — ‘응답 복사’를 쓰세요.", "warn"); return; }
+  db = cap;
+  const timer = setTimeout(() => setStatus("이전 응답을 불러오지 못했습니다. 새로 제출할 수 있습니다.", "warn"), 10000);
+  try {
+    const snap = await db.doc("responses/current").get();
+    clearTimeout(timer);
+    if (snap.exists) {
+      const d = snap.data() || {};
+      const saved = d.answers || {};
+      if (!Object.keys(answers).length) { for (const k of Object.keys(saved)) answers[k] = {choice: saved[k].choice || null, note: saved[k].note || ""}; paint(); }
+      setStatus((dirty ? "제출하지 않은 변경이 있습니다 · " : "") + "마지막 제출 " + fmt(d.submittedAt), dirty ? "warn" : "ok");
+    } else setStatus("아직 제출한 응답이 없습니다.");
+  } catch (e) { clearTimeout(timer); setStatus("이전 응답을 불러오지 못했습니다. 새로 제출할 수 있습니다.", "warn"); }
+})();
+</script>

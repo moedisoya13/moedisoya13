@@ -1,0 +1,20 @@
+{
+ "splats": 60000,
+ "n_splats": "60000",
+ "res": "320",
+ "n_views": "56",
+ "iters": "300",
+ "fov": "30.0",
+ "elev_range": "(-35.0, 30.0)",
+ "extent": "1.3",
+ "target": "(0.0, -0.1, -0.2)",
+ "seed": "0",
+ "tile": "4",
+ "k": "128",
+ "w_albedo": "1.0",
+ "w_material": "0.5",
+ "w_normal": "0.5",
+ "w_depth": "0.5",
+ "w_alpha": "1.0",
+ "log_every": "100"
+}
