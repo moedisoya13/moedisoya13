@@ -25,7 +25,7 @@ export const SEND = {
   repo: 'moedisoya13/moedisoya13',
   branch: 'claude/vibrant-ritchie-xornhd',
   title: '프로 복서',
-  page: ''
+  page: 'https://claude.ai/artifact/HybxKJu7LtBsGHs7M1rYpz'
 };
 // (the families the user's own catalogue offers for a new session; the first is the default)
 export const MODELS = [['claude-opus-5-5', 'Opus 5.5'], ['claude-fable-5-2', 'Fable 5.2'], ['claude-sonnet-5-5', 'Sonnet 5.5'], ['claude-haiku-5-5', 'Haiku 5.5']];
