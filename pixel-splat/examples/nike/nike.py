@@ -55,16 +55,29 @@ THIGH_LEN = float(np.linalg.norm(KNEE[1] - HIP[1]))
 SHIN_LEN = float(np.linalg.norm(ANKLE[1] - KNEE[1]))
 
 
-def wing_frame(s):
-    """Leading edge of a wing as a polyline, matched to the Louvre statue's profile.
+# Wing geometry re-verified against photos of the Louvre statue from the front, both sides and
+# the back (see examples/nike/README.md "날개 검증").  Measured in body units (neck→feet = 1.64):
+#   * side view: a wing reaches only ≈0.54 × body height behind the shoulder (≈0.86 units)
+#   * front view: each wing is an upright panel beside the shoulder, tip ≈0.45 beyond it,
+#     reaching from about neck height down to just above the hip mantle
+#   * plan (from above) the two wings open by the same amount: the right wing is an 1880s
+#     plaster cast made as a mirror of the left
+#   * but they are NOT identical as mounted: the right (plaster, -x) wing stands higher and
+#     hangs lower, so it looks ≈25 % taller from the front, and it is paler and smoother;
+#     the left (original marble, +x) wing stays near neck height and ends in a pointed tip.
+WINGS = {
+    1: dict(poly=[(0.10, 0.50, -0.08), (0.26, 0.65, -0.24), (0.43, 0.74, -0.44), (0.57, 0.73, -0.64),
+                  (0.65, 0.62, -0.82)],
+            lengths=[0.46, 0.50, 0.40, 0.24, 0.11], out=0.06, sweep=(10, 55)),
+    -1: dict(poly=[(-0.10, 0.50, -0.08), (-0.26, 0.68, -0.24), (-0.43, 0.79, -0.44), (-0.57, 0.78, -0.64),
+                   (-0.64, 0.67, -0.82)],
+             lengths=[0.50, 0.56, 0.46, 0.28, 0.13], out=0.10, sweep=(5, 50)),
+}
 
-    Seen from the side the wing sweeps almost horizontally *backwards* from the
-    shoulder blade: the top edge rises in a gentle arch a little above the
-    shoulders, then curls down at the far end — a long, swept-back crescent.
-    Seen from the front the two wings open into a modest V (≈2.4× shoulder half-width).
-    """
-    return [V(s * 0.09, 0.50, -0.09), V(s * 0.22, 0.70, -0.26), V(s * 0.34, 0.81, -0.48),
-            V(s * 0.43, 0.80, -0.73), V(s * 0.49, 0.64, -0.96)]
+
+def wing_frame(s):
+    """Leading edge (root → tip) of one wing as a polyline; s=+1 left (marble), -1 right (plaster)."""
+    return [V(*q) for q in WINGS[s]["poly"]]
 
 
 def _poly_tangent(pts, t, eps=0.02):
@@ -75,7 +88,7 @@ def _poly_tangent(pts, t, eps=0.02):
 def wing_feathers(s):
     """Feather blades (base, tip, radius, half_thickness, normal) for one wing."""
     poly = wing_frame(s)
-    down = V(s * 0.38, -1.0, 0.0)  # feathers fan slightly outward → broad from the front
+    down = V(s * WINGS[s]["out"], -1.0, 0.0)  # feathers fan slightly outward → broad from the front
     down = down / np.linalg.norm(down)
     out = []
 
@@ -90,10 +103,12 @@ def wing_feathers(s):
         return d, n / np.linalg.norm(n)
 
     def sweep(u):
-        return 15 + 50 * u  # feathers rake further back toward the tip
+        s0, s1 = WINGS[s]["sweep"]
+        return s0 + s1 * u  # feathers rake further back toward the tip
 
     def length(u):  # crescent: long in the middle, short at the root and the curled tip
-        return float(np.interp(u, [0.0, 0.4, 0.75, 1.0], [0.32, 0.52, 0.43, 0.20]))
+        L = WINGS[s]["lengths"]
+        return float(np.interp(u, np.linspace(0, 1, len(L)), L))
 
     # vane under everything so the wing reads as one solid mass
     for u in np.linspace(0.03, 0.97, 10):
@@ -220,8 +235,8 @@ COMPONENTS = {
 }
 UNION_K = 0.02
 HERO_AZ = 20  # 3/4 front view where both wings open into a V
-CENTER = (0.0, -0.08, -0.28)  # framing centre (body + swept-back wings)
-EXTENT = 1.4  # half-height the camera frames
+CENTER = (0.0, -0.10, -0.20)  # framing centre (body + swept-back wings)
+EXTENT = 1.3  # half-height the camera frames
 
 
 def full_sdf(p):
@@ -250,6 +265,11 @@ def sculpt(voxel=0.0075, log=print):
     col = base[None] * (0.80 + 0.22 * mott[:, None]) * (0.94 + 0.06 * vein[:, None])
     col = col * (0.42 + 0.58 * ao[:, None] ** 1.2)
     col = col * V(1.0, 0.99, 0.965)[None]
+    # the right wing is plaster: paler, greyer and without the marble's mottling
+    lab, names = component_labels(verts)
+    plaster = lab == names.index("wingR")
+    flat = V(0.90, 0.895, 0.885)[None] * (0.50 + 0.50 * ao[plaster, None] ** 1.2)
+    col[plaster] = 0.25 * col[plaster] + 0.75 * flat
     log(f"[sculpt] painted marble ({time.time() - t0:.1f}s)")
     part = Part("nike", verts, faces, nrm.astype(np.float32), vert_colors=np.clip(col, 0, 1).astype(np.float32),
                 base_color=V(1, 1, 1), roughness=0.55, metallic=0.0)
