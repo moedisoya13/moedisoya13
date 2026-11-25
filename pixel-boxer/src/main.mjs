@@ -134,6 +134,7 @@ function start({ manifest, arena: parts, boxers }) {
     guard = createGuard(guard.style);
     replayEnd = -Infinity;
     replay.reset();
+    audio.reset();
     show('replay', false);
     $('stage').textContent = STAGES[stage].name;
     hud();
@@ -151,6 +152,9 @@ function start({ manifest, arena: parts, boxers }) {
         reset();
       }
       phase = 'fight';
+      // (the bell for the start, and the pit's crowd murmuring under the bout)
+      audio.play('bell', { strikes: 1 });
+      audio.ambience(arena.crowd ? 'pit' : null);
       show('title', false);
       show('result', false);
     }
@@ -184,19 +188,18 @@ function start({ manifest, arena: parts, boxers }) {
     if (d.ripple) ripples[d.ripple.on] = d.ripple.ripple;
     return d;
   };
+  // (what the sound is told with each event, and each step: where the men are and the camera, the place, the player's man;
+  // the mapping from an event to its sounds is game/audio.mjs cuesOf, the sparring's too)
+  const heard = (men, more) => Object.assign({ men: men || bout.fighters, yaw: cam.yaw, target: cam.target, pit: !!arena.crowd, you: 0 }, more);
   function react(e) {
     const f = bout.fighters;
     arena.hear(e);
-    if (arena.crowd && e.type === 'hit' && (e.down || e.J >= 60 || e.counter)) audio.play(e.down ? 'roar' : 'cheer');
-    if (e.type === 'punch') audio.play('swing');
-    else if (e.type === 'dash') {
-      audio.play('dodge');
+    audio.hear(e, heard());
+    if (e.type === 'dash') {
       fx[0].dust([f[e.who].x, 0, f[e.who].z], 6, [25, 24, 23]);
     } else if (e.type === 'hit') {
       // everything about a blow is sized by its impulse: a clean cross is about 85 newton-seconds
-      const k = Math.min(1.6, (e.J * (e.counter ? RULES.counterGain : 1)) / 85),
-        heavy = k > 0.75 || e.down;
-      audio.play(heavy ? 'heavy' : 'hit');
+      const k = Math.min(1.6, (e.J * (e.counter ? RULES.counterGain : 1)) / 85);
       // (sparks off the far side of what it struck, never seen over him, and a ripple through him from where it landed)
       blow(motes[e.on], e, f[e.on]);
       ripples[e.on] = rippleOf(e, f[e.on]);
@@ -214,14 +217,11 @@ function start({ manifest, arena: parts, boxers }) {
       $('blow').classList.add('on');
       if (e.down) phase = 'over';
     } else if (e.type === 'block') {
-      audio.play('whiff');
       defend(e);
       shake.amp = 1.2;
     } else if (e.type === 'parry') {
-      audio.play('deflect');
       white = defend(e).white;
       shake.amp = 2.5;
-      if (e.who === 0) setTimeout(() => audio.play('chance'), 100);
     } else if (e.type === 'whiff' || e.type === 'graze' || e.type === 'brilliant') defend(e);
   }
 
@@ -260,10 +260,11 @@ function start({ manifest, arena: parts, boxers }) {
         guard.see(bout.fighters);
         if (spar) bout.fighters[1].hp = Math.max(bout.fighters[1].hp, 25); // a sparring partner does not go down
         for (const e of bout.events) react(e);
+        audio.watch(bout.fighters, DT, heard());
         // (where a knocked-down man first comes down on the canvas: a second ripple through him, and a ring through the canvas)
         falls.forEach((fall, i) => {
           const at = landed(fall, bout.fighters[i]);
-          if (at) (ripples[i] = landRipple(fall, bout.fighters[i], at)), (ground = groundOf(fall, at));
+          if (at) (ripples[i] = landRipple(fall, bout.fighters[i], at)), (ground = groundOf(fall, at)), audio.hear({ type: 'floor', who: i }, heard());
           ringsOn(ground, fall, bout.fighters[i]); // (the ring of shaken pixels: his trunk's and his head's, each as it comes down)
         });
         if (bout.stop <= 0 || bout.events.length) pose();
@@ -292,7 +293,10 @@ function start({ manifest, arena: parts, boxers }) {
         const set = () => createFx();
         again = { motes: [set(), set()], trails: [set(), set()], ripples: [null, null], was: null };
       }
+      // (and its sounds again, lower and longer as it plays slower: game/audio.mjs)
+      const slow = { replay: true, rate: elapsed > 0 ? Math.max(0.2, Math.min(1, replay.moved / elapsed)) : 0.25, yaw: replay.view ? replay.view.yaw : cam.yaw, target: replay.view ? replay.view.target : cam.target };
       for (const k of replay.crossed) {
+        for (const e of k.events) audio.hear(e, heard(k.men, slow));
         for (const e of k.events) if (e.type === 'hit') (blow(again.motes[e.on], e, k.men[e.on]), (again.ripples[e.on] = rippleOf(e, k.men[e.on])));
         // (the streak of the glove that put him down, as the live picture left it)
         const v = replay.view;

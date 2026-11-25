@@ -5,6 +5,7 @@
      node tools/artifact.mjs catalog.html src/catalog.mjs <out.html>     the footwork catalogue
      node tools/artifact.mjs pending.html src/pending.mjs <out.html>     the pending catalogue (or fxlab.html src/fxlab.mjs)
      node tools/artifact.mjs spar.html src/spar.mjs <out.html>           the one-round sparring (its outfits' splats with it)
+     node tools/artifact.mjs sfx.html src/sfx.mjs <out.html>             the sounds' audition page (its modules alone: no assets)
      ... --since <commit>                                                the same, and the files map printed holds only the
                                                                          files changed since that commit, and those gone
                                                                          since then as null (for publishing again)
@@ -74,6 +75,8 @@ function filesOf(read) {
     for (const m of text.matchAll(/new URL\('(\.[^']+\.mjs)', import\.meta\.url\)/g)) follow(path.posix.join(path.posix.dirname(file), m[1]));
   })(entry);
   const files = Object.fromEntries([...seen].sort().map(f => [f, { from: f, contentType: 'text/javascript' }]));
+  // (the sounds' audition page draws nothing and loads nothing: its modules are all of it)
+  if (/sfx/.test(entry)) return files;
   files['assets/manifest.json'] = 'assets/manifest.json';
   // (the sparring dresses its men as the viewer picks: every outfit)
   const wear = /spar/.test(entry) ? Object.values(manifest.wear || {}).map(w => w.file.replace(/\.splats\.txt$/, '')) : [];

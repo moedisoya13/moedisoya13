@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#090a11">
+<meta name="claude:viewport-fit-sides" content="cover">
+<title>타격음 오디션</title>
+<style>
+  /* the sounds of a bout, one button each (src/sfx.mjs, game/audio.mjs): the sparring page's ink and paper, two cards a row on
+     a phone */
+  :root { --ink: #090a11; --card: #12141f; --paper: #f6f3ea; --muted: #a9a8b8; --line: rgba(246,243,234,.18); --red: #ff8a80; --blue: #8cc4ff;
+    --gold: #ffc24a; --side: max(16px, env(safe-area-inset-left, 0px)); --side-r: max(16px, env(safe-area-inset-right, 0px)); color-scheme: dark; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; background: var(--ink); color: var(--paper); }
+  body { font: 400 14px/1.45 ui-monospace, "SF Mono", Menlo, Consolas, "Noto Sans Mono CJK KR", monospace; touch-action: manipulation; overflow-x: hidden; }
+  .page { max-width: 1100px; margin: 0 auto; padding: calc(20px + env(safe-area-inset-top, 0px)) var(--side-r) 48px var(--side); display: flex; flex-direction: column; gap: 22px; }
+  header { display: flex; flex-direction: column; gap: 10px; }
+  h1 { margin: 0; font-size: clamp(24px, 6.5vw, 36px); line-height: 1.1; letter-spacing: .04em; font-weight: 700; }
+  h1 em { font-style: normal; color: var(--gold); }
+  .lede { margin: 0; color: var(--muted); max-width: 66ch; }
+  #state { margin: 0; font-size: 12px; color: var(--gold); }
+  #state.on { color: #58d6a4; }
+  .controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .ctl { display: flex; flex-direction: column; gap: 5px; min-width: 0; font-size: 11px; color: var(--muted); letter-spacing: .06em; }
+  .seg { display: flex; border: 1.5px solid var(--line); }
+  .seg button { flex: 1; min-width: 0; font: inherit; font-weight: 700; font-size: 13px; line-height: 1; color: var(--paper); background: var(--card); border: 0; padding: 11px 6px; cursor: pointer; }
+  .seg button + button { border-left: 1.5px solid var(--line); }
+  .seg button[aria-pressed="true"] { background: var(--paper); color: var(--ink); }
+  .seg button[data-who="0"][aria-pressed="true"] { background: var(--red); }
+  .seg button[data-who="1"][aria-pressed="true"] { background: var(--blue); }
+  .ctl.strength { grid-column: 1 / -1; }
+  .ctl.strength label { display: flex; justify-content: space-between; gap: 8px; }
+  .ctl.strength b { color: var(--paper); font-variant-numeric: tabular-nums; }
+  input[type="range"] { width: 100%; accent-color: var(--gold); margin: 4px 0 0; min-height: 28px; }
+  section { display: flex; flex-direction: column; gap: 10px; }
+  h2 { margin: 0; padding-bottom: 6px; font-size: 12px; letter-spacing: .14em; color: var(--muted); border-bottom: 1.5px solid var(--line); font-weight: 700; }
+  .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  @media (min-width: 760px) { .grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } .controls { grid-template-columns: repeat(3, minmax(0, 1fr)) 2fr; } .ctl.strength { grid-column: auto; } }
+  .card { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; text-align: left; font-family: inherit; color: var(--paper); background: var(--card);
+    border: 1.5px solid var(--line); padding: 10px 10px 11px; cursor: pointer; min-height: 72px; }
+  .card:active, .card.on { border-color: var(--gold); }
+  .card:focus-visible, .seg button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+  .card b { font-size: 14px; line-height: 1.2; overflow-wrap: anywhere; }
+  .card span { font-size: 11.5px; line-height: 1.35; color: var(--muted); overflow-wrap: anywhere; }
+  .card.demo b { color: var(--gold); }
+  #log { margin: 0; min-height: 3.2em; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+  footer { font-size: 11px; color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="page">
+  <header>
+    <h1>타격음 <em>오디션</em></h1>
+    <p class="lede">게임과 스파링이 쓰는 소리를 하나씩 들어 봅니다. 파일 없이 모두 그 자리에서 합성합니다(<code>src/game/audio.mjs</code>). 주먹을 낼 때의 이 사이 날숨, 맞는 소리, 막기와 쳐내기, 피하기, 맞은 사람의 목소리, 발과 바닥과 로프, 관중과 공.</p>
+    <p id="state">소리 잠김: 아무 곳이나 한 번 누르면 켜집니다</p>
+    <div class="controls">
+      <div class="ctl">선수 목소리<div class="seg" id="who"><button data-who="0" aria-pressed="true">빨강</button><button data-who="1" aria-pressed="false">파랑</button></div></div>
+      <div class="ctl">장소<div class="seg" id="place"><button data-pit="0" aria-pressed="true">링</button><button data-pit="1" aria-pressed="false">지하</button></div></div>
+      <div class="ctl">속도<div class="seg" id="speed"><button data-slow="0" aria-pressed="true">1×</button><button data-slow="1" aria-pressed="false">느리게(¼)</button></div></div>
+      <div class="ctl strength"><label for="J"><span>세기 (타격·막기·신음)</span><b id="Jv">85 N·s</b></label><input id="J" type="range" min="20" max="140" step="1" value="85"></div>
+    </div>
+  </header>
+  <main id="sounds" style="display:flex;flex-direction:column;gap:22px"></main>
+  <p id="log" aria-live="polite"></p>
+  <footer>카드의 소리는 게임과 같은 길로 납니다: 시합의 사건(주먹, 타격, 막기 …)을 <code>audio.hear</code>에 넘기면 무엇을 낼지 한 곳(<code>cuesOf</code>)이 정합니다.</footer>
+</div>
+<script type="module" src="src/sfx.mjs"></script>
+</body>
+</html>

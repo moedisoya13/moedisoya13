@@ -404,6 +404,9 @@ function run({ manifest, get }, o) {
     resultAt = null;
     freshFx();
     phase = 'play';
+    audio.reset();
+    // (the bell for the start, and the pit's crowd murmuring under the round)
+    if (sound) audio.play('bell', { strikes: 1 }), audio.ambience(arena.crowd ? 'pit' : null);
     pose(true);
     named();
     show('title', false);
@@ -447,7 +450,9 @@ function run({ manifest, get }, o) {
       }
     });
   }
-  const play = name => sound && audio.play(name);
+  // (what the sound is told with each event, and each step, as the game tells it: src/main.mjs, game/audio.mjs cuesOf; nobody
+  // here is the player's man)
+  const heard = (men, more) => Object.assign({ men: men || bout.fighters, yaw: cam.yaw, target: cam.target, pit: !!arena.crowd, you: null }, more);
   // (a defence drawn: its ripple, if it has one, put through the man defending as a hit's is) -> what it asks for (src/main.mjs)
   const defend = e => {
     const d = guard.meet(e, bout.fighters, fx[0], motes);
@@ -457,15 +462,11 @@ function run({ manifest, get }, o) {
   function react(e) {
     const f = bout.fighters;
     arena.hear(e);
-    if (arena.crowd && e.type === 'hit' && (e.down || e.J >= 60 || e.counter)) play(e.down ? 'roar' : 'cheer');
-    if (e.type === 'punch') play('swing');
-    else if (e.type === 'dash') {
-      play('dodge');
+    if (sound) audio.hear(e, heard());
+    if (e.type === 'dash') {
       fx[0].dust([f[e.who].x, 0, f[e.who].z], 6, [25, 24, 23]);
     } else if (e.type === 'hit') {
-      const q = Math.min(1.6, (e.J * (e.counter ? RULES.counterGain : 1)) / 85),
-        heavy = q > 0.75 || e.down;
-      play(heavy ? 'heavy' : 'hit');
+      const q = Math.min(1.6, (e.J * (e.counter ? RULES.counterGain : 1)) / 85);
       blow(motes[e.on], e, f[e.on]);
       ripples[e.on] = rippleOf(e, f[e.on]);
       if (fallOf(e)) falls[e.on] = fallOf(e);
@@ -475,11 +476,9 @@ function run({ manifest, get }, o) {
       void $('blow').offsetWidth;
       $('blow').classList.add('on');
     } else if (e.type === 'block') {
-      play('whiff');
       defend(e);
       shake.amp = reduced ? 0 : 1.2;
     } else if (e.type === 'parry') {
-      play('deflect');
       const d = defend(e);
       shake.amp = reduced ? 0 : 2.5;
       white = reduced ? 0 : d.white;
@@ -528,9 +527,10 @@ function run({ manifest, get }, o) {
           step(bout, inp, DT);
           guard.see(bout.fighters);
           for (const e of bout.events) react(e);
+          if (sound) audio.watch(bout.fighters, DT, heard());
           falls.forEach((fall, i) => {
             const at = landed(fall, bout.fighters[i]);
-            if (at) (ripples[i] = landRipple(fall, bout.fighters[i], at)), (ground = groundOf(fall, at));
+            if (at) (ripples[i] = landRipple(fall, bout.fighters[i], at)), (ground = groundOf(fall, at)), sound && audio.hear({ type: 'floor', who: i }, heard());
             ringsOn(ground, fall, bout.fighters[i]); // (the ring of shaken pixels, if ?ring=shake were asked of the game: off here)
           });
           if (bout.stop <= 0 || bout.events.length) pose();
@@ -565,7 +565,10 @@ function run({ manifest, get }, o) {
         const set = () => createFx();
         again = { motes: [set(), set()], trails: [set(), set()], ripples: [null, null], was: null };
       }
+      // (and its sounds again, lower and longer as it plays slower: game/audio.mjs)
+      const slow = { replay: true, rate: elapsed > 0 ? Math.max(0.2, Math.min(1, knock.moved / elapsed)) : 0.25, yaw: knock.view ? knock.view.yaw : cam.yaw, target: knock.view ? knock.view.target : cam.target };
       for (const st of knock.crossed) {
+        if (sound) for (const e of st.events) audio.hear(e, heard(st.men, slow));
         for (const e of st.events) if (e.type === 'hit') blow(again.motes[e.on], e, st.men[e.on]), (again.ripples[e.on] = rippleOf(e, st.men[e.on]));
         // (the streak of the glove that put him down, as the live picture left it)
         const v = knock.view;
@@ -673,6 +676,7 @@ function run({ manifest, get }, o) {
     } else if (what === 'sound') {
       sound = !sound;
       if (sound) audio.unlock();
+      audio.ambience(sound && arena && arena.crowd ? 'pit' : null);
       $('soundbtn').textContent = sound ? '소리 켬' : '소리 끔';
       $('soundbtn').setAttribute('aria-pressed', String(sound));
     } else if (what === 'close') show('full', false);
@@ -692,6 +696,7 @@ function run({ manifest, get }, o) {
     placed(name)
       .then(A => {
         arena = A;
+        if (sound) audio.ambience(A.crowd ? 'pit' : null);
         store.set('spar.arena', name);
         if (plan && plan.arena !== name && phase !== 'rest') newRound(plan.seed);
       })
