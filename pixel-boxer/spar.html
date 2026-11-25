@@ -7,10 +7,10 @@
 <meta name="claude:viewport-fit-sides" content="cover">
 <title>한 라운드 스파링</title>
 <style>
-  /* one screen: the ring fills it; the two men and the clock along the top, the arranged timeline in the corner, the buttons
+  /* one screen: the ring fills it; the two men and the clock along the top, the two rails of what they do over the buttons
      along the bottom */
   :root { --ink: #090a11; --paper: #f6f3ea; --red: #e6382e; --blue: #2a84ec; --gold: #ffc24a; --line: rgba(246,243,234,.22);
-    --panel: rgba(9,10,17,.78); --muted: #a9a8b8; --side: max(16px, env(safe-area-inset-left, 0px)); --side-r: max(16px, env(safe-area-inset-right, 0px));
+    --panel: rgba(9,10,17,.8); --muted: #a9a8b8; --k-attack: #ffb84a; --k-evade: #58d6a4; --k-guard: #b49cff; --k-hurt: #ff5470; --k-distance: #9aa3bd; --k-axis: #52c7ea; --side: max(16px, env(safe-area-inset-left, 0px)); --side-r: max(16px, env(safe-area-inset-right, 0px));
     color-scheme: dark; }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body { margin: 0; height: 100%; background: var(--ink); color: var(--paper); overflow: hidden; overscroll-behavior: none;
@@ -41,26 +41,18 @@
   #tag { position: absolute; right: var(--side-r); top: calc(56px + env(safe-area-inset-top, 0px)); font-size: 11px; letter-spacing: .1em; color: var(--gold); text-shadow: 0 2px 0 var(--ink); display: none; }
   #tag.on { display: block; }
 
-  /* the arranged timeline, in the corner: a few lines round the one being fought; a tap opens the whole of it */
-  #tl { position: absolute; left: var(--side); bottom: calc(66px + env(safe-area-inset-bottom, 0px)); width: min(46vw, 330px); max-width: calc(50% - 8px);
-    background: var(--panel); border: 2px solid var(--line); padding: 6px 8px 5px; display: none; cursor: pointer; }
-  #tl.on { display: block; }
-  #tl:focus-visible, button:focus-visible, select:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
-  #tl h2 { margin: 0 0 3px; font-size: 10px; letter-spacing: .1em; color: var(--muted); font-weight: 700; display: flex; justify-content: space-between; gap: 6px; }
-  #tl ol { list-style: none; margin: 0; padding: 0; }
-  .beat { display: grid; grid-template-columns: 2.5em 4px 1fr; gap: 0 5px; align-items: baseline; font-size: 10px; line-height: 1.45; white-space: nowrap; color: var(--paper); }
-  .beat .t { color: var(--muted); font-variant-numeric: tabular-nums; }
-  .beat .who { align-self: stretch; margin: 2px 0; background: var(--red); }
-  .beat .who.b { background: var(--blue); }
-  .beat .what { overflow: hidden; text-overflow: ellipsis; }
-  .beat .said { color: var(--gold); }
-  .beat.done { color: #8d8c9c; }
-  .beat.done .said { color: #b5a67a; }
-  .beat.now { color: var(--paper); }
-  .beat.now .t { color: var(--gold); }
-  .beat.now .t::before { content: "▶"; margin-right: 2px; }
-  .beat.ahead .what { color: #d9d6cc; }
-  .beat.ko .said { color: #ff8a80; }
+  /* the four lanes, along the bottom over the buttons: red's techniques and footwork, blue's footwork and techniques, a block
+     an action, coloured by its kind; the present at the playhead, what is to come (약속) to its right; a tap opens the whole */
+  #rails { position: absolute; left: var(--side); right: var(--side-r); bottom: calc(60px + env(safe-area-inset-bottom, 0px)); background: var(--panel);
+    border: 2px solid var(--line); padding: 4px 6px 6px; display: none; cursor: pointer; }
+  #rails.on { display: block; }
+  #rails:focus-visible, button:focus-visible, select:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+  #legend { display: flex; gap: 8px; align-items: center; font-size: 9px; letter-spacing: .04em; color: var(--muted); margin: 0 0 3px; white-space: nowrap; overflow: hidden; }
+  #legend .k::before { content: ""; display: inline-block; width: 7px; height: 7px; margin-right: 3px; background: var(--c); }
+  #legend .a { --c: var(--k-attack); } #legend .e { --c: var(--k-evade); } #legend .g { --c: var(--k-guard); } #legend .h { --c: var(--k-hurt); } #legend .d { --c: var(--k-distance); } #legend .x { --c: var(--k-axis); }
+  #legend .sep { color: #5d5c6c; }
+  #legend .more { margin-left: auto; color: var(--gold); font-variant-numeric: tabular-nums; }
+  #railcv { display: block; width: 100%; height: 80px; }
 
   #bar { position: absolute; left: 0; right: 0; bottom: 0; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; justify-content: center;
     padding: 8px var(--side-r) calc(10px + env(safe-area-inset-bottom, 0px)) var(--side); background: linear-gradient(transparent, rgba(9,10,17,.85) 40%); }
@@ -69,7 +61,7 @@
   #bar .go, .sheet .go { border-color: var(--gold); color: var(--gold); }
   #bar select { appearance: none; -webkit-appearance: none; padding-right: 10px; }
   #bar button:disabled { opacity: .4; cursor: default; }
-  #build { position: absolute; right: var(--side-r); bottom: calc(58px + env(safe-area-inset-bottom, 0px)); font-size: 9px; color: #6e6d7d; letter-spacing: .06em; pointer-events: none; }
+  #build { position: absolute; left: var(--side); top: calc(54px + env(safe-area-inset-top, 0px)); font-size: 9px; color: #6e6d7d; letter-spacing: .06em; pointer-events: none; text-shadow: 0 2px 0 var(--ink); }
 
   #busy { position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%); padding: 8px 14px; background: var(--panel); border: 2px solid var(--line); font-size: 12px; letter-spacing: .06em; display: none; white-space: nowrap; }
   #busy.on { display: block; }
@@ -81,7 +73,7 @@
   #title { top: calc(64px + env(safe-area-inset-top, 0px)); }
   #title h1 { margin: 0 0 6px; font-size: clamp(26px, 8vw, 52px); letter-spacing: .1em; color: var(--paper); text-shadow: 4px 4px 0 var(--red); text-wrap: balance; }
   #title p { margin: 4px 0; color: #d9d6cc; font-size: 12px; text-shadow: 0 2px 0 var(--ink); }
-  #result { top: calc(60px + env(safe-area-inset-top, 0px)); }
+  #result { top: calc(74px + env(safe-area-inset-top, 0px)); }
   #result > div { background: var(--panel); border: 2px solid var(--line); padding: 14px 16px 12px; }
   #result h2 { margin: 0 0 4px; font-size: clamp(16px, 5vw, 26px); letter-spacing: .06em; color: var(--paper); text-shadow: 3px 3px 0 var(--red); }
   #result p { margin: 2px 0 10px; color: #d9d6cc; font-size: 12px; }
@@ -91,22 +83,33 @@
   #full.on { display: flex; flex-direction: column; }
   #full header { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 8px; }
   #full h2 { margin: 0; font-size: 14px; letter-spacing: .08em; }
-  #full ol { list-style: none; margin: 0; padding: 0; overflow: auto; flex: 1; border-top: 2px solid var(--line); }
-  #full li { display: grid; grid-template-columns: 3.2em 5px 1fr; gap: 0 8px; padding: 6px 0; border-bottom: 1px solid rgba(246,243,234,.1); font-size: 12px; line-height: 1.45; }
+  #full ol { list-style: none; margin: 0 auto; padding: 0; overflow: auto; flex: 1; border-top: 2px solid var(--line); width: 100%; max-width: 760px; }
+  #full li { display: grid; grid-template-columns: 3.6em 1fr 1fr; gap: 0 8px; padding: 3px 0; border-bottom: 1px solid rgba(246,243,234,.08); font-size: 12px; line-height: 1.4; }
   #full li .t { color: var(--muted); font-variant-numeric: tabular-nums; }
-  #full li .who { background: var(--red); }
-  #full li .who.b { background: var(--blue); }
-  #full li .said { display: block; color: var(--gold); font-size: 11px; }
+  #full li .c { min-width: 0; padding-left: 7px; border-left: 4px solid var(--c, transparent); }
+  #full li .said { color: var(--gold); font-size: 11px; }
+  #full li .cut { color: #ff8a9c; font-size: 11px; }
   #full li.done { color: #a5a4b2; }
+  #full li.now { background: rgba(255,194,74,.12); }
   #full li.now .t { color: var(--gold); }
-  #full li.ko .said { color: #ff8a80; }
+  #full li.ko { background: rgba(255,84,112,.16); }
+  #full li.f { font-size: 11px; color: #9c9bab; padding: 1px 0; }
+  #full li.f .c { border-left-width: 2px; margin-left: 10px; }
+  #full .heads { display: grid; grid-template-columns: 3.6em 1fr 1fr; gap: 0 8px; font-size: 11px; color: var(--muted); margin: 0 auto 4px; width: 100%; max-width: 760px; }
+  #full .heads b:nth-child(2) { color: #ff8a80; } #full .heads b:nth-child(3) { color: #8cc4ff; }
   #full button { font: inherit; font-size: 12px; color: var(--paper); background: transparent; border: 2px solid rgba(246,243,234,.55); padding: 6px 10px; min-height: 34px; cursor: pointer; }
   #full .meta { color: var(--muted); font-size: 11px; margin: 0 0 8px; }
 
   #loading { position: fixed; inset: 0; display: grid; place-items: center; z-index: 9; background: var(--ink); color: var(--paper); }
   @media (orientation: landscape) and (max-height: 500px) {
-    #tl { bottom: calc(58px + env(safe-area-inset-bottom, 0px)); }
+    #rails { bottom: calc(54px + env(safe-area-inset-bottom, 0px)); padding: 3px 6px 4px; }
+    #railcv { height: 62px; }
+    #legend { display: none; }
     #title { top: calc(48px + env(safe-area-inset-top, 0px)); }
+  }
+  @media (max-width: 520px) {
+    #legend { gap: 5px; font-size: 8.5px; letter-spacing: 0; }
+    #legend .sep, #legend .lane { display: none; }
   }
   @media (prefers-reduced-motion: reduce) {
     #blow.on { animation: none; opacity: 1; }
@@ -125,12 +128,15 @@
   <div id="blow"></div>
   <div id="tag">리플레이</div>
   <div id="busy" role="status" aria-live="polite">대본을 짜는 중…</div>
-  <div id="tl" role="button" tabindex="0" aria-label="공방 타임라인: 눌러서 전체 보기"><h2><span>공방 타임라인</span><span id="tlcount"></span></h2><ol id="tlrows"></ol></div>
+  <div id="rails" role="button" tabindex="0" aria-label="두 선수의 기술과 풋워크 타임라인 네 줄: 눌러서 전체 보기">
+    <div id="legend"><span class="lane">기술</span><span class="k a">공격</span><span class="k e">회피</span><span class="k g">방어</span><span class="k h">피격</span><span class="sep">|</span><span class="lane">발</span><span class="k d">거리</span><span class="k x">축</span><span class="more" id="railnote"></span></div>
+    <canvas id="railcv"></canvas>
+  </div>
   <div class="sheet on" id="title">
     <div>
       <h1>한 라운드 스파링</h1>
       <p>시작을 누를 때마다 새로 짠 약속 대련을 첫 KO까지</p>
-      <p>미리 맞춰 둔 공방이 구석에 뜹니다</p>
+      <p>두 선수가 쉬지 않고 주고받고, 올 기술과 풋워크가 아래 네 줄에 미리 보입니다</p>
     </div>
   </div>
   <div class="sheet" id="result" role="status" aria-live="polite">
@@ -150,8 +156,9 @@
   </div>
 </div>
 <div id="full" role="dialog" aria-modal="true" aria-labelledby="fulltitle">
-  <header><h2 id="fulltitle">공방 타임라인</h2><button data-act="close">닫기</button></header>
+  <header><h2 id="fulltitle">액션 타임라인</h2><button data-act="close">닫기</button></header>
   <p class="meta" id="fullmeta"></p>
+  <div class="heads"><span></span><b>빨강</b><b>파랑</b></div>
   <ol id="fullrows"></ol>
 </div>
 <div id="loading">불러오는 중…</div>

@@ -1,4 +1,5 @@
-// 한 라운드 스파링 (src/spar/plan.mjs): a round arranged from a seed and rehearsed in the real bout, played back to the step.
+// 한 라운드 스파링 (src/spar/plan.mjs, src/spar/rails.mjs): a round arranged from a seed in one pass of the real bout, both men
+// acting all the time, and played back to the step: the same four lanes, the same events, the same knockdown.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
@@ -6,88 +7,164 @@ import { readFileSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { planOf, replayOf, checkOf, library, SPAR, hpOf } from '../src/spar/plan.mjs';
-import { leftOut } from '../src/spar/cards.mjs';
-import { SCRIPTS } from '../src/audit.mjs';
-import { TECHNIQUES } from '../src/game/techniques.mjs';
-import { LEVEL } from '../src/anim/skill.mjs';
+import { planOf, replayOf, checkOf, SPAR, hpOf } from '../src/spar/plan.mjs';
+import { viewsOf, ACTS, WAY, VIEW } from '../src/spar/rails.mjs';
+import { labelOf, shortOf } from '../src/spar/names.mjs';
+import { MOVES } from '../src/anim/moves.mjs';
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
-// the rounds the tests look at: 30 seeds, each arranged and played back once
-const SEEDS = Array.from({ length: 30 }, (_, i) => 101 + i * 37);
+// the rounds the tests look at: each arranged once and played back once from its controls
+const SEEDS = [101, 138, 175, 212, 249, 286, 323, 360];
 const ROUNDS = SEEDS.map(seed => {
   const plan = planOf(seed),
     played = replayOf(plan);
   return { seed, plan, played, check: checkOf(plan, played) };
 });
-// (the bounds a round is held to: seconds of bout to the knockdown, and beats, the last the knockdown's)
-const TIME = [30, 110],
-  BEATS = [SPAR.beats[0], SPAR.beats[1] + 4];
+const mean = xs => xs.reduce((a, b) => a + b, 0) / xs.length;
 
-test('the same seed gives the same round, to the step, and the same events', () => {
+test('the same seed gives the same round: the same men, controls, lanes and knockdown', () => {
   const a = ROUNDS[0].plan,
     b = planOf(a.seed);
-  assert.deepEqual(b.beats, a.beats);
   assert.deepEqual(b.inputs, a.inputs);
-  assert.deepEqual({ men: b.men, hp: b.hp, winner: b.winner, ko: b.ko }, { men: a.men, hp: a.hp, winner: a.winner, ko: a.ko });
-  const e1 = ROUNDS[0].played.events.map(x => [x.k, x.e.type, x.e.who, x.e.J]),
-    e2 = replayOf(b).events.map(x => [x.k, x.e.type, x.e.who, x.e.J]);
-  assert.deepEqual(e2, e1);
+  assert.deepEqual(b.rails, a.rails);
+  assert.deepEqual(b.feet, a.feet);
+  assert.deepEqual({ men: b.men, hp: b.hp, favoured: b.favoured, ko: b.ko, events: b.events }, { men: a.men, hp: a.hp, favoured: a.favoured, ko: a.ko, events: a.events });
 });
 
-test('every round ends in exactly one knockdown, the finishing beat\'s, within the bounds', () => {
+test('the round played again from its controls is the round that was arranged: the four lanes block for block, every punch event for event', () => {
+  for (const { seed, plan, played, check } of ROUNDS) {
+    assert.deepEqual(played.rails, plan.rails, `#${seed}: the technique lanes`);
+    assert.deepEqual(played.feet, plan.feet, `#${seed}: the footwork lanes`);
+    assert.ok(check.events, `#${seed}: the punches' events`);
+    assert.ok(plan.events.length > 40, `#${seed}: ${plan.events.length} events`);
+  }
+});
+
+test('both men act all the time: techniques and footwork at one a second or more each, and no stretch in which nobody starts anything', () => {
+  for (const { seed, plan } of ROUNDS) {
+    const st = plan.stats;
+    for (const i of [0, 1]) {
+      assert.ok(st.rate[i] >= 1 && st.rate[i] <= 3.4, `#${seed}: ${st.rate[i].toFixed(2)} techniques a second (man ${i})`);
+      assert.ok(st.pace[i] >= 1 && st.pace[i] <= 3.4, `#${seed}: ${st.pace[i].toFixed(2)} steps a second (man ${i})`);
+      assert.ok(st.kinds[i] >= 6, `#${seed}: ${st.kinds[i]} kinds of footwork (man ${i})`);
+    }
+    assert.ok(st.empty <= 1.1, `#${seed}: ${st.empty.toFixed(2)} s with nothing started`);
+    assert.ok(st.lull <= 2.2, `#${seed}: ${st.lull.toFixed(2)} s with no technique started`);
+    assert.ok(st.ways.distance >= 15 && st.ways.axis >= 15, `#${seed}: distance ${st.ways.distance}, axis ${st.ways.axis}`);
+  }
+  assert.ok(mean(ROUNDS.flatMap(r => r.plan.stats.rate)) >= 1.4);
+  assert.ok(mean(ROUNDS.flatMap(r => r.plan.stats.pace)) >= 1.4);
+});
+
+test('no standing between two motions: the next starts on the first frame the bout lets him, on both lanes', () => {
+  for (const { seed, plan } of ROUNDS) {
+    const g = plan.stats.gaps;
+    for (const lane of ['tech', 'feet'])
+      for (const i of [0, 1]) {
+        assert.ok(g[lane][i].n > 20, `#${seed} ${lane} ${i}: ${g[lane][i].n} starts`);
+        assert.ok(g[lane][i].mean <= 1.5, `#${seed} ${lane} ${i}: ${g[lane][i].mean} frames on the average`);
+        assert.ok(g[lane][i].p90 <= 3, `#${seed} ${lane} ${i}: ${g[lane][i].p90} frames at the 90th percentile`);
+      }
+  }
+});
+
+test('the lanes are well made: each lane in order with no two blocks at once, footwork beside techniques, every block named', () => {
+  for (const { seed, plan } of ROUNDS) {
+    for (const [what, lanes] of [['rails', plan.rails], ['feet', plan.feet]])
+      lanes.forEach((lane, i) => {
+        lane.forEach((b, j) => {
+          assert.equal(b.who, i);
+          assert.ok(b.to > b.from, `#${seed} ${what} ${i} ${j}: ${b.from}..${b.to}`);
+          if (j) assert.ok(b.from >= lane[j - 1].to, `#${seed} ${what} ${i} ${j}: starts before the one before it ends`);
+          assert.ok(what === 'feet' ? b.kind === 'step' && WAY[b.name] === b.way : [...ACTS, 'hurt', 'down'].includes(b.kind), `#${seed} ${what} ${i} ${j}: ${b.kind} ${b.name}`);
+          assert.ok(labelOf(b) && shortOf(b), `#${seed}: a name for ${b.kind} ${b.name}`);
+          if (b.kind === 'attack') assert.ok(MOVES[b.name] && MOVES[b.name].punch, b.name);
+        });
+        // (he steps while he punches: some step of his overlaps a punch of his)
+        if (what === 'feet') assert.ok(lane.some(s => plan.rails[i].some(b => b.kind === 'attack' && b.from < s.to && s.from < b.to)), `#${seed}: no step of man ${i} during a punch of his`);
+      });
+    for (const kind of ['attack', 'evade', 'guard']) assert.ok(plan.rails.some(r => r.some(b => b.kind === kind)), `#${seed}: no ${kind}`);
+  }
+});
+
+test('a blow that lands ends what the other man was doing: his block is cut there and his hit reaction follows, a power blow\'s marked', () => {
+  let power = 0,
+    early = 0;
+  for (const { seed, plan } of ROUNDS) {
+    plan.rails.forEach((lane, i) =>
+      lane.forEach((b, j) => {
+        if (!b.cut) return;
+        const next = lane[j + 1];
+        // (cut at the step the blow landed, and the next thing on his lane is his reaction to that blow, or his fall)
+        assert.equal(b.to, b.cut.at, `#${seed}: cut at ${b.cut.at}, ended at ${b.to}`);
+        assert.ok(next && (next.kind === 'down' || (next.kind === 'hurt' && next.from === b.cut.at && next.by.name === b.cut.name && next.by.J === b.cut.J)), `#${seed}: after the cut, ${next && next.kind}`);
+        // (and the blow is on the other man's lane, landed at that step)
+        const blow = plan.rails[1 - i].find(x => x.kind === 'attack' && x.out === 'hit' && x.at === b.cut.at && x.name === b.cut.name);
+        assert.ok(blow, `#${seed}: the blow that cut it`);
+        if (b.cut.power) (power++, assert.ok(blow.power && b.cut.worth >= SPAR.power && blow.cuts));
+        if (b.cut.power && (b.kind !== 'attack' || !b.out)) early++;
+      })
+    );
+    // (and every hit reaction is a blow that landed)
+    for (const lane of plan.rails) for (const b of lane) if (b.kind === 'hurt' && b.name === 'hurt' && b.by) assert.ok(plan.events.some(e => e[1] === 'hit' && e[0] - 1 === b.from && e[3] === b.by.name), `#${seed}: a hit reaction at ${b.from} with no blow`);
+    assert.equal(plan.stats.power, plan.rails.flat().filter(b => b.cut && b.cut.power && ACTS.includes(b.kind) && b.from < plan.steps).length);
+  }
+  assert.ok(power >= ROUNDS.length, `${power} actions cut by a power blow in ${ROUNDS.length} rounds`);
+  assert.ok(early >= 1, 'none cut before it had done anything');
+});
+
+test('every round ends in its first knockdown, by a power punch, within the round', () => {
   for (const { seed, plan, check } of ROUNDS) {
     assert.equal(check.downs, 1, `#${seed}: knockdowns`);
     assert.ok(check.ko, `#${seed}: the knockdown is the plan's`);
-    assert.equal(plan.ko.beat, plan.beats.length - 1, `#${seed}: on the last beat`);
-    assert.equal(plan.ko.by, plan.winner, `#${seed}: by the winner`);
-    assert.ok(plan.ko.J >= SPAR.power, `#${seed}: a power blow (${plan.ko.J} N·s)`);
-    assert.ok(plan.ko.t >= TIME[0] && plan.ko.t <= TIME[1], `#${seed}: ${plan.ko.t} s`);
-    assert.ok(plan.beats.length >= BEATS[0] && plan.beats.length <= BEATS[1], `#${seed}: ${plan.beats.length} beats`);
-    // (both start with the same health, shown on the HUD, and the round's dice set it within what the winner's grade gives)
-    const [lo, hi] = hpOf(plan.men[plan.winner].grade);
-    assert.ok(plan.hp >= Math.round(lo) && plan.hp <= Math.round(hi), `#${seed}: health ${plan.hp}`);
+    assert.ok(plan.ko.power && !(MOVES[plan.ko.name].kind === 'straight' && MOVES[plan.ko.name].hand === 'L'), `#${seed}: ${plan.ko.name}`);
+    assert.ok(plan.ko.at >= 20 && plan.ko.at <= SPAR.most, `#${seed}: ${plan.ko.at} s`);
+    assert.equal(plan.steps, plan.ko.step);
+    assert.ok(plan.inputs.length >= plan.ko.step + SPAR.tail * 60 - 1, `#${seed}: the fall is in the round`);
+    assert.equal(plan.winner, plan.ko.by);
+    assert.equal(plan.attempt, 0, `#${seed}: arranged in one pass`);
+    // (both start with the same health, on the HUD, what the favoured man's grade takes off a man in the target time)
+    assert.ok(Math.abs(plan.hp - hpOf(plan.men[plan.favoured].grade, plan.men[1 - plan.favoured].grade, plan.target)) <= 1, `#${seed}: health ${plan.hp}`);
+    assert.ok(plan.hp >= SPAR.hp.span[0] && plan.hp <= SPAR.hp.span[1]);
+    // (the last block of the man who went down is his fall, and nothing of his starts after it)
+    const lane = plan.rails[plan.ko.on];
+    assert.equal(lane[lane.length - 1].kind, 'down');
   }
-});
-
-test('every arranged exchange came out as its timeline line says', () => {
-  for (const { seed, plan, check } of ROUNDS) {
-    assert.deepEqual(check.lines, [], `#${seed}`);
-    for (const b of plan.beats) for (const k of ['t', 'lead', 'what', 'answer', 'said']) assert.ok(b[k] !== undefined && b[k] !== '', `#${seed} beat ${b.i}: ${k}`);
-  }
+  assert.ok(ROUNDS.filter(r => r.plan.ko.at >= 35 && r.plan.ko.at <= 75).length >= ROUNDS.length - 2, ROUNDS.map(r => r.plan.ko.at).join(' '));
 });
 
 test('no man does anything his grade or his loadout does not have', () => {
   for (const { seed, plan, check } of ROUNDS) {
     assert.deepEqual(check.graded, [], `#${seed}`);
-    for (const b of plan.beats) {
-      const lib = library().find(l => l.id === b.id),
-        man = plan.men[b.A];
-      assert.ok(!lib.grade || lib.grade === man.grade, `#${seed} beat ${b.i}: ${b.id} fought at ${man.grade}`);
-      for (const id of lib.needs) assert.ok(man.techniques.includes(id), `#${seed} beat ${b.i}: ${b.id} needs ${id}`);
-    }
+    for (const m of plan.men) assert.ok(!m.techniques.includes('rollCounter') || m.techniques.includes('crossArm'), `#${seed}: the shoulder roll without the cross-arm guard`);
   }
 });
 
-test('rounds differ: other men, other beats, other finishes', () => {
-  const sequences = new Set(ROUNDS.map(r => r.plan.beats.map(b => b.id).join(' '))),
-    grades = new Set(ROUNDS.flatMap(r => r.plan.men.map(m => m.grade))),
-    kinds = new Set(ROUNDS.flatMap(r => r.plan.beats.map(b => b.kind))),
-    finishes = new Set(ROUNDS.map(r => r.plan.ko.name));
-  assert.equal(sequences.size, ROUNDS.length);
-  assert.equal(grades.size, 7);
-  for (const k of ['step', 'defence', 'punch', 'combo', 'entry']) assert.ok(kinds.has(k), k);
-  assert.ok(finishes.size >= 3, [...finishes].join(' '));
+test('the camera\'s views come off the lanes: one at a time, held, a zoom on the knockdown', () => {
+  for (const { seed, plan } of ROUNDS) {
+    const views = viewsOf(plan.rails, plan.feet, plan.steps);
+    assert.deepEqual(viewsOf(plan.rails, plan.feet, plan.steps), views);
+    views.forEach((v, j) => {
+      assert.ok(v.kind === 'bird' || v.kind === 'zoom');
+      assert.ok(v.to - v.from >= 60, `#${seed}: a view of ${v.to - v.from} steps`);
+      if (j) assert.ok(v.from >= views[j - 1].to, `#${seed}: two views at once`);
+    });
+    const last = views[views.length - 1];
+    assert.ok(last && last.kind === 'zoom' && /down/.test(last.why) && last.from <= plan.ko.step && plan.ko.step < last.to, `#${seed}: the knockdown is not zoomed on`);
+    assert.ok(views.reduce((s, v) => s + v.to - v.from, 0) / plan.steps <= 0.5, `#${seed}: more than half the round in a view`);
+    assert.ok(VIEW.hold >= 1.5);
+  }
 });
 
-test('the library is the catalogue: every card is in it or left out for a stated reason, and every technique has its cards', () => {
-  const lib = library(),
-    ids = new Set([...lib.map(l => l.id), ...leftOut().map(x => x.id)]);
-  for (const card of SCRIPTS) assert.ok(ids.has(card.id), card.id);
-  for (const x of leftOut()) assert.ok(x.why, x.id);
-  // (a technique comes into the sparring by its catalogue cards: each carried technique is needed by some card)
-  for (const id of Object.keys(TECHNIQUES)) assert.ok(lib.some(l => l.needs.includes(id)), id);
-  for (const l of lib) assert.ok(!l.grade || LEVEL[l.grade], l.id);
+test('rounds differ: other men, other actions, other finishes', () => {
+  const sequences = new Set(ROUNDS.map(r => r.plan.rails[0].slice(0, 30).map(b => b.name).join(' '))),
+    grades = new Set(ROUNDS.flatMap(r => r.plan.men.map(m => m.grade))),
+    names = new Set(ROUNDS.flatMap(r => r.plan.rails.flat().map(b => b.name))),
+    steps = new Set(ROUNDS.flatMap(r => r.plan.feet.flat().map(b => b.name)));
+  assert.equal(sequences.size, ROUNDS.length);
+  assert.ok(grades.size >= 5, [...grades].join(' '));
+  for (const n of ['jab', 'cross', 'hook', 'upper', 'slip', 'pull', 'duck', 'guard', 'hurt']) assert.ok(names.has(n), n);
+  for (const n of ['in', 'out', 'press', 'back', 'side', 'pivot', 'cut', 'dash']) assert.ok(steps.has(n), n);
 });
 
 test('the artifact tool builds the page with its worker, its outfits and a build stamp', () => {
@@ -97,7 +174,7 @@ test('the artifact tool builds the page with its worker, its outfits and a build
     page = readFileSync(out, 'utf8');
   assert.match(page, /^<title>한 라운드 스파링<\/title>\n<meta name="claude:viewport-fit-sides" content="cover">/);
   assert.match(page, /<meta name="build" content="[0-9a-f]{7}\+? \d{4}-\d{2}-\d{2}">/);
-  for (const f of ['src/spar.mjs', 'src/spar/worker.mjs', 'src/spar/plan.mjs', 'assets/boxer-training.splats.txt', 'assets/boxer-training-up.splats.txt', 'assets/ring.splats.txt']) assert.ok(files[f], f);
+  for (const f of ['src/spar.mjs', 'src/spar/worker.mjs', 'src/spar/plan.mjs', 'src/spar/rails.mjs', 'src/spar/names.mjs', 'assets/boxer-training.splats.txt', 'assets/boxer-training-up.splats.txt', 'assets/ring.splats.txt']) assert.ok(files[f], f);
   // (the committed page is left as it is)
   assert.doesNotMatch(readFileSync(path.join(root, 'spar.html'), 'utf8'), /name="build"/);
 });

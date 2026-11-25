@@ -1,12 +1,15 @@
 /* 한 라운드 스파링 (spar.html): each press of 시작 arranges a new round of promised sparring from a new seed (src/spar/plan.mjs:
-   every exchange arranged beforehand and rehearsed in the real bout) and plays it by itself, at the true speed, to the first
-   knockdown. The arranged timeline is in a corner of the picture; the camera is the game's own moving one (src/main.mjs),
-   eased toward each beat's view. The round is the plan's controls played into a bout of its own, step by step: what is seen
-   is the bout the rehearsal fought.
+   the whole round arranged beforehand, in one pass of the real bout, both men acting all the time) and plays it by itself,
+   at the true speed, to the first knockdown. What each man does is on four lanes along the bottom (src/spar/rails.mjs: his
+   techniques and his footwork, a block an action, coloured by its kind, with what came of it; the present at the playhead,
+   what is promised to its right).
+   The round is the plan's controls played into a bout of its own, step by step: what is seen is the bout that was arranged.
+   The camera is one fixed angle that only follows the two men; where what happens calls for it (rails.mjs viewsOf) it goes
+   up to a bird's-eye view or in to a zoom, eased; the only cut is a knockdown's replay.
    The round is arranged in a worker (src/spar/worker.mjs), or here a piece each picture where a worker cannot be had, and
-   plays once it is all arranged (on a slow device, after 8 s, on what is arranged, the rest arranged ahead of it). A knockdown is shown the way
-   src/spar/knock.mjs says (the one place for it). The seed is kept in the page's address (#s-48213), so a round can be
-   watched again or passed on; the outfit is remembered in this browser if it can be. */
+   plays once it is all arranged (on a slow device, after 4 s, on what is arranged, the rest arranged ahead of it). A
+   knockdown is shown the way src/spar/knock.mjs says (the one place for it). The seed is kept in the page's address
+   (#s-48213), so a round can be watched again or passed on; the outfit is remembered in this browser if it can be. */
 import { createRenderer, paletteArray, rgb } from './render/renderer.mjs';
 import { createFx } from './render/fx.mjs';
 import { blow, rippleOf, rippleRow, fallOf, landed, landRipple, groundOf, groundRow, quietOf, ringsOn } from './render/blow.mjs';
@@ -22,7 +25,8 @@ import { LEVEL } from './anim/skill.mjs';
 import { createBout, step, RULES } from './game/bout.mjs';
 import { createAudio } from './game/audio.mjs';
 import { startOf, planner } from './spar/plan.mjs';
-import { punchName } from './spar/cards.mjs';
+import { viewsOf, ACTS } from './spar/rails.mjs';
+import { punchName, labelOf, saidOf, shortOf } from './spar/names.mjs';
 import { createKnockdown } from './spar/knock.mjs';
 
 const DT = 1 / 60;
@@ -34,7 +38,6 @@ const CORNER = ['빨강', '파랑'];
 const shown = lv => LEVEL[lv].label.replace('명', 'L').replace('암', 'D');
 const WEARS = ['', 'training', 'training-up'];
 const NONE = [{}, {}];
-const wrap = a => Math.atan2(Math.sin(a), Math.cos(a));
 const clock = t => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
 const reduced = (() => {
   try {
@@ -72,11 +75,16 @@ const freshSeed = () => {
     return 1 + Math.floor(Math.random() * 99999);
   }
 };
-/* the view a beat is seen from, eased toward: how high (pitch), how close (times the game's distance), and nothing else.
-   Footwork from above, work to the body lower and from the side, an exchange a little closer; the walk between them as the
-   game has it. */
-const VIEW = { rest: { pitch: 0.5, closer: 1 }, step: { pitch: 0.8, closer: 1.04 }, body: { pitch: 0.3, closer: 0.9 }, exchange: { pitch: 0.44, closer: 0.88 }, over: { pitch: 0.62, closer: 1, lift: 0.35 } };
-const viewOf = (beat, k) => (!beat || k < beat.step ? VIEW.rest : beat.kind === 'step' || beat.kind === 'entry' ? VIEW.step : beat.body ? VIEW.body : VIEW.exchange);
+/* The camera (the user's rule, 2026-11-25): one fixed angle that only follows the two men, ANGLE (from the side the round
+   starts side on to, yaw 0; `pitch` radians above the canvas; as far off as frames them); and on top of it, where what
+   happens calls for it (rails.mjs viewsOf: a bird's-eye view for the big footwork, a zoom in for a power blow that lands as
+   a counter, cuts a punch, is thrown right up close or puts him down), the same angle from higher (`bird`) or nearer
+   (`zoom`), eased in and out at `ease` a second. It never goes round them, and never low. */
+const ANGLE = { yaw: 0, pitch: 0.5, bird: { pitch: 1.02, closer: 1.12 }, zoom: { pitch: 0.46, closer: 0.78 }, ease: 2.4 };
+// the colours of the rails' kinds, and of the two things footwork does (spar.html: --k-attack and the rest)
+const KIND = { attack: '#ffb84a', evade: '#58d6a4', guard: '#b49cff', show: '#e8e2cf', hurt: '#ff5470', down: '#ff5470', distance: '#9aa3bd', axis: '#52c7ea' };
+const hue = b => (b.kind === 'step' ? KIND[b.way] : KIND[b.kind]) || KIND.distance;
+const tenth = k => `${Math.floor(k / 3600)}:${String(Math.floor(k / 60) % 60).padStart(2, '0')}.${Math.floor((k % 60) / 6)}`;
 
 async function assets() {
   const manifest = await (await fetch('assets/manifest.json')).json(),
@@ -127,7 +135,7 @@ function run({ manifest, get, ring }, o) {
   }
 
   /* ---- the round: its plan as far as it is arranged, and the bout it is played into */
-  let plan = null, // { seed, men, hp, winner, beats, inputs, done, ko, stats }
+  let plan = null, // { seed, men, hp, favoured, inputs, rails, views, done, ko, stats }
     job = 0,
     bout = createBout(1),
     k = 0, // steps of the plan played
@@ -169,34 +177,39 @@ function run({ manifest, get, ring }, o) {
   }
   function arrange(seed, keepJob) {
     if (!keepJob) job++;
-    plan = { seed, men: null, hp: null, winner: null, beats: [], inputs: [], done: false, ko: null, stats: null, error: null, askedAt: performance.now(), readyAt: 0, doneAt: 0 };
+    plan = { seed, men: null, hp: null, favoured: null, inputs: [], rails: [[], []], feet: [[], []], views: [], done: false, ko: null, steps: 0, stats: null, error: null, askedAt: performance.now(), doneAt: 0 };
     local = null;
     if (worker) worker.postMessage({ id: job, seed });
-    else local = { id: job, p: planner(seed), beats: 0, inputs: 0 };
+    else local = { id: job, p: planner(seed), inputs: 0 };
   }
   function took(m) {
     if (!plan || m.id !== job) return;
     // (the round arranged again from the start, with the seed's next dice: it is played again from its start)
     if (m.reset) {
-      Object.assign(plan, { beats: [], inputs: [], done: false, ko: null, readyAt: 0 });
-      if (phase === 'play' || phase === 'over') (phase = 'wait'), show('result', false), show('tl', false), ($('busy').textContent = '대본을 다시 짜는 중…'), show('busy', true);
+      Object.assign(plan, { inputs: [], rails: [[], []], feet: [[], []], views: [], done: false, ko: null });
+      if (phase === 'play' || phase === 'over') (phase = 'wait'), show('result', false), show('rails', false), ($('busy').textContent = '대본을 다시 짜는 중…'), show('busy', true);
     }
     if (m.head) {
       Object.assign(plan, m.head);
       // (the new men, in their guards where the round starts, while it is arranged)
       if (phase === 'wait') (bout = startOf(plan)), freshFx(), pose(true), named();
     }
-    plan.beats.push(...m.beats);
     for (const inp of m.inputs) plan.inputs.push(inp);
+    plan.rails = m.rails;
+    plan.feet = m.feet;
     plan.done = m.done;
     if (m.done && !plan.doneAt) plan.doneAt = performance.now() - plan.askedAt;
-    if (m.beats.length && plan.beats.length >= 3 && !plan.readyAt) plan.readyAt = performance.now() - plan.askedAt;
     plan.ko = m.ko || plan.ko;
+    plan.steps = m.steps || 0;
     plan.stats = m.stats || plan.stats;
     plan.error = m.error || null;
+    // (the camera's views, read off the rails as far as they are arranged)
+    plan.views = viewsOf(plan.rails, plan.feet, plan.ko ? plan.ko.step : Infinity);
+    plan.count = plan.rails.reduce((n, r) => n + r.filter(b => ACTS.includes(b.kind)).length, 0);
+    plan.walked = plan.feet[0].length + plan.feet[1].length;
     if (plan.error) $('busy').textContent = '대본을 짜지 못했습니다';
-    else if (phase === 'wait') $('busy').textContent = `대본을 짜는 중… 공방 ${plan.beats.length}`;
-    rows();
+    else if (phase === 'wait') $('busy').textContent = `대본을 짜는 중… ${Math.floor(plan.inputs.length / 60)}초`;
+    if ($('full').classList.contains('on')) full();
   }
   function arrangeHere(ms) {
     const j = local;
@@ -204,22 +217,19 @@ function run({ manifest, get, ring }, o) {
     try {
       j.p.run(ms);
     } catch (err) {
-      took({ id: j.id, beats: [], inputs: [], done: false, error: String(err.message || err) });
+      took({ id: j.id, inputs: [], rails: plan.rails, feet: plan.feet, done: false, error: String(err.message || err) });
       local = null;
       return;
     }
     const p = j.p.plan,
-      log = j.p.log,
       reset = !!j.plan && j.plan !== p;
-    if (reset || !j.plan) (j.plan = p), (j.beats = j.inputs = 0);
-    took({ id: j.id, reset, head: j.beats === 0 ? { seed: p.seed, men: p.men, hp: p.hp, winner: p.winner } : null, beats: p.beats.slice(j.beats), inputs: log.slice(j.inputs), done: j.p.done, ko: p.ko, stats: j.p.done ? p.stats : null });
-    j.beats = p.beats.length;
-    j.inputs = log.length;
+    if (reset || !j.plan) (j.plan = p), (j.inputs = 0);
+    took({ id: j.id, reset, head: j.inputs === 0 ? { seed: p.seed, men: p.men, hp: p.hp, favoured: p.favoured, target: p.target } : null, inputs: p.inputs.slice(j.inputs), rails: p.rails, feet: p.feet, done: j.p.done, ko: p.ko, steps: p.steps, stats: j.p.done ? p.stats : null });
+    j.inputs = p.inputs.length;
   }
-  /* (it plays once it is all arranged: a round arranged again from the start with the seed's next dice, which happens, would
-     otherwise be seen to start over; on a slow device, after 8 s of waiting, it starts on what is arranged and the rest is
-     arranged ahead of it) */
-  const ready = () => plan && plan.men && plan.inputs.length && (plan.done || (performance.now() - plan.askedAt > 8000 && plan.beats.length >= 4));
+  /* (it plays once it is all arranged: the round is promised. On a slow device, after 4 s of waiting, it starts on what is
+     arranged, a third of a minute or more, and the rest is arranged ahead of it) */
+  const ready = () => plan && plan.men && plan.inputs.length && (plan.done || (performance.now() - plan.askedAt > 4000 && plan.inputs.length >= 1200));
 
   /* ---- what the page shows of it */
   function named() {
@@ -237,38 +247,138 @@ function run({ manifest, get, ring }, o) {
     $('time').textContent = clock(phase === 'play' || phase === 'over' ? bout.t : 0);
   }
   const show = (id, on) => $(id).classList.toggle('on', on);
-  // the beat being fought (its walk to its distance and the exchange itself), by the step the bout is at
-  const current = () => (plan ? plan.beats.findIndex(b => k >= b.from && k < b.to) : -1);
-  // (what is thrown and how it is answered; footwork has no answer; and what came of it, short for the corner)
-  const said = b => (b.answer && b.answer !== '—' ? `${b.what} → ${b.answer}` : b.what),
-    // (the knockdown's beat: what it ended with, first)
-    shortSaid = b => (b.said === '—' || b.said === '거리' ? '' : plan.ko && plan.ko.beat === b.i ? b.said.split(' · ').pop() : b.said.replace(/ N·s/g, '').replace(/카운터 명중/g, '카운터').replace(/ · /g, ' ')),
-    doneText = b => `${b.answer && b.answer !== '—' && b.answer !== '맞음' ? `${b.what} → ${b.answer}` : b.what}`;
-  const lineHtml = (b, state) => `<li class="beat ${state}${plan.ko && plan.ko.beat === b.i ? ' ko' : ''}"><span class="t">${clock(b.t)}</span><span class="who${b.lead ? ' b' : ''}"></span><span class="what">${state === 'done' ? `${doneText(b)} <span class="said">${shortSaid(b)}</span>` : said(b)}</span></li>`;
-  let rowsAt = null;
-  function rows(force) {
-    if (!plan) return;
-    const now = current(),
-      key = `${now}|${plan.beats.length}|${phase}|${plan.done}`;
-    if (key === rowsAt && !force) return;
-    rowsAt = key;
-    const n = plan.beats.length,
-      from = Math.max(0, Math.min(now < 0 ? (phase === 'over' ? n - 5 : 0) : now - 1, n - 5)),
-      shown = plan.beats.slice(from, from + 5);
-    $('tlrows').innerHTML = shown.map(b => lineHtml(b, (phase === 'over' && b.i <= n - 1) || b.to <= k ? 'done' : b.i === now ? 'now' : 'ahead')).join('');
-    $('tlcount').textContent = `${now < 0 ? (phase === 'over' ? n : 0) : now + 1}/${plan.done ? n : n + '…'}`;
-    if ($('full').classList.contains('on')) full();
+  /* ---- the four lanes, drawn each picture: red's techniques, red's footwork, blue's footwork, blue's techniques; time runs
+     to the left under the playhead, a step of the round a sixtieth of a second. A block is its kind's colour: faint once it
+     is past, bright while it is being done, and in between while it is still to come (the promise). On a punch's block,
+     where it landed (a dot; a power blow's a gold one, with a line to the other man's lane where it cut what he was doing),
+     was blocked (a bar), parried (a cross) or went by (a ring). */
+  const rcv = $('railcv'),
+    rg = rcv.getContext('2d'),
+    FONT = px => `700 ${px}px ui-monospace, "SF Mono", Menlo, Consolas, "Noto Sans Mono CJK KR", monospace`;
+  function drawRails(kf) {
+    const dpr = Math.min(devicePixelRatio || 1, 3),
+      W = rcv.clientWidth,
+      H = rcv.clientHeight;
+    if (!W || !H) return;
+    if (rcv.width !== Math.round(W * dpr) || rcv.height !== Math.round(H * dpr)) (rcv.width = Math.round(W * dpr)), (rcv.height = Math.round(H * dpr));
+    rg.setTransform(dpr, 0, 0, dpr, 0, 0);
+    rg.clearRect(0, 0, W, H);
+    const secs = W < 520 ? 4.4 : W < 900 ? 6.5 : 9, // (how much of the round the lanes show at once)
+      pps = W / secs,
+      head = Math.round(W * 0.3),
+      gap = 2,
+      mid = 5,
+      tall = Math.floor((H - 2 * gap - mid) * 0.3), // a technique lane
+      low = Math.floor((H - 2 * gap - mid) * 0.2), // a footwork lane
+      // (from the top: red's techniques, red's footwork, blue's footwork, blue's techniques)
+      lanes = [
+        { who: 0, of: plan.rails[0], y: 0, h: tall },
+        { who: 0, of: plan.feet[0], y: tall + gap, h: low, feet: true },
+        { who: 1, of: plan.feet[1], y: tall + gap + low + mid, h: low, feet: true },
+        { who: 1, of: plan.rails[1], y: tall + 2 * gap + 2 * low + mid, h: tall }
+      ],
+      xOf = k => head + ((k - kf) / 60) * pps,
+      arranged = plan.inputs.length;
+    rg.textBaseline = 'middle';
+    for (const L of lanes) {
+      rg.fillStyle = L.feet ? 'rgba(246,243,234,.035)' : 'rgba(246,243,234,.07)';
+      rg.fillRect(0, L.y, W, L.h);
+      rg.fillStyle = L.who ? '#2a84ec' : '#e6382e';
+      rg.fillRect(0, L.y, 3, L.h + (L.feet ? 0 : 0));
+    }
+    rg.fillStyle = '#e6382e';
+    rg.fillRect(0, lanes[0].y, 3, lanes[1].y + lanes[1].h);
+    rg.fillStyle = '#2a84ec';
+    rg.fillRect(0, lanes[2].y, 3, lanes[3].y + lanes[3].h - lanes[2].y);
+    for (const L of lanes) {
+      const y = L.y,
+        lane = L.h;
+      rg.font = FONT(L.feet ? 9 : 10);
+      for (const b of L.of) {
+        const to = b.to ?? arranged,
+          x0 = Math.max(4, xOf(b.from)),
+          x1 = Math.min(W, xOf(to));
+        if (x1 <= 4 || x0 >= W || x1 - x0 < 0.5) continue;
+        const past = to <= kf,
+          now = b.from <= kf && kf < to,
+          w = Math.max(2, x1 - x0 - 1);
+        rg.globalAlpha = past ? 0.34 : now ? 1 : 0.62;
+        rg.fillStyle = hue(b);
+        rg.fillRect(x0, y + 1, w, lane - 2);
+        if (b.kind === 'hurt' || b.kind === 'down') {
+          // (a hit reaction: hatched, so that it reads apart from an action he chose)
+          rg.fillStyle = 'rgba(9,10,17,.35)';
+          for (let x = Math.ceil(x0 / 4) * 4; x < x0 + w; x += 4) rg.fillRect(x, y + 1, 1.5, lane - 2);
+        }
+        if (now) (rg.strokeStyle = '#f6f3ea'), (rg.lineWidth = 1.5), rg.strokeRect(x0 + 0.75, y + 1.75, w - 1.5, lane - 3.5);
+        // (cut by a blow: its end struck off)
+        if (b.cut && xOf(to) <= W) (rg.fillStyle = b.cut.power ? '#ffe9a8' : '#f6f3ea'), rg.fillRect(x1 - 2.5, y, 2.5, lane);
+        const word = shortOf(b);
+        if (x1 - x0 >= 14 && rg.measureText(word).width <= w - 4) (rg.fillStyle = '#090a11'), (rg.globalAlpha = past ? 0.6 : 1), rg.fillText(word, x0 + 2.5, L.feet ? y + lane / 2 + 0.5 : y + 7.5);
+        rg.globalAlpha = 1;
+      }
+    }
+    // (what came of each punch, at the step it came: along the foot of his lane, under the words)
+    for (const i of [0, 1]) {
+      const L = lanes[i ? 3 : 0],
+        y = L.y + L.h - 5,
+        other = i ? lanes[0].y + lanes[0].h : lanes[3].y;
+      for (const b of plan.rails[i]) {
+        if (b.kind !== 'attack' || !b.out) continue;
+        const x = xOf(b.at);
+        if (x < 4 || x > W) continue;
+        rg.globalAlpha = b.at <= kf ? 1 : 0.7;
+        if (b.out === 'hit') {
+          if (b.cuts || b.power) (rg.strokeStyle = b.power ? '#ffe9a8' : 'rgba(246,243,234,.7)'), (rg.lineWidth = b.power ? 2 : 1), rg.beginPath(), rg.moveTo(x, y), rg.lineTo(x, other), rg.stroke();
+          rg.fillStyle = b.power ? '#ffe9a8' : '#f6f3ea';
+          rg.beginPath();
+          rg.arc(x, y, b.power ? 3.6 : 2.4, 0, 7);
+          rg.fill();
+          rg.strokeStyle = '#090a11';
+          rg.lineWidth = 1;
+          rg.stroke();
+        } else if (b.out === 'block') (rg.fillStyle = '#090a11'), rg.fillRect(x - 2, y - 3.5, 4, 7), (rg.fillStyle = '#f6f3ea'), rg.fillRect(x - 0.75, y - 3.5, 1.5, 7);
+        else if (b.out === 'parry') (rg.strokeStyle = '#090a11'), (rg.lineWidth = 2), rg.beginPath(), rg.moveTo(x - 3, y - 3), rg.lineTo(x + 3, y + 3), rg.moveTo(x + 3, y - 3), rg.lineTo(x - 3, y + 3), rg.stroke();
+        else (rg.strokeStyle = '#090a11'), (rg.lineWidth = 1.5), rg.beginPath(), rg.arc(x, y, 2.6, 0, 7), rg.stroke();
+        rg.globalAlpha = 1;
+      }
+    }
+    // (the knockdown, promised)
+    if (plan.ko) {
+      const x = xOf(plan.ko.step);
+      if (x >= 4 && x <= W) (rg.fillStyle = '#ff5470'), rg.fillRect(x - 1, 0, 2, H);
+    }
+    rg.fillStyle = '#ffc24a';
+    rg.fillRect(head - 1, 0, 2, H);
+    rg.beginPath();
+    rg.moveTo(head - 5, 0);
+    rg.lineTo(head + 5, 0);
+    rg.lineTo(head, 6);
+    rg.fill();
   }
+  let noteAt = null;
+  function note() {
+    const done = plan.rails.reduce((n, r) => n + r.filter(b => ACTS.includes(b.kind) && b.from < k).length, 0),
+      walked = plan.feet.reduce((n, r) => n + r.filter(b => b.from < k).length, 0),
+      text = `약속 → 기술 ${done}/${plan.count || 0} · 발 ${walked}/${plan.walked || 0}${plan.done ? '' : '…'}`;
+    if (text !== noteAt) $('railnote').textContent = noteAt = text;
+  }
+  // the whole of it, the two men side by side in the order things start: what, and what came of it; footwork smaller
   function full() {
-    const now = current(),
-      men = plan.men;
-    $('fullmeta').textContent = men ? `대련 #${plan.seed} · ${CORNER[0]} ${shown(men[0].grade)} 대 ${CORNER[1]} ${shown(men[1].grade)} · 시작 체력 둘 다 ${plan.hp}${plan.done ? '' : ' · 짜는 중…'}` : '짜는 중…';
-    $('fullrows').innerHTML = plan.beats
+    const men = plan.men,
+      rowsOf = [...plan.rails[0], ...plan.rails[1], ...plan.feet[0], ...plan.feet[1]].filter(b => b.kind !== 'down').sort((a, b) => a.from - b.from || a.who - b.who);
+    $('fullmeta').textContent = men ? `대련 #${plan.seed} · ${CORNER[0]} ${shown(men[0].grade)} 대 ${CORNER[1]} ${shown(men[1].grade)} · 시작 체력 둘 다 ${plan.hp} · 기술 ${plan.count || 0}개 · 풋워크 ${plan.walked || 0}개${plan.done ? '' : ' · 짜는 중…'}` : '짜는 중…';
+    $('fullrows').innerHTML = rowsOf
       .map(b => {
-        const state = b.to <= k || phase === 'over' ? 'done' : b.i === now ? 'now' : 'ahead';
-        return `<li class="${state}${plan.ko && plan.ko.beat === b.i ? ' ko' : ''}"><span class="t">${clock(b.t)}</span><span class="who${b.lead ? ' b' : ''}"></span><span>${CORNER[b.lead]} ${b.answer && b.answer !== '—' ? `${b.what} → ${CORNER[1 - b.lead]} ${b.answer}` : b.what}${b.said === '—' ? '' : `<span class="said">${state === 'done' || phase === 'over' ? b.said : '약속: ' + b.said}</span>`}</span></li>`;
+        const to = b.to ?? plan.inputs.length,
+          state = to <= k || phase === 'over' ? 'done' : b.from <= k ? 'now' : 'ahead',
+          said = saidOf(b),
+          cell = `<span class="c" style="--c:${hue(b)}">${b.kind === 'hurt' ? '<span class="cut">' + labelOf(b) + '</span>' : labelOf(b)}${said ? ` <span class="${b.cut && !(b.kind === 'attack' && b.out) ? 'cut' : 'said'}">${said}</span>` : ''}</span>`;
+        return `<li class="${state}${b.down ? ' ko' : ''}${b.kind === 'step' ? ' f' : ''}"><span class="t">${tenth(b.from)}</span>${b.who ? '<span></span>' + cell : cell + '<span></span>'}</li>`;
       })
       .join('');
+    const at = $('fullrows').querySelector('.now') || $('fullrows').querySelector('.ahead');
+    if (at && at.scrollIntoView) at.scrollIntoView({ block: 'center' });
   }
 
   /* ---- the round's playing */
@@ -292,8 +402,7 @@ function run({ manifest, get, ring }, o) {
     show('title', false);
     show('result', false);
     show('busy', false);
-    show('tl', true);
-    rows(true);
+    show('rails', true);
     $('againbtn').disabled = false;
   }
   function newRound(seed) {
@@ -307,7 +416,7 @@ function run({ manifest, get, ring }, o) {
     phase = 'wait';
     show('result', false);
     show('title', false);
-    show('tl', false);
+    show('rails', false);
     show('full', false);
     $('busy').textContent = '대본을 짜는 중…';
     show('busy', true);
@@ -371,7 +480,7 @@ function run({ manifest, get, ring }, o) {
     const ko = plan.ko,
       men = plan.men;
     $('verdict').textContent = `KO ${clock(ko.t)} · ${CORNER[ko.by]} ${shown(men[ko.by].grade)} · ${punchName(ko.name)}`;
-    $('detail').textContent = `${ko.out ? '실신' : ko.liver ? '리버 다운' : '다운'} · ${Math.round(ko.J * (ko.counter ? RULES.counterGain : 1))} N·s${ko.counter ? ' 카운터' : ''} · ${plan.beats.length}번째 공방 · 대련 #${plan.seed}`;
+    $('detail').textContent = `${ko.out ? '실신' : ko.liver ? '리버 다운' : '다운'} · ${Math.round(ko.J * (ko.counter ? RULES.counterGain : 1))} N·s${ko.counter ? ' 카운터' : ''} · 기술 ${plan.rails.reduce((n, r) => n + r.filter(b => ACTS.includes(b.kind) && b.from < ko.step).length, 0)} · 풋워크 ${plan.feet.reduce((n, r) => n + r.filter(b => b.from < ko.step).length, 0)} · 대련 #${plan.seed}`;
     show('result', true);
   }
 
@@ -428,8 +537,10 @@ function run({ manifest, get, ring }, o) {
       if (phase === 'play' && bout.over !== null) phase = 'over';
       // (arranged no further yet: the picture waits on it)
       show('busy', phase === 'play' && k >= plan.inputs.length && !plan.done);
-      if (phase === 'over' && resultAt === null && plan.ko && knock.shown(bout)) (resultAt = time), result(), rows(true);
-      rows();
+      if (phase === 'over' && resultAt === null && plan.ko && knock.shown(bout)) (resultAt = time), result();
+      // (the rails under the playhead: between two steps as the picture is, held with a held blow)
+      drawRails(Math.min(plan.inputs.length, k - 1 + (knock.playing || bout.stop > 0 ? 1 : Math.min(1, acc / DT))));
+      note();
     } else {
       // (at rest, and while the round is arranged: two men in their guards, bouncing where they stand)
       acc += elapsed;
@@ -492,36 +603,30 @@ function run({ manifest, get, ring }, o) {
     layers.push({ mesh: meshes.fx[1], palette: palettes[0], mask: 0.6 }, { mesh: meshes.fx[2], palette: palettes[1], mask: 0.6 });
     layers.push(...meshes.motes.map((mesh, i) => ({ mesh, palette: palettes[0], mask: 0.6, outside: i + 1 })));
 
-    // ---- the camera: the game's (beside the line between them, swinging round slowly as they circle, closer when they are
-    // near), eased toward the beat's view; kept clear of the timeline's corner; cut for a knockdown's replay only
+    // ---- the camera: one fixed angle that follows the two men (ANGLE); a bird's-eye view or a zoom where the round's
+    // views say (rails.mjs viewsOf), eased; kept clear of the rails; cut for a knockdown's replay only
     const [a, b] = men,
       ease = q => 1 - Math.exp(-elapsed * q),
-      axis = Math.atan2(b.x - a.x, b.z - a.z),
-      sideA = axis - Math.PI / 2,
-      sideB = axis + Math.PI / 2,
-      yaw = Math.abs(wrap(sideA - cam.yaw)) <= Math.abs(wrap(sideB - cam.yaw)) ? sideA : sideB,
       apart = Math.hypot(b.x - a.x, b.z - a.z),
-      beat = plan && phase !== 'rest' && phase !== 'wait' ? plan.beats[current()] : null,
-      // (the end: both men in the picture, the one standing and the one down, under the result)
-      v = phase === 'over' ? VIEW.over : viewOf(beat, k),
+      playing = plan && (phase === 'play' || phase === 'over'),
+      view = playing && !(phase === 'over' && resultAt !== null) ? plan.views.find(v => v.from <= k && k < v.to) : null,
+      v = view ? ANGLE[view.kind] : { pitch: ANGLE.pitch, closer: 1 },
       narrow = R.target.w < R.target.h,
-      base = Math.max(5.2, Math.min(narrow ? 12.5 : 11, R.distFor(apart + 3.6))),
-      replayCam = knock.camera(cam.dist, played);
+      // (as far off as frames the two of them: the same for any two men within a step of each other, further only as they part)
+      base = Math.max(5.2, Math.min(narrow ? 12.5 : 11, R.distFor(Math.max(apart, 1.4) + 3.6))),
+      replayCam = knock.camera(cam.dist, played),
+      box = $('rails').classList.contains('on') ? $('rails').getBoundingClientRect() : null,
+      H = canvas.clientHeight || 1,
+      // (the rails: the men drawn up and away from them, by as much of the picture as they cover)
+      up = box ? ((H - box.top) / H) * 0.9 : 0,
+      to = [((a.x + b.x) / 2) * 0.85, 0.8 - up * (view && view.kind === 'zoom' ? 0.6 : 1), ((a.z + b.z) / 2) * 0.85];
+    cam.view = view ? view.kind : null;
     // (the first picture is framed at once, not eased into from nowhere)
-    if (!replayCam && stats.frames === 0) (cam.yaw = yaw), (cam.dist = base * v.closer), (cam.pitch = v.pitch), cam.target.splice(0, 3, ((a.x + b.x) / 2) * 0.85, 0.8, ((a.z + b.z) / 2) * 0.85);
+    if (!replayCam && stats.frames === 0) (cam.dist = base * v.closer), (cam.pitch = v.pitch), cam.target.splice(0, 3, ...to);
     if (!replayCam) {
-      cam.yaw = wrap(cam.yaw + Math.max(-0.55 * elapsed, Math.min(0.55 * elapsed, wrap(yaw - cam.yaw) * ease(2.2))));
-      cam.dist += (base * v.closer - cam.dist) * ease(1.6);
-      cam.pitch += (v.pitch - cam.pitch) * ease(1.2);
-      // (the timeline's corner: the men drawn up and away from it, by as much of the picture as it covers)
-      const box = $('tl').classList.contains('on') ? $('tl').getBoundingClientRect() : null,
-        W = canvas.clientWidth || 1,
-        H = canvas.clientHeight || 1,
-        wide = W / H > 1,
-        across = box ? (box.right / W) * 0.22 * R.widthAt(cam.dist) * (wide ? 1 : 0.3) : 0,
-        up = box ? ((H - box.top) / H) * (wide ? 0.25 : 0.9) : 0,
-        X = [Math.cos(cam.yaw), -Math.sin(cam.yaw)],
-        to = [((a.x + b.x) / 2) * 0.85 - X[0] * across, 0.8 - up + (v.lift || 0), ((a.z + b.z) / 2) * 0.85 - X[1] * across];
+      cam.yaw = ANGLE.yaw;
+      cam.dist += (base * v.closer - cam.dist) * ease(ANGLE.ease);
+      cam.pitch += (v.pitch - cam.pitch) * ease(ANGLE.ease);
       for (const j of [0, 1, 2]) cam.target[j] += (to[j] - cam.target[j]) * ease(j === 1 ? 2 : 4);
     }
     if (!replayCam) (shake.amp *= Math.exp(-elapsed * 14)), (white *= Math.exp(-elapsed * 16));
@@ -565,10 +670,10 @@ function run({ manifest, get, ring }, o) {
   // (a knockdown's replay is skipped by a tap on the picture or any key)
   canvas.addEventListener('pointerdown', () => knock.skip(bout));
   addEventListener('keydown', e => e.key !== 'Tab' && knock.skip(bout));
-  const openFull = () => plan && plan.beats.length && (full(), show('full', true), document.querySelector('#full button').focus());
-  $('tl').addEventListener('click', openFull);
-  $('tl').addEventListener('keydown', e => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), openFull()));
-  addEventListener('keydown', e => e.key === 'Escape' && $('full').classList.contains('on') && (show('full', false), $('tl').focus()));
+  const openFull = () => plan && plan.rails[0].length && (show('full', true), full(), document.querySelector('#full button').focus());
+  $('rails').addEventListener('click', openFull);
+  $('rails').addEventListener('keydown', e => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), openFull()));
+  addEventListener('keydown', e => e.key === 'Escape' && $('full').classList.contains('on') && (show('full', false), $('rails').focus()));
   $('wear').value = wear;
   $('wear').addEventListener('change', () => {
     const w = $('wear').value;

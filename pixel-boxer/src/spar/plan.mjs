@@ -1,93 +1,109 @@
-/* 한 라운드 스파링: one round of promised sparring (약속 대련, docs/moves-plan-6.md §8; docs/spar.md), arranged from a seed and
-   rehearsed in the real bout. Nothing here draws, and the same code makes the round in the page and under node.
-     planOf(seed, o)   -> the round: { seed, men, hp, winner, beats (the timeline), inputs (both men's controls, step by step),
-                          ko, steps, time, stats }. Played back by startOf(plan) and stepping it with plan.inputs, it is the same
-                          bout to the step, events and all (tests/spar.test.mjs).
-     planner(seed, o)  -> the same made a piece at a time, for a page that must keep drawing: .run(ms) works on for about that
-                          long and says how far it has got ({ done, beats, rebuilt }); .plan once done
+/* 한 라운드 스파링: one round of promised sparring (약속 대련, docs/moves-plan-6.md §8; docs/spar.md), arranged from a seed in
+   one pass of the real bout. Nothing here draws, and the same code makes the round in the page and under node.
+     planOf(seed)      -> the round: { seed, men, hp, favoured, target, inputs (both men's controls, step by step), rails
+                          and feet (what each man does, his techniques and his footwork, a block an action: rails.mjs),
+                          events (what became of every punch), ko, steps, time, stats }. Played back by startOf(plan) and
+                          stepping it with plan.inputs, it is the same bout to the step, events, lanes and all
+                          (tests/spar.test.mjs).
+     planner(seed)     -> the same made a piece at a time, for a page that must keep drawing: .run(ms) works on for about that
+                          long; .plan (as far as it has got), .done
      startOf(plan)     -> a bout set up as the round starts: the two men, their grades and loadouts, the health both start with
+     replayOf(plan)    -> the round played again from its controls: { bout, events, rails, feet }
    How a round is made (docs/spar.md has it in Korean):
    - Two men, red (0) and blue (1), each at one of the seven grades, as likely as each other (1 in 7); each carries the
      techniques his grade gives him (profile.mjs loadout) and fills his other slots from those his grade opens, the round's
-     dice choosing (game/techniques.mjs: a technique added there comes in here). Who wins is the round's dice too, the better
-     grade the likelier; both start with the same health (hpOf: lower the weaker the winner, whose clean blows take less of
-     it), on the HUD from the first frame.
-   - A round is a sequence of beats, each one exchange of the catalogue's (cards.mjs library: the cards the catalogue fights,
-     at the grade each man is, with the techniques he carries), played between them where they stand: first a walk to the
-     distance the card is fought at (the rest between exchanges), then the card's own presses, guards and places.
-   - A grammar, not a shuffle: an opening of footwork, jabs and guards; a middle of combinations against guards,
-     defences and their counters, body work, a show-off's trick or taunt, techniques, in and out; and a finish: the blow that
-     puts the loser down, his first knockdown. Who leads each exchange goes by their grades, and by who is winning.
-   - Rehearsed: a bout cannot be copied (its men's bodies and dice are closures: structuredClone refuses it). So each card
-     drawn is first screened on a bout of its own, the two men set at the card's places as they are now (grades, loadouts,
-     health, breath): does it come out as the card does (the slip slips, the guard blocks, the counter lands), at what
-     timing of B's press (a card timed to the frame is searched round a guess from how much sooner or later his punch gets
-     there than a pro's, and kept only if three neighbouring frames or more work: its middle is used), what it does to each
-     man's health, and whether anyone goes down. The first that fits is then played on the round's own bout, from where it
-     stands: a walk to the card's distance and a rest, then the card. If it does not come out there as it did in its
-     screen, the round's bout is played again from the start (the same controls give the same bout) and the next timing or
-     card is tried. What it costs is in plan.stats (stepped, screened, rebuilt, replayed).
-   - The knockdown: the round's health is set once (both men alike, shown) and steered by the beats chosen, from their
-     screens: each takes about what the loser still has to lose, over the beats left (at most 2.2 times that), and the
-     winner stays the stronger. Once the loser's health is under SPAR.zone, the finish: a card whose screen puts him down
-     with the winner's power blow is tried first; one that only hurts him is kept as a beat, if there is room for it; at the
-     last beats with his health still high, the liver the likelier (a liver blow puts a man down whatever his health). The beat whose
-     blow is his first knockdown ends the round; one with a knockdown before it is refused. */
-import { createBout, step, settle, RULES } from '../game/bout.mjs';
-import { TECHNIQUES, opens } from '../game/techniques.mjs';
+     dice choosing (game/techniques.mjs: a technique added there comes in here). One of them is favoured (the better
+     grade; the dice between two of the same); both start with the same health (hpOf), on the HUD from the first frame.
+   - A bout cannot be copied (its men's bodies and dice are closures), so nothing is tried and taken back: the round is one
+     bout, stepped once from its start to the first knockdown, with a choreographer at each man's controls (think). Both act
+     all the time, at once: each has his next thing in hand while he is still doing the last, pressed and held so that the
+     bout starts it on the first frame it lets him (no standing between two motions), chosen from what his grade and his
+     loadout have: a punch or a combination (game/combos.data.mjs: what his grade knows, pressed beat by beat), a punch to
+     the body, a show-off's trick or taunt, his head moved off the line, his guard put up, a dash, the duck in, the pivot
+     and the circle out, the wave. A punch he knows is coming (on its way, or still in the other man's hand: the promise) is
+     answered, as often as his grade reads one (the engine's own answers and their shares, game/techniques.mjs answerOf: a
+     parry, the guard, the head out of the way, or a technique he carries), and an opening is taken (a parry's, a
+     technique's, the punch an evasion has wound up); in the middle of his own punch he cannot answer, and they trade: the
+     blow that lands first ends what the other man was doing (the engine's rule), which the rails show as a cut and a hit
+     reaction.
+   - His feet are a stream of their own, beside his techniques and at the same time (stepOf): one step after another with
+     nothing between them, the distance (in, out, pressing, giving ground) and the axis (a side step, a pivot, cutting off
+     the ring), by where the two of them are.
+   - The director (direct) steers it to the knockdown without touching the bout: each man's health is held to a line (the
+     unfavoured man's to nothing at the round's target time, the favoured man's to a share of what he started with) by how
+     often the man ahead of his line is defended and how hard the other presses him. A man whose health is in the finish's
+     zone is thrown power punches only, so that the blow that puts him down is one; past the target time the liver is gone
+     for (a liver blow puts a man down whatever his health). The first knockdown ends the round, whoever's it is.
+   - What the controls were is all the plan keeps of the choreographers: plan.inputs, and the lanes as the bout showed them. */
+import { createBout, step, incoming, RULES } from '../game/bout.mjs';
+import { TECHNIQUES, opens, has, memory, observe, situation, answerOf, counterOf, openingOf } from '../game/techniques.mjs';
 import { loadout } from '../game/profile.mjs';
-import { LEVEL, LEVELS } from '../anim/skill.mjs';
-import { MOVES } from '../anim/moves.mjs';
-import { dice } from '../anim/stance.mjs';
+import { LEVEL, LEVELS, levelOf } from '../anim/skill.mjs';
+import { MOVES, TO_BODY } from '../anim/moves.mjs';
 import { arrival } from '../anim/animator.mjs';
 import { createChain } from '../phys/chain.mjs';
+import { COMBOS, KNOWS, beatsOf } from '../game/combos.data.mjs';
+import { dice } from '../anim/stance.mjs';
 import { RING } from '../world/ring.mjs';
-import { library, runCard, frameOf, punchName, trickName, SAID, DT } from './cards.mjs';
-import { auditor } from '../audit.mjs';
-// (the audit's checks between the two men: a contact off the cards' distances is a known limit of the engine, not his body's)
-export const BETWEEN = ['a glove inside the other man', 'the two men inside each other'];
+import { watcher, measure, gapsOf, worthOf, POWER, WAY } from './rails.mjs';
+
+export const DT = 1 / 60;
+const F = s => Math.max(1, Math.round(s * 60));
+const clamp = (x, a, b) => (x < a ? a : x > b ? b : x);
 
 /* The numbers of a round (tune here):
-     beats      how many beats, at the least and the most (the finish is the last)
-     open       beats of the opening (feeling out)
-     hp         the health both men start with, least and most (the round's dice), for a winner of grade 5; less by `hpBy`
-                for each grade the winner is below 5 (a weaker man's clean blows take less of it: hpOf)
-     zone       the loser's health under which the finish is tried (a counter takes up to about 9)
-     walk       the walk between beats: the most seconds, how near his place a man has to be (m), how still (m/s), the
-                rest after it (seconds, least and most), how hard the stick is pushed (a walk, not a run), and the most
-                seconds spent first waiting for both to have their feet again after the last blow
-     margin     metres a punch an evasion made miss may have missed by at most (one that fell short was not evaded)
-     power      newton-seconds the knockdown's blow has at least (no light blow puts him down)
-     tries      the timings of B's press tried round the screened one (frames), the most cards drawn for one beat, how far
-                from the guess a screen searches (frames), and the fewest neighbouring frames a timing must work for
+     target     seconds of the round, as it is watched, the first knockdown is steered to (the round's dice, least and most)
+     late       seconds past it after which the liver is gone for
+     most       seconds after which a round with no knockdown is given up, and arranged again with the seed's next dice
+     tries      how many times a round is arranged at the most
+     hp         the health both start with: a second of the target time takes about this much off the unfavoured man, by the
+                favoured man's grade (measured with nothing steered: tools/spar.mjs --rates); `apart` more of it for each
+                grade past one the other man is below him, `novice` more off a beginner; least and most of it kept
+     zone       health under which a man is thrown power punches only: the blow that puts him down is then the power
+                button's (a jab takes 3.8 at the most, a counter's gain in it)
+     power      newton-seconds, a counter's gain in them, from which a blow counts as a power blow on the rails (rails.mjs)
      tail       seconds the bout goes on after the knockdown (his fall)
-     audit      true: a beat whose rehearsal breaks a held check of either man's own body (src/audit.mjs: joints, his own
-                gloves, balance, the centre of mass) is refused like one that did not come out (costs about as much again
-                as the round's own steps) */
+     tilt       degrees the line between them may lie off the picture's width before they walk it back round (the camera
+                does not turn: src/spar.mjs) */
 export const SPAR = {
-  beats: [10, 18],
-  open: 3,
-  hp: [28, 38],
-  hpBy: 2.5,
-  zone: 7,
-  walk: { most: 3, near: 0.035, still: 0.15, rest: [0.7, 1.7], pace: 0.7, settle: 0.8 },
-  audit: false,
-  margin: 0.12,
-  power: 45,
-  tries: { timing: [0, -1, 1], cards: 10, screen: [-4, 4], width: 3 },
-  tail: 4
+  target: [46, 60],
+  late: 5,
+  most: 88,
+  tries: 3,
+  hp: { rate: { 1: 0.36, 2: 0.6, 3: 0.96, '4m': 1.05, '4a': 1.05, '5m': 1.22, '5a': 1.22 }, apart: 0.14, novice: 0.2, span: [14, 96] },
+  zone: 4.2,
+  power: POWER,
+  tail: 4,
+  tilt: 36
 };
 
-const OUTCOME = ['hit', 'block', 'graze', 'whiff', 'parry'];
-const puncher = e => (e.type === 'parry' ? e.on : e.who);
-const clampRing = (p, m) => [Math.max(-RING.half + m, Math.min(RING.half - m, p[0])), Math.max(-RING.half + m, Math.min(RING.half - m, p[1]))];
+/* How each grade spars. read: how often he does something about a punch he knows is coming; answers: how (the shares of a parry, the guard and getting out of the way, as the
+   engine's heads have them: 1 in all); counter: how often he takes an opening; power: the share of his attacks led by a
+   power punch; combo: of his attacks that are more than one punch; the weights of what he starts when nothing is coming
+   (attack, head: his head moved with no punch coming, cover: the guard put up, feet); reads: he stops a combination when a
+   punch of it misses; show: a show-off's taunts and tricks (4암, 5암); iq: his sense, as a technique reads it. */
+const STYLE = {
+  1: { read: 0.4, answers: [['parry', 0.05], ['guard', 0.5], ['slip', 0.45]], counter: 0.2, power: 0.4, combo: 0.3, attack: 1, head: 0.1, cover: 0.2, feet: 0.3, reads: false, show: 0, iq: 0.2 },
+  2: { read: 0.55, answers: [['parry', 0.1], ['guard', 0.4], ['slip', 0.5]], counter: 0.35, power: 0.4, combo: 0.45, attack: 1, head: 0.15, cover: 0.18, feet: 0.32, reads: false, show: 0, iq: 0.35 },
+  3: { read: 0.7, answers: [['parry', 0.18], ['guard', 0.24], ['slip', 0.58]], counter: 0.55, power: 0.42, combo: 0.55, attack: 1, head: 0.2, cover: 0.14, feet: 0.36, reads: true, show: 0, iq: 0.5 },
+  '4m': { read: 0.8, answers: [['parry', 0.2], ['guard', 0.16], ['slip', 0.64]], counter: 0.7, power: 0.42, combo: 0.6, attack: 1, head: 0.25, cover: 0.12, feet: 0.42, reads: true, show: 0, iq: 0.7 },
+  '4a': { read: 0.76, answers: [['parry', 0.22], ['guard', 0.22], ['slip', 0.56]], counter: 0.7, power: 0.5, combo: 0.6, attack: 1.05, head: 0.2, cover: 0.12, feet: 0.36, reads: true, show: 0.12, iq: 0.7 },
+  '5m': { read: 0.88, answers: [['parry', 0.22], ['guard', 0.1], ['slip', 0.68]], counter: 0.85, power: 0.42, combo: 0.65, attack: 1, head: 0.28, cover: 0.1, feet: 0.44, reads: true, show: 0, iq: 0.9 },
+  '5a': { read: 0.84, answers: [['parry', 0.25], ['guard', 0.15], ['slip', 0.6]], counter: 0.85, power: 0.52, combo: 0.65, attack: 1.05, head: 0.22, cover: 0.1, feet: 0.38, reads: true, show: 0.12, iq: 0.9 }
+};
+const EVADE = ['slip', 'duck', 'roll', 'pull'];
+const TAUNTS = ['beckon', 'chinOut', 'wind'];
+// (the edges of the bands of distance the choreographer picks by: right up close, hook range, jab range, a step out, far)
+const BAND = [0.74, 0.9, 1.2, 1.5];
 
-// (the health both start with, least and most, when the winner is of this grade)
-export const hpOf = grade => SPAR.hp.map(h => h - SPAR.hpBy * (5 - LEVEL[grade].grade));
+const rank = lv => LEVEL[lv].grade;
+/* (the health both start with, for a round steered to `target` seconds: what the favoured man takes off the other in that
+   time; more the further below him the other man's grade is, who then stops less of it, and more again off a beginner) */
+export const hpOf = (favoured, other, target) =>
+  Math.round(clamp(SPAR.hp.rate[favoured] * target * (1 + SPAR.hp.apart * Math.max(0, rank(favoured) - rank(other) - 1) + (rank(other) === 1 && rank(favoured) > 1 ? SPAR.hp.novice : 0)), ...SPAR.hp.span));
+
 
 /* ---- the two men */
-// (a grade's place in the order, for who is the likelier to lead and to win: 1 to 5)
-const rank = lv => LEVEL[lv].grade;
 function menOf(rng) {
   return [0, 1].map(() => {
     const grade = LEVELS[Math.floor(rng() * LEVELS.length)],
@@ -95,8 +111,14 @@ function menOf(rng) {
       standard = loadout(skills),
       // (the rest of his slots from what his grade opens, in an order the dice choose)
       more = Object.keys(TECHNIQUES).filter(id => !standard.includes(id) && opens(skills, id)),
-      order = more.map(id => [rng(), id]).sort((a, b) => a[0] - b[0]).map(x => x[1]);
-    return { grade, skills, techniques: loadout(skills, [...standard, ...order]) };
+      order = more.map(id => [rng(), id]).sort((a, b) => a[0] - b[0]).map(x => x[1]),
+      asked = [...standard, ...order];
+    /* (the shoulder roll only with the cross-arm guard, which goes in ahead of it: rolled by a man who does not hold that
+       guard, the engine takes its shape on for the moment, and a lead hook coming as that moment ends throws in the
+       animator, anim/animator.mjs ear with no shape; found by this page, not mended here) */
+    if (asked.includes('rollCounter') && asked.indexOf('crossArm') > asked.indexOf('rollCounter')) asked.splice(asked.indexOf('crossArm'), 1), asked.splice(asked.indexOf('rollCounter'), 0, 'crossArm');
+    const techniques = loadout(skills, asked);
+    return { grade, skills, techniques: techniques.includes('rollCounter') && !techniques.includes('crossArm') ? techniques.filter(id => id !== 'rollCounter') : techniques };
   });
 }
 
@@ -107,678 +129,638 @@ export function startOf(plan) {
   return bout;
 }
 
-/* ---- what came of a beat, from its events */
-// the punches each man threw and what became of each, in order: { name, type, J, counter, down, out, margin, part, zone, at }
-function outcomes(events, who) {
-  return events.filter(x => OUTCOME.includes(x.e.type) && puncher(x.e) === who).map(x => ({ name: x.e.name, type: x.e.type, J: x.e.J, counter: !!x.e.counter, down: !!x.e.down, out: x.e.out || null, liver: !!x.e.liver, margin: x.e.margin ?? null, part: x.e.part, zone: x.e.zone || null, at: x.t, variant: x.e.variant }));
-}
-
-/* Did the exchange come out as the card does? A the card's boxer, B the other man (the round's indices). -> null if it did,
-   else what went wrong (for the stats). */
-function judged(lib, run, A, B, o) {
-  if (run.bad) return 'no place';
-  const ev = run.events,
-    mine = outcomes(ev, A),
-    his = outcomes(ev, B),
-    card = lib.card,
-    by = (who, type) => ev.some(x => x.e.type === type && x.e.who === who),
-    downs = ev.filter(x => x.e.type === 'hit' && x.e.down);
-  // (nobody down but by the finish's blow; no foul but the card's own)
-  if (o.downOk) {
-    // (screening a timing: a knockdown in it is no fault of the timing's)
-  } else if (o.finish) {
-    if (downs.length !== 1 || downs[0].e.who !== o.finish.by) return 'no knockdown';
-    const last = outcomes(ev, o.finish.by).pop();
-    if (!last || !last.down || last.J < SPAR.power || MOVES[last.name].kind === 'straight' && MOVES[last.name].hand === 'L') return 'not the last power blow';
-  } else if (downs.length) return 'down';
-  if (ev.some(x => x.e.type === 'foul') && !card.foul) return 'foul';
-  if (lib.kind === 'defence') {
-    if (!his.length) return 'nothing thrown';
-    const key = his[his.length - 1],
-      want = card.outcome;
-    if (want && key.type !== want) return `${key.type} for ${want}`;
-    if (card.before && his.slice(0, -1).some(x => x.type !== card.before)) return 'before';
-    if (key.type === 'whiff' && card.move && !(key.margin !== null && key.margin <= SPAR.margin)) return 'fell short';
-    if (card.move && !ev.some(x => x.e.type === card.move[0] && x.e.who === A)) return 'no evasion';
-    if (lib.counter && !(mine.length && mine[0].type === 'hit') && !o.finish) return 'counter';
-    if (lib.counter && o.finish && !mine.length) return 'counter';
-  } else if (lib.kind === 'punch' || lib.kind === 'combo') {
-    if (!mine.length) return 'nothing thrown';
-    if (mine[0].type !== (o.cover ? 'block' : 'hit')) return `${mine[0].type} first`;
-  } else if (lib.kind === 'trick') {
-    const t = card.trick || card.foul;
-    if (!ev.some(x => x.e.who === A && (x.e.type === 'paw' || x.e.type === 'collar' || (x.e.type === 'foul' && x.e.name === t) || x.e.variant === t || x.e.name === t))) return 'no trick';
-    if (!mine.length) return 'nothing thrown';
-  } else if (lib.kind === 'taunt') {
-    if (!ev.some(x => x.e.type === 'taunt' && x.e.who === A && x.e.name === card.taunt)) return 'no taunt';
-  } else if (lib.kind === 'tech') {
-    if (!ev.some(x => x.e.who === A && (x.e.type === 'wave' || x.e.type === 'shift'))) return 'no technique';
-  } else if (lib.kind === 'entry') {
-    if (!by(A, card.move)) return 'no move';
-  }
-  return null;
-}
-
-/* ---- the beat, line by line in the timeline: who leads, what is thrown, the answer, what came of it (as rehearsed) */
-const result = x => (x.down ? (x.out ? '실신' : '다운') : x.type === 'hit' ? `${x.counter ? '카운터 ' : ''}${SAID.hit} ${Math.round(x.J * (x.counter ? RULES.counterGain : 1))} N·s` : SAID[x.type]);
-function lineOf(lib, A, B, run, o) {
-  const ev = run.events,
-    mine = outcomes(ev, A),
-    his = outcomes(ev, B),
-    names = list => list.map(x => punchName(x.name)).join(' '),
-    card = lib.card;
-  let lead = A,
-    what,
-    answer,
-    said;
-  if (lib.kind === 'defence') {
-    lead = B;
-    what = names(his) || punchName((card.punch || ['jab'])[0]);
-    // (the card's name says the answer and what it answers: "크로스암 · 바디 잽"; the answer is the part before the dot)
-    answer = lib.group === '맞기' ? '맞음' : lib.item === 'slick' ? lib.name : lib.name.split(' · ')[0];
-    said = [...his.map(result), ...mine.map(result)];
-  } else if (lib.kind === 'punch' || lib.kind === 'combo') {
-    what = lib.kind === 'combo' ? lib.group : punchName(card.punch);
-    answer = o.cover ? '가드' : '맞음';
-    said = mine.map(result);
-  } else if (lib.kind === 'trick') {
-    what = trickName(card.trick || card.foul);
-    answer = o.cover ? '가드' : '맞음';
-    said = mine.map(result);
-  } else if (lib.kind === 'taunt') {
-    // (a taunt on its own; or the other man's punch, and the taunt after it, the answer)
-    what = his.length ? names(his) : trickName(card.taunt);
-    answer = his.length ? trickName(card.taunt) : '—';
-    said = [...his.map(result), '도발'];
-    if (his.length) lead = B;
-  } else {
-    what = lib.kind === 'tech' || lib.kind === 'entry' ? lib.group === '명의 기술' || lib.group === '진입 · 이탈' ? lib.name : lib.name : lib.name;
-    answer = his.length ? names(his) : '—';
-    said = [...mine.map(result), ...his.map(result)];
-    if (!said.length) said = [lib.kind === 'step' ? '거리' : '—'];
-  }
-  return { lead, what, answer, said: said.join(' · ') };
-}
-
-/* ---- the rehearsal: the round's own bout, and every control given it so far (to play it again from the start) */
-function rehearsal(plan) {
-  const r = {
-    log: [],
-    bout: startOf(plan),
-    rebuilt: 0, // how many times it has been played again from the start
-    replayed: 0, // and the steps that took
-    stepped: 0, // steps of the round's bout in all, tries and replays together
-    screened: 0, // steps of the screens' bouts
-    *rebuild() {
-      r.bout = startOf(plan);
-      let n = 0;
-      for (const inp of r.log) if ((step(r.bout, inp, DT), ++n % (4 * CHUNK) === 0)) yield;
-      r.rebuilt++;
-      r.replayed += r.log.length;
-      r.stepped += r.log.length;
-    }
-  };
-  return r;
-}
-
-const sink = () => new Proxy({ x: 0, z: 0 }, { set: (t, k, v) => (k !== 'x' && k !== 'z' && (t[k] = v), true) });
-const STUB = new Proxy({ fighters: [sink(), sink()] }, { set: () => true });
-/* The frame a card is played in, from where the two men stand: the card's line along theirs, the middle of it drawn in
-   toward the middle of the ring, and kept far enough inside the ropes for everything the card does. */
-function frameFor(bout, lib, A) {
-  const a = bout.fighters[A],
-    b = bout.fighters[1 - A],
-    line = Math.atan2(b.z - a.z, b.x - a.x),
-    cardLine = Math.atan2(lib.him[1] - lib.me[1], lib.him[0] - lib.me[0]),
-    angle = line - cardLine,
-    mid = clampRing([((a.x + b.x) / 2) * 0.55, ((a.z + b.z) / 2) * 0.55], 0.9),
-    turn = frameOf([0, 0], angle).turn,
-    c = turn([(lib.me[0] + lib.him[0]) / 2, (lib.me[1] + lib.him[1]) / 2]);
-  let o = [mid[0] - c[0], mid[1] - c[1]];
-  // (everywhere the card puts either man, inside the ropes by 0.45 m; a card that reads where a man is, from the bout its setup
-  // was given, is given two men standing at its origin for this: nothing of another bout is read)
-  const card = lib.card,
-    pts = [];
-  if (card.setup) card.setup(STUB);
-  for (let t = 0; t <= card.loop; t += 0.1)
-    for (const f of [card.me, card.him]) {
-      let p = null;
-      try {
-        p = f ? f(t) : null;
-      } catch {
-        p = null;
-      }
-      if (p && Number.isFinite(p[0]) && Number.isFinite(p[1])) pts.push(turn(p));
-    }
-  const room = RING.half - 0.45;
-  for (const k of [0, 1]) {
-    const lo = Math.min(...pts.map(p => p[k] + o[k]), o[k]),
-      hi = Math.max(...pts.map(p => p[k] + o[k]), o[k]);
-    if (hi > room) o[k] -= hi - room;
-    if (lo < -room) o[k] += -room - lo;
-  }
-  return frameOf(o, angle);
-}
-
-// (walk a man to a place on the canvas: full stick when far, easing off as he arrives: footwork.mjs walkTo)
-const walkTo = (f, to) => {
-  const dx = to[0] - f.x,
-    dz = to[1] - f.z,
-    d = Math.hypot(dx, dz);
-  return d < 0.025 ? [0, 0] : [(dx / d) * Math.min(SPAR.walk.pace, d * 4.5), (dz / d) * Math.min(SPAR.walk.pace, d * 4.5)];
-};
-const idle = f => !f.action && f.stun <= 0 && !f.down;
-
-/* One beat on a bout: the walk to the card's places and a rest there (rest seconds: the round's dice, drawn before), then
-   the card, until the exchange is over. -> { inputs, events: [{ t, k (step of the beat), e }] (the card's only), from (bout
-   time the card started), walked (steps of the walk) }. place: false to start the card where the men stand (a screen's). */
-function* playBeat(bout, lib, A, o, count) {
-  const frame = o.frame || frameFor(bout, lib, A),
-    run = runCard(lib, A, frame, { db: o.db, cover: o.cover, from: o.from ?? startOf_(lib) }),
-    inputs = [],
-    events = [],
-    W = SPAR.walk,
-    go = inp => {
-      step(bout, inp, DT);
-      inputs.push(inp);
-      count.n++;
-      for (const e of bout.events) events.push({ t: bout.t, k: inputs.length, e });
-      // (the held checks of each man's own body, frame by frame, until anyone is down: src/audit.mjs auditor)
-      if (o.audit && bout.over === null) o.audit.frame(bout, inputs.length);
-    };
-  // (first, until both have their feet again: nobody walks off while still being knocked back by the last blow)
-  let walked = 0;
-  for (let k = 0; o.place !== false && k < W.settle / DT && bout.fighters.some(f => !idle(f) || Math.hypot(f.kx, f.kz) > 0.15 || bout.stop > 0); k++) {
-    go([{}, {}]);
-    walked++;
-    if (count.n % CHUNK === 0) yield;
-  }
-  // (a card that gave no real place to walk to is not played)
-  if (!run.place.every(p => Number.isFinite(p[0]) && Number.isFinite(p[1]))) return { inputs, events: [], from: bout.t, walked, bad: true };
-  // the walk, and a rest once there
-  let still = 0;
-  for (let k = 0; o.place !== false && k < W.most / DT; k++) {
-    const fs = [A, 1 - A].map(i => bout.fighters[i]),
-      there = fs.every((f, i) => Math.hypot(f.x - run.place[i][0], f.z - run.place[i][1]) < W.near && Math.hypot(f.vx, f.vz) < W.still && idle(f));
-    if (there) still += DT;
-    if (there && still >= o.rest) break;
-    const inp = [{}, {}];
-    fs.forEach((f, i) => (inp[i === 0 ? A : 1 - A] = { move: walkTo(f, run.place[i]) }));
-    go(inp);
-    walked++;
-    if (count.n % CHUNK === 0) yield;
-  }
-  const from = bout.t,
-    // (the card's static presses: the exchange is not over before the last of them has had its time)
-    last = Math.max(0, ...[...(run.entry.press || []), ...(run.entry.against || [])].map(p => p[0])),
-    end = run.entry.loop;
-  let quiet = 0;
-  for (let k = 0; run.from + k * DT < end - 1e-9; k++) {
-    go(run.step(bout, k));
-    if (count.n % CHUNK === 0) yield;
-    const t = run.from + k * DT,
-      busy = bout.fighters.some(f => !idle(f)) || bout.stop > 0;
-    quiet = busy ? 0 : quiet + DT;
-    if (bout.over !== null && !o.finish) break;
-    // (over: footwork once it has had its time; anything else past its last press, both men idle a quarter of a second, and
-    // something of the card's done in it)
-    if (lib.kind === 'step' ? t >= run.from + STEP_FOR - 1e-9 : t > last + 0.3 && quiet >= 0.25 && events.some(x => x.k > walked && DOING.includes(x.e.type))) break;
-    if (bout.over !== null && bout.t - bout.overAt > 0.05) break;
-  }
-  return { inputs, events: events.filter(x => x.k > walked), from, walked };
-}
-// (what counts as a card having done something; and how long a beat of footwork goes on)
-const DOING = ['punch', 'taunt', 'wave', 'shift', 'duckIn', 'hopPivot', 'hopCircle', 'slip', 'duck', 'roll', 'pull', 'dash', 'hit', 'block', 'parry', 'whiff', 'graze'];
-const STEP_FOR = 3.2;
-// (steps of a bout between two pauses of the arranging, for a page arranging it while it draws)
-const CHUNK = 12;
-// (where in its loop a card's beat starts: a moment before the first thing it does)
-const startOf_ = lib => lib.from;
-// (footwork, and a taunt nobody throws at: nothing in them can come out otherwise, and they are not screened)
-const trivial = lib => lib.kind === 'step' || (lib.kind === 'taunt' && !(lib.card.against && lib.card.against.length));
-// does the card's answer have to be timed to the frame (an evasion, a parry, a counter out of one: a window of the catalogue's)?
-const critical = lib => lib.kind === 'defence' && (!!lib.card.card || !!(lib.card.press && lib.card.press.length));
-
-/* ---- screening a timing on a bout of its own: the two men at the card's places as they are now (grades, loadouts, health,
-   breath), standing in their guards; B's press moved by db frames. -> { db, width, dmg (the health each man lost in it),
-   down ({ by, on } if a man went down in it) }: the middle of the run of neighbouring timings that came out as the card
-   does, searched outward from the guess, or null. */
-// (kept for the round only: the key buckets health and breath, so a screen kept from another round, or the same round's
-// arranging begun again, would make the round depend on what was arranged before it)
-function* screen(plan, r, lib, A, o, SCREENS) {
-  const fa0 = r.bout.fighters[A],
-    fb0 = r.bout.fighters[1 - A],
-    // (what can change how it comes out: who they are, how hurt each looks (health under 45 shows), how tired (breath under a
-    // third slows him))
-    fresh = f => Math.round(4 * Math.min(1, f.stamina / (0.35 * f.k.staminaMax))),
-    hurt = f => (f.hp >= 45 ? 'ok' : Math.round(f.hp / 5)),
-    key = [lib.id, o.timed, plan.men[A].grade, plan.men[1 - A].grade, plan.men[A].techniques.join(), plan.men[1 - A].techniques.join(), o.cover, hurt(fa0), hurt(fb0), fresh(fa0), fresh(fb0)].join('|');
-  if (SCREENS.has(key)) return SCREENS.get(key);
-  const seen = new Map(),
-    probe = function* (db) {
-      if (seen.has(db)) return seen.get(db);
-      const b = startOf(plan);
-      for (const i of [0, 1]) (b.fighters[i].hp = r.bout.fighters[i].hp), (b.fighters[i].stamina = r.bout.fighters[i].stamina);
-      const fa = b.fighters[A],
-        fb = b.fighters[1 - A],
-        frame = frameOf([0, 0], 0),
-        run0 = runCard(lib, A, frame, { from: startOf_(lib) });
-      [[fa.x, fa.z], [fb.x, fb.z]] = run0.place;
-      fa.yaw = Math.atan2(fb.x - fa.x, fb.z - fa.z);
-      fb.yaw = Math.atan2(fa.x - fb.x, fa.z - fb.z);
-      settle(b);
-      const hp = b.fighters.map(f => f.hp),
-        count = { n: 0 },
-        run = yield* playBeat(b, lib, A, { db, cover: o.cover, frame, place: false }, count),
-        blow = run.events.find(x => x.e.type === 'hit' && x.e.down);
-      r.screened += count.n;
-      const ok = !judged(lib, run, A, 1 - A, { cover: o.cover, downOk: true }) && { db, dmg: b.fighters.map((f, i) => hp[i] - f.hp), down: blow ? { by: blow.e.who, on: blow.e.on, ok: !judged(lib, run, A, 1 - A, { cover: o.cover, finish: { by: blow.e.who } }) } : null };
-      seen.set(db, ok);
-      return ok;
-    };
-  if (!o.timed) {
-    const p0 = yield* probe(0),
-      out = p0 ? Object.assign({ width: null }, p0) : null;
-    SCREENS.set(key, out);
-    return out;
-  }
-  const [lo, hi] = SPAR.tries.screen;
-  let hit = null;
-  for (let d = 0; d <= Math.max(-lo, hi) && hit === null; d++) for (const s of d ? [-d, d] : [0]) if (hit === null && s >= lo && s <= hi && (yield* probe(o.est + s))) hit = o.est + s;
-  let out = null;
-  if (hit !== null) {
-    // (a frame either side of it, and one more on the side that held if the other did not: three in a row, or too fine)
-    const l = yield* probe(hit - 1),
-      r2 = yield* probe(hit + 1);
-    let a = hit - (l ? 1 : 0),
-      b = hit + (r2 ? 1 : 0);
-    if (b - a < 2) {
-      if (l && (yield* probe(hit - 2))) a = hit - 2;
-      else if (r2 && (yield* probe(hit + 2))) b = hit + 2;
-    }
-    out = Object.assign({}, yield* probe(Math.round((a + b) / 2)), { width: b - a + 1 });
-  }
-  SCREENS.set(key, out);
-  return out;
-}
-
-/* How many frames B's punch would get there sooner or later than a pro's (the windows of the catalogue's defence are
-   measured against a pro's: src/windows.data.mjs), as a first guess at where to put his press: anim/animator.mjs arrival. */
-function estimate(plan, r, lib, A) {
-  const B = 1 - A,
-    f = r.bout.fighters[B],
-    key = (lib.card.against || []).slice(-1)[0];
-  if (!key) return 0;
-  const name = typeof key[2] === 'string' && MOVES[key[2]] && MOVES[key[2]].punch ? key[2] : key[1] === 'jab' ? 'jab' : (lib.card.punch || ['cross'])[0];
-  const move = MOVES[name] || MOVES.cross,
-    rate = k => f.k.rate * (0.75 + 0.25 * Math.max(0, Math.min(1, f.stamina / (0.35 * f.k.staminaMax)))) * k,
-    his = arrival(createChain(move, rate(1), LEVEL[plan.men[B].grade]), move),
-    pro = arrival(createChain(move, 1, LEVEL[3]), move);
-  return -Math.round((his - pro) / DT);
-}
-
-/* ---- the grammar: what may come next, by the phase of the round and who is winning */
-const rest = (rng, k) => SPAR.walk.rest[0] + (SPAR.walk.rest[1] - SPAR.walk.rest[0]) * rng() * (k ?? 1);
-const fits = (lib, man) => (!lib.grade || lib.grade === man.grade) && lib.needs.every(id => man.techniques.includes(id));
-const showOff = man => !!LEVEL[man.grade].stance.show;
-const tricky = (lib, man) => {
-  const t = lib.card.trick || lib.card.foul,
-    v = LEVEL[man.grade].vary;
-  return !!v && [...(v.jab || []), ...(v.power || [])].some(([id]) => id === t);
-};
-// what a card is, for the grammar's purposes: its kind and a few things about it
-function tagsOf(lib) {
-  const c = lib.card,
-    p = c.punch,
-    name = typeof p === 'string' ? p : Array.isArray(p) ? p[0] : null,
-    body = !!name && !!MOVES[name] && !!MOVES[name].zone,
-    jab = name === 'jab' || name === 'jabBody',
-    inside = lib.gap < 0.74;
-  return { name, body, jab, inside, power: !!name && !jab };
-}
-
-/* The candidates for the next beat: [{ lib, A (the round's man in part A), cover, weight }], weighted. phase: 'open' |
-   'middle' | 'finish'. W the winner, L the loser. need: how much the loser is to be hurt by it (-1 spare him, 0 either way,
-   1 hurt him, 2 he must be hurt now). Each sort of exchange has its share (SHARES), split among the cards of that sort
-   either man can fight (so that a sort with many cards does not crowd out one with few); an attack goes by how likely its
-   man is to lead (his grade against the other's, and who is winning), a defence by how likely the other is to lead. */
-const SHARES = {
-  open: { step: 3, jab: 3, 'defence-jab': 2.5, guard: 1.2 },
-  middle: { combo: 3, punch: 1.6, 'punch-body': 1.6, defence: 2.4, 'defence-counter': 2.6, takes: 0.5, trick: 1, taunt: 0.8, tech: 1.8, entry: 1, step: 0.7 },
-  finish: { 'defence-counter': 5, punch: 3, 'punch-body': 1.5, combo: 2.5, trick: 1.5, tech: 2 }
-};
-const leadOf = (men, A, W) => Math.max(0.25, Math.min(0.75, 0.5 + 0.08 * (rank(men[A].grade) - rank(men[1 - A].grade)))) + (A === W ? 0.06 : -0.06);
-function candidates(plan, phase, W, L, need, used, rng, last, bad) {
-  const men = plan.men,
-    groups = new Map(),
-    shown = new Set(plan.beats.map(b => b.kind)),
-    // (pressure and escapes: in under his punches, his short punches from there, and out again after them; a show-off's
-    // or a great one's own at least once)
-    follow = (lib, A) => {
-      const t = tagsOf(lib);
-      if (last && last.kind === 'entry' && last.item === 'duckIn' && last.A === A) return t.inside && lib.kind === 'punch' ? 8 : 0.3;
-      if (last && last.kind === 'punch' && last.inside) return lib.kind === 'entry' && lib.item !== 'duckIn' ? 4 : 1;
-      if ((lib.kind === 'trick' || lib.kind === 'taunt') && !shown.has('trick') && !shown.has('taunt')) return 1.8;
-      // (a show-off shows off, but not all round)
-      if ((lib.kind === 'trick' || lib.kind === 'taunt') && plan.beats.filter(b => b.kind === 'trick' || b.kind === 'taunt').length >= 3) return 0.15;
-      if (lib.kind === 'tech' && !shown.has('tech')) return 1.8;
-      return 1;
-    },
-    take = A => (A === W ? (need >= 2 ? 0.75 : need === 1 ? 0.45 : need === 0 ? 0.3 : 0.1) : 0.15),
-    put = (sort, lib, A, cover, w) => {
-      const share = SHARES[phase][sort];
-      if (!share || w <= 0 || (last && last.item === lib.item)) return;
-      const key = sort + '|' + A;
-      if (!groups.has(key)) groups.set(key, []);
-      // (and a card that has not come out for this pair in its screens, the less often the more it has not)
-      groups.get(key).push({ lib, A, cover, weight: (share * w * follow(lib, A)) / (1 + 2.5 * (used.get(lib.item) || 0)) / (1 + 4 * ((bad && bad.get(lib.id + '|' + A)) || 0)) });
-    };
-  for (const lib of library()) {
-    const t = tagsOf(lib);
-    for (const A of [0, 1]) {
-      const man = men[A];
-      if (!fits(lib, man)) continue;
-      if ((lib.kind === 'trick' && !tricky(lib, man)) || (lib.kind === 'taunt' && !showOff(man))) continue;
-      const winner = A === W,
-        mine = leadOf(men, A, W),
-        his = leadOf(men, 1 - A, W),
-        attack = ['combo', 'punch', 'trick', 'tech'].includes(lib.kind),
-        hurts = (winner && attack) || (winner && lib.kind === 'defence' && lib.counter),
-        steer = need >= 2 ? (hurts ? 3 : 0.4) : need === 1 ? (hurts ? 1.5 : 0.8) : need < 0 ? (hurts ? 0.3 : 1.5) : 1,
-        cover = lib.covered ? undefined : rng() >= take(A);
-      if (phase === 'open') {
-        if (lib.kind === 'step') lib.moves && put('step', lib, A, undefined, mine);
-        else if (lib.kind === 'punch' && t.jab) put('jab', lib, A, cover, mine);
-        else if (lib.kind === 'defence' && t.jab && !lib.counter) put('defence-jab', lib, A, undefined, his);
-        else if (lib.item === 'guard' || lib.item === 'block') put('guard', lib, A, undefined, his);
-        continue;
-      }
-      if (phase === 'finish') {
-        // (the winner's blow: a counter off a defence of his, a power punch, a combination, a show-off's trick, the shift)
-        if (!winner) continue;
-        // (still strong: the liver puts him down whatever his health, game/bout.mjs RULES.body.liver; anything else hurts him
-        // on toward it)
-        const liver = lib.card.punch === 'hookBody' || lib.card.way === 'pullBody' || (lib.kind === 'defence' && /liver|Body/.test(lib.item) && lib.counter),
-          k = need > 1 && liver ? 3 : 1;
-        if (lib.kind === 'defence' && lib.counter) put('defence-counter', lib, A, undefined, k);
-        else if (lib.kind === 'punch' && t.power) put(t.body ? 'punch-body' : 'punch', lib, A, false, (lib.card.punch === 'hookBody' ? 1.4 : 1) * k);
-        else if (lib.kind === 'combo') put('combo', lib, A, false, 1);
-        else if (lib.kind === 'trick' && /elbow|collar|pawDown/.test(lib.card.trick || '')) put('trick', lib, A, false, 1);
-        else if (lib.kind === 'tech' && /shift/.test(lib.item)) put('tech', lib, A, undefined, 1);
-        continue;
-      }
-      // the middle
-      if (lib.kind === 'combo') put('combo', lib, A, cover, mine * steer);
-      else if (lib.kind === 'punch') put(t.body ? 'punch-body' : 'punch', lib, A, cover, mine * steer);
-      // (a drill of being hit is the other man's punch landing: a sort of its own, rarer)
-      else if (lib.kind === 'defence') put(lib.counter ? 'defence-counter' : lib.card.outcome === 'hit' && !lib.card.move && lib.group === '맞기' ? 'takes' : 'defence', lib, A, undefined, his * steer);
-      else if (lib.kind === 'trick') put('trick', lib, A, lib.covered ? undefined : cover, steer);
-      else if (lib.kind === 'taunt') put('taunt', lib, A, undefined, 1);
-      else if (lib.kind === 'tech') put('tech', lib, A, undefined, steer);
-      else if (lib.kind === 'entry') put('entry', lib, A, undefined, mine);
-      else if (lib.kind === 'step') lib.moves && put('step', lib, A, undefined, need >= 2 ? 0.3 : 1);
-    }
-  }
-  // (each sort's share split among its cards)
-  const out = [];
-  for (const list of groups.values()) for (const c of list) out.push(Object.assign(c, { weight: c.weight / list.length }));
-  return out;
-}
-// (k of them drawn without putting back, each by its weight)
-function draw(list, k, rng) {
-  const out = [],
-    pool = list.slice();
-  while (out.length < k && pool.length) {
-    const sum = pool.reduce((s, c) => s + c.weight, 0);
-    let u = rng() * sum,
-      i = 0;
-    while (i < pool.length - 1 && (u -= pool[i].weight) > 0) i++;
-    out.push(pool.splice(i, 1)[0]);
-  }
-  return out;
-}
-
-/* ---- the round, a piece at a time. A round that cannot be arranged (no beat comes out, try after try) is arranged again
-   from the start with the next of the seed's own streams of dice (plan.attempt): still the same round for the same seed. */
-export function planner(seed, o) {
-  seed = Math.max(1, Math.floor(Number(seed) || 1));
-  let attempt = 0,
-    cur = round(seed, attempt, o);
+/* ---- a man's choreographer: what he presses this step, from what the bout shows. It reads the bout and never writes it. */
+const punching = f => !!f.action && !!MOVES[f.action.name].punch;
+function createMind(i, man, rng) {
   return {
-    get plan() {
-      return cur.plan;
-    },
-    get log() {
-      return cur.log;
-    },
-    get done() {
-      return cur.done;
-    },
-    run(ms) {
-      const until = Date.now() + (ms ?? Infinity);
-      for (;;) {
-        try {
-          return cur.run(until - Date.now());
-        } catch (err) {
-          if (!/could not be arranged/.test(String(err && err.message)) || attempt >= 4) throw err;
-          cur = round(seed, ++attempt, o);
-          if (Date.now() >= until) return { done: false, beats: 0, rebuilt: 0, attempt };
-        }
-      }
-    }
+    i, grade: man.grade, lv: LEVEL[man.grade], st: STYLE[man.grade], rng,
+    queue: [], // the presses he has in hand: [{ press, kind, at (not before this step), drop (given up after), serial }]
+    pause: 0,
+    hold: 0, holding: null, seen: null, answer: null,
+    step: null, steps: 0, stepAt: 0, lastStep: null, wave: null, circle: rng() < 0.5 ? 1 : -1, range: 1.05, rangeFor: 0,
+    tried: null, triedBy: null, triedKept: null, triedOpen: null, lastKind: null, threat: null, pressed: null, waiting: -9,
+    // (what a technique's own reading needs of a head: game/techniques.mjs situation)
+    mem: memory(), used: null, rest: 0, rests: 0, going: null, rehearse: false
   };
 }
-function round(seed, attempt, o) {
-  o = Object.assign({ screen: true }, o);
-  const rng = dice(seed * 7919 + 17 + attempt * 104729),
-    men = menOf(rng),
-    edge = rank(men[0].grade) - rank(men[1].grade),
-    W = rng() < Math.max(0.15, Math.min(0.85, 0.5 + 0.12 * edge)) ? 0 : 1,
-    L = 1 - W,
-    span = hpOf(men[W].grade),
-    hp = Math.round(span[0] + (span[1] - span[0]) * rng()),
-    // (how many beats this round means to have, within SPAR.beats: the finish is tried from about there)
-    aim = SPAR.beats[0] + 2 + Math.floor(rng() * (SPAR.beats[1] - SPAR.beats[0] - 4)),
-    plan = { seed, attempt, men, hp, winner: W, beats: [], inputs: null, ko: null, stats: null },
-    r = rehearsal(plan),
-    used = new Map(),
-    bad = new Map(), // (cards whose screens did not come out for this pair, how many times)
-    screens = new Map(), // (what each screen found, this round)
-    t0 = Date.now(),
-    stats = { tries: 0, failed: {}, screens: 0, kept: 0, ms: 0, cards: {} },
-    // (what became of each card this round: drawn, screened out, over the budget, too fine, tried and failed, kept)
-    tally = (lib, what) => {
-      const c = (stats.cards[lib.item] = stats.cards[lib.item] || {});
-      c[what] = (c[what] || 0) + 1;
-    };
-  let phase = 'open',
-    misses = 0,
-    done = false,
-    going = null; // (the beat being arranged: a generator, worked on a few dozen steps at a time)
 
-  function commit(c, run, line, o2) {
-    r.log.push(...run.inputs);
-    used.set(c.lib.item, (used.get(c.lib.item) || 0) + 1);
-    const steps = r.log.length;
-    plan.beats.push(Object.assign({ i: plan.beats.length, id: c.lib.id, item: c.lib.item, kind: c.lib.kind, inside: tagsOf(c.lib).inside, body: tagsOf(c.lib).body, A: c.A, t: +run.from.toFixed(2), step: steps - run.inputs.length + run.walked, from: steps - run.inputs.length, to: steps, cover: !!c.cover, db: o2.db || 0, hp: r.bout.fighters.map(f => +f.hp.toFixed(1)) }, line));
+// a press of a punch by its name: the jab button, or the power button with the punch named; and for the body
+const pressOf = (name, body) => {
+  const id = body && TO_BODY[name] ? TO_BODY[name] : name;
+  return id === 'jab' ? { jab: true } : id === 'jabBody' ? { jab: true, body: true } : { power: id };
+};
+// a combination's beats as presses (those of it there are punches for: game/combos.data.mjs LATER has the rest)
+function beatsAs(id, grade, o) {
+  const beats = beatsOf(id);
+  if (!beats || beats.some(b => !MOVES[b.do] || !MOVES[b.do].punch)) return null;
+  return beats.map((b, j) => ({ press: pressOf(b.do, b.to === 'body' || (o && o.body === j)) }));
+}
+const pick = (rng, options) => {
+  const sum = options.reduce((s, o) => s + o[0], 0);
+  let u = rng() * sum;
+  for (const o of options) if ((u -= o[0]) < 0) return o[1];
+  return options.length ? options[options.length - 1][1] : null;
+};
+
+/* What he throws, from where he stands: -> the presses, or null. band: BAND's; steer: the director's. */
+function attackOf(m, me, him, far, band, steer) {
+  const rng = m.rng,
+    st = m.st,
+    g = rank(m.grade),
+    one = (name, body) => [{ press: pressOf(name, body) }],
+    chain = n => Array.from({ length: n }, (_, j) => ({ press: { power: true } })),
+    tricks = m.lv.vary ? new Set([...(m.lv.vary.jab || []), ...(m.lv.vary.power || [])].map(x => x[0])) : new Set(),
+    opts = [],
+    add = (w, beats) => beats && w > 0 && opts.push([w, beats]),
+    i = m.i;
+  // (the finish: power punches only, so that the blow that puts him down is one; past the target time, the liver)
+  if (steer.finish[i]) {
+    /* (each from where it lands with all of him behind it, so that the last blow is a real one: the hook and the uppercut
+       from their own range, the straight from the end of its reach; from anywhere else he waits for his feet) */
+    if (far >= 0.76 && far < 0.9) (add(1, one('hook')), add(1, one('upper')), add(g >= 3 ? 0.6 : 0, one('hookR')), add(steer.liver[i] ? 4 : 0, one('hookBody')));
+    else if (far >= 0.92 && far <= 1.16) (add(1, one('cross')), add(0.8, beatsAs('2-3-2', m.grade)), add(0.6, chain(2)));
+    else if (steer.liver[i] && far < 0.76) add(1, chain(2));
+    return opts.length ? pick(rng, opts) : null;
+  }
+  const power = clamp(st.power * steer.press[i], 0.12, 0.85),
+    combo = st.combo,
+    knows = KNOWS[m.grade].combos,
+    known = (id, o) => (knows.includes(id) ? beatsAs(id, m.grade, o) : null),
+    low = g >= 2 ? 0.16 : 0.08; // (how much of it goes to the body)
+  if (band === 3) {
+    // (a step out: the jab that walks in, the one-two behind it)
+    add(1, one('jab'));
+    add(far < 1.36 ? combo : 0, known('1-2'));
+    add(tricks.has('flicker') ? 0.5 : 0, [{ press: { jab: 'flicker' } }, { press: { jab: 'flicker' } }]);
+  } else if (band === 2) {
+    const light = 1 - power;
+    add(light * (1 - combo) * 1.2, one('jab'));
+    add(light * (1 - combo) * 0.5, [...one('jab'), { press: { jab: true } }]);
+    add(light * low * 2, one('jab', true));
+    add(light * combo, known('1-2'));
+    add(light * combo * 0.6, known('1-1-2'));
+    add(light * combo * 0.8, known('1-2-3'));
+    add(light * combo * 0.6, known('1-2-3-2'));
+    add(light * combo * 0.4, known('1-6-3-2'));
+    add(light * combo * low * 2, known('1-2', { body: 1 }));
+    add(power * (1 - combo), one('cross'));
+    add(far < 1.02 ? power * 0.6 : 0, one('hook'));
+    add(far < 1.02 ? power * 0.4 : 0, one('upper'));
+    add(power * low * 2, one('cross', true));
+    add(power * combo * 0.7, chain(g >= 3 ? 3 : 2));
+    add(power * combo * 0.5, known('2-3-2'));
+    add(tricks.has('flicker') ? 0.25 : 0, [{ press: { jab: 'flicker' } }, { press: { jab: 'flicker' } }, { press: { jab: 'flicker' } }]);
+    add(tricks.has('thumb') ? 0.06 : 0, [{ press: { jab: 'thumb' } }]);
+    add(tricks.has('pawDown') && him.cover && him.coverAge > 0.2 ? 0.8 : 0, [{ press: { power: 'pawDown' } }]);
+    // (the Tyson shift: its body hook is to the liver, so only late in the round, or at a guard held up)
+    add(has(me, 'shift') && far >= 0.9 && far <= 1.05 && me.stamina / me.k.staminaMax >= 0.45 && (steer.late || (him.cover && him.coverAge > 0.3)) ? 1.2 : 0, [{ press: { power: true, tech: 'shift' } }]);
+  } else if (band === 1) {
+    add(power, one('hook'));
+    add(power * 0.8, one('upper'));
+    add(power * 0.5, one('cross'));
+    add(g >= 3 ? power * 0.5 : 0, one('hookR'));
+    add(power * combo, known('2-3-2'));
+    add(power * combo * 0.7, [...one('hook'), { press: pressOf('cross') }]);
+    add((1 - power) * 0.9, one('jab'));
+    add((1 - power) * combo, known('1-2'));
+    add(low * 1.5, one('cross', true));
+    add(low, one('upper', true));
+    add(tricks.has('elbow') && far >= 0.75 && far <= 0.85 ? 0.3 : 0, [{ press: { power: 'elbow' } }]);
+    add(tricks.has('stomp') ? 0.08 : 0, [{ press: { power: 'stomp' } }]);
+    add(tricks.has('pawUp') && him.cover && him.coverAge > 0.2 ? 0.6 : 0, [{ press: { power: 'pawUp' } }]);
+    // (the liver hook at a guard held up, late in the round: his elbow is in the way of it, or it is the finish)
+    add(steer.late && him.cover && him.coverAge > 0.2 ? 0.5 : 0, one('hookBody'));
+  } else {
+    add(1, chain(1 + Math.floor(rng() * (g >= 3 ? 3 : 2))));
+    add(low * 2, one('upper', true));
+    add(tricks.has('collar') ? 0.4 : 0, [{ press: { power: 'collar' } }]);
+  }
+  return pick(rng, opts);
+}
+
+/* ---- what is coming at him, and when. The round is promised: a man knows the punch the other has in hand before it is
+   pressed (the next press of his queue, in hand while he is still doing the last thing), as a sparring partner who has
+   agreed the exchange does; a punch that was not in hand (a counter) he sees only once it is on its way.
+   -> { key, name, land (the step it gets there, about), q (the press in hand, until it is pressed) } or null. */
+const FLIGHT = new Map();
+// frames from a punch's press to its landing, about, by who throws it (as far as the arm takes to go out, less a little)
+function flightOf(f, name) {
+  const level = levelOf(f.skills, MOVES[name].of && !(f.skills && f.skills[name]) ? MOVES[name].of : name),
+    key = name + '|' + level.id + '|' + f.k.rate;
+  if (!FLIGHT.has(key)) FLIGHT.set(key, Math.max(3, Math.round(arrival(createChain(MOVES[name], f.k.rate, level), MOVES[name]) * 60) - 2));
+  return FLIGHT.get(key);
+}
+// the punch a press is, as near as can be told before the bout has made it one
+const punchOf = (press, far) => {
+  const v = press.jab ? (press.body ? 'jabBody' : press.jab === true || !MOVES[press.jab] ? 'jab' : press.jab) : press.power;
+  if (typeof v === 'string' && MOVES[v] && MOVES[v].punch) return v;
+  if (v === 'pawUp' || v === 'collar') return 'upper';
+  if (v === 'stomp') return 'hook';
+  return press.power ? (far < RULES.inside ? 'hookIn' : 'cross') : null;
+};
+function threatOf(m, his, bout, k, far) {
+  const him = bout.fighters[1 - m.i],
+    coming = incoming(him);
+  if (coming) return { key: coming.id, name: coming.name, land: k + Math.max(0, Math.floor(arrival(coming.chain, MOVES[coming.name]) * 60 - 3.5)), q: null, coming };
+  const q = his.queue[0],
+    name = q && (q.at || 0) - k <= 16 ? punchOf(q.press, far) : null;
+  return name ? { key: q, name, land: Math.max(q.at || 0, k) + flightOf(him, name), q, coming: null } : null;
+}
+/* How many frames before a punch lands each way out of its way has to be pressed, by his grade (measured against punches
+   of four grades from three distances: the frames that make most of them miss). A duck and a weave go under a hook only if
+   they start before it does: they are for a hook he knows is coming. A great one's slip is out and back too quickly to be
+   timed by anything but his own eye (it makes one punch in three miss from here): he sways back or steps back more. */
+const LEAD = {
+  slip: { 1: 9, 2: 4.5, 3: 3, '4m': 2, '4a': 2, '5m': 2, '5a': 2 },
+  pull: { 1: 10, 2: 6, 3: 2.5, '4m': 2, '4a': 2, '5m': 2, '5a': 2 },
+  duck: { 1: 18, 2: 18, 3: 14, '4m': 16, '4a': 16, '5m': 13, '5a': 13 },
+  roll: { 1: 22, 2: 21, 3: 16, '4m': 12, '4a': 12, '5m': 10, '5a': 10 },
+  back: { 1: 7, 2: 7, 3: 6, '4m': 6, '4a': 6, '5m': 6, '5a': 6 }
+};
+
+/* The answer to a punch he knows is coming, decided once: the engine's own (a parry, the guard, out of the way, or a
+   technique he carries taking its part of one of them), and the way out of the way that fits the punch and that there is
+   still time for. */
+function answerFor(m, s, threat, k) {
+  const rng = m.rng,
+    me = s.me,
+    left = threat.land - k,
+    can = kind => left >= LEAD[kind][m.grade] - 0.5;
+  if (me.stun > 0) return { kind: 'guard' };
+  // (the cross counter: the rear straight thrown over a jab; carried, and not yet one of the engine's own answers)
+  if (has(me, 'crossCounter') && s.head && s.punch === 'jab' && s.far >= 0.9 && s.far <= 1.14 && rng() < 0.4) return { kind: 'cross' };
+  const a = answerOf(s, rng(), m.st.answers),
+    t = TECHNIQUES[a];
+  if (t) return { kind: 'tech', id: a };
+  if (a === 'guard' || s.body) return { kind: 'guard' };
+  if (a === 'parry') return s.punch === 'upper' ? { kind: 'guard' } : { kind: 'parry' };
+  if (a !== 'slip') return null;
+  const hand = MOVES[threat.name].hand === 'L',
+    r = rng(),
+    great = rank(m.grade) >= 4,
+    first = s.punch === 'hook' ? (r < 0.5 ? 'duck' : r < 0.68 ? 'roll' : r < 0.84 ? 'pull' : 'back') : s.punch === 'upper' ? (r < 0.6 ? 'pull' : 'back') : r < (great ? 0.18 : 0.45) ? 'slip' : r < 0.82 ? 'pull' : 'back',
+    // (if there is no time left for it, the quickest that there is time for; if for none, the guard)
+    kind = [first, 'back', 'pull', 'slip'].find(x => can(x) && !(x === 'slip' && s.punch !== 'jab' && s.punch !== 'straight'));
+  if (!kind) return { kind: 'guard' };
+  return { kind, side: kind === 'slip' ? (hand ? -1 : 1) : kind === 'roll' ? (hand ? 1 : -1) : true };
+}
+
+/* His next step, from where the two of them are: -> { kind, side, until }. The distance: 'in', 'out', 'press' (walking him
+   down), 'back' (giving ground, off to a side); the axis: 'side' (a side step), 'pivot' (round him from close, turning the
+   line between them), 'cut' (across the way he is going, to cut the ring off). Closing when he is out of range, out or
+   round when he is right up close; in with a punch he has in hand; round and off the ropes when they are at his back;
+   pressing and cutting when they are at the other man's; and not the same step twice running, mostly. */
+function stepOf(m, his, me, him, far, band, at, steer) {
+  const rng = m.rng,
+    hisEdge = RING.half - Math.max(Math.abs(him.x), Math.abs(him.z)),
+    // (which way he is going across the line between them, if he is)
+    drift = (him.gx || 0) * at.across[0] + (him.gz || 0) * at.across[1],
+    going = Math.abs(drift) > 0.35,
+    // (a punch in hand that he is not yet near enough for: his feet take him in with it)
+    name = m.queue.length ? punchOf(m.queue[0].press, far) : null,
+    told = !!name && far > MOVES[name].reach - 0.12,
+    tired = me.stamina / me.k.staminaMax < 0.3,
+    // (by the band of distance they are at, right up close first: in, out, press, back, side, pivot, cut)
+    w = [[0, 0.4, 1.6, 3.5, 5][band], [3, 2.2, 1, 0.3, 0][band], [0, 0.3, 1.2, 2.2, 3][band], [2, 1.2, 0.6, 0.15, 0][band], [1, 2, 3, 2.2, 0.8][band], [3, 3, 2, 0.8, 0][band], [0, 0.4, 0.8, 1.5, 3][band] * (going ? 1 : 0.15)],
+    kinds = ['in', 'out', 'press', 'back', 'side', 'pivot', 'cut'],
+    weight = (kind, j) =>
+      w[j] *
+      (m.lastStep === kind ? 0.3 : 1) *
+      (told && kind === 'in' ? 3 : 1) *
+      (told && (kind === 'out' || kind === 'back') ? 0.15 : 1) *
+      (at.edge < 0.9 ? (WAY[kind] === 'axis' ? 3 : kind === 'out' || kind === 'back' ? 0.1 : 1) : 1) *
+      (hisEdge < 1 ? (kind === 'cut' || kind === 'press' ? 3.5 : kind === 'out' || kind === 'back' ? 0.3 : 1) : 1) *
+      (steer.finish[m.i] ? (far < 0.9 ? (kind === 'out' ? 4 : kind === 'in' || kind === 'press' ? 0.1 : 1) : far > 1.14 ? (kind === 'in' || kind === 'press' ? 3 : 1) : kind === 'side' ? 2 : 0.6) : 1) *
+      (tired && (kind === 'out' || kind === 'back' || kind === 'side') ? 1.6 : 1),
+    kind = pick(rng, kinds.map((x, j) => [weight(x, j), x])),
+    // (the way round: back toward the picture's width if the line has gone far off it; with him, to cut him off; else the
+    // way he has been going, mostly)
+    keep = rng() < 0.65 ? m.circle : -m.circle,
+    side = kind === 'cut' && going ? (drift > 0 ? 1 : -1) : at.tilt > SPAR.tilt * 0.75 ? at.home : keep,
+    secs = { in: [0.3, 0.55], out: [0.25, 0.45], press: [0.6, 1], back: [0.3, 0.5], side: [0.4, 0.7], pivot: [0.4, 0.7], cut: [0.5, 0.85] }[kind];
+  m.circle = side;
+  m.lastStep = kind;
+  return { kind, side, until: 0, secs: secs[0] + rng() * (secs[1] - secs[0]) };
+}
+
+function think(m, his, bout, k, steer) {
+  const i = m.i,
+    me = bout.fighters[i],
+    him = bout.fighters[1 - i],
+    c = { move: [0, 0] },
+    rng = m.rng,
+    st = m.st;
+  observe(m.mem, bout, i);
+  if (bout.over !== null || me.down || him.down) return c;
+  for (const e of bout.events) {
+    // (hit: whatever he meant to do is gone with what he was doing; a miss ends a combination of a man who reads them)
+    if (e.type === 'hit' && e.on === i) {
+      m.queue.length = 0;
+      m.answer = m.step = m.wave = m.holding = null;
+      m.stepAt = k;
+      // (a hurt man pulls his hands up, as often as he reads a punch, and keeps them there a moment: the bout lets a stunned
+      // man do that and nothing else)
+      m.hold = rng() < clamp(0.15 + 0.5 * st.read * steer.guard[i], 0.05, 0.9) ? F(RULES.stun[0] + worthOf(e) * RULES.stun[1] + 0.25 + 0.35 * rng()) : 0;
+    } else if (e.type === 'whiff' && e.who === i && st.reads) m.queue.length = 0;
+  }
+  const dx = him.x - me.x,
+    dz = him.z - me.z,
+    far = Math.hypot(dx, dz) || 1,
+    to = [dx / far, dz / far],
+    across = [to[1], -to[0]],
+    band = BAND.findIndex(b => far < b) < 0 ? 4 : BAND.findIndex(b => far < b),
+    threat = threatOf(m, his, bout, k, far),
+    coming = threat && threat.coming,
+    move = threat && MOVES[threat.name],
+    // (the bout as a technique reads it; a punch he only knows is coming is read as it will be)
+    s = Object.assign(situation(bout, i, m, { coming, range: m.range, side: m.circle, iq: st.iq, plan: null, roll: rng }), threat && !coming ? { punch: move.kind === 'straight' ? (move.hand === 'L' ? 'jab' : 'straight') : move.kind, body: !!move.zone, head: !move.zone, inReach: far < move.reach + 0.25 } : null),
+    started = kind => (m.lastKind = kind || m.lastKind);
+  m.rest = m.queue.length ? 0 : 1;
+  if (k >= m.rangeFor) (m.range = 0.96 + 0.22 * rng()), (m.rangeFor = k + F(0.8 + 1.4 * rng()));
+
+  /* ---- his feet, a stream of their own beside his techniques: one step after another (stepOf: the distance, in, out,
+     pressing, giving ground; the axis, a side step, a pivot, cutting off the ring), each the stick held its way for its
+     time, named in the controls (walk) for the rails; off the ropes; and never so far round that the line between them
+     leaves the picture's width (the camera does not turn) */
+  const feet = () => {
+    const tilt = Math.atan2(Math.abs(dz), Math.abs(dx)) * (180 / Math.PI),
+      // (which way round brings the line back across the picture)
+      turn = d => Math.abs(dz - across[1] * d * 0.1) / (Math.abs(dx - across[0] * d * 0.1) || 1e-6),
+      home = turn(1) < turn(-1) ? 1 : -1,
+      edge = RING.half - Math.max(Math.abs(me.x), Math.abs(me.z));
+    let w = m.step;
+    if (w && (k >= w.until || ((w.kind === 'in' || w.kind === 'press') && far < 0.8) || ((w.kind === 'out' || w.kind === 'back') && far > 1.6))) (m.step = w = null), (m.stepAt = k);
+    if (!w && k >= m.stepAt) (w = m.step = Object.assign(stepOf(m, his, me, him, far, band, { tilt, home, edge, across, to }, steer), { id: ++m.steps })), (w.until = k + F(w.secs));
+    if (w && tilt > SPAR.tilt && w.side !== home && WAY[w.kind] === 'axis') w.side = home;
+    let ahead = far > m.range + 0.1 ? 0.6 : far < m.range - 0.14 ? -0.6 : 0,
+      side = 0;
+    if (w) {
+      c.walk = w.kind + w.id;
+      until: switch (w.kind) {
+        case 'in': ahead = 0.8; break until;
+        case 'out': ahead = -0.75; break until;
+        case 'press': (ahead = 0.55), (side = w.side * 0.12); break until;
+        case 'back': (ahead = -0.6), (side = w.side * 0.35); break until;
+        case 'side': (ahead *= 0.4), (side = w.side * 0.8); break until;
+        case 'pivot': (ahead = far > 0.85 ? 0.3 : 0), (side = w.side * 0.95); break until;
+        default: (ahead = far > 1 ? 0.45 : 0.1), (side = w.side * 0.8); // (cut: across his way, and in)
+      }
+    }
+    let x = to[0] * ahead + across[0] * side,
+      z = to[1] * ahead + across[1] * side;
+    if (edge < 0.8) {
+      const l = Math.hypot(me.x, me.z) || 1,
+        pull = ((0.8 - edge) / 0.8) * 1.4;
+      x -= (me.x / l) * pull;
+      z -= (me.z / l) * pull;
+    }
+    const l = Math.hypot(x, z);
+    c.move = l > 1 ? [x / l, z / l] : [x, z];
+    return c;
+  };
+
+  // ---- a punch is coming: decide once what to do about it, as soon as he can do anything (in the middle of his own punch
+  // he cannot: they trade)
+  if (threat) {
+    // (the punch he knew of, pressed: it is the same one)
+    if (m.threat && m.threat.q && coming && his.pressed === m.threat.q) m.threat = { key: threat.key, decided: true };
+    if (!m.threat || m.threat.key !== threat.key) (m.threat = { key: threat.key, q: threat.q, decided: false }), (m.answer = null);
+    // (he can once his own punch has been thrown, or whatever else he is in is not a punch; stunned, his hands only)
+    const able = !punching(me) || me.action.chain.phase === 'hold' || me.action.chain.phase === 'recover';
+    if (!m.threat.decided && able && (coming || threat.land - k <= 24)) {
+      m.threat.decided = true;
+      if (s.inReach && rng() < Math.min(0.96, st.read * steer.guard[i]) * (me.stun > 0 ? 0.6 : 1)) m.answer = answerFor(m, s, threat, k);
+      // (what he had in hand is put down for a guard or a way out; a parry's moment may still be some way off)
+      if (m.answer && (LEAD[m.answer.kind] || m.answer.kind === 'guard')) (m.queue.length = 0), (m.wave = null);
+    }
+  } else if (m.answer) m.answer = null;
+  if (threat && m.answer) {
+    const a = m.answer,
+      t = a.kind === 'tech' ? TECHNIQUES[a.id] : null;
+    if (t) {
+      // (a technique's own way with it: the engine's, once the punch is on its way)
+      if (coming) {
+        if (!m.used || m.used.of !== coming.id) m.used = { id: t.id, of: coming.id, at: bout.t, hold: t.answer.hold ? t.answer.hold(s) : 0.12 };
+        m.queue.length = 0;
+        Object.assign(c, t.answer.control(s));
+        m.hold = F(m.used.hold);
+        m.holding = t.id;
+        if (t.answer.once && s.soon) m.answer = null;
+        started('answer');
+        return feet();
+      }
+    } else if (a.kind === 'guard' || a.kind === 'parry') {
+      if (a.kind === 'guard' || (coming && s.soon)) c.cover = true;
+      if (c.cover) {
+        m.queue.length = 0;
+        m.hold = F(0.12);
+        m.holding = null;
+        started('answer');
+        return feet();
+      }
+    } else if (a.kind === 'cross') {
+      if (coming) {
+        Object.assign(c, { power: true, tech: 'crossCounter' });
+        m.queue.length = 0;
+        m.answer = null;
+        started('answer');
+        return feet();
+      }
+    } else if (threat.land - k <= LEAD[a.kind][m.grade]) {
+      /* (out of the way: pressed as many frames before it lands as his grade's way out takes, and held until the bout has
+         started it, so that it starts on the first frame it can) */
+      if (a.serial !== undefined && me.serial !== a.serial) m.answer = null;
+      else {
+        a.serial = me.serial;
+        if (a.kind === 'back') c.dash = true;
+        else c[a.kind] = a.side;
+        started('answer');
+        return c;
+      }
+    }
+    /* (waiting for the moment of his way out: his hands up meanwhile, so that he is never standing doing nothing. Not for
+       long, and not while the other man is waiting for him: two men each waiting for the other's punch would stand there) */
+    a.waited = (a.waited || 0) + 1;
+    if (a.waited > 30 || (!coming && his.waiting >= k - 1)) m.answer = null;
+    else if (LEAD[a.kind]) return (m.waiting = k), (c.cover = !me.action), feet();
+    // (a parry's or a technique's moment: he waits for a punch that is on its way; one still in hand, he goes on meanwhile)
+    else if (coming) return (m.waiting = k), feet();
+  }
+  if (m.hold > 0) {
+    // (the guard kept up a moment after the punch has gone by, or for as long as he meant to hold it; a technique's own way)
+    m.hold--;
+    c.cover = !me.action;
+    const t = m.holding && TECHNIQUES[m.holding];
+    if (t && t.answer && t.answer.held) Object.assign(c, t.answer.held(s));
+    // (not counted down while something of his is still on its way home: the guard is not up yet)
+    if (me.action) m.hold++;
   }
 
-  /* one beat: the candidates, each screened (does it come out as its card does, at what timing, what does it do to each man)
-     and the first that fits tried on the round's bout, at its timings, until one comes out as its card does */
-  function* beat() {
-    const n = plan.beats.length,
-      hpNow = r.bout.fighters.map(f => f.hp),
-      Lhp = hpNow[L],
-      left = Math.max(1, aim - n - 1),
-      // (what the loser has still to lose before the finish, and so about what each beat should take: at most a little over
-      // twice that, the winner at most so much that he stays the stronger)
-      owed = Math.max(0, Lhp - SPAR.zone),
-      capL = owed <= 0 ? 1 : n >= aim ? Infinity : Math.max(1.5, (2.2 * owed) / left),
-      capW = Math.max(1, (hpNow[W] - Lhp) / 3 + 1),
-      need = owed <= 0 ? -1 : n >= aim || owed > 1.5 * left * 2.2 ? 2 : owed > 0.8 * left ? 1 : 0,
-      last = plan.beats[n - 1],
-      most = SPAR.beats[1] + Math.min(4, Math.floor(misses / 3));
-    phase = n < SPAR.open ? 'open' : (owed <= 0 && n >= SPAR.beats[0] - 1) || n >= most - 1 ? 'finish' : 'middle';
-    const list = draw(candidates(plan, phase, W, L, need, used, rng, last, bad), SPAR.tries.cards, rng);
-    if (o.trace) o.trace(`beat ${n} ${phase} need ${need} L ${Lhp.toFixed(1)} caps ${capL.toFixed(1)}/${capW.toFixed(1)} stepped ${r.stepped} screened ${r.screened} rebuilt ${r.rebuilt}: ${list.map(c => c.lib.id).join(' ')}`);
-    // (screened in the order drawn; in the finish, one that puts him down in its screen first, else the one that hurts him most)
-    const ready = [];
-    for (const c of list) tally(c.lib, 'drawn');
-    for (const c of list) {
-      const timed = critical(c.lib),
-        est = timed ? estimate(plan, r, c.lib, c.A) : 0,
-        s = o.screen && !trivial(c.lib) ? yield* screen(plan, r, c.lib, c.A, { cover: c.cover, est, timed }, screens) : { db: est, width: null, dmg: [0, 0], down: null };
-      stats.screens++;
-      if (!s) {
-        stats.failed.screen = (stats.failed.screen || 0) + 1;
-        tally(c.lib, 'screen');
-        bad.set(c.lib.id + '|' + c.A, (bad.get(c.lib.id + '|' + c.A) || 0) + 1);
-        continue;
-      }
-      if (s.down && !(phase === 'finish' && s.down.by === W && s.down.ok)) {
-        stats.failed['down in screen'] = (stats.failed['down in screen'] || 0) + 1;
-        continue;
-      }
-      // (a timing that works for one frame or two only is too fine to trust: the round's bout is not the screen's to the frame)
-      if (timed && s.width < SPAR.tries.width) {
-        stats.failed.narrow = (stats.failed.narrow || 0) + 1;
-        tally(c.lib, 'narrow');
-        continue;
-      }
-      if (phase !== 'finish' && (s.dmg[L] > capL || s.dmg[W] > capW || (need >= 2 && s.dmg[L] < 1 && rng() < 0.8))) {
-        stats.failed.budget = (stats.failed.budget || 0) + 1;
-        tally(c.lib, 'budget');
-        continue;
-      }
-      ready.push({ c, s, timed, est });
-      if (phase !== 'finish' || s.down) break;
+  // ---- an opening: taken as often as his grade takes one (each rolled for once)
+  const counter = clamp(st.counter * (0.6 + 0.4 * steer.press[i]), 0, 0.95),
+    // (a technique's counter for the body is its liver hook: kept for late in the round, when a knockdown may come)
+    late = press => (press.body && !steer.late ? Object.assign({}, press, { body: false }) : press);
+  if (me.counter > 0 && far < MOVES.cross.reach) {
+    const key = me.parried ? me.parried.at : -1;
+    if (m.triedOpen !== key) {
+      m.triedOpen = key;
+      if (rng() < counter) m.queue = [{ press: late(Object.assign({ power: true }, counterOf(s))), drop: k + F(0.8) }];
     }
-    if (phase === 'finish') ready.sort((x, y) => !!y.s.down - !!x.s.down || y.s.dmg[L] - x.s.dmg[L]);
-    for (const { c, s, timed, est } of ready) {
-      const finish = phase === 'finish' && s.down ? { by: W } : null,
-        base = { cover: c.cover, finish, rest: rest(rng, phase === 'open' ? 1.5 : 1) },
-        order = timed ? SPAR.tries.timing.map(d => s.db + d) : [s.db];
-      // (a finisher that did not put him down in its screen is a beat that hurt him, if there is room for one)
-      if (phase === 'finish' && !s.down && n >= most - 1) continue;
-      for (const db of order) {
-        stats.tries++;
-        const count = { n: 0 },
-          watch = SPAR.audit ? auditor() : null;
-        if (watch) watch.begin({ id: c.lib.id });
-        const run = yield* playBeat(r.bout, c.lib, c.A, Object.assign({}, base, { db, audit: watch }), count);
-        r.stepped += count.n;
-        const downed = run.events.some(x => x.e.type === 'hit' && x.e.down);
-        let why = finish ? (downed ? judged(c.lib, run, c.A, 1 - c.A, base) || (r.bout.over === W ? null : 'wrong man down') : 'no knockdown') : judged(c.lib, run, c.A, 1 - c.A, Object.assign({}, base, { finish: null }));
-        if (!why && !finish && r.bout.fighters.some(f => f.hp <= 0)) why = 'down';
-        if (!why && watch) {
-          const broke = Object.entries(watch.result().found).find(([name, x]) => x.bad > 0 && !BETWEEN.includes(name));
-          if (broke) why = 'audit: ' + broke[0];
-        }
-        if (!why) {
-          const line = lineOf(c.lib, c.A, 1 - c.A, run, base);
-          tally(c.lib, 'kept');
-          commit(c, run, line, { db });
-          if (finish) {
-            const blow = run.events.find(x => x.e.type === 'hit' && x.e.down).e;
-            plan.ko = { t: +r.bout.overAt.toFixed(2), by: W, on: L, name: blow.name, J: blow.J, counter: !!blow.counter, out: blow.out || null, liver: !!blow.liver, beat: plan.beats.length - 1 };
-            done = true;
-          }
-          return true;
-        }
-        stats.failed[why] = (stats.failed[why] || 0) + 1;
-        tally(c.lib, 'tried');
-        if (o.log) o.log.push({ beat: n, id: c.lib.id, A: c.A, db, est, width: s.width, why });
-        yield* r.rebuild();
-        if (!timed) break;
-      }
+  }
+  const made = openingOf(s);
+  if (made && made.key !== m.tried) {
+    m.tried = made.key;
+    if (rng() < counter) {
+      m.hold = 0;
+      m.holding = null;
+      m.queue = [{ press: late(TECHNIQUES[made.id].counter(s)), drop: k + F(0.5) }];
     }
+  }
+  // (his punch gone by in an evasion: the punch the evasion has wound up)
+  const by = m.mem.by,
+    ev = me.action && EVADE.includes(me.action.name) ? me.action : null;
+  if (by && bout.t - by.at <= 0.3 && m.triedBy !== by.at && ev && !made) {
+    m.triedBy = by.at;
+    if (rng() < counter && far < MOVES.cross.reach + 0.1) m.queue = [{ press: { power: true }, drop: k + F(0.9) }];
+  }
+  // (his punch blocked: fired back at once, half as often)
+  const kept = m.mem.kept;
+  if (kept && bout.t - kept.at <= 0.2 && m.triedKept !== kept.at && !m.queue.length && !made) {
+    m.triedKept = kept.at;
+    if (rng() < counter * 0.5) {
+      m.hold = 0;
+      m.queue = attackOf(m, me, him, far, Math.min(band, 2), steer) || [];
+    }
+  }
+
+  /* ---- the presses he has in hand: the first is pressed, and held down, from the moment it is in hand, so that the bout
+     starts it on the first frame it lets him (a punch as the one before it is thrown, anything else as he comes free); once
+     the bout has started it (his count of moves has gone on), the next */
+  while (m.queue.length) {
+    const q = m.queue[0],
+      name = punchOf(q.press, far);
+    if (q.serial !== undefined && me.serial !== q.serial) {
+      m.queue.shift();
+      m.pressed = q;
+      started(q.kind || 'attack');
+      continue;
+    }
+    if (q.drop === undefined) q.drop = k + F(0.9);
+    // (given up: too late, out of reach, or a light punch at a man in the finish's zone)
+    if (k > q.drop || (name && far > MOVES[name].reach + 0.42) || (him.hp <= SPAR.zone && (q.press.jab || q.press.body))) m.queue.length = 0;
+    else if (k >= (q.at || 0)) (q.serial = me.serial), Object.assign(c, q.press);
+    break;
+  }
+  if (m.queue.length) return feet();
+
+  // ---- the wave, for as long as he means to keep it (a jab out of it on the way)
+  if (m.wave) {
+    if (k >= m.wave.until || band === 0 || (me.action && me.action.name !== 'wave' && !punching(me))) m.wave = null;
+    else {
+      Object.assign(c, { away: 'wave', side: m.wave.side });
+      if (k === m.wave.jab && far < MOVES.jab.reach + 0.5) c.jab = true;
+      return c;
+    }
+  }
+
+  /* ---- nothing in hand: the next thing, chosen at once and pressed at once (held: it starts on the first frame the bout
+     lets him, with nothing between it and what he is doing now) */
+  if (m.hold <= 0 && k >= m.pause && !(me.action && MOVES[me.action.name].taunt)) {
+    const breath = me.stamina / me.k.staminaMax,
+      tired = breath < 0.3,
+      press = steer.press[i],
+      edge = RING.half - Math.max(Math.abs(me.x), Math.abs(me.z)),
+      fin = steer.finish[i],
+      again = kind => (m.lastKind === kind ? 0.35 : 1), // (not the same thing twice running, mostly)
+      what = pick(rng, [
+        // (pressing less, he throws less: a man well ahead of where the round wants him boxes, moves and waits)
+        [(band <= 2 ? st.attack * (tired ? 0.35 : 1) * (fin ? 3 : 1) : band === 3 ? st.attack * 0.9 : 0) * press * Math.min(1, press), 'attack'],
+        [band <= 3 && !fin ? st.head * again('head') * (band === 3 ? 0.6 : 1) : 0, 'head'],
+        [band <= 3 && !fin ? (st.cover * (tired ? 2 : 1) * again('cover') * (band === 3 ? 0.7 : 1)) / press : band === 4 ? 0.05 : 0, 'cover'],
+        // (the engine's own footwork takes all of him for its time: less of it, and not while the other man is in his)
+        [band <= 3 ? st.feet * 0.6 * (band === 0 ? 2 : 1) * (tired ? 1.5 : 1) * again('feet') * (fin ? 0.3 : 1) * (him.action && !punching(him) ? 0.15 : 1) : 0, 'feet'],
+        [st.show && band >= 2 && !fin ? st.show * (band >= 3 ? 2 : 1) * again('show') : 0, 'show'],
+        [has(me, 'wave') && band >= 2 && band <= 3 && edge > 0.9 && !fin ? 0.07 * again('feet') : 0, 'wave']
+      ]);
+    if (what === 'attack') {
+      const beats = attackOf(m, me, him, far, band, steer);
+      if (beats) m.queue = beats;
+      // (nothing to throw from here, in the finish: his hands up while his feet take him to where there is)
+      else (m.hold = 8), (m.holding = null);
+    } else if (what === 'head') {
+      // (his head moved with nothing coming, and sometimes the punch it winds up after it)
+      const r = rng(),
+        side = rng() < 0.5 ? 1 : -1;
+      m.queue = [{ press: r < 0.45 ? { slip: side } : r < 0.7 ? { duck: true } : r < 0.88 ? { roll: side } : { pull: true }, kind: 'head' }];
+      if (rng() < st.counter * 0.5) m.queue.push({ press: { power: true }, drop: undefined });
+    } else if (what === 'cover') {
+      m.hold = F(0.28 + 0.3 * rng());
+      m.holding = has(me, 'shell') && breath >= 0.5 && rng() < 0.3 ? 'shell' : null;
+      m.lastKind = 'cover';
+    } else if (what === 'feet') {
+      // (the engine's own footwork, which takes all of him: a dash, the duck in, the pivot and the circle out)
+      const r = rng(),
+        side = rng() < 0.5 ? 1 : -1,
+        q = press => (m.queue = [{ press, kind: 'feet' }]);
+      m.step = null;
+      if (band >= 2) {
+        if (r < 0.35) q({ dash: [across[0] * side - to[0] * 0.3, across[1] * side - to[1] * 0.3] });
+        else if (r < 0.7 && band === 2) {
+          // (the duck in, and the inside punches out of it)
+          q({ duck: true, dash: [to[0], to[1]] });
+          if (rng() < 0.75) m.queue.push({ press: { power: true } }, { press: { power: true } });
+        } else q({ away: rng() < 0.5 ? 'pivot' : 'circle', side });
+      } else if (r < 0.45) q({ away: 'pivot', side });
+      else if (r < 0.8) q({ away: 'circle', side });
+      else q({ dash: true });
+    } else if (what === 'show') {
+      // (a taunt is over the moment he does anything else: nothing else for as long as it takes)
+      m.queue = [{ press: { taunt: TAUNTS[Math.floor(rng() * TAUNTS.length)] }, kind: 'show' }];
+      m.pause = k + 8;
+    } else if (what === 'wave') {
+      m.wave = { side: m.circle || 1, until: k + F(0.8 + 0.7 * rng()), jab: rng() < 0.6 ? k + F(0.4 + 0.3 * rng()) : -1 };
+      Object.assign(c, { away: 'wave', side: m.wave.side });
+      started('feet');
+      return c;
+    }
+    // (in hand: pressed this very step)
+    if (m.queue.length && k >= (m.queue[0].at || 0)) (m.queue[0].serial = me.serial), (m.queue[0].drop = k + F(0.9)), Object.assign(c, m.queue[0].press);
+    if (m.hold > 0) c.cover = true;
+  }
+  return feet();
+}
+
+/* ---- the director: how hard each man presses and how often each is defended, from where their health is against where
+   the round wants it by now. Read by the choreographers; the bout is not touched. */
+function direct(steer, bout, k, plan) {
+  const t = k / 60,
+    T = plan.target,
+    H = plan.hp,
+    x = Math.min(1, t / T);
+  steer.late = t > T * 0.9;
+  for (const X of [0, 1]) {
+    const Y = 1 - X,
+      f = bout.fighters[X],
+      // (where his health should be by now: the unfavoured man's at nothing by the target time, the favoured man's at his share)
+      line = H * (X === plan.favoured ? 1 - plan.loss * x : 1 - x),
+      over = (f.hp - line) / H;
+    steer.guard[X] = clamp(1 - 4.5 * over, 0.12, 1.5);
+    steer.press[Y] = clamp(1 + 3.5 * over, 0.4, 1.75);
+    steer.finish[Y] = f.hp <= SPAR.zone || (X !== plan.favoured && t > T + SPAR.late);
+    steer.liver[Y] = X !== plan.favoured && t > T + SPAR.late;
+    if (steer.finish[Y] && X !== plan.favoured) steer.guard[X] = Math.min(steer.guard[X], t > T ? 0.12 : 0.5);
+  }
+}
+
+/* ---- the round, made a piece at a time */
+function arrangement(seed, attempt, o) {
+  o = o || {};
+  const rng = dice(seed * 7919 + 13),
+    // (o.grades: the two men's grades given, for measuring; o.neutral: nothing steered, full health, o.neutral seconds)
+    men = menOf(rng).map((m, i) => (o.grades ? { grade: o.grades[i], skills: { all: o.grades[i] }, techniques: loadout({ all: o.grades[i] }) } : m)),
+    /* (who is favoured: the better grade; the dice between two of the same. The round is steered toward him, and the health
+       both start with is what he takes off the other man in the target time: a round steered toward the weaker man ended
+       with him down early, or never) */
+    even = rng() < 0.5 ? 0 : 1,
+    favoured = rank(men[0].grade) === rank(men[1].grade) ? even : rank(men[0].grade) > rank(men[1].grade) ? 0 : 1,
+    target = SPAR.target[0] + rng() * (SPAR.target[1] - SPAR.target[0]),
+    // (how much of his health the favoured man is to lose: more the nearer their grades)
+    loss = clamp(0.62 - 0.1 * (rank(men[favoured].grade) - rank(men[1 - favoured].grade)) + 0.2 * (rng() - 0.5), 0.25, 0.8),
+    plan = { seed, attempt, men, hp: hpOf(men[favoured].grade, men[1 - favoured].grade, target), favoured, target: +target.toFixed(1), loss: +loss.toFixed(2), inputs: [], rails: null, feet: null, events: [], ko: null, done: false, steps: 0, time: 0, stats: null },
+    bout = startOf(plan),
+    minds = [0, 1].map(i => createMind(i, men[i], dice(seed * 104729 + 31 + i * 7919 + attempt * 15485863))),
+    steer = { press: [1, 1], guard: [1, 1], finish: [false, false], liver: [false, false], late: false },
+    w = watcher();
+  plan.rails = w.rails;
+  plan.feet = w.feet;
+  if (o.neutral) (plan.hp = RULES.hp), bout.fighters.forEach(f => (f.hp = plan.hp));
+  return { plan, bout, minds, steer, w, k: 0, tail: 0, failed: null, neutral: o.neutral || 0 };
+}
+const NONE = [{}, {}];
+const OUTCOME = ['hit', 'block', 'graze', 'whiff', 'parry'];
+// one step of it -> true once it is over (done, or to be arranged again: a.failed says why)
+function advance(a) {
+  const { plan, bout, minds, steer, w } = a;
+  // (the finish's zone is read every step: no light punch is pressed at a man in it)
+  for (const X of [0, 1]) if (bout.fighters[X].hp <= SPAR.zone) steer.finish[1 - X] = true;
+  if (a.neutral) {
+    // (measuring: nothing steered; over after so many seconds, the health each has lost kept)
+    if (a.k >= a.neutral * 60 || bout.over !== null) return w.end(), (plan.lost = bout.fighters.map(f => (RULES.hp - f.hp) / (a.k / 60))), (plan.stats = Object.assign(measure(plan.rails, plan.feet, a.k), { gaps: gapsOf(w.gaps) })), (a.failed = null), true;
+  } else if (a.k % 15 === 0) direct(steer, bout, a.k, plan);
+  const inputs = plan.ko ? NONE : [think(minds[0], minds[1], bout, a.k, steer), think(minds[1], minds[0], bout, a.k, steer)];
+  step(bout, inputs, DT);
+  plan.inputs.push(inputs);
+  w.see(bout, inputs);
+  a.k++;
+  // (what became of every punch, as the bout said it: the round's own record, which a playing of it is held to)
+  for (const e of bout.events) if (OUTCOME.includes(e.type)) plan.events.push([a.k, e.type, e.who, e.name, e.J]);
+  if (!plan.ko) {
+    const e = bout.events.find(e => e.type === 'hit' && e.down);
+    if (e) plan.ko = { step: a.k, t: +bout.t.toFixed(2), at: +(a.k / 60).toFixed(2), by: e.who, on: e.on, name: e.name, J: e.J, worth: +worthOf(e).toFixed(1), counter: !!e.counter, out: e.out || null, liver: !!e.liver, power: !(MOVES[e.name].kind === 'straight' && MOVES[e.name].hand === 'L'), trick: e.variant || null };
+    else if (a.k > SPAR.most * 60) return (a.failed = 'no knockdown'), true;
     return false;
   }
+  if (++a.tail < SPAR.tail * 60) return false;
+  w.end();
+  plan.steps = plan.ko.step;
+  plan.time = plan.ko.at;
+  plan.winner = plan.ko.by;
+  plan.stats = Object.assign(measure(plan.rails, plan.feet, plan.ko.step), { stepped: a.k, gaps: gapsOf(w.gaps), runs: w.gaps });
+  return true;
+}
 
-  function finishUp() {
-    // (his fall: the bout goes on a while with nobody pressing anything)
-    for (let k = 0; k < SPAR.tail / DT; k++) {
-      step(r.bout, [{}, {}], DT);
-      r.log.push([{}, {}]);
-    }
-    plan.inputs = r.log;
-    plan.steps = r.log.length;
-    plan.time = +plan.ko.t.toFixed(2);
-    stats.ms = Date.now() - t0;
-    stats.kept = plan.beats.length;
-    plan.stats = Object.assign(stats, { rebuilt: r.rebuilt, replayed: r.replayed, stepped: r.stepped + r.log.length, screened: r.screened });
-  }
-
+export function planner(seed, o) {
+  let a = arrangement(seed, 0, o),
+    done = false;
+  const tried = [];
   return {
-    plan,
-    // (the controls of the beats committed so far: final, whatever is tried after them)
-    get log() {
-      return r.log;
+    get plan() {
+      return a.plan;
     },
     get done() {
-      return done && !!plan.inputs;
+      return done;
     },
-    // work on for about `ms` milliseconds (a few dozen steps of a bout at the least); -> where it has got to
     run(ms) {
-      const until = Date.now() + (ms ?? Infinity);
-      while (!this.done) {
-        if (done) finishUp();
-        else {
-          const at = (going = going || beat()).next();
-          if (at.done) {
-            going = null;
-            // (nothing came out: try again with new draws; the round may run a few beats longer for it)
-            if (!at.value && ++misses > 24) throw new Error(`spar: round ${seed} could not be arranged`);
-          }
+      const until = Date.now() + (ms ?? 1e9);
+      while (!done) {
+        if (advance(a)) {
+          if (a.failed && a.plan.attempt + 1 < SPAR.tries) (tried.push(a.failed), (a = arrangement(seed, a.plan.attempt + 1, o)));
+          else if (a.failed) throw new Error(`round #${seed}: ${a.failed}`);
+          else a.plan.done = done = true;
         }
         if (Date.now() >= until) break;
       }
-      return { done: this.done, beats: plan.beats.length, rebuilt: r.rebuilt };
+      return { done, steps: a.k };
     }
   };
 }
-
 export function planOf(seed, o) {
   const p = planner(seed, o);
   p.run();
   return p.plan;
 }
 
-/* ---- playing a round back: the plan's controls into a bout of its own, step by step (each(bout, k) after each step) -> the
-   bout, and every event with the step it came on: [{ k, t, e }] */
+/* The round played again from its controls, as the page plays it: -> { bout, events: [{ k, t, e }], rails } (each(bout, k)
+   after each step). */
 export function replayOf(plan, each) {
   const bout = startOf(plan),
-    events = [];
+    events = [],
+    w = watcher();
   plan.inputs.forEach((inp, k) => {
     step(bout, inp, DT);
+    w.see(bout, inp);
     for (const e of bout.events) events.push({ k: k + 1, t: bout.t, e });
     /* (a weave and a shoulder roll both say { type: 'roll' }: the shoulder roll is the one that leaves him in f.roll, the
        technique's: kept apart as { type: 'shoulderRoll' } for gradedOf) */
     bout.fighters.forEach((f, who) => f.roll && f.roll.t === 0 && f.roll.at === bout.t && events.push({ k: k + 1, t: bout.t, e: { type: 'shoulderRoll', who } }));
     if (each) each(bout, k);
   });
-  return { bout, events };
+  w.end();
+  return { bout, events, rails: w.rails, feet: w.feet };
 }
-/* Does the round as played come out as its timeline says? Each beat's line made again from the events of its steps, the
-   knockdown the plan's (the first and only one, on the finishing beat), and nothing done that the man's grade or loadout does
-   not have. -> { lines: beats whose line differs, downs, ko (true if the knockdown is the plan's), graded: what a man did
-   that he does not have } */
-export function checkOf(plan, played) {
-  const { events } = played || replayOf(plan),
-    byId = new Map(library().map(l => [l.id, l])),
-    lines = [];
-  for (const b of plan.beats) {
-    const lib = byId.get(b.id),
-      run = { events: events.filter(x => x.k > b.step && x.k <= b.to) },
-      again = lineOf(lib, b.A, 1 - b.A, run, { cover: b.cover });
-    if (again.said !== b.said || again.what !== b.what || again.lead !== b.lead) lines.push({ i: b.i, plan: b.said, played: again.said });
-  }
-  const downs = events.filter(x => x.e.type === 'hit' && x.e.down),
-    ko = !!plan.ko && downs.length === 1 && downs[0].e.who === plan.ko.by && Math.abs(downs[0].t - plan.ko.t) < 0.02 && downs[0].k > plan.beats[plan.ko.beat].step && downs[0].k <= plan.beats[plan.ko.beat].to;
-  return { lines, downs: downs.length, ko, graded: gradedOf(plan, events) };
-}
+
 /* What each man did that his grade or his loadout does not have (none, as it should be): a technique's own event (the shell,
-   the shift, the wave, the shoulder roll, the down parry), a technique a press was meant as, a show-off's trick or taunt, a foul. */
+   the shift, the wave, the shoulder roll, the down parry), a show-off's trick or taunt, a foul, a punch meant as a technique. */
 export function gradedOf(plan, events) {
   const out = [],
     man = i => plan.men[i],
@@ -789,15 +771,30 @@ export function gradedOf(plan, events) {
     },
     own = { shell: 'shell', shift: 'shift', wave: 'wave', shoulderRoll: 'rollCounter' };
   for (const { e, t } of events) {
-    const who = e.type === 'parry' ? e.who : e.who;
-    if (own[e.type] && !carries(who, own[e.type])) out.push({ t, who, what: e.type });
+    if (own[e.type] && !carries(e.who, own[e.type])) out.push({ t, who: e.who, what: e.type });
     if (e.type === 'parry' && e.down && !carries(e.who, 'parryDown')) out.push({ t, who: e.who, what: 'parryDown' });
     if (e.type === 'taunt' && !LEVEL[man(e.who).grade].stance.show) out.push({ t, who: e.who, what: 'taunt ' + e.name });
     if ((e.type === 'paw' || e.type === 'collar') && !tricks(e.who).has(e.type === 'paw' ? e.name : 'collar')) out.push({ t, who: e.who, what: e.type });
     if (e.type === 'foul' && !LEVEL[man(e.who).grade].form.dirty) out.push({ t, who: e.who, what: 'foul ' + e.name });
     if (['hit', 'block', 'whiff', 'graze'].includes(e.type) && e.variant && !tricks(e.who).has(e.variant)) out.push({ t, who: e.who, what: e.variant });
     if (e.type === 'punch' && e.name === 'flicker' && !tricks(e.who).has('flicker')) out.push({ t, who: e.who, what: 'flicker' });
+    if (e.type === 'punch' && e.name === 'crossOver' && !carries(e.who, 'crossCounter')) out.push({ t, who: e.who, what: 'crossCounter' });
+    if (e.type === 'punch' && e.name === 'shiftHook' && !carries(e.who, 'shift')) out.push({ t, who: e.who, what: 'shiftHook' });
   }
   return out;
 }
-export { library };
+/* Does the round as played come out as the plan says? -> { rails: true if the four lanes read off the played bout are the
+   plan's, block for block; events: true if what became of every punch is the plan's, event for event; downs; ko: true if the first knockdown is the plan's; graded: what a man did that he does not have } */
+export function checkOf(plan, played) {
+  played = played || replayOf(plan);
+  const downs = played.events.filter(x => x.e.type === 'hit' && x.e.down),
+    d = downs[0];
+  return {
+    rails: JSON.stringify(played.rails) === JSON.stringify(plan.rails) && JSON.stringify(played.feet) === JSON.stringify(plan.feet),
+    events: JSON.stringify(played.events.filter(x => OUTCOME.includes(x.e.type)).map(x => [x.k, x.e.type, x.e.who, x.e.name, x.e.J])) === JSON.stringify(plan.events),
+    downs: downs.length,
+    ko: !!plan.ko && !!d && d.k === plan.ko.step && d.e.who === plan.ko.by && d.e.name === plan.ko.name && d.e.J === plan.ko.J,
+    graded: gradedOf(plan, played.events)
+  };
+}
+export { COMBOS, measure };
