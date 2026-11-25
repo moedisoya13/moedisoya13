@@ -84,6 +84,8 @@ patch 경계에서는 이웃 patch가 서로 다른 순간에 1px씩 점프하�
 
 ### 6. 룩(look): 풍화된 대리석 + 정리된 픽셀 (`--look stylized`, 기본)
 
+![tomcc 샘플(왼쪽)과 같은 조건의 니케(오른쪽): 사진 날개 + 손 발 + 새 룩, 256px](../../docs/images/nike_studio_vs_reference.png)
+
 레퍼런스(tomcc의 기사)와 나란히 놓고 차이를 잰 뒤 넣은 개선입니다. 자세한 내용·측정값은 [docs/LOOK.md](../../docs/LOOK.md).
 
 | 무엇 | 어디 | 내용 |
