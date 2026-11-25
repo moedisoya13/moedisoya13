@@ -64,7 +64,7 @@
 | 한 라운드 스파링 | https://claude.ai/artifact/QSaHbvPFewiH2uLYoWD4t1 | v7 | `spar.html`, `src/spar.mjs`, `src/spar/` | 85417ad |
 | 모션 카탈로그 | https://claude.ai/artifact/GGHUZQ9rFWLoRojwCzaK3N | v43 | `catalog.html`, `src/catalog.mjs` | 54592a0 (그 뒤 바뀐 파일 없음) |
 | 타격음 오디션 | https://claude.ai/artifact/92ZDBLW3TVC2M3XJ6bwgeQ | v1 | `sfx.html`, `src/sfx.mjs` | 85417ad |
-| **미결 카탈로그 (새)** | https://claude.ai/artifact/HybxKJu7LtBsGHs7M1rYpz | v2 | `open.html`, `src/open.mjs`, `src/open.data.mjs`, `src/open.clips.mjs`, `docs/ref/open/` | 437a65a |
+| **미결 카탈로그 (새)** | https://claude.ai/artifact/HybxKJu7LtBsGHs7M1rYpz | v3 | `open.html`, `src/open.mjs`, `src/open.data.mjs`, `src/open.clips.mjs`, `docs/ref/open/` | (점검 결과 커밋; `docs/artifact-history.md`) |
 | 미결 카탈로그 (옛) | https://claude.ai/artifact/UEM19aKseUxnixVYkrnAzd | v36 | `pending.html`, `src/pending*.mjs` | 54592a0 · **파기 후보**(§7) |
 | 타격 이펙트 시안 | https://claude.ai/artifact/5tZd5Xyp7iiRxCuftpNwL6 | v9 (11-24) | `fxlab.html`, `src/fxlab.mjs` | 엔진보다 낡음 · **파기 후보**(§7) |
 
@@ -103,17 +103,18 @@
 ## 5. 미결 내역 (새 세션의 브리핑 대상)
 
 전부 **미결 카탈로그 (새)**에 있다(원본 `src/open.data.mjs`). 묶음:
+0. **점검에서 찾은 것**(2026-11-25 자체 점검; 카드 `a-…` 38장, 모두 조정자가 재현함, 아무것도 고치지 않음): 전체 목록 `docs/audit-2026-11-25.md`, 재현 스크립트 `docs/audit-2026-11-25/`. S2 다섯: `a-fall-edge`, `a-standoff`, `a-ropes-stuck`, `a-guard-flicker`, `a-screen-ai`. 파기를 승인받기 전에 `a-dispose-list`(§7의 목록이 6군데 틀림)를 먼저 볼 것.
 1. **지금 정할 것**
    - `arm-way`: 체육복·후드를 입으면 가드를 올리지 않은 자세에서 오른 팔뚝이 자기 가슴에 묻힌다(보이는 비율 0.15, 최저 0.01; 맨몸 0.41). 원인은 옷이 아니라 자세(해법은 팔을 가슴 0.13 m 밖에 두는데 조각된 가슴은 0.20 × 0.14 m; 맨몸은 옛 가드 자세로 구운 것이라 가려지지 않을 뿐). A 자세를 고침(근본, 모든 동작을 다시 잼) / B 그릴 때만 앞으로(작음, 권장) / C·D(권하지 않음). 비교 영상 `arm`, 시험판 고침 `docs/ref/open/patches/`.
    - 소리: 층마다 듣고 좋음/고침/뺌(오디션 페이지). 머리의 "팍"이 30 ms뿐, 발소리는 걸은 거리 기준.
    - 링·지하: 기댐이 작음(16° 요청에 약 7°; 비교 영상 `lean`), 맨 아래 로프는 눌리지 않음, 세로 화면에서 가까운 통·벽이 가림, 관중 얼굴 없음, 관중 조각이 통째로 나타남, 지하에는 기대기 없음.
    - 스파링: 동작과 동작 사이의 회복(주먹 뒤 25~40프레임; 사용자 "아직도 모션과 모션 사이 딜레이가 많습니다"; 비교 영상 `tempo`), 약한 마무리 타격(50판 중 15판이 45 N·s 미만), 피하기가 드묾.
-   - `audit-10`: 새 세션의 가벼운 자체 점검(§8). `stage-order`: 남은 단계의 순서.
+   - `audit-10`: 승인되어 끝남(2026-11-25; "정해진 것"으로 옮김). `stage-order`: 남은 단계의 순서.
 2. **기획의 기본값**(옛 미결 카탈로그에서 넘어온 것 40개 남짓: 방어 이펙트, 팔방, 소스 C·D, 콤보, 로드아웃, 리버 훅 세기, 다운패링 타이밍, `twist-chin` 등). 답이 없으면 그 단계를 시작할 때 ★대로 가도 되는지 다시 묻는다.
 3. **엔진 한계를 받아들일지**(아래 §6과 README의 알려진 한계).
 4. **파기 승인**(§7).
 
-카드는 94장(지금 정할 것 23, 기획의 기본값 44, 엔진 한계 17, 파기 승인 9, 자유 메모 1). 옛 카탈로그의 열린 60항목은 모두 넘어왔고 글은 `src/pending.data.mjs`에서 읽는다(그 파일을 지우려면 먼저 `src/open.data.mjs`로 옮긴다).
+카드는 132장(점검에서 찾은 것 39, 지금 정할 것 22, 기획의 기본값 44, 엔진 한계 17, 파기 승인 9, 자유 메모 1; 2026-11-25 v3). 옛 카탈로그의 열린 60항목은 모두 넘어왔고 글은 `src/pending.data.mjs`에서 읽는다(그 파일을 지우려면 먼저 `src/open.data.mjs`로 옮긴다).
 
 **비교 영상의 시험판을 재 본 값** (고침은 `docs/ref/open/patches/`, 다시 녹화는 `node tools/openclips.mjs arm lean tempo --modules <ink-studio가 있는 node_modules>`)
 
@@ -171,7 +172,7 @@
 1. 이 문서와 `docs/pending.md`의 마지막 절들을 읽는다. `git fetch origin claude/vibrant-ritchie-xornhd` 후 그 브랜치에서 일한다. `npm test`를 한 번 돌려 §1.1과 맞는지 본다.
 2. 미결 카탈로그 (새)를 `Artifact`의 `read`로 읽고, `ArtifactComments`로 지켜보기를 등록한다("제출"이 이 세션을 깨우도록). `ArtifactData`로 `picks/open`을 읽어 이미 답한 것이 있는지 본다. 모션 카탈로그의 `feedback`도 한 번 읽는다.
 3. **미결 내역을 한국어로 브리핑**한다(§5: 지금 정할 것부터, 숫자와 함께, 짧게).
-4. **가벼운 자체 점검을 제안**한다: 버그와 게임성, 에이전트 10회(구현 쪽 모델, 노력 high; Agent 도구에 `model: 'opus'`, `effort: 'high'`). 사용자가 승인하면 띄운다(제안이 먼저다). 각 에이전트는 고치지 않고 찾기만 하며(작업 폴더에서 읽고 돌림), 찾은 것을 "재현 방법 · 수치 · 심각도 · 고치는 데 드는 것"으로 보고한다. 조정자는 겹치는 것을 합쳐 미결 카탈로그에 올린다. 열 개의 눈:
+4. **가벼운 자체 점검을 제안**한다(2026-11-25에 승인받아 끝남: `docs/audit-2026-11-25.md`): 버그와 게임성, 에이전트 10회(구현 쪽 모델, 노력 high; Agent 도구에 `model: 'opus'`, `effort: 'high'`). 사용자가 승인하면 띄운다(제안이 먼저다). 각 에이전트는 고치지 않고 찾기만 하며(작업 폴더에서 읽고 돌림), 찾은 것을 "재현 방법 · 수치 · 심각도 · 고치는 데 드는 것"으로 보고한다. 조정자는 겹치는 것을 합쳐 미결 카탈로그에 올린다. 열 개의 눈:
    1. 균형: 등급별·기술별 승률과 다운 수(`tools/balance.mjs`, `tools/ladder.mjs`), 지나치게 센 것·안 쓰이는 것.
    2. 시합의 흐름: 다운·KO까지의 시간, 한쪽이 일방적인 판, 아무 일도 없는 구간.
    3. 선수 AI: 로드아웃의 기술을 실제로 고르는지, 같은 수를 되풀이하는지, 구석·로프에서의 판단.
@@ -229,6 +230,7 @@
 
 - `README.md`: 구조, 채널, 표, 페이지와 옵션, 싸움터, 소리, 알려진 한계.
 - `docs/pending.md`: 사용자의 지시·결정·보고와 그 처리의 기록(1,000줄 남짓, 날짜순이 아니라 절마다; 최근 것은 2026-11-25의 절들).
+- `docs/audit-2026-11-25.md`: 자체 점검의 결과(재현된 38건, 확정 못 한 것), 재현 스크립트 `docs/audit-2026-11-25/`.
 - `docs/open-catalog.md`: 새 미결 카탈로그의 형식과 읽는 법. `docs/artifact-history.md`: 게시 이력.
 - 기획: `docs/moves-plan-4.md`, `-5.md`, `-6.md`(허리, 이펙트 §2~§2.4C, 단계 K~Z), `docs/skill-motion-plan.md`(숙련도 2차: 풋워크와 공격), `docs/defense-footwork-grades-plan.md`(숙련도 3차: 수비와 풋워크 드릴의 7단계), `docs/leaping-hook.md`, `docs/combos-plan.md`, `docs/source-ab-plan.md`, `docs/source-cd-proposal.md`, `docs/bearing-system-plan.md`, `docs/waist-more-plan.md`, `docs/cross-counter-plan.md`.
 - 기록: `docs/stage-n.md`(N의 구현 기록과 한계), `docs/physics-audit.md`(물리 점검이 재는 것), `docs/spar.md`(스파링 페이지), `docs/pending-catalog.md`(옛 미결 카탈로그의 기획; 파기 후보).

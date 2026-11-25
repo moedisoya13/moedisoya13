@@ -1,7 +1,7 @@
 /* What the open-questions catalogue holds (open.html, src/open.mjs; docs/open-catalog.md): every decision still open, as
    cards in five groups, and how an answer is read and sent. Nothing here knows the page: node reads it too
    (tests/open.test.mjs).
-     GROUPS     the five groups, in order: { id, title, note }
+     GROUPS     the six groups, in order: { id, title, note } (the first, audit: what the 11-25 self-audit found)
      CARDS      the cards, in order. A card is one question (its id is the answer's key) or a note (kind: 'note', no question):
                 { id, group, title, state (what it is now; `code` and **strong** marks), more (the long text, folded), list
                 (lines), links ([{ href, say }]), clips (a group of src/open.clips.mjs: the builds side by side), old (true: the
@@ -10,7 +10,7 @@
                 (true: several values), follow ({ 'value[,value]': [question] }: opened on the same card by that answer; a
                 question { id, title, note, opts, star, multi, memo }) }. Carried items keep the old ids and option ids.
      QUESTIONS  every question, follow-ups with their parent: { id, card, parent, when, opts, star, multi, memo, title }
-     DECIDED_LIST  what was decided before this page (the old catalogue's DECIDED and its db), shown at the bottom
+     DECIDED_LIST  what was decided: this page's own answered cards (DECIDED_NEW), then the old catalogue's DECIDED and its db; shown at the bottom
      STORE, SEND, MODELS, EFFORTS  where the answers are kept and where 제출 sends them
    The answers: picks { question id: value ('a,b' for several) }, notes { question id: text }. A question counts only once
    picked: ★ is the default the page recommends, never an answer. */
@@ -46,6 +46,7 @@ export function asLD(s) {
 }
 
 export const GROUPS = [
+  { id: 'audit', title: '점검에서 찾은 것', note: '11-25 자체 점검(에이전트 10회)에서 나온 것 가운데 <b>조정자가 본 저장소(37419ff)에서 직접 다시 돌려 재현한 것만</b>, 겹치는 것을 합쳐 심각도 순으로. 재현 스크립트는 <code>docs/audit-2026-11-25/</code>, 전체 목록은 <code>docs/audit-2026-11-25.md</code>. 아직 아무것도 고치지 않았습니다.' },
   { id: 'now', title: '지금 정할 것', note: '11-25에 새로 생긴 것입니다. 비교 영상은 같은 너비 · 같은 시계 · 같은 장면입니다.' },
   { id: 'plan', title: '기획의 기본값', note: '옛 미결 카탈로그에서 아직 답이 없는 것(옛 5부 · 1부 · 2부). 옛 카탈로그의 카드와 녹화는 그대로 돌아갑니다.' },
   { id: 'limits', title: '엔진 한계: 받아들일지', note: '대부분 “수용(README의 알려진 한계에 남김) / 다시 시도 / 목표를 고침”입니다.' },
@@ -196,7 +197,7 @@ const NEW = [
     id: 'spar-finish',
     group: 'now',
     title: '스파링: 마무리 타격이 약함',
-    state: '50판의 다운 주먹 50개 가운데 **15개가 45 N·s 아래**(최저 9.8)입니다.',
+    state: '50판의 다운 주먹 50개 가운데 **13개가 45 N·s 아래**(최저 **7.6**, #12; 11-25 점검에서 다시 잼. 그 전 기록은 15개 · 최저 9.8)입니다.',
     opts: [['keep', '그대로', ''], ['heavy', '마무리는 강타로', '다운을 내는 주먹을 강타 중에서 고름']],
     star: 'heavy',
     why: '약한 주먹으로 쓰러지면 다운이 읽히지 않습니다.'
@@ -211,17 +212,6 @@ const NEW = [
     why: '스파링의 볼거리는 주고받는 수비입니다.'
   },
   {
-    id: 'audit-10',
-    group: 'now',
-    title: '새 세션의 가벼운 자체 점검 — 버그와 게임성',
-    state: '에이전트 10회(구현 쪽 모델, 노력 high), 한 번에 하나의 눈으로 보고 결과는 목록으로만(고치기 전에 여쭘).',
-    list: ['균형(등급별 승률)', '다운 · KO 흐름', '휴대폰 조작과 화면', '옷 · 가림 · 그리기', '링 · 로프 · 지하 가장자리', '소리 연결', '스파링의 빈 시간', '물리 점검 회귀', '성능', '페이지 · 게시 동기화'],
-    opts: [['ok', '승인', '열 가지 눈으로 10회'], ['five', '5회로', '중요한 다섯만'], ['no', '안 함', '']],
-    star: 'ok',
-    why: '인계 직후 한 번 넓게 보는 것이 남은 단계의 순서를 정하는 데 씁니다.',
-    follow: { 'ok,five': [{ id: 'audit-10.where', title: '어디를 더 볼까요?', note: '메모로 적어 주세요.', opts: [] }] }
-  },
-  {
     id: 'stage-order',
     group: 'now',
     title: '남은 구현의 순서',
@@ -232,6 +222,211 @@ const NEW = [
     why: '기획 문서의 순서이고, 앞 단계가 뒤 단계의 바탕입니다.',
     follow: { change: [{ id: 'stage-order.how', title: '어떤 순서로?', note: '메모로 적어 주세요.', opts: [] }] }
   }
+];
+
+/* ---- group 0: what the self-audit of 11-25 found (docs/audit-2026-11-25.md). Only what the coordinator re-ran on the
+   repository and saw happen; the auditors' own sweep rates are marked as theirs. Each card's repro:
+   node docs/audit-2026-11-25/<file>.mjs <the pixel-boxer folder> */
+const FIX = [['fix', '고침', '다음 수정 라운드에서'], ['later', '나중에', '관련 단계에서 (메모에 단계)'], ['leave', '그대로', '알려진 한계로 README에 남김']];
+const run = (...f) => `재현: ${f.map((x) => `\`node docs/audit-2026-11-25/${x}.mjs <pixel-boxer>\``).join(', ')}`;
+const finding = (id, sev, title, state, more, star, why, extra = {}) => ({ id, group: 'audit', title: `${sev} · ${title}`, state, more, opts: FIX, star, why, ...extra });
+const AUDIT = [
+  {
+    id: 'a-about',
+    group: 'audit',
+    kind: 'note',
+    title: '점검의 방법과 확인하지 못한 것',
+    state: '에이전트 10개(구현 쪽 모델, 노력 high)가 각자 얼린 작업 폴더에서 읽고 돌리기만 했습니다(작업 폴더 10개 모두 끝에 깨끗). 보고된 45건을 조정자가 하나씩 본 저장소에서 다시 돌려 **45건 모두 재현**, 겹치는 것을 합쳐 아래 38장. 심각도: **S2** 누구나 보는 잘못 · 게임성을 깸, **S3** 눈에 띄지만 제한적, **S4** 사소함 · 글. S1(멈춤 · NaN · 안 열림)은 없었습니다. 기기가 붐벼(CPU 4개에 평균 부하 10~35) 프레임 시간 같은 절대 시간은 뜻이 없습니다. 아래는 에이전트가 보았으나 **확정하지 못한 것**(재현 없음):',
+    list: [
+      '1단계끼리 붙으면 0번 쪽이 이기는 듯함(40시드 20:11, 우연일 확률 약 7%; 균형 도구는 편을 바꿔 가려짐)',
+      '피커부 셸의 웅크림이 자기 주먹으로 일찍 끊기는 듯함(셸 중에 잽 · 스트레이트가 나감)',
+      '다음 라운드 시작이나 다운 뒤에 지난 콤비네이션이 남아 나갈 수 있음(코드 읽기만)',
+      '5L의 가드 · 커버가 0.13초마다 바뀜(한 장면만 봄; 아래 a-guard-flicker와 같은 뿌리일 수 있음)',
+      '로프 앞에서 팔꿈치 · 글러브가 로프를 지남, 링에서 쓰러진 몸이 화면에 어떻게 보이는지(그림으로는 지하만 봄)',
+      '휴대폰: iOS의 소리 잠금 해제 · 중단 상태, 자동 시작(`?auto=1`) 뒤 첫 탭에 소리가 한꺼번에 날 수 있음',
+      '설계로 보이는 것: 바디로 쓰러지면 KO가 없음(늘 8에 일어남), 세 심판이 거의 같게 채점, 막은 주먹이 막은 쪽 점수가 됨'
+    ]
+  },
+  finding('a-fall-edge', 'S2', '쓰러진 몸이 지하 벽 · 링 로프 · 기둥을 뚫음',
+    '**지하**: 벽에서 0.55 m에서 스트레이트(82 N·s)를 맞고 쓰러지면 머리가 벽 바깥면(3.0 m)을 지나 3.1 m에 눕고, 가슴 · 어깨 · 팔이 벽돌 안에(누운 270프레임 중 255). 구석 · 통 옆도 같음. 에이전트의 쓸기: 지하 스파링 시드 1~20 중 5판. **링**: 로프 앞에서 쓰러지면 위 · 가운데 로프를 지나 머리가 로프 밖 0.49 m, 구석에서는 머리가 쇠기둥에 11 cm.',
+    `원인: 쓰러짐 풀이(\`src/phys/fall.mjs\`)에 가장자리가 없고, 다운한 사람은 로프 계산을 건너뜀(\`src/game/bout.mjs\` ropes). 고치는 데: 중~대(쓰러짐 풀이에 벽 · 로프 조건; 가장자리 쓰러짐과 리플레이 구도가 움직임, 굽기 없음). ${run('6-1', '6-1-shot', '6-2')}`,
+    'fix', '화면에서 바로 보이는 관통입니다(그림 확인).'),
+  finding('a-standoff', 'S2', '주먹이 하나도 없는 라운드',
+    '지친 쪽의 회복 작전(`breathe`)과 방어 작전(`defend`)은 잽이 닿는 거리 밖에 머물러, 둘이 맞붙으면 **한 라운드 60초 동안 주먹 0개**, 채점 10-10. 균형 도구가 맨 먼저 치르는 판(시드 1000, 프로 대 프로)의 3라운드가 저절로 그렇습니다(라운드별 주먹 114 · 132 · **0**). 에이전트의 쓸기: 102라운드 중 5, 243라운드 중 13.',
+    `원인: 코너가 쉬는 시간 **전**의 피로로 작전을 정함(\`match.mjs\` cornerAdvice → nextRound), 작전 거리 1.65 / 1.3 m가 콤비네이션을 시작하는 거리 1.10 m보다 멂(\`brain.mjs\`). 고치는 데: 소~중(시합 표 · 균형 수치가 움직임). ${run('2-1', '1-3')}`,
+    'fix', '시합 엔진의 라운드가 비면 오토 배틀러가 성립하지 않습니다.'),
+  finding('a-ropes-stuck', 'S2', '선수 AI가 링을 모름: 로프 · 구석에 붙어 머묾',
+    '회복 작전의 선수가 곧장 뒤로 걸어 로프에 붙고 그대로 있습니다: 2 · 3라운드 6판 모두, 그 라운드의 **76~89%를 로프 앞**, 구석 33~54%, 한 번에 가장 길게 **29.1초**. 보통 작전에서도 구석에서 16.4초 동안 15대를 맞으며 머문 판이 있습니다(22판 중 3판이 10초 이상, 에이전트의 쓸기).',
+    `원인: 발놀림이 "상대와의 거리 + 무작위 원 돌기"뿐이고 로프 항이 없음(\`brain.mjs\` think; \`ai.mjs\`도 같음). 로프의 미는 힘이 뒷걸음을 못 이김. 고치는 데: 중(모든 시합의 경로 · 주사위가 바뀜, 시드 고정 시합 시험 몇이 움직일 수 있음). ${run('6-5', '3-2')}`,
+    'fix', '링의 로프 · 구석이 기능인데 머리가 쓰지 않습니다.'),
+  finding('a-guard-flicker', 'S2', '수비 작전의 가드가 매 프레임 오르내려 패리가 70%',
+    '방어 · 회복 · 카운터 작전의 "손을 올리고 기다림"이 매 프레임 동전 던지기라 **초당 18.5번** 가드가 오르내리고, 올린 프레임의 83%가 "갓 올린 가드"로 읽혀 패리가 됩니다. 같은 비율로 들고 있게 하면 패리는 40%, 지금은 **70%**.',
+    `원인: \`brain.mjs:180\`의 \`random(bout) < 0.5\`를 매 걸음 굴림, 가드를 내린 프레임마다 \`coverAge\`가 0으로(\`bout.mjs\`). 고치는 데: 소(상대의 \`hold\`처럼 한동안 유지; 시합 수치가 움직임). ${run('1-1')}`,
+    'fix', '패리 하나가 상대를 0.6초 묶는 큰 보너스입니다.'),
+  {
+    id: 'a-screen-ai',
+    group: 'audit',
+    title: 'S2 · 게임 화면에서는 선수 AI가 돌지 않음 (알려진 한계)',
+    state: 'README의 "화면은 아직 직접 대전"과 같은 것. 게임 화면의 홍코너는 12.5초 동안 **동작 0**(맞아서 밀린 2 m뿐), 청코너는 단순한 상대 AI(프로, 기본 로드아웃)입니다. 그래서 오토 배틀러의 시합(두 선수 AI · 라운드 · 카운트 · 판정)은 **지금 어느 페이지에서도 볼 수 없습니다** — 위의 시합 엔진 문제들도 화면에는 나오지 않습니다.',
+    more: `고치는 데: 화면에 \`match.mjs\`와 두 머리, 라운드 · 카운트 표시를 붙이는 설계 단계(\`stage-order\`). ${run('3-1')}`,
+    opts: [['soon', '수정 라운드 뒤 바로', '고친 시합 엔진을 화면에서 보게'], ['z', 'Z 최종 통합에서', '지금 순서대로'], ['leave', '그대로', '']],
+    star: 'soon',
+    why: 'AI · 판정을 고쳐도 볼 곳이 없으면 확인할 수 없습니다.'
+  },
+  finding('a-draw-winner', 'S3', '"무승부"인데 승자가 붙음',
+    '심판 하나만 한쪽, 둘은 동점이면 결과가 `{ winner: 0, how: \'draw\' }`이고 그 선수가 환호합니다. 균형 도구는 이것을 **승리로 셉니다**. 에이전트의 쓸기: 무승부 7 중 3, 4 중 3.',
+    `원인: \`match.mjs:96\`의 식 하나(판정 코드에서 직접 확인). 고치는 데: 소. ${run('2-2', '1-2')}`,
+    'fix', '한 줄이고 균형 수치가 바로잡힙니다.'),
+  finding('a-count-ten', 'S3', '일어나는 중인 선수에게 10까지 세고 시합이 이어짐',
+    '카운트 8에 일어나기 시작하면 일어나는 동작(2.3초)이 끝나기 전에 카운트가 10에 닿습니다. 아직 바닥 동작인데 KO가 아니고 시합이 이어집니다(재현의 일어남 5번 중 1번). 일어난 뒤에도 1~3번 더 셉니다.',
+    `원인: 일어남을 시작할 때 \`down\`이 풀려 KO 판정(\`down && n >= 10\`)을 빠져나감(\`match.mjs:119-130\`, \`bout.mjs\` getUp). 고치는 데: 소. ${run('2-3')}`,
+    'fix', '카운트를 화면에 보이면 "10" 뒤에 싸움이 이어집니다.'),
+  finding('a-hurt-blind', 'S3', '선수 AI가 라운드 안에서 자기 체력을 보지 않음',
+    '체력 15일 때와 100일 때 고르는 것이 **5,400걸음 모두 같음**(같은 방법으로 지구력을 바꾸면 28%가 달라짐). `brain.mjs` · `ai.mjs`에 체력(`.hp`)을 읽는 곳이 0(직접 확인). 체력 13의 선수도 똑같이 덤빕니다.',
+    `고치는 데: 소(덤빔 · 거리 · 가드에 체력 항; 다친 판의 주사위가 바뀜). ${run('3-3')}`,
+    'fix', '다친 선수의 커버 · 뒷걸음이 오토 배틀의 볼거리입니다.'),
+  {
+    id: 'a-dark-line',
+    group: 'audit',
+    title: 'S3 · 암(D) 줄이 오르지 않음: 기본 크로스암이 패리를 앗아감',
+    state: '같은 등급에서 L이 D를 9승 0패 3무(12판), 4D는 3단계에 4승 3패 1무, 5D는 4D에 2승 2패. 4D · 5D의 기본 로드아웃에 든 크로스암 가드는 받아넘기지 않아 패리가 판마다 **4~10번**, 빼면 **20번 안팎**이고 L에게 4승 8패(재현 2판: 패리 12 → 49). 표본이 작음(등급 쌍마다 4~12판).',
+    more: `원인: \`techniques.mjs:280\`(4 · 5단계 D의 기본에 crossArm), \`bout.mjs:664\`(크로스암은 해머가 아니면 쳐내지 않음). 관련 카드: \`loadout-default\`. ${run('1-4')}`,
+    opts: [['drop', '크로스암을 기본에서 뺌', ''], ['parry', '크로스암 가드에 패리를 조금', ''], ['counter', '크로스암 반격을 세게', ''], ['later', 'X 단계(능력치 범위)에서', ''], ['leave', '그대로', '']],
+    star: '',
+    why: '★ 없음: 균형의 방향은 정하실 일이고, 표본도 작습니다.'
+  },
+  {
+    id: 'a-novice',
+    group: 'audit',
+    title: 'S3 · 1단계는 능력치를 +30 해도 2단계를 못 이김',
+    state: '같은 능력치에서 2단계가 1단계를 10전 10승. 1단계의 능력치를 모두 80(2단계는 50)으로 올려도 **0승 4패**, 다운 9번 당하고 0번. 맞힌 주먹 하나가 1단계 18~21 N·s, 2단계 39 N·s(3단계 53). 2단계와 3단계 사이는 능력치가 판을 바꿉니다.',
+    more: `원인이 아니라 설계: 1단계 주먹의 팔 먼저 사슬(\`skill.mjs\`), 힘 능력치는 ×0.76~1.24. ${run('1-5')}`,
+    opts: [['keep', '의도대로', '등급이 능력치보다 큼'], ['tune', '1단계를 조금 올림', '주먹 세기나 능력치 폭'], ['later', 'X 단계에서', '']],
+    star: 'later',
+    why: '능력치 범위를 다루는 X 단계에서 함께 보는 것이 맞습니다.'
+  },
+  finding('a-cover-punch', 'S3', '1단계가 높은 커버에서 바로 치면 윗팔이 머리 위로 돔',
+    '실제 시합에서 1단계 선수가 막은 직후 스트레이트를 내면 윗팔이 6~9프레임 동안 165° 돌거나 머리 위로 올라갑니다(재현: 회전 한계를 **78.7° 넘음**, 9프레임). 물리 점검이 지키는 기준인데 카탈로그 대본 503개에는 이 동작이 없어 안 걸렸습니다. 에이전트의 쓸기: 30판 중 17판. 스파링 합계는 `docs/spar.md`에 있음.',
+    `원인(추정): 1단계 커버의 팔 자세에서 주먹 사슬로 넘어갈 때 어깨가 먼 쪽으로 돎. 고치는 데: 소~중(커버에서 나오는 주먹의 시작 자세 또는 어깨 회전 제한). ${run('4-1')}`,
+    'fix', '물리 점검이 지키는 기준을 실제 시합이 깹니다.'),
+  finding('a-topple', 'S3', '5L이 무게중심을 발 밖에 둔 채 한 발로 섬',
+    '실제 시합에서 5L이 디딘 발 밖으로 무게중심을 **최대 35.7 cm** 둔 채 0.3초 넘게 한 발로 섭니다(40초에 79프레임, 링 한가운데서도). 물리 점검의 기준은 6 cm. 에이전트의 쓸기: 30판 중 20판, 그 절반이 5L.',
+    `원인(추정): 가드 · 커버가 자꾸 바뀌어 스텝이 끊기고 다시 시작됨 — \`a-guard-flicker\`와 같은 뿌리일 수 있음. 고치는 데: 중. ${run('4-3')}`,
+    'fix', 'a-guard-flicker를 고친 뒤 다시 재면 비용이 줄 수 있습니다.'),
+  finding('a-corner', 'S3', '링 구석: 몸통이 코너 패드 안에 서고 로프 밖으로 비침',
+    '구석에 몰리면 엉덩이 · 허리 · 배 · 가슴이 코너 패드 안에(150프레임 중 144), 그려진 로프 밖으로 **10 cm** 비칩니다(가운데 로프에서는 0). 시합 30판 중 23판, 최악 15.9 cm. 시합 시간의 14%가 구석.',
+    `원인: 몸의 중심을 네모(2.55 m)로만 묶는데 패드는 2.53 m부터, 로프가 기둥 0.4 m 안에서는 거의 휘지 않음(\`ropes.mjs\` bend). 고치는 데: 소~중. ${run('6-3', '4-2')}`,
+    'fix', '로프에 기대는 장면이 구석에서 자주 나옵니다.'),
+  finding('a-pit-foot', 'S3', '지하 가장자리에서 뒷발이 벽돌 벽에 들어감',
+    '가장자리까지 물러서면 뒷발목이 벽 안으로 6.5 cm, 구석에서는 발끝이 **10.4 cm**. 서 있는 동안 늘(120프레임 중 120).',
+    `고치는 데: 소(지하만 멈추는 선을 2.45 m쯤으로, 또는 벽을 0.1 m 밖으로 — 그쪽은 다시 굽기). ${run('6-4')}`,
+    'fix', ''),
+  finding('a-pit-outline', 'S3', '지하: 관중을 등지면 선수의 검은 외곽선이 빠짐',
+    '관중 조각이 셰이더에서 "불빛"으로 읽혀 그 둘레에 외곽선을 긋지 않습니다. 30프레임 중 14, 한 프레임에 최대 88픽셀(외곽선의 약 1/5). 그림으로 확인.',
+    `원인: \`renderer.mjs:125\`의 빛 판정이 관중의 뼈 번호 칸을 빛 표시로 읽음. 고치는 데: 소(셰이더만, 굽기 없음). ${run('5-2')}`,
+    'fix', ''),
+  finding('a-hood-face', 'S3', '후드를 쓰면 게임 카메라에서 얼굴이 아예 안 보임',
+    '후드를 쓰면 얼굴 픽셀이 사람마다 중간값 **1**(내리면 64), 30프레임 중 27에서 두 사람 모두 3픽셀 이하 — 회색 공 둘(그림으로 확인). 가드와 상관없이 늘. 지금까지는 "가드를 올리면"만 적혀 있었습니다.',
+    `원인: 옆에서 보면 후드의 옆면과 챙이 얼굴을 덮음(\`rig/boxer.mjs\` 후드 공 0.14 m, 머리 0.118 m). 고치는 데: 중(후드를 다시 조각하고 \`tools/bake.mjs --wear\`). ${run('5-4')}`,
+    'fix', ''),
+  finding('a-ko-thud', 'S3', '약한 주먹의 KO는 타격음이 짧고 가벼움',
+    'KO 주먹의 낮은 쿵과 길이 늘임이 42.5 N·s 위에서만 켜져, 다운 40 N·s는 139 ms, 45 N·s는 586 ms로 끊기듯 달라집니다. 스파링 #6 · #8은 KO 주먹이 그 판의 보통 주먹보다 조용합니다(에이전트의 쓸기: KO 12개 중 6개가 42.5 아래).',
+    `원인: \`audio.mjs:233-237\`. 고치는 데: 소(다운 타격은 최소한 강타만큼). ${run('7-1')}`,
+    'fix', '"다운은 가장 무겁게"(README)와 어긋납니다.'),
+  finding('a-ko-bell', 'S3', 'KO의 공 소리가 슬로 리플레이 위에서 울림',
+    'KO 공 세 번(+1.1 · 1.4 · 1.7초)이 리플레이(+0.87초부터) 한가운데, 느려진 타격음 바로 위에 떨어집니다(에이전트의 쓸기: 12판 중 12). README는 리플레이를 "관중 · 공 없이"라고 함.',
+    `원인: \`cuesOf\`가 공을 고정 지연으로 예약(\`audio.mjs:86\`). 고치는 데: 소(리플레이가 끝나거나 건너뛸 때 침; \`tests/sfx.test.mjs\` 두 줄이 바뀜). ${run('7-2')}`,
+    'fix', ''),
+  finding('a-hidden-sound', 'S3', '숨긴 탭에서도 소리가 계속됨, 지하 웅성거림은 결과 화면에서도',
+    '페이지를 숨겨도 오디오가 계속 돌고(시합은 멈춤) 지하의 관중 웅성거림이 이어집니다(숨긴 8초 동안 오디오 시계 4.0 → 12.7초). 게임은 지하 웅성거림을 끄지 않아 결과 화면에서도 계속. 두 페이지 모두 `visibilitychange` 처리가 0.',
+    `고치는 데: 소(숨기면 \`suspend\`, 보이면 \`resume\`). ${run('7-5', '9-3')}`,
+    'fix', '휴대폰에서 다른 앱으로 가도 소리가 남는 것은 바로 눈에 띕니다.'),
+  finding('a-spar-link', 'S3', '스파링: 링크로 연 뒤 "시작" → "다시 보기"가 다른 판을 엶',
+    '`spar.html#s-7`로 열고 시작(#5가 돎) 뒤 다시 보기를 누르면 #5를 다시 보지 않고 링크의 #7을 짭니다. #5는 링크를 다시 쳐야 볼 수 있음.',
+    `원인: 링크가 단 한 번용 단추 처리가 지워지지 않음(\`src/spar.mjs:739\` 대 \`:684\`). 고치는 데: 소, 스파링 다시 게시. ${run('8-1')}`,
+    'fix', ''),
+  finding('a-spar-pinned', 'S3', '스파링: 한 사람이 3.8초 동안 아무것도 못 하고 맞기만 함',
+    '#36에서 한 사람이 **3.78초** 동안 기술을 하나도 시작하지 못하고 그중 189프레임이 피격, 7대를 맞습니다. 문서는 "두 사람 모두 아무것도 안 하는" 빈 시간(최대 2.45초)만 잼. 에이전트의 쓸기: 시드 34~50의 34명 중 5명이 3초 넘음.',
+    `원인: 안무가(\`src/spar/plan.mjs\`)가 한 사람이 연달아 맞는 수를 묶지 않음. \`spar-evade\`와 같은 손질. 고치는 데: 중. ${run('8-2')}`,
+    'fix', '사용자가 바란 "양측에 꽉 찬 액션"과 어긋납니다.'),
+  finding('a-spar-race', 'S3', '스파링: 장소 · 옷을 빨리 바꿨다 되돌리면 처음 고른 것으로 남음',
+    '선택 칸은 두 번째(되돌린 것)를 보이는데 페이지는 첫 번째로 그리고 기억합니다(4번 중 4번; 재현은 휴대폰 망처럼 응답을 1.5초 늦춤).',
+    `원인: \`src/spar.mjs:694-711\`, 늦게 끝난 첫 로드가 이김. 고치는 데: 소. ${run('9-1')}`,
+    'fix', ''),
+  {
+    id: 'a-gl-lost',
+    group: 'audit',
+    title: 'S3 · 그래픽 컨텍스트를 잃으면 화면이 흰색으로 남음',
+    state: '휴대폰이 백그라운드 · 메모리 부족으로 WebGL을 떨구면 게임 · 스파링 캔버스가 영구히 흰색(95% · 87%)이고 시합은 보이지 않게 계속됩니다. 복구 요청을 처리하지 않음.',
+    more: `원인: \`webglcontextlost\` · \`restored\` 처리가 \`src/\`에 없음. 고치는 데: 복구는 중(메시 · 프로그램 다시 만듦), "다시 불러오기" 표시만은 소. ${run('9-2')}`,
+    opts: [['fix', '복구', '잃으면 다시 만듦'], ['reload', '다시 불러오기 단추만', '싸게'], ['leave', '그대로', '']],
+    star: 'reload',
+    why: '먼저 싼 쪽으로 흰 화면만 막습니다.'
+  },
+  finding('a-frame-meter', 'S3', '프레임 시간 표시가 그리기를 빼고 잼',
+    '`#fps` 표시와 README의 "1.5~1.9 ms"는 그림을 **예약하는** 자바스크립트만 잽니다. 같은 환경에서 그림이 다 그려질 때까지 기다리면 표시 3.5 ms에 실제 661 ms(소프트웨어 GL). 그래서 휴대폰의 GPU 병목을 이 표시로는 볼 수 없습니다. 링과 지하의 차이는 없음(0.9~1.0배).',
+    `알려진 한계("휴대폰 프레임 시간은 못 잼")의 새 면. 고치는 데: 소(프레임 간격으로 재고 README 고침). ${run('9-4')}`,
+    'fix', ''),
+  finding('a-catalog-scroll', 'S3', '모션 카탈로그가 휴대폰 폭에서 가로로 스크롤됨',
+    '390 px에서 페이지 폭 450 px. 행 하나(`out-counter`)의 영어 이름이 줄을 바꾸지 않습니다. 게시된 v43도 같음.',
+    `원인: \`catalog.html:86\`의 \`nowrap\`. 고치는 데: CSS 한 줄, 카탈로그 다시 게시. ${run('10-1')}`,
+    'fix', ''),
+  finding('a-idle', 'S4', '선수가 시합 시간의 30%를 아무것도 안 하고 섬',
+    '"아무것도 안 함" = 동작 없음 · 가드 내림 · 5 cm/s 미만. 선수마다 약 30%, 한 번에 최대 2.5초(쓸기에서 3.9초). 두 사람이 동시에 그런 것은 5%.',
+    `원인: 발놀림의 죽은 구간과 원 돌기 0이 반(\`brain.mjs\`). 고치는 데: 소, 시합 경로가 바뀜. ${run('3-4')}`,
+    'later', 'R(풋워크) 단계에서 함께.'),
+  finding('a-reel-g', 'S4', '휘청임이 "중력보다 빨리 떨어짐"에 2.6 g로 걸림',
+    '휘청임(V 단계) 중 무게중심 높이가 2~5 mm 떨려 2.6 g(받아들인 예외는 out-log 1.6 g). 화면에서는 보이지 않음.',
+    `고치는 데: 소(휘청임의 높이 채널을 고름). ${run('4-4')}`,
+    'fix', '지키는 점검이라 예외를 넓히지 않고 고치는 쪽입니다.'),
+  finding('a-single-frames', 'S4', '실제 시합의 한 프레임 위반들',
+    '자기 글러브가 다른 팔에 10.6 cm(기준 2), 허벅지가 골반 뒤로 38.6°, 자기 글러브가 머리에 6.0 cm, 두 사람이 8.0 cm 겹침. 모두 스파링 합계로는 `docs/spar.md`에 있었고, 시합 30판의 수치가 새것.',
+    run('4-5'), 'leave', '한 프레임씩이라 README에 시합 수치를 더하는 것으로 충분합니다.'),
+  finding('a-pit-hud', 'S4', '지하: 위쪽 글자가 늘 관중 위에, 가까운 관중이 선수보다 크게',
+    '코너 이름 · 라운드 글자 아래가 30프레임 모두 관중(링은 어두운 홀). 카메라 가까운 관중이 선수보다 크게 그려지는 프레임 1280 폭 15 중 3, 390 폭 15 중 2. 화면의 20~33%가 관중.',
+    `고치는 데: 소(글자 뒤 어두운 띠, 또는 카메라 가까운 관중을 흐리게). ${run('5-1')}`,
+    'fix', ''),
+  finding('a-pit-spark', 'S4', '지하: 막기 불꽃이 파랑 대신 콘크리트 갈색',
+    '막기 불꽃의 3분의 2(66 중 45)가 지하 바닥 팔레트로 그려져 어두운 바닥에 어두운 갈색.',
+    `원인: \`main.mjs:187\` · \`:345\`. 고치는 데: 소. ${run('5-3')}`,
+    'fix', ''),
+  finding('a-replay-silent', 'S4', '리플레이에서 맞기 전까지 소리가 없음',
+    '리플레이는 타격 · 막기 · 쳐내기만 다시 들려줘, KO 주먹의 숨 · 바람이 빠지고 리플레이의 처음 0.5~0.7초가 조용합니다. README는 "그 스텝의 사건을 다시 들려줌".',
+    `원인: \`src/replay.mjs:129\`. 고치는 데: 소. ${run('7-3')}`,
+    'fix', ''),
+  finding('a-murmur-cut', 'S4', '지하 웅성거림이 서서히 줄지 않고 뚝 끊김',
+    '끌 때 제 크기의 −7 ~ −31 dB에서 끊김(깨끗이 줄면 약 −59 dB). 절대 크기는 작음(약 −53 dBFS). 스파링에서 소리 끔 · 링으로 바꿀 때만.',
+    `원인: 흔들림(LFO)이 줄어드는 음량에 그대로 붙어 있음(\`audio.mjs:679\`). 고치는 데: 소. ${run('7-4')}`,
+    'fix', ''),
+  finding('a-mute', 'S4', '소리 끔이 이미 예약된 소리를 막지 못함, 게임엔 음소거가 없음',
+    '`audio.mute()`를 부르는 페이지가 0. 스파링의 소리 끔을 KO 0.1초 뒤에 누르면 공이 1.1~3.3초에 울리고 관중 함성이 이어짐.',
+    `고치는 데: 소. ${run('7-6')}`,
+    'fix', ''),
+  finding('a-spar-docs', 'S4', '`docs/spar.md`의 숫자가 지금 커밋과 다름',
+    '가장 이른 다운 34.1초(문서 36.8), 실신 다운 3판(#34 · #35 · #45, 문서에 없음), 이변 0(문서 2), 45 N·s 아래 13판(문서 15, 최저 9.8 → 지금 **7.6**).',
+    `고치는 데: 소(\`node tools/spar.mjs --seeds 1-50\`을 다시 돌려 고침, \`spar-finish\` 카드의 글도). ${run('8-4', '8-3')}`,
+    'fix', ''),
+  finding('a-dispose-list', 'S4', '파기 목록이 실제 파일과 다름 — 승인 전에 고칠 것',
+    '`docs/handoff.md` §7과 파기 카드 가운데 6군데가 틀림: `cleanup-fxlab-now`의 "지금" 열은 이미 없음, 안 쓰는 이펙트 버전은 `fxlab`이 아니라 `src/pending.data.mjs`에, 바닥 고리 영상은 11개가 아니라 12개. 특히 **`del-code-pending-old`를 적힌 대로 지우면 새 미결 카탈로그가 열리지 않음**(`src/open.data.mjs`가 `src/pending.data.mjs`를, `src/open.mjs`가 `src/pending.mjs`를 불러 씀).',
+    `고치는 데: 소(글만). ${run('10-2')}`,
+    'fix', '파기를 승인하시기 전에 목록부터 바로잡는 것이 안전합니다.'),
+  finding('a-since', 'S4', '게시 도구의 `--since`가 페이지 HTML 자체의 변경을 보지 않음',
+    'HTML만 고쳐도 "바뀐 것 없음"(`{}`)이 나옵니다(세 페이지 모두). 이번에는 `git diff`로 따로 보아 네 아티팩트가 현행임을 확인했습니다.',
+    `원인: \`tools/artifact.mjs:107-111\`. 고치는 데: 소. ${run('10-3')}`,
+    'fix', ''),
+  finding('a-catalog-text', 'S4', '모션 카탈로그의 설명 글 두 군데가 옛 동작을 말함',
+    '멱살 잡고 어퍼: 글은 0.1초(5D 0.05초) 뒤 놓음, 코드는 0.14 / 0.08초 + 버팀 8° · 0.03초 기다림. 첫머리 글: 아직 "이번 판(6차 기획 J · K)". 도발 글은 이미 `fix-taunt-text`.',
+    `고치는 데: 소(글만, \`fix-taunt-text\`와 함께 다시 게시). ${run('10-4')}`,
+    'fix', ''),
+  finding('a-history', 'S4', '게시 이력에 새 미결 카탈로그가 없음',
+    '`docs/artifact-history.md`에 미결 카탈로그 (새)의 줄이 없고, 이펙트 시안 v9는 게시 커밋이 없습니다.',
+    `고치는 데: 소(문서만). ${run('10-5')}`,
+    'fix', '')
+];
+
+/* ---- what was decided on this page's own cards (moved out of the groups once answered) */
+const DECIDED_NEW = [
+  { id: 'audit-10', title: '새 세션의 가벼운 자체 점검 — 버그와 게임성', said: '승인 (10회, 구현 쪽 모델 · high, 읽기만; 재현한 것만 목록으로, 고칠지는 목록을 보고 정함)', at: '2026-11-25', how: 'chat' }
 ];
 
 /* ---- groups 2-4: the old catalogue's open items (src/pending.data.mjs), tightened: a long state is cut to SHORT here, the
@@ -390,7 +585,7 @@ const FREE = [
   { id: 'free', group: 'free', title: '그 밖에 하실 말씀', state: '위 카드에 없는 것 — 화면 · 조작 · 소리 · 링 · 이 페이지 무엇이든. 번호 목록으로 쓰시면 한 줄씩 지시로 읽습니다.', opts: [] }
 ];
 
-const order = (g) => [...NEW, ...CARRY, ...LIMITS, ...DISPOSE, ...FREE].filter((c) => c.group === g);
+const order = (g) => [...AUDIT, ...NEW, ...CARRY, ...LIMITS, ...DISPOSE, ...FREE].filter((c) => c.group === g);
 export const CARDS = GROUPS.flatMap((g) => order(g.id));
 
 // every question, follow-ups with their parent and the answers that open them
@@ -405,11 +600,11 @@ const BY = Object.fromEntries(QUESTIONS.map((q) => [q.id, q]));
 export const question = (id) => BY[id];
 
 // what was decided before this page: the old data's decided and the three answered in the old page's db
-export const DECIDED_LIST = ITEMS.filter((i) => !isOpen(i)).map((i) => {
+export const DECIDED_LIST = [...DECIDED_NEW, ...ITEMS.filter((i) => !isOpen(i)).map((i) => {
   const d = i.decided || { choice: OLD_DB[i.id], at: '2026-11-25', how: 'db' },
     o = i.options.find((x) => x.id === d.choice);
   return { id: i.id, title: asLD(i.title).replace(/`/g, ''), said: `${o ? asLD(o.name).replace(/`/g, '') : d.choice}${d.note ? ` (${d.note})` : ''}`, at: d.at, how: d.how };
-});
+})];
 
 /* ---- the answers */
 const values = (v) => (v ? String(v).split(',').filter(Boolean) : []);

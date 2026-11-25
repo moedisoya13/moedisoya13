@@ -13,7 +13,7 @@ const $ = (s, r = document) => r.querySelector(s);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 // the data's own marks: `code` and **strong**
 const fmt = (s) => esc(s).replace(/`([^`]+)`/g, '<code>$1</code>').replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>');
-const NO = ['', '1', '2', '3', '4', '5'];
+const NO = ['', '1', '2', '3', '4', '5', '6', '7'];
 
 /* ---- the page, written from the data */
 function optsHtml(q) {
@@ -34,9 +34,12 @@ function followHtml(c) {
     .join('');
 }
 const tableHtml = (t) => `<div class="tablebox"><table><thead><tr>${t.head.map((h) => `<th>${fmt(h)}</th>`).join('')}</tr></thead><tbody>${t.rows.map((r) => `<tr>${r.map((d, i) => (i ? `<td>${fmt(d)}</td>` : `<th>${fmt(d)}</th>`)).join('')}</tr>`).join('')}</tbody></table></div>`;
+// (a card's folded text: the old catalogue's whole item { state, tables, notes, refs }, or a line of this page's own — the
+// audit's cause, cost and repro)
 function moreHtml(m) {
   if (!m) return '';
-  const body = [m.state ? `<p>${fmt(m.state)}</p>` : '', ...m.tables.map(tableHtml), ...m.notes.map((n) => `<p>${fmt(n)}</p>`), m.refs.length ? `<p>${m.refs.map((r) => `<a href="${esc(r.href)}" target="_blank" rel="noopener">${fmt(r.say)} ↗</a>`).join(' · ')}</p>` : ''].join('');
+  if (typeof m === 'string') return `<details class="more"><summary>자세히 (원인 · 고치는 데 · 재현)</summary><div><p>${fmt(m)}</p></div></details>`;
+  const body = [m.state ? `<p>${fmt(m.state)}</p>` : '', ...(m.tables || []).map(tableHtml), ...(m.notes || []).map((n) => `<p>${fmt(n)}</p>`), (m.refs || []).length ? `<p>${m.refs.map((r) => `<a href="${esc(r.href)}" target="_blank" rel="noopener">${fmt(r.say)} ↗</a>`).join(' · ')}</p>` : ''].join('');
   return `<details class="more"><summary>자세히 (옛 카탈로그의 글 그대로)</summary><div>${body}</div></details>`;
 }
 // a group of recorded comparisons: the clips at one width, a scrub, the controls; or a box saying it is still to be recorded

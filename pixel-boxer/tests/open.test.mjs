@@ -101,12 +101,12 @@ test('nothing counts as picked until picked; the stars button picks only when pr
   assert.equal(kept['ring-lean'], 'now');
   assert.equal(kept['spar-tempo'], undefined);
   assert.equal(kept['arm-way.when'], undefined, 'arm-way.when has no ★');
-  assert.equal(kept['audit-10'], 'ok');
+  assert.equal(kept['pit-crowd-pop'], 'fade');
 });
 
 test('the answers as text hold every pick and memo of an open question', () => {
   const picks = { 'arm-way': 'B', 'arm-way.also': 'yes', 'sound-hit': 'fix', 'sound-hit.how': 'louder,shorter', 'fx-ground-shake': 'shake', 'cleanup-fx-sweat': 'approve', 'limit-u-45': 'retry' },
-    notes = { 'arm-way': '팔뚝\n둘째 줄', 'audit-10.where': '닫힌 질문의 메모', free: '자유 메모', 'wave-speed': '파도 메모' };
+    notes = { 'arm-way': '팔뚝\n둘째 줄', 'stage-order.how': '닫힌 질문의 메모', free: '자유 메모', 'wave-speed': '파도 메모' };
   const text = answersText(picks, notes, '머리');
   assert.match(text, /^머리\n/);
   for (const [k, v] of Object.entries(picks)) for (const x of v.split(',')) assert.match(text, new RegExp(`${k.replace(/\./g, '\\.')}: .*${x}`), `${k} ${x}`);
