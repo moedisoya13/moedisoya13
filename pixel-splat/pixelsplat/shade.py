@@ -188,7 +188,8 @@ def render_frame(model, cam: Camera, cfg: FrameConfig) -> np.ndarray:
     if cfg.mode == "depth":
         d = gb["depth"]
         dm = d[mask[..., 0]]
-        z = (d - dm.min()) / max(dm.max() - dm.min(), 1e-6) if dm.size else d
+        lo, hi = (np.percentile(dm, 2), np.percentile(dm, 98)) if dm.size else (0.0, 1.0)
+        z = np.clip((d - lo) / max(hi - lo, 1e-6), 0, 1)
         return np.where(mask, np.repeat(1 - z[..., None], 3, -1), bg)
     raise ValueError(cfg.mode)
 

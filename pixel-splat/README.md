@@ -14,6 +14,11 @@ mesh ──▶ ① 정답 G-buffer 렌더 (48 시점)
 model.pt ──▶ ④ (선택) patch snapping ──▶ ⑤ 저해상도 G-buffer ──▶ ⑥ deferred 조명 ──▶ ⑦ 픽셀 hacks ──▶ GIF/MP4
 ```
 
+![데모 기사 turntable](docs/images/demo_knight_sheet.png)
+![G-buffer 디버그: lit · albedo · normal · depth · patches](docs/images/demo_knight_gbuffer.png)
+
+*위: 내장 데모 기사(primitive 조합)를 16k splat으로 학습 → 102×128px로 렌더. 아래: 같은 프레임의 G-buffer 채널과 snapping patch.*
+
 ## 빠른 시작
 
 ```bash

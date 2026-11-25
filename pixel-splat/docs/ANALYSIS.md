@@ -72,6 +72,21 @@ splat 하나의 모양은 `G(u,v) = exp(-½·ρ^m)`, `ρ = (|u|^p + |v|^p)^(1/p)
 - snapping 이동량은 항상 0.5px 이하이고, 같은 patch는 같은 양만큼 움직입니다.
 - (`tests/test_pipeline.py`, 10개 통과)
 
+### snapping 실측 (`scripts/snap_stability.py`, 데모 기사, 128px, 20프레임)
+프레임 사이에 색이 바뀐 물체 픽셀의 비율입니다. 낮을수록 안정적입니다.
+
+| 움직임 | 화면 | snap off | snap on |
+|---|---|---|---|
+| pan (프레임당 0.13px 평행 이동) | albedo | 9.2% | **4.4%** |
+| pan | lit | 16.2% | **10.7%** |
+| orbit (프레임당 0.15° 회전) | albedo | 1.6% | 1.3% |
+| orbit | lit | 2.3% | 3.0% |
+
+→ **평행 이동에는 확실히 효과가 있습니다**(지글거림 절반).
+**회전에서는 patch마다 서로 다른 순간에 1px씩 점프해서 이득이 없거나 오히려 나빠집니다.** tomcc가 말한 "locally pixel-perfect but too noisy"와 같은 현상입니다.
+조명(lit)은 specular가 시점에 따라 변하므로 snap으로 완전히 고정되지 않습니다.
+권장: 카메라가 주로 **평행 이동하는 게임 시점**(탑다운·횡스크롤)에서는 `--snap`을 켜고, turntable·회전 연출에서는 끕니다.
+
 ## 6. 알려진 한계 / 다음 단계
 
 - **CPU 전용**이라 느립니다. 16k splat·160px 학습 1500 step에 약 10분이 걸립니다. GPU가 있으면 gsplat의 CUDA `rasterization_2dgs`로 바꾸면 됩니다(채널 구조가 같습니다).
