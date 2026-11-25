@@ -52,8 +52,12 @@ export const MAT = {
   red: { r: [32, 33, 34] },
   blue: { r: [35, 36, 37] },
   white: { r: [12, 13, 14] },
-  // the training suit (WEAR): its cloth, its ribbing and the inside of its hood, in the trunks' ramp
+  // the training suit (WEAR): its cloth, its sleeves, its ribbing and the inside of its hood, in the trunks' ramp
   cloth: { r: [8, 9, 10, 11] },
+  /* (the sleeves start a step up it: the rear arm is sculpted in the guard turned from the sun and in the shadow of his own
+     glove and head, so in the cloth's ramp nearly all of it came out the darkest step, the step the trunk's shaded side is,
+     and the arm went into the body in front of it, elbow and all; the bare arm is told from the body by its tape) */
+  sleeve: { r: [9, 9, 10, 11] },
   rib: { r: [8, 8, 9] },
   lining: { r: [8, 8, 9] }
 };
@@ -168,8 +172,8 @@ function suit(k, up) {
     const s = sideName === 'Left' ? 1 : -1;
     // ---- the sleeves, to a ribbed cuff at the wrist under the glove
     ball(sideName + 'Shoulder', [s * 0.15, 0, 0], 0.102, MAT.cloth);
-    tube(sideName + 'Arm', [0, 0, 0], [s * 0.28, 0, 0], 0.086, 0.072, MAT.cloth);
-    tube(sideName + 'ForeArm', [0, 0, 0], [s * 0.17, 0, 0], 0.072, 0.064, MAT.cloth);
+    tube(sideName + 'Arm', [0, 0, 0], [s * 0.28, 0, 0], 0.086, 0.072, MAT.sleeve);
+    tube(sideName + 'ForeArm', [0, 0, 0], [s * 0.17, 0, 0], 0.072, 0.064, MAT.sleeve);
     tube(sideName + 'ForeArm', [s * 0.16, 0, 0], [s * 0.25, 0, 0], 0.066, 0.07, MAT.rib);
     glove(sideName, s);
     // ---- the sweatpants' legs, to a ribbed cuff at the ankle; a low training shoe with a pale sole
