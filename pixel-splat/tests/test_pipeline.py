@@ -84,3 +84,23 @@ def test_render_frame_modes(scene, mode):
     img = render_frame(model, cam, FrameConfig(mode=mode, snap=True))
     assert img.shape == (64, 48, 3) and np.isfinite(img).all()
     assert 0.0 <= img.min() and img.max() <= 1.0
+
+
+def test_pose_splats_identity_and_rigid(scene):
+    """Identity bones leave splats untouched; a rigid rotation rotates means and normals."""
+    from pixelsplat.skin import pose_splats, rot_y
+
+    _, model = scene
+    W = torch.ones(model.n, 1)
+    I = torch.as_tensor(np.eye(3, 4), dtype=torch.float32)[None]
+    with torch.no_grad():
+        m, R, s = pose_splats(model, W, I)
+        assert torch.allclose(m, model.means, atol=1e-5)
+        assert torch.allclose(s, model.scales(), atol=1e-5)
+        assert torch.allclose(R[..., 2], model.normals(), atol=1e-4)
+        Rot = torch.as_tensor(rot_y(40.0), dtype=torch.float32)
+        M = torch.cat([Rot, torch.tensor([[0.1], [0.0], [0.2]])], 1)[None]
+        m2, R2, s2 = pose_splats(model, W, M)
+        assert torch.allclose(m2, model.means @ Rot.T + torch.tensor([0.1, 0.0, 0.2]), atol=1e-5)
+        assert torch.allclose(R2[..., 2], model.normals() @ Rot.T, atol=1e-4)
+        assert torch.allclose(s2, model.scales(), atol=1e-5)

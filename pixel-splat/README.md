@@ -19,6 +19,12 @@ model.pt ──▶ ④ (선택) patch snapping ──▶ ⑤ 저해상도 G-buff
 
 *위: 내장 데모 기사(primitive 조합)를 16k splat으로 학습 → 102×128px로 렌더. 아래: 같은 프레임의 G-buffer 채널과 snapping patch.*
 
+## 예제: 걷는 니케
+
+[examples/nike](examples/nike/README.md) — 「사모트라케의 니케」를 SDF로 조형하고 28k splat으로 학습한 뒤, IK 기반 걷기 동작을 입힌 예제입니다.
+
+![걷는 니케](docs/images/nike_walk_sheet.png)
+
 ## 빠른 시작
 
 ```bash
@@ -72,8 +78,11 @@ pixelsplat/
   splats.py   splat 모델(위치·회전·크기·불투명도·재질)
   raster.py   ★ 미분 가능한 2D-가우시안(quad) tile rasterizer
   train.py    G-buffer 학습 + patch(k-means) 배정
-  shade.py    deferred PBR 조명, 픽셀 hacks, patch snapping
+  shade.py    deferred PBR 조명, 픽셀 hacks, patch snapping, 접지 그림자
+  skin.py     뼈대·skinning: 학습된 splat을 프레임마다 움직이기(애니메이션)
+  sdf.py      SDF 조형 도구: 모델 파일이 없을 때 코드로 형태를 빚고 mesh로 변환
   cli.py      명령줄
+examples/nike/  ★ 예제: 걷는 사모트라케의 니케 (조형 → 학습 → 걷기)
 tests/        파이프라인 검증 (pytest, 약 15초)
 docs/ANALYSIS.md  기법 분석·근거·한계
 ```

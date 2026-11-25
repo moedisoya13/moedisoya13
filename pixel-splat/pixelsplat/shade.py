@@ -16,7 +16,7 @@ import numpy as np
 import torch
 
 from .camera import Camera
-from .raster import RasterConfig, render_model
+from .raster import RasterConfig, rasterize
 
 BG = np.array([0.075, 0.075, 0.11], np.float32)  # dark navy, like the reference posts
 
@@ -44,6 +44,12 @@ class ShadeConfig:
     outline_depth: float = 0.06  # depth jump (world units) that counts as an edge
     palette: int = 0  # hack: >0 quantize final colours to N-colour k-means palette
     background: tuple = tuple(BG.tolist())
+    # ground contact shadow: soft dark disc on a ground plane under the character
+    ground_y: Optional[float] = None
+    shadow_center: tuple = (0.0, 0.0)  # (x, z) world
+    shadow_radius: tuple = (0.32, 0.22)  # (rx, rz)
+    shadow_strength: float = 0.55
+    shadow_steps: int = 3  # quantized (pixel-art) falloff
 
 
 def _normalize(v, eps=1e-8):
@@ -111,7 +117,32 @@ def shade(gb: dict, cam: Camera, cfg: ShadeConfig) -> np.ndarray:
     return col * cfg.exposure
 
 
-def postprocess(rgb_lin: np.ndarray, gb: dict, cfg: ShadeConfig) -> np.ndarray:
+def ground_shadow(cam: Camera, cfg: ShadeConfig) -> np.ndarray:
+    """(H,W) darkening factor 0..1 for background pixels whose ray hits the shadow disc."""
+    if cfg.ground_y is None:
+        return np.zeros((cam.height, cam.width), np.float32)
+    rays = cam.pixel_rays()
+    if cam.ortho:
+        R = cam.viewmat[:3, :3]
+        ys, xs = np.mgrid[0:cam.height, 0:cam.width].astype(np.float64) + 0.5
+        s = cam.A[0, 0]
+        cx, cy = cam.A[0, 3], cam.A[1, 3]
+        pc = np.stack([(xs - cx) / s, (ys - cy) / s, np.zeros_like(xs)], -1)
+        origin = (pc - cam.viewmat[:3, 3]) @ R  # camera-plane points in world
+    else:
+        origin = np.broadcast_to(cam.position, rays.shape)
+    t = (cfg.ground_y - origin[..., 1]) / np.where(np.abs(rays[..., 1]) < 1e-6, -1e-6, rays[..., 1])
+    hit = origin + t[..., None] * rays
+    dx = (hit[..., 0] - cfg.shadow_center[0]) / cfg.shadow_radius[0]
+    dz = (hit[..., 2] - cfg.shadow_center[1]) / cfg.shadow_radius[1]
+    r = np.sqrt(dx * dx + dz * dz)
+    f = np.clip(1 - r, 0, 1)
+    if cfg.shadow_steps > 0:
+        f = np.ceil(f * cfg.shadow_steps) / cfg.shadow_steps
+    return np.where(t > 0, f * cfg.shadow_strength, 0).astype(np.float32)
+
+
+def postprocess(rgb_lin: np.ndarray, gb: dict, cfg: ShadeConfig, cam: Optional[Camera] = None) -> np.ndarray:
     """Tonemap + pixel-art hacks → (H,W,3) sRGB in 0..1."""
     img = linear_to_srgb(aces(rgb_lin))
     mask = gb["alpha"] > cfg.alpha_threshold
@@ -129,18 +160,21 @@ def postprocess(rgb_lin: np.ndarray, gb: dict, cfg: ShadeConfig) -> np.ndarray:
         km = KMeans(n_clusters=cfg.palette, n_init=1, random_state=0).fit(px[:: max(1, len(px) // 4000)])
         img[mask] = km.cluster_centers_[km.predict(px)]
     bg = np.asarray(cfg.background, np.float32)
+    if cam is not None and cfg.ground_y is not None:
+        bg = bg * (1 - ground_shadow(cam, cfg))[..., None]
     return np.where(mask[..., None], img, bg)
 
 
 # ------------------------------------------------------------------ snapping
-def patch_snap_shift(model, cam: Camera) -> torch.Tensor:
+def patch_snap_shift(model, cam: Camera, means: Optional[torch.Tensor] = None) -> torch.Tensor:
     """"Almost Pixel Perfect": move every patch by < 1 px so that the patch's
     anchor (centroid) lands exactly on a pixel centre.  Inside a patch the
     pixel pattern then moves in whole-pixel steps instead of shimmering."""
     with torch.no_grad():
         P = torch.as_tensor(cam.A @ cam.viewmat, dtype=torch.float32)  # (3,4)
         npatch = int(model.patch.max()) + 1
-        cent = torch.zeros(npatch, 3).index_add_(0, model.patch, model.means)
+        means = model.means if means is None else means
+        cent = torch.zeros(npatch, 3).index_add_(0, model.patch, means.detach())
         cnt = torch.bincount(model.patch, minlength=npatch).clamp_min(1)[:, None]
         cent = cent / cnt
         h = cent @ P[:, :3].T + P[:, 3]
@@ -164,23 +198,35 @@ class FrameConfig:
     mode: str = "lit"  # lit | albedo | normal | depth | patches
 
 
-def render_frame(model, cam: Camera, cfg: FrameConfig) -> np.ndarray:
-    """One low-res pixel-art frame (H,W,3) sRGB 0..1."""
-    shift = patch_snap_shift(model, cam) if cfg.snap else None
-    feats = torch.cat([patch_colors(model), torch.zeros(model.n, 2)], -1) if cfg.mode == "patches" else None
-    rc = cfg.raster
+def render_frame(model, cam: Camera, cfg: FrameConfig, pose=None) -> np.ndarray:
+    """One low-res pixel-art frame (H,W,3) sRGB 0..1.
+
+    ``pose`` = optional (means, R, scales) from :func:`pixelsplat.skin.pose_splats`
+    (an animated frame); default is the trained rest pose."""
     with torch.no_grad():
-        out = render_model(model, cam, rc, feats=feats, shift=shift)
+        if pose is None:
+            R = model.rot()
+            pose = (model.means, R, model.scales())
+        means, R, scales = pose
+        shift = patch_snap_shift(model, cam, means) if cfg.snap else None
+        feats = (torch.cat([patch_colors(model), torch.zeros(model.n, 2)], -1) if cfg.mode == "patches"
+                 else model.material())
+        rc = cfg.raster
+
+        def go(rc):
+            return rasterize(means, R, scales, model.opacity(), feats, R[..., 2], cam, rc, shift)
+
+        out = go(rc)
         # inference only: if some tiles ran out of slots, retry with more (never silently truncate much)
         while out["overflow"] > 0.01 and rc.k < 2048:
             rc = replace(rc, k=rc.k * 2)
-            out = render_model(model, cam, rc, feats=feats, shift=shift)
+            out = go(rc)
     gb = gbuffer_from_render(out)
     sc = cfg.shade
     mask = (gb["alpha"] > sc.alpha_threshold)[..., None]
     bg = np.asarray(sc.background, np.float32)
     if cfg.mode == "lit":
-        return postprocess(shade(gb, cam, sc), gb, sc)
+        return postprocess(shade(gb, cam, sc), gb, sc, cam)
     if cfg.mode in ("albedo", "patches"):
         return np.where(mask, gb["albedo"], bg)
     if cfg.mode == "normal":
