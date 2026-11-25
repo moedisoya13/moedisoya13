@@ -1,0 +1,19 @@
+Candidate build arm-a (the open-questions catalogue, group arm): the rear glove held further out and forward in the
+ordinary guard. After applying it, bake the outfits again in the new guard: node tools/bake.mjs --wear
+
+diff --git a/src/anim/moves.mjs b/src/anim/moves.mjs
+index 1c28a95..20a8f3b 100644
+--- a/src/anim/moves.mjs
++++ b/src/anim/moves.mjs
+@@ -38,7 +38,10 @@ export const GUARD = {
+   yaw: -28,
+   twist: -10,
+   chin: 5,
+-  hands: { L: [0.1, 1.385, 0.33], R: [-0.1, 1.365, 0.17] },
++  /* (the rear glove 5 cm further out and 7 cm further forward than it was before 2026-11-25: there the rear forearm lay in
++     the sculpted chest, which is fuller than the ball the arms are kept out of (rig/body.mjs RADIUS.Chest), and the
++     training suit, baked in this guard, hid it; the outfits are baked again after it: node tools/bake.mjs --wear) */
++  hands: { L: [0.1, 1.385, 0.33], R: [-0.15, 1.365, 0.24] },
+   feet: { L: { at: [0.13, 0.09, 0.2], yaw: -12, pitch: 0 }, R: { at: [-0.15, 0.09, -0.24], yaw: -48, pitch: 12 } }
+ };
+ 

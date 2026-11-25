@@ -1,0 +1,27 @@
+Candidate build arm-b (the open-questions catalogue, group arm): a man's own forearms and gloves drawn as if 4 cm
+nearer the eye, for the depth test only. No motion changes and nothing is baked again.
+
+diff --git a/src/render/renderer.mjs b/src/render/renderer.mjs
+index 2d90999..d5530a9 100644
+--- a/src/render/renderer.mjs
++++ b/src/render/renderer.mjs
+@@ -7,6 +7,10 @@ const FOV = (38 * Math.PI) / 180; // ink-studio's own, so a splat is the size on
+ const MAX_BONES = 24;
+ const MAX_PALETTE = 48;
+ const NO_RINGS = new Float32Array(8);
++/* (a man's own forearms and gloves are taken as this many metres nearer the eye than they are, for deciding what is nearest
++   only: the sculpted chest is fuller than the ball his arms are kept out of (rig/body.mjs RADIUS.Chest), and a rear forearm
++   held against it in the guard went under its skin, the training suit's most of all. Nothing moves where it is drawn.) */
++const ARM_PULL = 0.04;
+ 
+ const SPLAT_VS = `#version 300 es
+ precision highp float;
+@@ -114,6 +118,8 @@ void main() {
+   /* (a loose splat may be taken as a little nearer the eye than it is, for deciding what is nearest only: the parts of one
+      glob, so that its head is drawn over its body and its body over its tail from any side; render/fx.mjs) */
+   float pull = max(-a_misc.y, 0.0);
++  // (and a man's forearms and gloves, his bones 11 to 14 behind bone 0: rig/skeleton.mjs NAMES; a man is drawn with mask 1)
++  if (u_mask > 0.9 && a_misc.y > 10.5 && a_misc.y < 14.5) pull = ${ARM_PULL.toFixed(3)};
+   float iz = 1.0 / dist;
+   vec3 ja = vec3(u_focal * iz, 0.0, u_focal * c.x * iz * iz);
+   vec3 jb = vec3(0.0, u_focal * iz, u_focal * c.y * iz * iz);

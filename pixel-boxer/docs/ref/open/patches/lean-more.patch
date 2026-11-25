@@ -1,0 +1,20 @@
+Candidate build lean-more (the open-questions catalogue, group lean): the lean asked on the ropes raised so that
+about twice as much of it shows at the spine.
+
+diff --git a/src/world/ropes.mjs b/src/world/ropes.mjs
+index 0e44aa0..97c6625 100644
+--- a/src/world/ropes.mjs
++++ b/src/world/ropes.mjs
+@@ -20,8 +20,10 @@ export const ROPE = {
+   k: 4,
+   bounce: 0.45,
+   // (the lean: his centre within `near` of where he must stop, his back toward the ropes; `most` degrees of trunk laid back, the
+-  // hips `hips` metres forward under it, `side` degrees toward a rope at his side; sprung at hz, damped by ratio)
+-  lean: { near: 0.2, most: 16, hips: 0, side: 7, hz: 2.2, ratio: 0.45 },
++  // hips `hips` metres forward under it, `side` degrees toward a rope at his side; sprung at hz, damped by ratio. Of the 16
++  // asked before 2026-11-25 about 7 showed at his spine, his centre stopped and the ropes pushing him back in: 34 asked is
++  // about 14 to 16 seen)
++  lean: { near: 0.2, most: 34, hips: 0, side: 7, hz: 2.2, ratio: 0.45 },
+   drawn: { hz: 3.2, ratio: 0.14, most: 0.3, wide: 1.1 }
+ };
+ // the balls of him that meet the ropes: the bout's points, each so thick (the trunk's, game/trunk.mjs TRUNK; the head's)
