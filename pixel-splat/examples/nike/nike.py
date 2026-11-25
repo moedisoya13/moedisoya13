@@ -32,6 +32,8 @@ import torch
 from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import marble  # noqa: E402
 from pixelsplat import sdf  # noqa: E402
 from pixelsplat.camera import fit_radius_for_fov, orbit_camera  # noqa: E402
 from pixelsplat.gt import render_gbuffer  # noqa: E402
@@ -257,21 +259,10 @@ def sculpt(voxel=0.0075, log=print):
     verts, faces = sdf.mesh_components(COMPONENTS, voxel, k=UNION_K)
     log(f"[sculpt] marching cubes: {len(verts)} verts {len(faces)} faces ({time.time() - t0:.1f}s)")
     nrm = sdf.sdf_normal(full_sdf, verts)
-    # weathered Parian marble: cavities grey, soft mottling, slightly warm
-    ao = sdf.ambient_occlusion(full_sdf, verts, nrm)
-    mott = sdf.value_noise(verts, 5.0, seed=11, octaves=4)
-    vein = sdf.value_noise(verts * V(1, 3, 1), 9.0, seed=3, octaves=2)
-    base = V(0.87, 0.85, 0.81)
-    col = base[None] * (0.80 + 0.22 * mott[:, None]) * (0.94 + 0.06 * vein[:, None])
-    col = col * (0.42 + 0.58 * ao[:, None] ** 1.2)
-    col = col * V(1.0, 0.99, 0.965)[None]
-    # the right wing is plaster: paler, greyer and without the marble's mottling
     lab, names = component_labels(verts)
-    plaster = lab == names.index("wingR")
-    flat = V(0.90, 0.895, 0.885)[None] * (0.50 + 0.50 * ao[plaster, None] ** 1.2)
-    col[plaster] = 0.25 * col[plaster] + 0.75 * flat
+    col = marble.paint(verts, nrm, full_sdf, lab, names)  # surface look lives in marble.py
     log(f"[sculpt] painted marble ({time.time() - t0:.1f}s)")
-    part = Part("nike", verts, faces, nrm.astype(np.float32), vert_colors=np.clip(col, 0, 1).astype(np.float32),
+    part = Part("nike", verts, faces, nrm.astype(np.float32), vert_colors=col,
                 base_color=V(1, 1, 1), roughness=0.55, metallic=0.0)
     return [part]
 
