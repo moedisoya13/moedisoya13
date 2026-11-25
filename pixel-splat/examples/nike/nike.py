@@ -2,13 +2,14 @@
 
 There is no 3D model file for this example, so the statue is *sculpted* here
 with signed distance fields: headless, armless, wet drapery clinging to the
-torso, a rolled mantle around the hips, cloth streaming behind the legs and two
-large feathered wings.  It is then
+torso, a rolled mantle around the hips, cloth streaming behind the legs, two
+large wings whose outlines are cut out of side-view photographs of the real statue
+(wings.py), and - below the ankles - foot-sized hands instead of feet.  It is then
 
   1. meshed (marching cubes) and painted as weathered Parian marble,
   2. baked into quad splats (G-buffer training, rest pose = standing),
   3. skinned to a small skeleton, and
-  4. animated with a procedural walk cycle (2-bone leg IK keeps feet planted).
+  4. animated with a procedural walk cycle (2-bone leg IK keeps the hand-feet planted).
 
 Coordinates: y up, the figure faces +z, +x is her left.  Ground at y = -1.
 
@@ -34,6 +35,7 @@ from PIL import Image
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import marble  # noqa: E402
+import wings  # noqa: E402
 from pixelsplat import sdf  # noqa: E402
 from pixelsplat.camera import fit_radius_for_fov, orbit_camera  # noqa: E402
 from pixelsplat.gt import render_gbuffer  # noqa: E402
@@ -52,97 +54,73 @@ GROUND = -1.0
 HIP = {s: V(s * 0.10, -0.06, 0.0) for s in (-1, 1)}
 KNEE = {s: V(s * 0.10, -0.50, 0.015) for s in (-1, 1)}
 ANKLE = {s: V(s * 0.10, -0.92, -0.005) for s in (-1, 1)}
-TOE = {s: V(s * 0.10, -0.975, 0.15) for s in (-1, 1)}
+TOE = {s: V(s * 0.10, -0.985, 0.175) for s in (-1, 1)}  # tip of the middle finger (she stands on hands)
 THIGH_LEN = float(np.linalg.norm(KNEE[1] - HIP[1]))
 SHIN_LEN = float(np.linalg.norm(ANKLE[1] - KNEE[1]))
 
 
-# Wing geometry re-verified against photos of the Louvre statue from the front, both sides and
-# the back (see examples/nike/README.md "날개 검증").  Measured in body units (neck→feet = 1.64):
-#   * side view: a wing reaches only ≈0.54 × body height behind the shoulder (≈0.86 units)
-#   * front view: each wing is an upright panel beside the shoulder, tip ≈0.45 beyond it,
-#     reaching from about neck height down to just above the hip mantle
-#   * plan (from above) the two wings open by the same amount: the right wing is an 1880s
-#     plaster cast made as a mirror of the left
-#   * but they are NOT identical as mounted: the right (plaster, -x) wing stands higher and
-#     hangs lower, so it looks ≈25 % taller from the front, and it is paler and smoother;
-#     the left (original marble, +x) wing stays near neck height and ends in a pointed tip.
-WINGS = {
-    1: dict(poly=[(0.10, 0.50, -0.08), (0.26, 0.65, -0.24), (0.43, 0.74, -0.44), (0.57, 0.73, -0.64),
-                  (0.65, 0.62, -0.82)],
-            lengths=[0.46, 0.50, 0.40, 0.24, 0.11], out=0.06, sweep=(10, 55)),
-    -1: dict(poly=[(-0.10, 0.50, -0.08), (-0.26, 0.68, -0.24), (-0.43, 0.79, -0.44), (-0.57, 0.78, -0.64),
-                   (-0.64, 0.67, -0.82)],
-             lengths=[0.50, 0.56, 0.46, 0.28, 0.13], out=0.10, sweep=(5, 50)),
-}
-
-
+# Wings: their outlines and feather relief are cut out of side-view photographs of the Louvre
+# statue - the left wing (original marble, +x) from a left-side photo, the right wing (1880s plaster
+# reconstruction, -x) from a right-side photo - see wings.py / extract_wings.py.  Each photo is
+# registered to this model by the neck break and the sole, so wing size and height relative to the
+# body come from the photos: the plaster wing sits higher and is the larger of the two.
 def wing_frame(s):
-    """Leading edge (root → tip) of one wing as a polyline; s=+1 left (marble), -1 right (plaster)."""
-    return [V(*q) for q in WINGS[s]["poly"]]
+    """Leading edge (root -> tip) of one wing as a polyline; s=+1 left (marble), -1 right (plaster).
 
-
-def _poly_tangent(pts, t, eps=0.02):
-    a, b = _lerp_poly(pts, max(t - eps, 0)), _lerp_poly(pts, min(t + eps, 1))
-    return (b - a) / np.linalg.norm(b - a)
-
-
-def wing_feathers(s):
-    """Feather blades (base, tip, radius, half_thickness, normal) for one wing."""
-    poly = wing_frame(s)
-    down = V(s * WINGS[s]["out"], -1.0, 0.0)  # feathers fan slightly outward → broad from the front
-    down = down / np.linalg.norm(down)
-    out = []
-
-    def frame(u, sweep_deg):
-        T = _poly_tangent(poly, u)
-        Dp = down - (down @ T) * T
-        Dp = Dp / np.linalg.norm(Dp)
-        a = math.radians(sweep_deg)
-        d = math.cos(a) * Dp + math.sin(a) * T
-        d = d / np.linalg.norm(d)
-        n = np.cross(T, d)
-        return d, n / np.linalg.norm(n)
-
-    def sweep(u):
-        s0, s1 = WINGS[s]["sweep"]
-        return s0 + s1 * u  # feathers rake further back toward the tip
-
-    def length(u):  # crescent: long in the middle, short at the root and the curled tip
-        L = WINGS[s]["lengths"]
-        return float(np.interp(u, np.linspace(0, 1, len(L)), L))
-
-    # vane under everything so the wing reads as one solid mass
-    for u in np.linspace(0.03, 0.97, 10):
-        d, n = frame(u, sweep(u))
-        b = _lerp_poly(poly, u) - n * 0.007
-        out.append((b, b + d * length(u) * 0.78, 0.075, 0.010, n))
-    # flight feathers with rounded (scalloped) tips
-    for i, u in enumerate(np.linspace(0.02, 1.0, 24)):
-        d, n = frame(u, sweep(u))
-        b = _lerp_poly(poly, u) + n * (0.0035 * (i % 2))
-        out.append((b, b + d * length(u), 0.046, 0.012, n))
-    # three rows of shingled coverts over the upper half
-    for row, (off, L, lift, r) in enumerate(((0.03, 0.12, 0.014, 0.036), (0.10, 0.13, 0.010, 0.038),
-                                             (0.18, 0.15, 0.006, 0.040))):
-        for j, u in enumerate(np.linspace(0.03, 0.93 - 0.05 * row, 15)):
-            d, n = frame(u, sweep(u))
-            b = _lerp_poly(poly, u) + d * off + n * (lift + 0.003 * (j % 2))
-            out.append((b, b + d * min(L, length(u) - off), r, 0.011, n))
-    return out
-
-
-def _lerp_poly(pts, t):
-    """Point at arc-length fraction t along a polyline."""
-    seg = [np.linalg.norm(pts[i + 1] - pts[i]) for i in range(len(pts) - 1)]
-    L = t * sum(seg)
-    for i, sl in enumerate(seg):
-        if L <= sl or i == len(seg) - 1:
-            return pts[i] + (pts[i + 1] - pts[i]) * min(L / sl, 1.0)
-        L -= sl
+    Traced on the photographed outline; the wing bone runs first point -> last point."""
+    return wings.wing_frame(s)
 
 
 # ---------------------------------------------------------------- sculpture
+HAND_SCALE = 1.1  # hand ~0.22 long from the back of the wrist to the fingertips, ~0.12 wide: foot-sized
+# fingers: knuckle offset to the little-finger side, knuckle z, length factor, radius factor, sideways splay
+FINGERS = ((-0.039, 0.088, 0.95, 1.00, -0.10),   # index
+           (-0.013, 0.094, 1.00, 1.00, -0.02),   # middle
+           (0.013, 0.090, 0.94, 0.96, 0.07),     # ring
+           (0.038, 0.080, 0.78, 0.86, 0.17))     # little
+PHALANX = ((0.042, (-0.22, 1.0)), (0.030, (-0.75, 0.66)), (0.022, (-0.90, 0.42)))  # length, (down, forward)
+FINGER_R = (0.0145, 0.0130, 0.0115, 0.0100)  # radius at knuckle, two finger joints, tip
+THUMB = (((-0.034, 0.030, 0.012), 0.0175), ((-0.058, 0.036, 0.050), 0.0150),
+         ((-0.066, 0.027, 0.084), 0.0130), ((-0.060, 0.006, 0.106), 0.0110))
+
+
+def hand_sdf(p, s):
+    """A foot-sized hand standing where the foot was: palm down, fingers forward like toes.
+
+    The hand is gently cupped, as if resting over an egg: the heel of the palm and the fingertips
+    touch the ground, the knuckles arch up, each finger bends down through three phalanges and the
+    thumb curls down on the inner side (toward the other leg).  The wrist is the ankle, so it
+    disappears into the hem of the dress.  s=+1 is her left hand, s=-1 the right (mirror image).
+
+    Local frame: u = sideways toward the little finger (away from the midline), v = height above the
+    ground, w = forward from the ankle."""
+    q = np.stack([s * (p[..., 0] - ANKLE[s][0]), p[..., 1] - GROUND, p[..., 2] - ANKLE[s][2]], -1) / HAND_SCALE
+    q = q.astype(np.float32)
+    # wrist + heel of the palm (two pads on the ground) + one metacarpal per finger rising to its knuckle
+    palm = [sdf.round_cone(q, (0, 0.090, -0.004), (0, 0.040, 0.004), 0.036, 0.036),
+            sdf.ellipsoid(q, (-0.028, 0.021, 0.030), (0.024, 0.023, 0.037)),
+            sdf.ellipsoid(q, (0.029, 0.019, 0.028), (0.023, 0.021, 0.035)),
+            sdf.ellipsoid(q, (0.0, 0.043, 0.046), (0.052, 0.019, 0.052))]  # rounded back of the hand
+    fingers = []
+    for u, w, ln, rs, splay in FINGERS:
+        j = np.array([u, 0.002 + 0.0514 * ln, w], np.float32)  # knuckle (lower for the shorter fingers)
+        palm.append(sdf.round_cone(q, (0.5 * u, 0.047, 0.0), j, 0.019, 0.0155 * rs))
+        f = None
+        for k, (seg, (dn, fw)) in enumerate(PHALANX):
+            d = np.array([splay * fw, dn, fw], np.float32)
+            j2 = j + ln * seg * d / np.linalg.norm(d)
+            c = sdf.round_cone(q, j, j2, FINGER_R[k] * rs, FINGER_R[k + 1] * rs)
+            f = c if f is None else sdf.smin(f, c, 0.003)
+            j = j2
+        fingers.append(f)
+    th = None
+    for (a, ra), (b, rb) in zip(THUMB[:-1], THUMB[1:]):
+        c = sdf.round_cone(q, a, b, ra, rb)
+        th = c if th is None else sdf.smin(th, c, 0.004)
+    d = sdf.smin(sdf.union(palm, 0.014), np.minimum(np.minimum.reduce(fingers), th), 0.006)  # fingers stay separate
+    return d * HAND_SCALE
+
+
 def body_sdf(p):
     x, y, z = p[..., 0], p[..., 1], p[..., 2]
     # torso: pelvis, belly, rib cage (leaning forward), shoulders, breasts
@@ -178,7 +156,7 @@ def body_sdf(p):
     th = np.arctan2(z / 0.15, x / 0.205)
     ring = np.stack([0.21 * np.cos(th), -0.085 + 0.095 * np.cos(th - 2.6), 0.155 * np.sin(th) - 0.01], -1)
     himation = sdf.length(p - ring) - (0.048 + 0.008 * np.sin(6 * th + 4 * y))
-    # legs wrapped in clinging cloth (hem flares at the ankle) + bare feet
+    # legs wrapped in clinging cloth (hem flares at the ankle); she stands on foot-sized hands
     legs = []
     for s in (-1, 1):
         cx = s * 0.10
@@ -190,16 +168,14 @@ def body_sdf(p):
         ], 0.04)
         lw = 4.0 * sdf.value_noise(p, 2.5, seed=31 + s, octaves=2)
         leg = leg - 0.011 * np.sin(8 * ang + 7 * y + 5 * s * z + lw) * np.clip((-0.08 - y) * 8, 0, 1)
-        foot = sdf.union([
-            sdf.ellipsoid(p, V(cx, -0.955, 0.055), (0.046, 0.038, 0.105)),
-            sdf.capsule(p, ANKLE[s] + V(0, 0.0, -0.01), V(cx, -0.955, 0.02), 0.038),
-        ], 0.03)
-        legs.append(sdf.smin(leg, foot, 0.02))
+        legs.append(leg)
     # cloth panel between the thighs (front) with vertical folds
     panel = sdf.flat_capsule(p, (0, -0.10, 0.04), (0, -0.66, 0.05), 0.095, 0.02, (0, 0, 1))
     panel = panel - 0.008 * np.sin(26 * x + 6 * y + 3.0 * sdf.value_noise(p, 3, seed=41, octaves=1))
     d = sdf.union([torso, belt, himation], 0.05)
     d = sdf.smin(d, sdf.union([panel] + legs, 0.06), 0.045)
+    # below the ankles: hands, not feet (joined with a tight blend so the two thumbs do not web together)
+    d = sdf.smin(d, np.minimum(hand_sdf(p, 1), hand_sdf(p, -1)), 0.02)
     return np.maximum(d, GROUND + 0.002 - y)  # nothing below the ground
 
 
@@ -217,16 +193,12 @@ def trail_sdf(p):
 
 
 def wing_sdf(p, s):
-    poly = wing_frame(s)
-    radii = [0.056, 0.048, 0.040, 0.033, 0.024]
-    parts = [sdf.round_cone(p, poly[i], poly[i + 1], radii[i], radii[i + 1]) for i in range(len(poly) - 1)]
-    parts += [sdf.flat_capsule(p, b, t, r, ht, n) for b, t, r, ht, n in wing_feathers(s)]
-    return sdf.union(parts, 0.006)
+    """Photographed side silhouette extruded around the wing sheet (see wings.py)."""
+    return wings.wing_sdf(p, s)
 
 
 def wing_aabb(s):
-    pts = np.stack(wing_frame(s) + [t for _, t, _, _, _ in wing_feathers(s)])
-    return pts.min(0) - 0.08, pts.max(0) + 0.08
+    return wings.wing_aabb(s)
 
 
 COMPONENTS = {
@@ -296,11 +268,17 @@ def skin_weights(skel: Skeleton, points: np.ndarray) -> np.ndarray:
         m = lab == names.index("wing" + side)
         allowed[m] = False
         allowed[np.ix_(m, [idx["wing" + side], idx["chest"]])] = True
+    for sgn, other in ((1, "R"), (-1, "L")):  # the thumbs reach toward the midline:
+        allowed[points[:, 0] * sgn > 0, idx["foot" + other]] = False  # never let a hand follow the other foot
     m = lab == names.index("trail")
     allowed[m] = False
     allowed[np.ix_(m, [idx["trail"], idx["pelvis"], idx["thighL"], idx["thighR"]])] = True
     w = distance_weights(points, skel, sigma=0.055, allowed=allowed)
-    return w
+    # ... nor the other shin: fade its pull out smoothly over the hand (below the hem, in front of the ankle)
+    hand = smoothstep((-0.88 - points[:, 1]) / 0.04) * smoothstep(points[:, 2] / 0.05)
+    for sgn, other in ((1, "R"), (-1, "L")):
+        w[:, idx["shin" + other]] *= np.where(points[:, 0] * sgn > 0, 1.0 - hand, 1.0)
+    return (w / w.sum(1, keepdims=True)).astype(np.float32)
 
 
 def bone_patches(model, W: torch.Tensor, total: int = 80, seed: int = 0):
@@ -345,12 +323,21 @@ def foot_target(psi):
         z = STRIDE - 2 * STRIDE * s
         heel = 0.045 * smoothstep((s - 0.65) / 0.35)  # heel lifts before toe-off
         pitch = -8 * (1 - smoothstep(s / 0.15)) + 28 * smoothstep((s - 0.7) / 0.3)
-        return z, ankle_h + heel, pitch
+        return z, ankle_h + max(heel, _tip_clearance(pitch)), pitch
     s = (psi - STANCE) / (1 - STANCE)
     z = -STRIDE + 2 * STRIDE * smoothstep(s)
-    y = ankle_h + 0.045 * (1 - smoothstep(s / 0.25)) + 0.075 * math.sin(math.pi * s)
     pitch = 28 * (1 - smoothstep(s / 0.4)) - 8 * smoothstep((s - 0.6) / 0.4)
+    y = ankle_h + max(0.045 * (1 - smoothstep(s / 0.25)), _tip_clearance(pitch)) + 0.075 * math.sin(math.pi * s)
     return z, y, pitch
+
+
+def _tip_clearance(pitch_deg):
+    """How far the ankle must rise so the fingertips stay on the ground when the hand pitches down."""
+    if pitch_deg <= 0:
+        return 0.0
+    a = math.radians(pitch_deg)
+    dy, dz = TOE[1][1] - ANKLE[1][1], TOE[1][2] - ANKLE[1][2]  # fingertip relative to the ankle (rest)
+    return dz * math.sin(a) + dy * (math.cos(a) - 1.0)
 
 
 def _frame(d, axis):
