@@ -355,6 +355,11 @@ const SINCE = {
   crossCounter: { since: 'new', stage: 'Y', at: '2026-11-24', note: '구간 +3~+4 · +1~+4 · +1~+4 · +1~+4 · +1~+4, 잽이 2.8 · 3.2 · 1.6 · 2.4 · 1.8 cm로 빗나가고 +9에 96 · 100 · 106 · 107 · 122 N·s, 카운터(스트레이트 88 · 93 · 101 · 105 · 112). 뒷손이 넘어가는 높이는 상대 잽이 뻗어 올 자리에서 읽고, 머리는 잽이 지나간 뒤에야 앞으로 들어갑니다. 잽이 조준까지 5스텝 넘게 걸리면(1 · 2단계의 잽), 조준 뒤 2스텝째부터, 또 3단계가 조준이 굳기 전에 누르면 보통 스트레이트' },
   'crossCounter-off': { since: 'new', stage: 'Y', at: '2026-11-24', note: '3단계가 +1에 누르면 조준이 굳기 전이라 보통 스트레이트가 나가고 들어가는 머리에 잽 61 N·s(선 채 46)에 끊김. +6에 누르면 잽이 이미 이겨 보통 스트레이트가 나가고 잽 45 N·s에 끊김' },
   'out-counter': { since: 'new', stage: 'Y', at: '2026-11-24', note: '4명의 크로스 카운터(구간 끝 +4에 누름) 89 N·s에 잽을 내던 선수가 실신(통나무)' },
+  /* changed: the show-off dirty fighter's taunts (plan 6 §3.4 N18-N23, stage U: the joints of both men compared frame by
+     frame with the scripts before it, the cards listed moved more than 1 mm; cm are the most a joint moved) */
+  beckon: { since: 'changed', stage: 'U', at: '2026-11-25', cards: ['1', '2', '3', '4m', '4a', '5m', '5a'], note: '앞 글러브를 얼굴 높이로 가드보다 29 cm(5암 23) 앞까지 내밀어 세 번 까딱임; 도발하는 손은 자리가 있는 만큼만 뻗어 상대 머리·몸통에서 5 cm 넘게 떨어지고, 대시로 들어오면 가드 올리듯 급히 거두며, 끊기면 제 빠르기로 가드로 돌아옴. 카드는 1.0 → 1.2 m에서 시작(다른 등급은 그 거리의 보통 동작; U; 관절 최대 44.5 cm)' },
+  chinOut: { since: 'changed', stage: 'U', at: '2026-11-25', cards: ['4a', '5a'], note: '두 손을 다 늘어뜨리고(팔꿈치 155° 넘게) 0.5초 넘게 머리 30 cm 안에 글러브가 없음; 끊기면 늘어뜨린 손이 몸과 함께 천천히 돌아옴(U; 관절 최대 59.9 cm)' },
+  wind: { since: 'changed', stage: 'U', at: '2026-11-25', cards: ['4a', '5a'], note: '두 주먹이 반 바퀴 어긋나게 두 바퀴씩 돎(630° 넘게, 두 글러브 20 cm 넘게 떨어짐); 도발하는 손은 자리가 있는 만큼만 뻗어 상대 머리·몸통에서 5 cm 넘게 떨어지고, 대시로 들어오면 가드 올리듯 급히 거두며, 끊기면 제 빠르기로 가드로 돌아옴, 0.80 m 안에서는 뒷주먹만 돎(U; 관절 최대 44.9 cm)' },
   /* changed: the rocked man, the knockdown's legs, the twisted knockout (plan 6 N24-N26, stage V: the joints of both men
      compared frame by frame with the scripts before it, the cards listed moved more than 1 mm; cm are the most a joint moved) */
   cross: { since: 'changed', stage: 'V', at: '2026-11-24', cards: ['2', '3', '4m', '4a', '5m', '5a'], note: '맞은 사람이 휘청여 팔이 느리게 늘어지고 무릎이 꺾임(V; 관절 최대 35.6 cm)' },
@@ -366,7 +371,10 @@ const SINCE = {
   pawDown: { since: 'changed', stage: 'V', at: '2026-11-24', cards: ['4a', '5a'], note: '맞은 사람이 휘청여 팔이 느리게 늘어지고 무릎이 꺾임(V; 관절 최대 16.6 cm)' },
   pawUp: { since: 'changed', stage: 'V', at: '2026-11-24', cards: ['3', '4m', '4a', '5m', '5a'], note: '맞은 사람이 휘청여 팔이 느리게 늘어지고 무릎이 꺾임(V; 관절 최대 8.3 cm)' },
   elbow: { since: 'changed', stage: 'V', at: '2026-11-24', cards: ['1', '4a', '5a'], note: '맞은 사람이 휘청여 팔이 느리게 늘어지고 무릎이 꺾임(V; 관절 최대 0.5 cm)' },
-  tapChin: { since: 'changed', stage: 'V', at: '2026-11-24', cards: ['4a'], note: '맞은 사람이 휘청여 팔이 느리게 늘어지고 무릎이 꺾임(V; 관절 최대 0.8 cm)' },
+  tapChin: [
+    { since: 'changed', stage: 'U', at: '2026-11-25', cards: ['4a', '5a'], note: '턱에서 12 · 9 cm 뺐다가 세 번 치고 칠 때마다 고개가 끄덕임; 도발하는 손은 자리가 있는 만큼만 뻗어 상대 머리·몸통에서 5 cm 넘게 떨어지고, 대시로 들어오면 가드 올리듯 급히 거두며, 끊기면 제 빠르기로 가드로 돌아옴(U; 관절 최대 39.1 cm)' },
+    { since: 'changed', stage: 'V', at: '2026-11-24', cards: ['4a'], note: '맞은 사람이 휘청여 팔이 느리게 늘어지고 무릎이 꺾임(V; 관절 최대 0.8 cm)' }
+  ],
   parryDown: { since: 'changed', stage: 'V', at: '2026-11-24', cards: ['4m', '5m'], note: '맞은 사람이 휘청여 팔이 느리게 늘어지고 무릎이 꺾임(V; 관절 최대 14.6 cm); 5명의 스트레이트 56 → 57 N·s' },
   pullCross: { since: 'changed', stage: 'V', at: '2026-11-24', cards: ['1', '2', '3', '4m', '4a', '5m'], note: '맞은 사람이 휘청여 팔이 느리게 늘어지고 무릎이 꺾임(V; 관절 최대 27.3 cm)' },
   blockFire: { since: 'changed', stage: 'V', at: '2026-11-24', cards: ['4m', '5m'], note: '맞은 사람이 휘청여 팔이 느리게 늘어지고 무릎이 꺾임(V; 관절 최대 29.3 cm); 4명의 어퍼 77 → 76, 5명의 훅 134 → 136 · 131 → 127, 어퍼 90 → 88 N·s' },
@@ -396,7 +404,10 @@ const SINCE = {
     { since: 'changed', stage: 'V', at: '2026-11-24', cards: ['1', '2', '3', '4m', '4a', '5m', '5a'], note: '맞은 사람이 휘청여 팔이 느리게 늘어지고 무릎이 꺾임(V; 관절 최대 29 cm)' },
     { since: 'changed', stage: 'M', at: '2026-11-23', cards: ['4m', '4a', '5m', '5a'], note: '슬립의 앞 글러브가 뒷팔을 지나지 않게 8 cm만 감(최대 15.5 cm); 5명·5암의 카운터 103 → 104, 112 → 111 N·s' }
   ],
-  shrug: { since: 'changed', stage: 'M', at: '2026-11-23', cards: ['4m', '4a', '5m', '5a'], note: '앞선 슬립의 앞 글러브가 뒷팔을 지나지 않게(최대 15.2 cm)' },
+  shrug: [
+    { since: 'changed', stage: 'U', at: '2026-11-25', cards: ['4a', '5a'], note: '두 손을 크게 벌리고(글러브 사이 87 · 70 cm) 어깨를 올림, 앞손을 뒤로 빼지 않음; 도발하는 손은 자리가 있는 만큼만 뻗어 상대 머리·몸통에서 5 cm 넘게 떨어지고, 대시로 들어오면 가드 올리듯 급히 거두며, 끊기면 제 빠르기로 가드로 돌아옴(U; 관절 최대 39.6 cm)' },
+    { since: 'changed', stage: 'M', at: '2026-11-23', cards: ['4m', '4a', '5m', '5a'], note: '앞선 슬립의 앞 글러브가 뒷팔을 지나지 않게(최대 15.2 cm)' }
+  ],
   duck: { since: 'changed', stage: 'M', at: '2026-11-23', cards: ['4m', '4a', '5a'], note: '자기 글러브가 다른 팔 안으로 들지 않게 풀이가 천천히 밀어냄(최대 2.7 cm)' },
   roll: { since: 'changed', stage: 'M', at: '2026-11-23', cards: ['4m', '4a', '5a'], note: '자기 글러브가 다른 팔 안으로 들지 않게 풀이가 천천히 밀어냄(최대 6.2 cm)' },
   parry: { since: 'changed', stage: 'M', at: '2026-11-23', cards: ['1', '2', '4a', '5a'], note: '자기 글러브가 다른 팔 안으로 들지 않게 풀이가 천천히 밀어냄(최대 7.7 cm)' },
@@ -404,6 +415,7 @@ const SINCE = {
   guard: { since: 'changed', stage: 'M', at: '2026-11-23', cards: ['2', '4m', '4a', '5a'], note: '자기 글러브가 다른 팔 안으로 들지 않게 풀이가 천천히 밀어냄(최대 1.9 cm)' },
   stalk: { since: 'changed', stage: 'M', at: '2026-11-23', cards: ['4m', '4a', '5a'], note: '자기 글러브가 다른 팔 안으로 들지 않게 풀이가 천천히 밀어냄(최대 3.4 cm)' },
   collar: [
+    { since: 'changed', stage: 'U', at: '2026-11-25', cards: ['4a', '5a'], note: '당기는 목에 몸을 뒤로 버티고 어퍼가 0.03초 기다렸다 닿음: 40프레임에 4암 94 → 102, 5암 105 → 115 N·s, 맞힌 뒤 쫓아가지 않음(U; 관절 최대 46.5 cm)' },
     { since: 'changed', stage: 'V', at: '2026-11-24', cards: ['3', '4m', '4a', '5m', '5a'], note: '맞은 사람이 휘청여 팔이 느리게 늘어지고 무릎이 꺾임(V; 관절 최대 32.7 cm)' },
     { since: 'changed', stage: 'M', at: '2026-11-23', cards: ['4a', '5a'], note: '자기 글러브가 다른 팔 안으로 들지 않게 풀이가 천천히 밀어냄(최대 1.5 cm)' }
   ],

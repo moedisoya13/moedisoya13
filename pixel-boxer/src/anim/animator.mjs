@@ -37,7 +37,7 @@
    rise is blended out of the pose he comes to rest in (view.near: what of the other man he cannot fall through). */
 import * as M from '../rig/m3.mjs';
 import { TPOSE, fk } from '../rig/skeleton.mjs';
-import { solve, centre, footPose, LEN } from '../rig/solve.mjs';
+import { solve, centre, footPose, armEnd, FOLDED_ARM, LEN } from '../rig/solve.mjs';
 import { createFall, stepFall, shoveFall, poseOf, lyingOf, moveFall } from '../phys/fall.mjs';
 import * as Q from './quat.mjs';
 import { FOOT, HEAD, RADIUS, RANGE, GLOVE, shoulderOf, gloveInArm } from '../rig/body.mjs';
@@ -47,7 +47,7 @@ import { LEVEL } from './skill.mjs';
 import { H, headAt, headTo, phraseX, PHRASE, FLOURISH, CLEAN, DIRTY, dice } from './stance.mjs';
 import { sampleEvade, EVASIONS, timeline, evadeTime, pullBack, pullIn } from './evade.mjs';
 import { travel as legendTravel, dash as legendDash, dashShape } from './legend.mjs';
-import { stance as showStance, crossGuard, ear, shoulderRoll, hammer, paw, PAW, collar, COLLAR, ELBOW } from './show.mjs';
+import { stance as showStance, crossGuard, ear, shoulderRoll, hammer, paw, PAW, collar, COLLAR, ELBOW, windmill, ROOM, room, least, spare } from './show.mjs';
 import { bodyState, struck as foldUp, give as bodyGive, coverLow, lower } from './body.mjs';
 import { createWave, waveBeat, waveLand, waveLanding, waveDrag, waveBody, createPat, patDown, pattedArm, fireBody, createShell, shellBody } from './clean.mjs';
 import { createShift, shiftHold, shiftFoot, shiftBody } from './shift.mjs';
@@ -168,6 +168,22 @@ const ROCK = 0.034; // metres the weight swings forward and back between the fee
 const DASH = { push: 16, load: 0.034, out: 0, drive: 0.13, land: 12, lands: [0.1, 0.3], lead: [0.28, 0.44] };
 const STRIDE = 0.42; // metres: the furthest a foot is ever put from its place in the guard
 const SETTLE = 30; // how fast the difference between two moves is let go of (1/seconds): gone in about a sixth of a second
+/* A taunt's hands that it let hang, left there when it is cut short or over (a chin-out's hang all the way down by his thighs,
+   60 cm from his guard; the chin-tap's lead hand), come home no harder than a hand is moved: let go of at the rate that
+   starts them gathering no more than HOME.accel m/s2 (at SETTLE a hand 60 cm out starts at 540, 9 m/s in a frame), and no
+   slower than HOME.least (1/seconds); every other hand as anything else is, at SETTLE. Into a punch the punching hand is
+   let go of, of where the taunt had it and of where the taunt's room had it (hung by his thigh, at his own chin, drawn in
+   by his shoulder, given way down past his hip), whether straight out of the taunt or still on its way home, at HOME.punch,
+   three times as fast as anything else: a jab thrown while the hand was still on its way from there turned the upper arm
+   10 to 17 degrees past where the shoulder lets it. On its way home a hand is put off his own head and trunk softly, from
+   HOME.soft short of touching (rig/solve.mjs: soft), a margin let in over its first HOME.ramp seconds (all at once, a
+   shrug's rear glove was put 2.8 cm off its way in the frame after): a chin-out's rear hand coming up from his thigh, the
+   trunk turned into it by a blow, was set out of him 13 cm at once, 14 cm a frame. A hand that hung there (and that the taunt's room had not
+   moved as much as HOME.lock) is carried with his chest as it comes home, by the share of the way it still has to go: an
+   arm hanging from the shoulder goes with it, and held to the face it was left behind 9 degrees a frame when a blow turned
+   the trunk under it, 10 cm a frame as the chest saw it. And one the shoulder cannot put where it is sent by any way round
+   stays there (rig/solve.mjs: stay), not put out toward a guard's place. */
+const HOME = { accel: 120, least: 8, punch: 90, soft: 0.05, ramp: 0.15, lock: 0.03 };
 /* Nothing pulls a man down but gravity: his centre of mass can fall no faster than that (and a little faster as he is drawn,
    1.3 g, with the muscles pulling the hips down under it), and it is stopped on the way down, or driven up, by the legs, up
    to 3 g. Whatever a move asks of his height, and whatever his arms and legs are doing, this is what his body can do with
@@ -346,6 +362,26 @@ const BENT = 0.4; // and as far as it gets with the elbow held at a right angle
    shoulder: `arm` metres out) turned up so far that the shoulder rises so many metres, and `ahead` degrees forward at `most`
    metres of it (into the punch's way) */
 const SHRUG = { arm: Math.abs(TPOSE.LeftArm[0] - TPOSE.LeftShoulder[0]), ahead: 18, most: 0.07 };
+/* (seconds a show-off's taunt takes to bring his hanging lead hand up out of where it hangs, and to let it down again, at
+   most a third of it; gently: from a standstill and into one, gathering speed and losing it softly, moves.mjs's io) */
+const HANG = 0.3;
+const gently = x => ((x = x < 0 ? 0 : x > 1 ? 1 : x), x * x * x * (x * (x * 6 - 15) + 10));
+/* (what a taunt sends each hand out by from where his guard would hold it, `at` seconds into it as written: his grade's size
+   of it, and all of what it writes whole, and its circles; { L, R: [x, y, z] }. And how many moments of it are looked at to
+   find how far out it goes: show.mjs ROOM) */
+const HANDS = ['lx', 'ly', 'lz', 'rx', 'ry', 'rz'];
+function tauntReach(move, at, size) {
+  const c = { lx: 0, ly: 0, lz: 0, rx: 0, ry: 0, rz: 0 },
+    tmp = sampleMove(move, at, {});
+  for (const ch of HANDS) c[ch] += (tmp[ch] || 0) * size;
+  if (move.whole) {
+    const w = sampleMove(move.whole, at, {});
+    for (const ch of HANDS) c[ch] += w[ch] || 0;
+  }
+  if (move.circles) windmill(c, move.circles, at, size);
+  return { L: [c.lx, c.ly, c.lz], R: [c.rx, c.ry, c.rz] };
+}
+const ROOM_LOOKS = 24;
 // (a straight rolled off a shoulder: how far its fist goes on, over it, in his own terms: moves.mjs rolled, game/bout.mjs)
 const ROLLED = [0, 0.03, 0.08];
 /* (his grade's way of covering up with the cross-arm guard he holds put in its place, for body.mjs coverLow: the same object
@@ -517,6 +553,17 @@ export function createAnimator(seed) {
     tired = 0,
     cheer = 0,
     doing = null,
+    taunted0 = false, // whether what he was doing last frame was a taunt (a cut taunt's hands come home gently: HOME)
+    slack = { L: false, R: false }, // an arm let hang by a taunt, until it is up off the hang again: no way round it is remembered
+    homing = { L: false, R: false }, // a hand on its way home from where a taunt left it
+    homeFor = 0, // seconds since the last taunt ended
+    hanging = { L: false, R: false }, // an arm last drawn hanging straight down, or near it (its way round the arm is measured from nothing)
+    hungFrom = { L: 0, R: 0 }, // how far a hand that hung was from home as the taunt ended (carried with his chest by the share still to go: HOME), or 0
+    roomedBy = { L: 0, R: 0 }, // how far the taunt's room had each wrist off where the taunt sent it, the last frame it had (metres)
+    homed = { L: false, R: false }, // whether each hand was let go of at HOME's pace at the last handover
+    sentTo = { L: null, R: null }, // where each hand was sent last frame, before what is carried over is added (raw, below)
+    sentSpeed = { L: null, R: null }, // and how fast that was going, of it all but the taunt's room's part
+    roomWas = { L: null, R: null }, // and where the room had each wrist, last frame
     flourish = null, // { name, from (half beats), t, k, side }
     nextFlourish = 2.2 + 2.3 * roll(), // seconds until a man who fidgets fidgets again
     bag = [], // the flourishes still to come before any comes round again
@@ -555,6 +602,8 @@ export function createAnimator(seed) {
     arm = { L: null, R: null }, // and each upper arm's way as the chest saw it (solve.mjs: arms)
     wrist = { L: null, R: null }, // and where each wrist was
     apart = { L: null, R: null }, // and how far each hand was put off where it was sent, to keep it out of the other arm (solve.mjs: apart)
+    fore = { L: null, R: null }, // and which way each forearm pointed, elbow to wrist (the glove is on past the wrist along it)
+    roomed = { id: null, up: {}, out: { L: {}, R: {} }, rush: { L: {}, R: {} }, fold: { L: null, R: null } }, // how much of what the taunt he is in takes his lead hand up by, and sends each hand out by, there is room for, and how far each wrist is hurried off there: { id (the taunt's), up, out: { L, R }: { want, k, v }, rush: { L, R }: { d, v, aim, down, back, on }, fold: { L, R }: how far from its shoulder all of that put the wrist, last frame } (show.mjs ROOM)
     knees = { L: null, R: null }, // and each knee round its leg (solve.mjs: azimuth), degrees
     // where each hand was drawn last frame and how fast it was going, and what is still owed to the move before
     hand = { L: null, R: null },
@@ -576,6 +625,7 @@ export function createAnimator(seed) {
   let edge = 0, // a foot rolled onto its inside edge by a blow across him: + the right foot (a blow to his left), - the left
     leadOut = 1, // how far out a dirty man's lead hand is (put out in the other man's face, unless a punch is coming)
     showDown = 1, // how far down a show-off's lead hand is let (show.mjs)
+    hung = null, // where it was as the taunt he is in began: { id, from } (a taunt takes it up out of that, and lets it down)
     hammering = false, // a show-off's rear fist coming down on a punch, his guard put up fresh (show.mjs)
     shrug = 0, // metres his lead shoulder is shrugged up (the cross-arm guard, the shoulder roll: show.mjs)
     crossHeld = null, // the cross-arm guard he held last frame, if it was up (what a block on its lead forearm sags)
@@ -653,7 +703,7 @@ export function createAnimator(seed) {
      so is slowed less; and one whose glove would be in his own head, trunk or other arm goes round it (WOBBLE.own). An arm not drawn so last frame
      is as the solver has it; one let go of is the solver's and how it was off it, that let out first (WOBBLE.caught). */
   const ARMS = [['L', 'Left', 1], ['R', 'Right', -1]];
-  const hung = (pose, F, Side, s, rot, deg) => {
+  const droopArm = (pose, F, Side, s, rot, deg) => {
     // (about the chest's own x, as the upper arm's parent sees it)
     const up = F.R[Side + 'Shoulder'],
       across = M.mul(M.tr(up), M.mul(F.R.Chest, M.mul(M.rx(deg), M.mul(M.tr(F.R.Chest), up))));
@@ -792,12 +842,12 @@ export function createAnimator(seed) {
             now = near || blend(own, now, lo);
           }
           // (and hanging from there as far as the shoulder lets it)
-          let drawn = deg > 1e-3 ? hung(pose, F, Side, s, now, deg) : now;
+          let drawn = deg > 1e-3 ? droopArm(pose, F, Side, s, now, deg) : now;
           if (drawn !== now && !shouldered(F, Side, s, drawn)) {
             let lo = 0,
               hi = 1;
-            for (let i = 0; i < 8; i++) shouldered(F, Side, s, hung(pose, F, Side, s, now, deg * (lo + hi) * 0.5)) ? (lo = (lo + hi) * 0.5) : (hi = (lo + hi) * 0.5);
-            drawn = hung(pose, F, Side, s, now, deg * lo);
+            for (let i = 0; i < 8; i++) shouldered(F, Side, s, droopArm(pose, F, Side, s, now, deg * (lo + hi) * 0.5)) ? (lo = (lo + hi) * 0.5) : (hi = (lo + hi) * 0.5);
+            drawn = droopArm(pose, F, Side, s, now, deg * lo);
           }
           slow.drawn[side] = drawn;
         }
@@ -1305,9 +1355,12 @@ export function createAnimator(seed) {
        head goes back (if it was done in the open) and his rear glove goes to his eye a while. */
     /* His guard pushed down or up by the other man's lead hand (game/bout.mjs: paws): the glove goes with it, is held there
        and comes back. */
-    /* His neck caught by the other man's lead hand (game/bout.mjs: collars): his head and trunk pulled down toward him. */
+    /* His neck caught by the other man's lead hand (game/bout.mjs: collars): his head and trunk pulled down toward him; and
+       no longer hauled on ({ go: true }: the uppercut has landed), let up from wherever it had got to. */
     pulled(p) {
-      pulledBy = Object.assign({ t: 0 }, p);
+      if (p && p.go) {
+        if (pulledBy && pulledBy.at === null) (pulledBy.k0 = pulledBy.k), (pulledBy.at = pulledBy.t), (pulledBy.free = p.free || pulledBy.free);
+      } else pulledBy = Object.assign({ t: 0, k: 0, at: null, k0: 1, free: 0.25 }, p);
     },
     pawed(p) {
       pawedBy = pawedBy && pawedBy.t === 0 && pawedBy.hand !== p.hand ? [].concat(pawedBy.list || [pawedBy], [Object.assign({ t: 0 }, p)]) : Object.assign({ t: 0 }, p);
@@ -1427,6 +1480,8 @@ export function createAnimator(seed) {
       // ---- what he is doing
       // what the punching hand does past where the chain puts it (a dirty jab's glove pushed on into his face)
       const extra = { L: null, R: null };
+      // (the taunt he is in, if he is, and what it sends his hands out by now: tauntReach)
+      let taunted = null;
       let form = null, // how this punch's grade holds the body (skill.mjs)
         foul = null, // and the foul a dirty one throws with it (moves.mjs)
         stomp = null; // a lead foot going onto his instep: { to, w, lift }
@@ -1477,6 +1532,13 @@ export function createAnimator(seed) {
         if (action.loaded && action.loaded.fired) fireBody(c, action, move);
         // (the cross counter: the head off inside the jab, the elbow up, the lead foot in, by his grade, anim/over.mjs)
         if (move.over) overBody(c, action, form);
+        /* (a show-off with the other man's neck in his lead hand sits back against it as he hauls on it, from the moment he has
+           it until he lets go: show.mjs COLLAR, game/bout.mjs collars) */
+        if (action.variant === 'collar' && action.collared) {
+          const lands = chain.thrownAt >= 0 ? chain.t - chain.thrownAt : -1,
+            held = smooth((action.t - action.collared.t) / 0.08) * (lands >= 0 ? 1 - smooth((lands - COLLAR.let[Math.max(0, (form.dirty || 1) - 1)]) / 0.1) : 1);
+          c.lean -= COLLAR.brace * held;
+        }
         /* How the rest of him is held while it goes, by how good he is (skill.mjs): all of it grows with the arm, so it is
            there as the punch is and gone as it comes home. */
         const me = move.hand,
@@ -1599,9 +1661,17 @@ export function createAnimator(seed) {
         else if (action.name === 'duckIn') duckIn(action, c);
         else if (action.name === 'hopPivot' || action.name === 'hopCircle') away(action, clock, c, st.show);
         else if (MOVES[action.name].taunt) {
-          // (a show-off's taunt: as his grade does it, longer or shorter and bigger or smaller, show.mjs)
-          const tmp = sampleMove(MOVES[action.name], action.t / (action.long || 1), {});
+          /* (a show-off's taunt: as his grade does it, longer or shorter and bigger or smaller, all but what it writes whole
+             (where a hand has to get to); and hands swung round in circles: show.mjs windmill) */
+          const move = MOVES[action.name],
+            at = action.t / (action.long || 1),
+            tmp = sampleMove(move, at, {});
           for (const ch in tmp) c[ch] += tmp[ch] * (action.size ?? 1);
+          if (move.whole) sampleMove(move.whole, at, c);
+          if (move.circles) windmill(c, move.circles, at, action.size ?? 1);
+          taunted = { move, size: action.size ?? 1, now: tauntReach(move, at, action.size ?? 1), left: move.dur - at };
+          // (hands let hang all the way down: an arm hanging straight has its elbow nowhere in particular round it)
+          if (move.low) slack.L = slack.R = true;
         } else if (MOVES[action.name].hand) {
           // (written for the lead hand: the rear's is the same with the hands swapped, mirrored across him)
           const tmp = sampleMove(MOVES[action.name], action.t, {});
@@ -2008,8 +2078,22 @@ export function createAnimator(seed) {
           // (snapped up into a punch thrown with it, so that it is up and still before the glove gets there; let down slowly)
           const lowHand = !action || hopping || (punchMove && ((punchMove.hand === 'R' && !REACHING.includes(action.variant)) || punchMove.low)),
             want = lowHand && !evading && !view.threat ? 1 - cover : 0;
-          showDown += (want - showDown) * (1 - Math.exp(-dt * (want > showDown ? 8 : punchMove && !lowHand ? 45 : 16)));
-          showStance(c, st.show, { clock, down: showDown, unwind, cover, seed: seed || 0 });
+          if (taunting) {
+            /* (a taunt takes it up out of where it hangs over its first HANG seconds, from wherever it was as it began, and
+               lets it down to hang again over its last, both from a standstill: so it neither leaps up nor drops away in a
+               frame as one begins or ends, and is hanging as he comes out of it; one done with it hanging (moves.mjs: low)
+               lets it on down over the first and leaves it there) */
+            if (!hung || hung.id !== id) hung = { id, from: showDown };
+            const end = MOVES[action.name].dur * (action.long || 1),
+              rise = Math.min(HANG, end / 3),
+              on = gently(action.t / rise),
+              off = gently((action.t - end + rise) / rise);
+            showDown = MOVES[action.name].low ? hung.from + (1 - hung.from) * on : hung.from * (1 - on) * (1 - off) + off;
+          } else showDown += (want - showDown) * (1 - Math.exp(-dt * (want > showDown ? 8 : punchMove && !lowHand ? 45 : 16)));
+          const per = showStance(c, st.show, { clock, down: showDown, unwind, cover, seed: seed || 0 });
+          /* (what the taunt has taken the hanging hand up by, or let it on down by, out of where it hung as the taunt began,
+             and the most it will: given room with the rest of what the taunt does with the hand, show.mjs ROOM) */
+          if (taunting && taunted) taunted.lift = { now: M.scale(per, showDown - hung.from), most: M.scale(per, (MOVES[action.name].low ? 1 : 0) - hung.from) };
         }
       }
       /* A beginner: his weight shifts from foot to foot in its own slow time (no beat in it), his feet are put right every few
@@ -2219,17 +2303,24 @@ export function createAnimator(seed) {
         }
         if (pawedBy.done) pawedBy = null;
       }
-      // ---- the neck pulled: the head and the trunk dragged forward and down toward him over `time`, and let up
+      /* ---- the neck pulled: the head and the trunk dragged forward and down toward him over `time`, and let up over `free`;
+         and his lead glove drawn in across his chin with it (where his guard holds it, his head hauled in, it is where the
+         other man's rear shoulder comes up behind the uppercut) */
       if (pulledBy) {
         pulledBy.t += dt;
-        const p = pulledBy,
-          k = p.t < p.time ? Math.sin((Math.PI / 2) * (p.t / p.time)) ** 2 : 1 - smooth((p.t - p.time) / 0.25),
-          down = (p.d / 0.1) * k;
+        const p = pulledBy;
+        if (p.at === null && p.t >= p.time) (p.at = p.time), (p.k0 = 1);
+        p.k = p.at === null ? Math.sin((Math.PI / 2) * (p.t / p.time)) ** 2 : p.k0 * (1 - smooth((p.t - p.at) / p.free));
+        const down = (p.d / 0.1) * p.k;
         c.lean += 11 * down * Math.max(0, p.dir[1]);
         c.hp += 9 * down;
         c.hz += 0.03 * down * p.dir[1];
         c.hx += 0.03 * down * p.dir[0];
-        if (p.t > p.time + 0.25) pulledBy = null;
+        // (his lead glove drawn in across his chin as he is hauled down by the neck: show.mjs COLLAR.tuck)
+        c.lx += COLLAR.tuck[0] * down;
+        c.ly += COLLAR.tuck[1] * down;
+        c.lz += COLLAR.tuck[2] * down;
+        if (p.at !== null && p.t > p.at + p.free) pulledBy = null;
       }
       // ---- fouls done to him: a flinch, an eye covered
       fouled.flinch += dt;
@@ -2327,8 +2418,13 @@ export function createAnimator(seed) {
         wobble.t += dt;
         const w = wobble.amount * Math.exp(-wobble.t / WOBBLE.last) * smooth(clamp(wobble.t / WOBBLE.onset, 0, 1)),
           T = wobble.t,
-          // a hand that is punching is the punch's, not his condition's (it is physics: where it goes is what it hits)
-          free = { L: !(punchMove && punchMove.hand === 'L'), R: !(punchMove && punchMove.hand === 'R') },
+          // a hand that is punching is the punch's, not his condition's (it is physics: where it goes is what it hits); and
+          // a taunt's hands are the taunt's (what it sends them out by is shrunk to keep them off the other man: show.mjs
+          // ROOM, which reckons with the hands as the solver puts them. Slowed and drooped on top, a rocked show-off's
+          // taunting hands were let go of at once as his rocking wore off in the middle of a beckon, both gloves thrown
+          // 5.7 m/s in a frame, and a slowed one was 7 cm in the other man, in seeded bouts once stages U and V were merged;
+          // over 24 seeded bouts neither is left: no taunting glove in him, none past JUMP as one is let go of)
+          free = { L: !taunting && !(punchMove && punchMove.hand === 'L'), R: !taunting && !(punchMove && punchMove.hand === 'R') },
           guardUp = 1 - 0.6 * cover,
           breath = Math.sin(TAU * (1 + 0.5 * tired) * clock);
         wobble.now = w;
@@ -2415,7 +2511,7 @@ export function createAnimator(seed) {
         rising.id = id;
         doing = id;
         for (const ch of CHANNELS) (shown[ch] = c[ch]), (speed[ch] = 0), (carry[ch].x = carry[ch].v = 0);
-        for (const side of ['L', 'R']) (hand[side] = null), (elbow[side] = null), (round[side] = null), (arm[side] = null), (wrist[side] = null), (apart[side] = null), (knees[side] = null), (steer[side] = [0, 0, 0]);
+        for (const side of ['L', 'R']) (hand[side] = null), (elbow[side] = null), (round[side] = null), (arm[side] = null), (wrist[side] = null), (apart[side] = null), (knees[side] = null), (steer[side] = [0, 0, 0]), (sentTo[side] = sentSpeed[side] = null);
         height = null;
         exit = null;
         fall = null;
@@ -2431,23 +2527,63 @@ export function createAnimator(seed) {
           if (ch === 'aim') continue;
           carry[ch].x = shown[ch] - c[ch];
           carry[ch].v = speed[ch];
+          carry[ch].w = SETTLE;
         }
+        // (out of a taunt and not into a punch, each hand comes home gently: HOME; and from where a taunt let it hang,
+        // whatever came between, a blow that cut it short and held him as he was; and into a taunt, from wherever it was)
+        if (taunted0 && !taunted) (homing.L = homing.R = true), (hungFrom.L = hungFrom.R = 0), (homeFor = 0);
+        homed.L = homed.R = false;
+        if ((taunted0 || taunted || slack.L || slack.R) && !punchMove)
+          for (const k of ['l', 'r']) {
+            const side = k === 'l' ? 'L' : 'R',
+              /* (a hand a taunt let hang, the chin-out's and the chin-tap's, wherever it has got to: one near its guard is let
+                 go of at SETTLE anyway, HOME's pace being no slower there) */
+              hung = slack[side];
+            /* (and one let go of at HOME's pace, handed over into a taunt or out of one, does not take on twice the speed its
+               channels carry on with: below; any other takes it on as it always did: rid of it at SETTLE, a rear glove's
+               velocity changed by up to 8.5 m/s in a frame two frames after a taunt a dash had cut short) */
+            homed[side] = hung;
+            /* (and a taunt does not begin with a hand flung: one begun as a blow lands, the chin-tap's own cue, took the
+               speed the blow had knocked the hand to on with it, 9 m/s, the arm thrown out straight five frames into
+               the taunt; it keeps a hand's pace of it, ROOM.speed) */
+            const fast = Math.hypot(carry[k + 'x'].v, carry[k + 'y'].v, carry[k + 'z'].v);
+            if (taunted && fast > ROOM.speed) for (const ch of ['x', 'y', 'z']) carry[k + ch].v *= ROOM.speed / fast;
+            /* (only a hand that hangs is let go of at HOME's pace; any other, as anything else is, at SETTLE: let go of
+               slowly, a hand the taunt or its room had moved but not let hang came home late enough to be in his way, his
+               own glove in his other arm after a blow in 11 rooms and a glove popping 4.5 cm as a dash ended; and into a
+               taunt from anything but one, at SETTLE too: where his guard had a hand at the taunt's first frames, let go of
+               slowly, took it into his other arm, up to 7 cm, in 4 of 48 bouts) */
+            const far = Math.hypot(carry[k + 'x'].x, carry[k + 'y'].x, carry[k + 'z'].x),
+              pace = Math.hypot(carry[k + 'x'].v, carry[k + 'y'].v, carry[k + 'z'].v),
+              w = !hung || (taunted && !taunted0) ? SETTLE : far > 1e-4 ? clamp((Math.sqrt(pace * pace + HOME.accel * far) - pace) / far, HOME.least, SETTLE) : SETTLE;
+            for (const ch of ['x', 'y', 'z', 'e']) carry[k + ch].w = w;
+            if (taunted0 && !taunted && hung && roomedBy[side] < HOME.lock) hungFrom[side] = far;
+          }
+        // (and into a punch out of a taunt, or from a hand still on its way home from one, the punching hand's are let go of fast: HOME.punch)
+        if ((taunted0 || homing[punchMove ? (punchMove.hand === 'R' ? 'R' : 'L') : 'L']) && punchMove) for (const ch of ['x', 'y', 'z', 'e']) carry[(punchMove.hand === 'R' ? 'r' : 'l') + ch].w = HOME.punch;
       }
+      const wasTaunt = taunted0;
+      taunted0 = !!taunted;
+      homeFor += dt;
       for (const ch of CHANNELS) {
         if (ch === 'aim') continue; // not part of the pose: it says how hard a hand is being steered, and has its own follower
         const k = carry[ch];
         if (k.x || k.v) {
           // critically damped, exact: x(t) = (x + (v + w x) t) e^(-w t)
-          const e = Math.exp(-SETTLE * dt),
-            j = k.v + SETTLE * k.x;
+          const w = k.w || SETTLE,
+            e = Math.exp(-w * dt),
+            j = k.v + w * k.x;
           k.x = (k.x + j * dt) * e;
-          k.v = (k.v - SETTLE * j * dt) * e;
+          k.v = (k.v - w * j * dt) * e;
           if (Math.abs(k.x) < 1e-6 && Math.abs(k.v) < 1e-5) k.x = k.v = 0;
           c[ch] += k.x;
         }
         speed[ch] = dt > 0 ? (c[ch] - shown[ch]) / dt : 0;
         shown[ch] = c[ch];
       }
+      // (a hand that hung on its way home: how much of it is carried with his chest, the share of the way it still has to go)
+      const hungLock = { L: 0, R: 0 };
+      for (const [side, k] of [['L', 'l'], ['R', 'r']]) if (homing[side] && hungFrom[side] > 0.05) hungLock[side] = Math.min(1, Math.hypot(carry[k + 'x'].x, carry[k + 'y'].x, carry[k + 'z'].x) / hungFrom[side]);
 
       /* (how far a legend's dash will have taken him in so many seconds more, for each metre a second it is taking him now:
          game/bout.mjs moves him along a curve at rest at both ends, 0.85 of the dash's length) */
@@ -2554,7 +2690,11 @@ export function createAnimator(seed) {
       const spine = trunk(c, gaze);
       /* (the lead shoulder shrugged up, the chin behind it: the collarbone turned up about the line ahead of him, so far that
          the shoulder rises so many metres, and a little forward with it: show.mjs) */
-      if (shrug > 1e-4) spine.LeftShoulder = [0, -SHRUG.ahead * (shrug / SHRUG.most), (Math.asin(clamp(shrug / SHRUG.arm, 0, 0.9)) * 180) / Math.PI];
+      /* (and both of them shrugged straight up, a shrug: the sh channel, on top of that on the lead side and mirrored on the
+         rear) */
+      const both = Math.max(0, c.sh);
+      if (shrug + both > 1e-4) spine.LeftShoulder = [0, -SHRUG.ahead * (shrug / SHRUG.most), (Math.asin(clamp((shrug + both) / SHRUG.arm, 0, 0.9)) * 180) / Math.PI];
+      if (both > 1e-4) spine.RightShoulder = [0, 0, -(Math.asin(clamp(both / SHRUG.arm, 0, 0.9)) * 180) / Math.PI];
       // (the knees: the hips brought down over the planted feet as far as they say, a foot in the air folded up)
       /* (what a legend's going bends the knees by is a bend of the leg he stands on: a foot in the air is not folded up by it,
          legend.mjs) */
@@ -2604,7 +2744,22 @@ export function createAnimator(seed) {
         collaring = collar(action.t, view.foe);
         const lands = action.chain.thrownAt >= 0 ? action.chain.t - action.chain.thrownAt : -1;
         if (lands >= 0) collaring.w *= 1 - smooth((lands - COLLAR.let[Math.max(0, (form.dirty || 1) - 1)]) / 0.1);
-        c.le += 0.9 * collaring.w;
+        /* (once the uppercut is there the hand no longer goes after his neck: it stays where it had him and is let go of
+           there, and his head, thrown by the blow, goes from it, not taking the hand out after it; a hand that never got
+           there goes on as it went) */
+        if (lands >= 0 && action.collared) collaring.to = action.collared.let || (action.collared.let = collaring.to);
+        /* (the elbow up as the hand goes round his head, and let down to COLLAR.elbow[1] as the legs drive the uppercut: held
+           up through the drive, the forearm has to swing round the line from the shoulder faster than an elbow can as the
+           trunk turns under a hand held on his neck, and the solver holds the arm back: the glove dropped 12 cm in the frame
+           it landed, and back in the frame after the blow's held moment) */
+        c.le += (COLLAR.elbow[0] + (COLLAR.elbow[1] - COLLAR.elbow[0]) * smooth(clamp(action.chain.q[0], 0, 1))) * collaring.w;
+        /* (hauling, not reaching: the arm is kept bent, the wrist no further from the shoulder than `hold` metres; the head
+           pulled in comes to it. An arm held out straight to a neck that moves as the body turns under it has no steady way
+           round for its elbow, and flips) */
+        const sh = M.add(chest.p, M.app(chest.R, M.sub(TPOSE.LeftArm, TPOSE.Chest))),
+          out = M.sub(collaring.to, sh),
+          far = Math.hypot(out[0], out[1], out[2]);
+        if (far > COLLAR.hold) collaring.to = M.add(sh, M.scale(out, COLLAR.hold / far));
       }
       const reach = pawing || collaring;
       // (the elbow lifted for it, a great dirty fighter's in the open; a legend's fist drawn back across as if from a miss)
@@ -2616,16 +2771,197 @@ export function createAnimator(seed) {
       }
       // (a cross counter's rear arm goes over the other man's lead arm, read off where his jab is going: over.mjs)
       const his = punchMove && punchMove.over ? hisNext(action, hisArm(view, wide, tall)) : null;
+      /* (a taunting hand reaches only as far as there is room, show.mjs ROOM: what the taunt sends each hand out by is shrunk
+         toward the guard by the share that keeps its glove off the other man, looked for over the whole taunt (one share
+         for all of it: the same taunt made smaller) and followed at a hand's pace; and, by a share of its own, what the
+         taunt takes a show-off's hanging lead hand up by, out of where it hung, where a guard would hold it being too
+         near him: the reach is out from as far up as that gets. A hand whose reach will not keep it off him a moment on
+         is hurried in ahead of its share, and gives way where all the way in is not off him either: below) */
+      const solid = taunted && view.foe && view.foe.solid,
+        // (the punch the other man is throwing, if he is: its arm)
+        coming = (solid && solid[0][3]) || null,
+        // (and whether he is in a dash)
+        rushed = !!(solid && solid[0][4]),
+        /* (a share followed, s: { want, k, v }: less room is taken at once and more let out only slowly, so that his bounce
+           does not work the hand in and out; not let out at all while a punch of his comes, nor past `most`; followed as
+           a spring that just does not overshoot, no faster than the glove's most speed and gathering of it allow over
+           `far` metres, the furthest the whole share takes it) */
+        follow = (s, want, far, most = 1) => {
+          if (s.k === undefined) return (s.v = 0), (s.want = s.k = Math.min(want, most));
+          if (coming) want = Math.min(want, s.k);
+          if (dt > 0) {
+            s.want = Math.min(most, want < s.want ? want : Math.min(want, s.want + ROOM.back * dt));
+            if (far > 1e-6) {
+              const top = ROOM.speed / far,
+                gather = ROOM.accel / far,
+                pull = clamp(ROOM.firm * ROOM.firm * (s.want - s.k) - 2 * ROOM.firm * s.v, -gather, gather);
+              s.v = clamp(s.v + pull * dt, -top, top);
+              s.k = clamp(s.k + s.v * dt, 0, 1);
+            } else s.k = s.want;
+          }
+          return s.k;
+        },
+        /* (and a hand hurried, r: { d, v, aim }, the way d its wrist is taken off where its shares have it, to `aim`: as a
+           guard is taken up, at a punch's pace (ROOM.rush), in one straight line, gathering its speed and shedding it a
+           step at a time so that it is still when it is there, never set there at once; and going along with the aim as
+           that goes itself, its share coming in after it, no faster than a share does) */
+        hurry = (r, aim) => {
+          if (dt > 0) {
+            const to = M.sub(aim, r.d),
+              far = Math.hypot(to[0], to[1], to[2]),
+              gather = ROOM.rush.accel * dt,
+              went = M.scale(M.sub(aim, r.aim), 1 / dt),
+              pace = Math.hypot(went[0], went[1], went[2]),
+              // (the most speed that can still be shed by the time it is there)
+              speed = Math.min(ROOM.rush.speed, (Math.sqrt(gather * gather + 8 * ROOM.rush.accel * far) - gather) / 2),
+              more = M.sub(M.add(pace > ROOM.speed ? M.scale(went, ROOM.speed / pace) : went, far > 1e-9 ? M.scale(to, speed / far) : [0, 0, 0]), r.v),
+              by = Math.hypot(more[0], more[1], more[2]);
+            r.v = M.add(r.v, by > gather ? M.scale(more, gather / by) : more);
+            r.d = M.add(r.d, M.scale(r.v, dt));
+          }
+          r.aim = aim;
+          return r.d;
+        },
+        // held to the face, or locked to the chest and swung with it, or part way between
+        // (or put on the canvas: where its channels say, in the room)
+        keptAs = side => {
+          const k = side === 'L' ? 'l' : 'r',
+            lock = Math.max(clamp(c[k + 'c'], 0, 1), hungLock[side]),
+            put = clamp(c[k + 'g'], 0, 1);
+          return o => M.lerp(M.lerp(M.add(o, carried), M.add(chest.p, M.app(swung, M.sub(o, CHEST.p))), lock), o, put);
+        },
+        opened = { L: M.add(GUARD.hands.L, [c.lx, c.ly, c.lz]), R: M.add(GUARD.hands.R, [c.rx, c.ry, c.rz]) },
+        // (and how far its wrist is taken off there, hurried)
+        nudged = { L: [0, 0, 0], R: [0, 0, 0] };
+      if (!solid) roomed.id = null;
+      else {
+        if (roomed.id !== id) (roomed.id = id), (roomed.up = {}), (roomed.out = { L: {}, R: {} }), (roomed.rush = { L: { d: [0, 0, 0], v: [0, 0, 0], aim: [0, 0, 0], down: 0, back: 0, on: 0 }, R: { d: [0, 0, 0], v: [0, 0, 0], aim: [0, 0, 0], down: 0, back: 0, on: 0 } }), (roomed.fold = { L: null, R: null });
+        const ahead = dt > 0 ? ROOM.look / dt : 0,
+          heed = dt > 0 ? ROOM.heed / dt : 0,
+          far = v => Math.hypot(v[0], v[1], v[2]),
+          both = ['L', 'R'].map(side => {
+            const out = taunted.now[side],
+              up = side === 'L' && taunted.lift ? taunted.lift : { now: [0, 0, 0], most: [0, 0, 0] },
+              kept = keptAs(side),
+              shoulder = M.add(chest.p, M.app(chest.R, M.sub(TPOSE[(side === 'L' ? 'Left' : 'Right') + 'Arm'], TPOSE.Chest))),
+              // (where it hung)
+              hang = M.sub(M.sub(opened[side], out), up.now),
+              base = kept(hang),
+              /* (the middle of its glove with the hand so far from where it hung: where the arm will put the wrist
+                 (rig/solve.mjs: armEnd), and on past it along the forearm as it was last drawn) */
+              glove = o => {
+                const wrist = armEnd(shoulder, kept(M.add(hang, o)), ROOM.fold);
+                return fore[side] ? M.add(wrist, M.scale(fore[side], GLOVE.ahead)) : wrist;
+              };
+            // (and what the taunt sends it out by, now and at so many moments of it)
+            return { side, out, up, hang, glove, wrist: o => armEnd(shoulder, kept(M.add(hang, o)), ROOM.fold), shoulder, put: o => kept(M.add(hang, o)), spare: fore[side] ? 0 : GLOVE.ahead, way: o => far(M.sub(kept(M.add(hang, o)), base)), outs: [out].concat(Array.from({ length: ROOM_LOOKS }, (_, i) => tauntReach(taunted.move, (taunted.move.dur * (i + 1)) / ROOM_LOOKS, taunted.size)[side])) };
+          }),
+          lead = both[0],
+          /* (the room there is with a hand k of the way out, at every one of those moments, and the lead hand so far up;
+             a moment that has it no nearer him than not sent out at all is not for want of room out, however near: the
+             way in would not mend it) */
+          outFrom = (h, up) => {
+            const high = M.scale(h.up.most, up),
+              left = (d, k) => spare(h.glove(M.add(high, M.scale(d, k))), solid, ROOM.want + h.spare, ahead, true),
+              looks = h.outs.map(d => ({ d, home: left(d, 0) }));
+            return k =>
+              Math.min(
+                ...looks.map(l => {
+                  const now = left(l.d, k);
+                  return now < l.home ? now : Math.max(now, 0);
+                })
+              );
+          },
+          upAt = roomed.up.k ?? 1;
+        /* (as far out as there is room, from all the way up. And where a guard would hold the lead hand is itself too near
+           him, right up close or where his head is coming, the hand is taken down as far as there is room for it to come
+           up, by as much as it is coming in (out to his side, a shrug's stays out and up), and goes out from there: if
+           down is the way off him, that is. Over a head coming in low behind a straight punch or a hook the hand stays
+           as far up as it is, unless there is room where it hung and none where a guard would hold it (a cross from
+           0.8 m brings his head to that very place in three frames); under an uppercut, whose head dips first and then
+           comes up, and under a punch to the body, whose head comes in low, it goes down from the start) */
+        for (const h of both) h.want = room(outFrom(h, 1), roomed.out[h.side].k ?? 0) ?? 0;
+        let wantUp = 1;
+        {
+          const left = k => spare(lead.glove(M.scale(lead.up.most, k)), solid, ROOM.want + lead.spare, ahead, true),
+            off = k => spare(lead.glove(M.add(M.scale(lead.up.most, k), M.scale(lead.out, roomed.out.L.k ?? 0))), solid, 0, 0);
+          if (left(1) < 0) {
+            const down = coming === 'lift' || coming === 'low' || (coming && left(0) >= 0) || off(Math.max(0, upAt - 1 / 16)) > off(upAt) ? room(left) ?? 0 : upAt;
+            wantUp = 1 - (1 - down) * (1 - Math.min(lead.want, roomed.out.L.k ?? 1));
+            if (wantUp < 1) lead.want = room(outFrom(lead, wantUp), roomed.out.L.k ?? 0) ?? 0;
+          }
+        }
+        const kUp = follow(roomed.up, wantUp, lead.way(lead.up.most));
+        for (const h of both) {
+          /* (and no further out than keeps its glove off him wherever he will be over the next moments at the pace he is
+             coming, and all the way of a dash of his, from as far up as the lead hand is: all the way in with no room
+             anywhere. Past that, the hand is hurried in to it, ahead of its share. And where all the way in is in him
+             still, he right up against it as a dash of his lands, or stood there and throwing nothing, the hand gives
+             way: the lead hand down toward where it hung, as far as it takes, and from there, or the rear hand from
+             where it is, down past his own hip and back by as much of ROOM.give as that takes; let out again slowly,
+             and all of it by the taunt's end) */
+          const from = M.scale(h.up.now, kUp),
+            at = roomed.out[h.side],
+            r = roomed.rush[h.side],
+            off = o => spare(h.glove(o), solid, ROOM.clear + h.spare, heed),
+            left = k => off(M.add(from, M.scale(h.out, k))),
+            most = room(left, at.k ?? h.want) ?? 0,
+            kOut = follow(at, h.want, Math.max(...h.outs.map(h.way)), most),
+            inAt = Math.min(kOut, most),
+            reach = M.scale(h.out, inAt),
+            calm = M.add(from, M.scale(h.out, kOut)),
+            give = [h.side === 'L' ? ROOM.give[0] : -ROOM.give[0], ROOM.give[1], ROOM.give[2]];
+          let down = 0,
+            back = 0;
+          if (left(inAt) < 0 && (rushed || coming === 'low' || (!coming && spare(h.glove(M.add(from, reach)), solid, ROOM.clear + h.spare, 0) < 0))) {
+            down = least(k => off(M.add(M.scale(from, 1 - k), reach)));
+            const here = M.add(M.scale(from, 1 - down), reach);
+            if (off(here) < 0) back = least(k => off(M.add(here, M.scale(give, k))));
+          }
+          r.down = Math.max(down, r.down - ROOM.back * dt);
+          r.back = Math.max(back, r.back - ROOM.back * dt);
+          /* (hurried as a wrist is put, rig/solve.mjs armEnd: a hand asked for nearer its shoulder than a folded arm lets
+             it be is put out from it, and one taken straight through there would be swung about it) */
+          const wrist = h.wrist(calm),
+            safe = inAt < kOut || r.down > 0 || r.back > 0 ? M.sub(h.wrist(M.add(M.add(M.scale(from, 1 - r.down), reach), M.scale(give, r.back * (rushed ? 1 : smooth(clamp(taunted.left / ROOM.ease, 0, 1)))))), wrist) : [0, 0, 0],
+            d = hurry(r, safe);
+          opened[h.side] = M.add(h.hang, calm);
+          /* (the solver is handed that wrist, eased up to the arm's fold, only while the room has the hand anywhere but
+             where the taunt sends it, and by degrees: sent where the taunt has it, a hand goes through the arm's own
+             rules as it always has) */
+          r.on = clamp(r.on + (kUp < 0.999 || kOut < 0.999 || Math.hypot(safe[0], safe[1], safe[2]) > 1e-6 || Math.hypot(d[0], d[1], d[2]) > 0.002 ? dt : -dt) / ROOM.ease, 0, 1);
+          /* (the hurry is a way the hand goes, as the arm puts it, rig/solve.mjs armEnd; sent from where the taunt has a
+             hand right in by its shoulder, nearer than the arm folds, the arm puts it out on its fold and every way it is
+             sent there is made the larger by as much: so it is sent there the less, by as much. Taken from 16 cm off his
+             shoulder onto the fold at 22 cm, the windmill's lead hand hurried in under a body cross was thrown 1.4 times
+             as hard as the hurry gathers, the glove 4.2 m/s in a frame. And, by as much as the room has the hand at all,
+             it is not taken in toward its shoulder faster than it can still be stopped at the fold slowing at ROOM.brake:
+             a beckon's hand drawn in as the room took it in too was stopped dead there, the glove 4.5 m/s in a frame) */
+          const on = smooth(r.on),
+            was = roomed.fold[h.side],
+            base = M.lerp(h.put(calm), wrist, on),
+            near = Math.hypot(...M.sub(base, h.shoulder));
+          let end = M.add(base, near < FOLDED_ARM ? M.scale(d, near / FOLDED_ARM) : d);
+          const v = M.sub(end, h.shoulder),
+            far = Math.hypot(v[0], v[1], v[2]);
+          if (dt > 0 && was !== null && on > 0 && far > 1e-6) {
+            const fast = Math.sqrt(2 * ROOM.brake * Math.max(0, was - FOLDED_ARM));
+            if ((was - far) / dt > fast) end = M.lerp(end, M.add(h.shoulder, M.scale(v, (was - fast * dt) / far)), on);
+          }
+          roomed.fold[h.side] = Math.hypot(...M.sub(end, h.shoulder));
+          nudged[h.side] = M.sub(end, h.put(calm));
+          roomedBy[h.side] = Math.hypot(nudged[h.side][0], nudged[h.side][1], nudged[h.side][2]);
+        }
+      }
       for (const side of ['L', 'R']) {
         const k = side === 'L' ? 'l' : 'r',
           s = side === 'L' ? 1 : -1,
           flare = clamp(c[k + 'e'], 0, 1),
-          open = M.add(GUARD.hands[side], [c[k + 'x'], c[k + 'y'], c[k + 'z']]),
-          // held to the face, or locked to the chest and swung with it, or part way between
+          // held to the face, or locked to the chest and swung with it, or part way between (keptAs)
           // (or put on the canvas: where its channels say, in the room)
           mine = punchMove && punchMove.hand === side ? punchMove : null,
           // (a cross counter's rear hand: left where it was as he went, not carried with his head, and lifted over: over.mjs)
-          kept = mine && mine.over ? overHand(action, open, carried) : M.lerp(M.lerp(M.add(open, carried), M.add(chest.p, M.app(swung, M.sub(open, CHEST.p))), clamp(c[k + 'c'], 0, 1)), open, clamp(c[k + 'g'], 0, 1)),
+          kept = mine && mine.over ? overHand(action, opened[side], carried) : M.add(keptAs(side)(opened[side]), nudged[side]),
           free = reach && side === 'L' && reach.w > 0 ? M.lerp(kept, [reach.to[0] * wide, reach.to[1] / tall, reach.to[2] * wide], reach.w) : kept;
         if (mine) {
           /* The punching arm is not sent anywhere: it is thrown. The shoulder and elbow are the last two joints of the
@@ -2797,12 +3133,23 @@ export function createAnimator(seed) {
         if (handover && hand[side]) {
           hc.x = M.sub(hand[side], raw);
           hc.v = handSpeed[side].slice();
+          // (as fast as its channels are: where the taunt had the hand and where its room had it are let go of together,
+          // or the one is gone while the other is still out, the hand left in him)
+          hc.w = (wasTaunt || homing[side]) && mine ? HOME.punch : carry[k + 'x'].w || SETTLE;
+          /* (and let go of at HOME's pace, it does not also take on the speed its channels carry on with, the speed it was
+             sent at but for the room's part, which ends with the taunt: let go of slowly, that speed carried over twice
+             took a hand on 23 cm off where it was sent, into his own trunk) */
+          if (homed[side] && sentSpeed[side]) (hc.x = M.add(hc.x, M.scale(sentSpeed[side], dt))), (hc.v = M.sub(hc.v, sentSpeed[side]));
         }
-        const e = Math.exp(-SETTLE * dt);
+        if (dt > 0 && sentTo[side] && !handover) sentSpeed[side] = M.sub(M.scale(M.sub(raw, sentTo[side]), 1 / dt), roomWas[side] ? M.scale(M.sub(nudged[side], roomWas[side]), 1 / dt) : [0, 0, 0]);
+        sentTo[side] = raw.slice();
+        roomWas[side] = nudged[side].slice();
+        const w = hc.w || SETTLE,
+          e = Math.exp(-w * dt);
         for (let i = 0; i < 3; i++) {
-          const j = hc.v[i] + SETTLE * hc.x[i];
+          const j = hc.v[i] + w * hc.x[i];
           hc.x[i] = (hc.x[i] + j * dt) * e;
-          hc.v[i] = (hc.v[i] - SETTLE * j * dt) * e;
+          hc.v[i] = (hc.v[i] - w * j * dt) * e;
         }
         const at = M.add(raw, hc.x);
         if (hand[side] && dt > 0) handSpeed[side] = M.scale(M.sub(at, hand[side]), 1 / dt);
@@ -2811,11 +3158,13 @@ export function createAnimator(seed) {
         const poled = mine && mine.over ? overElbow(action, s, chest.R) : null,
           way = poled ? unit(M.lerp(M.scale(asked, 1 / l), poled.to, poled.w)) : M.scale(asked, 1 / l),
           keep = elbow[side] ? Math.exp(-dt * (poled ? poled.rate : 16)) : 0;
+        // (home: nothing left of where the taunt had it)
+        if (homing[side] && Math.hypot(hc.x[0], hc.x[1], hc.x[2]) < 0.01 && Math.hypot(carry[k + 'x'].x, carry[k + 'y'].x, carry[k + 'z'].x) < 0.01) homing[side] = false;
         // (and it goes round the arm no faster than an elbow can, 1200 degrees a second, and the shoulder swings it no faster
         // than 900)
         /* (and, kept out of the other arm, it is put off where it is sent no faster than APART: how locked to the chest it is,
            and how far put down in the room, say which hand gives way: solve.mjs) */
-        hands[side] = { at, toward: M.lerp(way, elbow[side] || [0, 0, 0], keep), round: { was: round[side], most: (poled ? ROUND : 1200) * dt }, shoulder: { was: arm[side], most: 900 * dt }, last: wrist[side], punch: !!mine && (action.chain.phase === 'coil' || action.chain.phase === 'throw') && !(pullIn(action) > 0 && action.chain.t < action.chain.wait), locked: !!mine && mine.arm === 'swing', chest: clamp(c[k + 'c'], 0, 1), room: clamp(c[k + 'g'], 0, 1), apart: { was: apart[side], most: APART * dt } };
+        hands[side] = { at, toward: M.lerp(way, elbow[side] || [0, 0, 0], keep), round: { was: !mine && slack[side] ? null : round[side], most: (poled ? ROUND : 1200) * dt }, shoulder: { was: arm[side], most: 900 * dt }, last: wrist[side], punch: !!mine && (action.chain.phase === 'coil' || action.chain.phase === 'throw') && !(pullIn(action) > 0 && action.chain.t < action.chain.wait), locked: !!mine && mine.arm === 'swing', chest: clamp(c[k + 'c'], 0, 1), room: clamp(c[k + 'g'], 0, 1), apart: { was: apart[side], most: APART * dt }, soft: !mine && homing[side] ? HOME.soft * smooth(homeFor / HOME.ramp) : 0, stay: !mine && homing[side] };
       }
       let stance = { hips, spine, feet, hands, stretch: 1 + c.st },
         // (getting up, while the rise is still being blended out of how he lay: its own stance, and how far it has gone)
@@ -2899,8 +3248,23 @@ export function createAnimator(seed) {
           l = Math.hypot(d[0], d[1], d[2]) || 1;
         elbow[side] = M.scale(d, 1 / l);
         round[side] = pose.round[side];
+        /* (an arm a taunt let hang is slack until it is up off the hang, the hand 35 degrees and more off straight down
+           from its shoulder as the chest stands: round an arm that hangs straight, where its elbow is is measured from
+           nothing (solve.mjs roundOf: from the chest's up), and held to the rate an elbow goes round at, a hand on its
+           way up was held back four frames and then let go 30 cm at once. Only an arm a taunt let hang: one merely on
+           its way home from a taunt while it hangs so, its way round let go too, flipped its elbow round 42 to 162
+           degrees in a frame when a blow had cut the taunt short (in 38 of 520 rooms). Not a punching arm's: thrown, it
+           is held to the rate its elbow goes round at, or the elbow flips in a frame) */
+        {
+          const to = M.sub(pose.at[Side + 'Hand'], pose.at[Side + 'Arm']),
+            up = M.app(chest.R, [0, 1, 0]);
+          hanging[side] = (to[0] * up[0] + to[1] * up[1] + to[2] * up[2]) / (Math.hypot(to[0], to[1], to[2]) || 1) <= -0.82;
+          if (slack[side] && !(taunted && taunted.move.low) && !hanging[side]) slack[side] = false;
+        }
         arm[side] = pose.arms ? pose.arms[side] : null;
         wrist[side] = o.hand;
+        const fa = M.sub(o.hand, o.fore);
+        fore[side] = M.scale(fa, 1 / (Math.hypot(fa[0], fa[1], fa[2]) || 1));
         apart[side] = pose.own ? pose.own[side].apart : pose.apart ? pose.apart[side] : null;
         knees[side] = pose.knees ? pose.knees[side] : null;
       }

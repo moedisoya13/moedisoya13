@@ -313,6 +313,8 @@ function begin(f, name, more, bout) {
   if (loaded) preload(chain, move, loaded.load, loaded.shoulder);
   // (a guard pushed out of the way first: the punch waits for the lead hand to get it there, anim/show.mjs)
   if (chain && more && (more.variant === 'pawDown' || more.variant === 'pawUp')) chain.wait = PAW.wait[name] || PAW.wait.cross;
+  // (and the uppercut under a collar waits for the lead hand to have his neck and to have hauled on it a while: anim/show.mjs)
+  if (chain && more && more.variant === 'collar') chain.wait = COLLAR.wait;
   // (a punch to the body thrown in two movements: down in the wind-up, a moment's stop at the bottom, and then the punch, anim/body.mjs: seam)
   if (chain && move.level && level.form.level && level.form.level.seam && !(loaded && loaded.load > 0)) chain.pause += level.form.level.seam;
   // (a great one's spring waits for his next foot to come down, half a beat at most, and goes down with it)
@@ -1250,8 +1252,8 @@ function viewOf(bout, i) {
       // his shoulders, elbows and gloves: what a cross counter's rear arm goes over, anim/over.mjs)
       // (and the rest of his body that a glove can be in, as the audit reads it, src/audit.mjs SOLID, and his gloves, where they
       // will be as he is drawn this frame: a rocked man's slowed arms are kept out of them as the solver's would be,
-      // anim/animator.mjs rockedArms)
-      foe: f.place && other.pose && other.points ? { foot: mine(f, at(other, 'LeftFoot', [0, -0.02, 0.07])), glove: { L: mine(f, other.points.L), R: mine(f, other.points.R) }, head: mine(f, other.points.head), elbow: { L: mine(f, other.points.LE), R: mine(f, other.points.RE) }, shoulder: { L: mine(f, other.points.LS), R: mine(f, other.points.RS) }, aim: leadAim(bout, f, other), lag: i === 0 ? 1 : 0, nape: mine(f, napeOf(other)), right: dirIn(f, [-Math.cos(other.yaw), Math.sin(other.yaw)]), ...bodyOf(bout, f, other) } : null,
+      // anim/animator.mjs rockedArms; and, while he taunts, what of him a taunting hand is kept off: anim/animator.mjs ROOM)
+      foe: f.place && other.pose && other.points ? { foot: mine(f, at(other, 'LeftFoot', [0, -0.02, 0.07])), glove: { L: mine(f, other.points.L), R: mine(f, other.points.R) }, head: mine(f, other.points.head), elbow: { L: mine(f, other.points.LE), R: mine(f, other.points.RE) }, shoulder: { L: mine(f, other.points.LS), R: mine(f, other.points.RS) }, aim: leadAim(bout, f, other), lag: i === 0 ? 1 : 0, nape: mine(f, napeOf(other)), right: dirIn(f, [-Math.cos(other.yaw), Math.sin(other.yaw)]), ...bodyOf(bout, f, other), solid: f.action && MOVES[f.action.name].taunt ? solidOf(f, other) : null } : null,
       pinned: f.pinned > 0,
       // the down parry his guard is put up for, if it is (anim/clean.mjs): how soon the glove coming in will be on his rear glove
       pat: f.pat ? patView(bout, f, other) : null,
@@ -1383,6 +1385,52 @@ const mine = (f, p) => {
   return [d[0] * Math.sqrt(s), d[1] / s, d[2] * Math.sqrt(s)];
 };
 const at = (f, joint, by) => P.toWorld(f.place, M.add(f.pose.at[joint], by || [0, 0, 0]), f.pose.stretch);
+/* The other man's head and trunk as a glove lands on them (RULES.head, trunk.mjs balls), in boxer f's own space, for a hand
+   of his that is not punching to keep clear of (a show-off's taunt: anim/animator.mjs, show.mjs ROOM): [middle, how near a
+   glove's middle comes to it before they touch, how far that middle moved in the last step he was drawn in, the punch he
+   is throwing, if he is (its arm: 'straight', 'swing' or 'lift', or 'low' for one to the body; his head and trunk go on
+   in with it, faster than they have moved yet, up behind an uppercut and down behind one to the body), and how far a dash of his has still to take it, if he is in one (dashLeft:
+   a dash is on him in a tenth of a second, and where it ends is known from its start)]. Each middle is where it was last
+   drawn and as far on as the two of them have gone over the canvas since (the first of them solved in a step sees the
+   other a step late: a dash goes 14 cm in one). */
+function solidOf(f, other) {
+  const was = other.before,
+    punch = incoming(other) && MOVES[incoming(other).name],
+    coming = punch ? (punch.zone ? 'low' : punch.arm) : null,
+    left = dashLeft(other, f),
+    gone = [other.x - other.place.p[0] - (f.x - f.place.p[0]), 0, other.z - other.place.p[2] - (f.z - f.place.p[2])],
+    out = [[other.points.head, RULES.head + RULES.glove, was && was.head]];
+  const now = balls(other.points),
+    then = was && was.hips ? balls(was) : null;
+  now.forEach(([p, r], i) => out.push([p, r + RULES.glove, then && then[i][0]]));
+  return out.map(([p, r, p0]) => {
+    const q = mine(f, M.add(p, gone));
+    return [q, r, p0 ? M.sub(mine(f, p), mine(f, p0)) : [0, 0, 0], coming, left && M.sub(mine(f, [p[0] + gone[0] + left[0], p[1], p[2] + gone[2] + left[1]]), q)];
+  });
+}
+/* -> how far over the canvas ([x, z]) the dash boxer f is in has still to take his head and trunk, or null if he is in
+   none: what is left of its reach the way it goes (travel's curve: 30 u2 (1 - u)2 comes to u3 (10 - 15 u + 6 u2) of it by
+   u), and no nearer the other man than the two of them are kept apart (RULES.gap); and as far again as he is yet to be
+   thrown forward over his feet (DASH_LEAN: measured, his head 18 cm and his chest 15 further ahead of his place a tenth
+   of a second in than at its start, and back by its end). The duck in under a punch is a dash too, of its own length. */
+const DASH_LEAN = { far: 0.16, by: 0.4 };
+function dashLeft(f, other) {
+  const a = f.action;
+  if (!a || (a.name !== 'dash' && a.name !== 'duckIn')) return null;
+  // (a duck in goes in the same way, over its own stretch and as far as it was begun for: travel)
+  const duck = a.name === 'duckIn',
+    u = duck ? Math.min(1, Math.max(0, (a.t - GO.inFrom - a.level.entry.seam) / GO.inTime)) : Math.min(1, a.t / (MOVES.dash.dur * 0.85)),
+    reach = duck ? a.reach : f.k.dash * (0.78 + 0.22 * fatigue(f)),
+    [gx, gz] = a.go,
+    rx = f.x - other.x,
+    rz = f.z - other.z,
+    along = rx * gx + rz * gz,
+    // (how far along his way he comes to that near the other man, if he does)
+    inside = along * along - (rx * rx + rz * rz - RULES.gap * RULES.gap),
+    until = inside > 0 && along < 0 ? Math.max(0, -along - Math.sqrt(inside)) : Infinity,
+    far = Math.min(until, reach * (1 - u * u * u * (10 - 15 * u + 6 * u * u))) + (duck ? 0 : DASH_LEAN.far * Math.max(0, 1 - u / DASH_LEAN.by));
+  return [gx * far, gz * far];
+}
 // solve boxer i for this step, and find his gloves and head on the canvas
 function solvePose(bout, f, i, dt) {
   const pose = f.animator.update(viewOf(bout, i), dt);
@@ -1839,7 +1887,8 @@ function strike(bout, f, other, who, dt) {
     // (and so does a legend after his block and fire, his other hand's hook to follow, and a man who hooks out of his shell, his
     // body uppercut to follow: anim/clean.mjs)
     chase = !!(action.loaded && action.loaded.fired && action.loaded.fired.fire.follow !== null),
-    after = move.close >= RULES.inside ? (dirty || chase ? 0.75 : action.shellOut ? action.shellOut.chase : 0) : 0,
+    // (but not a show-off with the other man's neck in his lead hand, sat back against it: anim/show.mjs COLLAR)
+    after = move.close >= RULES.inside && !action.collared ? (dirty || chase ? 0.75 : action.shellOut ? action.shellOut.chase : 0) : 0,
     // (and a man whose foot is stood on can hardly be moved off it)
     push = (worth / RULES.mass) * RULES.shove * (other.pinned > 0 ? 0.3 : 1) * (spot ? RULES.body.shove : 1);
   other.kx += dir[0] * push;
@@ -1988,17 +2037,24 @@ function paws(bout, f, other, who) {
 }
 
 /* A show-off's lead hand behind the other man's neck (anim/show.mjs: collar): when it gets there, it pulls his head forward
-   and down into the uppercut (his body's: animator.pulled) until it lets go. Only if it gets there. */
+   and down into the uppercut (his body's: animator.pulled) until the uppercut gets there, and then no longer hauls on it (the
+   blow has his head; the hand comes off a moment later). Only if it gets there. */
 function collars(bout, f, other, who) {
   const action = f.action;
+  if (action && action.variant === 'collar' && action.collared && !action.collared.done && action.chain && action.chain.thrownAt >= 0) {
+    action.collared.done = true;
+    other.animator.pulled && other.animator.pulled({ go: true, free: COLLAR.free });
+  }
   if (!action || action.variant !== 'collar' || action.collared || other.down || !other.points || action.t > COLLAR.reach * 2.5) return;
   if (Math.hypot(...M.sub(f.points.L, napeOf(other))) > RULES.glove + 0.04) return;
-  action.collared = { at: bout.t };
+  action.collared = { at: bout.t, t: action.t };
   const to = [f.x - other.x, f.z - other.z],
     // (toward the man pulling him, in his own terms)
     [x, z] = local(other, to[0], to[1]),
-    l = Math.hypot(x, z) || 1;
-  other.animator.pulled && other.animator.pulled({ dir: [x / l, z / l], d: COLLAR.pull, time: COLLAR.time });
+    l = Math.hypot(x, z) || 1,
+    // (as hard as the puller's grade hauls: [4암, 5암])
+    n = Math.max(0, (((action.level && action.level.form) || {}).dirty || 1) - 1);
+  other.animator.pulled && other.animator.pulled({ dir: [x / l, z / l], d: COLLAR.pull[Math.min(n, COLLAR.pull.length - 1)], time: COLLAR.time });
   bout.events.push({ type: 'collar', who, on: 1 - who, t: +action.t.toFixed(3) });
 }
 

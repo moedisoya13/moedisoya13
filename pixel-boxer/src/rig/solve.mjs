@@ -16,7 +16,10 @@
                          as near that as will do), punch (a punch on its way), chest (how locked to the chest it is, 0..1:
                          moves.mjs lc, rc), room (how far it is put down in the room, 0..1: lg, rg), apart: { was, most }
                          (how far it was put off where it was sent last frame, to keep its glove out of the other arm, as
-                         solve() gave it in apart, and how many metres that may change by this frame) } },
+                         solve() gave it in apart, and how many metres that may change by this frame), soft (metres: its
+                         glove is put off his own head and trunk from so far short of touching, by degrees, not only once
+                         it is in them; left out, 0), stay (a hand the shoulder cannot put where it is sent by any way
+                         round is left where it is sent, not put out toward where a guard holds it) } },
        stretch }
    solve(stance) -> { root, rot: { Joint: 3x3 local }, stretch, at: { Joint: where it is, in his space }, head (the middle
                       of the head), round: { L, R }, arms: { L, R } (each upper arm's way as the chest sees it, mirrored
@@ -28,6 +31,8 @@
                       arm, what that did to its glove, and how much that changed this frame, as the chest sees it: { at,
                       glove, step }, metres, or null) }
    centre(pose) -> his centre of mass, in his space as he is drawn (stretched about the canvas).
+   armEnd(shoulder, target, ease) -> where an arm puts a wrist sent to target (no nearer the shoulder than it folds, no
+                      further than it reaches; ease: slowed up to the fold over so many metres).
 
    The body is held inside what it can do (body.mjs), whatever it is asked: a heel that lifts turns the foot on its ball, so
    the ankle rises and the toes stay on the canvas, and nothing of the foot goes under it; a foot follows its shin when the
@@ -102,6 +107,8 @@ const KEEP = {
 /* The middle joint of a two-bone limb. A target past the limb's length is brought back onto it, but softly: the last few
    centimetres of reach are approached, never hit, so a fully thrown punch does not lock the elbow with a click (a leg's
    last two: a leg is straightened, and a knee that cannot bend the way it is asked to stays straight). */
+// (how near its root a limb's end may be put, of its whole length: an arm; a leg is given its own)
+const FOLD = 0.42;
 function twoBone(a, target, l1, l2, pole, least, give) {
   const v = M.sub(target, a),
     d = len(v),
@@ -110,7 +117,7 @@ function twoBone(a, target, l1, l2, pole, least, give) {
     knee = full - soft,
     /* (nor is it ever folded right up: a wrist on top of its own shoulder leaves the elbow nowhere in particular to be; a
        leg folds as far as a knee does) */
-    want = Math.max(least ?? 0.42 * full, d <= knee ? d : knee + soft * (1 - Math.exp(-(d - knee) / soft)) - 1e-3),
+    want = Math.max(least ?? FOLD * full, d <= knee ? d : knee + soft * (1 - Math.exp(-(d - knee) / soft)) - 1e-3),
     dir = norm(v, [0, -1, 0]),
     along = (l1 * l1 - l2 * l2 + want * want) / (2 * want),
     out = Math.sqrt(Math.max(0, l1 * l1 - along * along)),
@@ -189,6 +196,19 @@ export const LEN = {
 const FOLDED = Math.sqrt(LEN.thigh ** 2 + LEN.shin ** 2 - 2 * LEN.thigh * LEN.shin * Math.cos((RANGE.kneeFolded + 4) * RAD));
 const SPINE = ['Hips', 'Spine1', 'Spine2', 'Chest', 'Neck1', 'Head', 'LeftShoulder', 'RightShoulder'];
 
+/* Where an arm puts a wrist sent to `target` from a shoulder at `a`, before any of its rules: no nearer its shoulder than a
+   folded arm lets it be (a hand asked for right in front of the shoulder is put out ahead of it), and no further than it
+   reaches. For whoever has to know where a hand will be before it is solved (anim/animator.mjs: a taunt's room). ease: come
+   up to the fold over that many metres and not stopped dead at it (a hand taken in toward its shoulder at speed is slowed
+   to nothing there, not halted in a frame: what a taunt's hands are given). */
+// (how near its shoulder an arm puts a wrist: folded right up)
+export const FOLDED_ARM = FOLD * (LEN.upperArm + LEN.foreArm);
+export const armEnd = (a, target, ease = 0) => {
+  const v = M.sub(target, a),
+    d = len(v),
+    least = FOLDED_ARM;
+  return twoBone(a, ease > 0 && d < least + ease ? M.add(a, M.scale(norm(v, [0, -1, 0]), least + ease * Math.exp((d - least - ease) / ease))) : target, LEN.upperArm, LEN.foreArm, [0, -1, 0]).end;
+};
 /* Where an elbow is round its arm: the angle of its offset from the line from shoulder to wrist, measured from the chest's up
    (as tools/audit.mjs measures it). */
 export function roundOf(shoulder, elbow, wrist, chestUp) {
@@ -335,7 +355,9 @@ export function solve(stance) {
           const t = M.add(shoulder, M.scale(norm(M.lerp(from, way, k / 20)), l));
           if (reachable(t)) return t;
         }
-      return M.add(shoulder, M.scale(ways[ways.length - 1], l));
+      /* (and if none will, out toward where a guard's hand is, at its full length; or, a hand that stays (hand.stay), where
+         it is sent: a hand on its way home from a taunt, put out so, was thrown 59 cm in a frame and back) */
+      return hand.stay ? at : M.add(shoulder, M.scale(ways[ways.length - 1], l));
     };
     const sent = target;
     // (the arm solved to the target, if it is in reach as it is; else brought round, or, tried only as it is sent, not had)
@@ -360,10 +382,13 @@ export function solve(stance) {
         k = clamp(dot(M.sub(glove, P.Hips), trunk) / dot(trunk, trunk), 0, 1),
         spine0 = M.add(P.Hips, M.scale(trunk, k));
       let push = [0, 0, 0];
+      /* (a hand sent softly, hand.soft = m, is put off from m short of touching: by (most + m - l)^2 / 4m there, as far as
+         ever out of him, and not set against him at once the frame it touches: once, the first time round) */
+      const m = hand.soft && pass === 0 ? hand.soft : 0;
       for (const [from, most] of [[head, KEEP.head], [spine0, KEEP.trunk]]) {
         const d = M.sub(glove, from),
           l = len(d);
-        if (l < most) push = M.add(push, M.scale(norm(d, [s, 0, 0]), most - l));
+        if (l < most + m) push = M.add(push, M.scale(norm(d, [s, 0, 0]), m > 0 && l > most - m ? ((most + m - l) * (most + m - l)) / (4 * m) : most - l));
       }
       if (glove[1] + push[1] < GLOVE.r) push[1] = GLOVE.r + 0.004 - glove[1];
       if (len(push) < 1e-4) break;

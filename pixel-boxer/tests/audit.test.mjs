@@ -3,7 +3,7 @@
    and how far it may go, so that one getting worse, or anything new, still fails. */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { audit, auditor, SCRIPTS, LIMIT, JUMP, JUMPING, KNOCKED, GETUP, GETTING_UP } from '../src/audit.mjs';
+import { audit, auditor, SCRIPTS, LIMIT, JUMP, JUMPING, KNOCKED, GETUP, GETTING_UP, STRAY } from '../src/audit.mjs';
 import { createMatch, stepMatch } from '../src/game/match.mjs';
 import { PLANS } from '../src/game/brain.mjs';
 import { loadout } from '../src/game/profile.mjs';
@@ -165,4 +165,15 @@ test('audit: a joint jumping as he gets up is measured, apart from what is held'
   assert.ok(c && c.frames > 300, `measured in ${c ? c.frames : 0} frames`);
   assert.equal(GETUP, 0.08);
   assert.ok(!(GETTING_UP in found));
+});
+
+/* A glove not punching inside the other man's head (src/audit.mjs STRAY) is watched and not held, the same way: the engine
+   as it was before it was measured already put one there, mostly the guards of two men right up close (228 frames in 16
+   groups of scripts, 18.6 cm at worst, at 7fa3003), and tools/audit.mjs prints where. A taunt's hand is held to more than
+   this in tests/show.test.mjs (5 cm off him, and none in him in seeded bouts). */
+test('audit: a glove not punching in the other man\'s head is measured, apart from what is held', () => {
+  const { found, watched } = audited(),
+    c = watched[STRAY];
+  assert.ok(c && c.frames > 10000, `measured in ${c ? c.frames : 0} frames`);
+  assert.ok(!(STRAY in found));
 });

@@ -218,7 +218,9 @@ export const SHOWOFF = TRICKS.flatMap(tq =>
 /* The show-off's taunts (anim/show.mjs, docs/moves-plan-4.md §5.4), at every grade side by side: the script names the taunt
    (in a real bout his dice do), and only 4암 and 5암 have them; the rest stand there. Standing ones are named at a moment of
    the loop; the shrug once he has slipped the other man's jab and is out of it, and the tap of the chin once a jab from long
-   range has landed and he has got over it. */
+   range has landed and he has got over it. The beckon is done from 1.2 m (centre to centre), where there is room for the
+   whole of its long arm at the height of his face (docs/moves-plan-6.md §3.4 N19): nearer, it reaches only as far as there
+   is room (anim/show.mjs ROOM; from 1.0 m some 19 cm ahead of his guard instead of 29, from 0.9 m some 9). */
 const quiet = id => (bout, t) => {
   const f = bout.fighters[0],
     own = (f.cues = f.cues || {});
@@ -229,7 +231,7 @@ const quiet = id => (bout, t) => {
   return ['taunt', id];
 };
 export const TAUNT_ROWS = [
-  { id: 'beckon', name: '손짓', en: 'Beckon' },
+  { id: 'beckon', name: '손짓', en: 'Beckon', gap: 1.2 },
   { id: 'chinOut', name: '턱 내밀기', en: 'Chin out' },
   { id: 'wind', name: '풍차', en: 'Windmill' },
   { id: 'shrug', name: '어깨 으쓱', en: 'Shrug', punch: ['jab', 0.8], slip: true },

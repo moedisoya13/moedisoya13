@@ -4,7 +4,8 @@
                 about itself): elbow, shoulder, knee, hip, ankle, spine, neck; limbs changing length; a joint flipping over
                 between frames
      contact    anything under the canvas; a man's own glove inside his trunk or head, or inside his other arm (its elbow,
-                its forearm, its upper arm: rig/body.mjs ARM); one man inside the other
+                its forearm, its upper arm: rig/body.mjs ARM); one man inside the other; and, watched and not yet held, a
+                glove that is not punching inside the other man's head
      dynamics   the centre of mass: falling faster than gravity, thrown upward, standing where he would topple; how fast the
                 waist turns on the pelvis (rig/body.mjs: RATE), and how fast the joints of a punch turn; a glove knocked
                 by being kept out of his other arm (JUMP); and, watched and not yet held, a glove jumping, its hand not
@@ -73,6 +74,14 @@ export const GETTING_UP = 'a joint jumping as he gets up (cm in a frame)';
    glove as drawn that the check is about; the solver is still told its own push the next frame: anim/animator.mjs,
    rockedArms.) */
 export const KNOCKED = 'a glove knocked by being kept out of his other arm (m/s of velocity changed in a frame)';
+/* Watched too: a glove that is not punching (its hand not busy, as below: not throwing, not reaching for the other man, not
+   put out fresh to meet a punch) inside the other man's head, held to what any other part of him is (a glove inside the
+   other man, 8 cm), unless the man it is on is down. A glove meeting a head is otherwise let through, as a punch landing; a
+   hand only held up, or sent out in a taunt, is not a punch. Measured on the engine as it was before the taunts were given
+   room (docs/moves-plan-6.md §3.4 N19: anim/show.mjs ROOM), it was already broken in 228 frames of 16 groups of scripts,
+   18.6 cm at worst (mostly the guards of two men right up close, and the guard of a man a body punch is coming up under),
+   so it is watched and not held. */
+export const STRAY = "a glove not punching inside the other man's head (cm)";
 // (a show-off's lead hand sent for the other man while the rear one throws: anim/animator.mjs REACHING)
 const REACHING = ['pawDown', 'pawUp', 'collar'];
 export { LIMIT };
@@ -422,7 +431,18 @@ export function auditor(o) {
       for (const [na, ra] of SOLID)
         for (const [nb, rb] of SOLID) {
           const glove = na.startsWith('glove') || nb.startsWith('glove');
-          if (glove && (na === 'head' || nb === 'head' || (na.startsWith('glove') && nb.startsWith('glove')))) continue; // (that is a punch landing, or a guard)
+          // (a glove in his head: a punch landing, watched where the hand is not punching; a glove on a glove: a guard)
+          if (glove && (na === 'head' || nb === 'head')) {
+            const i = na === 'head' ? 1 : 0,
+              f = bout.fighters[i],
+              S = (i === 0 ? na : nb).slice(5),
+              depth = ra + rb - dist(now[0].at[na], now[1].at[nb]),
+              doing = f.action ? f.action.name : f.cover ? 'cover' : 'guard';
+            if (now[i].busy && !now[i].busy[S] && !f.down && !(MOVES[doing] && MOVES[doing].floor) && !(only && !only.includes(doing)))
+              watch(STRAY, depth * 100, { script: entry.id, t: +(tick * DT).toFixed(3), who: i, part: S.toLowerCase() + ' glove', doing }, depth > 0.08);
+            continue;
+          }
+          if (glove && na.startsWith('glove') && nb.startsWith('glove')) continue;
           const depth = ra + rb - dist(now[0].at[na], now[1].at[nb]),
             doing = [0, 1].map(i => (bout.fighters[i].action ? bout.fighters[i].action.name : 'guard')).join(' / ');
           if (only && !only.some(o => doing.includes(o))) continue;
@@ -430,7 +450,12 @@ export function auditor(o) {
         }
       if (!held) (prev2[0] = prev[0]), (prev2[1] = prev[1]), (prev[0] = now[0]), (prev[1] = now[1]), struck[0]++, struck[1]++;
     },
-    result: () => ({ found, watched, seen, falls, turning })
+    // (the watched ones in the order they are written above, whichever was first met; and any other after them, as met)
+    result: () => {
+      const ordered = {};
+      for (const k of [JUMPING, STRAY, ...Object.keys(watched)]) if (watched[k]) ordered[k] = watched[k];
+      return { found, watched: ordered, seen, falls, turning };
+    }
   };
 }
 

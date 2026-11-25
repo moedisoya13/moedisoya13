@@ -25,10 +25,11 @@
      lkx rkx           each knee turned round its leg from over the foot: in (negative), as a hook's pivot turns it, or out
      lk rk             how far each knee is pointed down at the canvas (1): a knee put down (the solver stops it there, on it)
      st                taller and thinner by this share
+     sh                both shoulders shrugged up, metres (the collarbones turned up: a shrug)
      aim               how much the punching hand is steered onto the target (0..1) */
 
 export const CHANNELS = ['hx', 'hy', 'hz', 'lean', 'tip', 'yaw', 'side', 'twist', 'waist', 'hp', 'hw', 'hr', 'lx', 'ly', 'lz', 'le', 'lc', 'lg', 'rx', 'ry', 'rz', 're', 'rc', 'rg',
-  'lfx', 'lfy', 'lfz', 'lfw', 'lfp', 'lk', 'rfx', 'rfy', 'rfz', 'rfw', 'rfp', 'rk', 'lkf', 'rkf', 'lkx', 'rkx', 'st', 'aim'];
+  'lfx', 'lfy', 'lfz', 'lfw', 'lfp', 'lk', 'rfx', 'rfy', 'rfz', 'rfw', 'rfp', 'rk', 'lkf', 'rkf', 'lkx', 'rkx', 'st', 'sh', 'aim'];
 
 // Orthodox guard: left foot and hand lead, chin down, weight on the balls of the feet.
 export const GUARD = {
@@ -50,10 +51,11 @@ const EASE = {
 };
 
 /* keys: [{ t, e (how this key is arrived at: io by default), ...channels }]. Every channel starts at zero and, unless the
-   move is `stay`, is back at zero by `dur`. */
-function compile(def) {
+   move is `stay`, is back at zero by `dur`. A taunt may have a second set, `whole`, written the same way: what his grade's
+   size does not shrink (where a hand has to get to: his own chin, all the way down), compiled into `whole.tracks`. */
+function tracksOf(keys, def) {
   const tracks = {};
-  for (const key of def.keys)
+  for (const key of keys)
     for (const ch of Object.keys(key)) {
       if (ch === 't' || ch === 'e') continue;
       if (!CHANNELS.includes(ch)) throw new Error(`Unknown channel ${ch}`);
@@ -63,7 +65,12 @@ function compile(def) {
     const last = track[track.length - 1];
     if (!def.stay && last[0] < def.dur) track.push([def.dur, 0, 'io']);
   }
-  return Object.assign({}, def, { tracks });
+  return tracks;
+}
+function compile(def) {
+  const out = Object.assign({}, def, { tracks: tracksOf(def.keys, def) });
+  if (def.whole) out.whole = { tracks: tracksOf(def.whole, def) };
+  return out;
 }
 export function sampleMove(move, t, out) {
   for (const ch in move.tracks) {
@@ -667,57 +674,88 @@ export const MOVES = Object.assign(
     hopCircle: { dur: 0.86, keys: [] },
     // (the wave, a clean great one's circling at the end of his reach: held as long as its button is, anim/clean.mjs)
     wave: { dur: 1, keys: [] },
-    /* ---- a show-off's taunts (anim/show.mjs, docs/moves-plan-4.md §5.4): no guard while they last, and anything he does puts
-       an end to them (game/bout.mjs). Written as the plan's lengths; a grade stretches and shrinks them (skill.mjs:
-       stance.show, long and size). */
-    // the lead glove held out and beckoned twice, palm up, the chin up at him, the rear hand let down
+    /* ---- a show-off's taunts (anim/show.mjs, docs/moves-plan-4.md §5.4, docs/moves-plan-6.md §3.4): no guard while they
+       last, and anything he does puts an end to them (game/bout.mjs). Written as the plan's lengths; a grade stretches and
+       shrinks them (skill.mjs: stance.show, long and size), all but what is written `whole`. The lead hand that a show-off
+       lets hang is taken up out of it over a taunt's first moments and let down again over its last (anim/animator.mjs);
+       `low`: a taunt done with it left hanging. `circles`: hands swung round (anim/show.mjs, windmill). */
+    /* the lead glove held out long at the height of his face and beckoned three times, palm up, the chin up at him, leant
+       back a little and open to him at the waist, the rear hand let down */
     beckon: {
+      taunt: true, dur: 0.85,
+      keys: [
+        { t: 0.22, lz: 0.46, ly: 0.12, lx: -0.04, le: 0.05, ry: -0.22, rz: -0.03, hp: -9, lean: -4, waist: 6 },
+        { t: 0.31, lz: 0.3, ly: 0.2 },
+        { t: 0.4, lz: 0.46, ly: 0.12 },
+        { t: 0.49, lz: 0.3, ly: 0.2 },
+        { t: 0.58, lz: 0.46, ly: 0.12 },
+        { t: 0.67, lz: 0.3, ly: 0.2, lx: -0.04, le: 0.05, ry: -0.22, rz: -0.03, hp: -9, lean: -4, waist: 6 }
+      ]
+    },
+    /* no guard at all: both hands let hang all the way down at his sides, the arms straight (whole: a legend's hang as far
+       as a great one's), the chin pushed out at him with the head a little ahead, and rocked from side to side */
+    chinOut: {
+      taunt: true, dur: 0.9, low: true,
+      whole: [
+        { t: 0.28, lx: 0.06, ly: -0.31, lz: 0, le: -0.25, rx: -0.12, ry: -0.62, rz: -0.1, re: -0.25 },
+        { t: 0.64, lx: 0.06, ly: -0.31, lz: 0, le: -0.25, rx: -0.12, ry: -0.62, rz: -0.1, re: -0.25 }
+      ],
+      keys: [
+        { t: 0.2, hp: -14, hz: 0.05, side: 4, hw: 10 },
+        { t: 0.4, hp: -14, hz: 0.05, side: -4, hw: -10 },
+        { t: 0.6, hp: -14, hz: 0.05, side: 4, hw: 10 },
+        { t: 0.76, hp: -9, hz: 0.03, side: 0, hw: 0 }
+      ]
+    },
+    /* the shrug: the hands thrown open out to his sides, palms up, the elbows kept in at his ribs, both shoulders up round
+       his ears, the head tipped and leant back, held a quarter of a second (the lead hand not drawn back at all, 2 cm
+       forward of where his guard holds it: drawn back 8 cm, its way out and home ran along the edge of where the
+       shoulder lets the upper arm point, 4 frames of the way out and 2 of the way home past it at his card's own
+       distance, and the arm, brought round and let go again, threw the glove 9 to 12 cm in a frame when the other man
+       had moved him; drawn back 3 it still came to that edge in a bout; from level with the guard it does not) */
+    shrug: {
       taunt: true, dur: 0.6,
       keys: [
-        { t: 0.14, lz: 0.2, ly: 0.04, lx: -0.04, le: 0.25, ry: -0.12, rz: -0.03, hp: -5 },
-        { t: 0.24, lz: 0.12, ly: 0.08, lx: -0.04, le: 0.25, ry: -0.12, rz: -0.03, hp: -5 },
-        { t: 0.33, lz: 0.2, ly: 0.04, lx: -0.04, le: 0.25, ry: -0.12, rz: -0.03, hp: -5 },
-        { t: 0.43, lz: 0.12, ly: 0.08, lx: -0.04, le: 0.25, ry: -0.12, rz: -0.03, hp: -5 },
-        { t: 0.5, lz: 0.16, ly: 0.05, lx: -0.04, le: 0.2, ry: -0.1, rz: -0.02, hp: -4 }
+        { t: 0.22, lx: 0.3, rx: -0.3, ly: -0.16, ry: -0.16, lz: 0.02, rz: 0.04, le: 0.25, re: 0.25, sh: 0.045, hp: 7, lean: -5 },
+        { t: 0.45, lx: 0.3, rx: -0.3, ly: -0.16, ry: -0.16, lz: 0.02, rz: 0.04, le: 0.25, re: 0.25, sh: 0.045, hp: 7, lean: -5 }
       ]
     },
-    // both hands let down, the chin pushed out at him and rocked from side to side
-    chinOut: {
-      taunt: true, dur: 0.7,
-      keys: [
-        { t: 0.15, ly: -0.26, ry: -0.24, lx: 0.05, rx: -0.05, lz: -0.04, hp: -10, hz: 0.02, side: 4, hw: 10 },
-        { t: 0.33, ly: -0.26, ry: -0.24, lx: 0.05, rx: -0.05, lz: -0.04, hp: -10, hz: 0.02, side: -4, hw: -10 },
-        { t: 0.5, ly: -0.26, ry: -0.24, lx: 0.05, rx: -0.05, lz: -0.04, hp: -10, hz: 0.02, side: 4, hw: 10 },
-        { t: 0.6, ly: -0.2, ry: -0.18, lx: 0.04, rx: -0.04, lz: -0.03, hp: -7, hz: 0.01, side: 0, hw: 0 }
-      ]
-    },
-    // the hands thrown open, palms up, the shoulders up round the ears (the head sunk between them)
-    shrug: {
-      taunt: true, dur: 0.4,
-      keys: [{ t: 0.12, e: 'out', lx: 0.14, rx: -0.14, ly: -0.12, ry: -0.12, lz: -0.06, rz: 0.03, le: 0.5, re: 0.5, hp: 7, lean: -3 }, { t: 0.28, lx: 0.14, rx: -0.14, ly: -0.12, ry: -0.12, lz: -0.06, rz: 0.03, le: 0.5, re: 0.5, hp: 7, lean: -3 }]
-    },
-    /* the windmill: the rear arm swung round once in front of his rear side, down, back, up and over, and on into the start
-       of a bolo punch (a circle kept in front of him: no shoulder swings a whole arm round behind)*/
+    /* the windmill: both fists rolled round in circles in front of him, the rear one first and the lead half a turn behind
+       it, the same way round, twice each, the circles standing up square to him a hand's depth apart so that neither glove
+       comes near the other arm; the waist rocked with the rear fist and the knees giving at the bottom of each of its turns;
+       the rear one goes on round into the start of a bolo punch, low in front (circles kept in front of him: no shoulder
+       swings a whole arm round behind) */
     wind: {
-      taunt: true, dur: 0.8,
+      taunt: true, dur: 1.0,
+      circles: {
+        R: { at: [-0.18, -0.18, 0.02], r: 0.21, from: 0.04, to: 0.8, turns: 2.4, home: 0.18, out: 0.14 },
+        L: { at: [0.15, -0.16, 0.16], r: 0.19, from: 0.2, to: 0.94, turns: 2, home: 0, out: 0.14 }
+      },
       keys: [
-        { t: 0.1, rx: -0.08, ry: -0.18, rz: 0.16, re: 0.2, yaw: 3 },
-        { t: 0.22, rx: -0.1, ry: -0.34, rz: 0.02, re: 0.2, yaw: 6 },
-        { t: 0.34, rx: -0.1, ry: -0.2, rz: -0.1, re: 0.2, yaw: 8 },
-        { t: 0.46, rx: -0.08, ry: -0.04, rz: 0.02, re: 0.2, yaw: 5 },
-        { t: 0.56, rx: -0.06, ry: -0.16, rz: 0.16, re: 0.2, yaw: 0 },
-        { t: 0.66, e: 'out', rx: -0.03, ry: -0.12, rz: 0.24, re: 0.15, yaw: -4, twist: 6 }
+        { t: 0.12, re: 0.25, le: 0.25, waist: 10, lkf: 0, rkf: 0 },
+        { t: 0.3, waist: -10, lkf: 6, rkf: 6 },
+        { t: 0.46, waist: 10, lkf: 0, rkf: 0 },
+        { t: 0.62, waist: -10, lkf: 6, rkf: 6 },
+        { t: 0.82, e: 'out', re: 0.2, le: 0.25, waist: 6, lkf: 2, rkf: 2, yaw: -4, twist: 6 }
       ]
     },
-    // the rear glove tapped on his own chin, twice, offering it, the lead hand let down
+    /* the rear glove drawn off his chin and tapped back onto it, three times, hard, the head nodding to each tap, the chin
+       pushed out to offer it; the lead hand left hanging. Where it taps is his chin whatever his size (whole); how far it is
+       drawn back, his size's */
     tapChin: {
-      taunt: true, dur: 0.5,
+      taunt: true, dur: 0.7, low: true,
+      whole: [
+        { t: 0.13, rx: -0.02, ry: -0.044, rz: 0.019 },
+        { t: 0.6, rx: -0.02, ry: -0.044, rz: 0.019 }
+      ],
       keys: [
-        { t: 0.1, rx: 0.04, ry: -0.04, rz: -0.02, re: 0.2, hp: -6, ly: -0.14 },
-        { t: 0.18, rx: 0.06, ry: -0.06, rz: -0.05, re: 0.2, hp: -6, ly: -0.14 },
-        { t: 0.26, rx: 0.04, ry: -0.04, rz: -0.02, re: 0.2, hp: -6, ly: -0.14 },
-        { t: 0.34, rx: 0.06, ry: -0.06, rz: -0.05, re: 0.2, hp: -6, ly: -0.14 },
-        { t: 0.42, rx: 0.03, ry: -0.03, rz: -0.01, re: 0.15, hp: -4, ly: -0.1 }
+        { t: 0.13, rx: -0.035, ry: -0.075, rz: 0.065, re: 0.15, hp: -10 },
+        { t: 0.21, e: 'in', rx: 0, ry: 0, rz: 0, hp: -5 },
+        { t: 0.3, rx: -0.035, ry: -0.075, rz: 0.065, hp: -10 },
+        { t: 0.38, e: 'in', rx: 0, ry: 0, rz: 0, hp: -5 },
+        { t: 0.47, rx: -0.035, ry: -0.075, rz: 0.065, hp: -10 },
+        { t: 0.55, e: 'in', rx: 0, ry: 0, rz: 0, hp: -5 },
+        { t: 0.6, rx: -0.014, ry: -0.03, rz: 0.026, re: 0.1, hp: -7 }
       ]
     },
     // arms up, mixed in for the winner

@@ -119,7 +119,7 @@
               the chin is pushed out, shoulder: degrees the lead shoulder is hunched up, roll: degrees it is turned in; taunt:
               the chance of a taunt { idle: every 16 half beats standing, evade: just after a punch has missed him, hit: just
               after one under 30 N·s has landed, hop: on the last hop moving away }, and long: how long a taunt lasts, times
-              the plan's, size: how big }
+              the plan's, size: how big (all but what a taunt writes whole: moves.mjs) }
    evade: how he gets his head out of the way (anim/evade.mjs; each 0 or 1 in the textbook unless said)
      flinch   seconds he flinches before anything of the evasion starts; wince: how much of a beginner's flinch shows (the
               gloves up in front of his own eyes, the head jerked back and turned away)
@@ -230,7 +230,7 @@ const LEGEND_DIRTY = Object.assign({}, LEGEND_CLEAN, { beat: false, weave: [0.06
    the chin out and the lead shoulder up; a great dirty fighter big and blatant about it, a legend all but still and then one big
    swing, and his taunts the shorter and smaller (§5.4) */
 const SHOW_4A = { drop: [0.03, -0.33, 0], swing: [0.06, 1.1, 0, 1], lean: 6, chin: 6, shoulder: 5, roll: 3, taunt: { idle: 0.3, evade: 0.25, hit: 0.2, hop: 0.6 }, long: 1.25, size: 1 };
-const SHOW_5A = { drop: [0.02, -0.31, 0.01], swing: [0.012, 0.8, 2.6, 4], lean: 6, chin: 4, shoulder: 4, roll: 2, taunt: { idle: 0.15, evade: 0.4, hit: 0.3, hop: 0.4 }, long: 1, size: 0.6 };
+const SHOW_5A = { drop: [0.02, -0.31, 0.01], swing: [0.012, 0.8, 2.6, 4], lean: 6, chin: 4, shoulder: 4, roll: 2, taunt: { idle: 0.15, evade: 0.4, hit: 0.3, hop: 0.4 }, long: 1, size: 0.75 };
 
 /* The cross-arm guard (anim/show.mjs: crossGuard; docs/moves-plan-5.md §4A), the classic one (Archie Moore, Ken Norton,
    Foreman): the rear glove up at the chin, the lead forearm laid across the belly, side on behind the lead shoulder. The head

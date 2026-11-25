@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /* The physics audit (src/audit.mjs), printed: for each check, how often it is broken and the worst case (which script, when,
    who, doing what), how deep a man's own glove went into his other arm in each action, broken or not, and, under "watched",
-   what is measured and not yet held (src/audit.mjs: a glove jumping, script group by script group).
+   what is measured and not yet held (src/audit.mjs: a glove jumping, and a glove not punching inside the other man's head,
+   script group by script group).
    tests/audit.test.mjs runs the same audit and holds it to nothing broken.
      node tools/audit.mjs                       the summary
      node tools/audit.mjs --all                 every action a check was broken in, not just the five it was broken in most
@@ -46,8 +47,9 @@ for (const [check, c] of rows) {
     }
   }
 }
-/* (watched, not held: a glove jumping, its hand not punching, parrying or pawing. How many frames break it and the worst, and
-   script group by script group, frames and the worst m/s: what is to be mended, and what a stage's audit is compared by) */
+/* (watched, not held: a glove jumping, its hand not punching, parrying or pawing; a glove not punching in the other man's
+   head. How many frames break each and the worst, and script group by script group, frames and the worst: what is to be
+   mended, and what a stage's audit is compared by) */
 for (const [check, c] of Object.entries(watched)) {
   if (!c.bad) {
     console.log(`\nwatched, not held: ${check}: nowhere`);

@@ -5,21 +5,23 @@
    the plan's §4A.10, and the roll & counter to §4A.7. */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { step, crossOf } from '../src/game/bout.mjs';
+import { step, crossOf, RULES } from '../src/game/bout.mjs';
 import { freshBout, drive, HOME } from '../src/footwork.mjs';
 import { RANGE, THROW, CROSS_BODY, CROSS_BODY_ROWS, ROLLING } from '../src/defense.mjs';
 import { LEVELS, LEVEL, CROSS, ROLL } from '../src/anim/skill.mjs';
 import { aimAt } from '../src/bodyshots.mjs';
-import { where } from '../src/game/trunk.mjs';
+import { where, balls } from '../src/game/trunk.mjs';
 import { local } from '../src/game/bout.mjs';
-import { audit, measure } from '../src/audit.mjs';
+import { audit, measure, JUMP } from '../src/audit.mjs';
 import { fk } from '../src/rig/skeleton.mjs';
 import { run, rung } from '../src/measure.mjs';
-import { STANCES, SHOWOFF, TAUNTING } from '../src/ladder.mjs';
+import { STANCES, SHOWOFF, TAUNTING, AT } from '../src/ladder.mjs';
 import { WINDOWS } from '../src/windows.data.mjs';
 import * as M from '../src/rig/m3.mjs';
 import { createBout, settle } from '../src/game/bout.mjs';
-import { choose } from '../src/anim/show.mjs';
+import { createMatch, stepMatch } from '../src/game/match.mjs';
+import { choose, COLLAR } from '../src/anim/show.mjs';
+import { GLOVE, HEAD } from '../src/rig/body.mjs';
 import { MOVES } from '../src/anim/moves.mjs';
 import { createChain, stepChain } from '../src/phys/chain.mjs';
 import { dice } from '../src/anim/stance.mjs';
@@ -586,7 +588,56 @@ test('paw down / paw up: the lead hand moves his glove first, and the punch that
 });
 
 /* The collar: the lead hand round his head to the back of his neck (a 'collar' event: only when it gets there), his head
-   coming down toward the uppercut as it goes up, and the uppercut harder for it than the same one pressed plain. */
+   coming down toward the uppercut as it goes up, and the uppercut harder for it than the same one pressed plain. And, seen
+   to be hauled on (docs/moves-plan-6.md §3.4 N18): from the catch to the landing, a tenth of a second and more, his head comes
+   toward the man pulling and down by 14 cm (4암) and 10 cm (5암) and more, the glove is on the back of his neck (its surface
+   within 6 cm of the point the bout judges it by) 7 and 5 frames and more, the pulling arm is bent (its elbow, catch to
+   landing, 135 degrees or less: the arm held out straight to the neck was at 160), his neck goes down no further than 35
+   degrees, and the uppercut is no more than 1.25 times what it was before it was hauled on like this (93.7 and 105.0
+   newton-seconds, measured at 4c726b9). */
+const HAULED = { '4a': { head: 0.14, frames: 7, was: 93.7 }, '5a': { head: 0.1, frames: 5, was: 105.0 } };
+function hauled(lv) {
+  const e = SHOWOFF.find(x => x.id === `collar@${lv}`),
+    bout = freshBout(e),
+    [a, b] = bout.fighters,
+    out = { near: 0, elbows: [], neck: -Infinity };
+  let caught = null;
+  for (let i = 0; i < Math.round(e.loop / DT); i++) {
+    step(bout, drive(e, bout, i * DT, DT), DT);
+    b.hp = 1000;
+    a.hp = Math.max(a.hp, 1000);
+    const h = b.points.head,
+      nape = [h[0] - Math.sin(b.yaw) * COLLAR.nape[0], h[1] - COLLAR.nape[1], h[2] - Math.cos(b.yaw) * COLLAR.nape[0]];
+    if (Math.hypot(...M.sub(a.points.L, nape)) - GLOVE.r <= 0.06) out.near++;
+    out.neck = Math.max(out.neck, measure(b).angles.NeckForward);
+    for (const ev of bout.events) {
+      if (ev.type === 'collar' && ev.who === 0) (caught = i), (out.from = h.slice()), (out.me = [a.x, a.z]);
+      if (ev.type === 'hit' && ev.who === 0 && !out.hit) (out.hit = ev), (out.dt = caught === null ? null : (i - caught) * DT);
+    }
+    if (caught !== null && !out.hit) (out.elbows.push(measure(a).angles.LeftElbow), (out.to = h.slice()));
+  }
+  if (out.from && out.to) {
+    const toMe = [out.me[0] - out.from[0], out.me[1] - out.from[2]],
+      l = Math.hypot(...toMe),
+      ahead = ((out.to[0] - out.from[0]) * toMe[0] + (out.to[2] - out.from[2]) * toMe[1]) / l;
+    out.came = Math.hypot(Math.max(0, ahead), Math.max(0, out.from[1] - out.to[1]));
+  }
+  return out;
+}
+test('collar: the neck is seen to be hauled on: his head comes in and down, the hand stays on it, the arm bends; no more than 1.25 times the uppercut', () => {
+  for (const lv of SHOW) {
+    const h = hauled(lv),
+      want = HAULED[lv],
+      elbow = h.elbows.reduce((s, x) => s + x, 0) / h.elbows.length,
+      say = `collar@${lv}: ${JSON.stringify({ came: h.came, near: h.near, elbow, neck: h.neck, J: h.hit && h.hit.J, dt: h.dt })}`;
+    assert.ok(h.dt >= 0.1 - 1e-9, say);
+    assert.ok(h.came >= want.head, say);
+    assert.ok(h.near >= want.frames, say);
+    assert.ok(elbow <= 135, say);
+    assert.ok(h.neck <= 35, say);
+    assert.ok(h.hit && h.hit.J <= want.was * 1.25, say);
+  }
+});
 test('collar: the lead hand catches the back of his neck, pulls his head down into the uppercut, and it lands harder', () => {
   for (const lv of LEVELS) {
     const t = trick('collar', lv),
@@ -607,6 +658,39 @@ test('collar: the lead hand catches the back of his neck, pulls his head down in
       p = run(plain).frames.flatMap(f => f.events).find(ev => ev.who === 0 && ev.type === 'hit');
     assert.ok(hit.J > p.J, `collar@${lv}: ${hit.J} N·s against ${p.J} plain`);
   }
+});
+
+/* The collar off its card's spot: the other man stood anywhere about the distance the hand catches the back of his neck
+   from (the card's 0.74 m, 0.715 to 0.745 centre to centre: not much nearer and it is an uppercut alone, a little further
+   and the hand does not get there) and up to 12 cm to either side, at either grade: wherever it catches, and wherever it
+   does not, the whole of it is within the physics audit, with no exception (hauled in, the other man's guard is where the
+   uppercutting shoulder comes up and the blow knocks it open: anim/show.mjs COLLAR, tuck; that went 8 to 15 cm into the
+   shoulder, the audit's 8 the limit). And it catches over all of that band but straight in front at its nearest (an
+   uppercut alone) and at its furthest corners. And a hand that never gets there, the other man stepping back from it to
+   0.9 or 1.0 m as it goes (as he may in a bout, game/match.mjs): an uppercut and nothing else, within the audit too. */
+test('collar: off the card\'s spot, nearer, further and to either side, it is within the audit wherever it catches', () => {
+  const broken = [],
+    missed = [];
+  for (const lv of SHOW)
+    for (const gap of [0.715, 0.725, 0.735, 0.745])
+      for (const side of [-0.12, -0.06, 0, 0.06, 0.12]) {
+        const e = Object.assign({}, SHOWOFF.find(x => x.id === `collar@${lv}`), { id: `collar@${lv} ${gap} ${side}`, him: t => (t < 0.75 ? [HOME[0] + gap, HOME[1] + side] : null) }),
+          { found } = audit([e]);
+        for (const [check, c] of Object.entries(found)) if (c.bad) broken.push(`${e.id}: ${check} ${c.worst.value.toFixed(1)} at ${c.worst.t}, ${c.worst.who}`);
+        if (!fight(e).some(ev => ev.type === 'collar' && ev.who === 0) && !(gap < 0.72 && Math.abs(side) < 0.1) && !(gap > 0.74 && Math.abs(side) > 0.1)) missed.push(e.id);
+      }
+  const away = [];
+  for (const lv of SHOW)
+    for (const back of [0.9, 1.0]) {
+      const e = Object.assign({}, SHOWOFF.find(x => x.id === `collar@${lv}`), { id: `collar@${lv} stepped back to ${back}`, him: t => (t < AT ? [HOME[0] + 0.74, HOME[1]] : t < AT + 0.4 ? [HOME[0] + back, HOME[1]] : null) }),
+        events = fight(e),
+        { found } = audit([e]);
+      for (const [check, c] of Object.entries(found)) if (c.bad) broken.push(`${e.id}: ${check} ${c.worst.value.toFixed(1)} at ${c.worst.t}, ${c.worst.who}`);
+      if (events.some(ev => ev.type === 'collar') || !events.some(ev => ev.type === 'punch' && ev.who === 0)) away.push(`${e.id}: ${events.map(ev => ev.type).join(' ')}`);
+    }
+  assert.deepEqual(broken, []);
+  assert.deepEqual(missed, []);
+  assert.deepEqual(away, []);
 });
 
 /* The elbow: the cross thrown past the side of his head, and what lands is the elbow coming on behind it, inside the cross's
@@ -643,7 +727,7 @@ const taunted = (id, lv) => {
   return (taunts[key] = { frames, events, on: frames.filter(f => f.action === id).length, said: events.filter(ev => ev.type === 'taunt' && ev.who === 0) });
 };
 test('taunts: the five are a show-off\'s alone, a great dirty fighter\'s the longer, and each has his hands off his guard', () => {
-  const LONG = { beckon: 0.6, chinOut: 0.7, shrug: 0.4, wind: 0.8, tapChin: 0.5 };
+  const LONG = { beckon: 0.85, chinOut: 0.9, shrug: 0.6, wind: 1.0, tapChin: 0.7 };
   for (const id of Object.keys(LONG)) {
     for (const lv of others) assert.equal(taunted(id, lv).said.length, 0, `${id}@${lv}`);
     for (const lv of SHOW) {
@@ -682,6 +766,457 @@ test('taunts: anything he does puts an end to one, and the last hop moving away 
     for (const ev of b2.events) if (ev.type === 'taunt' || ev.type === 'hopPivot') names.push(`${i} ${ev.type}`);
   }
   assert.ok(names.length === 2 && names[1].endsWith('taunt') && +names[1].split(' ')[0] >= 40, names.join(', '));
+});
+
+/* ---- the taunts made showier (docs/moves-plan-6.md §3.4, N19-N23: the catalogue's memos), measured on his own body (the
+   pose's terms: x to his left, y up, z ahead) frame by frame through the catalogue's rows. The numbers are the plan's, which
+   are a great dirty fighter's (4암: size 1); a legend's taunts are 0.75 the size (skill.mjs SHOW_5A), so where a number is
+   an amount of the taunt's own (a reach, a swing, a spread) his is held to 0.75 of it; where it is where a hand has to get
+   to (his chin, all the way down) it is the same. */
+const posed = {};
+function poseOf(id, lv) {
+  const key = `${id}@${lv}`;
+  if (posed[key]) return posed[key];
+  const e = TAUNTING.find(x => x.id === key),
+    bout = freshBout(e),
+    a = bout.fighters[0],
+    frames = [];
+  for (let i = 0; i < Math.round(e.loop / DT); i++) {
+    step(bout, drive(e, bout, i * DT, DT), DT);
+    a.hp = Math.max(a.hp, 60);
+    const { R, p } = fk(a.pose),
+      glove = S => M.add(p[S + 'Hand'], M.scale(M.sub(p[S + 'Hand'], p[S + 'ForeArm']), GLOVE.ahead / Math.hypot(...M.sub(p[S + 'Hand'], p[S + 'ForeArm'])))),
+      chest = q => M.app(M.tr(R.Chest), M.sub(q, p.Chest)),
+      m = measure(a),
+      fwd = [R.Head[2], R.Head[5], R.Head[8]];
+    frames.push({
+      on: !!a.action && a.action.name === id,
+      L: glove('Left'),
+      R: glove('Right'),
+      // (the room's: what is seen to jump)
+      at: { L: a.points.L.slice(), R: a.points.R.slice(), head: a.points.head.slice() },
+      // (the chin: 8 cm under the middle of his head and 9 cm ahead of it, as his head is turned)
+      chin: M.add(p.Head, M.app(R.Head, M.add(HEAD, [0, -0.08, 0.09]))),
+      // (the head's nod: + down)
+      nod: (-Math.atan2(fwd[1], Math.hypot(fwd[0], fwd[2])) * 180) / Math.PI,
+      shoulders: [chest(p.LeftArm)[1], chest(p.RightArm)[1]],
+      elbows: [m.angles.LeftElbow, m.angles.RightElbow],
+      // (how far either glove is into his other arm, past the padding's give: the audit's own, rig/body.mjs gloveInArm)
+      self: Math.max(...m.arms.map(g => g.depth))
+    });
+  }
+  const on = frames.map((f, i) => (f.on ? i : -1)).filter(i => i >= 0);
+  return (posed[key] = { frames, during: on.map(i => frames[i]), first: on[0], last: on[on.length - 1], long: LEVEL[lv].stance.show.long });
+}
+const TAUNT_IDS = ['beckon', 'chinOut', 'wind', 'shrug', 'tapChin'];
+const sized = (lv, x) => x * LEVEL[lv].stance.show.size;
+const hyp = v => Math.hypot(v[0], v[1], v[2]);
+
+/* As a taunt begins and as it ends no glove jumps (the frame it starts on and the next, the frame it ends on and the two
+   after), and neither glove is in his other arm more than the audit's 2 cm in any frame of it (its own check: src/audit.mjs
+   measure, arms). */
+test('taunts: no glove jumps more than 2.5 cm as a taunt begins or as it ends; no glove in his other arm', () => {
+  for (const id of TAUNT_IDS)
+    for (const lv of SHOW) {
+      const { frames, during, first, last } = poseOf(id, lv),
+        step1 = (i, k) => hyp(M.sub(frames[i].at[k], frames[i - 1].at[k]));
+      // (the frame it starts on and the next, the frame it ends on and the next: the pose follows what he does a frame late)
+      for (const i of [first, first + 1, last, last + 1, last + 2])
+        for (const k of ['L', 'R']) assert.ok(step1(i, k) <= 0.025, `${id}@${lv}: the ${k} glove moves ${(step1(i, k) * 100).toFixed(1)} cm into frame ${i} (${first}-${last})`);
+      const worst = Math.max(...during.map(f => f.self));
+      assert.ok(worst <= 0.02, `${id}@${lv}: a glove ${(worst * 100).toFixed(1)} cm into his other arm`);
+    }
+});
+
+/* A taunting hand reaches only as far as there is room (docs/moves-plan-6.md §3.4 N19; anim/show.mjs ROOM). Each taunt at
+   either grade, done from 0.9, 1.0 and 1.05 m (centre to centre: the ordinary fighting distance; the beckon's card stands
+   at 1.2 to show the whole of its reach) and from right up close, 0.70, 0.72 and 0.75 m (where a guard would hold the lead
+   hand is at the other man's face there: the arm, asked for a hand close in front of its own shoulder, puts it out ahead);
+   with the other man stepping in on him during it, from the card's distance to 0.82 and to 0.70 m; and with a punch
+   thrown at him during it: a cross a third of the way into it (stepping in to 0.85 m, and standing at 1.0 and at 0.9 m)
+   and 0.4 of the way (stepping in to 0.8 m), an uppercut from 0.9 m early in it and half way (his head dips and comes
+   up where the hand is), and a hook to the body from 0.75 m at its start and a quarter of the way in (his head comes in
+   low, where a shrug's lead hand is on its way up). In every frame of the taunt each glove's surface is 5 cm and more
+   off his head and his trunk as a glove lands on them (game/bout.mjs RULES, game/trunk.mjs balls). A hand given way so is
+   not knocked: as his chest sees it, neither glove's velocity changes by more than the audit's JUMP in a frame of the
+   taunt (src/audit.mjs), and one that is let finish moves no more than 2.5 cm in its first and last frames. */
+const ROOMS = [
+  { tag: '0.70 m', at: 0.7 },
+  { tag: '0.72 m', at: 0.72 },
+  { tag: '0.75 m', at: 0.75 },
+  { tag: '0.9 m', at: 0.9 },
+  { tag: '1.0 m', at: 1.0 },
+  { tag: '1.05 m', at: 1.05 },
+  { tag: 'stepping in', to: 0.82 },
+  { tag: 'stepping in to 0.70 m', to: 0.7 },
+  { tag: 'stepping in and a cross', to: 0.85, hit: true },
+  { tag: 'stepping in to 0.8 m and a cross 0.4 of the way in', to: 0.8, hit: true, when: 0.4 },
+  { tag: 'a cross at 1.0 m', at: 1.0, hit: true },
+  { tag: 'a cross at 0.9 m', at: 0.9, hit: true },
+  { tag: 'an uppercut at 0.9 m, early', at: 0.9, hit: 'upper', when: 0.15 },
+  { tag: 'an uppercut at 0.9 m, half way', at: 0.9, hit: 'upper', when: 0.5 },
+  { tag: 'a hook to the body at 0.75 m, at the start', at: 0.75, hit: 'hookBody', when: 0.05 },
+  { tag: 'a hook to the body at 0.75 m, a quarter of the way in', at: 0.75, hit: 'hookBody', when: 0.25 }
+];
+function roomOf(id, lv, r) {
+  const card = TAUNTING.find(x => x.id === `${id}@${lv}`),
+    gap = card.him(0)[0] - HOME[0],
+    from = 0.5,
+    long = MOVES[id].dur * LEVEL[lv].stance.show.long,
+    e = Object.assign({}, card, {
+      hurt: false,
+      // (standing; or stepping back from some way into the taunt, which ends it)
+      me: t => (r.back !== undefined && t > from + long * r.back ? [HOME[0] - 0.3, HOME[1]] : HOME),
+      // (where he stands, or walks to, or slides to one side from; from a dash on, wherever it takes him)
+      him: t =>
+        r.dash !== undefined && t > from + long * r.dash
+          ? null
+          : r.side
+            ? [HOME[0] + r.side[0], HOME[1] + (t < from ? 0 : r.side[1] * Math.min(1, (t - from) / 0.5))]
+            : [HOME[0] + (r.at ?? (r.to === undefined || t < from + 0.05 ? gap : r.to)), HOME[1]],
+      // (a button of his own, some way into the taunt: it ends it)
+      press: r.press ? [[from + long * r.press[0], r.press[1], r.press[2]]] : [],
+      // (the power button, or the punch it is to be: a cross, by default, from there; or a dash straight at him)
+      against: r.hit ? [[from + long * (r.when ?? 1 / 3), 'power', r.hit]] : r.dash !== undefined ? [[from + long * r.dash, 'dash', [-1, 0]]] : [],
+      // (named at half a second, standing: the shrug's slip and the tap's jab left out)
+      cue: (bout, t) => {
+        const own = (bout.fighters[0].cues = bout.fighters[0].cues || {});
+        if (own.taunted || t < from) return null;
+        own.taunted = t;
+        return ['taunt', id];
+      }
+    });
+  // (the other man's grade, where it is not the card's)
+  if (r.his) {
+    const setup = card.setup;
+    e.setup = bout => {
+      if (setup) setup(bout);
+      bout.fighters[1].skills = { all: r.his };
+    };
+  }
+  const bout = freshBout(e),
+    [a, b] = bout.fighters,
+    frames = [];
+  for (let i = 0; i < Math.round(e.loop / DT); i++) {
+    step(bout, drive(e, bout, i * DT, DT), DT);
+    a.hp = Math.max(a.hp, 60);
+    b.hp = 1000;
+    const solid = [[b.points.head, RULES.head], ...balls(b.points)],
+      m = measure(a);
+    frames.push({
+      on: !!a.action && a.action.name === id,
+      idle: !a.action,
+      gap: Math.hypot(a.x - b.x, a.z - b.z),
+      clear: Math.min(...['L', 'R'].flatMap(k => solid.map(([c, rr]) => hyp(M.sub(a.points[k], c)) - rr - RULES.glove))),
+      at: { L: a.points.L.slice(), R: a.points.R.slice() },
+      chest: { L: m.gloves.Left, R: m.gloves.Right }
+    });
+  }
+  const on = frames.map((f, i) => (f.on ? i : -1)).filter(i => i >= 0);
+  return { frames, first: on[0], last: on[on.length - 1], hit: !!r.hit || r.dash !== undefined, entry: e };
+}
+test('taunts: a taunting hand reaches only as far as there is room, wherever they stand and however he comes in', () => {
+  const bad = [];
+  let seen = 0;
+  for (const id of TAUNT_IDS)
+    for (const lv of SHOW)
+      for (const r of ROOMS) {
+        const { frames, first, last, hit } = roomOf(id, lv, r),
+          say = `${id}@${lv}, ${r.tag}`;
+        if (first === undefined) {
+          bad.push(`${say}: no taunt`);
+          continue;
+        }
+        seen++;
+        const clear = Math.min(...frames.slice(first, last + 1).map(f => f.clear));
+        if (clear < 0.05) bad.push(`${say}: a glove ${(clear * 100).toFixed(1)} cm off him`);
+        for (let i = Math.max(first, 2); i <= last; i++)
+          for (const k of ['L', 'R']) {
+            const jump = hyp(M.add(M.sub(frames[i].chest[k], M.scale(frames[i - 1].chest[k], 2)), frames[i - 2].chest[k])) / DT;
+            if (jump > JUMP) bad.push(`${say}: the ${k} glove's velocity changes ${jump.toFixed(1)} m/s in frame ${i}`);
+          }
+        if (!hit)
+          for (const i of [first, first + 1, last, last + 1, last + 2])
+            for (const k of ['L', 'R']) {
+              const d = hyp(M.sub(frames[i].at[k], frames[i - 1].at[k]));
+              if (d > 0.025) bad.push(`${say}: the ${k} glove moves ${(d * 100).toFixed(1)} cm into frame ${i} (${first}-${last})`);
+            }
+      }
+  assert.deepEqual(bad, []);
+  assert.equal(seen, TAUNT_IDS.length * SHOW.length * ROOMS.length);
+});
+
+/* The other man dashing in at him during a taunt (game/bout.mjs: 0.58 m in seven frames from 1.2 m, and thrown forward over
+   his feet as he lands; where the dash ends is known from its first frame: dashLeft). Each taunt at either grade, he
+   dashing straight in from 1.2 m 0.3 of the way into it and from 1.0 m half way, and from 1.2 m 0.85 of the way in (he
+   lands in the taunt's last moments, as the hands are let back out for its end): the hands are hurried out of his way as
+   a guard is taken up (anim/show.mjs ROOM.rush) and give way where he ends right up against them, and in every frame of
+   the taunt each glove's surface is 5 cm and more off his head and trunk. (How hard a hand so hurried is thrown is not
+   held here: its glove's velocity changes by more than the audit's JUMP in a frame in three of the thirty, 4.1 m/s at
+   most, the beckon@4a's from 1.2 m; the punch-quick fold of the arm does that. Measured 2026-11-23.) */
+test('taunts: no taunting glove is in the way of a man who dashes in', () => {
+  const bad = [];
+  for (const id of TAUNT_IDS)
+    for (const lv of SHOW)
+      for (const r of [
+        { tag: 'a dash in from 1.2 m, 0.3 of the way in', at: 1.2, dash: 0.3, lands: true },
+        { tag: 'a dash in from 1.0 m, half way', at: 1.0, dash: 0.5, lands: true },
+        { tag: 'a dash in from 1.2 m, 0.85 of the way in', at: 1.2, dash: 0.85 }
+      ]) {
+        const { frames, first, last } = roomOf(id, lv, r);
+        assert.ok(first !== undefined, `${id}@${lv}, ${r.tag}: no taunt`);
+        // (and he did come: the two of them right up close before the taunt was over; the late one, on his way)
+        assert.ok(frames.slice(first, last + 1).some(f => f.gap < (r.lands ? 0.7 : 1.15)), `${id}@${lv}, ${r.tag}: he never came`);
+        const clear = Math.min(...frames.slice(first, last + 1).map(f => f.clear));
+        if (clear < 0.05) bad.push(`${id}@${lv}, ${r.tag}: a glove ${(clear * 100).toFixed(1)} cm off him`);
+      }
+  assert.deepEqual(bad, []);
+});
+/* And a legend's cross, as he steps in to 0.8 m, 0.2 and 0.45 of the way into the taunt: his head is where a guard would
+   hold the lead hand three frames after the punch starts. No taunting glove goes into him (the lead hand goes down to
+   where it hung, where there is room, and the reach is hurried in). */
+test("taunts: no taunting glove goes into a legend throwing his cross", () => {
+  const bad = [];
+  for (const id of TAUNT_IDS)
+    for (const lv of SHOW)
+      for (const when of [0.2, 0.45]) {
+        const { frames, first, last } = roomOf(id, lv, { to: 0.8, hit: true, when, his: '5a' }),
+          say = `${id}@${lv}, a legend's cross ${when} of the way in`;
+        assert.ok(first !== undefined, `${say}: no taunt`);
+        const clear = Math.min(...frames.slice(first, last + 1).map(f => f.clear));
+        if (clear < 0) bad.push(`${say}: a glove ${(-clear * 100).toFixed(1)} cm into him`);
+      }
+  assert.deepEqual(bad, []);
+});
+/* Hands the room has moved are not thrown about by it: what round 4 of this stage mended, each a room that broke before,
+   run for every taunt. A great man stepping in to 0.70 m, and he sliding 15 cm to one side from 0.8 m (the shrug's lead
+   arm ran along the edge of the shoulder's range and was let go 11 cm in a frame, 6.6 and 6.4 m/s), and a legend's cross
+   0.2 of the way in as he steps in to 0.8 m (the beckon's reach was set back at once, 8.6 m/s): no glove's velocity
+   changes by more than the audit's JUMP in a frame of the taunt, as his chest sees it. One room is watched, not held: the
+   windmill at 5a under the legend's cross (its lead glove 4.1 m/s in a frame as the cross begins), which the engine before
+   this stage breaks too (5.59 m/s in the same room), and whose mend cost clearance in other rooms: measured and printed
+   here, JUMP left as it is (the user's decision of 2026-11-24, src/pending.data.mjs u-wind-room). */
+const WATCHED_ROOM = (id, lv, r) => id === 'wind' && lv === '5a' && r.hit;
+test('taunts: a hand the room moves is not thrown about', t => {
+  const bad = [],
+    watched = { most: 0, frames: 0 };
+  for (const id of TAUNT_IDS)
+    for (const r of [
+      { tag: 'a great man stepping in to 0.70 m', to: 0.7, his: '5m' },
+      { tag: 'he slides 15 cm aside at 0.8 m', side: [0.8, -0.15] },
+      { tag: "a legend's cross 0.2 of the way in", to: 0.8, hit: true, when: 0.2, his: '5a' }
+    ])
+    for (const lv of SHOW) {
+      const { frames, first, last } = roomOf(id, lv, r);
+      assert.ok(first !== undefined, `${id}@${lv}, ${r.tag}: no taunt`);
+      for (let i = Math.max(first, 2); i <= last; i++)
+        for (const k of ['L', 'R']) {
+          const jump = hyp(M.add(M.sub(frames[i].chest[k], M.scale(frames[i - 1].chest[k], 2)), frames[i - 2].chest[k])) / DT;
+          if (WATCHED_ROOM(id, lv, r)) (watched.most = Math.max(watched.most, jump)), (watched.frames += jump > JUMP ? 1 : 0);
+          else if (jump > JUMP) bad.push(`${id}@${lv}, ${r.tag}: the ${k} glove's velocity changes ${jump.toFixed(1)} m/s in frame ${i}`);
+        }
+    }
+  t.diagnostic(`watched, not held: wind@5a under a legend's cross 0.2 of the way in, a glove's velocity changes ${watched.most.toFixed(2)} m/s in a frame at most (JUMP ${JUMP}), past JUMP in ${watched.frames} frame(s)`);
+  assert.deepEqual(bad, []);
+});
+/* A taunt cut short leaves his hands where it had them, and they come home no harder than a hand is moved (anim/animator.mjs
+   HOME): the chin-out's, hung all the way down by his thighs, above all. Cut half way by his own step back, and by the
+   other man's dash landing on him from 1.2 m, a fifth of the way in: over the twenty frames after it in which he does
+   nothing else, no glove's velocity changes by more than the audit's JUMP in a frame. (At the rate everything else is let
+   go of, a hand 60 cm from his guard starts home at 9 m/s in a frame; and an arm hanging straight, its elbow nowhere in
+   particular round it, was held back and let go 30 cm at once.) */
+test('taunts: a chin-out cut short comes back to his guard without a pop', () => {
+  const bad = [];
+  for (const lv of SHOW)
+    for (const r of [
+      { tag: 'cut half way by his own step back', back: 0.5 },
+      { tag: 'cut by a dash landing, begun a fifth of the way in', at: 1.2, dash: 0.2 }
+    ]) {
+      const { frames, first, last } = roomOf('chinOut', lv, r);
+      assert.ok(first !== undefined, `chinOut@${lv}, ${r.tag}: no taunt`);
+      assert.ok((last - first) * DT < 0.9 * MOVES.chinOut.dur * LEVEL[lv].stance.show.long, `chinOut@${lv}, ${r.tag}: not cut`);
+      for (let i = last + 1; i <= last + 20 && i < frames.length; i++)
+        if (frames[i].idle && frames[i - 1].idle)
+          for (const k of ['L', 'R']) {
+            const jump = hyp(M.add(M.sub(frames[i].chest[k], M.scale(frames[i - 1].chest[k], 2)), frames[i - 2].chest[k])) / DT;
+            if (jump > JUMP) bad.push(`chinOut@${lv}, ${r.tag}: the ${k} glove's velocity changes ${jump.toFixed(1)} m/s ${i - last} frames after`);
+          }
+    }
+  assert.deepEqual(bad, []);
+});
+/* And his own jab out of a taunt begun right up close, 0.66 m, where the room has his lead hand drawn in or given way: the
+   punching hand is let go of where the room had it fast enough (HOME.punch) that the arm it is thrown with is one the
+   shoulder allows. Each taunt at either grade, the jab pressed 0.7 of the way in: the audit finds no upper arm turned
+   past its range, none where the shoulder cannot put it, and no elbow flipping round. */
+test('taunts: a jab out of a taunt begun right up close is thrown with an arm the shoulder allows', () => {
+  const bad = [];
+  for (const id of TAUNT_IDS)
+    for (const lv of SHOW) {
+      const { first, entry } = roomOf(id, lv, { at: 0.66, press: [0.7, 'jab', true] });
+      assert.ok(first !== undefined, `${id}@${lv}: no taunt`);
+      const { found } = audit([entry]);
+      for (const check of ['upper arm turned past its range (degrees past)', 'upper arm in a place the shoulder cannot put it (degrees past)', 'elbow flipping round'])
+        for (const [name, c] of Object.entries(found))
+          if (name.startsWith(check) && c.bad) bad.push(`${id}@${lv}: ${name}, ${c.bad} frames, the worst ${c.worst.value.toFixed(1)} (${c.worst.doing})`);
+    }
+  assert.deepEqual(bad, []);
+});
+/* And in real bouts, the dice choosing when, where and which (game/match.mjs: eight seeds, a great dirty fighter against
+   a legend, a minute each; every taunt a glove went into the other man in, before it was given room, was in this
+   pairing): no taunting glove is inside the other man's head or trunk in any frame; and past a taunt's first 0.07 s (a
+   taunt begins from wherever his hands were: its first four frames are the way out of that), away from a blow (a frame
+   held at one, and the four after it), no glove's velocity changes by more than the audit's JUMP in a frame, as his
+   chest sees it: a hand is not thrown about in the middle of a taunt. (Only this pairing is fought here: it takes some
+   25 seconds, and the other two, 4암 against 4암 and 5암 against 5암, as long again each. They were fought by hand over
+   the same eight seeds on 2026-11-23, as the taunts stand in this file's tree: 193 taunts in the 24 bouts, none inside
+   him, the nearest a beckon's glove 7.0 cm off him and a chin-out's 9.4 in its first frame, a shrug's 13.7; and no
+   glove thrown past JUMP in the middle of one.) */
+test('taunts: in seeded bouts no taunting glove goes into the other man, nor is thrown about in the middle of a taunt', () => {
+  const bad = [],
+    seen = {},
+    was = [null, null];
+  for (const seed of [11, 23, 37, 41, 53, 67, 79, 97]) {
+    const m = createMatch({ seed, skills: [{ all: '4a' }, { all: '5a' }], rounds: 1, roundTime: 60 });
+    let prev = [null, null],
+      prev2 = [null, null],
+      blow = [-99, -99];
+    for (let i = 0; m.phase === 'fight' && i < 70 * 60; i++) {
+      stepMatch(m, DT);
+      for (const e of m.bout.events) if (e.type === 'hit' || e.type === 'block' || e.type === 'parry') (blow[e.on] = i), (blow[e.who] = i);
+      const held = m.bout.stop > 0,
+        now = m.bout.fighters.map(f => (f.pose && f.points ? measure(f).gloves : null));
+      m.bout.fighters.forEach((f, w) => {
+        if (!f.action || !MOVES[f.action.name].taunt || !f.points) return;
+        const o = m.bout.fighters[1 - w],
+          solid = [[o.points.head, RULES.head], ...balls(o.points)],
+          clear = Math.min(...['L', 'R'].flatMap(k => solid.map(([c, r]) => hyp(M.sub(f.points[k], c)) - r - RULES.glove))),
+          say = `seed ${seed}, frame ${i}, ${w ? '5a' : '4a'} ${f.action.name}`;
+        if (was[w] !== f.action) seen[f.action.name] = (seen[f.action.name] || 0) + 1;
+        was[w] = f.action;
+        if (clear < 0) bad.push(`${say}: a glove ${(clear * 100).toFixed(1)} cm into him`);
+        if (f.action.t > 0.07 && !held && !f.down && Math.abs(i - blow[w]) > 4 && now[w] && prev[w] && prev2[w])
+          for (const k of ['Left', 'Right']) {
+            const jump = hyp(M.add(M.sub(now[w][k], M.scale(prev[w][k], 2)), prev2[w][k])) / DT;
+            if (jump > JUMP) bad.push(`${say}, ${f.action.t.toFixed(2)} s in: the ${k.toLowerCase()} glove's velocity changes ${jump.toFixed(1)} m/s`);
+          }
+      });
+      if (!held) (prev2 = prev), (prev = now);
+    }
+  }
+  assert.deepEqual(bad, []);
+  assert.ok((seen.beckon || 0) >= 5 && Object.values(seen).reduce((s, n) => s + n, 0) >= 30, JSON.stringify(seen));
+});
+
+/* N19, beckon: held out long at the height of his face, 28 cm and more ahead of where his guard holds the lead glove (the
+   same man's guard without the show-off's hand let down); beckoned three times, each pull back toward him 12 cm and more. */
+test('beckon: the lead glove out far ahead of his guard and beckoned three times, 12 cm each', () => {
+  for (const lv of SHOW) {
+    const still = Object.assign({}, LEVEL[lv], { stance: Object.assign({}, LEVEL[lv].stance, { show: null, head: null, flourish: null }) }),
+      guardRun = [];
+    const g = freshBout(Object.assign({}, STANCES.find(e => e.id === `stance@${lv}`), { setup: b => (b.fighters[0].skills = { all: still }) }));
+    for (let i = 0; i < 120; i++) {
+      step(g, [{}, {}], DT);
+      if (i >= 60) {
+        const { p } = fk(g.fighters[0].pose);
+        guardRun.push(M.add(p.LeftHand, M.scale(M.sub(p.LeftHand, p.LeftForeArm), GLOVE.ahead / Math.hypot(...M.sub(p.LeftHand, p.LeftForeArm))))[2]);
+      }
+    }
+    const guard = guardRun.reduce((s, z) => s + z, 0) / guardRun.length,
+      { during } = poseOf('beckon', lv),
+      z = during.map(f => f.L[2]),
+      ahead = Math.max(...z) - guard;
+    assert.ok(ahead >= sized(lv, 0.28), `beckon@${lv}: ${(ahead * 100).toFixed(1)} cm ahead of his guard`);
+    // (each beckon: from out at its furthest to back in at its nearest, before it goes out again or he puts it down)
+    const outs = [];
+    for (let i = 1; i < z.length - 1; i++) if (z[i] >= z[i - 1] && z[i] > z[i + 1] && z[i] - Math.min(...z.slice(i, i + 9)) > 0.05 && z[i] - Math.min(...z.slice(Math.max(0, i - 9), i)) > 0.05) outs.push(i);
+    const pulls = outs.map(i => Math.max(...during.slice(i, i + 9).map(f => hyp(M.sub(f.L, during[i].L)))));
+    assert.equal(outs.length, 3, `beckon@${lv}: ${outs.length} beckons`);
+    for (const d of pulls) assert.ok(d >= sized(lv, 0.12), `beckon@${lv}: beckoned ${pulls.map(x => (x * 100).toFixed(1))} cm`);
+  }
+});
+
+/* N20, chin out: no guard at all, the hands hanging all the way down at his sides (the same at either grade: hanging is
+   hanging), for half a second and more neither glove within 30 cm of his head, and while they hang, both gloves 0.95 m or
+   less off the canvas and both arms straight to 155 degrees and more. */
+test('chin out: both hands hang all the way down, the arms straight, nowhere near his head for half a second', () => {
+  for (const lv of SHOW) {
+    const { during } = poseOf('chinOut', lv);
+    let run0 = 0,
+      best = [0, 0];
+    during.forEach((f, i) => {
+      const clear = Math.min(hyp(M.sub(f.at.L, f.at.head)), hyp(M.sub(f.at.R, f.at.head))) > 0.3;
+      run0 = clear ? run0 + 1 : 0;
+      if (run0 > best[1] - best[0]) best = [i - run0 + 1, i + 1];
+    });
+    assert.ok((best[1] - best[0]) * DT > 0.5, `chinOut@${lv}: clear of his head ${((best[1] - best[0]) * DT).toFixed(3)} s`);
+    // (while they hang: the middle half of that)
+    const n = best[1] - best[0],
+      hanging = during.slice(best[0] + Math.floor(n / 4), best[1] - Math.floor(n / 4)),
+      high = Math.max(...hanging.map(f => Math.max(f.at.L[1], f.at.R[1]))),
+      bent = Math.min(...hanging.map(f => Math.min(...f.elbows)));
+    assert.ok(high <= 0.95, `chinOut@${lv}: a glove ${(high * 100).toFixed(1)} cm off the canvas`);
+    assert.ok(bent >= 155, `chinOut@${lv}: an elbow at ${bent.toFixed(1)}°`);
+  }
+});
+
+/* N21, the windmill: both fists round circles in front of him, each 630 degrees and more round the middle of its own path
+   (as he sees it from in front), the gloves never touching (20 cm, two gloves' radii, apart and more), and within the
+   physics audit, the shoulder's table among it. (The glove in his other arm: the test above.) */
+test('windmill: both fists round and round, each 630 degrees and more, never touching, within the audit', () => {
+  for (const lv of SHOW) {
+    const { during } = poseOf('wind', lv);
+    for (const k of ['L', 'R']) {
+      const xs = during.map(f => f[k][0]),
+        ys = during.map(f => f[k][1]),
+        mid = [(Math.max(...xs) + Math.min(...xs)) / 2, (Math.max(...ys) + Math.min(...ys)) / 2];
+      let turned = 0;
+      for (let i = 1; i < during.length; i++) {
+        let d = Math.atan2(during[i][k][0] - mid[0], during[i][k][1] - mid[1]) - Math.atan2(during[i - 1][k][0] - mid[0], during[i - 1][k][1] - mid[1]);
+        d = Math.atan2(Math.sin(d), Math.cos(d));
+        turned += d;
+      }
+      assert.ok(Math.abs((turned * 180) / Math.PI) >= 630, `wind@${lv}: the ${k} glove went ${((turned * 180) / Math.PI).toFixed(0)}° round`);
+    }
+    const apart = Math.min(...during.map(f => hyp(M.sub(f.at.L, f.at.R))));
+    assert.ok(apart >= 0.2, `wind@${lv}: the gloves ${(apart * 100).toFixed(1)} cm apart`);
+  }
+  const { found } = audit(SHOW.map(lv => TAUNTING.find(x => x.id === `wind@${lv}`))),
+    broken = Object.entries(found)
+      .filter(([, c]) => c.bad)
+      .map(([check, c]) => `${check}: ${c.bad}`);
+  assert.deepEqual(broken, []);
+});
+
+/* N22, the shrug: the hands thrown open out to his sides, the gloves 75 cm and more apart (the 20 cm his guard holds them
+   apart and 55 more; a legend's 0.75 of the 55: 61), and both shoulders up 3 cm and more (as his chest sees them). */
+test('shrug: the hands out to his sides, both shoulders up', () => {
+  for (const lv of SHOW) {
+    const { frames, during, first } = poseOf('shrug', lv),
+      apart = Math.max(...during.map(f => hyp(M.sub(f.at.L, f.at.R)))),
+      before = frames[first - 1].shoulders,
+      up = [0, 1].map(i => Math.max(...during.map(f => f.shoulders[i] - before[i])));
+    assert.ok(apart >= 0.2 + sized(lv, 0.55), `shrug@${lv}: the gloves ${(apart * 100).toFixed(1)} cm apart`);
+    for (const u of up) assert.ok(u >= 0.03, `shrug@${lv}: the shoulders up ${up.map(x => (x * 100).toFixed(1))} cm`);
+  }
+});
+
+/* N23, tapping the chin: three taps, at each the glove's surface within 1 cm of his chin, drawn back 9 cm and more between
+   them (a legend's 0.75 of it), coming onto it at 1.5 m/s and more, and the head nodding 3 degrees and more with each. */
+test('tap the chin: three hard taps right on the chin, drawn well back between, the head nodding to each', () => {
+  for (const lv of SHOW) {
+    const { during } = poseOf('tapChin', lv),
+      off = during.map(f => hyp(M.sub(f.R, f.chin)) - GLOVE.r),
+      taps = [];
+    for (let i = 2; i < off.length - 1; i++) if (off[i] < off[i - 1] && off[i] <= off[i + 1] && Math.max(...off.slice(Math.max(0, i - 12), i)) - off[i] > 0.05) taps.push(i);
+    const say = `tapChin@${lv}: ${JSON.stringify(taps.map(i => ({ off: +(off[i] * 100).toFixed(1), back: +((Math.max(...off.slice(Math.max(0, i - 12), i)) - off[i]) * 100).toFixed(1), speed: +((Math.max(off[i - 1] - off[i], off[i - 2] - off[i - 1]) / DT).toFixed(2)), nod: +(during[i].nod - Math.min(...during.slice(Math.max(0, i - 12), i).map(f => f.nod))).toFixed(1) })))}`;
+    assert.equal(taps.length, 3, say);
+    for (const i of taps) {
+      assert.ok(Math.abs(off[i]) <= 0.01, say);
+      assert.ok(Math.max(...off.slice(Math.max(0, i - 12), i)) - off[i] >= sized(lv, 0.09), say);
+      assert.ok(Math.max(off[i - 1] - off[i], off[i - 2] - off[i - 1]) / DT >= 1.5, say);
+      assert.ok(during[i].nod - Math.min(...during.slice(Math.max(0, i - 12), i).map(f => f.nod)) >= 3, say);
+    }
+  }
 });
 
 test('flicker: the same bout goes the same way', () => {
