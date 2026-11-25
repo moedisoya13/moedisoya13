@@ -81,6 +81,28 @@ tomcc가 말한 "모델의 patch를 화면 픽셀 격자에 snap한 뒤 다시 �
 이동에는 확실히 효과가 있습니다. 걷기에서는 팔다리가 실제로 움직여 생기는 변화가 대부분이라 차이가 작습니다.
 patch 경계에서는 이웃 patch가 서로 다른 순간에 1px씩 점프하므로 이음매 노이즈가 남습니다. tomcc가 "too noisy"라고 한 지점이고, 그래서 "Almost"입니다.
 
+### 6. 룩(look): 풍화된 대리석 + 정리된 픽셀 (`--look stylized`, 기본)
+
+레퍼런스(tomcc의 기사)와 나란히 놓고 차이를 잰 뒤 넣은 개선입니다. 자세한 내용·측정값은 [docs/LOOK.md](../../docs/LOOK.md).
+
+| 무엇 | 어디 | 내용 |
+|---|---|---|
+| 칠 | `marble.py` | 크림색 바탕 + 꿀색·황토색 풍화(patina), 오목한 곳의 때, 골의 어두운 선, 능선 마모, 빗물 자국. 형태(SDF)만 보고 칠하므로 조형이 바뀌어도 동작 |
+| 픽셀 정리 | `pixelsplat/gbuffer.py` | 2배로 그려 아트 픽셀마다 투표(실루엣·깊이 층) → 튀는 픽셀·구멍 제거 → 법선만 부드럽게 |
+| 조명·색 | `pixelsplat/shade.py::stylized` | 어두운 주변광, 또렷한 명암 경계, 주름 속 그늘(SSAO)·곡률 음영, rim, 따뜻한 밝은 곳/차가운 그림자, bloom |
+| 조합 | `look.py` | 스튜디오(어두운 배경)용 `upgrade()`, 거상용 `colossus_shade()` |
+
+```bash
+python examples/nike/nike.py animate -o out/nike --app                  # 새 룩 (기본)
+python examples/nike/nike.py animate -o out/nike --app --look classic   # 이전 렌더러 그대로
+# 이미 학습한 모델에 새 칠만 입히기 (조형·학습 없이 약 1분)
+python examples/nike/repaint.py out/nike/nike_splats.pt -o out/nike/nike_splats_painted.pt
+python examples/nike/colossus.py -o out/nike_colossus --repaint         # 불러온 모델을 그 자리에서 다시 칠해 렌더
+```
+
+칠은 조형할 때(`sculpt`) mesh 색으로 들어가므로, 칠을 바꾼 뒤에는 `sculpt` → `bake`를 다시 하거나 `repaint.py`를 씁니다
+(`repaint.py`는 조형 **형태**가 그대로일 때만 유효합니다).
+
 ## 날개 검증 (원본 사진 대조)
 
 처음 두 번의 조형은 사진 한두 장만 보고 만들어 날개가 **너무 길고, 좌우 대칭**이었습니다. 원본 사진을 추가로 확보해 다시 검증했습니다.

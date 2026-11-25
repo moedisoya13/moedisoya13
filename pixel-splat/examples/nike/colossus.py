@@ -33,6 +33,8 @@ from PIL import Image
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[1]))
 sys.path.insert(0, str(HERE))
+import look as nike_look  # noqa: E402
+import marble  # noqa: E402
 import nike  # noqa: E402
 from pixelsplat.camera import Camera, look_at  # noqa: E402
 from pixelsplat.raster import RasterConfig  # noqa: E402
@@ -207,8 +209,11 @@ def draw_people(img, cam: Camera, people, statue_depth, statue_mask, look: Look)
 
 # ---------------------------------------------------------------- frames
 class Colossus:
-    def __init__(self, out_dir, model_path=None, look=Look(), app=True):
+    def __init__(self, out_dir, model_path=None, look=Look(), app=True, style="stylized", repaint=False):
         self.model = SplatModel.load(model_path or os.path.join(out_dir, "nike_splats.pt"))
+        if repaint:  # give an older model the current marble paint without re-sculpting / re-baking
+            marble.repaint_splats(self.model, nike.full_sdf, nike.component_labels)
+        self.style = style
         self.skel = nike.make_skeleton()
         self.W = torch.as_tensor(nike.skin_weights(self.skel, self.model.means.detach().numpy()))
         if app:
@@ -219,6 +224,8 @@ class Colossus:
             lights=[Light(look.sun_dir, look.sun_col, look.sun_int), Light(look.rim_dir, look.rim_col, look.rim_int)],
             sky=look.ambient, ground=(0.10, 0.07, 0.06), env_strength=1.0, outline=0.28, outline_depth=0.08,
             background=(0, 0, 0))
+        if style != "classic":
+            self.shade_cfg = nike_look.colossus_shade(self.shade_cfg)
 
     def frame(self, w, h, phase, advance, cam_az, cam_dist, eye_h, look_y, vfov, people, shake=0.0):
         mats, root = nike.walk_pose(self.skel, phase, advance)
@@ -238,6 +245,8 @@ class Colossus:
         sm = make_shadow_map(means, R, scales, self.model.opacity(), self.look.sun_dir,
                              center=(0.0, -0.1, advance - 0.2), extent=1.45, res=320)
         fc = FrameConfig(raster=RasterConfig(tile=4, k=256, hard=self.app), shade=self.shade_cfg, snap=self.app)
+        if self.style != "classic":
+            fc = nike_look.clean(fc)  # supersample + vote, despeckle, normal smoothing (no-blend mode)
         gb = render_gbuffer_frame(self.model, cam, fc, pose)
         mask = gb["alpha"] > self.shade_cfg.alpha_threshold
         P = world_points(cam, np.where(mask, gb["depth"], 1.0))
@@ -306,13 +315,17 @@ def main():
     ap.add_argument("--vfov", type=float, default=66.0)
     ap.add_argument("--shake", type=float, default=0.35, help="footfall jolt (deg)")
     ap.add_argument("--no-app", action="store_true", help="disable Almost Pixel Perfect")
+    ap.add_argument("--look", default="stylized", choices=nike_look.LOOKS,
+                    help="render look (examples/nike/look.py); classic = the original renderer settings")
+    ap.add_argument("--repaint", action="store_true",
+                    help="re-paint the loaded splats with the current marble.py (older models: no re-bake needed)")
     ap.add_argument("--max-frames", type=int, default=0, help="debug: stop after N frames")
     a = ap.parse_args()
     sw, sh = SCREENS[a.screen] if a.screen in SCREENS else map(int, a.screen.lower().split("x"))
     gw, gh = math.ceil(sw / a.pixel), math.ceil(sh / a.pixel)
     os.makedirs(a.out, exist_ok=True)
     print(f"[colossus] screen {sw}x{sh}, art grid {gw}x{gh} × {a.pixel}px")
-    col = Colossus(a.out, a.model, app=not a.no_app)
+    col = Colossus(a.out, a.model, app=not a.no_app, style=a.look, repaint=a.repaint)
     n = a.cycle_frames
     period = nike.SPEED * a.cycles
     people = plaza_people(period)
