@@ -80,8 +80,10 @@ def gbuffer_from_render(out) -> dict:
                 depth=out["depth"].detach().numpy() * inv[..., 0], id=out["id"].numpy())
 
 
-def shade(gb: dict, cam: Camera, cfg: ShadeConfig) -> np.ndarray:
-    """Deferred PBR shading → (H,W,3) linear radiance (before tonemapping)."""
+def shade(gb: dict, cam: Camera, cfg: ShadeConfig, light_vis: Optional[list] = None) -> np.ndarray:
+    """Deferred PBR shading → (H,W,3) linear radiance (before tonemapping).
+
+    ``light_vis`` = optional per-light (H,W) visibility in 0..1 (shadow maps)."""
     n = gb["normal"]
     V = -cam.pixel_rays()  # towards the eye
     alb = srgb_to_linear(gb["albedo"])
@@ -92,7 +94,7 @@ def shade(gb: dict, cam: Camera, cfg: ShadeConfig) -> np.ndarray:
     nv = np.clip((n * V).sum(-1, keepdims=True), 1e-4, 1)
     k = (rough + 1) ** 2 / 8
     col = np.zeros_like(alb)
-    for L in cfg.lights:
+    for li, L in enumerate(cfg.lights):
         l = _normalize(np.asarray(L.direction, np.float32))
         h = _normalize(V + l)
         nl = np.clip((n * l).sum(-1, keepdims=True), 0, 1)
@@ -105,7 +107,10 @@ def shade(gb: dict, cam: Camera, cfg: ShadeConfig) -> np.ndarray:
         F = f0 + (1 - f0) * (1 - vh) ** 5
         spec = D * G * F / (4 * nv * np.maximum(nl, 1e-4))
         diff = (1 - F) * (1 - metal) * alb / np.pi
-        col += (diff + spec) * nl * np.asarray(L.color, np.float32) * L.intensity
+        vis = 1.0
+        if light_vis is not None and li < len(light_vis) and light_vis[li] is not None:
+            vis = light_vis[li][..., None]
+        col += (diff + spec) * nl * vis * np.asarray(L.color, np.float32) * L.intensity
     # cheap environment: sky/ground gradient for diffuse ambient and reflections
     sky, gnd = np.asarray(cfg.sky, np.float32), np.asarray(cfg.ground, np.float32)
     amb = gnd + (sky - gnd) * (0.5 + 0.5 * n[..., 1:2])
@@ -142,8 +147,11 @@ def ground_shadow(cam: Camera, cfg: ShadeConfig) -> np.ndarray:
     return np.where(t > 0, f * cfg.shadow_strength, 0).astype(np.float32)
 
 
-def postprocess(rgb_lin: np.ndarray, gb: dict, cfg: ShadeConfig, cam: Optional[Camera] = None) -> np.ndarray:
-    """Tonemap + pixel-art hacks → (H,W,3) sRGB in 0..1."""
+def postprocess(rgb_lin: np.ndarray, gb: dict, cfg: ShadeConfig, cam: Optional[Camera] = None,
+                background: Optional[np.ndarray] = None) -> np.ndarray:
+    """Tonemap + pixel-art hacks → (H,W,3) sRGB in 0..1.
+
+    ``background`` = optional (H,W,3) sRGB image behind the model (sky, ground…)."""
     img = linear_to_srgb(aces(rgb_lin))
     mask = gb["alpha"] > cfg.alpha_threshold
     if cfg.outline > 0:
@@ -159,9 +167,12 @@ def postprocess(rgb_lin: np.ndarray, gb: dict, cfg: ShadeConfig, cam: Optional[C
         px = img[mask]
         km = KMeans(n_clusters=cfg.palette, n_init=1, random_state=0).fit(px[:: max(1, len(px) // 4000)])
         img[mask] = km.cluster_centers_[km.predict(px)]
-    bg = np.asarray(cfg.background, np.float32)
-    if cam is not None and cfg.ground_y is not None:
-        bg = bg * (1 - ground_shadow(cam, cfg))[..., None]
+    if background is not None:
+        bg = background
+    else:
+        bg = np.asarray(cfg.background, np.float32)
+        if cam is not None and cfg.ground_y is not None:
+            bg = bg * (1 - ground_shadow(cam, cfg))[..., None]
     return np.where(mask[..., None], img, bg)
 
 
@@ -198,11 +209,8 @@ class FrameConfig:
     mode: str = "lit"  # lit | albedo | normal | depth | patches
 
 
-def render_frame(model, cam: Camera, cfg: FrameConfig, pose=None) -> np.ndarray:
-    """One low-res pixel-art frame (H,W,3) sRGB 0..1.
-
-    ``pose`` = optional (means, R, scales) from :func:`pixelsplat.skin.pose_splats`
-    (an animated frame); default is the trained rest pose."""
+def render_gbuffer_frame(model, cam: Camera, cfg: FrameConfig, pose=None) -> dict:
+    """Rasterize (optionally posed / patch-snapped) splats into a plain G-buffer dict."""
     with torch.no_grad():
         if pose is None:
             R = model.rot()
@@ -221,7 +229,15 @@ def render_frame(model, cam: Camera, cfg: FrameConfig, pose=None) -> np.ndarray:
         while out["overflow"] > 0.01 and rc.k < 2048:
             rc = replace(rc, k=rc.k * 2)
             out = go(rc)
-    gb = gbuffer_from_render(out)
+    return gbuffer_from_render(out)
+
+
+def render_frame(model, cam: Camera, cfg: FrameConfig, pose=None) -> np.ndarray:
+    """One low-res pixel-art frame (H,W,3) sRGB 0..1.
+
+    ``pose`` = optional (means, R, scales) from :func:`pixelsplat.skin.pose_splats`
+    (an animated frame); default is the trained rest pose."""
+    gb = render_gbuffer_frame(model, cam, cfg, pose)
     sc = cfg.shade
     mask = (gb["alpha"] > sc.alpha_threshold)[..., None]
     bg = np.asarray(sc.background, np.float32)

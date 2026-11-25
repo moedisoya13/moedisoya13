@@ -482,7 +482,7 @@ def cmd_bake(a):
     # the statue already lives in the normalized frame (height ≈ 2, centred) — no renormalisation,
     # so the skeleton coordinates stay valid
     cfg = TrainConfig(n_splats=a.splats, res=a.res, n_views=a.views, iters=a.iters, seed=0,
-                      elev_range=(-10.0, 40.0), extent=EXTENT, target=CENTER)
+                      elev_range=(a.elev_lo, a.elev_hi), extent=EXTENT, target=CENTER)
     model = train(parts, cfg)
     assign_patches(model, 80)
     torch.save(model.state_dict(), os.path.join(a.out, "nike_splats.pt"))
@@ -568,6 +568,8 @@ def main():
     ap.add_argument("--res", type=int, default=208)
     ap.add_argument("--views", type=int, default=48)
     ap.add_argument("--iters", type=int, default=1500)
+    ap.add_argument("--elev-lo", type=float, default=-10.0, help="lowest training camera elevation (deg)")
+    ap.add_argument("--elev-hi", type=float, default=40.0, help="highest training camera elevation (deg)")
     ap.add_argument("--px", type=int, default=128, help="pixel-art height")
     ap.add_argument("--scale", type=int, default=5)
     ap.add_argument("--cycle-frames", type=int, default=28, help="frames per walk cycle (2 steps)")
