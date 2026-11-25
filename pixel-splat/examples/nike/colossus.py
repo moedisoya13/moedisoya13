@@ -263,7 +263,10 @@ def save_clip(frames, out_dir, name, fps, loops=4, preview_div=3):
         Image.fromarray((np.clip(f, 0, 1) * 255 + 0.5).astype(np.uint8)).save(os.path.join(tmp, f"{i:04d}.png"))
     mp4 = os.path.join(out_dir, name + ".mp4")
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-stream_loop", str(loops - 1), "-framerate", str(fps), "-i",
-                    os.path.join(tmp, "%04d.png"), "-c:v", "libx264", "-preset", "slow", "-crf", "14",
+                    os.path.join(tmp, "%04d.png"),
+                    # H.264 4:2:0 needs even sizes: 1179 px → 1178 px (one column off the edge, imperceptible)
+                    "-vf", "crop=floor(iw/2)*2:floor(ih/2)*2:0:0",
+                    "-c:v", "libx264", "-preset", "slow", "-crf", "14",
                     "-pix_fmt", "yuv420p", "-movflags", "+faststart", mp4], check=True)
     # small looping GIF preview (1/3 size, still pixel-exact because the pixel size is a multiple of 3)
     ims = [Image.fromarray((np.clip(f[::preview_div, ::preview_div], 0, 1) * 255 + 0.5).astype(np.uint8))
