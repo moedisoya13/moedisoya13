@@ -47,11 +47,11 @@ def cmd_bake(a):
 
 def _frame_cfg(a, mode="lit"):
     quad = dict(kernel_p=8.0, kernel_m=6.0) if a.quad else {}
-    rc = RasterConfig(tile=4, k=256, hard=a.hard, **quad)
+    rc = RasterConfig(tile=4, k=256, hard=a.hard or a.app, **quad)
     sc = ShadeConfig(outline=a.outline, palette=a.palette, light_steps=a.light_steps, exposure=a.exposure)
     if a.light_follow:
         sc.lights = [Light((-0.6, 0.7, 0.8), (1.0, 0.93, 0.82), 3.2)]
-    return FrameConfig(raster=rc, shade=sc, snap=a.snap, mode=mode)
+    return FrameConfig(raster=rc, shade=sc, snap=a.snap or a.app, mode=mode)
 
 
 def cmd_render(a):
@@ -114,7 +114,8 @@ def main(argv=None):
         p.add_argument("--azimuth", type=float, default=20.0, help="start azimuth (deg)")
         p.add_argument("--fov", type=float, default=30.0)
         p.add_argument("--ortho", action="store_true", help="orthographic camera")
-        p.add_argument("--snap", action="store_true", help='"Almost Pixel Perfect" patch snapping')
+        p.add_argument("--snap", action="store_true", help="patch snapping to the pixel grid")
+        p.add_argument("--app", action="store_true", help='"Almost Pixel Perfect" = --snap + --hard')
         p.add_argument("--quad", action="store_true", help="square hard-edged splat kernel")
         p.add_argument("--hard", action="store_true", help="no blending: front splat wins each pixel")
         p.add_argument("--outline", type=float, default=0.35, help="edge darkening 0..1")

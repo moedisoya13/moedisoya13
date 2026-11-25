@@ -17,6 +17,8 @@ python examples/nike/nike.py bake    -o out/nike  # 12분: splat 학습
 python examples/nike/nike.py animate -o out/nike  # 6분: 걷기 GIF/MP4
 ```
 
+**Almost Pixel Perfect 버전**: `python examples/nike/nike.py animate -o out/nike --app` → `walk_cycle_app` · `walk_across_app` · `walk_orbit_app` (아래 설명 참고)
+
 결과: `walk_cycle`(제자리 걷기 3/4뷰, 끊김 없는 loop) · `walk_across`(옆모습으로 화면을 가로질러 걷기, patch snap 켬) ·
 `walk_orbit`(걸으면서 카메라 360° 회전 — 조명 변화 확인) 각각 `.gif`/`.mp4`, `walk_sheet.png`, `gbuffer.png`, `nike.glb`(조형 mesh).
 
@@ -58,3 +60,23 @@ splat마다 가까운 뼈들에 부드러운 가중치를 줍니다. 날개 spla
 ⁴ **ambient occlusion**: 오목하게 파인 곳일수록 빛이 덜 들어 어두워지는 효과
 ⁵ **skinning**: 표면의 점들을 뼈에 붙여, 뼈가 움직이면 따라 움직이게 하는 기술
 ⁶ **IK(역운동학)**: "발을 여기 두고 싶다" → 관절 각도를 거꾸로 계산하는 방법
+
+### 5. Almost Pixel Perfect (`--app`)
+
+![기존(왼쪽) vs Almost Pixel Perfect(오른쪽)](../../docs/images/nike_soft_vs_app.png)
+![APP 걷기 loop](../../docs/images/nike_walk_cycle_app.gif)
+
+tomcc가 말한 "모델의 patch를 화면 픽셀 격자에 snap한 뒤 다시 합치는" 방식을 애니메이션에 맞게 구현했습니다.
+1. **뼈 기준 patch**: splat을 주로 따르는 뼈별로 묶은 뒤, 각 묶음을 k-means로 쪼갭니다(총 81개). 한 patch가 무릎·허리처럼 서로 다르게 움직이는 부분을 걸치지 않으므로, 거의 한 덩어리로 움직입니다.
+2. **snap**: 매 프레임 patch 중심을 화면에 투영하고, 픽셀 중앙까지 남은 오차(0.5px 이하)만큼 patch 전체를 화면에서 옮깁니다. 그러면 patch 안의 픽셀 무늬가 정수 픽셀 단위로만 움직입니다.
+3. **섞지 않고 합치기**: 픽셀마다 맨 앞의 splat 하나만 씁니다(`hard`). patch 경계에서 반투명하게 섞이지 않아 픽셀이 또렷합니다.
+
+실측(프레임 사이 색이 바뀐 픽셀 비율, 128px 옆모습, 16프레임):
+
+| 상황 | 기존 | hard만 | APP |
+|---|---|---|---|
+| 자세 고정, 0.3px씩 이동 | 44.6% | 45.9% | **28.4%** |
+| 실제로 걸으며 카메라가 따라감 | 51.5% | 52.9% | **49.6%** |
+
+이동에는 확실히 효과가 있습니다. 걷기에서는 팔다리가 실제로 움직여 생기는 변화가 대부분이라 차이가 작습니다.
+patch 경계에서는 이웃 patch가 서로 다른 순간에 1px씩 점프하므로 이음매 노이즈가 남습니다. tomcc가 "too noisy"라고 한 지점이고, 그래서 "Almost"입니다.

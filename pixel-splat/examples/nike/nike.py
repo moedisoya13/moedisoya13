@@ -292,6 +292,28 @@ def skin_weights(skel: Skeleton, points: np.ndarray) -> np.ndarray:
     return w
 
 
+def bone_patches(model, W: torch.Tensor, total: int = 80, seed: int = 0):
+    """"Almost Pixel Perfect" patches that never straddle two bones.
+
+    Splats are grouped by their dominant bone, then each group is split by
+    k-means (patch count ∝ group size).  A patch therefore moves (almost)
+    rigidly, so snapping it to the pixel grid keeps its pixels stable."""
+    from sklearn.cluster import KMeans
+
+    dom = W.argmax(1).numpy()
+    X = model.means.detach().numpy()
+    patch = np.zeros(len(X), np.int64)
+    nxt = 0
+    for b in np.unique(dom):
+        idx = np.nonzero(dom == b)[0]
+        k = int(max(1, min(len(idx), round(total * len(idx) / len(X)))))
+        lab = KMeans(n_clusters=k, n_init=2, random_state=seed).fit_predict(X[idx]) if k > 1 else np.zeros(len(idx), int)
+        patch[idx] = lab + nxt
+        nxt += k
+    model.patch = torch.as_tensor(patch)
+    return nxt
+
+
 # ---------------------------------------------------------------- walk cycle
 def smoothstep(x):
     x = np.clip(x, 0, 1)
@@ -453,6 +475,11 @@ def cmd_animate(a):
     model = SplatModel.load(os.path.join(a.out, "nike_splats.pt"))
     skel = make_skeleton()
     W = torch.as_tensor(skin_weights(skel, model.means.detach().numpy()))
+    # "Almost Pixel Perfect": bone-aware patches snapped to the pixel grid, recombined without blending
+    app = a.app
+    sfx = "_app" if app else ""
+    if app:
+        print(f"[animate] Almost Pixel Perfect: {bone_patches(model, W, 80)} bone-aware patches")
     n = a.cycle_frames
     px = a.px
     radius = fit_radius_for_fov(30, EXTENT)
@@ -461,8 +488,8 @@ def cmd_animate(a):
         mats, root = walk_pose(skel, phase, advance)
         pose = pose_splats(model, W, torch.as_tensor(mats))
         sc.shadow_center = (float(root[0]), float(root[2]))
-        return render_frame(model, cam, FrameConfig(raster=RasterConfig(tile=4, k=256), shade=sc,
-                                                    snap=snap, mode=mode), pose=pose)
+        return render_frame(model, cam, FrameConfig(raster=RasterConfig(tile=4, k=256, hard=app), shade=sc,
+                                                    snap=snap or app, mode=mode), pose=pose)
 
     t0 = time.time()
     clips = set(a.clips.split(","))
@@ -476,7 +503,7 @@ def cmd_animate(a):
         cam = orbit_camera(HERO_AZ, 10, int(px * 1.0), px, radius=radius, target=CENTER)
         frames.append(upscale(frame(cam, i / n, 0.0, nike_shade()), a.scale))
     if frames:
-        save_anim(frames, a.out, "walk_cycle", a.fps)
+        save_anim(frames, a.out, "walk_cycle" + sfx, a.fps)
         print(f"[animate] walk_cycle {n} frames ({time.time() - t0:.0f}s)")
     # 2) walking across the screen, side view, camera fixed, patch snapping on
     cycles = 3 if "across" in clips else 0
@@ -489,7 +516,7 @@ def cmd_animate(a):
         sc = nike_shade(key=(0.6, 0.7, 0.45), rim=(-0.7, 0.4, -0.6))
         frames.append(upscale(frame(cam, (i / n) % 1, adv, sc, snap=True), a.scale))
     if frames:
-        save_anim(frames, a.out, "walk_across", a.fps)
+        save_anim(frames, a.out, "walk_across" + sfx, a.fps)
         print(f"[animate] walk_across {len(frames)} frames ({time.time() - t0:.0f}s)")
     # 3) walking in place while the camera orbits (dynamic lighting showcase)
     cycles = 4 if "orbit" in clips else 0
@@ -499,15 +526,15 @@ def cmd_animate(a):
         cam = orbit_camera(az, 10, int(px * 1.0), px, radius=radius, target=CENTER)
         frames.append(upscale(frame(cam, (i / n) % 1, 0.0, nike_shade()), a.scale))
     if frames:
-        save_anim(frames, a.out, "walk_orbit", a.fps)
+        save_anim(frames, a.out, "walk_orbit" + sfx, a.fps)
         print(f"[animate] walk_orbit {len(frames)} frames ({time.time() - t0:.0f}s)")
     # 4) stills: 8 phases of the cycle + G-buffer debug of one frame
     cam = orbit_camera(HERO_AZ, 10, int(px * 1.0), px, radius=radius, target=CENTER)
     stills = [frame(cam, k / 8, 0.0, nike_shade()) for k in range(8)]
     sheet = np.concatenate([np.concatenate(stills[:4], 1), np.concatenate(stills[4:], 1)], 0)
-    save_png(upscale(sheet, max(1, a.scale // 2)), os.path.join(a.out, "walk_sheet.png"))
+    save_png(upscale(sheet, max(1, a.scale // 2)), os.path.join(a.out, f"walk_sheet{sfx}.png"))
     dbg = [frame(cam, 0.1, 0.0, nike_shade(), mode=m) for m in ("lit", "albedo", "normal", "depth", "patches")]
-    save_png(upscale(np.concatenate(dbg, 1), max(1, a.scale // 2)), os.path.join(a.out, "gbuffer.png"))
+    save_png(upscale(np.concatenate(dbg, 1), max(1, a.scale // 2)), os.path.join(a.out, f"gbuffer{sfx}.png"))
     print(f"[animate] done ({time.time() - t0:.0f}s)")
 
 
@@ -526,6 +553,8 @@ def main():
     ap.add_argument("--cycle-frames", type=int, default=28, help="frames per walk cycle (2 steps)")
     ap.add_argument("--fps", type=int, default=24)
     ap.add_argument("--clips", default="cycle,across,orbit", help="which animations to render")
+    ap.add_argument("--app", action="store_true",
+                    help='"Almost Pixel Perfect": bone-aware patch snapping + no-blend recombine (outputs *_app)')
     a = ap.parse_args()
     os.makedirs(a.out, exist_ok=True)
     if a.cmd in ("sculpt", "all"):
