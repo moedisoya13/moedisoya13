@@ -553,7 +553,21 @@ async function connect() {
   if (later) later.then(d => (fill(d), readOnly || storeSays('결정은 이 페이지에 저장되고, 함께 보는 사람과 같습니다', 'ok')), () => storeSays('저장된 결정을 불러오지 못했습니다', 'warn'));
   for (const id of Object.keys(state)) status(id);
 }
-const written = connect();
+/* Lent (the open-questions catalogue, open.html and src/open.mjs, which carries some of these items and keeps its own
+   answers): a page with no `#pending` but places marked data-pending-cards="<item id>" has each named item's cards written
+   into its place and played as they are here (its banner, its clocks, or its one card of a pair), and nothing else of this
+   page: no contents, no choices, no store. */
+function lend() {
+  for (const slot of document.querySelectorAll('[data-pending-cards]')) {
+    const item = ITEMS.find(i => i.id === slot.dataset.pendingCards);
+    if (!item) continue;
+    if (item.banner) slot.insertAdjacentHTML('beforeend', `<a class="banner" href="${esc(item.banner.image)}" target="_blank" rel="noopener"><img src="${esc(item.banner.image)}" alt="${esc(item.banner.say)}" loading="lazy"></a><p class="banner-note">${fmt(item.banner.say)}</p>`);
+    if (item.groups) slot.append(clocks(item.groups));
+    else if (item.card) slot.append(clocks([{ rows: [[item.card]], apart: true }]));
+    shownAsLD(slot);
+  }
+}
+const written = main ? connect() : Promise.resolve(lend());
 
 /* ---- the bouts */
 function floor(half, centre) {
@@ -1095,12 +1109,14 @@ function start({ manifest, boxer }) {
         })
   };
   theme();
-  document.getElementById('loading').hidden = true;
+  const loading = document.getElementById('loading');
+  if (loading) loading.hidden = true;
   requestAnimationFrame(frame);
 }
 
 // (the bouts once the page that holds their cards is written)
 Promise.all([load(), written]).then(([assets]) => start(assets)).catch(error => {
   console.error(error);
-  document.getElementById('loading').textContent = '불러오지 못했습니다: ' + error.message;
+  const loading = document.getElementById('loading');
+  if (loading) loading.textContent = '불러오지 못했습니다: ' + error.message;
 });

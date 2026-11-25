@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="claude:viewport-fit-sides" content="cover">
+<title>미결 카탈로그 · 프로 복서</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=IBM+Plex+Mono:wght@500&family=IBM+Plex+Sans+KR:wght@400;600;700&display=swap">
+<style>
+  /* the open-questions catalogue (docs/open-catalog.md): a sticky answer bar (what is picked, whether it is saved, where 제출
+     sends it), then the open decisions in five groups, each a card: where it stands, the builds side by side on one clock
+     (src/open.clips.mjs videos, or the old catalogue's own cards played by src/pending.mjs on the canvas behind the page),
+     the choices (★ the default recommended, never read as picked), a follow-up opened on the same card by a choice, a memo.
+     Dark by default, light when the viewer asks for it. */
+  :root {
+    --bg: #0d0f19; --panel: #151826; --ink: #f1f2f7; --muted: #9aa1b8; --line: #2a2f45;
+    --star: #f05a4a; --lava: #ffad5c; --brass: #ffc24a; --pick: #8ecbff; --ok: #5fd39a; --okbg: #11261c; --chip: #1d2133;
+    --stage: #07080e;
+    --display: "Black Han Sans", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+    --body: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+    --data: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+    color-scheme: dark;
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) { --bg: #e9ebf2; --panel: #f7f8fb; --ink: #151826; --muted: #5a6077; --line: #c6cada; --star: #c42a30; --lava: #a85200; --brass: #8a6412; --pick: #1f4f9a; --ok: #17794a; --okbg: #e0f0e6; --chip: #dfe2ec; color-scheme: light; }
+  }
+  :root[data-theme="light"] { --bg: #e9ebf2; --panel: #f7f8fb; --ink: #151826; --muted: #5a6077; --line: #c6cada; --star: #c42a30; --lava: #a85200; --brass: #8a6412; --pick: #1f4f9a; --ok: #17794a; --okbg: #e0f0e6; --chip: #dfe2ec; color-scheme: light; }
+  * { box-sizing: border-box; }
+  html { scroll-padding-top: 190px; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 400 15px/1.55 var(--body); }
+  body, h1, h2, h3, p, li, td, button { word-break: keep-all; overflow-wrap: anywhere; }
+  /* the old catalogue's cards draw on one canvas behind the page (src/pending.mjs): every box above a stage is see-through */
+  #view { position: fixed; inset: 0; width: 100%; height: 100%; display: block; image-rendering: pixelated; z-index: 0; background: var(--bg); }
+  .wrap { position: relative; z-index: 1; max-width: 920px; margin: 0 auto; padding-block: 20px 56px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: 14px; }
+  .wrap * { min-width: 0; }
+  header { display: grid; gap: 8px; background: var(--bg); }
+  .eyebrow { font: 500 11px/1 var(--data); letter-spacing: .1em; color: var(--lava); text-transform: uppercase; }
+  h1 { margin: 0; font: 400 clamp(30px, 7vw, 48px)/1.08 var(--display); letter-spacing: .02em; text-wrap: balance; }
+  h1 em { font-style: normal; color: var(--star); }
+  h2 { margin: 0; font-size: 17px; line-height: 1.35; text-wrap: balance; }
+  h3 { margin: 0; font-size: 14.5px; line-height: 1.4; }
+  p { margin: 0; }
+  .lede { color: var(--muted); max-width: 68ch; font-size: 14.5px; }
+  .lede b { color: var(--ink); }
+  code { font: 500 .86em/1.3 var(--data); overflow-wrap: anywhere; }
+  a { color: var(--pick); }
+  nav.toc { display: flex; flex-wrap: wrap; gap: 6px; font-size: 13px; }
+  nav.toc a { text-decoration: none; border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px; background: var(--panel); color: var(--ink); }
+  nav.toc a span { color: var(--muted); font: 500 11px/1 var(--data); margin-left: 4px; }
+
+  /* the answer bar */
+  .bar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); padding-block: 8px; border-bottom: 1px solid var(--line); display: grid; gap: 6px; }
+  .row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  button { font: 600 14px/1.2 var(--body); color: var(--ink); background: var(--chip); border: 1px solid var(--line); border-radius: 6px; padding: 8px 11px; cursor: pointer; min-height: 36px; }
+  button[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+  button:focus-visible, textarea:focus-visible, select:focus-visible, a:focus-visible, summary:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
+  button:disabled { opacity: .5; cursor: default; }
+  .sum { font-size: 13px; color: var(--muted); flex: 1 1 160px; }
+  .sum b { color: var(--ink); font-family: var(--data); font-weight: 500; }
+  .save { font: 500 11.5px/1.35 var(--data); color: var(--muted); }
+  .save.ok { color: var(--ok); } .save.warn { color: var(--star); }
+  .send { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .send select { font: 600 13px/1.2 var(--body); color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 7px 8px; max-width: 100%; }
+  .send #send { background: var(--ink); color: var(--bg); border-color: var(--ink); font-weight: 700; }
+  .send .quiet { background: transparent; }
+  .send-out { font-size: 13px; line-height: 1.4; color: var(--muted); }
+  .send-out.ok { color: var(--ok); } .send-out.warn { color: var(--star); }
+  .send-out a { color: inherit; font-weight: 600; }
+  .send-out textarea { display: block; width: 100%; margin-top: 6px; font: 12px/1.4 var(--data); color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 6px; min-height: 6em; }
+
+  /* groups and cards */
+  .group { margin: 14px 0 0; display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: baseline; background: var(--bg); padding-block: 4px; }
+  .group h2 { font: 400 26px/1.1 var(--display); letter-spacing: .02em; }
+  .group h2 .no { color: var(--star); margin-right: 6px; }
+  .groupnote { color: var(--muted); font-size: 14px; background: var(--bg); }
+  .groupnote b { color: var(--ink); }
+  .stars { font-size: 13px; padding: 6px 10px; min-height: 32px; }
+  .item { background: transparent; border: 1px solid var(--line); border-radius: 10px; padding: 14px 12px; display: grid; gap: 12px; }
+  .item.note { border-style: dashed; }
+  .item > .head, .item > h2, .item > .state, .item > .q, .item > .more, .item > .links, .item > .band { background: var(--bg); }
+  .head { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+  .num { font: 500 11.5px/1 var(--data); color: var(--brass); }
+  .tag { font: 500 10.5px/1 var(--data); color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 3px 5px; }
+  .state { color: var(--muted); font-size: 14px; display: grid; gap: 6px; }
+  .state b { color: var(--ink); }
+  .state ul, .more ul { margin: 0; padding-left: 18px; }
+  .links { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13.5px; }
+  .more summary { cursor: pointer; font-size: 13px; color: var(--muted); }
+  .more > div { display: grid; gap: 8px; padding-top: 8px; font-size: 13.5px; color: var(--muted); }
+  .tablebox { overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; }
+  .tablebox table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  .tablebox th, .tablebox td { text-align: left; padding: 5px 7px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  .tablebox th { color: var(--muted); font-weight: 600; }
+  .tablebox td { color: var(--ink); }
+  /* the answers */
+  .q { display: grid; gap: 8px; }
+  .opts { display: grid; gap: 6px; }
+  .opt { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 10px; align-items: start; text-align: left; width: 100%; padding: 9px 10px; font-weight: 400; line-height: 1.45; }
+  .opt .k { font: 600 12px/1.45 var(--data); white-space: nowrap; color: var(--muted); }
+  .opt .k i { font-style: normal; color: var(--star); }
+  .opt .l { font-weight: 600; }
+  .opt[aria-pressed="true"] { background: var(--panel); color: var(--ink); border-color: var(--pick); box-shadow: inset 0 0 0 1px var(--pick); }
+  .opt[aria-pressed="true"] .k::after { content: " ✓"; color: var(--pick); }
+  .opt small { grid-column: 2; color: var(--muted); font-size: 12.5px; }
+  .why { font-size: 13px; color: var(--muted); }
+  .why i { font-style: normal; color: var(--star); font-weight: 700; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { font-size: 13px; padding: 7px 10px; }
+  .chip[aria-pressed="true"] { background: var(--pick); border-color: var(--pick); color: var(--bg); }
+  .follow { margin-left: 8px; padding: 8px 0 2px 12px; border-left: 2px solid var(--pick); display: grid; gap: 8px; }
+  .follow h3 { color: var(--pick); }
+  .follow .note { font-size: 13px; color: var(--muted); }
+  .memo { display: grid; gap: 4px; }
+  .memo span { font: 500 11px/1 var(--data); color: var(--muted); }
+  .memo textarea { width: 100%; min-height: 2.6em; resize: vertical; font: 14px/1.5 var(--body); color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 7px 9px; }
+  .memo.has span { color: var(--pick); }
+  .band { display: none; }
+  .item.answered { border-color: var(--ok); }
+  .item.answered .band { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; background: var(--okbg); color: var(--ok); border-radius: 6px; padding: 6px 9px; font-size: 13.5px; font-weight: 600; }
+  .band span { color: var(--ink); font-weight: 400; font-family: var(--data); font-size: 12.5px; }
+
+  /* the recorded comparisons (src/open.clips.mjs): one group's clips side by side at one width, on one clock */
+  .cmp { background: var(--stage); border-radius: 8px; padding: 8px; display: grid; gap: 8px; }
+  .cmp-say { font-size: 12.5px; color: #c9c3b4; }
+  .cmp-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+  @media (min-width: 700px) { .cmp-grid.n3 { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+  .cmp-grid.solo { grid-template-columns: minmax(0, 1fr) !important; }
+  .cmp-grid.solo .clip:not(.on) { display: none; }
+  .clip { margin: 0; display: grid; gap: 4px; align-content: start; }
+  .clip .who { font: 600 12px/1.3 var(--body); color: #f1e9d6; }
+  .clip video { display: block; width: 100%; height: auto; background: #000; border-radius: 3px; image-rendering: pixelated; }
+  .clip .measure { font: 500 11px/1.35 var(--data); color: #c9c3b4; }
+  .wait { border: 1px dashed #3a3f55; border-radius: 6px; padding: 18px 10px; text-align: center; color: #c9c3b4; font-size: 13px; }
+  .wait b { display: block; font: 500 12px/1 var(--data); color: #ffad5c; margin-bottom: 6px; letter-spacing: .06em; }
+  .scrub { width: 100%; accent-color: #ffad5c; margin: 0; }
+  .ctl { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+  .ctl button { font-size: 12px; padding: 6px 8px; min-height: 32px; background: #171a23; color: #d9d3c4; border-color: #2c3040; }
+  .ctl button[aria-pressed="true"] { background: #e8e1d2; color: #05060a; border-color: #e8e1d2; }
+  .ctl .fr { margin-left: auto; font: 500 11px/1 var(--data); color: #8c8a99; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+  /* the old catalogue's cards, lent (src/pending.mjs lend): its classes, on this page's tokens */
+  .old { --card: var(--panel); --fg: var(--ink); --dim: var(--muted); --accent: var(--star); --changed: var(--lava); --new: var(--ok); display: flex; flex-direction: column; gap: 8px; }
+  .old.wide .grid { grid-template-columns: minmax(0, 1fr); }
+  .old .ctl { background: var(--bg); }
+  .old .ctl button { background: var(--chip); color: var(--ink); border-color: var(--line); }
+  .old .ctl button[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+  .old .ctl .fr { color: var(--muted); white-space: normal; }
+  .old .clock { display: flex; flex-direction: column; gap: 8px; }
+  .old .clock h4 { margin: 0; padding: 4px 0 0; background: var(--bg); font: 600 12.5px/1.3 var(--body); color: var(--muted); }
+  .old .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .old .card { display: flex; flex-direction: column; min-width: 0; border: 1.5px solid var(--line); }
+  .old .card.tuned { border-color: var(--changed); }
+  .old .stage { position: relative; aspect-ratio: 5 / 4; max-width: 100%; display: block; }
+  .old .stage .mark { position: absolute; right: 6px; top: 6px; font: 600 11px/1 var(--body); padding: 4px 6px; background: var(--changed); color: var(--bg); }
+  .old .card.ref .stage { overflow: hidden; background: var(--card); }
+  .old .card.ref img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: top; image-rendering: pixelated; }
+  .old .card.ref video { display: block; width: 100%; height: 100%; object-fit: contain; background: #090a11; image-rendering: pixelated; }
+  .old .card.rec .from { margin: 0; font: 500 11px/1.3 var(--data); color: var(--dim); }
+  .old .card.rec.tuned .from { color: var(--changed); }
+  .old .card.rec .choice { margin: 0; padding-left: 7px; border-left: 3px solid var(--accent); font: 600 13px/1.3 var(--body); color: var(--fg); }
+  .old .stage .white { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; }
+  .old .fill { display: none; }
+  .old .info { flex: 1; background: var(--card); border-top: 1.5px solid var(--line); padding: 8px 9px 10px; display: flex; flex-direction: column; gap: 6px; }
+  .old .info .say { margin: 0; font: 600 12.5px/1.35 var(--body); }
+  .old .feet { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font: 500 11px/1.3 var(--data); color: var(--dim); font-variant-numeric: tabular-nums; }
+  .old .feet b { color: var(--fg); font-weight: 500; }
+  .old .feet [data-tag] { display: inline-block; min-width: 4.5em; text-align: center; }
+  .old .big { font: 400 26px/1 var(--display); color: var(--fg); }
+  .old .big small { font: 500 11px/1 var(--data); color: var(--dim); margin-left: 4px; }
+  .old .result .tag { font: 600 12px/1 var(--body); padding: 5px 7px; border: 1.5px solid var(--line); color: var(--dim); }
+  .old .result .tag.on { animation: tag .9s steps(6) forwards; }
+  @keyframes tag { 0%, 55% { background: var(--accent); border-color: var(--accent); color: var(--bg); } 100% { background: transparent; } }
+  .old .scale { position: relative; height: 16px; background: color-mix(in srgb, var(--line) 45%, transparent); }
+  .old .scale .band { display: block; position: absolute; top: 0; bottom: 0; background: color-mix(in srgb, var(--new) 30%, transparent); border-left: 1.5px solid var(--new); border-right: 1.5px solid var(--new); }
+  .old .scale .ko { position: absolute; top: -2px; bottom: -2px; width: 0; border-left: 1.5px dotted var(--fg); }
+  .old .scale .blow { position: absolute; top: -4px; bottom: -4px; width: 3px; margin-left: -1.5px; background: var(--accent); opacity: 0; }
+  .old .scale .blow.in { background: var(--new); }
+  .old .scale .blow.on { opacity: 1; }
+  .old .ticks { display: flex; justify-content: space-between; font: 500 10px/1 var(--data); color: var(--dim); }
+  .old .banner { display: block; height: 200px; border: 1.5px solid var(--line); overflow: hidden; background: var(--card); }
+  .old .banner img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: top; }
+  .old .banner-note { font-size: 12px; color: var(--dim); background: var(--bg); }
+
+  /* what was decided before this page, and the foot */
+  .decided { border-top: 1px solid var(--line); padding-top: 12px; background: var(--bg); }
+  .decided summary { cursor: pointer; font: 400 22px/1.2 var(--display); }
+  .decided ul { margin: 8px 0 0; padding-left: 18px; font-size: 13.5px; color: var(--muted); display: grid; gap: 3px; }
+  .decided li b { color: var(--ink); font-weight: 600; }
+  footer { font-size: 12.5px; color: var(--muted); display: grid; gap: 4px; background: var(--bg); }
+  [hidden] { display: none !important; }
+  @media (max-width: 420px) { .item { padding: 12px 10px; } .cmp { padding: 6px; } .follow { margin-left: 2px; padding-left: 9px; } .group h2 { font-size: 23px; } }
+  @media (prefers-reduced-motion: reduce) { .old .result .tag.on { animation: none; } }
+</style>
+</head>
+<body>
+<canvas id="view" aria-hidden="true"></canvas>
+<main class="wrap">
+  <header>
+    <div class="eyebrow">Pixel Boxer · 미결 · 2026-11-25</div>
+    <h1>미결 <em>카탈로그</em> · 프로 복서</h1>
+    <p class="lede">아직 정하지 않은 것을 모두 모았습니다. 카드마다 <b>고르기 그리고/또는 메모</b> — 누르거나 쓰는 <b>즉시 저장</b>되고, 고른 답에 따라 <b>같은 카드 안에 다음 질문</b>이 열립니다. 다 되면 위 막대의 <b>‘제출’</b>: 받는 곳(이 페이지를 지켜보는 세션 / 새 세션)이 받을 수 있는지 누르기 전에 막대 아래에 나오고, 한 번 누르면 안 되는 곳은 건너뛰어 다른 곳으로, 둘 다 안 되면 답을 복사해 드립니다.</p>
+    <p class="lede"><b style="color:var(--star)">★</b>는 기본안일 뿐 — 고르지 않은 것을 ★로 읽지 않습니다. 묶음마다 ‘남은 것을 모두 ★로’ 단추가 있습니다(누를 때만 고름). 비교는 <b>같은 너비 · 같은 시계 · 같은 장면</b>으로 나란히, ◀ ▶ 한 프레임, ½× · ¼×, ‘크게’로 한 빌드만. 이미 정해진 것은 맨 아래 목록에만 있습니다.</p>
+    <nav class="toc" id="toc" aria-label="차례"></nav>
+  </header>
+
+  <section class="bar" aria-label="내 답">
+    <div class="row">
+      <div class="sum" id="sum">고른 것 <b>0</b></div>
+      <button type="button" id="play" aria-pressed="true">❚❚ 모두 멈춤</button>
+    </div>
+    <div class="save" id="save" role="status">저장소 확인 중…</div>
+    <div class="send">
+      <select id="send-to" aria-label="받는 곳">
+        <option value="here">받는 곳: 이 페이지를 지켜보는 세션</option>
+        <option value="new">받는 곳: 새 세션 (모델 · effort 고름)</option>
+      </select>
+      <select id="send-model" aria-label="새 세션의 모델" hidden></select>
+      <select id="send-effort" aria-label="새 세션의 effort" hidden></select>
+      <button type="button" id="send">제출</button>
+      <button type="button" id="copy" class="quiet">답 복사</button>
+    </div>
+    <p class="send-out" id="send-out" role="status">받는 곳 확인 중…</p>
+  </section>
+
+  <div id="items"></div>
+
+  <details class="decided" id="decided"></details>
+
+  <footer>
+    <p>답은 이 페이지의 저장소(db 문서 <code>picks/open</code>: 고른 것, 메모, 누른 기록, 제출 기록)에 남고, 일하는 세션이 읽습니다(<code>docs/open-catalog.md</code>). 저장소가 없는 곳에서 열면 이 기기에만 남으니 ‘제출’이나 ‘답 복사’로 보내 주세요.</p>
+    <p>비교 영상은 <code>tools/openclips.mjs</code>가 녹화한 것(<code>docs/ref/open/</code>, 시험판의 고침은 <code>docs/ref/open/patches/</code>)이고, 옛 카드는 옛 미결 카탈로그의 것을 그대로 돌립니다. 소리는 아무도 들어 본 적이 없습니다. 헤드리스 화면으로 확인했고 휴대폰에서 본 것은 아닙니다.</p>
+  </footer>
+</main>
+<script type="module" src="src/open.mjs"></script>
+</body>
+</html>
