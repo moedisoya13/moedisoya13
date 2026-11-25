@@ -56,13 +56,63 @@ SHIN_LEN = float(np.linalg.norm(ANKLE[1] - KNEE[1]))
 
 
 def wing_frame(s):
-    """Leading-edge polyline (root → elbow → tip) and feather directions."""
-    r0 = V(s * 0.07, 0.45, -0.10)
-    e = r0 + V(s * 0.27, 0.20, -0.14)
-    t = e + V(s * 0.27, 0.27, -0.27)
-    d_root = V(s * 0.22, -0.82, -0.50)
-    d_tip = V(s * 0.38, -0.22, -0.90)
-    return r0, e, t, d_root / np.linalg.norm(d_root), d_tip / np.linalg.norm(d_tip)
+    """Leading edge of a wing as a polyline, matched to the Louvre statue's profile.
+
+    Seen from the side the wing sweeps almost horizontally *backwards* from the
+    shoulder blade: the top edge rises in a gentle arch a little above the
+    shoulders, then curls down at the far end — a long, swept-back crescent.
+    Seen from the front the two wings open into a modest V (≈2.4× shoulder half-width).
+    """
+    return [V(s * 0.09, 0.50, -0.09), V(s * 0.22, 0.70, -0.26), V(s * 0.34, 0.81, -0.48),
+            V(s * 0.43, 0.80, -0.73), V(s * 0.49, 0.64, -0.96)]
+
+
+def _poly_tangent(pts, t, eps=0.02):
+    a, b = _lerp_poly(pts, max(t - eps, 0)), _lerp_poly(pts, min(t + eps, 1))
+    return (b - a) / np.linalg.norm(b - a)
+
+
+def wing_feathers(s):
+    """Feather blades (base, tip, radius, half_thickness, normal) for one wing."""
+    poly = wing_frame(s)
+    down = V(s * 0.38, -1.0, 0.0)  # feathers fan slightly outward → broad from the front
+    down = down / np.linalg.norm(down)
+    out = []
+
+    def frame(u, sweep_deg):
+        T = _poly_tangent(poly, u)
+        Dp = down - (down @ T) * T
+        Dp = Dp / np.linalg.norm(Dp)
+        a = math.radians(sweep_deg)
+        d = math.cos(a) * Dp + math.sin(a) * T
+        d = d / np.linalg.norm(d)
+        n = np.cross(T, d)
+        return d, n / np.linalg.norm(n)
+
+    def sweep(u):
+        return 15 + 50 * u  # feathers rake further back toward the tip
+
+    def length(u):  # crescent: long in the middle, short at the root and the curled tip
+        return float(np.interp(u, [0.0, 0.4, 0.75, 1.0], [0.32, 0.52, 0.43, 0.20]))
+
+    # vane under everything so the wing reads as one solid mass
+    for u in np.linspace(0.03, 0.97, 10):
+        d, n = frame(u, sweep(u))
+        b = _lerp_poly(poly, u) - n * 0.007
+        out.append((b, b + d * length(u) * 0.78, 0.075, 0.010, n))
+    # flight feathers with rounded (scalloped) tips
+    for i, u in enumerate(np.linspace(0.02, 1.0, 24)):
+        d, n = frame(u, sweep(u))
+        b = _lerp_poly(poly, u) + n * (0.0035 * (i % 2))
+        out.append((b, b + d * length(u), 0.046, 0.012, n))
+    # three rows of shingled coverts over the upper half
+    for row, (off, L, lift, r) in enumerate(((0.03, 0.12, 0.014, 0.036), (0.10, 0.13, 0.010, 0.038),
+                                             (0.18, 0.15, 0.006, 0.040))):
+        for j, u in enumerate(np.linspace(0.03, 0.93 - 0.05 * row, 15)):
+            d, n = frame(u, sweep(u))
+            b = _lerp_poly(poly, u) + d * off + n * (lift + 0.003 * (j % 2))
+            out.append((b, b + d * min(L, length(u) - off), r, 0.011, n))
+    return out
 
 
 def _lerp_poly(pts, t):
@@ -150,40 +200,16 @@ def trail_sdf(p):
 
 
 def wing_sdf(p, s):
-    r0, e, t, d_root, d_tip = wing_frame(s)
-    lead = (e - r0) / np.linalg.norm(e - r0)
-    n = np.cross(lead, (d_root + d_tip) / 2)
-    n = n / np.linalg.norm(n)
-    parts = [sdf.round_cone(p, r0, e, 0.05, 0.038), sdf.round_cone(p, e, t, 0.038, 0.018)]
-    poly = [r0, e, t]
-
-    def fdir(u):
-        d = d_root * (1 - u) + d_tip * u
-        return d / np.linalg.norm(d)
-
-    # vane: a continuous slab under the feathers so the wing reads as one mass
-    for u in np.linspace(0.05, 0.95, 8):
-        base = _lerp_poly(poly, u) - n * 0.006
-        parts.append(sdf.flat_capsule(p, base, base + fdir(u) * (0.18 + 0.26 * u), 0.07, 0.009, n))
-    # flight feathers: long overlapping blades hanging from the leading edge, longer outward
-    for i, u in enumerate(np.linspace(0.04, 1.0, 21)):
-        base = _lerp_poly(poly, u) + n * (0.0035 * (i % 2))
-        L = 0.27 + 0.36 * u - 0.14 * max(u - 0.85, 0) / 0.15
-        parts.append(sdf.flat_capsule(p, base, base + fdir(u) * L, 0.042, 0.011, n))
-    # coverts: two rows of short, overlapping feathers near the leading edge
-    for row, (off, L, lift) in enumerate(((0.035, 0.13, 0.010), (0.10, 0.12, 0.006))):
-        for j, u in enumerate(np.linspace(0.04, 0.9, 13)):
-            d = fdir(u)
-            base = _lerp_poly(poly, u) + d * off + n * (lift + 0.003 * (j % 2))
-            parts.append(sdf.flat_capsule(p, base, base + d * L, 0.033, 0.010, n))
+    poly = wing_frame(s)
+    radii = [0.056, 0.048, 0.040, 0.033, 0.024]
+    parts = [sdf.round_cone(p, poly[i], poly[i + 1], radii[i], radii[i + 1]) for i in range(len(poly) - 1)]
+    parts += [sdf.flat_capsule(p, b, t, r, ht, n) for b, t, r, ht, n in wing_feathers(s)]
     return sdf.union(parts, 0.006)
 
 
 def wing_aabb(s):
-    r0, e, t, d_root, d_tip = wing_frame(s)
-    pts = [r0, e, t, r0 + d_root * 0.3, t + d_tip * 0.62, e + (d_root + d_tip) / 2 * 0.5]
-    pts = np.stack(pts)
-    return pts.min(0) - 0.07, pts.max(0) + 0.07
+    pts = np.stack(wing_frame(s) + [t for _, t, _, _, _ in wing_feathers(s)])
+    return pts.min(0) - 0.08, pts.max(0) + 0.08
 
 
 COMPONENTS = {
@@ -194,6 +220,8 @@ COMPONENTS = {
 }
 UNION_K = 0.02
 HERO_AZ = 20  # 3/4 front view where both wings open into a V
+CENTER = (0.0, -0.08, -0.28)  # framing centre (body + swept-back wings)
+EXTENT = 1.4  # half-height the camera frames
 
 
 def full_sdf(p):
@@ -239,8 +267,8 @@ def make_skeleton():
                   Bone("shin" + side, "thigh" + side, KNEE[s], ANKLE[s]),
                   Bone("foot" + side, "shin" + side, ANKLE[s], TOE[s])]
     for s, side in ((1, "L"), (-1, "R")):
-        r0, e, t, _, _ = wing_frame(s)
-        bones.append(Bone("wing" + side, "chest", r0, t))
+        poly = wing_frame(s)
+        bones.append(Bone("wing" + side, "chest", poly[0], poly[-1]))
     bones.append(Bone("trail", "pelvis", V(0.03, -0.05, -0.12), V(0.09, -0.85, -0.33)))
     return Skeleton(bones)
 
@@ -338,8 +366,8 @@ def walk_pose(skel: Skeleton, phase: float, advance: float = 0.0):
         rots["shin" + side] = W_thigh.T @ W_shin
         rots["foot" + side] = W_shin.T @ W_foot
     for s, side in ((1, "L"), (-1, "R")):
-        r0, e, t, _, _ = wing_frame(s)
-        lead = (e - r0) / np.linalg.norm(e - r0)
+        poly = wing_frame(s)
+        lead = (poly[2] - poly[0]) / np.linalg.norm(poly[2] - poly[0])
         flap = 5.0 * math.sin(2 * tau * phase - 1.3) + 2.0 * math.sin(tau * phase)
         rots["wing" + side] = rot_axis(lead, s * flap) @ rot_y(s * 2.5 * math.sin(2 * tau * phase - 2.0))
     rots["trail"] = (rot_x(-6 - 7 * math.sin(2 * tau * phase - 2.2))
@@ -393,7 +421,7 @@ def cmd_sculpt(a):
     # quick GT previews
     row = []
     for az in (25, 90, 180, 300):
-        cam = orbit_camera(az, 8, 160, 200, radius=fit_radius_for_fov(30, 1.25), fov_deg=30)
+        cam = orbit_camera(az, 8, 200, 200, radius=fit_radius_for_fov(30, EXTENT), fov_deg=30, target=CENTER)
         g = render_gbuffer(parts, cam, 2)
         a_ = np.maximum(g[..., 9:10], 1e-6)
         row.append(np.where(g[..., 9:10] > 0.5, g[..., :3] / a_, 0.1))
@@ -412,7 +440,7 @@ def cmd_bake(a):
     # the statue already lives in the normalized frame (height ≈ 2, centred) — no renormalisation,
     # so the skeleton coordinates stay valid
     cfg = TrainConfig(n_splats=a.splats, res=a.res, n_views=a.views, iters=a.iters, seed=0,
-                      elev_range=(-10.0, 40.0))
+                      elev_range=(-10.0, 40.0), extent=EXTENT, target=CENTER)
     model = train(parts, cfg)
     assign_patches(model, 80)
     torch.save(model.state_dict(), os.path.join(a.out, "nike_splats.pt"))
@@ -427,7 +455,7 @@ def cmd_animate(a):
     W = torch.as_tensor(skin_weights(skel, model.means.detach().numpy()))
     n = a.cycle_frames
     px = a.px
-    radius = fit_radius_for_fov(30, 1.3)
+    radius = fit_radius_for_fov(30, EXTENT)
 
     def frame(cam, phase, advance, sc, snap=False, mode="lit"):
         mats, root = walk_pose(skel, phase, advance)
@@ -445,7 +473,7 @@ def cmd_animate(a):
     else:
         n_cycle = n
     for i in range(n_cycle):
-        cam = orbit_camera(HERO_AZ, 10, int(px * 0.85), px, radius=radius, target=(0, -0.05, 0))
+        cam = orbit_camera(HERO_AZ, 10, int(px * 1.0), px, radius=radius, target=CENTER)
         frames.append(upscale(frame(cam, i / n, 0.0, nike_shade()), a.scale))
     if frames:
         save_anim(frames, a.out, "walk_cycle", a.fps)
@@ -456,7 +484,7 @@ def cmd_animate(a):
     frames = []
     for i in range(n * cycles):
         adv = -total / 2 + SPEED * i / n
-        cam = orbit_camera(90, 6, int(px * 2.0), px, radius=radius + 0.4, target=(0, -0.05, 0))
+        cam = orbit_camera(90, 6, int(px * 2.0), px, radius=radius + 0.4, target=CENTER)
         # key light from the camera side (+x) so the visible flank is lit
         sc = nike_shade(key=(0.6, 0.7, 0.45), rim=(-0.7, 0.4, -0.6))
         frames.append(upscale(frame(cam, (i / n) % 1, adv, sc, snap=True), a.scale))
@@ -468,13 +496,13 @@ def cmd_animate(a):
     frames = []
     for i in range(n * cycles):
         az = HERO_AZ + 360 * i / (n * cycles)
-        cam = orbit_camera(az, 10, int(px * 0.85), px, radius=radius, target=(0, -0.05, 0))
+        cam = orbit_camera(az, 10, int(px * 1.0), px, radius=radius, target=CENTER)
         frames.append(upscale(frame(cam, (i / n) % 1, 0.0, nike_shade()), a.scale))
     if frames:
         save_anim(frames, a.out, "walk_orbit", a.fps)
         print(f"[animate] walk_orbit {len(frames)} frames ({time.time() - t0:.0f}s)")
     # 4) stills: 8 phases of the cycle + G-buffer debug of one frame
-    cam = orbit_camera(HERO_AZ, 10, int(px * 0.85), px, radius=radius, target=(0, -0.05, 0))
+    cam = orbit_camera(HERO_AZ, 10, int(px * 1.0), px, radius=radius, target=CENTER)
     stills = [frame(cam, k / 8, 0.0, nike_shade()) for k in range(8)]
     sheet = np.concatenate([np.concatenate(stills[:4], 1), np.concatenate(stills[4:], 1)], 0)
     save_png(upscale(sheet, max(1, a.scale // 2)), os.path.join(a.out, "walk_sheet.png"))
@@ -490,7 +518,7 @@ def main():
     ap.add_argument("-o", "--out", default="out/nike")
     ap.add_argument("--voxel", type=float, default=0.0075, help="sculpt resolution (world units)")
     ap.add_argument("--splats", type=int, default=28000)
-    ap.add_argument("--res", type=int, default=192)
+    ap.add_argument("--res", type=int, default=208)
     ap.add_argument("--views", type=int, default=48)
     ap.add_argument("--iters", type=int, default=1500)
     ap.add_argument("--px", type=int, default=128, help="pixel-art height")

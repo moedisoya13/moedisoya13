@@ -27,6 +27,8 @@ class TrainConfig:
     iters: int = 1500
     fov: float = 30.0
     elev_range: tuple = (-15.0, 50.0)
+    extent: float = 1.15  # half-height of the framed volume
+    target: tuple = (0.0, 0.0, 0.0)  # framing centre
     seed: int = 0
     tile: int = 4
     k: int = 128
@@ -40,12 +42,12 @@ class TrainConfig:
 
 def make_views(parts, cfg: TrainConfig):
     rng = np.random.default_rng(cfg.seed + 1)
-    radius = fit_radius_for_fov(cfg.fov)
+    radius = fit_radius_for_fov(cfg.fov, cfg.extent)
     views = []
     for i in range(cfg.n_views):
         az = (i / cfg.n_views) * 360.0 + rng.uniform(-3, 3)  # even azimuth coverage
         el = rng.uniform(*cfg.elev_range)
-        cam = orbit_camera(az, el, cfg.res, cfg.res, radius=radius, fov_deg=cfg.fov)
+        cam = orbit_camera(az, el, cfg.res, cfg.res, radius=radius, fov_deg=cfg.fov, target=cfg.target)
         views.append((cam, torch.as_tensor(render_gbuffer(parts, cam, ssaa=2))))
     return views
 
