@@ -153,11 +153,13 @@ test('without wear the boxer is sculpted as he was, solid for solid', () => {
   assert.equal(sha(JSON.stringify(list)), 'a6dd791f6fdd7e66184cd562f7b743e78c5770e9681a81c70a47f89ea4e0174e');
 });
 
+/* (the ring re-baked 2026-11-25, tests/arena.test.mjs: its canvas plain, its ropes moved in to 2.62 m and baked apart in
+   assets/ropes.splats.txt; the boxer's bytes as they were) */
 test('the committed boxer and ring are the bytes they were', () => {
   assert.equal(manifest.boxer.count, 8657);
-  assert.equal(manifest.ring.count, 23997);
+  assert.equal(manifest.ring.count, 18525);
   assert.equal(sha(asset('boxer.splats.txt')), 'd2f0d0fa5d1567667aafe82de04a76b768699a3bd2ba2176f780ae63fed5abee');
-  assert.equal(sha(asset('ring.splats.txt')), '4457724a341d03725940c03efd9de1fbd5be25cfc4ff4dde5af53f069f97fc06');
+  assert.equal(sha(asset('ring.splats.txt')), '156d4adbf50db27dd3a5f34cb8ebd53ca6f75f8a2fdd50b67a43c33c6dbd0a69');
 });
 
 // (the motion catalogue's new samples, src/samples.data.mjs: each on a script the catalogue has, each card's wear an outfit

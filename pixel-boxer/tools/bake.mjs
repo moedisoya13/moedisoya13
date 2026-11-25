@@ -1,17 +1,23 @@
 #!/usr/bin/env node
-/* Bakes what the match draws: the boxer in his guard and the ring, as packed splats the page hands to the graphics card, and
-   the boxer in each thing he may wear (rig/boxer.mjs WEAR: the training suit, its hood down and up).
+/* Bakes what the match draws: the boxer in his guard, the ring (its plain canvas and posts, and its ropes apart, so that the
+   page can bend them: world/ropes.mjs) and the underground pit (its floor, edge and lamp, and its crowd on the bones of its
+   groups: world/pit.mjs), as packed splats the page hands to the graphics card, and the boxer in each thing he may wear
+   (rig/boxer.mjs WEAR: the training suit, its hood down and up).
    ink-studio is only needed here; the page ships none of it.
-     node tools/bake.mjs          -> assets/boxer.splats.txt, assets/ring.splats.txt, assets/boxer-<wear>.splats.txt, assets/manifest.json
+     node tools/bake.mjs          -> assets/boxer.splats.txt, assets/ring.splats.txt, assets/ropes.splats.txt, assets/pit.splats.txt,
+                                     assets/crowd.splats.txt, assets/boxer-<wear>.splats.txt, assets/manifest.json
      node tools/bake.mjs --wear   -> the outfits alone: assets/boxer-<wear>.splats.txt, and their entries put into the manifest
-                                     as it is (manifest.wear), the boxer's and the ring's left as they were baked */
+                                     as it is (manifest.wear), the rest left as it was baked
+     node tools/bake.mjs --world  -> the places alone: the ring, its ropes, the pit and its crowd (manifest.ring, ropes, pit,
+                                     crowd), the boxer and his outfits left as they were baked */
 import { createRequire } from 'node:module';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { fk, NAMES } from '../src/rig/skeleton.mjs';
 import { PALETTE, MAT, WEAR, sculptBoxer } from '../src/rig/boxer.mjs';
-import { RING, sculptRing, markCanvas } from '../src/world/ring.mjs';
+import { RING, sculptRing, sculptRopes } from '../src/world/ring.mjs';
+import { PIT, CROWD, BUDGET, sculptPit, brickOf, floorOf, crowdOf } from '../src/world/pit.mjs';
 import { guardPose } from '../src/anim/animator.mjs';
 import { pack as packSplats, BYTES } from '../src/render/splats.mjs';
 
@@ -57,18 +63,52 @@ function bakeBoxer(wear) {
   return rowsOf(W, true);
 }
 const only = process.argv.includes('--wear'),
+  world = process.argv.includes('--world'),
   outfits = Object.keys(WEAR);
-let boxer, ring;
+let boxer, places;
+if (!only && !world) boxer = bakeBoxer();
 if (!only) {
-  boxer = bakeBoxer();
-  const { B, S } = sculptor(5);
-  sculptRing(S);
-  S.bake();
-  const W = B.finish({}),
-    canvas = MAT.canvas.r.map(i => packed(PALETTE[i])),
-    shade = (colour, steps) => canvas[Math.max(0, Math.min(canvas.length - 1, canvas.indexOf(Math.round(colour)) + steps))];
-  markCanvas(W.data, W.count, 16, 7, shade, c => canvas.includes(Math.round(c)));
-  ring = rowsOf(W, false);
+  // the ring with its canvas plain (the bake's light and shade on it, nothing marked on it), and its ropes, lit as they are
+  const ring = sculptor(5);
+  sculptRing(ring.S, { ropes: false });
+  ring.S.bake();
+  const ropes = sculptor(6);
+  sculptRopes(ropes.S);
+  ropes.S.bake();
+  // the pit under its lamp: the sun let down to a glimmer; the bricks' mortar marked a step of its ramp darker
+  const pit = sculptor(7);
+  Object.assign(pit.S, { sunK: 0.22, amb: 0.1, sky: 0.12 });
+  sculptPit(pit.S);
+  pit.S.bake();
+  const P = pit.B.finish({}),
+    brick = MAT.apron.r.map(i => packed(PALETTE[i]));
+  for (let i = 0; i < P.count; i++) {
+    const o = i * 16,
+      k = brick.indexOf(Math.round(P.data[o + 7]));
+    if (k >= 0 && brickOf(P.data[o], P.data[o + 1], P.data[o + 2])) P.data[o + 7] = packed(PALETTE[MAT.canvas.r[0]]);
+  }
+  const edge = rowsOf(P, false),
+    floor = floorOf(),
+    crowd = crowdOf(),
+    all = new Float32Array(floor.rows.length + edge.data.length);
+  all.set(floor.rows);
+  all.set(edge.data, floor.rows.length);
+  /* (the canvas a step darker all over, its light and shade kept: lit, it is the ramp's third step, so that what the effects
+     light on it (render/renderer.mjs: a ring through the canvas a step lighter where it lifts it) has a step to go to) */
+  const canvas = rowsOf(ring.B.finish({}), false);
+  for (let i = 0; i < canvas.count; i++) {
+    const o = i * 12,
+      k = MAT.canvas.r.indexOf(canvas.data[o + 9]);
+    if (k > 0) canvas.data[o + 9] = MAT.canvas.r[k - 1];
+  }
+  places = {
+    ring: canvas,
+    ropes: rowsOf(ropes.B.finish({}), false),
+    pit: { data: all, count: floor.count + edge.count, stray: edge.stray },
+    crowd: { data: crowd.rows, count: crowd.count, stray: 0, figures: crowd.figures.length }
+  };
+  console.log(`pit: floor ${floor.count}, edge ${edge.count}, crowd ${crowd.count} (${crowd.figures.length} figures)`);
+  if (places.pit.count + places.crowd.count > BUDGET || places.crowd.count > CROWD.budget) throw new Error(`the pit is ${places.pit.count} + ${places.crowd.count} splats: over its budget`);
 }
 
 function write(name, baked) {
@@ -80,8 +120,16 @@ function write(name, baked) {
   return { file, count: baked.count, min: p.min.map(round), size: p.size.map(round) };
 }
 const where = path.join(out, 'manifest.json'),
-  manifest = only ? JSON.parse(readFileSync(where, 'utf8')) : { palette: PALETTE, bones: NAMES.length + 1, boxer: write('boxer', boxer), ring: Object.assign(write('ring', ring), RING) };
-// (an outfit's splats name the palette's slots: it must be the palette the manifest was baked with)
+  manifest = only || world ? JSON.parse(readFileSync(where, 'utf8')) : { palette: PALETTE, bones: NAMES.length + 1, boxer: write('boxer', boxer) };
+// (an outfit's splats, and the places', name the palette's slots: it must be the palette the manifest was baked with)
 if (JSON.stringify(manifest.palette) !== JSON.stringify(PALETTE) || manifest.bones !== NAMES.length + 1) throw new Error('assets/manifest.json was baked with another palette or skeleton: bake everything');
-manifest.wear = Object.fromEntries(outfits.map(wear => [wear, write('boxer-' + wear, bakeBoxer(wear))]));
-writeFileSync(where, JSON.stringify(manifest, null, 2) + '\n');
+if (places) {
+  manifest.ring = Object.assign(write('ring', places.ring), RING);
+  manifest.ropes = write('ropes', places.ropes);
+  manifest.pit = Object.assign(write('pit', places.pit), { edge: PIT.edge, budget: BUDGET });
+  manifest.crowd = Object.assign(write('crowd', places.crowd), { figures: places.crowd.figures, groups: CROWD.groups.length, sectors: CROWD.sectors });
+}
+if (!world) manifest.wear = Object.fromEntries(outfits.map(wear => [wear, write('boxer-' + wear, bakeBoxer(wear))]));
+// (the entries in the order they have always been in, the new ones after)
+const order = ['palette', 'bones', 'boxer', 'ring', 'wear', 'ropes', 'pit', 'crowd'];
+writeFileSync(where, JSON.stringify(Object.fromEntries(order.filter(k => k in manifest).map(k => [k, manifest[k]])), null, 2) + '\n');

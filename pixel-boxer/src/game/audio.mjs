@@ -1,5 +1,5 @@
 /* The sounds, made on the spot: filtered noise for the air a blade moves, a pitched thud for a hit, two detuned bells for
-   steel on steel. Nothing is loaded, and nothing plays until the first touch has unlocked the audio context. */
+   steel on steel, and a crowd's cheer and roar (the underground pit's, world/pit.mjs). Nothing is loaded, and nothing plays until the first touch has unlocked the audio context. */
 export function createAudio() {
   let ctx = null,
     noise = null,
@@ -45,7 +45,29 @@ export function createAudio() {
     osc.start(t);
     osc.stop(t + dur + 0.05);
   }
+  // (a crowd: the noise looped and let through low, swelling and dying away over `dur` seconds)
+  function crowd(dur, peak, low, high) {
+    const t = ctx.currentTime,
+      src = ctx.createBufferSource(),
+      band = ctx.createBiquadFilter(),
+      gain = ctx.createGain();
+    src.buffer = noise;
+    src.loop = true;
+    band.type = 'bandpass';
+    band.Q.value = 0.6;
+    band.frequency.setValueAtTime(low, t);
+    band.frequency.linearRampToValueAtTime(high, t + dur * 0.3);
+    band.frequency.linearRampToValueAtTime(low, t + dur);
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(peak, t + dur * 0.2);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    src.connect(band).connect(gain).connect(ctx.destination);
+    src.start(t);
+    src.stop(t + dur + 0.05);
+  }
   const SOUNDS = {
+    cheer: () => crowd(1.1, 0.12, 500, 1100),
+    roar: () => crowd(3.2, 0.2, 450, 1300),
     swing: () => hiss(900, 3600, 0.12, 0.22),
     whiff: () => hiss(700, 2200, 0.16, 0.12),
     hit: () => (tone('square', 190, 48, 0.16, 0.3), hiss(2600, 500, 0.1, 0.3, 0.7)),

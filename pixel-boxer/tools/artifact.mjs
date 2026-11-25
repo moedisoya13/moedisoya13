@@ -10,7 +10,8 @@
                                                                          since then as null (for publishing again)
    Either way the files map is printed as JSON: the modules (those imported, those loaded later by import('./...'), and a
    worker's, new URL('./...', import.meta.url)), the assets (a page of boxers alone, without the ring: the catalogues and the
-   effect study; the sparring's outfits besides), and the reference sheets (docs/ref) the modules name. The page made carries
+   effect study; the game and the sparring with both places, the ring with its ropes and the pit with its crowd; the
+   sparring's outfits besides), and the reference sheets (docs/ref) the modules name. The page made carries
    the commit it was made from and that commit's date (<meta name="build" content="7c4c057 2026-11-24">, a + after the
    commit if the working tree had changes): the committed .html files are not touched. */
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
@@ -76,7 +77,9 @@ function filesOf(read) {
   files['assets/manifest.json'] = 'assets/manifest.json';
   // (the sparring dresses its men as the viewer picks: every outfit)
   const wear = /spar/.test(entry) ? Object.values(manifest.wear || {}).map(w => w.file.replace(/\.splats\.txt$/, '')) : [];
-  for (const part of /catalog|pending|fxlab/.test(entry) ? ['boxer'] : ['boxer', 'ring', ...wear]) files[`assets/${part}.splats.txt`] = `assets/${part}.splats.txt`;
+  // (and the places a bout is fought in, the game's and the sparring's: the ring and its ropes, the pit and its crowd)
+  const places = ['ring', 'ropes', 'pit', 'crowd'].filter(k => manifest[k]).map(k => manifest[k].file.replace(/\.splats\.txt$/, ''));
+  for (const part of /catalog|pending|fxlab/.test(entry) ? ['boxer'] : ['boxer', ...places, ...wear]) files[`assets/${part}.splats.txt`] = `assets/${part}.splats.txt`;
   for (const w of [...wears].sort()) files[`assets/boxer-${w}.splats.txt`] = `assets/boxer-${w}.splats.txt`;
   for (const sheet of [...sheets].sort()) files[sheet] = sheet;
   return files;

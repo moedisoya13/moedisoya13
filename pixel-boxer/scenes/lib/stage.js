@@ -1,14 +1,11 @@
 'use strict';
-// What the review scenes share: the ring (or a bare disc), one boxer sculpted in his guard, and a script that drives him.
+// What the review scenes share: the ring (its canvas plain, its ropes straight) or a bare disc, one boxer sculpted in his guard, and a script that drives him.
 const { fk, NAMES } = require('../../src/rig/skeleton.mjs');
 const { PALETTE, MAT, sculptBoxer } = require('../../src/rig/boxer.mjs');
-const { sculptRing, markCanvas } = require('../../src/world/ring.mjs');
+const { sculptRing } = require('../../src/world/ring.mjs');
 const { boneMatrices } = require('../../src/anim/pose.mjs');
 const { guardPose } = require('../../src/anim/animator.mjs');
 
-const packed = hex => ((hex >> 16) & 255) + ((hex >> 8) & 255) * 256 + (hex & 255) * 65536;
-const CANVAS = MAT.canvas.r.map(i => packed(PALETTE[i]));
-const shade = (colour, steps) => CANVAS[Math.max(0, Math.min(CANVAS.length - 1, CANVAS.indexOf(Math.round(colour)) + steps))];
 
 /* o.frame(t) -> { pose, place } for the boxer at t, called once for every sixtieth of a second in order (the scenes play a
    real bout and hand over one of its boxers); o.restart() starts it over, when an earlier time is asked for. */
@@ -27,7 +24,6 @@ function buildStage({ makeBuilder, makeSculpt, KIT: K }, seed, o) {
   sculptBoxer(S, bind);
   S.bake();
   const W = B.finish(Object.assign({ cam: { target: [0, 0.85, 0], dist: 6.6, pitch: 0.5, yaw: 0.75 }, detail: 34, dither: 0.2, radius: 4 }, o.finish));
-  markCanvas(W.data, W.count, 16, 7, shade, c => CANVAS.includes(Math.round(c)));
   const mats = new Float32Array(NAMES.length * 12),
     STEP = 1 / 60;
   let at = -STEP;

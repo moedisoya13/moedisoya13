@@ -1,6 +1,7 @@
 /* 한 라운드 스파링: one round of promised sparring (약속 대련, docs/moves-plan-6.md §8; docs/spar.md), arranged from a seed in
    one pass of the real bout. Nothing here draws, and the same code makes the round in the page and under node.
-     planOf(seed)      -> the round: { seed, men, hp, favoured, target, inputs (both men's controls, step by step), rails
+     planOf(seed, o)   -> the round (o.arena: where it is fought, the ring unless it is 'underground': game/bout.mjs arenaOf):
+                          { seed, arena, men, hp, favoured, target, inputs (both men's controls, step by step), rails
                           and feet (what each man does, his techniques and his footwork, a block an action: rails.mjs),
                           events (what became of every punch), ko, steps, time, stats }. Played back by startOf(plan) and
                           stepping it with plan.inputs, it is the same bout to the step, events, lanes and all
@@ -35,7 +36,7 @@
      zone is thrown power punches only, so that the blow that puts him down is one; past the target time the liver is gone
      for (a liver blow puts a man down whatever his health). The first knockdown ends the round, whoever's it is.
    - What the controls were is all the plan keeps of the choreographers: plan.inputs, and the lanes as the bout showed them. */
-import { createBout, step, incoming, RULES } from '../game/bout.mjs';
+import { createBout, step, incoming, RULES, arenaOf } from '../game/bout.mjs';
 import { TECHNIQUES, opens, has, memory, observe, situation, answerOf, counterOf, openingOf } from '../game/techniques.mjs';
 import { loadout } from '../game/profile.mjs';
 import { LEVEL, LEVELS, levelOf } from '../anim/skill.mjs';
@@ -124,7 +125,7 @@ function menOf(rng) {
 
 /* A bout as the round starts: the two men as the plan has them, both with the round's health. */
 export function startOf(plan) {
-  const bout = createBout(plan.seed, { skills: plan.men.map(m => m.skills), techniques: plan.men.map(m => m.techniques) });
+  const bout = createBout(plan.seed, { skills: plan.men.map(m => m.skills), techniques: plan.men.map(m => m.techniques), arena: plan.arena });
   bout.fighters.forEach(f => (f.hp = plan.hp));
   return bout;
 }
@@ -666,7 +667,7 @@ function arrangement(seed, attempt, o) {
     target = SPAR.target[0] + rng() * (SPAR.target[1] - SPAR.target[0]),
     // (how much of his health the favoured man is to lose: more the nearer their grades)
     loss = clamp(0.62 - 0.1 * (rank(men[favoured].grade) - rank(men[1 - favoured].grade)) + 0.2 * (rng() - 0.5), 0.25, 0.8),
-    plan = { seed, attempt, men, hp: hpOf(men[favoured].grade, men[1 - favoured].grade, target), favoured, target: +target.toFixed(1), loss: +loss.toFixed(2), inputs: [], rails: null, feet: null, events: [], ko: null, done: false, steps: 0, time: 0, stats: null },
+    plan = { seed, arena: arenaOf(o.arena), attempt, men, hp: hpOf(men[favoured].grade, men[1 - favoured].grade, target), favoured, target: +target.toFixed(1), loss: +loss.toFixed(2), inputs: [], rails: null, feet: null, events: [], ko: null, done: false, steps: 0, time: 0, stats: null },
     bout = startOf(plan),
     minds = [0, 1].map(i => createMind(i, men[i], dice(seed * 104729 + 31 + i * 7919 + attempt * 15485863))),
     steer = { press: [1, 1], guard: [1, 1], finish: [false, false], liver: [false, false], late: false },

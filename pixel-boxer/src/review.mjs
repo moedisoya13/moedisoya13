@@ -17,7 +17,10 @@
    as he faces in that picture, his front marked, the rings of the distance bands, the path the other man's centre has taken
    since the first picture, and in the corner of each picture the cell the other man is in (with the margin the cells change
    by), the band and the bearing in degrees; wear=training (or training-up, the hood up): both men in the training suit, as
-   the game has it (rig/boxer.mjs WEAR; wear=training,none or none,training-up: each corner his own, the first man's first). It is read from above: unless told otherwise the camera looks almost straight down,
+   the game has it (rig/boxer.mjs WEAR; wear=training,none or none,training-up: each corner his own, the first man's first);
+   arena=ring or arena=underground: fought there (game/bout.mjs: the ring's ropes give and are leaned on, the pit's edge
+   stops a man as the ropes once did) and drawn there under each picture (world/stage.mjs: the ring, its ropes bent where the
+   men press them; the pit, its edge and the crowd past it, still). It is read from above: unless told otherwise the camera looks almost straight down,
    at 1.45 (the plan's 0.95 leaves the men standing over the rings), from behind the man in the middle as he faced in the first picture
    (turn=1: as he faces in each), on his feet and far enough back for the path)
    The bout is run once from the start of the script and the chosen moments are kept; nothing moves on the page after that.
@@ -35,6 +38,7 @@ import { dress } from './rig/boxer.mjs';
 import { boneMatrices } from './anim/pose.mjs';
 import { guardPose } from './anim/animator.mjs';
 import { step } from './game/bout.mjs';
+import { arenaOf, loadArena, createArena } from './world/stage.mjs';
 import { createTracker, track, cellName, cellSaid, BANDS } from './game/bearing.mjs';
 import { ENTRIES, freshBout, drive } from './footwork.mjs';
 import { DEFENSE, PARRY_DOWN, CROSS_ARM, CROSS_BODY, ROLLING, PULL_COUNTER, BLOCK_FIRE, SHELL, CROSS_COUNTER, OUT_COUNTER } from './defense.mjs';
@@ -58,7 +62,15 @@ const DT = 1 / 60,
   bearing = q.get('bearing') === '1' && !replay,
   of = num('of', 1),
   // (what each man wears: '' as he is)
-  wears = (w => [w[0], w.length > 1 ? w[1] : w[0]])((q.get('wear') || '').split(',').map(x => (x.trim() === 'none' ? '' : x.trim())));
+  wears = (w => [w[0], w.length > 1 ? w[1] : w[0]])((q.get('wear') || '').split(',').map(x => (x.trim() === 'none' ? '' : x.trim()))),
+  // (where it is fought and drawn: none named, the script's own bout, and the catalogue's square of canvas with fx=1)
+  arena = q.has('arena') ? arenaOf(q.get('arena')) : null;
+// (the script's bout, in the arena asked for)
+const fresh = entry => {
+  const bout = freshBout(entry);
+  if (arena) bout.arena = arena;
+  return bout;
+};
 
 // (the effects' dice: the same sheet every time it is drawn)
 const dice = seed => () => {
@@ -121,12 +133,13 @@ const momentOf = (men, bind, mats, E) =>
     z: f.z,
     yaw: f.yaw,
     hips: f.pose.at.Hips[2],
+    points: f.points,
     wave: E ? rippleRow(E.ripples[i], f) : null
   }));
 
 // ---- the exchange, run once: the bones of both men at each moment asked for (and, with fx=1, what is in the air then)
 function run(bind) {
-  const bout = freshBout(entry),
+  const bout = fresh(entry),
     mats = new Float32Array(NAMES.length * 12),
     want = Array.from({ length: n }, (_, i) => Math.round((from + (n > 1 ? ((to - from) * i) / (n - 1) : 0)) / DT)),
     frames = [],
@@ -161,7 +174,7 @@ function run(bind) {
 /* The first replay the script makes, as the catalogue draws it: the bout run until a replay starts, and then the replay
    played a sixtieth of a second of real time at a time, what its steps threw thrown again as it comes to them. */
 function runReplay(bind) {
-  const bout = freshBout(entry),
+  const bout = fresh(entry),
     mats = new Float32Array(NAMES.length * 12),
     r = createReplay({ yaw: () => num('yaw', entry.view.yaw) }),
     want = Array.from({ length: n }, (_, i) => Math.round((from + (n > 1 ? ((to - from) * i) / (n - 1) : 0)) / DT)),
@@ -215,7 +228,8 @@ async function start() {
     frames = replay ? runReplay(bind) : run(bind),
     // (a ring through the canvas needs a canvas to go through: the catalogue's tiles, under any sheet with the effects)
     tiles = effects ? (q.get('canvas') === 'ring' ? { rows: unpack(fromBase64(await (await fetch('assets/' + manifest.ring.file)).text()), manifest.ring), count: manifest.ring.count } : floor(3.2, [0.6, 0])) : null,
-    ground = tiles ? R.mesh(tiles.rows, tiles.count) : null,
+    ground = tiles && !arena ? R.mesh(tiles.rows, tiles.count) : null,
+    place = arena ? createArena(R, manifest, await loadArena(manifest, arena, async part => unpack(fromBase64(await (await fetch('assets/' + part.file)).text()), part))) : null,
     sheet = document.getElementById('sheet'),
     gap = 6,
     w = Math.floor((innerWidth - gap * (cols + 1)) / cols),
@@ -259,6 +273,8 @@ async function start() {
     const ring = f.fx && f.fx.ground,
       layers = [{ mesh: shadows, palette: palettes[0], mask: 0.6, ground: ring && [...ring.slice(0, 6), 0] }];
     if (ground) layers.unshift({ mesh: ground, palette: palettes[0], mask: 0.5, ground: ring });
+    // (or the arena, the ropes bent as the men in this picture press them, the crowd as it stands)
+    if (place) (layers[0].palette = place.floor), layers.unshift(place.ground(ring), ...place.over(f.men, 0, cam));
     f.men.forEach((m, i) => {
       if (q.get('solo') === '1' && q.has('focus') && i !== num('focus', 0)) return;
       R.packBones(m.bones, bones[i]);

@@ -9,7 +9,10 @@
    The round is arranged in a worker (src/spar/worker.mjs), or here a piece each picture where a worker cannot be had, and
    plays once it is all arranged (on a slow device, after 4 s, on what is arranged, the rest arranged ahead of it). A
    knockdown is shown the way src/spar/knock.mjs says (the one place for it). The seed is kept in the page's address
-   (#s-48213), so a round can be watched again or passed on; the outfit is remembered in this browser if it can be. */
+   (#s-48213), so a round can be watched again or passed on; the outfit, and where it is fought (the ring, or the
+   underground pit with its crowd: world/stage.mjs), are remembered in this browser if they can be. A round is arranged in
+   the arena it is fought in (their edges stop a man differently: game/bout.mjs ropes), so another arena chosen arranges the
+   round again there. */
 import { createRenderer, paletteArray, rgb } from './render/renderer.mjs';
 import { createFx } from './render/fx.mjs';
 import { blow, rippleOf, rippleRow, fallOf, landed, landRipple, groundOf, groundRow, quietOf, ringsOn } from './render/blow.mjs';
@@ -28,10 +31,11 @@ import { startOf, planner } from './spar/plan.mjs';
 import { viewsOf, ACTS } from './spar/rails.mjs';
 import { punchName, labelOf, saidOf, shortOf } from './spar/names.mjs';
 import { createKnockdown } from './spar/knock.mjs';
+import { arenaOf, loadArena, createArena } from './world/stage.mjs';
+import { ARENAS } from './world/pit.mjs';
 
 const DT = 1 / 60;
 const $ = id => document.getElementById(id);
-const HALL = [0x171a2c, 0x11131f, 0x0c0d16, 0x090a11];
 const TRAIL = [38, 18, 18, 17, 16];
 const CORNER = ['빨강', '파랑'];
 // (a grade as the screens say it: 명 and 암 as L and D, 4명 -> 4L; the code and the docs keep 명 and 암)
@@ -46,7 +50,7 @@ const reduced = (() => {
     return false;
   }
 })();
-// (what this browser remembers for the page, if it lets it: the outfit)
+// (what this browser remembers for the page, if it lets it: the outfit, the arena)
 const store = {
   get(k) {
     try {
@@ -89,23 +93,24 @@ const tenth = k => `${Math.floor(k / 3600)}:${String(Math.floor(k / 60) % 60).pa
 async function assets() {
   const manifest = await (await fetch('assets/manifest.json')).json(),
     get = async part => unpack(fromBase64(await (await fetch('assets/' + part.file)).text()), part);
-  return { manifest, get, ring: await get(manifest.ring) };
+  return { manifest, get };
 }
 
 function start(data) {
   data = data || {};
   let wear = WEARS.includes(data.wear) ? data.wear : WEARS.includes(store.get('spar.wear')) ? store.get('spar.wear') : '',
     sound = !!data.sound;
-  const want = Number(data.seed) || seedOfHash();
+  const arena = ARENAS.includes(data.arena) ? data.arena : arenaOf(store.get('spar.arena')),
+    want = Number(data.seed) || seedOfHash();
   assets()
-    .then(a => run(a, { wear, sound, seed: want, play: !!data.seed }))
+    .then(a => run(a, { wear, arena, sound, seed: want, play: !!data.seed }))
     .catch(error => {
       console.error(error);
       $('loading').textContent = '불러오지 못했습니다: ' + error.message;
     });
 }
 
-function run({ manifest, get, ring }, o) {
+function run({ manifest, get }, o) {
   const canvas = $('view'),
     R = createRenderer(canvas),
     audio = createAudio(),
@@ -114,14 +119,15 @@ function run({ manifest, get, ring }, o) {
     motes = [createFx(), createFx()];
   // (what a defence draws, as the game draws it today: render/guard.mjs; not the brilliant defence's slow motion, as in the game)
   let guard = createGuard(styleOf(null));
-  const meshes = { ring: R.mesh(ring, manifest.ring.count), fx: fx.map(f => R.mesh(f.rows, 0, true)), motes: motes.map(f => R.mesh(f.rows, 0, true)) },
+  const meshes = { fx: fx.map(f => R.mesh(f.rows, 0, true)), motes: motes.map(f => R.mesh(f.rows, 0, true)) },
     palettes = [0, 1].map(i => paletteArray(dress(manifest.palette, i))),
-    hall = new Float32Array(HALL.flatMap(rgb)),
+    arenas = {}, // where it is fought, each loaded the first time it is chosen
     ink = new Float32Array(rgb(manifest.palette[0])),
     bones = [new Float32Array(R.maxBones * 12), new Float32Array(R.maxBones * 12)],
     mats = new Float32Array(NAMES.length * 12),
     bodies = {}; // the boxers' meshes, as dressed: '' as they are
   let wear = o.wear,
+    arena = null,
     sound = o.sound,
     speed = 1;
   // (an outfit's mesh, loaded the first time it is worn)
@@ -133,6 +139,7 @@ function run({ manifest, get, ring }, o) {
     const rows = await get(part);
     return (bodies[w] = { mesh: R.mesh(rows, part.count), colours: [0, 1].map(i => (w ? paletteArray(dress(manifest.palette, i, w)) : palettes[i])) });
   }
+  const placed = async name => arenas[name] || (arenas[name] = createArena(R, manifest, await loadArena(manifest, name, get)));
 
   /* ---- the round: its plan as far as it is arranged, and the bout it is played into */
   let plan = null, // { seed, men, hp, favoured, inputs, rails, views, done, ko, stats }
@@ -156,7 +163,7 @@ function run({ manifest, get, ring }, o) {
     shake = { amp: 0, t: 0 },
     stats = { frames: 0, ms: 0 },
     // (a knockdown's showing: src/spar/knock.mjs, the game's way)
-    knock = createKnockdown({ yaw: () => cam.yaw, aspect: () => R.target.w / R.target.h });
+    knock = createKnockdown({ yaw: () => cam.yaw, aspect: () => R.target.w / R.target.h, edge: () => arena.edge });
 
   /* ---- arranging: in a worker if there can be one, else here, a piece each picture */
   let worker = null,
@@ -177,10 +184,10 @@ function run({ manifest, get, ring }, o) {
   }
   function arrange(seed, keepJob) {
     if (!keepJob) job++;
-    plan = { seed, men: null, hp: null, favoured: null, inputs: [], rails: [[], []], feet: [[], []], views: [], done: false, ko: null, steps: 0, stats: null, error: null, askedAt: performance.now(), doneAt: 0 };
+    plan = { seed, arena: arena.name, men: null, hp: null, favoured: null, inputs: [], rails: [[], []], feet: [[], []], views: [], done: false, ko: null, steps: 0, stats: null, error: null, askedAt: performance.now(), doneAt: 0 };
     local = null;
-    if (worker) worker.postMessage({ id: job, seed });
-    else local = { id: job, p: planner(seed), inputs: 0 };
+    if (worker) worker.postMessage({ id: job, seed, arena: arena.name });
+    else local = { id: job, p: planner(seed, { arena: arena.name }), inputs: 0 };
   }
   function took(m) {
     if (!plan || m.id !== job) return;
@@ -449,6 +456,8 @@ function run({ manifest, get, ring }, o) {
   };
   function react(e) {
     const f = bout.fighters;
+    arena.hear(e);
+    if (arena.crowd && e.type === 'hit' && (e.down || e.J >= 60 || e.counter)) play(e.down ? 'roar' : 'cheer');
     if (e.type === 'punch') play('swing');
     else if (e.type === 'dash') {
       play('dodge');
@@ -581,7 +590,7 @@ function run({ manifest, get, ring }, o) {
     if (ground) ground.age += fade;
     const ringRow = played ? null : groundRow(ground),
       shadows = [],
-      layers = [{ mesh: meshes.ring, palette: palettes[0], mask: 0.5, ground: ringRow }],
+      layers = [arena.ground(ringRow)],
       body = bodies[wear] || bodies[''];
     men.forEach((m, i) => {
       boneMatrices(m.pose, bind, m.place, mats, 0);
@@ -599,7 +608,7 @@ function run({ manifest, get, ring }, o) {
     mote.forEach((m, i) => meshes.motes[i].update(m.rows, m.update(moved)));
     // (a ripple goes on in the same time as the sparks)
     for (const r of waves) if (r) r.age += moved;
-    layers.splice(1, 0, { mesh: meshes.fx[0], palette: palettes[0], mask: 0.6, ground: ringRow && [...ringRow.slice(0, 6), 0] });
+    layers.splice(1, 0, { mesh: meshes.fx[0], palette: arena.floor, mask: 0.6, ground: ringRow && [...ringRow.slice(0, 6), 0] });
     layers.push({ mesh: meshes.fx[1], palette: palettes[0], mask: 0.6 }, { mesh: meshes.fx[2], palette: palettes[1], mask: 0.6 });
     layers.push(...meshes.motes.map((mesh, i) => ({ mesh, palette: palettes[0], mask: 0.6, outside: i + 1 })));
 
@@ -633,12 +642,14 @@ function run({ manifest, get, ring }, o) {
     shake.t += elapsed;
     // (the picture darkens for the result only once the fall and its replay have been shown)
     if (phase === 'over') dim = knock.pending || replayCam ? 0 : resultAt === null ? 0 : Math.min(0.4, (time - resultAt) * 0.4);
+    // (what stands round them: the ropes, bent where the men drawn press them; or the crowd beyond the camera's side of them)
+    layers.splice(1, 0, ...arena.over(men, elapsed, replayCam || cam));
     R.draw({
       camera: replayCam || cam,
       shake: !replayCam && shake.amp > 0.4 ? [Math.sin(shake.t * 97) * shake.amp, Math.cos(shake.t * 83) * shake.amp * 0.6] : null,
       white: !replayCam && white > 0.02 ? white : 0,
       dim,
-      hall,
+      hall: arena.hall,
       ink,
       layers
     });
@@ -674,6 +685,18 @@ function run({ manifest, get, ring }, o) {
   $('rails').addEventListener('click', openFull);
   $('rails').addEventListener('keydown', e => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), openFull()));
   addEventListener('keydown', e => e.key === 'Escape' && $('full').classList.contains('on') && (show('full', false), $('rails').focus()));
+  /* (another arena: drawn at once, and a round under way arranged again there, from its start, the same seed) */
+  $('arena').value = o.arena;
+  $('arena').addEventListener('change', () => {
+    const name = arenaOf($('arena').value);
+    placed(name)
+      .then(A => {
+        arena = A;
+        store.set('spar.arena', name);
+        if (plan && plan.arena !== name && phase !== 'rest') newRound(plan.seed);
+      })
+      .catch(err => console.error(err));
+  });
   $('wear').value = wear;
   $('wear').addEventListener('change', () => {
     const w = $('wear').value;
@@ -692,13 +715,13 @@ function run({ manifest, get, ring }, o) {
 
   // (the page as it was, if the host swaps a new version in while it is open: the same round comes back)
   try {
-    globalThis.claude && globalThis.claude.hot && globalThis.claude.hot.snapshot && globalThis.claude.hot.snapshot(() => ({ seed: plan ? plan.seed : null, wear, sound }));
+    globalThis.claude && globalThis.claude.hot && globalThis.claude.hot.snapshot && globalThis.claude.hot.snapshot(() => ({ seed: plan ? plan.seed : null, wear, arena: arena ? arena.name : o.arena, sound }));
   } catch {
     // (no host to tell)
   }
   globalThis.__spar = { get plan() { return plan; }, get bout() { return bout; }, get phase() { return phase; }, get k() { return k; }, stats, cam, newRound, replay, tick: ms => frame((clockAt += ms)) };
 
-  Promise.all([dressed(''), wear ? dressed(wear) : null]).then(() => {
+  Promise.all([dressed(''), wear ? dressed(wear) : null, placed(o.arena).then(A => (arena = A))]).then(() => {
     pose(true);
     hud();
     $('loading').remove();

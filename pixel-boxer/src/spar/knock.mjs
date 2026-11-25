@@ -4,7 +4,9 @@
    the blow is seen best from: replay.mjs viewOf) and a brief slow replay from the press of the punch that did it to him falling
    away, ending before he comes down; then a cut back. Any tap or key skips it. If the game's way changes, this file follows it
    and src/spar.mjs does not change. The page calls it at these points and nowhere else:
-     const k = createKnockdown({ yaw, aspect })   yaw(): the live camera's yaw; aspect(): the picture's width over its height
+     const k = createKnockdown({ yaw, aspect, edge })   yaw(): the live camera's yaw; aspect(): the picture's width over its
+                            height; edge(): what the camera keeps inside (the ropes, RING.rope, unless it says: the pit's
+                            edge, world/stage.mjs)
      k.after(bout, quiet)   after each step: -> true on the step a replay starts (the page stops stepping the bout while k.playing);
                             quiet: quietOf(the motes, the ripples, the ring) as the page draws them
      k.picture(dt)          while k.playing: what to draw instead of the live bout (k.crossed: the steps it has come to, to throw
@@ -22,15 +24,14 @@ const DT = 1 / 60;
    as far off as it is drawn, it is inside them, or high enough over them (EYE metres up) that they lie under the picture; and
    if none has, it comes in no further off what it frames than a little inside them (inside). AFTER: seconds after the replay
    before the result (the game's). */
-const ROPES = RING.apron - 0.32,
-  EYE = 2.4,
+const EYE = 2.4,
   AFTER = 0.6;
-function inside(at, Z) {
+function inside(at, Z, ROPES) {
   let far = Infinity;
   for (const i of [0, 2]) if (Math.abs(Z[i]) > 1e-6) far = Math.min(far, (Math.sign(Z[i]) * ROPES - at[i]) / Z[i]);
   return far - 0.2;
 }
-const roomFor = (at, Z, d) => {
+const roomFor = (at, Z, d, ROPES) => {
   const eye = [0, 1, 2].map(i => at[i] + Z[i] * d);
   return (Math.abs(eye[0]) < ROPES && Math.abs(eye[2]) < ROPES) || eye[1] >= EYE;
 };
@@ -38,10 +39,11 @@ const roomFor = (at, Z, d) => {
 export function createKnockdown(o) {
   let liveDist = 8,
     endedAt = -Infinity;
+  const edge = () => (o.edge ? o.edge() : RING.rope);
   const replay = createReplay({
     brilliant: false,
     yaw: o.yaw,
-    room: (at, Z, size) => roomFor(at, Z, distOf({ size, closer: FALL.view.closer, push: 0 }, liveDist, o.aspect(), 0))
+    room: (at, Z, size) => roomFor(at, Z, distOf({ size, closer: FALL.view.closer, push: 0 }, liveDist, o.aspect(), 0), edge())
   });
   return {
     get playing() {
@@ -73,7 +75,7 @@ export function createKnockdown(o) {
     camera(live, played) {
       liveDist = live;
       const v = played ? replay.view : null;
-      return v ? { target: v.target, yaw: v.yaw, pitch: v.pitch, dist: distOf(v, live, o.aspect(), replay.progress, inside(v.target, backOf(v.yaw, v.pitch))) } : null;
+      return v ? { target: v.target, yaw: v.yaw, pitch: v.pitch, dist: distOf(v, live, o.aspect(), replay.progress, inside(v.target, backOf(v.yaw, v.pitch), edge())) } : null;
     },
     skip(bout) {
       if (!replay.playing) return false;

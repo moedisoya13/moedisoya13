@@ -564,13 +564,10 @@ function floor(half, centre) {
   let k = 0;
   for (let i = 0; i < n; i++)
     for (let j = 0; j < n; j++) {
+      // (plain, as the ring's canvas is: render/floor.mjs)
       const x = centre[0] - half + (i + 0.5) * gap,
-        z = centre[1] - half + (j + 0.5) * gap,
-        tile = 0.5,
-        fx = Math.abs((((x / tile) % 1) + 1.5) % 1 - 0.5) * tile,
-        fz = Math.abs((((z / tile) % 1) + 1.5) % 1 - 0.5) * tile,
-        dark = (Math.floor(x / tile + 100) + Math.floor(z / tile + 100)) % 2;
-      rows.set([x, 0, z, s, 0, 0, 1e-6, 0, s, fx < 0.03 || fz < 0.03 ? 22 : dark ? 23 : 24, 0, 3], k);
+        z = centre[1] - half + (j + 0.5) * gap;
+      rows.set([x, 0, z, s, 0, 0, 1e-6, 0, s, 24, 0, 3], k);
       k += 12;
     }
   return { rows, count: n * n };

@@ -1,6 +1,6 @@
 /* The sparring page's planner, in a worker of its own so that the page goes on drawing while a round is arranged
-   (src/spar.mjs; the page arranges it itself, a piece each picture, where a worker cannot be had). Told { id, seed }, it
-   makes that round (plan.mjs planner) and sends it as it goes: { id, head (the men, their health, who is favoured: once),
+   (src/spar.mjs; the page arranges it itself, a piece each picture, where a worker cannot be had). Told { id, seed, arena }, it
+   makes that round (in that arena: the ring unless it is 'underground') (plan.mjs planner) and sends it as it goes: { id, head (the men, their health, who is favoured: once),
    inputs (the controls of the steps arranged since the last message), rails and feet (both men's two lanes as far as they
    are arranged: rails.mjs),
    done, ko, steps, stats, reset (the round was arranged again from the start with the seed's next dice: what was sent before
@@ -9,8 +9,8 @@ import { planner } from './plan.mjs';
 
 let job = null;
 self.onmessage = e => {
-  const { id, seed } = e.data || {};
-  job = { id, p: planner(seed), inputs: 0, head: false, plan: null };
+  const { id, seed, arena } = e.data || {};
+  job = { id, p: planner(seed, { arena }), inputs: 0, head: false, plan: null };
   setTimeout(work, 0);
 };
 function work() {

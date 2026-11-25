@@ -1,12 +1,16 @@
-/* The ring: a canvas six metres square on a raised apron, four padded posts and three ropes a side. Sculpted once and baked;
-   the canvas is then marked out in tiles, because a floor with a pattern on it is what makes footwork visible. */
+/* The ring: a canvas six metres square on a raised apron, four padded posts and three ropes a side. Sculpted once and baked
+   (tools/bake.mjs); the canvas is one plain colour, the bake's own light and shade on it and nothing marked out, and the
+   ropes are baked apart from it (assets/ropes.splats.txt), so that the page can bend them where a man leans on them
+   (world/ropes.mjs). The ropes run `rope` metres from the centre: a man stands at most `half` from it (game/bout.mjs), and
+   there his back is against them. */
 import { MAT } from '../rig/boxer.mjs';
 
-export const RING = { half: 2.55, apron: 3.2 }; // how far from the centre a boxer can stand, and where the canvas ends
+export const RING = { half: 2.55, apron: 3.2, rope: 2.62, heights: [0.48, 0.84, 1.2], thick: 0.024 };
 
-export function sculptRing(S) {
+/* The ring sculpted: the canvas and the apron, the posts and their pads, and (o.ropes, as it is unless false) the ropes. */
+export function sculptRing(S, o) {
   const A = RING.apron,
-    rope = A - 0.32;
+    rope = RING.rope;
   S.box([0, -0.42, 0], [A, 0.42, A], MAT.canvas, { res: 0.1 });
   S.box([0, -0.5, 0], [A + 0.03, 0.34, A + 0.03], MAT.apron, { res: 0.1 });
   for (const [sx, sz] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) {
@@ -17,31 +21,16 @@ export function sculptRing(S) {
     // the corner pad faces the centre
     S.box([x - sx * 0.1, 0.8, z - sz * 0.1], [0.11, 0.55, 0.11], pad, { res: 0.06 });
   }
-  for (const [h, mat] of [[0.48, MAT.red], [0.84, MAT.white], [1.2, MAT.blue]])
-    for (const s of [-1, 1]) {
-      S.tube([[-rope, h, s * rope], [rope, h, s * rope]], 0.024, 0.024, mat, { res: 0.05 });
-      S.tube([[s * rope, h, -rope], [s * rope, h, rope]], 0.024, 0.024, mat, { res: 0.05 });
-    }
+  if (!o || o.ropes !== false) sculptRopes(S);
 }
-
-/* Mark the canvas after baking: darker seams every `tile` metres, a ring in the middle. `data` is splat rows, `stride` floats
-   each, the colour packed in column `col`; `shade(colour, steps)` returns the same ramp `steps` darker or lighter. */
-export function markCanvas(data, count, stride, col, shade, isCanvas) {
-  const tile = 0.8,
-    seam = 0.035;
-  for (let i = 0; i < count; i++) {
-    const o = i * stride,
-      x = data[o],
-      y = data[o + 1],
-      z = data[o + 2];
-    if (y < -0.03 || Math.abs(x) > RING.apron || Math.abs(z) > RING.apron || !isCanvas(data[o + col])) continue;
-    const fx = Math.abs(((x / tile) % 1 + 1.5) % 1 - 0.5) * tile,
-      fz = Math.abs(((z / tile) % 1 + 1.5) % 1 - 0.5) * tile,
-      r = Math.hypot(x, z),
-      checker = (Math.floor(x / tile + 100) + Math.floor(z / tile + 100)) % 2;
-    let steps = checker ? 0 : -1;
-    if (fx < seam || fz < seam) steps = -2;
-    if (Math.abs(r - 1.1) < 0.045) steps = 1;
-    if (steps) data[o + col] = shade(data[o + col], steps);
-  }
+// the three ropes a side, red at the bottom, white, blue at the top (each side's from corner to corner)
+export function sculptRopes(S) {
+  const rope = RING.rope,
+    mats = [MAT.red, MAT.white, MAT.blue];
+  RING.heights.forEach((h, k) => {
+    for (const s of [-1, 1]) {
+      S.tube([[-rope, h, s * rope], [rope, h, s * rope]], RING.thick, RING.thick, mats[k], { res: 0.05 });
+      S.tube([[s * rope, h, -rope], [s * rope, h, rope]], RING.thick, RING.thick, mats[k], { res: 0.05 });
+    }
+  });
 }

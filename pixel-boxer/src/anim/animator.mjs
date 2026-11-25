@@ -17,6 +17,8 @@
                threat: { eta (seconds until the punch coming at him gets there), dir } | null, stun: bool (stopped by a blow),
                low: { zone, t, id } | null (a punch coming at his body: where, and seconds since he could see it: body.mjs),
                shoved: metres a second he is being knocked back at,
+               rope: { press: 0..1, way: [left, ahead] } | null (he is at the ropes, his back to them, pressed onto them so
+                     far: game/bout.mjs ropes; he leans back on them, world/ropes.mjs ROPE.lean),
                cheer: bool, still: bool (lying on the canvas) }
      a.strike({ J, dir: [left, up, ahead] })         he has just been hit: the impulse in newton-seconds, and the way the glove
                                                       was going as it met him (on his body: zone, a, k, the place it met
@@ -52,6 +54,7 @@ import { bodyState, struck as foldUp, give as bodyGive, coverLow, lower } from '
 import { createWave, waveBeat, waveLand, waveLanding, waveDrag, waveBody, createPat, patDown, pattedArm, fireBody, createShell, shellBody } from './clean.mjs';
 import { createShift, shiftHold, shiftFoot, shiftBody } from './shift.mjs';
 import { overBody, overHand, overRaise, overElbow, hisArm, hisNext, ROUND } from './over.mjs';
+import { ROPE } from '../world/ropes.mjs';
 
 const TAU = Math.PI * 2;
 /* The feet keep time. One beat is one foot coming down; a cycle is both. Standing, the boxer rocks between his feet on that
@@ -550,6 +553,7 @@ export function createAnimator(seed) {
     cover = 0,
     meet = 0, // how far out to meet a punch the gloves of a fresh guard are
     hurt = 0, // what the fight has taken out of him, as his body shows it (followed slowly: see view.hurt, view.tired)
+    leaning = { x: 0, v: 0, way: [0, -1] }, // how far he is laid back on the ropes (sprung, so it gives and comes back: view.rope)
     tired = 0,
     cheer = 0,
     doing = null,
@@ -2493,6 +2497,22 @@ export function createAnimator(seed) {
           c.lfz += brace.L[1];
           c.rfx += brace.R[0];
           c.rfz += brace.R[1];
+        }
+        /* on the ropes: the trunk laid back onto them (and the hips forward under it by L.hips: none, as it is: they took the
+           back off the ropes again), a little toward a rope at his side as much as it is at his side (ROPE.lean), as far as he
+           is pressed onto them, sprung: they give, and he comes off them again */
+        {
+          const L = ROPE.lean,
+            want = view.rope ? view.rope.press : 0;
+          if (view.rope) leaning.way = view.rope.way;
+          const k = Math.max(0, spring(leaning, want, dt, L.hz, L.ratio)),
+            [left, ahead] = leaning.way,
+            back = Math.max(0, -ahead);
+          if (k > 1e-4) {
+            c.lean -= L.most * k * back;
+            c.hz += L.hips * k * back;
+            c.side += L.side * k * left;
+          }
         }
         // hurt: the guard lower and wider, the head and shoulders forward and down
         c.lean += 8 * hurt;

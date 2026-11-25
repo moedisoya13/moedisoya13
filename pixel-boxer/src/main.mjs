@@ -4,7 +4,9 @@
    once everything the blow and the landing threw has gone out and he lies all but still, the picture cuts to a closer
    camera, from above or from the side the blow is seen best from, and replays it slowly and briefly, from the press of the
    punch that did it to him falling away, ending before he comes down (src/replay.mjs), the tag "리플레이" in the corner;
-   the bout is not stepped meanwhile, any key, tap or button skips it, and it cuts back; the result comes after it. */
+   the bout is not stepped meanwhile, any key, tap or button skips it, and it cuts back; the result comes after it.
+   ?arena=underground fights it in the underground pit, walled round with bricks and paint drums, its crowd reacting
+   (world/pit.mjs); otherwise in the ring, whose ropes give and are leaned on (world/ropes.mjs). */
 import { createRenderer, paletteArray, rgb } from './render/renderer.mjs';
 import { createFx } from './render/fx.mjs';
 import { blow, rippleOf, rippleRow, fallOf, landed, landRipple, groundOf, groundRow, quietOf, ringsOn, FX } from './render/blow.mjs';
@@ -18,7 +20,7 @@ import { boneMatrices } from './anim/pose.mjs';
 import { guardPose } from './anim/animator.mjs';
 import { MOVES } from './anim/moves.mjs';
 import { createBout, step, RULES } from './game/bout.mjs';
-import { RING } from './world/ring.mjs';
+import { arenaOf, loadArena, createArena } from './world/stage.mjs';
 import { createRival, think } from './game/ai.mjs';
 import { createInput } from './game/input.mjs';
 import { createAudio } from './game/audio.mjs';
@@ -32,9 +34,9 @@ const WEARS = (() => {
   const w = (query.get('wear') || '').split(',').map(x => (x.trim() === 'none' ? '' : x.trim()));
   return [w[0], w.length > 1 ? w[1] : w[0]];
 })();
+const ARENA = arenaOf(query.get('arena'));
 const $ = id => document.getElementById(id);
 const canvas = $('view');
-const HALL = [0x171a2c, 0x11131f, 0x0c0d16, 0x090a11];
 const STAGES = [
   { level: 'novice', name: '1회전 · 신예' },
   { level: 'contender', name: '2회전 · 도전자' },
@@ -44,9 +46,10 @@ const STAGES = [
 const TRAIL = [38, 18, 18, 17, 16];
 /* A knockdown's replay camera is not to look at them through the ropes (src/replay.mjs viewOf, distOf): it has room where,
    as far off as it is drawn, it is inside them, or high enough over them (EYE metres up) that they lie under the picture;
-   and if none has, it comes in no further off what it frames than a little inside them (inside). */
-const ROPES = RING.apron - 0.32,
-  EYE = 2.4;
+   and if none has, it comes in no further off what it frames than a little inside them (inside). In the pit, its edge
+   instead (world/stage.mjs: the arena's edge). */
+let ROPES = 2.62;
+const EYE = 2.4;
 // (how far from `at` the way Z the ropes are, less a little)
 function inside(at, Z) {
   let far = Infinity;
@@ -66,12 +69,13 @@ async function load() {
   const worn = [...new Set(WEARS)],
     partOf = w => (!w ? manifest.boxer : manifest.wear && Object.hasOwn(manifest.wear, w) ? manifest.wear[w] : null);
   for (const w of worn) if (!partOf(w)) throw new Error(`no outfit called ${w}`);
-  const [ring, ...boxers] = await Promise.all([splats(manifest.ring), ...worn.map(w => splats(partOf(w)))]);
-  return { manifest, ring, boxers: Object.fromEntries(worn.map((w, i) => [w, { rows: boxers[i], count: partOf(w).count }])) };
+  const [arena, ...boxers] = await Promise.all([loadArena(manifest, ARENA, splats), ...worn.map(w => splats(partOf(w)))]);
+  return { manifest, arena, boxers: Object.fromEntries(worn.map((w, i) => [w, { rows: boxers[i], count: partOf(w).count }])) };
 }
 
-function start({ manifest, ring, boxers }) {
+function start({ manifest, arena: parts, boxers }) {
   const R = createRenderer(canvas),
+    arena = createArena(R, manifest, parts),
     audio = createAudio(),
     input = createInput($('controls')),
     bind = fk(guardPose());
@@ -83,13 +87,14 @@ function start({ manifest, ring, boxers }) {
      styleOf: ?defence=lines-sparks,wind-line,line), today's if it asks for none. (Not the brilliant defence's slow motion:
      the picture here plays at the true speed, as tests/fx.test.mjs holds it; the pending catalogue's cards show it.) */
   let guard = createGuard(styleOf(query.get('defence')));
-  const meshes = { ring: R.mesh(ring, manifest.ring.count), fx: fx.map(f => R.mesh(f.rows, 0, true)), motes: motes.map(f => R.mesh(f.rows, 0, true)) };
+  ROPES = arena.edge;
+  const meshes = { fx: fx.map(f => R.mesh(f.rows, 0, true)), motes: motes.map(f => R.mesh(f.rows, 0, true)) };
   for (const w in boxers) meshes[w ? 'boxer-' + w : 'boxer'] = R.mesh(boxers[w].rows, boxers[w].count);
   const palettes = [0, 1].map(i => paletteArray(dress(manifest.palette, i)));
   // (each man as he is dressed: his mesh, and his colours with the suit's in place of the trunks'; a glove's streak is in his own colours either way)
   const men = WEARS.map(w => meshes[w ? 'boxer-' + w : 'boxer']),
     worn = WEARS.map((w, i) => (w ? paletteArray(dress(manifest.palette, i, w)) : palettes[i]));
-  const hall = new Float32Array(HALL.flatMap(rgb)),
+  const hall = arena.hall,
     ink = new Float32Array(rgb(manifest.palette[0]));
   const bones = [new Float32Array(R.maxBones * 12), new Float32Array(R.maxBones * 12)],
     mats = new Float32Array(NAMES.length * 12);
@@ -119,7 +124,7 @@ function start({ manifest, ring, boxers }) {
     replay = createReplay({ brilliant: false, yaw: () => cam.yaw, room: (at, Z, size) => roomFor(at, Z, distOf({ size, closer: FALL.view.closer, push: 0 }, cam.dist, R.target.w / R.target.h, 0)) });
 
   function reset() {
-    bout = createBout(Number(query.get('seed')) || (Date.now() & 0xffff) || 1, { vary: true });
+    bout = createBout(Number(query.get('seed')) || (Date.now() & 0xffff) || 1, { vary: true, arena: ARENA });
     rival = createRival(STAGES[stage].level);
     pose(true);
     dim = 0;
@@ -181,6 +186,8 @@ function start({ manifest, ring, boxers }) {
   };
   function react(e) {
     const f = bout.fighters;
+    arena.hear(e);
+    if (arena.crowd && e.type === 'hit' && (e.down || e.J >= 60 || e.counter)) audio.play(e.down ? 'roar' : 'cheer');
     if (e.type === 'punch') audio.play('swing');
     else if (e.type === 'dash') {
       audio.play('dodge');
@@ -312,7 +319,7 @@ function start({ manifest, ring, boxers }) {
     if (ground) ground.age += fade;
     const ring = played ? null : groundRow(ground),
       shadows = [],
-      layers = [{ mesh: meshes.ring, palette: palettes[0], mask: 0.5, ground: ring }];
+      layers = [arena.ground(ring)];
     bout.fighters.forEach((f, i) => {
       const m = shown[i];
       boneMatrices(m.pose, bind, m.place, mats, 0);
@@ -331,7 +338,7 @@ function start({ manifest, ring, boxers }) {
     // (a ripple goes on in the same time as the sparks)
     for (const r of waves) if (r) r.age += moved;
     // (the shadows and the dust on the canvas ride the ring through it, never lit by it)
-    layers.splice(1, 0, { mesh: meshes.fx[0], palette: palettes[0], mask: 0.6, ground: ring && [...ring.slice(0, 6), 0] });
+    layers.splice(1, 0, { mesh: meshes.fx[0], palette: arena.floor, mask: 0.6, ground: ring && [...ring.slice(0, 6), 0] });
     layers.push({ mesh: meshes.fx[1], palette: palettes[0], mask: 0.6 }, { mesh: meshes.fx[2], palette: palettes[1], mask: 0.6 });
     // (what a blow threw off each man is never seen over him, in front of him or behind: it shows first at his outline)
     layers.push(...meshes.motes.map((mesh, i) => ({ mesh, palette: palettes[0], mask: 0.6, outside: i + 1 })));
@@ -358,8 +365,11 @@ function start({ manifest, ring, boxers }) {
     }
     // (the picture darkens for the result only once the fall and its replay have been shown)
     if (phase === 'over') dim = replay.pending || view ? 0 : Math.min(0.4, Math.max(0, Math.min(bout.t - bout.overAt - 1.2, bout.t - replayEnd - 0.2)) * 0.4);
+    // (what stands round them: the ropes, bent where the men drawn press them; or the crowd beyond the camera's side of them)
+    const camera = view ? { target: view.target, yaw: view.yaw, pitch: view.pitch, dist: distOf(view, cam.dist, R.target.w / R.target.h, replay.progress, inside(view.target, backOf(view.yaw, view.pitch))) } : cam;
+    layers.splice(1, 0, ...arena.over(shown, elapsed, camera));
     const drawn = R.draw({
-      camera: view ? { target: view.target, yaw: view.yaw, pitch: view.pitch, dist: distOf(view, cam.dist, R.target.w / R.target.h, replay.progress, inside(view.target, backOf(view.yaw, view.pitch))) } : cam,
+      camera,
       shake: !view && shake.amp > 0.4 ? [(Math.random() * 2 - 1) * shake.amp, (Math.random() * 2 - 1) * shake.amp * 0.6] : null,
       white: !view && white > 0.02 ? white : 0,
       dim,
@@ -376,7 +386,7 @@ function start({ manifest, ring, boxers }) {
 
   reset();
   if (query.has('auto')) begin();
-  globalThis.__bout = { shown: [], get bout() { return bout; }, get phase() { return phase; }, get replay() { return replay; }, get ground() { return ground; }, stats, renderer: R, cam, RULES };
+  globalThis.__bout = { shown: [], get bout() { return bout; }, get phase() { return phase; }, get replay() { return replay; }, get ground() { return ground; }, stats, renderer: R, cam, RULES, arena };
   $('loading').remove();
   requestAnimationFrame(frame);
 }

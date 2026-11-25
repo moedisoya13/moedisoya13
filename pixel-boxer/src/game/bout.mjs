@@ -72,6 +72,8 @@ import { toWorld } from '../anim/pose.mjs';
 import { createChain, stepChain, effectiveMass, preload } from '../phys/chain.mjs';
 import * as P from '../anim/pose.mjs';
 import { RING } from '../world/ring.mjs';
+import { pressOf as ropesPressed, ROPE, SIDES } from '../world/ropes.mjs';
+import { arenaOf } from '../world/pit.mjs';
 import { LEN } from '../rig/solve.mjs';
 import { body, blank, fatigue, COST, loadout } from './profile.mjs';
 import { asked, has, gradeOf } from './techniques.mjs';
@@ -154,7 +156,7 @@ function boxer(x, yaw, seed, sheet, skills) {
 export function createBout(seed, o) {
   o = o || {};
   const sheets = o.sheets || [],
-    bout = { t: 0, stop: 0, over: null, overAt: 0, seed: seed || 1, events: [], knockdowns: !!o.knockdowns, fighters: [boxer(-RULES.startGap / 2, Math.PI / 2, 0, sheets[0], (o.skills || [])[0]), boxer(RULES.startGap / 2, -Math.PI / 2, 1, sheets[1], (o.skills || [])[1])] };
+    bout = { t: 0, stop: 0, over: null, overAt: 0, seed: seed || 1, events: [], knockdowns: !!o.knockdowns, arena: arenaOf(o.arena), fighters: [boxer(-RULES.startGap / 2, Math.PI / 2, 0, sheets[0], (o.skills || [])[0]), boxer(RULES.startGap / 2, -Math.PI / 2, 1, sheets[1], (o.skills || [])[1])] };
   /* (a show-off's tricks and taunts come up by his own dice, thrown from the bout's seed, in a real bout: o.vary. Scripts and
      tests name what they want instead: anim/show.mjs) */
   bout.fighters.forEach((f, i) => ((f.vary = !!o.vary), (f.luck = dice((seed || 1) * 31 + i * 7919 + 5))));
@@ -163,6 +165,10 @@ export function createBout(seed, o) {
   settle(bout);
   return bout;
 }
+/* Where they fight (world/pit.mjs ARENAS): 'ring' (as it is unless named), whose ropes give and can be leaned on (ropes,
+   below), or 'underground', the pit walled round with bricks and paint drums, which stops a man as the ropes stopped him
+   before they gave: the last quarter of a metre run out of speed, and no further (travel, step). (world/pit.mjs arenaOf) */
+export { arenaOf };
 // stand both boxers in their guards where they are (after they have been put somewhere by hand)
 export function settle(bout) {
   for (const f of bout.fighters) (f.animator = createAnimator(f === bout.fighters[0] ? 0 : 1)), (f.before = f.points = f.parts = null);
@@ -175,6 +181,7 @@ export function random(bout) {
   return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
 }
 const wrap = a => Math.atan2(Math.sin(a), Math.cos(a));
+const smooth = x => ((x = Math.max(0, Math.min(1, x))), x * x * (3 - 2 * x));
 const aheadOf = f => [Math.sin(f.yaw), Math.cos(f.yaw)];
 // a direction on the canvas, in a boxer's own terms: [to his left, ahead of him]
 export const local = (f, x, z) => [x * Math.cos(f.yaw) - z * Math.sin(f.yaw), x * Math.sin(f.yaw) + z * Math.cos(f.yaw)];
@@ -1246,6 +1253,8 @@ function viewOf(bout, i) {
       hook: null,
       stun: f.stun > 0,
       shoved: Math.hypot(f.kx, f.kz),
+      // (leaning back on the ropes: how far he is pressed onto them, 0..1, and their way in his own terms: ropes)
+      rope: f.rope || null,
       reach: null,
       // the other man, in his own terms: his lead foot's instep (what a dirty man stands on), and whether this man's own lead
       // foot is stood on (and his elbows: what the bottom of an inside uppercut's U is kept clear of, anim/animator.mjs; and
@@ -2058,6 +2067,41 @@ function collars(bout, f, other, who) {
   bout.events.push({ type: 'collar', who, on: 1 - who, t: +action.t.toFixed(3) });
 }
 
+/* The ropes give (world/ropes.mjs). Where his body is pressed into them (as he was last solved), they push him back in,
+   ROPE.k metres a second for every metre, and a knockback carrying him into them is turned round, ROPE.bounce of it: soft,
+   where the canvas's edge alone (the pit's, or the ring's before) is a wall he is run up against. And a man at them, his back
+   toward them, leans back on them as far as he is pressed onto them (f.rope, for the animator: anim/animator.mjs): by his
+   own walking into them (lying back on them), a blow carrying him into them, the other man up against him from the inside,
+   or no more than his body against them. Not a man down, nor one getting up off the canvas. */
+function ropes(f, other, dt) {
+  f.rope = null;
+  if (f.down || !f.points || (f.action && MOVES[f.action.name].floor)) return;
+  const press = ropesPressed(f.points),
+    L = ROPE.lean;
+  let best = null;
+  SIDES.forEach(([axis, s], side) => {
+    const key = axis ? 'z' : 'x',
+      knock = axis ? 'kz' : 'kx',
+      walk = axis ? 'vz' : 'vx';
+    if (press[side] > 0) {
+      f[key] -= s * ROPE.k * press[side] * dt;
+      if (s * f[knock] > 0) f[knock] *= -ROPE.bounce;
+    }
+    const near = smooth((s * f[key] - (RULES.half - L.near)) / L.near);
+    if (near <= 0) return;
+    // (the way to the ropes, in his own terms: [to his left, ahead of him]; how much of it is behind him)
+    const way = local(f, axis ? 0 : s, axis ? s : 0),
+      back = smooth((-way[1] - 0.2) / 0.6),
+      inside = s * (f[key] - other[key]) > 0.25 && Math.hypot(f.x - other.x, f.z - other.z) < RULES.gap + 0.05,
+      drive = Math.max(press[side] / 0.1, (s * f[walk]) / 1, (s * f[knock]) / 0.6, inside ? 0.8 : 0),
+      k = near * back * Math.max(0, Math.min(1, drive));
+    if (k > 0 && (!best || k > best.press)) best = { press: k, way };
+  });
+  f.rope = best;
+  f.x = Math.max(-RULES.half, Math.min(RULES.half, f.x));
+  f.z = Math.max(-RULES.half, Math.min(RULES.half, f.z));
+}
+
 /* Up off the canvas, where he lies (his place turned and moved under him: anim/animator.mjs getUp), the way that fits how
    he lies; or, off a knee, the way up off a knee. A man out cold does not get up: nothing is done, -> null. */
 export function getUp(bout, f) {
@@ -2123,6 +2167,7 @@ export function step(bout, inputs, dt) {
   for (const f of bout.fighters) {
     f.x = Math.max(-RULES.half, Math.min(RULES.half, f.x));
     f.z = Math.max(-RULES.half, Math.min(RULES.half, f.z));
+    if (bout.arena === 'ring') ropes(f, f === a ? b : a, dt);
     // how fast the canvas really went past under him this step, ropes and the other man allowed for: what his feet walk to
     f.gx = (f.x - f.px) / dt;
     f.gz = (f.z - f.pz) / dt;

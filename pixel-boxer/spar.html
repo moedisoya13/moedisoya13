@@ -108,6 +108,8 @@
     #title { top: calc(48px + env(safe-area-inset-top, 0px)); }
   }
   @media (max-width: 520px) {
+    #bar { gap: 4px; }
+    #bar button, #bar select { padding-left: 7px; padding-right: 7px; }
     #legend { gap: 5px; font-size: 8.5px; letter-spacing: 0; }
     #legend .sep, #legend .lane { display: none; }
   }
@@ -153,6 +155,7 @@
     <button data-act="speed" id="speedbtn" aria-pressed="false" aria-label="속도">1×</button>
     <button data-act="sound" id="soundbtn" aria-pressed="false">소리 끔</button>
     <select id="wear" aria-label="옷"><option value="">맨몸</option><option value="training">체육복</option><option value="training-up">후드</option></select>
+    <select id="arena" aria-label="경기장"><option value="ring">링</option><option value="underground">지하</option></select>
   </div>
 </div>
 <div id="full" role="dialog" aria-modal="true" aria-labelledby="fulltitle">
