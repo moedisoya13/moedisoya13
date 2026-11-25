@@ -8,7 +8,7 @@
 - **무엇**: 3D 모델을 납작한 가우시안 splat("quad splat") 수만 개로 표현하고, 색 대신 G-buffer¹(albedo·normal·depth·roughness·metallic·coverage)를 학습시켜 저해상도로 그린 뒤 조명을 나중에 붙이는 **3D 픽셀아트 렌더러** `pixel-splat/`. tomcc(@_tomcc)의 2026-11 데모가 동기.
 - **예제**: 「사모트라케의 니케」를 코드로 조형(SDF²) → 60k splat 학습 → 뼈대·IK 걷기 → Almost Pixel Perfect(APP) → 아이폰 전체 화면 "거상" 영상.
 - **현재 빌드**: **v4** = 사진에서 오려낸 좌우 날개 + 발 자리의 손 + 새 룩(stylized). 모델은 `pixel-splat/models/nike_v4_60k.pt`.
-- **미결**: 29건. 카탈로그 artifact에서 사용자가 답하는 중 → §6.
+- **미결**: 28건(결정 21 + 파기 승인 7). 카탈로그 artifact에서 사용자가 답하는 중 → §6.
 - **다음 할 일**: §8의 시작 절차(미결 briefing → Opus(high) 10회 점검 제안).
 
 ## 1. 위치와 상태
