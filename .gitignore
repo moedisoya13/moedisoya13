@@ -6,3 +6,4 @@ probe-out/
 .pytest_cache/
 skill-zips/
 pixel-splat/out/
+.claude/worktrees/
