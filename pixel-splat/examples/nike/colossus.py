@@ -255,12 +255,21 @@ def to_screen(img, pixel, sw, sh):
     return big[y0:y0 + sh, x0:x0 + sw]
 
 
-def save_clip(frames, out_dir, name, fps, loops=4, preview_div=3):
+def render_clip(out_dir, name, total, render_fn, pixel, sw, sh, fps, loops=4, preview_div=3):
+    """Render ``total`` frames straight to PNG files (nothing is kept in memory, so long clips at
+    phone resolution fit in RAM) and resume if frames already exist; then encode MP4 + GIF preview."""
     tmp = os.path.join(out_dir, "_frames_" + name)
-    shutil.rmtree(tmp, ignore_errors=True)
-    os.makedirs(tmp)
-    for i, f in enumerate(frames):
-        Image.fromarray((np.clip(f, 0, 1) * 255 + 0.5).astype(np.uint8)).save(os.path.join(tmp, f"{i:04d}.png"))
+    os.makedirs(tmp, exist_ok=True)
+    t0 = time.time()
+    for i in range(total):
+        path = os.path.join(tmp, f"{i:04d}.png")
+        if os.path.exists(path):
+            continue
+        img = to_screen(render_fn(i), pixel, sw, sh)
+        Image.fromarray((np.clip(img, 0, 1) * 255 + 0.5).astype(np.uint8)).save(path + ".part.png")
+        os.replace(path + ".part.png", path)
+        if i % 12 == 0:
+            print(f"[colossus] {name} frame {i}/{total} ({time.time() - t0:.0f}s)", flush=True)
     mp4 = os.path.join(out_dir, name + ".mp4")
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-stream_loop", str(loops - 1), "-framerate", str(fps), "-i",
                     os.path.join(tmp, "%04d.png"),
@@ -269,8 +278,10 @@ def save_clip(frames, out_dir, name, fps, loops=4, preview_div=3):
                     "-c:v", "libx264", "-preset", "slow", "-crf", "14",
                     "-pix_fmt", "yuv420p", "-movflags", "+faststart", mp4], check=True)
     # small looping GIF preview (1/3 size, still pixel-exact because the pixel size is a multiple of 3)
-    ims = [Image.fromarray((np.clip(f[::preview_div, ::preview_div], 0, 1) * 255 + 0.5).astype(np.uint8))
-           for f in frames]
+    ims = []
+    for i in range(total):
+        im = Image.open(os.path.join(tmp, f"{i:04d}.png"))
+        ims.append(im.resize((im.width // preview_div, im.height // preview_div), Image.NEAREST))
     ims[0].save(os.path.join(out_dir, name + "_preview.gif"), save_all=True, append_images=ims[1:],
                 duration=int(round(1000 / fps)), loop=0)
     shutil.rmtree(tmp)
@@ -319,12 +330,8 @@ def main():
         total = n * a.cycles
         if a.max_frames:
             total = min(total, a.max_frames)
-        frames = []
-        for i in range(total):
-            frames.append(to_screen(render(i, total), a.pixel, sw, sh))
-            if i % 12 == 0:
-                print(f"[colossus] walk frame {i}/{total} ({time.time() - t0:.0f}s)", flush=True)
-        print("[colossus] wrote", save_clip(frames, a.out, "colossus_walk", a.fps))
+        mp4 = render_clip(a.out, "colossus_walk", total, lambda i: render(i, total), a.pixel, sw, sh, a.fps)
+        print("[colossus] wrote", mp4)
     if "still" in clips:
         img = to_screen(render(int(0.62 * n), n), a.pixel, sw, sh)
         Image.fromarray((np.clip(img, 0, 1) * 255 + 0.5).astype(np.uint8)).save(
@@ -334,12 +341,9 @@ def main():
         total = n * 4
         if a.max_frames:
             total = min(total, a.max_frames)
-        frames = []
-        for i in range(total):
-            frames.append(to_screen(render(i, n * 4, orbit=True), a.pixel, sw, sh))
-            if i % 12 == 0:
-                print(f"[colossus] orbit frame {i}/{total} ({time.time() - t0:.0f}s)", flush=True)
-        print("[colossus] wrote", save_clip(frames, a.out, "colossus_orbit", a.fps, loops=2))
+        mp4 = render_clip(a.out, "colossus_orbit", total, lambda i: render(i, n * 4, orbit=True), a.pixel, sw, sh,
+                          a.fps, loops=2)
+        print("[colossus] wrote", mp4)
     print(f"[colossus] done ({time.time() - t0:.0f}s)")
 
 
