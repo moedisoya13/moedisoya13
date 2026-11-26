@@ -1,0 +1,328 @@
+"""Soldier rig: real human proportions, joint positions, skeleton, rotation limits, helper bones.
+
+Layer 1 of the soldier (see README.md): everything else - joint beads, turntables, the mannequin
+surface, the motion, later the costume - hangs off the numbers in this file.
+
+Coordinates as in the Nike example: y up, the figure faces +z, +x is HIS LEFT, ground at y = -1.
+All sizes are fractions of the body height ``H`` (sole to top of the head), so changing ``H``
+rescales the whole figure.
+
+Proportions: Drillis & Contini (1966) segment ratios as tabulated by Winter, "Biomechanics and Motor
+Control of Human Movement" - an average adult male, about 7.5 heads tall.
+
+Rest pose: legs straight, feet forward, arms straight and spread ``A_POSE`` degrees away from the
+body (an "A-pose": the hands clear the hips and sleeves clear the ribs).  Joint angles are still
+counted from the anatomical position (arms hanging straight down), see ``local_rot``.
+"""
+from __future__ import annotations
+
+import math
+import sys
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple
+
+import numpy as np
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from pixelsplat.skin import Bone, Skeleton, rot_x, rot_y, rot_z  # noqa: E402
+
+H = 1.80  # body height in world units (a 1.75 m man -> 1 unit = 0.972 m)
+GROUND = -1.0
+A_POSE = 10.0  # degrees the rest-pose arms are spread away from the body
+SIDES = (("L", 1), ("R", -1))
+
+
+def V(*a):
+    return np.array(a, np.float64)
+
+
+def Y(ratio: float) -> float:
+    """World height of a landmark given as a fraction of the body height above the sole."""
+    return GROUND + ratio * H
+
+
+# ---------------------------------------------------------------- proportions (fractions of H)
+RATIO = dict(
+    vertex=1.000, eye=0.936, chin=0.870, shoulder=0.818, shoulder_width=0.259, elbow=0.630, wrist=0.485,
+    fingertip=0.377, hip=0.530, hip_width=0.191, knee=0.285, ankle=0.039, upper_arm=0.186, forearm=0.146,
+    hand=0.108, thigh=0.245, shin=0.246, foot_length=0.152, foot_width=0.055)
+
+# joint centres that the table does not give (fractions of H)
+WAIST_H = 0.620  # narrowest part of the trunk, between the lowest rib and the hip bone
+NECK_H = 0.832  # base of the neck (C7 / top of the breast bone)
+HEAD_H = 0.885  # skull base (atlas): the head turns and nods here
+HIP_X = 0.0511  # hip joint centre, sideways from the midline
+SHOULDER_X = 0.1000  # shoulder joint centre, sideways from the midline
+CLAV_X, CLAV_H, CLAV_Z = 0.0195, 0.800, 0.011  # inner end of the collar bone
+HEEL_BACK = 0.276  # ankle sits this fraction of the foot length in front of the back of the heel
+HEEL_ROUND = 0.145  # centre of the rounded heel, as a fraction of the foot length from the back of the heel
+HEEL_PIVOT = 0.122  # the heel rolls about a ground point just behind that centre
+TOE_JOINT = 0.705  # ball of the foot (toe hinge) as a fraction of the foot length from the heel
+TOE_R = 0.0150  # radius of the toe hinge = its height above the ground
+
+# ---------------------------------------------------------------- joint beads / sockets / turntables
+# radius of the bead (sphere on the CHILD bone, centred on the joint) and of the socket (sphere of
+# the PARENT bone around the same centre), fractions of H.  bead >= socket, so the parent's end cap
+# always hides inside the bead; both solids contain the socket sphere in every pose -> no gap.
+BEAD = dict(hip=0.0445, knee=0.0311, ankle=0.0222, toe=TOE_R, shoulder=0.0300, elbow=0.0233, wrist=0.0167,
+            clavicle=0.0211, neck=0.0344)
+SOCKET = dict(hip=0.0390, knee=0.0278, ankle=0.0183, toe=TOE_R, shoulder=0.0261, elbow=0.0206, wrist=0.0144,
+              clavicle=0.0211, neck=0.0306)
+# turntables: a disc on the PARENT bone whose axis is the yaw axis, plus a ball of radius ``ball``
+# on the parent and a slightly smaller one (``inner``) on the child, both centred on the joint.
+TURNTABLE = dict(
+    waist=dict(radius=0.0644, half_height=0.0122, ball=0.0600, inner=0.0556),
+    head=dict(radius=0.0356, half_height=0.0078, ball=0.0289, inner=0.0267))
+
+
+def _arm_axis(s: int) -> np.ndarray:
+    a = math.radians(A_POSE)
+    return V(s * math.sin(a), -math.cos(a), 0.0)
+
+
+WAIST = V(0.0, Y(WAIST_H), 0.0)
+PELVIS = V(0.0, Y(RATIO["hip"]) + 0.02 * H, 0.0)  # root pivot, between and a little above the hip joints
+NECK = V(0.0, Y(NECK_H), -0.007 * H)
+HEAD = V(0.0, Y(HEAD_H), 0.0)
+VERTEX = V(0.0, Y(RATIO["vertex"]), 0.0)
+EYE = V(0.0, Y(RATIO["eye"]), 0.045 * H)
+CHIN = V(0.0, Y(RATIO["chin"]), 0.039 * H)
+HIP, KNEE, ANKLE, TOE, TOE_TIP, HEEL = {}, {}, {}, {}, {}, {}
+CLAV, SHOULDER, ELBOW, WRIST, FINGERTIP, ARM_AXIS = {}, {}, {}, {}, {}, {}
+FOOT_LEN = RATIO["foot_length"] * H
+FOOT_W = RATIO["foot_width"] * H
+for _side, _s in SIDES:
+    x = _s * HIP_X * H
+    HIP[_s] = V(x, Y(RATIO["hip"]), 0.0)
+    KNEE[_s] = V(x, Y(RATIO["knee"]), 0.0)
+    ANKLE[_s] = V(x, Y(RATIO["ankle"]), 0.0)
+    z_heel = -HEEL_BACK * FOOT_LEN
+    TOE[_s] = V(x, GROUND + TOE_R * H, z_heel + TOE_JOINT * FOOT_LEN)  # toe hinge (ball of the foot)
+    TOE_TIP[_s] = V(x, GROUND + 0.011 * H, z_heel + FOOT_LEN)
+    HEEL[_s] = V(x, GROUND, z_heel + HEEL_PIVOT * FOOT_LEN)  # ground point the heel rolls about at heel strike
+    ARM_AXIS[_s] = _arm_axis(_s)
+    CLAV[_s] = V(_s * CLAV_X * H, Y(CLAV_H), CLAV_Z * H)
+    SHOULDER[_s] = V(_s * SHOULDER_X * H, Y(RATIO["shoulder"]), 0.0)
+    ELBOW[_s] = SHOULDER[_s] + RATIO["upper_arm"] * H * ARM_AXIS[_s]
+    WRIST[_s] = ELBOW[_s] + RATIO["forearm"] * H * ARM_AXIS[_s]
+    FINGERTIP[_s] = WRIST[_s] + RATIO["hand"] * H * ARM_AXIS[_s]
+THIGH_LEN = float(np.linalg.norm(KNEE[1] - HIP[1]))
+SHIN_LEN = float(np.linalg.norm(ANKLE[1] - KNEE[1]))
+
+# ---------------------------------------------------------------- helper bones for the costume (stage 2)
+# No surface is attached to these yet; motion.drive_helpers() already animates them.
+BELT_H = 0.585  # where the belt sits (just below the waist turntable): the skirt panels hinge here
+HEM_H = 0.385  # hem of the tabard skirt: mid-thigh
+SKIRT = {  # panel -> (hinge on the belt line, hem end); children of the pelvis
+    "skirtF": (V(0.0, Y(BELT_H), 0.062 * H), V(0.0, Y(HEM_H), 0.075 * H)),
+    "skirtB": (V(0.0, Y(BELT_H), -0.060 * H), V(0.0, Y(HEM_H), -0.075 * H)),
+    "skirtL": (V(0.088 * H, Y(BELT_H), 0.0), V(0.102 * H, Y(HEM_H), 0.0)),
+    "skirtR": (V(-0.088 * H, Y(BELT_H), 0.0), V(-0.102 * H, Y(HEM_H), 0.0)),
+}
+CAPE = (V(0.0, Y(0.800), -0.062 * H), V(0.0, Y(0.560), -0.085 * H), V(0.0, Y(0.330), -0.095 * H))  # root, mid, hem
+PLUME = (V(0.0, Y(0.985), -0.050 * H), V(0.0, Y(1.050), -0.105 * H), V(0.0, Y(1.085), -0.180 * H))  # root, mid, tip
+
+GEOMETRY_BONES: List[str] = []  # bones that carry mannequin surface (filled below)
+HELPER_BONES: List[str] = []
+
+
+def make_skeleton() -> Skeleton:
+    """28 bones, parents first.  Every surface piece belongs to exactly one of the first 20;
+    the last 8 are costume helpers without surface."""
+    b = [Bone("pelvis", None, PELVIS, WAIST),
+         Bone("chest", "pelvis", WAIST, NECK),  # joint = waist turntable
+         Bone("neck", "chest", NECK, HEAD),
+         Bone("head", "neck", HEAD, VERTEX)]  # joint = neck turntable
+    for side, s in SIDES:
+        b += [Bone("clav" + side, "chest", CLAV[s], SHOULDER[s]),
+              Bone("upperarm" + side, "clav" + side, SHOULDER[s], ELBOW[s]),
+              Bone("forearm" + side, "upperarm" + side, ELBOW[s], WRIST[s]),
+              Bone("hand" + side, "forearm" + side, WRIST[s], FINGERTIP[s])]
+    for side, s in SIDES:
+        b += [Bone("thigh" + side, "pelvis", HIP[s], KNEE[s]),
+              Bone("shin" + side, "thigh" + side, KNEE[s], ANKLE[s]),
+              Bone("foot" + side, "shin" + side, ANKLE[s], TOE[s]),
+              Bone("toe" + side, "foot" + side, TOE[s], TOE_TIP[s])]
+    n_geo = len(b)
+    for name, (head, tail) in SKIRT.items():
+        b.append(Bone(name, "pelvis", head, tail))
+    b += [Bone("cape", "chest", CAPE[0], CAPE[1]), Bone("capeTip", "cape", CAPE[1], CAPE[2]),
+          Bone("plume", "head", PLUME[0], PLUME[1]), Bone("plumeTip", "plume", PLUME[1], PLUME[2])]
+    bones = [Bone(x.name, x.parent, np.asarray(x.head, np.float32), np.asarray(x.tail, np.float32)) for x in b]
+    GEOMETRY_BONES[:] = [x.name for x in bones[:n_geo]]
+    HELPER_BONES[:] = [x.name for x in bones[n_geo:]]
+    return Skeleton(bones)
+
+
+SKELETON = make_skeleton()
+PARENT: Dict[str, Optional[str]] = {b.name: b.parent for b in SKELETON.bones}
+
+
+# ---------------------------------------------------------------- joints
+@dataclass(frozen=True)
+class Joint:
+    """One articulation: ``bone`` turns about ``pos`` relative to ``parent``."""
+    name: str
+    bone: str
+    parent: str
+    pos: np.ndarray
+    kind: str  # "bead" (ball on the child) | "hinge" (cylinder along x) | "turntable" (disc on the parent)
+    bead: float  # radius of the visible ball / hinge barrel / turntable ball (world units)
+    shared: float  # radius of the sphere around ``pos`` that BOTH bones contain (world units)
+    owner: str  # the bone the bead / turntable is rigidly attached to
+
+
+def _joints() -> List[Joint]:
+    j = [Joint("waist", "chest", "pelvis", WAIST, "turntable", TURNTABLE["waist"]["ball"] * H,
+               TURNTABLE["waist"]["inner"] * H, "pelvis"),
+         Joint("neck", "neck", "chest", NECK, "bead", BEAD["neck"] * H, SOCKET["neck"] * H, "neck"),
+         Joint("head", "head", "neck", HEAD, "turntable", TURNTABLE["head"]["ball"] * H,
+               TURNTABLE["head"]["inner"] * H, "neck")]
+    for side, s in SIDES:
+        for nm, bone, par, pos, key in (
+                ("clavicle", "clav", "chest", CLAV, "clavicle"), ("shoulder", "upperarm", "clav", SHOULDER, "shoulder"),
+                ("elbow", "forearm", "upperarm", ELBOW, "elbow"), ("wrist", "hand", "forearm", WRIST, "wrist"),
+                ("hip", "thigh", "pelvis", HIP, "hip"), ("knee", "shin", "thigh", KNEE, "knee"),
+                ("ankle", "foot", "shin", ANKLE, "ankle"), ("toe", "toe", "foot", TOE, "toe")):
+            parent = par if par in ("chest", "pelvis") else par + side
+            j.append(Joint(nm + side, bone + side, parent, pos[s], "hinge" if nm == "toe" else "bead",
+                           BEAD[key] * H, SOCKET[key] * H, bone + side))
+    return j
+
+
+JOINTS: List[Joint] = _joints()
+
+# ---------------------------------------------------------------- rotation limits (degrees)
+# Angles are counted from the anatomical position (standing, arms hanging straight down):
+#   pitch = about +x : trunk/head bend forward (+);  a hanging limb swings BACK (+) / forward (-);
+#                      foot and toes point down (+) / up (-)
+#   yaw   = about +y : turn / twist towards his left (+)
+#   roll  = about +z : trunk/head lean to his right (+); a left limb moves away from the body (+)
+# Left side shown; the right side mirrors yaw and roll.  Local rotation = Ry(yaw) Rz(roll) Rx(pitch).
+LIMITS: Dict[str, Tuple[Tuple[float, float], Tuple[float, float], Tuple[float, float]]] = {
+    #            pitch (min, max)   yaw (min, max)   roll (min, max)
+    "chest":    ((-10.0, 25.0),    (-40.0, 40.0),   (-12.0, 12.0)),   # waist turntable
+    "neck":     ((-15.0, 20.0),    (0.0, 0.0),      (-10.0, 10.0)),   # neck base: nod and tilt only
+    "head":     ((-20.0, 25.0),    (-70.0, 70.0),   (-10.0, 10.0)),   # neck turntable
+    "clav":     ((0.0, 0.0),       (-15.0, 15.0),   (-5.0, 20.0)),    # shrug (+roll), reach forward/back (yaw)
+    "upperarm": ((-170.0, 50.0),   (-70.0, 70.0),   (-20.0, 90.0)),   # shoulder
+    "forearm":  ((-145.0, 0.0),    (-80.0, 80.0),   (0.0, 0.0)),      # elbow + forearm twist
+    "hand":     ((-70.0, 70.0),    (0.0, 0.0),      (-20.0, 30.0)),   # wrist
+    "thigh":    ((-120.0, 20.0),   (-40.0, 40.0),   (-25.0, 45.0)),   # hip
+    "shin":     ((0.0, 140.0),     (0.0, 0.0),      (0.0, 0.0)),      # knee
+    "foot":     ((-20.0, 45.0),    (-10.0, 10.0),   (-15.0, 15.0)),   # ankle
+    "toe":      ((-60.0, 10.0),    (0.0, 0.0),      (0.0, 0.0)),      # toe hinge
+}
+
+
+def side_of(bone: str) -> int:
+    """+1 for a left bone, -1 for a right bone, 0 for the midline."""
+    base = bone[:-1] if bone[-1] in "LR" and bone[:-1] in LIMITS else None
+    if base is None:
+        return 0
+    return 1 if bone.endswith("L") else -1
+
+
+def limits(bone: str):
+    """((pitch_min, pitch_max), (yaw_min, yaw_max), (roll_min, roll_max)) for one bone, or None."""
+    s = side_of(bone)
+    key = bone[:-1] if s else bone
+    if key not in LIMITS:
+        return None
+    p, y, r = LIMITS[key]
+    if s < 0:
+        y, r = (-y[1], -y[0]), (-r[1], -r[0])
+    return p, y, r
+
+
+def _frame(bone: Optional[str]) -> np.ndarray:
+    """Rest orientation of a bone's anatomical frame: the arm chain is spread by A_POSE."""
+    if bone is not None and bone[:-1] in ("upperarm", "forearm", "hand"):
+        return rot_z((1 if bone.endswith("L") else -1) * A_POSE)
+    return np.eye(3)
+
+
+def euler(pitch: float = 0.0, yaw: float = 0.0, roll: float = 0.0) -> np.ndarray:
+    return rot_y(yaw) @ rot_z(roll) @ rot_x(pitch)
+
+
+def euler_angles(R: np.ndarray) -> Tuple[float, float, float]:
+    """Inverse of ``euler``: (pitch, yaw, roll) in degrees, roll within +-90."""
+    roll = math.degrees(math.asin(float(np.clip(R[1, 0], -1, 1))))
+    pitch = math.degrees(math.atan2(-R[1, 2], R[1, 1]))
+    yaw = math.degrees(math.atan2(-R[2, 0], R[0, 0]))
+    return pitch, yaw, roll
+
+
+def local_rot(bone: str, pitch: float = 0.0, yaw: float = 0.0, roll: float = 0.0) -> np.ndarray:
+    """Local rotation for ``Skeleton.world_mats`` from joint angles counted from the anatomical position."""
+    return _frame(PARENT[bone]) @ euler(pitch, yaw, roll) @ _frame(bone).T
+
+
+def joint_angles(bone: str, R_local: np.ndarray) -> Tuple[float, float, float]:
+    """(pitch, yaw, roll) of a local rotation, counted from the anatomical position."""
+    return euler_angles(_frame(PARENT[bone]).T @ np.asarray(R_local, float) @ _frame(bone))
+
+
+def rest_angles(bone: str) -> Tuple[float, float, float]:
+    """Joint angles of the rest pose (non-zero only for the spread arms)."""
+    return joint_angles(bone, np.eye(3))
+
+
+def check_limits(rots: Dict[str, np.ndarray], tol: float = 0.05) -> List[Tuple[str, str, float, float, float]]:
+    """Joint angles outside their limits: [(bone, axis, angle, min, max), ...]; empty = all fine."""
+    bad = []
+    for bone, R in rots.items():
+        lim = limits(bone)
+        if lim is None:
+            continue
+        for axis, ang, (lo, hi) in zip(("pitch", "yaw", "roll"), joint_angles(bone, R), lim):
+            if ang < lo - tol or ang > hi + tol:
+                bad.append((bone, axis, float(ang), lo, hi))
+    return bad
+
+
+def anatomical_rots() -> Dict[str, np.ndarray]:
+    """Standing to attention: the pose the proportion table is measured in (arms straight down)."""
+    return {"upperarm" + side: local_rot("upperarm" + side) for side, _ in SIDES}
+
+
+def limit_poses(n_random: int = 48, seed: int = 0, corners: bool = True) -> List[Dict[str, np.ndarray]]:
+    """Poses that sweep the rotation limits: rest, every joint at each end of each axis, the corners
+    of every multi-axis joint, and ``n_random`` whole-body poses drawn uniformly inside the limits."""
+    rng = np.random.default_rng(seed)
+    bones = [b for b in GEOMETRY_BONES if limits(b) is not None]
+    poses: List[Dict[str, np.ndarray]] = [{}, anatomical_rots()]
+    for b in bones:
+        lim = limits(b)
+        free = [i for i in range(3) if lim[i][0] != lim[i][1]]
+        base = list(rest_angles(b))
+        for i in free:
+            for v in lim[i]:
+                a = list(base)
+                a[i] = v
+                poses.append({b: local_rot(b, *a)})
+        if corners and len(free) > 1:
+            for code in range(2 ** len(free)):
+                a = [0.0, 0.0, 0.0]
+                for k, i in enumerate(free):
+                    a[i] = lim[i][(code >> k) & 1]
+                poses.append({b: local_rot(b, *a)})
+    for _ in range(n_random):
+        poses.append({b: local_rot(b, *[rng.uniform(lo, hi) for lo, hi in limits(b)]) for b in bones})
+    return poses
+
+
+def measure_joints() -> Dict[str, float]:
+    """Proportions that follow from the joint positions alone (fractions of H).  The surface-dependent
+    ones (widths, vertex, chin, fingertip, foot) are measured on the mesh by soldier.py."""
+    h = lambda p: (p[1] - GROUND) / H  # noqa: E731
+    d = lambda a, b: float(np.linalg.norm(a - b)) / H  # noqa: E731
+    return dict(shoulder=h(SHOULDER[1]), hip=h(HIP[1]), knee=h(KNEE[1]), ankle=h(ANKLE[1]),
+                upper_arm=d(SHOULDER[1], ELBOW[1]), forearm=d(ELBOW[1], WRIST[1]), hand=d(WRIST[1], FINGERTIP[1]),
+                thigh=d(HIP[1], KNEE[1]), shin=d(KNEE[1], ANKLE[1]),
+                # arms hanging straight down (anatomical position)
+                elbow=h(SHOULDER[1]) - d(SHOULDER[1], ELBOW[1]),
+                wrist=h(SHOULDER[1]) - d(SHOULDER[1], WRIST[1]),
+                fingertip=h(SHOULDER[1]) - d(SHOULDER[1], FINGERTIP[1]))

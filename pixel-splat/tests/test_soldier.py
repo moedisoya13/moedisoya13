@@ -1,0 +1,163 @@
+"""Fast checks for the soldier example: proportions, rigid binding, joints that cannot open,
+planted feet, loop seams.  (CPU, well under a minute; coarse sculpt, 6000 untrained splats.)"""
+import sys
+from pathlib import Path
+
+import numpy as np
+import pytest
+import torch
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "examples" / "soldier"))
+import body  # noqa: E402
+import motion  # noqa: E402
+import rig  # noqa: E402
+import soldier  # noqa: E402
+from pixelsplat.splats import SplatModel  # noqa: E402
+
+SKEL = rig.SKELETON
+
+
+@pytest.fixture(scope="module")
+def sc():
+    return soldier.sculpt(voxel=0.014, n_random=12, log=lambda *a: None)
+
+
+@pytest.fixture(scope="module")
+def splats(sc):
+    model = SplatModel.from_mesh(sc.parts(True), 6000, seed=0)
+    return model, sc.bone_index[np.asarray(model.part)]
+
+
+def some_poses(n_random=20):
+    poses = {k: SKEL.world_mats(r) for k, r in soldier.named_poses().items()}
+    poses.update({f"limit{i}": SKEL.world_mats(r) for i, r in enumerate(rig.limit_poses(n_random, seed=3, corners=False))})
+    poses.update({f"walk{k}": motion.walk_pose(SKEL, k / 12)[0] for k in range(12)})
+    poses.update({f"turn{k}": motion.turn_pose(SKEL, k / 8, bend=10.0)[0] for k in range(8)})
+    return poses
+
+
+def test_proportions_match_the_table(sc):
+    """Every Drillis & Contini ratio is met within 3 % on the sculpted meshes."""
+    for name, target, measured, dev in soldier.proportion_table(sc):
+        assert abs(dev) <= 3.0, (name, target, measured)
+
+
+def test_skeleton_layout():
+    names = [b.name for b in SKEL.bones]
+    for b in SKEL.bones:  # parents first, as Skeleton.world_mats needs
+        assert b.parent is None or names.index(b.parent) < names.index(b.name)
+    assert names[:len(rig.GEOMETRY_BONES)] == body.BONES
+    assert set(rig.HELPER_BONES) == {"skirtF", "skirtB", "skirtL", "skirtR", "cape", "capeTip", "plume", "plumeTip"}
+    for j in rig.JOINTS:  # the bead is never smaller than the socket it sits in
+        assert j.bead >= j.shared > 0
+        assert np.allclose(SKEL.bones[SKEL.index[j.bone]].head, j.pos, atol=1e-6)
+
+
+def test_joint_angles_round_trip_and_limits():
+    rng = np.random.default_rng(0)
+    for bone in ("chest", "head", "upperarmL", "upperarmR", "forearmR", "handL", "thighR", "footL"):
+        lim = rig.limits(bone)
+        a = [rng.uniform(lo, hi) for lo, hi in lim]
+        back = rig.joint_angles(bone, rig.local_rot(bone, *a))
+        assert np.allclose(a, back, atol=1e-6), (bone, a, back)
+    assert rig.limits("thighR")[2] == (-45.0, 25.0)  # mirrored: the right leg spreads towards -x
+    assert rig.check_limits({"chest": rig.local_rot("chest", yaw=41)})
+    assert not rig.check_limits({"chest": rig.local_rot("chest", yaw=40), "head": rig.local_rot("head", yaw=-70)})
+    assert np.allclose(rig.rest_angles("upperarmL"), (0, 0, rig.A_POSE), atol=1e-6)
+    for k in range(24):  # the two motions stay inside the limits
+        assert not rig.check_limits(motion.walk_rots(SKEL, k / 24)[0])
+        assert not rig.check_limits(motion.turn_rots(SKEL, k / 24, bend=10.0)[0])
+
+
+def test_binding_is_one_hot_and_rigid(splats):
+    model, bones = splats
+    rep = soldier.rigid_report(model, bones, list(some_poses(6).values()))
+    assert rep["one_hot"]
+    assert rep["max_distance_change"] < 1e-5  # two splats of one bone never move apart
+    assert rep["max_scale_change"] < 1e-5  # ... and no splat is stretched
+    assert set(np.unique(bones)) == {SKEL.index[b] for b in body.BONES}  # helper bones carry nothing yet
+
+
+def test_joints_cannot_open():
+    """SDF-level gap check: at every joint both bones contain the shared ball - in the rest pose and,
+    moved by the pose, in world space - parent and child agree on where the joint is, and solid
+    material runs through the joint in the posed union."""
+    rep = soldier.sdf_gap_report(some_poses())
+    assert rep["shared_ball"] < 0
+    assert rep["pivot"] < 1e-5
+    assert rep["posed_ball"] < 0
+    assert rep["core"] < -0.3, rep
+
+
+def test_turntable_outline_does_not_change_when_turning():
+    rep = soldier.turntable_report(steps=5)
+    for joint in ("waist", "head"):
+        assert rep[joint + "_turning"] < 1e-4  # what the turning bone sweeps over is round about the yaw axis
+    assert rep["waist_static"] < 1e-4  # the chest never shows past the waist disc (the jaw does overhang the neck)
+    assert abs(rep["waist_radius"] - rig.TURNTABLE["waist"]["radius"] * rig.H) < 2e-3
+
+
+def test_planted_feet_do_not_slide(sc):
+    rep = soldier.foot_report(sc, steps=200)
+    assert rep["stance_slide"] < 1e-4  # world position of the planted point
+    assert rep["stance_heading_deg"] < 1e-4  # the planted foot never turns
+    assert rep["max_reach"] < 1.0  # the IK never runs out of leg (that would drag the foot)
+    assert rep["limit_violations"] == 0
+    assert -0.004 < rep["ground_stance_min"] and rep["ground_stance_max"] < 0.004
+    assert rep["ground_swing_min"] > -0.002  # the swinging foot clears the ground
+    assert rep["landing_speed"] < 0.02 * rep["body_speed"]  # it lands (and lifts off) at rest
+    assert rep["liftoff_speed"] < 0.02 * rep["body_speed"]
+    assert rep["mid_swing_speed"] > rep["body_speed"]
+
+
+def test_loops_are_seamless():
+    for rep in (soldier.loop_report(steps=96), soldier.loop_report(lambda ph: motion.turn_pose(SKEL, ph)[0], steps=96)):
+        assert rep["seam_position"] < 1e-5  # pose(1) == pose(0)
+        assert rep["kink"] < 0.4  # velocity is continuous everywhere (0.25 = smooth, 1 = a jump) ...
+        assert rep["seam_kink"] < 0.4  # ... and across the seam
+
+
+def test_walk_travels_one_stride_per_cycle():
+    a = motion.walk_pose(SKEL, 0.0, 0.0)[0]
+    b = motion.walk_pose(SKEL, 1.0, motion.STRIDE)[0]
+    d = b - a
+    assert np.abs(d[:, :, :3]).max() < 1e-6
+    assert np.allclose(d[:, :, 3], [0, 0, motion.STRIDE], atol=1e-5)
+
+
+def test_buried_faces_are_never_seen(sc, splats):
+    """Culling drops surface, but in fresh poses the culled meshes look exactly like the full ones,
+    and the splats cover the posed silhouette about as well as they cover the rest pose."""
+    assert 0.02 < 1 - sc.area(True) / sc.area(False) < 0.25
+    model, bones = splats
+    R = soldier.Renderer(model, bones, app=False)
+    poses = {k: SKEL.world_mats(r) for k, r in soldier.named_poses().items()
+             if k in ("rest", "knee_bent", "hip_flex", "elbow_bent", "waist_bend", "neck_nod")}
+    poses["walk"] = motion.walk_pose(SKEL, 0.05)[0]
+    rep = soldier.gap_report(R, sc, poses, views=((35, 8),), px=96)
+    rest = rep["rest"]["missing"] / rep["rest"]["silhouette"]
+    for name, g in rep.items():
+        assert g["culled"] == 0, name
+        assert g["missing"] / g["silhouette"] <= rest + 0.01, (name, g, rest)
+
+
+def test_helper_bones_are_driven():
+    rots, _ = motion.walk_rots(SKEL, 0.0)  # left leg forward
+    assert set(rig.HELPER_BONES) <= set(rots)
+    f, _ = motion.thigh_swing(rots["thighL"], 1)
+    assert f > 10
+    assert rig.euler_angles(rots["skirtF"])[0] < -5  # the front panel is pushed forward by the thigh
+    still = motion.stand_rots()[0]
+    motion.drive_helpers(still)
+    assert all(np.allclose(still[h], np.eye(3), atol=1e-6) for h in rig.HELPER_BONES)  # at rest nothing moves
+
+
+def test_posed_union_matches_rigid_motion():
+    """posed_union_sdf at a posed surface point == 0 where the rest SDF is 0."""
+    mats = motion.walk_pose(SKEL, 0.3)[0]
+    b = "shinL"
+    p = np.asarray(rig.KNEE[1] + [rig.BEAD["knee"] * rig.H, 0, 0], np.float32)[None]  # on the knee bead
+    assert abs(float(body.bone_sdf(b, p)[0])) < 1e-5
+    q = body.apply(mats[SKEL.index[b]].astype(np.float64), p.astype(np.float64))
+    assert abs(float(body.posed_bone_sdf(b, q, mats)[0])) < 1e-4
+    assert torch.get_num_threads() >= 1
