@@ -85,7 +85,7 @@ def foot_path(psi: float, s: int) -> Dict[str, object]:
     ankle = start + (end - start) * smoothstep(t)  # zero world speed at both ends
     ankle[1] += SWING_LIFT * math.sin(math.pi * t) ** 2
     pitch = PITCH_OFF + (PITCH_STRIKE - PITCH_OFF) * smoothstep((t - SWING_HOLD) / (1 - SWING_HOLD))
-    toe = -PITCH_OFF * (1 - smoothstep(t / 0.45))  # toes straighten out early in the swing
+    toe = -PITCH_OFF * (1 - smoothstep(t / 0.70))  # toes straighten out during the swing (slowly: the shoe is long)
     return dict(ankle=ankle, pitch=pitch, toe=toe, contact=None)
 
 
@@ -146,7 +146,7 @@ def _pelvis_world(R_pelvis, root):
     return lambda p: R_pelvis @ (p - ph) + ph + root
 
 
-def stand_rots(arm_out: float = 6.0, elbow: float = 8.0) -> Tuple[Dict[str, np.ndarray], np.ndarray]:
+def stand_rots(arm_out: float = 10.0, elbow: float = 8.0) -> Tuple[Dict[str, np.ndarray], np.ndarray]:
     """Relaxed standing: arms hang a little away from the body, elbows slightly bent."""
     rots = {}
     for side, s in rig.SIDES:
@@ -196,7 +196,7 @@ def walk_rots(skel: Skeleton, phase: float, advance: float = 0.0, info: Optional
     for side, s in rig.SIDES:
         sw = c1 * s
         rots["clav" + side] = rig.local_rot("clav" + side, yaw=-s * 2.0 * sw)
-        rots["upperarm" + side] = rig.local_rot("upperarm" + side, pitch=-3.0 + 21.0 * sw, roll=s * 5.5)
+        rots["upperarm" + side] = rig.local_rot("upperarm" + side, pitch=-3.0 + 21.0 * sw, roll=s * 9.0)
         rots["forearm" + side] = rig.local_rot("forearm" + side, pitch=-(19.0 - 11.0 * sw), yaw=s * 8.0)
         rots["hand" + side] = rig.local_rot("hand" + side, pitch=-6.0)
     drive_helpers(rots, phase=phase, walk=1.0)
@@ -232,7 +232,7 @@ def turn_rots(skel: Skeleton, phase: float, bend: float = 0.0):
     for side, s in rig.SIDES:  # the arms trail the shoulders a little
         lag = -0.12 * waist * s
         out = (waist / WAIST_TURN) ** 2  # 0 facing front, 1 at either end of the turn
-        rots["upperarm" + side] = rig.local_rot("upperarm" + side, pitch=2.0 + lag, roll=s * (7.0 + 1.6 * out))
+        rots["upperarm" + side] = rig.local_rot("upperarm" + side, pitch=2.0 + lag, roll=s * (10.0 + 1.6 * out))
         rots["forearm" + side] = rig.local_rot("forearm" + side, pitch=-(9.0 + 4.0 * out))
     d = 1e-3  # turning speeds (degrees per cycle) for the trailing cloth and plume
     w1, n1 = turn_angles(phase + d)
@@ -254,33 +254,73 @@ def thigh_swing(R_thigh_local: np.ndarray, s: int) -> Tuple[float, float]:
     return math.degrees(math.atan2(d[2], -d[1])), math.degrees(math.atan2(s * d[0], -d[1]))
 
 
+SKIRT_REACH = 0.55  # the skirt must clear the thigh this far down it (fraction of the thigh: about the hem)
+SKIRT_GAP = 0.056 * H  # thigh radius there + room for the cloth
+SKIRT_FOLLOW = 0.8  # how much of the thigh's swing a side panel is dragged along
+
+
+def _cape_lean(R_chest_local: np.ndarray) -> float:
+    """Degrees the cape has to lean back from plumb to pass behind the hips, given how the chest is
+    bent over them (the cape hangs from the upper back, which moves forward when the trunk bends)."""
+    root = rig.WAIST + R_chest_local @ (rig.CAPE[0] - rig.WAIST)  # where the cape hangs from, pelvis frame
+    need = [math.degrees(math.atan2(root[2] - b[2], root[1] - b[1])) for b in rig.CAPE_CLEAR]
+    top = max(need)
+    return top + math.log(sum(math.exp(n - top) for n in need))  # smooth max (1 degree soft): no jerk
+
+
+CAPE_LEAN_REST = _cape_lean(np.eye(3))
+
+
+def _skirt_lift(R_thigh_local: np.ndarray, s: int) -> Tuple[float, float, float]:
+    """How far (degrees) the front, back and own-side skirt panel must swing out so that it rests ON
+    this thigh instead of cutting through it: the panel hangs from its hinge on the belt line and has to
+    pass outside the thigh's surface at SKIRT_REACH.  0 = hanging as in the rest pose."""
+    def angles(R):
+        a = rig.HIP[s] + R @ (SKIRT_REACH * (rig.KNEE[s] - rig.HIP[s]))  # a point on the thigh's axis
+        hf, hb, hs = rig.SKIRT["skirtF"][0], rig.SKIRT["skirtB"][0], rig.SKIRT["skirtL" if s > 0 else "skirtR"][0]
+        return (math.degrees(math.atan2(a[2] + SKIRT_GAP - hf[2], hf[1] - a[1])),
+                math.degrees(math.atan2(hb[2] - (a[2] - SKIRT_GAP), hb[1] - a[1])),
+                math.degrees(math.atan2(s * a[0] + SKIRT_GAP - s * hs[0], hs[1] - a[1])))
+    now, rest = angles(R_thigh_local), angles(np.eye(3))
+    return tuple(n - r for n, r in zip(now, rest))
+
+
 def drive_helpers(rots: Dict[str, np.ndarray], phase: float = 0.0, walk: float = 0.0, chest_spin: float = 0.0,
                   head_spin: float = 0.0) -> Dict[str, np.ndarray]:
     """Set the helper bones from the pose (in place): skirt panels are pushed out by the thighs, the
-    cape hangs back and trails, the plume nods.  Purely procedural, loops with ``phase``.
+    cape hangs plumb from the shoulders and trails, the plume nods.  Purely procedural, loops with ``phase``.
 
     ``walk`` 0..1 = how much walking sway to add; ``*_spin`` = turning speed in degrees per cycle."""
     eye = np.eye(3)
-    fl, ol = thigh_swing(rots.get("thighL", eye), 1)
-    fr, orr = thigh_swing(rots.get("thighR", eye), -1)
+    tl, tr = rots.get("thighL", eye), rots.get("thighR", eye)
+    (fl, bl, sl), (fr, br, sr) = _skirt_lift(tl, 1), _skirt_lift(tr, -1)
+    swing_l, swing_r = thigh_swing(tl, 1)[0], thigh_swing(tr, -1)[0]
     flutter = walk * math.sin(2 * TAU * phase - 1.1)
-    # skirt: a panel never passes through the thigh behind it; 0.85 = the cloth hangs a little off the leg
-    front = fr + soft_pos(fl - fr, 6.0)  # smooth max: the thigh that is further forward ...
-    back = -fl + soft_pos(fl - fr, 6.0)  # ... and the one that is further back
-    rots["skirtF"] = rig.euler(pitch=-(0.85 * soft_pos(front) + 2.0 * walk + 1.5 * flutter))
-    rots["skirtB"] = rig.euler(pitch=0.85 * soft_pos(back) + 2.0 * walk - 1.5 * flutter)
-    rots["skirtL"] = rig.euler(pitch=-0.5 * fl, roll=0.9 * soft_pos(ol) + 1.5 * walk * math.sin(TAU * phase - 0.9))
-    rots["skirtR"] = rig.euler(pitch=-0.5 * fr, roll=-0.9 * soft_pos(orr) + 1.5 * walk * math.sin(TAU * phase - 0.9))
-    # cape: streams back when walking, swings out against a turn, the hem lags the top
+    # front / back panel: lifted by whichever thigh pushes further (smooth max, so no jerk as the legs pass)
+    front = soft_pos(fr + soft_pos(fl - fr, 6.0))
+    back = soft_pos(br + soft_pos(bl - br, 6.0))
+    rots["skirtF"] = rig.euler(pitch=-(front + 1.0 * walk * (1 + flutter)))
+    rots["skirtB"] = rig.euler(pitch=back + 1.0 * walk * (1 - flutter))
+    # side panels: pushed out by their own thigh, and dragged along with its swing
+    sway = 1.2 * walk * math.sin(TAU * phase - 0.9)
+    rots["skirtL"] = rig.euler(pitch=-SKIRT_FOLLOW * swing_l, roll=soft_pos(sl) + sway)
+    rots["skirtR"] = rig.euler(pitch=-SKIRT_FOLLOW * swing_r, roll=-soft_pos(sr) + sway)
+    # cape: hangs plumb whatever the chest does (it undoes the chest's bend and lean and part of its turn -
+    # the hips hold the cloth back), leans back as far as it must to pass behind the hips, streams back
+    # when walking, swings out against a turn; the hem lags
+    R_chest = rots.get("chest", eye)
+    cp, cy, cr = rig.joint_angles("chest", R_chest)
+    lean = soft_pos(_cape_lean(R_chest) - CAPE_LEAN_REST, 2.0) + 0.9 * back  # the back of the skirt pushes it too
     lag = -0.035 * chest_spin
-    rots["cape"] = rig.euler(pitch=walk * (7.0 + 3.0 * math.sin(2 * TAU * phase - 1.0)),
-                             yaw=0.5 * lag, roll=walk * 2.5 * math.sin(TAU * phase - 0.8) + 0.15 * lag)
-    rots["capeTip"] = rig.euler(pitch=walk * (4.0 + 4.0 * math.sin(2 * TAU * phase - 1.9)),
+    plumb = rig.rot_x(-cp) @ rig.rot_z(-cr) @ rig.rot_y(-0.50 * cy)
+    rots["cape"] = plumb @ rig.euler(pitch=lean + walk * (6.0 + 3.0 * math.sin(2 * TAU * phase - 1.0)), yaw=0.5 * lag,
+                                     roll=walk * 2.5 * math.sin(TAU * phase - 0.8) + 0.15 * lag)
+    rots["capeTip"] = rig.euler(pitch=-0.5 * lean + walk * (3.0 + 4.0 * math.sin(2 * TAU * phase - 1.9)),
                                 yaw=0.5 * lag, roll=walk * 3.0 * math.sin(TAU * phase - 1.6) + 0.25 * lag)
     # plume: nods with every step, leans away from a head turn
-    lean = -0.02 * head_spin
-    rots["plume"] = rig.euler(pitch=walk * (3.0 + 4.0 * math.sin(2 * TAU * phase - 0.6)), roll=0.5 * lean)
-    rots["plumeTip"] = rig.euler(pitch=walk * (2.0 + 5.0 * math.sin(2 * TAU * phase - 1.5)), roll=lean)
+    sway_p = -0.02 * head_spin
+    rots["plume"] = rig.euler(pitch=walk * (3.0 + 4.0 * math.sin(2 * TAU * phase - 0.6)), roll=0.5 * sway_p)
+    rots["plumeTip"] = rig.euler(pitch=walk * (2.0 + 5.0 * math.sin(2 * TAU * phase - 1.5)), roll=sway_p)
     return rots
 
 

@@ -120,8 +120,12 @@ SKIRT = {  # panel -> (hinge on the belt line, hem end); children of the pelvis
     "skirtL": (V(0.088 * H, Y(BELT_H), 0.0), V(0.102 * H, Y(HEM_H), 0.0)),
     "skirtR": (V(-0.088 * H, Y(BELT_H), 0.0), V(-0.102 * H, Y(HEM_H), 0.0)),
 }
-CAPE = (V(0.0, Y(0.800), -0.062 * H), V(0.0, Y(0.560), -0.085 * H), V(0.0, Y(0.330), -0.095 * H))  # root, mid, hem
-PLUME = (V(0.0, Y(0.985), -0.050 * H), V(0.0, Y(1.050), -0.105 * H), V(0.0, Y(1.085), -0.180 * H))  # root, mid, tip
+CAPE = (V(0.0, Y(0.800), -0.066 * H), V(0.0, Y(0.560), -0.099 * H), V(0.0, Y(0.330), -0.128 * H))  # root, hinge, hem
+PLUME = (V(0.0, Y(0.985), -0.050 * H), V(0.0, Y(1.046), -0.080 * H), V(0.0, Y(1.090), -0.125 * H))  # root, mid, tip
+
+# points on the back of the hips / skirt (in the pelvis frame) that the cape has to hang behind
+CAPE_CLEAR = (V(0.0, Y(0.620), -0.081 * H), V(0.0, Y(0.555), -0.092 * H), V(0.0, Y(0.500), -0.097 * H),
+              V(0.0, Y(0.400), -0.107 * H))
 
 GEOMETRY_BONES: List[str] = []  # bones that carry mannequin surface (filled below)
 HELPER_BONES: List[str] = []
@@ -224,13 +228,16 @@ def side_of(bone: str) -> int:
     return 1 if bone.endswith("L") else -1
 
 
+LIMIT_OVERRIDE: Dict[str, Tuple] = {}  # tighter limits while an outfit is worn (set by body.wear)
+
+
 def limits(bone: str):
     """((pitch_min, pitch_max), (yaw_min, yaw_max), (roll_min, roll_max)) for one bone, or None."""
     s = side_of(bone)
     key = bone[:-1] if s else bone
     if key not in LIMITS:
         return None
-    p, y, r = LIMITS[key]
+    p, y, r = LIMIT_OVERRIDE.get(key, LIMITS[key])
     if s < 0:
         y, r = (-y[1], -y[0]), (-r[1], -r[0])
     return p, y, r

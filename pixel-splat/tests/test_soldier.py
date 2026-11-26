@@ -1,5 +1,6 @@
 """Fast checks for the soldier example: proportions, rigid binding, joints that cannot open,
-planted feet, loop seams.  (CPU, well under a minute; coarse sculpt, 6000 untrained splats.)"""
+planted feet, loop seams (on the bare mannequin), then the costume: materials, clashes, training path.
+(CPU, well under a minute; coarse sculpts, a few thousand untrained splats.)"""
 import sys
 from pathlib import Path
 
@@ -9,23 +10,40 @@ import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "examples" / "soldier"))
 import body  # noqa: E402
+import costume  # noqa: E402
 import motion  # noqa: E402
 import rig  # noqa: E402
 import soldier  # noqa: E402
 from pixelsplat.splats import SplatModel  # noqa: E402
 
 SKEL = rig.SKELETON
+quiet = lambda *a: None  # noqa: E731
 
 
 @pytest.fixture(scope="module")
 def sc():
-    return soldier.sculpt(voxel=0.014, n_random=12, log=lambda *a: None)
+    """The bare mannequin (stage 1)."""
+    return soldier.sculpt(voxel=0.014, n_random=12, outfit="none", log=quiet)
 
 
 @pytest.fixture(scope="module")
 def splats(sc):
     model = SplatModel.from_mesh(sc.parts(True), 6000, seed=0)
-    return model, sc.bone_index[np.asarray(model.part)]
+    return model, soldier.splat_bones(sc, model)
+
+
+@pytest.fixture(scope="module")
+def dressed():
+    """The soldier in his kit (stage 2), nothing culled."""
+    return soldier.sculpt(voxel=0.014, cull=False, outfit="soldier", log=quiet)
+
+
+@pytest.fixture(autouse=True)
+def bare_by_default():
+    """Every test starts on the bare mannequin; the costume tests put the outfit on themselves."""
+    body.wear(None)
+    yield
+    body.wear(None)
 
 
 def some_poses(n_random=20):
@@ -75,7 +93,7 @@ def test_binding_is_one_hot_and_rigid(splats):
     assert rep["one_hot"]
     assert rep["max_distance_change"] < 1e-5  # two splats of one bone never move apart
     assert rep["max_scale_change"] < 1e-5  # ... and no splat is stretched
-    assert set(np.unique(bones)) == {SKEL.index[b] for b in body.BONES}  # helper bones carry nothing yet
+    assert set(np.unique(bones)) == {SKEL.index[b] for b in body.BONES}  # bare: helper bones carry nothing
 
 
 def test_joints_cannot_open():
@@ -161,3 +179,117 @@ def test_posed_union_matches_rigid_motion():
     q = body.apply(mats[SKEL.index[b]].astype(np.float64), p.astype(np.float64))
     assert abs(float(body.posed_bone_sdf(b, q, mats)[0])) < 1e-4
     assert torch.get_num_threads() >= 1
+
+
+# ---------------------------------------------------------------- stage 2: the costume
+def test_bake_with_training_keeps_bone_labels(sc, tmp_path):
+    """The ``--iters > 0`` path: a few training steps, then the splat -> bone labels still line up,
+    survive save / load, and the splats the rest pose hides were left as initialised."""
+    model = soldier.bake(sc, n_splats=2500, res=48, views=3, iters=2, log=quiet)
+    bones = soldier.splat_bones(sc, model)
+    assert isinstance(model.part, torch.Tensor) and len(bones) == model.n == model.patch.shape[0]
+    assert set(np.unique(bones)) == {SKEL.index[b] for b in body.BONES}
+    init = SplatModel.from_mesh(sc.parts(True), 2500, seed=0)
+    hidden = body.inside_other(init.means.detach().numpy(), soldier.splat_bones(sc, init), SKEL.world_mats({}), 0.0)
+    assert hidden.any()
+    d = torch.cdist(init.means[torch.as_tensor(hidden)].detach(), model.means.detach(),
+                    compute_mode="donot_use_mm_for_euclid_dist").min(1).values
+    assert float(d.max()) < 1e-6  # every hidden splat is still exactly where the mesh put it
+    path = tmp_path / "m.pt"
+    torch.save(model.state_dict(), path)
+    back = SplatModel.load(str(path))
+    assert torch.equal(back.part, model.part)
+    rep = soldier.rigid_report(back, soldier.splat_bones(sc, back), [motion.walk_pose(SKEL, 0.3)[0]])
+    assert rep["one_hot"] and rep["max_distance_change"] < 1e-5
+
+
+def test_costume_dresses_every_bone_and_leaves_the_body_alone(sc, dressed):
+    assert dressed.outfit == "soldier" and dressed.names == rig.GEOMETRY_BONES + rig.HELPER_BONES
+    assert body.outfit() is None  # sculpting did not leave the outfit on
+    with dressed.worn():
+        assert body.bones() == dressed.names
+        p = np.asarray(rig.KNEE[1] + [rig.BEAD["knee"] * rig.H, 0, 0], np.float32)[None]  # on the knee bead
+        assert abs(float(body.bone_sdf("shinL", p)[0])) < 1e-5  # hose is paint only: same solid
+        assert not rig.check_limits(motion.walk_rots(SKEL, 0.2)[0])
+        assert rig.limits("head")[1] == (-70.0, 70.0) and rig.limits("head")[0][0] > -20  # helmet: stiffer neck
+        few = {k: v for k, v in some_poses(0).items() if k in ("rest", "knee_bent", "shoulder_up", "waist_bend", "walk3", "turn2")}
+        rep = soldier.sdf_gap_report(few)  # the joints stay closed under the clothes
+        assert rep["shared_ball"] < 0 and rep["posed_ball"] < 0 and rep["pivot"] < 1e-5
+        assert soldier.turntable_report(steps=3)["waist_static"] < 1e-4  # nothing of the chest shows past the belt
+    assert rig.limits("head")[0] == (-20.0, 25.0)  # ... and the bare limits are back
+    model = SplatModel.from_mesh(dressed.parts(True), 8000, seed=0)
+    bones = soldier.splat_bones(dressed, model)
+    assert len(np.unique(bones)) == 28
+    rep = soldier.rigid_report(model, bones, [motion.walk_pose(SKEL, 0.3)[0], motion.turn_pose(SKEL, 0.2)[0]])
+    assert rep["one_hot"] and rep["max_distance_change"] < 1e-5
+
+
+def test_costume_materials(dressed):
+    """Steel is metallic, cloth is not; lozenges, parti-coloured hose and the rig debug paint are there;
+    per-vertex roughness / metallic reach the splats through the material atlas."""
+    i = {n: k for k, n in enumerate(dressed.names)}
+    for bone in ("head", "neck", "clavL", "upperarmR"):
+        assert dressed.metal[i[bone]].max() > 0.4, bone  # sallet, bevor, pauldron, lames
+    for bone in ("skirtF", "cape", "thighL", "plume"):  # (the chest is cloth too, but carries the gold brooch)
+        assert dressed.metal[i[bone]].max() < 0.01 and dressed.rough[i[bone]].min() > 0.25, bone
+    red, white = np.array(costume.MAT["red"][0]), np.array(costume.MAT["white"][0])
+    for bone in ("chest", "skirtF", "skirtB"):
+        c = dressed.colors[i[bone]]
+        assert (np.abs(c - red).max(1) < 0.02).mean() > 0.15 and (np.abs(c - white).max(1) < 0.02).mean() > 0.03, bone
+    assert np.abs(dressed.colors[i["thighL"]] - red).max() < 0.02  # his left leg red ...
+    assert np.abs(dressed.colors[i["shinR"]] - np.array(costume.MAT["cream"][0])).max() < 0.02  # ... his right cream
+    model = SplatModel.from_mesh(dressed.parts(False), 6000, seed=0)
+    mat = model.material().detach().numpy()
+    bones = soldier.splat_bones(dressed, model)
+    steel = mat[(bones == SKEL.index["head"]) & (mat[:, 4] > 0.4)]
+    assert len(steel) > 20 and abs(np.median(steel[:, 4]) - costume.MAT["steel"][2]) < 0.03
+    assert abs(np.median(steel[:, 3]) - costume.MAT["steel"][1]) < 0.05
+    cloth = mat[bones == SKEL.index["cape"]]
+    assert cloth[:, 4].max() < 0.02 and abs(np.median(cloth[:, 3]) - costume.MAT["yellow"][1]) < 0.03
+    with body.wearing(costume):
+        alb, rough, metal = body.paint("head", dressed.verts[i["head"]][:500], "rig")
+    allowed = np.array(list(body.RIG_COLORS.values()) + [body.RIG_OUTFIT_COLOR], np.float32)
+    assert metal.max() == 0 and np.abs(alb[:, None] - allowed[None]).max(2).min(1).max() < 1e-5  # only rig colours
+
+
+def test_patterns_are_fixed_to_the_cloth():
+    """A pattern is a function of the rest position only, so a pose cannot slide it over the cloth."""
+    x, y = np.meshgrid(np.linspace(-0.12, 0.12, 60), np.linspace(-0.3, 0.45, 120))
+    hit = costume.lozenge(x, y)
+    assert 0.08 < hit.mean() < 0.45
+    assert hit[:, ::-1].tolist() == hit.tolist()  # mirror-symmetric about the midline
+    y0 = costume.LOZ_Y0
+    assert costume.lozenge(np.array([0.0]), np.array([y0]))[0] and not costume.lozenge(np.array([costume.LOZ_W / 2]), np.array([y0]))[0]
+
+
+def test_costume_does_not_clash_while_walking_or_turning(dressed):
+    with dressed.worn():
+        rep = soldier.clash_report(dressed, walk=8, turn=6)
+    for garment in ("skirtF", "skirtB", "skirtL", "skirtR", "cape", "capeTip"):
+        d = rep["through " + garment]
+        assert d["walk"] < 0 and d["turn"] < 0 and d["rest"] < 0, (garment, d)  # the body never shows through
+    for pair in ("helmet / bevor", "face / bevor, cowl", "helmet, plume / mantle, pauldrons"):
+        d = rep[pair]  # the helmet clears everything up to the (helmeted) limits of the neck
+        assert max(d["rest"], d["walk"], d["turn"], d["limit"]) < 0.003, (pair, d)
+    for pair in ("forearm, hand / skirt, hips", "cape / skirt, hips", "cape / legs"):
+        d = rep[pair]
+        assert max(d["rest"], d["walk"], d["turn"]) < 0.004, (pair, d)
+    for pair in ("pauldron / trunk", "bevor / pauldron"):
+        d = rep[pair]  # these touch by design at rest; moving must not push them in further
+        assert max(d["walk"], d["turn"]) - d["rest"] < 0.004, (pair, d)
+    d = rep["puffed sleeve / trunk"]  # the bare arm already sits ~4 mm in the flank; the sleeve stays near that
+    assert d["rest"] < 0.010 and max(d["walk"], d["turn"]) < 0.020, d
+
+
+def test_helpers_keep_cloth_off_the_body():
+    """The drives of the costume bones: skirt follows the thigh, cape hangs plumb and behind the hips."""
+    L = rig.local_rot
+    rots = motion.drive_helpers({"thighL": L("thighL", pitch=-40)})
+    assert 20 < -rig.euler_angles(rots["skirtF"])[0] < 40  # front panel lifted about as far as the thigh
+    assert abs(rig.euler_angles(rots["skirtB"])[0]) < 2
+    rots = motion.drive_helpers({"chest": L("chest", pitch=25)})
+    world = L("chest", pitch=25) @ rots["cape"]  # cape orientation relative to the pelvis
+    lean = rig.euler_angles(world)[0]
+    assert 5 < lean < 25  # not bent forward with the chest (-25 would be plumb... it leans BACK to clear the hips)
+    rots = motion.drive_helpers({"chest": L("chest", yaw=40)})
+    assert abs(rig.euler_angles(L("chest", yaw=40) @ rots["cape"])[1] - 20) < 1  # half the turn: the hips hold it back

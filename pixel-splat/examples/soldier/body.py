@@ -18,6 +18,7 @@ Nothing here knows about splats or rendering; soldier.py meshes these solids bon
 from __future__ import annotations
 
 import sys
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Callable, Dict, List, Tuple
 
@@ -31,7 +32,6 @@ from pixelsplat import sdf  # noqa: E402
 H, GROUND = rig.H, rig.GROUND
 F32 = np.float32
 FLESH, BEAD, TURNTABLE = 0, 1, 2  # surface kinds
-COLORS = {FLESH: (0.80, 0.74, 0.64), BEAD: (0.80, 0.50, 0.20), TURNTABLE: (0.30, 0.37, 0.52)}  # sRGB albedo
 ROUGHNESS = 0.62
 BIG = 1e3
 
@@ -281,29 +281,97 @@ for _side, _s in rig.SIDES:
     for _name, _fn in (("clav", _clav), ("upperarm", _upperarm), ("forearm", _forearm), ("hand", _hand),
                        ("thigh", _thigh), ("shin", _shin), ("foot", _foot), ("toe", _toe)):
         BUILDERS[_name + _side] = _sided(_fn, _s)
-BONES: List[str] = [b for b in rig.GEOMETRY_BONES]
+BONES: List[str] = [b for b in rig.GEOMETRY_BONES]  # bones of the bare mannequin
 assert set(BONES) == set(BUILDERS)
 
+# ---------------------------------------------------------------- outfit (stage 2)
+# An outfit dresses the mannequin without changing it: it adds layers to bone solids (and solids to
+# helper bones), and paints.  It is any object / module with
+#   BONES             extra bones that get a solid (skirt panels, cape, plume)
+#   layers(bone, p)   -> {layer name: distance}, merged into the bone's solid (may be empty)
+#   paint(bone, p, layer) -> albedo (N,3), roughness (N,), metallic (N,)
+#   box(bone)         -> rest-pose box of the dressed bone solid, or None to keep the body's
+#   LIMITS            (optional) tighter rotation limits while it is worn
+#   VOXEL_SCALE       (optional) finer sculpt grid per bone
+# ``wear`` puts one on for every function of this module; ``None`` = the bare mannequin.
+_OUTFIT = None
 
-def bone_sdf(bone: str, p) -> np.ndarray:
-    """Signed distance to one bone's solid (rest pose)."""
+
+def wear(outfit):
+    """Put an outfit on (None = bare mannequin).  Returns the one worn before."""
+    global _OUTFIT
+    prev, _OUTFIT = _OUTFIT, outfit
+    rig.LIMIT_OVERRIDE = dict(getattr(outfit, "LIMITS", {}) or {})
+    return prev
+
+
+@contextmanager
+def wearing(outfit):
+    prev = wear(outfit)
+    try:
+        yield outfit
+    finally:
+        wear(prev)
+
+
+def outfit():
+    return _OUTFIT
+
+
+def bones() -> List[str]:
+    """Bones that carry a solid: the mannequin's, plus the outfit's helper bones."""
+    return BONES + (list(_OUTFIT.BONES) if _OUTFIT is not None else [])
+
+
+def bone_layers(bone: str, p) -> Dict[object, np.ndarray]:
+    """{layer: distance} of one bone: FLESH / BEAD / TURNTABLE of the body + the outfit's named layers."""
+    p = np.asarray(p, F32)
+    d = dict(BUILDERS[bone](p)) if bone in BUILDERS else {}
+    if _OUTFIT is not None:
+        d.update(_OUTFIT.layers(bone, p))
+    return d
+
+
+def body_sdf(bone: str, p) -> np.ndarray:
+    """Signed distance to one bone of the BARE mannequin, whatever is worn."""
     d = None
     for e in BUILDERS[bone](np.asarray(p, F32)).values():
         d = e if d is None else np.minimum(d, e)
     return d
 
 
-def bone_kind(bone: str, p) -> np.ndarray:
-    """Which kind of surface (FLESH / BEAD / TURNTABLE) is nearest at each point."""
-    k = BUILDERS[bone](np.asarray(p, F32))
-    keys = list(k)
-    return np.asarray(keys)[np.argmin(np.stack([k[i] for i in keys], -1), -1)]
+def bone_sdf(bone: str, p) -> np.ndarray:
+    """Signed distance to one bone's solid (rest pose): hard union of its layers."""
+    d = None
+    for e in bone_layers(bone, p).values():
+        d = e if d is None else np.minimum(d, e)
+    return d
 
 
-def paint(bone: str, p) -> np.ndarray:
-    """Albedo (sRGB) at surface points of one bone: pale wood, brass beads, steel-blue turntables.
-    The costume (stage 2) replaces this with real materials; the solids stay as they are."""
-    return np.array([COLORS[int(k)] for k in bone_kind(bone, p)], F32)
+def bone_layer(bone: str, p) -> np.ndarray:
+    """Which layer's surface is nearest at each point (object array of layer keys)."""
+    k = bone_layers(bone, p)
+    keys = np.empty(len(k), object)
+    keys[:] = list(k)
+    return keys[np.argmin(np.stack(list(k.values()), -1), -1)]
+
+
+RIG_COLORS = {FLESH: (0.80, 0.74, 0.64), BEAD: (0.80, 0.50, 0.20), TURNTABLE: (0.30, 0.37, 0.52)}
+RIG_OUTFIT_COLOR = (0.56, 0.58, 0.62)  # outfit layers in the rig debug paint
+
+
+def paint(bone: str, p, mode: str = "costume"):
+    """Material at surface points of one bone: (albedo sRGB (N,3), roughness (N,), metallic (N,)).
+
+    mode "costume": the outfit's materials (the bare mannequin has none, so it falls back to "rig");
+    mode "rig": debug colours - pale wood, brass joint beads, steel-blue turntables, grey outfit."""
+    p = np.asarray(p, F32)
+    layer = bone_layer(bone, p)
+    if mode == "costume" and _OUTFIT is not None:
+        alb, rough, metal = _OUTFIT.paint(bone, p, layer)
+        return np.clip(alb, 0.02, 1).astype(F32), np.clip(rough, 0.05, 1).astype(F32), np.clip(metal, 0, 1).astype(F32)
+    alb = np.array([RIG_COLORS.get(k, RIG_OUTFIT_COLOR) for k in layer], F32)
+    return alb, np.full(len(p), ROUGHNESS, F32), np.zeros(len(p), F32)
 
 
 # ---------------------------------------------------------------- boxes
@@ -334,17 +402,41 @@ def _boxes() -> Dict[str, Tuple[np.ndarray, np.ndarray]]:
     return b
 
 
-BOXES = _boxes()
+BOXES = _boxes()  # of the bare mannequin
 VOXEL_SCALE = {"hand": 0.55, "head": 0.8, "toe": 0.8, "foot": 0.9}  # finer grid where the detail is small
 
 
+def box(bone: str) -> Tuple[np.ndarray, np.ndarray]:
+    """Rest-pose box around a bone's solid as currently dressed."""
+    b = _OUTFIT.box(bone) if _OUTFIT is not None else None
+    return b if b is not None else BOXES[bone]
+
+
+def measure_box(bone: str, reach: float = 0.42, step: float = 0.016, pad: float = 0.022):
+    """Box of a bone solid found by probing its SDF on a coarse grid around the bone (for outfits)."""
+    bn = rig.SKELETON.bones[rig.SKELETON.index[bone]]
+    lo = np.minimum(bn.head, bn.tail) - reach
+    hi = np.maximum(bn.head, bn.tail) + reach
+    axes = [np.arange(lo[a], hi[a] + step, step, dtype=F32) for a in range(3)]
+    g = np.stack(np.meshgrid(*axes, indexing="ij"), -1)
+    inside = bone_sdf(bone, g) < step  # thin shells still register
+    if not inside.any():
+        raise ValueError(f"bone {bone!r} has no solid within {reach} of its axis")
+    pts = g[inside]
+    return pts.min(0) - F32(pad), pts.max(0) + F32(pad)
+
+
 def voxel_for(bone: str, voxel: float) -> float:
-    return voxel * VOXEL_SCALE.get(bone[:-1] if bone[-1] in "LR" else bone, 1.0)
+    key = bone[:-1] if bone[-1] in "LR" and bone[:-1] in VOXEL_SCALE else bone
+    scale = VOXEL_SCALE.get(key, 1.0)
+    if _OUTFIT is not None:
+        scale = min(scale, getattr(_OUTFIT, "VOXEL_SCALE", {}).get(bone, 1.0))
+    return voxel * scale
 
 
 def components(bone: str) -> Dict[str, sdf.Component]:
     """The one-entry component dict ``pixelsplat.sdf.mesh_components`` expects for this bone."""
-    return {bone: (lambda p, _b=bone: bone_sdf(_b, p), BOXES[bone])}
+    return {bone: (lambda p, _b=bone: bone_sdf(_b, p), box(bone))}
 
 
 # ---------------------------------------------------------------- posed solids
@@ -371,23 +463,22 @@ def posed_union_sdf(p_world, mats) -> np.ndarray:
     inv = invert(np.asarray(mats, np.float64))
     p_world = np.asarray(p_world, np.float64)
     d = np.full(p_world.shape[:-1], BIG, F32)
-    for b in BONES:
+    for b in bones():
         q = apply(inv[rig.SKELETON.index[b]], p_world).astype(F32)
-        lo, hi = BOXES[b]
+        lo, hi = box(b)
         m = np.all((q >= lo - 0.05) & (q <= hi + 0.05), -1)
         if m.any():
             d[m] = np.minimum(d[m], bone_sdf(b, q[m]))
     return d
 
 
-def inside_other(p_rest, owner, mats, margin: float, boxes=None, only=None) -> np.ndarray:
+def inside_other(p_rest, owner, mats, margin: float, only=None) -> np.ndarray:
     """For points that ride on bone ``owner[i]`` (given in the rest pose): True where the posed point
     lies deeper than ``margin`` inside the solid of some OTHER bone, i.e. cannot be seen.
 
     ``only`` = optional bool mask of the points worth testing (the rest are returned False)."""
     mats = np.asarray(mats, np.float64)
     inv = invert(mats)
-    boxes = BOXES if boxes is None else boxes
     p_rest = np.asarray(p_rest, np.float64)
     owner = np.asarray(owner)
     idx = np.arange(len(p_rest)) if only is None else np.nonzero(only)[0]
@@ -395,11 +486,11 @@ def inside_other(p_rest, owner, mats, margin: float, boxes=None, only=None) -> n
     if len(idx) == 0:
         return hidden
     world = np.einsum("nij,nj->ni", mats[owner[idx], :, :3], p_rest[idx]) + mats[owner[idx], :, 3]
-    for b in BONES:
+    for b in bones():
         bi = rig.SKELETON.index[b]
         cand = owner[idx] != bi
         q = apply(inv[bi], world[cand]).astype(F32)
-        lo, hi = boxes[b]
+        lo, hi = box(b)
         m = np.all((q >= lo) & (q <= hi), -1)
         if not m.any():
             continue

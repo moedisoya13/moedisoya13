@@ -1,11 +1,10 @@
-"""Soldier - a human-proportioned figure built for motion: skeleton, joint beads, turntables, mannequin.
+"""Soldier - a human-proportioned figure built for motion, then dressed.
 
-Stage 1 of the soldier example (the costume comes in stage 2 and hangs on the same bones):
-
-  rig.py     layer 1  real proportions, joint positions, 28 bones, rotation limits
-  body.py    layers 2-4  one solid per bone: joint beads, waist/neck turntables, mannequin flesh
-  motion.py  walk loop (planted feet, heel strike -> toe-off), turntable demo, costume helper bones
-  soldier.py this file: sculpt -> bake -> animate, plus `verify` (all the numbers in the README)
+  rig.py      layer 1     real proportions, joint positions, 28 bones, rotation limits
+  body.py     layers 2-4  one solid per bone: joint beads, waist/neck turntables, mannequin flesh
+  costume.py  layer 5     the kit: sallet, bevor, pauldrons, mantle, tabard, sleeves, hose ... (an "outfit")
+  motion.py   walk loop (planted feet, heel strike -> toe-off), turntable demo, costume helper bones
+  soldier.py  this file: sculpt -> bake -> animate, plus `verify` (all the numbers in the README)
 
 Unlike the Nike, every splat belongs to exactly ONE bone (rigid binding), so no surface is ever
 stretched; the beads and turntables keep the joints closed instead.
@@ -14,6 +13,8 @@ stretched; the beads and turntables keep the joints closed instead.
     python examples/soldier/soldier.py bake    -o out/soldier --iters 0       # splats (0 = no training)
     python examples/soldier/soldier.py animate -o out/soldier --app           # sheets + GIFs
     python examples/soldier/soldier.py verify  -o out/soldier                 # proportions, gaps, feet, loop
+    python examples/soldier/soldier.py sculpt  -o out/rig --outfit none       # the bare mannequin of stage 1
+    python examples/soldier/soldier.py sculpt  -o out/rig --paint rig         # dressed, but in rig debug colours
 
 Coordinates: y up, he faces +z, +x is his left.  Ground at y = -1, body height rig.H.
 """
@@ -36,6 +37,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(1, str(Path(__file__).resolve().parents[1] / "nike"))
 import body  # noqa: E402
+import costume  # noqa: E402
 import motion  # noqa: E402
 import rig  # noqa: E402
 import look  # noqa: E402  (examples/nike/look.py: the shared render look)
@@ -56,7 +58,23 @@ CENTER = (0.0, GROUND + 0.52 * H, 0.0)  # framing centre
 EXTENT = 0.60 * H  # half-height the camera frames (leaves room for the plume of stage 2)
 HERO_AZ = 28
 CULL_MARGIN = 0.0035 * H  # a surface point this deep inside another bone counts as buried
-MESH_FILE, SPLAT_FILE, BONE_FILE = "soldier_mesh.npz", "soldier_splats.pt", "soldier_bones.npy"
+MESH_FILE, SPLAT_FILE = "soldier_mesh.npz", "soldier_splats.pt"
+OUTFITS = {"none": None, "soldier": costume}
+
+# Per-vertex roughness / metallic travel as texture coordinates into a tiny ramp texture (the mesh
+# Part only has one roughness / metallic value of its own): u -> roughness, v -> metallic.
+_ATLAS_N, _ATLAS_LO, _ATLAS_SPAN = 16, 0.05, 0.90
+
+
+def _material_atlas() -> np.ndarray:
+    g = ((np.arange(_ATLAS_N) + 0.5) / _ATLAS_N - _ATLAS_LO) / _ATLAS_SPAN
+    tex = np.zeros((_ATLAS_N, _ATLAS_N, 3), np.float32)
+    tex[..., 1] = g[None, :]  # G = roughness along u
+    tex[..., 2] = g[::-1][:, None]  # B = metallic along v (v = 0 is the bottom row)
+    return tex
+
+
+ATLAS = _material_atlas()
 
 
 # ---------------------------------------------------------------- sculpt
@@ -69,12 +87,23 @@ class Sculpt:
     faces: List[np.ndarray]
     normals: List[np.ndarray]
     colors: List[np.ndarray]
+    rough: List[np.ndarray]
+    metal: List[np.ndarray]
     keep: List[np.ndarray]
+    outfit: str = "none"
+
+    def worn(self):
+        """Context manager: put on the outfit these meshes were sculpted in (for SDF queries)."""
+        return body.wearing(OUTFITS[self.outfit])
+
+    def _part(self, i: int, verts, normals, faces) -> Part:
+        uv = _ATLAS_LO + _ATLAS_SPAN * np.stack([self.rough[i], self.metal[i]], 1)
+        return Part(self.names[i], verts, faces, normals, uv=uv.astype(np.float32), vert_colors=self.colors[i],
+                    base_color=np.ones(3, np.float32), mr_tex=ATLAS, roughness=1.0, metallic=1.0)
 
     def parts(self, culled: bool = True) -> List[Part]:
-        return [Part(n, v, (f[k] if culled else f), nr, vert_colors=c, base_color=np.ones(3, np.float32),
-                     roughness=body.ROUGHNESS, metallic=0.0)
-                for n, v, f, nr, c, k in zip(self.names, self.verts, self.faces, self.normals, self.colors, self.keep)]
+        return [self._part(i, self.verts[i], self.normals[i], self.faces[i][self.keep[i]] if culled else self.faces[i])
+                for i in range(len(self.names))]
 
     @property
     def bone_index(self) -> np.ndarray:
@@ -87,19 +116,27 @@ class Sculpt:
     def area(self, culled: bool) -> float:
         return float(sum(p.area for p in self.parts(culled)))
 
+    def posed_verts(self, mats: np.ndarray) -> Dict[str, np.ndarray]:
+        out = {}
+        for n, v in zip(self.names, self.verts):
+            M = np.asarray(mats[SKEL.index[n]], np.float32)
+            out[n] = v @ M[:, :3].T + M[:, 3]
+        return out
+
     def posed_parts(self, mats: np.ndarray, culled: bool = False) -> List[Part]:
         """The meshes moved rigidly by a pose (for ground-truth renders of a posed figure)."""
         out = []
-        for p in self.parts(culled):
-            M = np.asarray(mats[SKEL.index[p.name]], np.float32)
-            out.append(Part(p.name, p.verts @ M[:, :3].T + M[:, 3], p.faces, p.normals @ M[:, :3].T,
-                            vert_colors=p.vert_colors, base_color=p.base_color, roughness=p.roughness, metallic=0.0))
+        for i, n in enumerate(self.names):
+            M = np.asarray(mats[SKEL.index[n]], np.float32)
+            f = self.faces[i][self.keep[i]] if culled else self.faces[i]
+            out.append(self._part(i, self.verts[i] @ M[:, :3].T + M[:, 3], self.normals[i] @ M[:, :3].T, f))
         return out
 
     def save(self, path: str):
         cat = lambda xs: np.concatenate(xs) if xs else np.zeros(0)  # noqa: E731
         np.savez_compressed(path, names=np.array(self.names), verts=cat(self.verts), faces=cat(self.faces),
-                            normals=cat(self.normals), colors=cat(self.colors), keep=cat(self.keep),
+                            normals=cat(self.normals), colors=cat(self.colors), rough=cat(self.rough),
+                            metal=cat(self.metal), keep=cat(self.keep), outfit=np.array(self.outfit),
                             n_verts=np.array([len(v) for v in self.verts]), n_faces=np.array([len(f) for f in self.faces]))
 
     @classmethod
@@ -108,56 +145,61 @@ class Sculpt:
         nv, nf = np.cumsum(z["n_verts"])[:-1], np.cumsum(z["n_faces"])[:-1]
         sp = lambda a, cuts: [np.ascontiguousarray(x) for x in np.split(a, cuts)]  # noqa: E731
         return cls([str(n) for n in z["names"]], sp(z["verts"], nv), sp(z["faces"], nf), sp(z["normals"], nv),
-                   sp(z["colors"], nv), sp(z["keep"], nf))
+                   sp(z["colors"], nv), sp(z["rough"], nv), sp(z["metal"], nv), sp(z["keep"], nf), str(z["outfit"]))
 
 
 def visibility_poses(n_random: int = 48, seed: int = 0, cycle: int = 16) -> List[np.ndarray]:
     """Bone matrices of the poses used to decide what can ever be seen: the rotation limits (ends,
-    corners, random whole-body poses) plus the walk and turntable loops."""
-    mats = [SKEL.world_mats(r) for r in rig.limit_poses(n_random, seed)]
+    corners, random whole-body poses, each with the costume helper bones following the limbs) plus the
+    walk and turntable loops."""
+    mats = [SKEL.world_mats(motion.drive_helpers(dict(r))) for r in rig.limit_poses(n_random, seed)]
     for i in range(cycle):
         mats.append(motion.walk_pose(SKEL, i / cycle)[0])
-        mats.append(motion.turn_pose(SKEL, i / cycle, bend=12.0)[0])
+        mats.append(motion.turn_pose(SKEL, i / cycle, bend=8.0)[0])
     return mats
 
 
 def sculpt(voxel: float = 0.0075, cull: bool = True, margin: float = CULL_MARGIN, n_random: int = 48,
-           log=print) -> Sculpt:
-    """Mesh every bone's solid on its own grid, paint it, and mark the faces no pose can show."""
+           outfit: str = "soldier", paint: str = "costume", log=print) -> Sculpt:
+    """Mesh every bone's solid on its own grid, paint it, and mark the faces no pose can show.
+
+    outfit "soldier" = mannequin + costume, "none" = the bare mannequin; paint "costume" | "rig"."""
     t0 = time.time()
-    names, verts, faces, normals, colors = [], [], [], [], []
-    for b in body.BONES:
-        vx = body.voxel_for(b, voxel)
-        v, f = sdf.mesh_components(body.components(b), vx, k=0.0, pad=2.5 * vx)
-        lo, hi = body.BOXES[b]
-        if (v.min(0) < lo + vx).any() or (v.max(0) > hi - vx).any():
-            raise ValueError(f"solid of bone {b!r} touches its box in body.BOXES - enlarge the box")
-        fn = lambda p, _b=b: body.bone_sdf(_b, p)  # noqa: E731
-        n = sdf.sdf_normal(fn, v).astype(np.float32)  # from the SDF, so the triangle winding does not matter
-        names.append(b), verts.append(v), faces.append(f), normals.append(n), colors.append(body.paint(b, v))
-    sc = Sculpt(names, verts, faces, normals, colors, [np.ones(len(f), bool) for f in faces])
-    log(f"[sculpt] {len(names)} bone meshes, {sum(map(len, verts))} verts, {sum(map(len, faces))} faces, "
-        f"area {sc.area(False):.3f} ({time.time() - t0:.1f}s)")
-    if cull:
-        poses = visibility_poses(n_random)
-        buried = body.never_visible(np.concatenate(verts), sc.owners(), poses, margin)
-        start = 0
-        for i, (v, f) in enumerate(zip(verts, faces)):
-            seen = ~buried[start:start + len(v)]
-            for _ in range(2):  # keep two more rings of triangles around everything that can show
-                near = seen[f].any(1)
-                seen[f[near]] = True
-            sc.keep[i] = seen[f].any(1)
-            start += len(v)
-        a0, a1 = sc.area(False), sc.area(True)
-        log(f"[sculpt] buried in every one of {len(poses)} poses: {100 * (1 - a1 / a0):.1f}% of the surface "
-            f"dropped (area {a0:.3f} -> {a1:.3f}) ({time.time() - t0:.1f}s)")
+    sc = Sculpt([], [], [], [], [], [], [], [], outfit)
+    with sc.worn():
+        for b in body.bones():
+            vx = body.voxel_for(b, voxel)
+            v, f = sdf.mesh_components(body.components(b), vx, k=0.0, pad=2.5 * vx)
+            lo, hi = body.box(b)
+            if (v.min(0) < lo + vx).any() or (v.max(0) > hi - vx).any():
+                raise ValueError(f"solid of bone {b!r} touches its box - enlarge the box")
+            fn = lambda p, _b=b: body.bone_sdf(_b, p)  # noqa: E731
+            n = sdf.sdf_normal(fn, v).astype(np.float32)  # from the SDF, so the triangle winding does not matter
+            alb, rough, metal = body.paint(b, v, paint)
+            sc.names.append(b), sc.verts.append(v), sc.faces.append(f), sc.normals.append(n)
+            sc.colors.append(alb), sc.rough.append(rough), sc.metal.append(metal), sc.keep.append(np.ones(len(f), bool))
+        log(f"[sculpt] {len(sc.names)} bone meshes ({outfit}), {sum(map(len, sc.verts))} verts, "
+            f"{sum(map(len, sc.faces))} faces, area {sc.area(False):.3f} ({time.time() - t0:.1f}s)")
+        if cull:
+            poses = visibility_poses(n_random)
+            buried = body.never_visible(np.concatenate(sc.verts), sc.owners(), poses, margin)
+            start = 0
+            for i, (v, f) in enumerate(zip(sc.verts, sc.faces)):
+                seen = ~buried[start:start + len(v)]
+                for _ in range(2):  # keep two more rings of triangles around everything that can show
+                    near = seen[f].any(1)
+                    seen[f[near]] = True
+                sc.keep[i] = seen[f].any(1)
+                start += len(v)
+            a0, a1 = sc.area(False), sc.area(True)
+            log(f"[sculpt] buried in every one of {len(poses)} poses: {100 * (1 - a1 / a0):.1f}% of the surface "
+                f"dropped (area {a0:.3f} -> {a1:.3f}) ({time.time() - t0:.1f}s)")
     return sc
 
 
 def cmd_sculpt(a) -> Sculpt:
     os.makedirs(a.out, exist_ok=True)
-    sc = sculpt(a.voxel)
+    sc = sculpt(a.voxel, outfit=a.outfit, paint=a.paint)
     sc.save(os.path.join(a.out, MESH_FILE))
     try:
         import trimesh
@@ -179,11 +221,9 @@ def cmd_sculpt(a) -> Sculpt:
 
 
 # ---------------------------------------------------------------- bake
-def _train_tracking_prune(parts, cfg: TrainConfig):
-    """``train`` + which of the initial splats survived its final prune.
-
-    The splat -> bone label lives in ``model.part`` (set by SplatModel.from_mesh), which the core's
-    prune may or may not carry along; recording the prune mask makes this independent of that."""
+def _train_recording_prune(parts, cfg: TrainConfig):
+    """``train`` + which of the initial splats survived its final prune (the model's own ``part``
+    buffer follows the prune, but does not say WHICH splats were dropped)."""
     seen = {}
     orig = SplatModel.prune
 
@@ -206,9 +246,14 @@ def one_hot(bones: np.ndarray) -> torch.Tensor:
     return W
 
 
+def splat_bones(sc: Sculpt, model) -> np.ndarray:
+    """Bone number of every splat: ``model.part`` (the mesh part it was sampled from) -> bone."""
+    return sc.bone_index[model.part.cpu().numpy()]
+
+
 def bake(sc: Sculpt, n_splats: int = 30000, res: int = 192, views: int = 48, iters: int = 0, elev=(-20.0, 35.0),
-         seed: int = 0, log=print):
-    """Splats on the bone meshes (+ optional G-buffer training in the rest pose).  Returns (model, bones).
+         seed: int = 0, log=print) -> SplatModel:
+    """Splats on the bone meshes (+ optional G-buffer training in the rest pose).
 
     Training only ever sees the rest pose, so it must not touch what the rest pose hides: splats whose
     centre is inside (or within half a splat radius of) another bone's solid keep their
@@ -216,57 +261,48 @@ def bake(sc: Sculpt, n_splats: int = 30000, res: int = 192, views: int = 48, ite
     parts = sc.parts(True)
     cfg = TrainConfig(n_splats=n_splats, res=res, n_views=views, iters=iters, seed=seed, elev_range=tuple(elev),
                       extent=EXTENT, target=CENTER)
-    init = SplatModel.from_mesh(parts, n_splats, seed=seed)  # the very state train() starts from
-    bones0 = sc.bone_index[np.asarray(init.part)]
-    model, kept = _train_tracking_prune(parts, cfg)
+    model, kept = _train_recording_prune(parts, cfg)
     if iters <= 0:
-        assert torch.equal(model.means, init.means)
-        return model, bones0
+        return model
+    init = SplatModel.from_mesh(parts, n_splats, seed=seed)  # the very state train() started from
     radius = float(init.scales().detach().mean())
-    rest = SKEL.world_mats({})
-    shielded = body.inside_other(init.means.detach().numpy(), bones0, rest, margin=-0.5 * radius)
-    sel = kept | shielded
+    with sc.worn():
+        shielded = body.inside_other(init.means.detach().numpy(), splat_bones(sc, init), SKEL.world_mats({}),
+                                     margin=-0.5 * radius)
+    sel = torch.as_tensor(kept | shielded)
+    rows = torch.as_tensor(np.nonzero(kept)[0])
+    use = torch.as_tensor(~shielded[kept])
     with torch.no_grad():
         for name in ("means", "quats", "log_scales", "opacity_logit", "albedo_logit", "rough_logit", "metal_logit"):
             full = getattr(init, name).data.clone()
-            trained = getattr(model, name).data
-            rows = torch.as_tensor(np.nonzero(kept)[0])
-            use = torch.as_tensor(~shielded[kept])
-            full[rows[use]] = trained[use]
-            setattr(model, name, torch.nn.Parameter(full[torch.as_tensor(sel)].clone()))
+            full[rows[use]] = getattr(model, name).data[use]
+            setattr(model, name, torch.nn.Parameter(full[sel].clone()))
         model.patch = torch.zeros(int(sel.sum()), dtype=torch.long)
-    model.part = np.asarray(init.part)[sel]
-    log(f"[bake] {int(sel.sum())} splats; {int(shielded.sum())} near/inside a neighbouring bone kept untrained, "
+        model.part = init.part[sel].clone()
+    log(f"[bake] {model.n} splats; {int(shielded.sum())} near/inside a neighbouring bone kept untrained, "
         f"{int((~sel).sum())} pruned")
-    return model, bones0[sel]
+    return model
 
 
 def cmd_bake(a):
     sc = Sculpt.load(os.path.join(a.out, MESH_FILE))
-    model, bones = bake(sc, a.splats, a.res, a.views, a.iters, (a.elev_lo, a.elev_hi))
+    model = bake(sc, a.splats, a.res, a.views, a.iters, (a.elev_lo, a.elev_hi))
     torch.save(model.state_dict(), os.path.join(a.out, SPLAT_FILE))
-    np.save(os.path.join(a.out, BONE_FILE), bones.astype(np.int16))
-    json.dump({"splats": model.n, "iters": a.iters, "res": a.res, "views": a.views,
+    bones = splat_bones(sc, model)
+    json.dump({"splats": model.n, "iters": a.iters, "res": a.res, "views": a.views, "outfit": sc.outfit,
                "per_bone": {b.name: int((bones == i).sum()) for i, b in enumerate(SKEL.bones) if (bones == i).any()}},
               open(os.path.join(a.out, "soldier_splats.json"), "w"), indent=1)
     print(f"[bake] saved {model.n} splats on {len(np.unique(bones))} bones")
-    return model, bones
-
-
-def label_by_solid(points: np.ndarray) -> np.ndarray:
-    """Fallback splat -> bone label when no label file exists: the bone whose surface is nearest."""
-    d = np.stack([np.abs(body.bone_sdf(b, points)) for b in body.BONES], 1)
-    return np.array([SKEL.index[b] for b in body.BONES])[d.argmin(1)]
+    return model
 
 
 def load_model(out: str):
+    """(sculpt, model, bone number per splat) of an output folder."""
+    sc = Sculpt.load(os.path.join(out, MESH_FILE))
     model = SplatModel.load(os.path.join(out, SPLAT_FILE))
-    path = os.path.join(out, BONE_FILE)
-    bones = np.load(path).astype(np.int64) if os.path.exists(path) else None
-    if bones is None or len(bones) != model.n:
-        print("[soldier] no matching bone labels - labelling splats by the nearest bone surface")
-        bones = label_by_solid(model.means.detach().numpy())
-    return model, bones
+    if not hasattr(model, "part"):
+        raise SystemExit(f"{out}/{SPLAT_FILE} has no splat -> bone labels (baked before they were stored): bake again")
+    return sc, model, splat_bones(sc, model)
 
 
 # ---------------------------------------------------------------- render
@@ -303,8 +339,8 @@ class Renderer:
         return look.upgrade(fc, self.look)
 
     def frame(self, cam, mats, root=(0.0, 0.0, 0.0), shade=None, mode="lit", az=None):
-        """mode: lit | albedo | normal | depth | patches | bones.  ``az`` = camera azimuth, to turn the
-        lights with the camera (default: lights for the hero view)."""
+        """mode: lit | albedo | normal | depth | patches | bones | material (red = metallic, green =
+        roughness).  ``az`` = camera azimuth, to turn the lights with the camera."""
         sc = shade or soldier_shade(HERO_AZ if az is None else az)
         sc.shadow_center = (float(root[0]), float(root[2]))
         if mode == "bones":  # colour by bone instead of by patch
@@ -313,6 +349,10 @@ class Renderer:
                 return render_frame(self.model, cam, self.config(sc, "patches"), pose=self.pose(mats))
             finally:
                 self.model.patch = self.patch
+        if mode == "material":
+            gb = render_gbuffer_frame(self.model, cam, self.config(sc, "albedo"), pose=self.pose(mats))
+            img = np.stack([gb["metal"], gb["rough"], 0.25 * np.ones_like(gb["rough"])], -1)
+            return np.where((gb["alpha"] > sc.alpha_threshold)[..., None], img, np.asarray(sc.background, np.float32))
         return render_frame(self.model, cam, self.config(sc, mode), pose=self.pose(mats))
 
     def coverage(self, cam, mats) -> np.ndarray:
@@ -328,8 +368,11 @@ def sheet(frames: Sequence[np.ndarray], cols: int) -> np.ndarray:
 
 def named_poses() -> Dict[str, Dict[str, np.ndarray]]:
     """Poses at the ends of the rotation limits, one joint (group) at a time - the gap tests and the
-    joint close-ups use these."""
+    joint close-ups use these.  Neck and head go to the limits of whatever is worn (the helmet tightens
+    them); the costume helper bones follow the limbs."""
     L = rig.local_rot
+    (np0, np1), _, (nr0, nr1) = rig.limits("neck")
+    (hp0, hp1), (hy0, hy1), (hr0, hr1) = rig.limits("head")
     P: Dict[str, Dict[str, np.ndarray]] = {"rest": {}}
     P["shoulder_up"] = {"upperarmL": L("upperarmL", pitch=-170), "upperarmR": L("upperarmR", roll=-90),
                         "clavL": L("clavL", roll=20), "clavR": L("clavR", roll=-20)}
@@ -350,12 +393,13 @@ def named_poses() -> Dict[str, Dict[str, np.ndarray]]:
     P["waist_right"] = {"chest": L("chest", yaw=-40)}
     P["waist_bend"] = {"chest": L("chest", pitch=25, yaw=40)}
     P["waist_arch"] = {"chest": L("chest", pitch=-10, roll=12, yaw=-40)}
-    P["neck_left"] = {"head": L("head", yaw=70)}
-    P["neck_right"] = {"head": L("head", yaw=-70)}
-    P["neck_nod"] = {"neck": L("neck", pitch=20), "head": L("head", pitch=25, yaw=70)}
-    P["neck_back"] = {"neck": L("neck", pitch=-15, roll=10), "head": L("head", pitch=-20, yaw=-70, roll=-10)}
+    P["neck_left"] = {"head": L("head", yaw=hy1)}
+    P["neck_right"] = {"head": L("head", yaw=hy0)}
+    P["neck_nod"] = {"neck": L("neck", pitch=np1), "head": L("head", pitch=hp1, yaw=hy1)}
+    P["neck_back"] = {"neck": L("neck", pitch=np0, roll=nr1), "head": L("head", pitch=hp0, yaw=hy0, roll=hr0)}
     for name, rots in P.items():
         assert not rig.check_limits(rots), (name, rig.check_limits(rots))
+        motion.drive_helpers(rots)
     return P
 
 
@@ -363,10 +407,21 @@ CLOSEUPS = (  # pose, joint to look at, camera azimuth, elevation
     ("knee_bent", "kneeL", 75, 5), ("hip_flex", "hipL", 60, 5), ("elbow_bent", "elbowL", 70, 10),
     ("shoulder_up", "shoulderR", -35, 15), ("ankle_toe", "ankleL", 80, 8), ("waist_bend", "waist", 150, 5),
     ("waist_left", "waist", 20, 5), ("neck_left", "head", 20, 5), ("neck_nod", "head", 200, 12))
+# costume close-ups: pose, point to look at (x, height, z as fractions of H), azimuth, elevation, half-height / H
+COSTUME_SHOTS = (
+    ("rest", (0.0, 0.93, 0.0), 25, 8, 0.16), ("rest", (0.0, 0.93, 0.0), 95, 8, 0.16), ("rest", (0.0, 0.93, 0.0), 200, 12, 0.16),
+    ("neck_left", (0.0, 0.93, 0.0), 0, 8, 0.16), ("rest", (0.07, 0.80, 0.0), 35, 15, 0.17),
+    ("shoulder_up", (0.0, 0.82, 0.0), 0, 10, 0.24), ("rest", (0.0, 0.50, 0.0), 20, 5, 0.22), ("walk", (0.0, 0.47, 0.0), 75, 5, 0.24),
+    ("rest", (0.0, 0.55, 0.0), 180, 8, 0.30))
 
 
 def cmd_animate(a):
-    model, bones = load_model(a.out)
+    sc, model, bones = load_model(a.out)
+    with sc.worn():
+        _animate(a, sc, model, bones)
+
+
+def _animate(a, sc, model, bones):
     R = Renderer(model, bones, app=a.app, look_name=a.look)
     sfx = "_app" if a.app else ""
     if a.app:
@@ -388,23 +443,31 @@ def cmd_animate(a):
         stills = [R.frame(camera(TURN_AZ, TURN_EL, px), *motion.turn_pose(SKEL, k / 8), az=TURN_AZ) for k in range(8)]
         save(sheet(stills, 4), "turn_sheet")
         print(f"[animate] sheets ({time.time() - t0:.0f}s)")
+    if "joints" in clips or "costume" in clips:
+        poses = {k: SKEL.world_mats(r) for k, r in named_poses().items()}
+        poses["walk"] = motion.walk_pose(SKEL, 0.92)[0]
     if "joints" in clips:
-        poses = named_poses()
         joints = {j.name: j for j in rig.JOINTS}
         shots = []
         for pose_name, joint, az, el in CLOSEUPS:
-            mats = SKEL.world_mats(poses[pose_name])
-            M = mats[SKEL.index[joints[joint].bone]]
+            M = poses[pose_name][SKEL.index[joints[joint].bone]]
             tgt = M[:, :3] @ joints[joint].pos + M[:, 3]
             cam = camera(az, el, int(px * 0.75), 1.0, target=tuple(tgt), extent=0.16 * H)
-            shots.append(R.frame(cam, mats, az=az))
+            shots.append(R.frame(cam, poses[pose_name], az=az))
         save(sheet(shots, 3), "joints_sheet")
         print(f"[animate] joint close-ups ({time.time() - t0:.0f}s)")
+    if "costume" in clips:
+        shots = []
+        for pose_name, (x, hgt, z), az, el, ext in COSTUME_SHOTS:
+            cam = camera(az, el, int(px * 0.75), 1.0, target=(x * H, rig.Y(hgt), z * H), extent=ext * H)
+            shots.append(R.frame(cam, poses[pose_name], az=az))
+        save(sheet(shots, 3), "costume_sheet")
+        print(f"[animate] costume close-ups ({time.time() - t0:.0f}s)")
     if "gbuffer" in clips:
         mats, root = motion.walk_pose(SKEL, 0.1)
         cam = camera(WALK_AZ, 8, px)
-        modes = ("lit", "albedo", "normal", "depth", "patches", "bones")
-        save(sheet([R.frame(cam, mats, root, mode=m, az=WALK_AZ) for m in modes], 6), "gbuffer")
+        modes = ("lit", "albedo", "normal", "depth", "material", "patches", "bones")
+        save(sheet([R.frame(cam, mats, root, mode=m, az=WALK_AZ) for m in modes], 7), "gbuffer")
         print(f"[animate] g-buffer ({time.time() - t0:.0f}s)")
     if "walk" in clips:  # on the spot, seamless loop
         frames = [upscale(R.frame(camera(WALK_AZ, 8, px), *motion.walk_pose(SKEL, i / n), az=WALK_AZ), a.scale)
@@ -430,7 +493,9 @@ def cmd_animate(a):
 
 # ---------------------------------------------------------------- verify
 def measure(sc: Sculpt) -> Dict[str, float]:
-    """Proportions measured on the meshes, standing to attention (arms straight down), as fractions of H."""
+    """Proportions measured on the meshes of the BARE mannequin (``sculpt(outfit="none")``), standing to
+    attention (arms straight down), as fractions of H."""
+    assert sc.outfit == "none", "proportions are measured on the body, not on the costume"
     mats = SKEL.world_mats(rig.anatomical_rots())
     posed = {p.name: p.verts for p in sc.posed_parts(mats, culled=False)}
     cat = lambda *names: np.concatenate([posed[n] for n in names])  # noqa: E731
@@ -703,52 +768,168 @@ def loop_report(fn=None, steps: int = 240) -> Dict[str, float]:
 def cull_report(sc: Sculpt, model, bones, n_random: int = 200, seed: int = 123) -> Dict[str, float]:
     """How much surface was dropped as buried, and how many of the splats that remain are buried in
     every pose of a FRESH set of poses (not the ones used for culling).  For comparison the same count
-    for splats spread over the un-culled meshes."""
+    for splats spread over the un-culled meshes.  (Call with the sculpt's outfit worn.)"""
     poses = visibility_poses(n_random, seed)
     radius = float(model.scales().detach().mean())
     x = model.means.detach().numpy()
     out = dict(area_full=sc.area(False), area_kept=sc.area(True), splat_radius=radius, test_poses=len(poses))
     out["dropped_area_fraction"] = 1 - out["area_kept"] / out["area_full"]
     raw = SplatModel.from_mesh(sc.parts(False), model.n, seed=1)
-    xr, br = raw.means.detach().numpy(), sc.bone_index[np.asarray(raw.part)]
+    xr, br = raw.means.detach().numpy(), splat_bones(sc, raw)
     for label, margin in (("centre", 0.0), ("whole_splat", radius)):
         out[f"never_visible_{label}"] = float(body.never_visible(x, bones, poses, margin).mean())
         out[f"never_visible_{label}_without_culling"] = float(body.never_visible(xr, br, poses, margin).mean())
     out["hidden_at_rest"] = float(body.inside_other(x, bones, SKEL.world_mats({}), 0.0).mean())
+    if sc.outfit != "none":  # how much of the mannequin the costume swallowed: body surface vs what is left of it
+        with body.wearing(None):
+            bare_area = sum(float(Part(b, *sdf.mesh_components(body.components(b), body.voxel_for(b, 0.0075), k=0.0, pad=0.02),
+                                       normals=np.zeros((1, 3), np.float32)).area) for b in body.BONES)
+        left = {}
+        for p_ in sc.parts(False):
+            if p_.name not in body.BONES:
+                continue
+            v = p_.verts[p_.faces]
+            on_body = np.abs(body.body_sdf(p_.name, v.mean(1))) < 0.002 * H  # this triangle IS the mannequin's surface
+            area = 0.5 * np.linalg.norm(np.cross(v[:, 1] - v[:, 0], v[:, 2] - v[:, 0]), axis=1)
+            key = p_.name[:-1] if p_.name[-1] in "LR" else p_.name
+            left[key] = left.get(key, 0.0) + float(area[on_body].sum())
+        total = sum(left.values())
+        out.update(body_area_bare=bare_area, body_area_still_surface=total, body_swallowed_fraction=1 - total / bare_area,
+                   body_left_by_bone={k: round(v, 3) for k, v in left.items()})
     return out
 
 
-CHECKS = ("proportions", "rigid", "sdf", "feet", "loop", "cull", "gaps")
+def _visible_verts(sc: Sculpt, step: int = 2):
+    """Per bone: (rest-pose vertices on faces some pose can show - every ``step``-th -, their layer)."""
+    out = {}
+    for n, v, f, k in zip(sc.names, sc.verts, sc.faces, sc.keep):
+        pts = v[np.unique(f[k])][::step]
+        out[n] = (pts, body.bone_layer(n, pts))
+    return out
+
+
+def _group_points(group, verts):
+    """[(bone, rest points)] of a clash group: its bones' visible vertices, filtered by layer and mask."""
+    out = []
+    for bone, layers, where in group:
+        pts, lay = verts[bone]
+        m_ = np.ones(len(pts), bool) if layers is None else np.isin(lay, np.array(layers, object))
+        if where is not None:
+            m_ &= where(pts)
+        out.append((bone, pts[m_]))
+    return out
+
+
+def _group_sdf(group, bone, q):
+    """Distance to the solids of a clash group that ride on ``bone``, at rest-frame points q."""
+    d = np.full(len(q), body.BIG, np.float32)
+    for b_, layers, where in group:
+        if b_ != bone:
+            continue
+        for key, e in body.bone_layers(bone, q).items():
+            if layers is None or key in layers:
+                d = np.minimum(d, e if where is None else np.where(where(q), e, body.BIG))
+    return d
+
+
+def clash_depths(sc: Sculpt, mats, verts=None) -> Dict[str, float]:
+    """For one pose: how deep the costume's pieces run into each other (world units, 0 = clear), and how
+    far the body sticks out through each hanging garment (> 0 = it shows, < 0 = clearance).
+
+    Depth of a pair = the deepest point of one group's visible surface inside the other group's solids."""
+    verts = verts or _visible_verts(sc)
+    mats = np.asarray(mats, np.float64)
+    inv = body.invert(mats)
+    out = {}
+    for label, A, B in costume.CLASH_PAIRS:
+        d = 0.0
+        for g, h in ((A, B), (B, A)):
+            for a_, pts in _group_points(g, verts):
+                if not len(pts):
+                    continue
+                world = body.apply(mats[SKEL.index[a_]], pts.astype(np.float64))
+                for b_ in {x[0] for x in h}:
+                    q = body.apply(inv[SKEL.index[b_]], world).astype(np.float32)
+                    lo, hi = body.box(b_)
+                    m_ = np.all((q >= lo) & (q <= hi), -1)
+                    if m_.any():
+                        d = max(d, float(-_group_sdf(h, b_, q[m_]).min()))
+        out[label] = d
+    for garment, under in costume.UNDER.items():
+        poke = -np.inf
+        for u_ in under:
+            pts = verts[u_][0]
+            world = body.apply(mats[SKEL.index[u_]], pts[costume.under_mask(u_, pts)].astype(np.float64))
+            q = body.apply(inv[SKEL.index[garment]], world).astype(np.float32)
+            poke = max(poke, float(costume.COVERS[garment](q).max()))
+        out["through " + garment] = poke
+    return out
+
+
+def clash_report(sc: Sculpt, walk: int = 32, turn: int = 16) -> Dict[str, Dict[str, object]]:
+    """Costume against costume and costume against body over the walk loop, the turntable demo and the
+    limit poses.  Per pair: depth at rest, the worst depth of each motion, and the worst limit pose."""
+    verts = _visible_verts(sc)
+    sets = {"walk": [motion.walk_pose(SKEL, k / walk)[0] for k in range(walk)],
+            "turn": [motion.turn_pose(SKEL, k / turn)[0] for k in range(turn)]}
+    rest = clash_depths(sc, SKEL.world_mats({}), verts)
+    rep = {k: dict(rest=v) for k, v in rest.items()}
+    for name, poses in sets.items():
+        ds = [clash_depths(sc, m_, verts) for m_ in poses]
+        for k in rest:
+            rep[k][name] = max(d[k] for d in ds)
+    worst = {k: (-np.inf, "") for k in rest}
+    for pose_name, rots in named_poses().items():
+        d = clash_depths(sc, SKEL.world_mats(rots), verts)
+        for k in rest:
+            if d[k] > worst[k][0]:
+                worst[k] = (d[k], pose_name)
+    for k in rest:
+        rep[k]["limit"], rep[k]["limit_pose"] = worst[k]
+    return rep
+
+
+CHECKS = ("proportions", "rigid", "sdf", "feet", "loop", "cull", "clash", "gaps")
 
 
 def cmd_verify(a):
-    sc = Sculpt.load(os.path.join(a.out, MESH_FILE))
-    model, bones = load_model(a.out)
+    sc, model, bones = load_model(a.out)
+    with sc.worn():
+        return _verify(a, sc, model, bones)
+
+
+def _verify(a, sc, model, bones):
     checks = set(a.checks.split(","))
     path = os.path.join(a.out, "soldier_verify.json")
     rep = json.load(open(path)) if os.path.exists(path) else {}
+    rep["outfit"] = sc.outfit
     t0 = time.time()
     named = {k: SKEL.world_mats(r) for k, r in named_poses().items()}
     walk = {f"walk_{k:02d}": motion.walk_pose(SKEL, k / 16)[0] for k in range(16)}
     turn = {f"turn_{k}": motion.turn_pose(SKEL, k / 8)[0] for k in range(8)}
     allp = {**named, **walk, **turn}
     if "proportions" in checks:
-        print("== 1. proportions (fraction of body height H; measured standing to attention)")
-        rows = proportion_table(sc)
+        print("== 1. proportions of the body under the costume (fraction of H; measured standing to attention)")
+        rows = proportion_table(sculpt(a.voxel, cull=False, outfit="none", log=lambda *x: None))
         for k, t, m, dev in rows:
             print(f"   {k:15s} target {t:.3f}  measured {m:.4f}  {dev:+5.1f}%")
         rep["proportions"] = {k: dict(target=t, measured=m, deviation_pct=dev) for k, t, m, dev in rows}
     if "rigid" in checks:
         print("== 2. rigid binding")
         rep["rigid"] = rigid_report(model, bones, list(allp.values()))
+        rep["rigid"]["bones_with_splats"] = int(len(np.unique(bones)))
         print("  ", rep["rigid"])
     if "sdf" in checks:
         print("== 3a. joints on the solids (no splats)")
         limit = {f"limit_{i}": SKEL.world_mats(r) for i, r in enumerate(rig.limit_poses(40, seed=7))}
         rep["sdf"] = sdf_gap_report({**allp, **limit})
         rep["sdf"]["poses"] = len(allp) + len(limit)
-        rep["turntable"] = turntable_report()
-        print("  ", rep["sdf"], "\n  ", rep["turntable"])
+        with body.wearing(None):
+            rep["turntable"] = turntable_report()
+        print("  ", rep["sdf"], "\n   turntables (bare body):", rep["turntable"])
+        if sc.outfit != "none":  # dressed: does anything that turns with the chest show past the belt?
+            rep["turntable_worn"] = {"waist_static": turntable_report()["waist_static"]}
+            print("   as worn:", rep["turntable_worn"])
     if "gaps" in checks:
         print("== 3b. holes in the no-blend splat coverage")
         R = Renderer(model, bones, app=False)
@@ -773,6 +954,12 @@ def cmd_verify(a):
         print("== buried surface")
         rep["cull"] = cull_report(sc, model, bones)
         print("  ", rep["cull"])
+    if "clash" in checks and sc.outfit != "none":
+        print("== costume clashes (world units; depth 0 = clear, 'through' > 0 = the body shows through a garment)")
+        rep["clash"] = clash_report(sc)
+        for k, d in rep["clash"].items():
+            print(f"   {k:28s} rest {d['rest']:+.4f}  walk {d['walk']:+.4f}  turn {d['turn']:+.4f}  "
+                  f"limit poses {d['limit']:+.4f} ({d['limit_pose']})")
     json.dump(rep, open(path, "w"), indent=1)
     print(f"[verify] done ({time.time() - t0:.0f}s) -> {path}")
     return rep
@@ -784,6 +971,9 @@ def main():
     ap.add_argument("cmd", choices=["sculpt", "bake", "animate", "verify", "all"])
     ap.add_argument("-o", "--out", default="out/soldier")
     ap.add_argument("--voxel", type=float, default=0.0075, help="sculpt resolution (world units)")
+    ap.add_argument("--outfit", default="soldier", choices=sorted(OUTFITS), help="sculpt: costume, or none = bare mannequin")
+    ap.add_argument("--paint", default="costume", choices=["costume", "rig"],
+                    help="sculpt: costume materials, or rig = debug colours (brass joint beads, blue turntables)")
     ap.add_argument("--splats", type=int, default=30000)
     ap.add_argument("--res", type=int, default=192)
     ap.add_argument("--views", type=int, default=48)
@@ -794,9 +984,9 @@ def main():
     ap.add_argument("--scale", type=int, default=4)
     ap.add_argument("--cycle-frames", type=int, default=24, help="frames per loop")
     ap.add_argument("--fps", type=int, default=24)
-    ap.add_argument("--clips", default="sheets,joints,gbuffer,walk,turn",
-                    help="what to render: sheets, joints, gbuffer, walk, across, turn")
-    ap.add_argument("--checks", default="proportions,rigid,sdf,feet,loop,cull",
+    ap.add_argument("--clips", default="sheets,joints,costume,gbuffer,walk,turn",
+                    help="what to render: sheets, joints, costume, gbuffer, walk, across, turn")
+    ap.add_argument("--checks", default="proportions,rigid,sdf,feet,loop,cull,clash",
                     help="verify: which checks to run (" + ", ".join(CHECKS) + "); gaps renders ~40 views, run it alone")
     ap.add_argument("--look", default="stylized", choices=look.LOOKS)
     ap.add_argument("--app", action="store_true",
