@@ -1,0 +1,3 @@
+# Optional dependencies for examples/soldier/mocap.py (video -> pose landmarks).
+# The retarget / clip / render steps and tests/test_mocap.py run without them.
+mediapipe==1.2.3
