@@ -153,7 +153,13 @@ def mesh_components(components: Dict[str, Component], voxel: float, k: float = 0
         field[sl] = smin(field[sl], d.astype(F32), k)
     verts, faces, _, _ = marching_cubes(field, 0.0, spacing=(voxel,) * 3)
     verts = verts + los
-    return verts.astype(F32), faces[:, ::-1].astype(np.int32)  # outward winding
+    # outward winding, whatever the library version returns: the signed volume
+    # Σ v0·(v1×v2)/6 of a closed surface is positive exactly when its faces point outward
+    # (scikit-image 0.26 already does; older code here flipped unconditionally → inward)
+    v = verts[faces].astype(np.float64)
+    if (v[:, 0] * np.cross(v[:, 1], v[:, 2])).sum() < 0:
+        faces = faces[:, ::-1]
+    return verts.astype(F32), np.ascontiguousarray(faces, dtype=np.int32)
 
 
 def sdf_normal(fn, p, eps=2e-3):

@@ -93,7 +93,13 @@ def rasterize(means, R, scales, opacity, feats, normals, cam: Camera, cfg: Raste
     """Render a G-buffer. feats (N,F) arbitrary per-splat features, normals (N,3) world.
 
     Returns dict: feat (H,W,F), normal (H,W,3), depth (H,W), alpha (H,W), id (H,W)
-    (all premultiplied by coverage except ``alpha``/``id``; id = front-most splat, -1 = none).
+    (all premultiplied by coverage except ``alpha``/``id``; id = front-most splat, -1 = none),
+    plus three floats about "truncated" tiles (more than K candidates, only the K front-most
+    kept): ``overflow`` = their share of ALL tiles (training log), ``overflow_occupied`` = their
+    share of the tiles that hold any splat (what "should I retry with a larger K" has to look
+    at: empty background tiles would otherwise dilute it), ``overflow_open`` = same, counting
+    only truncated tiles that still have a pixel the kept splats did not close — when it is 0 a
+    larger K cannot change the picture (the dropped splats are all behind closed pixels).
     """
     H, W, Ts = cam.height, cam.width, cfg.tile
     pr = project(means, R, scales, cam, shift)
@@ -110,6 +116,10 @@ def rasterize(means, R, scales, opacity, feats, normals, cam: Camera, cfg: Raste
         ok = pr["valid"]
         if cfg.cull_backfaces:
             ok = ok & pr["facing"]
+        if cfg.hard:
+            # no-blend mode: alpha ≤ opacity, so these can never pass hard_thresh — binning them
+            # would only use up the K slots of a tile and hide the splats behind
+            ok = ok & (opacity.detach() > cfg.hard_thresh)
         tx0 = ((mx - rad[:, 0]) / Ts).floor().clamp(-1, tw).long()
         tx1 = ((mx + rad[:, 0]) / Ts).floor().clamp(-1, tw).long()
         ty0 = ((my - rad[:, 1]) / Ts).floor().clamp(-1, th).long()
@@ -134,9 +144,11 @@ def rasterize(means, R, scales, opacity, feats, normals, cam: Camera, cfg: Raste
         keep = rank < K
         idx = torch.full((nt, K), N, dtype=torch.long)
         idx[tile_s[keep], rank[keep]] = spl_s[keep]
-        kmask = idx < N
-        idx = idx.clamp_max(N - 1)
-        overflow = float((counts > K).float().mean())
+        kmask = idx < N  # empty slots keep index N = the all-zero dummy splat appended by g()
+        over = counts > K
+        overflow = float(over.float().mean())
+        occupied = max(int((counts > 0).sum()), 1)
+        overflow_occupied = float(over.sum()) / occupied
         # pixel centres per tile
         tyy, txx = torch.meshgrid(torch.arange(th, dtype=torch.float32), torch.arange(tw, dtype=torch.float32), indexing="ij")
         txx, tyy = txx.reshape(-1, 1), tyy.reshape(-1, 1)
@@ -145,7 +157,9 @@ def rasterize(means, R, scales, opacity, feats, normals, cam: Camera, cfg: Raste
         py = (tyy * Ts + ly.reshape(1, -1) + 0.5)
 
     # ---------------- per pixel × per splat (dense)
-    g = lambda t: t[idx]  # gather (nt,K,...)
+    def g(t):  # gather (nt,K,...); empty slots read a zero row, never a real splat (whose NaN/inf
+        return torch.cat([t, t.new_zeros((1,) + t.shape[1:])])[idx]  # would survive the 0-mask)
+
     r0, r1, r2 = g(pr["r0"]), g(pr["r1"]), g(pr["r2"])
     X = px[:, :, None, None]
     Y = py[:, :, None, None]
@@ -163,6 +177,7 @@ def rasterize(means, R, scales, opacity, feats, normals, cam: Camera, cfg: Raste
         s = u.abs().clamp_max(1e3) ** p + v.abs().clamp_max(1e3) ** p
         e = 0.5 * (s + 1e-12) ** (m / p)
     rho_ok = e < 0.5 * cfg.cutoff ** m
+    e_plane = e
     if cfg.min_screen_sigma:
         m2 = g(pr["mean2d"])
         dx = X[..., 0] - m2[:, None, :, 0]
@@ -184,12 +199,25 @@ def rasterize(means, R, scales, opacity, feats, normals, cam: Camera, cfg: Raste
         w = alpha * trans  # (nt,P,K)
 
     zr = g(pr["zrow"])  # (nt,K,3)
-    z = zr[:, None, :, 0] * u + zr[:, None, :, 1] * v + zr[:, None, :, 2]
+    if cfg.min_screen_sigma:
+        # the screen-space dot also lights pixels whose ray meets the splat's PLANE far outside
+        # the splat (edge-on: anywhere, even behind the camera).  Pull such a hit point back to
+        # the rim of the splat's support (ρ = cutoff), so the depth stays inside the splat's own
+        # depth range.  Hits within the cutoff are untouched (factor exactly 1).
+        pull = (2.0 * e_plane / cfg.cutoff ** m).clamp_min(1.0)  # (ρ/cutoff)^m, at least 1
+        pull = torch.rsqrt(pull) if m == 2.0 else pull ** (-1.0 / m)
+        dz = (zr[:, None, :, 0] * u.clamp(-1e3, 1e3) + zr[:, None, :, 1] * v.clamp(-1e3, 1e3)) * pull
+        z = dz + zr[:, None, :, 2]
+    else:
+        z = zr[:, None, :, 0] * u + zr[:, None, :, 1] * v + zr[:, None, :, 2]
     out_f = torch.einsum("tpk,tkf->tpf", w, g(feats))
     out_n = torch.einsum("tpk,tkf->tpf", w, g(normals))
     out_d = (w * z).sum(-1)
     out_a = w.sum(-1)
     with torch.no_grad():
+        # hard: a pixel is closed once any splat won it; blended: once it is (almost) opaque
+        open_px = (out_a < (0.5 if cfg.hard else 0.999)) & (px < W) & (py < H)
+        overflow_open = float((over & open_px.any(-1)).sum()) / occupied
         has = w.max(-1).values > 0
         fid = torch.gather(idx, 1, w.argmax(-1))
         fid = torch.where(has, fid, torch.full_like(fid, -1))
@@ -200,7 +228,7 @@ def rasterize(means, R, scales, opacity, feats, normals, cam: Camera, cfg: Raste
 
     return dict(feat=img(out_f), normal=img(out_n), depth=img(out_d[..., None])[..., 0],
                 alpha=img(out_a[..., None])[..., 0], id=img(fid[..., None])[..., 0],
-                overflow=overflow)
+                overflow=overflow, overflow_occupied=overflow_occupied, overflow_open=overflow_open)
 
 
 def render_model(model, cam: Camera, cfg: RasterConfig, feats: Optional[torch.Tensor] = None,

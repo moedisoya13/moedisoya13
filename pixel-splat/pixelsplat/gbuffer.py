@@ -42,12 +42,16 @@ def _shift(a: np.ndarray, dy: int, dx: int, fill=0):
 
 # ------------------------------------------------------------------ supersample + vote
 def select_downsample(gb: dict, s: int, alpha_threshold: float = 0.5, mode: str = "medoid",
-                      depth_tol: float = 0.04, albedo_weight: float = 2.0) -> dict:
+                      depth_tol: float = 0.04, albedo_weight: float = 2.0, tie_covers: bool = False) -> dict:
     """Reduce an S×-supersampled hard G-buffer to the art grid by picking, not averaging.
 
     ``mode`` = "medoid" (one representative sample supplies every channel — stays flat and
     crisp) or "mean" (average the samples of the winning depth layer — smoother, softer).
-    The returned ``alpha`` is the covered fraction, so the usual 0.5 threshold = majority vote.
+    The returned ``alpha`` is the covered fraction n/S.  Mind that the usual test
+    ``alpha > 0.5`` then needs 3 of 4 samples (a 2-of-4 tie reads as empty, so a 2-sample-wide
+    line that straddles two art pixels vanishes).  ``tie_covers=True`` (what the frame renderer
+    uses) lifts an exact tie, n/S == ``alpha_threshold``, just above the threshold, so that
+    "at least half covered" counts as covered in every later ``alpha > alpha_threshold`` test.
     """
     H, W = gb["alpha"].shape
     h, w = H // s, W // s
@@ -86,6 +90,9 @@ def select_downsample(gb: dict, s: int, alpha_threshold: float = 0.5, mode: str 
     elif mode != "medoid":
         raise ValueError(mode)
     out["alpha"] = (n / S).astype(np.float32)
+    if tie_covers:
+        thr = np.float32(alpha_threshold)
+        out["alpha"][(n > 0) & (out["alpha"] == thr)] = np.nextafter(thr, np.float32(2))
     out["id"] = np.where(n > 0, out["id"], -1)
     return out
 

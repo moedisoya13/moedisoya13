@@ -112,7 +112,8 @@ class SplatModel(torch.nn.Module):
         log_s = np.full((n, 2), np.log(r), np.float32)
         m = cls(s["pos"], rot_to_quat(R), log_s, np.full(n, _logit(opacity), np.float32),
                 s["albedo"], s["rough"], s["metal"])
-        m.part = s["part"]
+        # which mesh part each splat was sampled from: a buffer, so it follows prune / save / load
+        m.register_buffer("part", torch.as_tensor(s["part"], dtype=torch.long))
         return m
 
     def state(self) -> dict:
@@ -124,6 +125,8 @@ class SplatModel(torch.nn.Module):
         n = sd["means"].shape[0]
         m = cls(np.zeros((n, 3)), np.tile([1, 0, 0, 0], (n, 1)), np.zeros((n, 2)), np.zeros(n),
                 np.full((n, 3), 0.5), np.full(n, 0.5), np.full(n, 0.5))
+        if "part" in sd:  # optional (only models built by from_mesh have it; old files do not)
+            m.register_buffer("part", torch.zeros(n, dtype=torch.long))
         m.load_state_dict(sd)
         return m
 
@@ -133,3 +136,8 @@ class SplatModel(torch.nn.Module):
             p = getattr(self, name)
             setattr(self, name, torch.nn.Parameter(p.data[keep].clone()))
         self.patch = self.patch[keep].clone()
+        part = getattr(self, "part", None)
+        if isinstance(part, torch.Tensor):
+            self.part = part[keep].clone()
+        elif part is not None:  # labels attached by hand as a plain array
+            self.part = np.asarray(part)[np.asarray(keep)]

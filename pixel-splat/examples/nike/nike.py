@@ -463,6 +463,7 @@ def cmd_bake(a):
     cfg = TrainConfig(n_splats=a.splats, res=a.res, n_views=a.views, iters=a.iters, seed=0,
                       elev_range=(a.elev_lo, a.elev_hi), extent=EXTENT, target=CENTER)
     model = train(parts, cfg)
+    torch.save(model.state_dict(), os.path.join(a.out, "nike_splats.pt"))  # keep the training even if patches fail
     assign_patches(model, 80)
     torch.save(model.state_dict(), os.path.join(a.out, "nike_splats.pt"))
     json.dump({"splats": model.n, **{k: str(v) for k, v in vars(cfg).items()}},

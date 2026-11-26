@@ -35,12 +35,21 @@ def cmd_bake(a):
     print(f"[bake] {len(parts)} parts, {sum(len(p.faces) for p in parts)} triangles, "
           f"{sum(p.base_tex is not None for p in parts)} textured")
     cfg = TrainConfig(n_splats=a.splats, res=a.res, n_views=a.views, iters=a.iters, seed=a.seed)
-    model = train(parts, cfg)
-    assign_patches(model, a.patches, seed=a.seed)
+    # check the cheap things BEFORE the (long) training, not after it
+    if a.patches < 1:
+        raise SystemExit(f"[bake] --patches must be at least 1 (got {a.patches})")
+    patches = a.patches
+    if patches > a.splats:
+        print(f"[bake] warning: --patches {patches} > --splats {a.splats}; using {a.splats} patches")
+        patches = a.splats
     os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
+    model = train(parts, cfg)
+    torch.save(model.state_dict(), a.out)  # the training result is on disk before anything else can fail
+    patches = min(patches, model.n)  # training may have pruned splats
+    assign_patches(model, patches, seed=a.seed)
     torch.save(model.state_dict(), a.out)
     with open(os.path.splitext(a.out)[0] + ".json", "w") as f:
-        json.dump({"source": a.mesh, "splats": model.n, "patches": a.patches, **vars(cfg)}, f, indent=1, default=str)
+        json.dump({"source": a.mesh, "splats": model.n, "patches": patches, **vars(cfg)}, f, indent=1, default=str)
     print(f"[bake] saved {model.n} splats → {a.out}")
     return a.out
 

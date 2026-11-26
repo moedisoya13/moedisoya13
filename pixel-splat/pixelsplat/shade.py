@@ -276,7 +276,9 @@ def postprocess(rgb_lin: np.ndarray, gb: dict, cfg: ShadeConfig, cam: Optional[C
         edge = np.zeros_like(mask)  # inner edge: the neighbour is a farther part of the model
         sil = np.zeros_like(mask)  # silhouette: the neighbour is background
         for dy, dx in ((0, 1), (0, -1), (1, 0), (-1, 0)):
-            nb = np.roll(np.roll(d, dy, 0), dx, 1)
+            # no wrap-around (np.roll made the top row a neighbour of the bottom row); outside
+            # the image counts as "nearer" (0), so a model cut off by the frame gets no outline there
+            nb = gbuf._shift(d, dy, dx, 0.0)
             far = mask & ((nb - d) > cfg.outline_depth)
             sil |= far & (nb > 1e8)
             edge |= far & (nb <= 1e8)
@@ -399,13 +401,16 @@ def render_gbuffer_frame(model, cam: Camera, cfg: FrameConfig, pose=None) -> dic
             cam = cam.scaled(ss)
             shift = shift * ss if shift is not None else None
         out = go(rc)
-        # inference only: if some tiles ran out of slots, retry with more (never silently truncate much)
-        while out["overflow"] > 0.01 and rc.k < 2048:
+        # inference only: if some tiles ran out of slots, retry with more (never silently truncate
+        # much).  Measured against the tiles that hold splats, not the whole (mostly empty) image;
+        # and only while a truncated tile still has an open pixel (otherwise nothing can change).
+        while out["overflow_occupied"] > 0.01 and out["overflow_open"] > 0 and rc.k < 2048:
             rc = replace(rc, k=rc.k * 2)
             out = go(rc)
     gb = gbuffer_from_render(out)
     if ss > 1:
-        gb = gbuf.select_downsample(gb, ss, cfg.shade.alpha_threshold, cfg.select, cfg.depth_tol)
+        gb = gbuf.select_downsample(gb, ss, cfg.shade.alpha_threshold, cfg.select, cfg.depth_tol,
+                                    tie_covers=True)
         assert gb["alpha"].shape == (art_cam.height, art_cam.width)
     if cfg.despeckle and cfg.mode != "patches":
         gb = gbuf.despeckle(gb, cfg.shade.alpha_threshold, cfg.depth_tol)

@@ -105,6 +105,9 @@ def assign_patches(model: SplatModel, n_patches: int = 80, seed: int = 0, normal
     """Cluster splats into spatial patches (k-means on position + a bit of normal)."""
     from sklearn.cluster import KMeans
 
+    if n_patches > model.n:  # k-means needs at least one splat per patch
+        print(f"[patches] {n_patches} patches asked for but only {model.n} splats: using {model.n}")
+        n_patches = model.n
     x = torch.cat([model.means.detach(), normal_weight * model.normals().detach()], -1).numpy()
     km = KMeans(n_clusters=n_patches, n_init=2, random_state=seed).fit(x)
     model.patch = torch.as_tensor(km.labels_, dtype=torch.long)

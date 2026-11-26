@@ -250,7 +250,7 @@ class Colossus:
         gb = render_gbuffer_frame(self.model, cam, fc, pose)
         mask = gb["alpha"] > self.shade_cfg.alpha_threshold
         P = world_points(cam, np.where(mask, gb["depth"], 1.0))
-        vis = np.where(mask, visibility(sm, P, bias=0.025, pcf=1), 1.0)
+        vis = np.where(mask, visibility(sm, P, bias=0.025, pcf=1, normals=gb["normal"]), 1.0)
         bg, _ = environment(cam, self.look, sm, contact=(float(root[0]), float(root[2]) + 0.02))
         img = postprocess(shade(gb, cam, self.shade_cfg, light_vis=[vis, None]), gb, self.shade_cfg, cam,
                           background=bg)

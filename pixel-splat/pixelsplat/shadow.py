@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from typing import Optional
 
 import numpy as np
 import torch
@@ -38,7 +39,7 @@ def make_shadow_map(means, R, scales, opacity, light_dir, center, extent: float 
         rc = RasterConfig(tile=4, k=k, hard=True, cull_backfaces=False)
         feats = torch.zeros(means.shape[0], 1)
         out = rasterize(means, R, scales, opacity, feats, R[..., 2], cam, rc)
-        while out["overflow"] > 0.01 and rc.k < 2048:
+        while out["overflow_occupied"] > 0.01 and out["overflow_open"] > 0 and rc.k < 2048:
             rc = RasterConfig(tile=4, k=rc.k * 2, hard=True, cull_backfaces=False)
             out = rasterize(means, R, scales, opacity, feats, R[..., 2], cam, rc)
     a = out["alpha"].numpy()
@@ -46,9 +47,23 @@ def make_shadow_map(means, R, scales, opacity, light_dir, center, extent: float 
     return ShadowMap(cam, d.astype(np.float32), a > 0.5)
 
 
-def visibility(sm: ShadowMap, P: np.ndarray, bias: float = 0.03, pcf: int = 1) -> np.ndarray:
-    """Fraction (0..1) of the light reaching world points ``P`` (...,3).  ``pcf`` = filter radius."""
+def visibility(sm: ShadowMap, P: np.ndarray, bias: float = 0.03, pcf: int = 1,
+               normals: Optional[np.ndarray] = None, normal_offset: float = 1.0) -> np.ndarray:
+    """Fraction (0..1) of the light reaching world points ``P`` (...,3).  ``pcf`` = filter radius.
+
+    ``normals`` (...,3) = the surface normal at each point (optional).  With it every point is
+    first lifted off its surface along the normal by  r·sinθ  (θ = angle between normal and
+    light, r = the filter's reach √2·(pcf+½) texels, times ``normal_offset``).  Without that a
+    surface the light only grazes shadows itself ("acne"): the neighbouring map cells the filter
+    reads lie r·tanθ nearer to the light, which soon exceeds any fixed ``bias``.  The lift is at
+    most r (about 2 texels), so real shadows keep their place."""
     V = sm.cam.viewmat
+    if normals is not None and normal_offset > 0:
+        N = np.asarray(normals, np.float64)
+        N = N / np.maximum(np.linalg.norm(N, axis=-1, keepdims=True), 1e-8)
+        cos = -(N @ V[2, :3])  # the light looks along +z of its camera, so "towards the light" = −z
+        r = math.sqrt(2.0) * (pcf + 0.5) / sm.cam.A[0, 0]  # filter reach in world units
+        P = P + N * (normal_offset * r * np.sqrt(np.clip(1.0 - cos * cos, 0.0, 1.0)))[..., None]
     X = P @ V[:3, :3].T + V[:3, 3]
     A = sm.cam.A
     px = A[0, 0] * X[..., 0] + A[0, 3]
