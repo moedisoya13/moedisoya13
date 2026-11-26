@@ -64,7 +64,7 @@
 | 한 라운드 스파링 | https://claude.ai/artifact/QSaHbvPFewiH2uLYoWD4t1 | v7 | `spar.html`, `src/spar.mjs`, `src/spar/` | 85417ad |
 | 모션 카탈로그 | https://claude.ai/artifact/GGHUZQ9rFWLoRojwCzaK3N | v43 | `catalog.html`, `src/catalog.mjs` | 54592a0 (그 뒤 바뀐 파일 없음) |
 | 타격음 오디션 | https://claude.ai/artifact/92ZDBLW3TVC2M3XJ6bwgeQ | v1 | `sfx.html`, `src/sfx.mjs` | 85417ad |
-| **미결 카탈로그 (새)** | https://claude.ai/artifact/HybxKJu7LtBsGHs7M1rYpz | v3 | `open.html`, `src/open.mjs`, `src/open.data.mjs`, `src/open.clips.mjs`, `docs/ref/open/` | fb249f2 |
+| **미결 카탈로그 (새)** | https://claude.ai/artifact/HybxKJu7LtBsGHs7M1rYpz | v4 | `open.html`, `src/open.mjs`, `src/open.data.mjs`, `src/open.clips.mjs`, `docs/ref/open/` | e6f0bb4 |
 | 미결 카탈로그 (옛) | https://claude.ai/artifact/UEM19aKseUxnixVYkrnAzd | v36 | `pending.html`, `src/pending*.mjs` | 54592a0 · **파기 후보**(§7) |
 | 타격 이펙트 시안 | https://claude.ai/artifact/5tZd5Xyp7iiRxCuftpNwL6 | v9 (11-24) | `fxlab.html`, `src/fxlab.mjs` | 엔진보다 낡음 · **파기 후보**(§7) |
 
