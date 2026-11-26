@@ -1,0 +1,5 @@
+# Optional: only template/mocap.py capture (video -> pose landmarks) needs these.
+# retarget / render / synth / evaluate and tests/test_mocap.py run without them.
+# mediapipe also needs the system libraries libEGL and libGLESv2:  apt-get install -y libegl1 libgles2
+mediapipe==1.2.3
+opencv-contrib-python==5.1.0.95
