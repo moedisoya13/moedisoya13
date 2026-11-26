@@ -103,6 +103,7 @@
 ## 5. 미결 내역 (새 세션의 브리핑 대상)
 
 전부 **미결 카탈로그 (새)**에 있다(원본 `src/open.data.mjs`). 묶음:
+0b. **카탈로그 점검에서 찾은 것**(2026-11-26; 카드 `l-sfx` · `l-catalog` · `l-spar` · `l-open`, 찾은 것의 id를 여럿 고름; 결함 25 · 개선 23, 모두 조정자가 확인, 아무것도 고치지 않음): `docs/look-2026-11-26.md`, 스크립트 `docs/look-2026-11-26/`. `del-session`은 이전 세션 `session_01Juyi5CipAWs3ncaLCG6BsY`를 뜻한다(open-6).
 0. **점검에서 찾은 것**(2026-11-25 자체 점검; 카드 `a-…` 38장, 모두 조정자가 재현함, 아무것도 고치지 않음): 전체 목록 `docs/audit-2026-11-25.md`, 재현 스크립트 `docs/audit-2026-11-25/`. S2 다섯: `a-fall-edge`, `a-standoff`, `a-ropes-stuck`, `a-guard-flicker`, `a-screen-ai`. 파기를 승인받기 전에 `a-dispose-list`(§7의 목록이 6군데 틀림)를 먼저 볼 것.
 1. **지금 정할 것**
    - `arm-way`: 체육복·후드를 입으면 가드를 올리지 않은 자세에서 오른 팔뚝이 자기 가슴에 묻힌다(보이는 비율 0.15, 최저 0.01; 맨몸 0.41). 원인은 옷이 아니라 자세(해법은 팔을 가슴 0.13 m 밖에 두는데 조각된 가슴은 0.20 × 0.14 m; 맨몸은 옛 가드 자세로 구운 것이라 가려지지 않을 뿐). A 자세를 고침(근본, 모든 동작을 다시 잼) / B 그릴 때만 앞으로(작음, 권장) / C·D(권하지 않음). 비교 영상 `arm`, 시험판 고침 `docs/ref/open/patches/`.
@@ -114,7 +115,7 @@
 3. **엔진 한계를 받아들일지**(아래 §6과 README의 알려진 한계).
 4. **파기 승인**(§7).
 
-카드는 132장(점검에서 찾은 것 39, 지금 정할 것 22, 기획의 기본값 44, 엔진 한계 17, 파기 승인 9, 자유 메모 1; 2026-11-25 v3). 옛 카탈로그의 열린 60항목은 모두 넘어왔고 글은 `src/pending.data.mjs`에서 읽는다(그 파일을 지우려면 먼저 `src/open.data.mjs`로 옮긴다).
+카드는 136장(점검에서 찾은 것 39, 카탈로그 점검 4, 지금 정할 것 22, 기획의 기본값 44, 엔진 한계 17, 파기 승인 9, 자유 메모 1; 2026-11-26 v4). 옛 카탈로그의 열린 60항목은 모두 넘어왔고 글은 `src/pending.data.mjs`에서 읽는다(그 파일을 지우려면 먼저 `src/open.data.mjs`로 옮긴다).
 
 **비교 영상의 시험판을 재 본 값** (고침은 `docs/ref/open/patches/`, 다시 녹화는 `node tools/openclips.mjs arm lean tempo --modules <ink-studio가 있는 node_modules>`)
 
@@ -230,6 +231,7 @@
 
 - `README.md`: 구조, 채널, 표, 페이지와 옵션, 싸움터, 소리, 알려진 한계.
 - `docs/pending.md`: 사용자의 지시·결정·보고와 그 처리의 기록(1,000줄 남짓, 날짜순이 아니라 절마다; 최근 것은 2026-11-25의 절들).
+- `docs/look-2026-11-26.md`: 카탈로그별 점검(특이사항 · 개선점, 확인된 48건), 스크립트 `docs/look-2026-11-26/`.
 - `docs/audit-2026-11-25.md`: 자체 점검의 결과(재현된 38건, 확정 못 한 것), 재현 스크립트 `docs/audit-2026-11-25/`.
 - `docs/open-catalog.md`: 새 미결 카탈로그의 형식과 읽는 법. `docs/artifact-history.md`: 게시 이력.
 - 기획: `docs/moves-plan-4.md`, `-5.md`, `-6.md`(허리, 이펙트 §2~§2.4C, 단계 K~Z), `docs/skill-motion-plan.md`(숙련도 2차: 풋워크와 공격), `docs/defense-footwork-grades-plan.md`(숙련도 3차: 수비와 풋워크 드릴의 7단계), `docs/leaping-hook.md`, `docs/combos-plan.md`, `docs/source-ab-plan.md`, `docs/source-cd-proposal.md`, `docs/bearing-system-plan.md`, `docs/waist-more-plan.md`, `docs/cross-counter-plan.md`.

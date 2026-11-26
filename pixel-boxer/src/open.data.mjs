@@ -1,7 +1,8 @@
 /* What the open-questions catalogue holds (open.html, src/open.mjs; docs/open-catalog.md): every decision still open, as
    cards in five groups, and how an answer is read and sent. Nothing here knows the page: node reads it too
    (tests/open.test.mjs).
-     GROUPS     the six groups, in order: { id, title, note } (the first, audit: what the 11-25 self-audit found)
+     GROUPS     the seven groups, in order: { id, title, note } (audit: what the 11-25 self-audit found; look: the 11-26 look at
+                each catalogue, one card a page with several picks)
      CARDS      the cards, in order. A card is one question (its id is the answer's key) or a note (kind: 'note', no question):
                 { id, group, title, state (what it is now; `code` and **strong** marks), more (the long text, folded), list
                 (lines), links ([{ href, say }]), clips (a group of src/open.clips.mjs: the builds side by side), old (true: the
@@ -47,6 +48,7 @@ export function asLD(s) {
 
 export const GROUPS = [
   { id: 'audit', title: '점검에서 찾은 것', note: '11-25 자체 점검(에이전트 10회)에서 나온 것 가운데 <b>조정자가 본 저장소(37419ff)에서 직접 다시 돌려 재현한 것만</b>, 겹치는 것을 합쳐 심각도 순으로. 재현 스크립트는 <code>docs/audit-2026-11-25/</code>, 전체 목록은 <code>docs/audit-2026-11-25.md</code>. 아직 아무것도 고치지 않았습니다.' },
+  { id: 'look', title: '카탈로그 점검에서 찾은 것', note: '11-26 카탈로그별 점검(에이전트 4회, 페이지마다 하나): 결함 25건 · 개선 23건, <b>모두 조정자가 다시 돌려 확인</b>. 카탈로그마다 한 장 — <b>고칠 것을 여럿 고르세요</b>(고르지 않은 것은 그대로). 전체 목록 <code>docs/look-2026-11-26.md</code>, 재현 <code>docs/look-2026-11-26/</code>.' },
   { id: 'now', title: '지금 정할 것', note: '11-25에 새로 생긴 것입니다. 비교 영상은 같은 너비 · 같은 시계 · 같은 장면입니다.' },
   { id: 'plan', title: '기획의 기본값', note: '옛 미결 카탈로그에서 아직 답이 없는 것(옛 5부 · 1부 · 2부). 옛 카탈로그의 카드와 녹화는 그대로 돌아갑니다.' },
   { id: 'limits', title: '엔진 한계: 받아들일지', note: '대부분 “수용(README의 알려진 한계에 남김) / 다시 시도 / 목표를 고침”입니다.' },
@@ -293,7 +295,7 @@ const AUDIT = [
     more: `원인: \`techniques.mjs:280\`(4 · 5단계 D의 기본에 crossArm), \`bout.mjs:664\`(크로스암은 해머가 아니면 쳐내지 않음). 관련 카드: \`loadout-default\`. ${run('1-4')}`,
     opts: [['drop', '크로스암을 기본에서 뺌', ''], ['parry', '크로스암 가드에 패리를 조금', ''], ['counter', '크로스암 반격을 세게', ''], ['later', 'X 단계(능력치 범위)에서', ''], ['leave', '그대로', '']],
     star: '',
-    why: '★ 없음: 균형의 방향은 정하실 일이고, 표본도 작습니다.'
+    why: '균형의 방향은 정하실 일이고, 표본도 작습니다.'
   },
   {
     id: 'a-novice',
@@ -422,6 +424,72 @@ const AUDIT = [
     '`docs/artifact-history.md`에 미결 카탈로그 (새)의 줄이 없고, 이펙트 시안 v9는 게시 커밋이 없습니다.',
     `고치는 데: 소(문서만). ${run('10-5')}`,
     'fix', '')
+];
+
+/* ---- group 1: what the look at each catalogue found (11-26, docs/look-2026-11-26.md): one card a page, several picks; a
+   value is the finding's id (A: odd or wrong, S2-S4; p: an improvement, P1-P3) */
+const lookCard = (id, title, state, opts, why) => ({ id, group: 'look', title, state, opts, multi: true, star: '', why, more: `고르는 값은 찾은 것의 id입니다. 재현 · 근거: \`node docs/look-2026-11-26/<id>.mjs <pixel-boxer>\`(몇은 \`.cjs\`; 근거가 다른 스크립트에 있는 것은 \`docs/look-2026-11-26.md\`의 표에). 결함(S)은 \`REPRO: yes\`, 개선(P)은 \`EVIDENCE: …\`를 찍습니다. 각 줄의 설명: ${opts.map((o) => `**${o[0]}** ${o[2]}`).join(' · ')}.` });
+const LOOK = [
+  lookCard('l-sfx', '타격음 오디션: 고칠 것 고르기',
+    '결함 7(S3 2 · S4 5), 개선 9(P1 3). 가장 큰 것: 휴대폰 스피커(300 Hz 아래를 깎은 흉내)로 들으면 **쓰러지는 소리가 28.7 dB 줄어 잽의 숨보다 작고**, 몸통 타격도 14.6 dB 줄어듭니다. 페이지의 "크기" 숫자는 36쌍 중 25쌍이 실제 음량과 거꾸로입니다.',
+    [['sfx-1', 'S3 · 공 · 함성 · 승패가 고른 선수 쪽으로 쏠림', '±5.9 dB, 게임은 가운데 · 작음'],
+     ['sfx-6', 'S3 · "크기" 숫자가 음량과 거꾸로', '25/36쌍 · 작음'],
+     ['sfx-2', 'S4 · 세기 슬라이더가 일부 구간에서 그대로', '카운터 95~140 등 · 작음'],
+     ['sfx-3', 'S4 · 느리게(¼)에서도 KO 공이 울림', '게임 리플레이엔 없음 · 작음'],
+     ['sfx-4', 'S4 · 어퍼컷 카드 글에 "흡"이 빠짐', '글만'],
+     ['sfx-7', 'S4 · 헐떡임이 게임보다 두 배 빠름', '0.37 대 0.75초 · 작음'],
+     ['sfx-8', 'S4 · 카드에 적힌 타격음 수치가 실제와 다름', 'J40: 적힌 −14.9, 잰 −27.9 dBFS · 글만'],
+     ['sfx-p1', 'P1 · 휴대폰 스피커에서도 들리게', '타격 · 쓰러짐에 중음 층 + 페이지에 "휴대폰 스피커로" 토글 · 중'],
+     ['sfx-p2', 'P1 · 조작 줄과 음량계를 화면에 붙임', '지금 읽는 칸이 1,743 px 아래 · 작음'],
+     ['sfx-p3', 'P1 · 피로 조절기', '실제 숨의 중간값 피로 0.61, 카드는 거의 0 · 작음'],
+     ['sfx-p4', 'P2 · 의도와 어긋난 크기 바로잡기', '쳐내기 −8 LU, 숄더롤 +6 LU 등 · 중'],
+     ['sfx-p5', 'P2 · A/B 이어 듣기와 반복', '작음'],
+     ['sfx-p6', 'P2 · 카드가 없는 게임 소리 7종 추가', '실제 소리의 8.4% · 작음'],
+     ['sfx-p7', 'P2 · ¼에서 낮은 쿵이 들리지 않는 대역으로', '40 Hz 아래 77~91% · 작음'],
+     ['sfx-p8', 'P3 · 실제 공방 10초 듣기', '중'],
+     ['sfx-p9', 'P3 · 토글 단추를 크게', '35 → 44 px · 작음']],
+    '고칠 것을 직접 고르세요. 권하는 묶음은 결함 7개 전부(모두 작음) + sfx-p1 · p2 · p3.'),
+  lookCard('l-catalog', '모션 카탈로그: 고칠 것 고르기',
+    '결함 7(S3 2 · S4 5), 개선 4(P1 3). 가장 큰 것: V의 "바뀜" 15줄은 "맞은 사람이 휘청임"이라고 하는데 **그 카드들에서 아무도 휘청이지 않고**(13줄은 1 cm 미만), 휴대폰에서 첫 카드가 8.4화면 아래 · 열린 줄만 81화면입니다.',
+    [['catalog-1', 'S3 · V "바뀜" 15줄의 설명이 카드와 다름', '노트 · 표시 고침, 열린 줄 58 → 약 46 · 작음'],
+     ['catalog-2', 'S3 · out-counter: 쓰러지는 도중 ¼ 리플레이가 끼어듦', '리플레이 두 번 · 작음'],
+     ['catalog-3', 'S4 · 맺음말의 리플레이 설명이 옛것', '글만'],
+     ['catalog-4', 'S4 · 기다리는 메모 10건의 조치 글이 낡음', '글만'],
+     ['catalog-5', 'S4 · 요약 "N 4줄"(실제 13줄)', '작음'],
+     ['catalog-6', 'S4 · README의 표시 설명이 낡음', '글만'],
+     ['catalog-7', 'S4 · 숏 어퍼 메모의 "반영됨"(5L · 5D는 U 바닥 0)', '글 · 상태'],
+     ['catalog-p1', 'P1 · 휴대폰: "다음 바뀐 줄" 단추와 떠 있는 속도 단추', '작음~중'],
+     ['catalog-p3', 'P1 · 카드마다 슬로 · 한 프레임씩', '물은 순간이 1×에서 83~267 ms · 중'],
+     ['catalog-mark', 'P1 · "바뀜" 표시에 보이는 크기의 문턱', '휴대폰 약 17화면 줄어듦 · 작음'],
+     ['catalog-p2', 'P2 · 보이는 카드만 계산, 판은 처음 보일 때', '지금 그리는 것의 1.7배를 계산 · 작음~중']],
+    '고칠 것을 직접 고르세요. 권하는 묶음은 결함 7개 전부(글 · 작음) + catalog-p1 · p3 · mark.'),
+  lookCard('l-spar', '한 라운드 스파링: 고칠 것 고르기',
+    '결함 5(S2 1 · S3 2 · S4 2), 개선 3(P1 1). 가장 큰 것: **4D · 5D의 도발이 1프레임 만에 끊겨 화면에 나오지 않는데 기술 하나로 셉니다**(44번 중 43번, 걸음이 끊음). 고정 카메라에서 한 사람이 다른 사람 뒤에 서는 각이 90°까지(문서는 36°).',
+    [['spar-1', 'S2 · 4D · 5D의 도발이 1프레임 만에 끊김', '안무가 걷기를 멈추지 않음 · 작음'],
+     ['spar-2', 'S3 · 한 사람이 다른 사람 뒤에 섬(90°, 문서 36°)', '발놀림을 더 세게 되돌림(중) — 카메라를 돌리는 쪽은 "고정" 규칙과 어긋나 따로 여쭘'],
+     ['spar-3', 'S3 · 같은 시드가 브라우저와 node에서 다른 판(10시드 중 1)', '계획을 함께 쓰게 · 중'],
+     ['spar-4', 'S4 · 결과 화면 아래 시계가 계속 감', '작음'],
+     ['spar-5', 'S4 · "(크로스 카운터)"가 훅 · 어퍼에도 붙음', '11번 중 8번 · 작음'],
+     ['spar-p1', 'P1 · 멈춤 · 한 프레임씩 · 원하는 곳으로 이동', '지금은 처음부터 다시 봐야 함 · 중'],
+     ['spar-p2', 'P2 · 휴대폰에서 선수를 크게, 타임라인을 높게', '선수가 화면 높이의 21%(데스크톱 50%) · 작음'],
+     ['spar-p3', 'P2 · 판마다 다른 첫 수', '58명 모두 가드로 시작, 39명이 잽 · 작음~중']],
+    '고칠 것을 직접 고르세요. 권하는 묶음은 spar-1 · 4 · 5(작음) + spar-p1. spar-2 · 3은 중간 크기라 따로 판단.'),
+  lookCard('l-open', '미결 카탈로그 (이 페이지): 고칠 것 고르기',
+    '결함 6(S3 4 · S4 2), 개선 7(P1 3). 가장 큰 것: **제출을 댓글로 보내면 ★대로만 골라도 끝의 29개(파기 승인 전부 · 자유 메모)와 안내 줄이 잘립니다**(답은 저장소에 모두 남고 세션은 거기서 읽음). 휴대폰에서 페이지가 약 9만 px이고, 답해도 짧아지지 않습니다.',
+    [['open-1', 'S3 · 댓글 제출이 끝의 답과 안내 줄을 자름', '안내 줄은 따로, 줄 단위로 자름 · 작음'],
+     ['open-3', 'S3 · ★끼리 어긋남: a-screen-ai(바로) 대 stage-order(Z에서), 순서에 수정 라운드가 없음', '데이터만 · 작음'],
+     ['open-4', 'S3 · spar-tempo 영상은 처음 1.6초만 같은 장면, 아래 수치가 요약과 반대', '글(작음) 또는 다시 녹화(중)'],
+     ['open-6', 'S3 · del-session이 "이 작업 세션"이라고만 씀', '이전 세션 id를 적음 · 글만'],
+     ['open-2', 'S4 · 휴대폰에서 차례로 가면 묶음 제목이 위 막대에 가림', '작음'],
+     ['open-5', 'S4 · 파기 카드 둘의 ★ 보류 이유가 이미 정해진 일', '작음'],
+     ['open-p1', 'P1 · "안 고른 것만" 보기 · 답한 카드 접기 · 묶음별 다음', '9만 → 2.7만 px · 중'],
+     ['open-p2', 'P1 · 위 막대를 한 줄로', '지금 화면의 26% · 작음~중'],
+     ['open-p3', 'P1 · 제출 글을 짧게(★대로는 묶어서)', '7.5 → 4.6 KB · 작음'],
+     ['open-p4', 'P2 · 비교 영상: 지금과 ★를 나란히, 번갈아 보기', '작음~중'],
+     ['open-p5', 'P2 · 영상을 못 틀면 그렇다고 말함(+ MP4)', '작음 / 중'],
+     ['open-p6', 'P2 · "모두 ★로"에 되돌리기, 파기 묶음엔 없애기', '작음'],
+     ['open-p7', 'P3 · 초록 띠에 값 대신 이름', '작음']],
+    '고칠 것을 직접 고르세요. 권하는 묶음은 결함 6개 전부 + open-p1 · p2 · p3.')
 ];
 
 /* ---- what was decided on this page's own cards (moved out of the groups once answered) */
@@ -585,7 +653,7 @@ const FREE = [
   { id: 'free', group: 'free', title: '그 밖에 하실 말씀', state: '위 카드에 없는 것 — 화면 · 조작 · 소리 · 링 · 이 페이지 무엇이든. 번호 목록으로 쓰시면 한 줄씩 지시로 읽습니다.', opts: [] }
 ];
 
-const order = (g) => [...AUDIT, ...NEW, ...CARRY, ...LIMITS, ...DISPOSE, ...FREE].filter((c) => c.group === g);
+const order = (g) => [...AUDIT, ...LOOK, ...NEW, ...CARRY, ...LIMITS, ...DISPOSE, ...FREE].filter((c) => c.group === g);
 export const CARDS = GROUPS.flatMap((g) => order(g.id));
 
 // every question, follow-ups with their parent and the answers that open them
