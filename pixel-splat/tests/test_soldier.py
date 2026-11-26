@@ -65,7 +65,8 @@ def test_skeleton_layout():
     for b in SKEL.bones:  # parents first, as Skeleton.world_mats needs
         assert b.parent is None or names.index(b.parent) < names.index(b.name)
     assert names[:len(rig.GEOMETRY_BONES)] == body.BONES
-    assert set(rig.HELPER_BONES) == {"skirtF", "skirtB", "skirtL", "skirtR", "cape", "capeTip", "plume", "plumeTip"}
+    assert rig.HELPER_BONES == list(rig.GORES) + ["cape", "capeTip", "plume", "plumeTip"] and len(rig.GORES) == 8
+    assert len(SKEL) == 32
     for j in rig.JOINTS:  # the bead is never smaller than the socket it sits in
         assert j.bead >= j.shared > 0
         assert np.allclose(SKEL.bones[SKEL.index[j.bone]].head, j.pos, atol=1e-6)
@@ -164,7 +165,7 @@ def test_helper_bones_are_driven():
     assert set(rig.HELPER_BONES) <= set(rots)
     f, _ = motion.thigh_swing(rots["thighL"], 1)
     assert f > 10
-    assert rig.euler_angles(rots["skirtF"])[0] < -5  # the front panel is pushed forward by the thigh
+    assert rig.euler_angles(rots["skirtFL"])[0] < -5  # the gore in front of the left thigh is pushed forward by it
     still = motion.stand_rots()[0]
     motion.drive_helpers(still)
     assert all(np.allclose(still[h], np.eye(3), atol=1e-6) for h in rig.HELPER_BONES)  # at rest nothing moves
@@ -219,7 +220,7 @@ def test_costume_dresses_every_bone_and_leaves_the_body_alone(sc, dressed):
     assert rig.limits("head")[0] == (-20.0, 25.0)  # ... and the bare limits are back
     model = SplatModel.from_mesh(dressed.parts(True), 8000, seed=0)
     bones = soldier.splat_bones(dressed, model)
-    assert len(np.unique(bones)) == 28
+    assert len(np.unique(bones)) == 32
     rep = soldier.rigid_report(model, bones, [motion.walk_pose(SKEL, 0.3)[0], motion.turn_pose(SKEL, 0.2)[0]])
     assert rep["one_hot"] and rep["max_distance_change"] < 1e-5
 
@@ -230,7 +231,7 @@ def test_costume_materials(dressed):
     i = {n: k for k, n in enumerate(dressed.names)}
     for bone in ("head", "neck", "clavL", "upperarmR"):
         assert dressed.metal[i[bone]].max() > 0.4, bone  # sallet, bevor, pauldron, lames
-    for bone in ("skirtF", "cape", "thighL", "plume"):  # (the chest is cloth too, but carries the gold brooch)
+    for bone in ("skirtF", "skirtBL", "cape", "thighL", "plume"):  # (the chest is cloth too, but carries the gold brooch)
         assert dressed.metal[i[bone]].max() < 0.01 and dressed.rough[i[bone]].min() > 0.25, bone
     red, white = np.array(costume.MAT["red"][0]), np.array(costume.MAT["white"][0])
     for bone in ("chest", "skirtF", "skirtB"):
@@ -264,32 +265,124 @@ def test_patterns_are_fixed_to_the_cloth():
 
 def test_costume_does_not_clash_while_walking_or_turning(dressed):
     with dressed.worn():
-        rep = soldier.clash_report(dressed, walk=8, turn=6)
-    for garment in ("skirtF", "skirtB", "skirtL", "skirtR", "cape", "capeTip"):
-        d = rep["through " + garment]
-        assert d["walk"] < 0 and d["turn"] < 0 and d["rest"] < 0, (garment, d)  # the body never shows through
+        rep = soldier.clash_report(dressed, walk=8, turn=6, run=6, jump=6)
+    for label in ("thighs, knees through the skirt", "hips, skirt, legs through the cape"):
+        d = rep[label]  # the body never shows through skirt or cape - walking, turning, sprinting, jumping,
+        assert max(d["rest"], d["walk"], d["turn"], d["run"], d["jump"]) < -0.003, (label, d)  # with room to spare
+    assert rep["thighs, knees through the skirt"]["big"] < 0  # ... nor with a thigh at 100 deg or the legs spread 30 deg
+    d = rep["skirt gore through its neighbour"]  # no gore comes out through the next one (the audit's bug)
+    assert max(d["rest"], d["walk"], d["turn"], d["run"], d["jump"], d["big"]) < 0.003, d
     for pair in ("helmet / bevor", "face / bevor, cowl", "helmet, plume / mantle, pauldrons"):
         d = rep[pair]  # the helmet clears everything up to the (helmeted) limits of the neck
         assert max(d["rest"], d["walk"], d["turn"], d["limit"]) < 0.003, (pair, d)
-    for pair in ("forearm, hand / skirt, hips", "cape / skirt, hips", "cape / legs"):
+    for pair in ("forearm, hand / skirt, hips", "cape / legs"):
         d = rep[pair]
-        assert max(d["rest"], d["walk"], d["turn"]) < 0.004, (pair, d)
+        assert max(d["rest"], d["walk"], d["turn"], d["run"], d["jump"]) < 0.004, (pair, d)
+    d = rep["cape / skirt, hips"]
+    assert max(d["rest"], d["walk"], d["turn"]) < 0.004 and max(d["run"], d["jump"]) < 0.012, d
     for pair in ("pauldron / trunk", "bevor / pauldron"):
         d = rep[pair]  # these touch by design at rest; moving must not push them in further
         assert max(d["walk"], d["turn"]) - d["rest"] < 0.004, (pair, d)
     d = rep["puffed sleeve / trunk"]  # the bare arm already sits ~4 mm in the flank; the sleeve stays near that
-    assert d["rest"] < 0.010 and max(d["walk"], d["turn"]) < 0.020, d
+    assert d["rest"] < 0.010 and max(d["walk"], d["turn"], d["run"], d["jump"]) < 0.020, d
 
 
 def test_helpers_keep_cloth_off_the_body():
-    """The drives of the costume bones: skirt follows the thigh, cape hangs plumb and behind the hips."""
+    """The drives of the costume bones, for any pose: a gore swings out only, and only as far as the
+    legs under it need; the cape hangs plumb and behind hips and legs; nothing moves at rest."""
     L = rig.local_rot
+    swing = lambda rots, g: float(np.degrees(np.arccos(np.clip((np.trace(rots[g]) - 1) / 2, -1, 1))))  # noqa: E731
+    still = motion.drive_helpers({})
+    assert all(np.array_equal(still[h], np.eye(3)) for h in rig.HELPER_BONES)  # exactly the rest pose
     rots = motion.drive_helpers({"thighL": L("thighL", pitch=-40)})
-    assert 20 < -rig.euler_angles(rots["skirtF"])[0] < 40  # front panel lifted about as far as the thigh
-    assert abs(rig.euler_angles(rots["skirtB"])[0]) < 2
+    assert 12 < swing(rots, "skirtFL") < 45 and swing(rots, "skirtFR") < 2 and swing(rots, "skirtB") == 0
+    hinge, out, axis = rig.gore_frame("skirtFL")
+    hem = rig.SKIRT["skirtFL"][1] - hinge
+    assert (rots["skirtFL"] @ hem) @ out > hem @ out + 0.05 and abs((rots["skirtFL"] @ axis) @ axis - 1) < 1e-9
+    rots = motion.drive_helpers({"thighL": L("thighL", pitch=-100), "shinL": L("shinL", pitch=120)})
+    assert 75 < swing(rots, "skirtFL") <= motion.GORE_MAX  # a thigh at 100 deg: the gore lies on top of it
+    rots = motion.drive_helpers({"thighR": L("thighR", roll=-30)})
+    assert swing(rots, "skirtR") > 15 and swing(rots, "skirtL") == 0  # spread: the side gore swings out
     rots = motion.drive_helpers({"chest": L("chest", pitch=25)})
-    world = L("chest", pitch=25) @ rots["cape"]  # cape orientation relative to the pelvis
-    lean = rig.euler_angles(world)[0]
-    assert 5 < lean < 25  # not bent forward with the chest (-25 would be plumb... it leans BACK to clear the hips)
+    lean = rig.euler_angles(L("chest", pitch=25) @ rots["cape"])[0]  # cape orientation relative to the pelvis
+    assert 5 < lean < 25  # it does not bend forward with the chest: it leans BACK to clear the hips
+    rots = motion.drive_helpers({"chest": L("chest", pitch=-10)})
+    assert rig.euler_angles(L("chest", pitch=-10) @ rots["cape"])[0] >= -1e-9  # arching back never tips it forward
     rots = motion.drive_helpers({"chest": L("chest", yaw=40)})
     assert abs(rig.euler_angles(L("chest", yaw=40) @ rots["cape"])[1] - 20) < 1  # half the turn: the hips hold it back
+    rots = motion.drive_helpers({"thighR": L("thighR", pitch=20), "shinR": L("shinR", pitch=140)})
+    assert rig.euler_angles(rots["cape"])[0] > 8  # a heel kicked up behind pushes the cape back
+
+
+def test_soft_pos_is_zero_below_zero_and_smooth():
+    assert all(motion.soft_pos(x, 3.0) == 0.0 for x in (-50.0, -1.0, -1e-9, 0.0))
+    assert motion.soft_pos(3.0, 3.0) == 3.0 and motion.soft_pos(40.0, 3.0) == 40.0  # no shortfall once it is clear
+    xs = np.linspace(-1, 5, 601)
+    f = np.array([motion.soft_pos(x, 3.0) for x in xs])
+    slope = np.diff(f) / np.diff(xs)
+    assert (slope >= -1e-12).all() and np.abs(np.diff(slope)).max() < 0.02  # monotone, no jump in slope
+
+
+def test_limits_are_exact_at_gimbal_lock_and_clamp():
+    """Arm raised straight out sideways (roll = 90): pitch and yaw are no longer unique.  The limit check
+    must find the reading that IS allowed, and clamp_rot must return the nearest allowed rotation."""
+    L = rig.local_rot
+    for rots in rig.limit_poses(48, 0):  # every pose built from angles inside the limits passes
+        assert not rig.check_limits(rots)
+    for roll in (89.99, 90.0, 90.01):
+        for bone, sgn in (("upperarmL", 1), ("upperarmR", -1)):
+            R = L(bone, pitch=-100, yaw=sgn * 30, roll=sgn * roll)
+            Rc, ang, excess = rig.clamp_rot(bone, R)
+            assert excess < 0.02 and not rig.check_limits({bone: R})
+            assert np.abs(L(bone, *ang) - Rc).max() < 1e-9 and rig._geodesic(R, Rc) < 0.02  # round trip
+            lim = rig.limits(bone)
+            assert all(lo - 1e-9 <= a <= hi + 1e-9 for a, (lo, hi) in zip(ang, lim))
+    # outside: the excess is the angle to the nearest allowed rotation, and the clamped pose is inside
+    for bone, kw, expect in (("shinL", dict(pitch=-30), 30.0), ("head", dict(yaw=95), 25.0),
+                             ("upperarmL", dict(pitch=-100, yaw=30, roll=95), 5.0), ("chest", dict(pitch=40, yaw=10), 15.0)):
+        R = L(bone, **kw)
+        Rc, ang, excess = rig.clamp_rot(bone, R)
+        assert abs(excess - expect) < 0.3 and abs(rig._geodesic(R, Rc) - excess) < 1e-6, (bone, excess)
+        assert rig.check_limits({bone: R}) and not rig.check_limits({bone: Rc})
+    pose = {"shinL": L("shinL", pitch=150), "thighL": L("thighL", pitch=-50), "pelvis": rig.euler(yaw=200),
+            "skirtF": rig.euler(pitch=-170)}
+    clamped, moved = rig.clamp_pose(pose)
+    assert set(moved) == {"shinL"} and abs(moved["shinL"] - 10.0) < 1e-6 and not rig.check_limits(clamped)
+    assert np.array_equal(clamped["pelvis"], pose["pelvis"]) and np.array_equal(clamped["skirtF"], pose["skirtF"])
+    rng = np.random.default_rng(1)  # random rotations: clamping always lands inside, and never moves what is inside
+    for _ in range(40):
+        q = rng.normal(size=4)
+        q /= np.linalg.norm(q)
+        w, x, y, z = q
+        R = np.array([[1 - 2 * (y * y + z * z), 2 * (x * y - w * z), 2 * (x * z + w * y)],
+                      [2 * (x * y + w * z), 1 - 2 * (x * x + z * z), 2 * (y * z - w * x)],
+                      [2 * (x * z - w * y), 2 * (y * z + w * x), 1 - 2 * (x * x + y * y)]])
+        for bone in ("upperarmL", "thighR", "head"):
+            Rc, _, excess = rig.clamp_rot(bone, R)
+            assert not rig.check_limits({bone: Rc}), bone
+            assert rig.clamp_rot(bone, Rc)[2] < 1e-6
+
+
+def test_big_motions_and_cloth_inertia():
+    """Synthetic sprint and tuck jump stay inside the joint limits and loop; with ``prev`` the cloth
+    drops back at a limited speed, without it the helpers depend on the pose alone."""
+    with body.wearing(costume):
+        for fn in (motion.run_rots, motion.jump_rots):
+            for k in range(12):
+                assert not rig.check_limits(fn(SKEL, k / 12)[0]), (fn.__name__, k)
+    for fn in (motion.run_pose, motion.jump_pose):
+        assert np.abs(fn(SKEL, 1.0)[0] - fn(SKEL, 0.0)[0]).max() < 1e-5
+    L = rig.local_rot
+    up = {"thighL": L("thighL", pitch=-80), "shinL": L("shinL", pitch=60)}
+    state = {}
+    a = motion.drive_helpers(dict(up), prev=state, dt=1 / 24)
+    b = motion.drive_helpers({}, prev=state, dt=1 / 24)  # the leg snaps down; the gore follows more slowly
+    c = motion.drive_helpers({})
+    swing = lambda rots, g: float(np.degrees(np.arccos(np.clip((np.trace(rots[g]) - 1) / 2, -1, 1))))  # noqa: E731
+    assert swing(c, "skirtFL") == 0 and swing(a, "skirtFL") > 45
+    assert abs((swing(a, "skirtFL") - swing(b, "skirtFL")) - motion.FALL_RATE["gore"] / 24) < 1e-6
+    for _ in range(40):
+        b = motion.drive_helpers({}, prev=state, dt=1 / 24)
+    assert swing(b, "skirtFL") == 0  # ... and comes to rest
+    turn = motion.drive_helpers({"chest": L("chest", yaw=20)}, prev={"chest_yaw": 0.0, "head_yaw": 0.0}, dt=1 / 24)
+    assert abs(rig.euler_angles(L("chest", yaw=20) @ turn["cape"])[1] - 10) > 1  # the cape trails the turn it measured

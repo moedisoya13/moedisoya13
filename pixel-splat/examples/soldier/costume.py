@@ -2,7 +2,7 @@
 
 Nothing of the body changes - not a bone, joint or motion.  The costume is an *outfit* for
 ``body.wear``: per bone it adds layers to the bone's solid (so cloth and plate ride rigidly on the
-bone they are tied to, exactly like the flesh), gives solids to the eight helper bones (skirt panels,
+bone they are tied to, exactly like the flesh), gives solids to the twelve helper bones (skirt gores,
 cape, plume) and paints every surface with a material: albedo, roughness, metallic.
 
     head      sallet (bowl, long tail, brim), torse (twisted orange/black band), plume holder, face
@@ -11,7 +11,7 @@ cape, plume) and paints every surface with a material: albedo, roughness, metall
     clav      mantle over the shoulder, pauldron cap, strap + buckle
     upperarm  two pauldron lames, puffed sleeve    forearm   tight sleeve + buttons
     hand      glove + cuff                         pelvis    belt (= the waist turntable), buckle, skirt yoke
-    skirt*    tabard skirt panels                  cape*     the mantle's long back drape (dagged hem)
+    skirt*    tabard skirt, eight gores            cape*     the mantle's long back drape (dagged hem)
     legs      two-coloured hose                    foot/toe  shoes with a pointed toe
 
 Patterns (lozenges, studs, the twist of the torse) are functions of the REST position, and every
@@ -41,9 +41,9 @@ NAME = "soldier"
 F32 = np.float32
 S = rig.H / 1.80  # design units -> world units
 GROUND = rig.GROUND
-BONES = list(rig.HELPER_BONES)  # skirtF/B/L/R, cape, capeTip, plume, plumeTip all get a solid
-VOXEL_SCALE = {"skirtF": 0.7, "skirtB": 0.7, "skirtL": 0.7, "skirtR": 0.7, "cape": 0.7, "capeTip": 0.7,
-               "plume": 0.6, "plumeTip": 0.6, "head": 0.7, "neck": 0.8, "clavL": 0.8, "clavR": 0.8}
+BONES = list(rig.HELPER_BONES)  # the 8 skirt gores, cape, capeTip, plume, plumeTip all get a solid
+VOXEL_SCALE = {**{g: 0.7 for g in rig.GORES}, "cape": 0.7, "capeTip": 0.7, "plume": 0.6, "plumeTip": 0.6,
+               "head": 0.7, "neck": 0.8, "clavL": 0.8, "clavR": 0.8}
 # With the helmet on the neck is stiffer: tipping the head back drives the sallet's tail into the cowl and
 # the shoulders, nodding with a bent neck drives the chin into the bevor (measured by
 # ``soldier.py verify --checks clash``).  Turning stays free: +-70 degrees.
@@ -147,27 +147,30 @@ def paint_tabard(pa: Paint, mask, p, field=None):
     pa.set(mask & f & lozenge(p[:, 0], p[:, 1]), "white")
 
 
-# ---------------------------------------------------------------- skirt: belt, yoke, four panels
+# ---------------------------------------------------------------- skirt: belt, yoke, eight gores
 BELT_Y = float(rig.WAIST[1])
-SK_ZC = -0.005 * S  # the skirt's axis sits a little behind the body axis (buttocks)
-SK_Y = np.array([GROUND + (y + 1.0) * S for y in (-0.307, -0.100, 0.090)])  # hem, yoke bottom, top (under the belt)
-SK_A = np.array([0.230, 0.210, 0.134]) * S  # half width (x) at those heights
-SK_B = np.array([0.162, 0.141, 0.116]) * S  # half depth (z)
+SK_ZC = float(rig.SKIRT_ZC)
+SK_Y = np.array([rig.Y(h) for h in rig.SKIRT_H])  # hem, yoke bottom, top (under the belt)
 SK_T = 0.0085 * S  # half thickness of the cloth
+SK_ROUND = 0.002 * S  # rounding of the cloth's edges (so its faces sit SK_T + SK_ROUND from the middle)
 HEM_Y, YOKE_Y, SK_TOP = SK_Y
-PANELS = {  # centre azimuth (deg from +z towards +x), half width (deg), radial scale (side panels tuck under)
-    "skirtF": (0.0, 51.0, 1.000), "skirtB": (180.0, 51.0, 1.000),
-    "skirtL": (90.0, 46.0, 0.975), "skirtR": (-90.0, 46.0, 0.975)}
+GORE_TOP = SK_TOP - 0.035 * S  # the gores start a little below the belt, inside the yoke
+FIELD = 51.0  # degrees either side of front / back that carry the tabard's colours; the flanks are ochre
 
 
 def skirt_coords(p):
-    """(rho, phi, a, b): elliptical-cone coordinates of the skirt: rho = 1 on the skirt surface,
-    phi = azimuth (0 = front, +90 deg = his left)."""
-    y = p[..., 1]
-    a = np.interp(y, SK_Y, SK_A).astype(F32)
-    b = np.interp(y, SK_Y, SK_B).astype(F32)
-    x, z = p[..., 0] / a, (p[..., 2] - SK_ZC) / b
-    return np.sqrt(x * x + z * z), np.arctan2(x, z), a, b
+    """(rho, phi, reach): elliptical-cone coordinates of the skirt.  rho = 1 on the skirt surface,
+    phi = azimuth (0 = front, +90 deg = his left), reach = horizontal distance from the skirt's axis."""
+    a, b = rig.skirt_radii(p[..., 1])
+    x, z = p[..., 0], p[..., 2] - SK_ZC
+    rho = np.sqrt((x / a) ** 2 + (z / b) ** 2).astype(F32)
+    return rho, np.arctan2(x / a, z / b), np.sqrt(x * x + z * z).astype(F32)
+
+
+def skirt_depth(p, scale: float = 1.0):
+    """Distance outside (+) / inside (-) the skirt cone, measured along the ray from the skirt's axis."""
+    rho, _, reach = skirt_coords(p)
+    return reach * (1.0 - scale / np.maximum(rho, 1e-4))
 
 
 def _angle_diff(phi, centre_deg):
@@ -177,30 +180,30 @@ def _angle_diff(phi, centre_deg):
 
 def yoke_sdf(p):
     """Top of the skirt, rigid on the pelvis: covers hips and buttocks from the belt to hip level."""
-    rho, _, a, b = skirt_coords(p)
-    d = np.maximum((rho - 1.0) * np.minimum(a, b), np.maximum(p[..., 1] - SK_TOP, YOKE_Y - p[..., 1]))
+    d = np.maximum(skirt_depth(p), np.maximum(p[..., 1] - SK_TOP, YOKE_Y - p[..., 1]))
     return d - m(0.004)
 
 
-def panel_sdf(p, name):
-    """One hanging panel of the skirt: a slab of the elliptical cone, from under the belt to the hem."""
-    c, w, scale = PANELS[name]
-    rho, phi, a, b = skirt_coords(p)
-    r = np.minimum(a, b)
-    d_shell = np.abs(rho - scale) * r - SK_T
-    d_side = (_angle_diff(phi, c) - math.radians(w)) * r * np.maximum(rho, 0.3)
-    d_y = np.maximum(p[..., 1] - (SK_TOP - m(0.035)), HEM_Y - p[..., 1])
-    return np.maximum(np.maximum(d_shell, d_side), d_y) - m(0.002)
+def gore_sdf(p, name):
+    """One gore (hanging strip) of the skirt: a slab of the elliptical cone, from under the belt to the hem."""
+    _, phi, reach = skirt_coords(p)
+    d_shell = np.abs(skirt_depth(p)) - SK_T
+    d_side = (_angle_diff(phi, rig.GORES[name]) - math.radians(rig.GORE_HALF)) * np.maximum(reach, m(0.03))
+    d_y = np.maximum(p[..., 1] - GORE_TOP, HEM_Y - p[..., 1])
+    return np.maximum(np.maximum(d_shell, d_side), d_y) - SK_ROUND
 
 
-def panel_poke(p, name):
-    """How far a point sticks out THROUGH a panel (rest frame of the panel): > 0 = in front of the
-    panel's outer face while inside its outline; -inf where the panel does not cover the point."""
-    c, w, scale = PANELS[name]
-    rho, phi, a, b = skirt_coords(p)
-    r = np.minimum(a, b)
-    covered = (_angle_diff(phi, c) < math.radians(w)) & (p[..., 1] > HEM_Y) & (p[..., 1] < SK_TOP - m(0.035))
-    return np.where(covered, (rho - scale) * r - SK_T, -np.inf)
+def gore_poke(p, name, seam: float = 0.0):
+    """How far a point sticks out THROUGH a gore (rest frame of the gore): > 0 = beyond the gore's outer
+    face while inside its outline; -inf where the gore does not cover the point.  ``seam`` (degrees)
+    leaves out a strip along the gore's two side edges - where it overlaps its neighbours."""
+    _, phi, _ = skirt_coords(p)
+    inside = _angle_diff(phi, rig.GORES[name]) < math.radians(rig.GORE_HALF - seam)
+    covered = inside & (p[..., 1] > HEM_Y) & (p[..., 1] < GORE_TOP)
+    return np.where(covered, skirt_depth(p) - (SK_T + SK_ROUND), -np.inf)
+
+
+SEAM = 1.5  # degrees: neighbouring gores overlap by 0.5 deg; a lifted gore lying on that strip is not "through"
 
 
 # ---------------------------------------------------------------- cape: the mantle's long back drape
@@ -239,7 +242,7 @@ def cape_poke(p):
     """How far a point sticks out behind the cape's outer (rear) face; -inf where the cape does not cover it."""
     y = p[..., 1]
     covered = (np.abs(p[..., 0]) < np.interp(y, CAPE_Y, CAPE_W)) & (y > CAPE_Y[0] + DAG_DEPTH) & (y < CAPE_Y[2])
-    return np.where(covered, cape_mid(p) - CAPE_T - p[..., 2], -np.inf)
+    return np.where(covered, cape_mid(p) - (CAPE_T + m(0.002)) - p[..., 2], -np.inf)
 
 
 # ---------------------------------------------------------------- trunk
@@ -333,8 +336,7 @@ def _paint_pelvis(p, layer):
     pa = Paint(len(p), "red")
     pa.set(p[:, 0] < 0, "cream")  # what little shows of the body under the skirt wears the hose
     yoke = layer == "yoke"
-    _, phi, _, _ = skirt_coords(p)
-    front_back = (_angle_diff(phi, 0.0) < math.radians(51)) | (_angle_diff(phi, 180.0) < math.radians(51))
+    front_back = _tabard_field(p)
     pa.set(yoke, "ochre")
     paint_tabard(pa, yoke & front_back, p, field=np.abs(p[:, 0]) < TABARD_HALF)
     belt = layer == body.TURNTABLE
@@ -348,19 +350,23 @@ def _paint_pelvis(p, layer):
     return pa.out()
 
 
+def _tabard_field(p):
+    """Front and back of the skirt carry the tabard (red, lozenges); the flanks are ochre."""
+    _, phi, _ = skirt_coords(p)
+    return (_angle_diff(phi, 0.0) < math.radians(FIELD)) | (_angle_diff(phi, 180.0) < math.radians(FIELD))
+
+
 def _skirt(p, name):
-    return {"panel": panel_sdf(p, name)}
+    return {"gore": gore_sdf(p, name)}
 
 
 def _paint_skirt(p, layer, name):
-    front_back = name in ("skirtF", "skirtB")
-    pa = Paint(len(p), "red" if front_back else "ochre")
-    every = np.ones(len(p), bool)
-    if front_back:
-        paint_tabard(pa, every, p)
-    rho, _, _, _ = skirt_coords(p)
-    pa.set(every & (rho < PANELS[name][2]), "ochre", 0.82)  # the inside of the cloth: lining
-    pa.set(p[:, 1] < HEM_Y + m(0.016), "ochre", 1.0 if front_back else 0.78)  # hem band
+    pa = Paint(len(p), "ochre")
+    field = _tabard_field(p)
+    paint_tabard(pa, field, p)
+    pa.set(skirt_depth(p) < 0, "ochre", 0.82)  # the inside of the cloth: lining
+    pa.set(p[:, 1] < HEM_Y + m(0.016), "ochre")  # hem band
+    pa.set((p[:, 1] < HEM_Y + m(0.016)) & ~field, "ochre", 0.78)
     return pa.out()
 
 
@@ -703,7 +709,7 @@ def layers(bone: str, p) -> Dict[str, np.ndarray]:
         return _hand(p, s)
     if base == "toe":
         return _toe(p, s)
-    if base in PANELS:
+    if base in rig.GORES:
         return _skirt(p, base)
     if base in ("cape", "capeTip"):
         return _cape(p, base)
@@ -731,7 +737,7 @@ def paint(bone: str, p, layer):
         return _paint_forearm(p, layer, s)
     if base == "hand":
         return _paint_hand(p, layer, s)
-    if base in PANELS:
+    if base in rig.GORES:
         return _paint_skirt(p, layer, base)
     if base in ("cape", "capeTip"):
         return _paint_cape(p, layer, base)
@@ -755,9 +761,12 @@ def box(bone: str) -> Optional[Tuple[np.ndarray, np.ndarray]]:
 
 
 # garments that hang over another bone: (garment bone, how far a point pokes through it)
-COVERS = {name: (lambda p, _n=name: panel_poke(p, _n)) for name in PANELS}
+COVERS = {name: (lambda p, _n=name: gore_poke(p, _n)) for name in rig.GORES}
+COVERS_GORE = {name: (lambda p, _n=name: gore_poke(p, _n, SEAM)) for name in rig.GORES}  # gore against gore
 COVERS["cape"] = cape_poke
 COVERS["capeTip"] = cape_poke
+SKIRT_BONES = tuple(rig.GORES)
+
 
 def _past_shoulder(p, s):
     """The part of the upper arm that is clear of the shoulder (the puff of the sleeve)."""
@@ -773,7 +782,7 @@ CLASH_PAIRS = (
     ("puffed sleeve / trunk", [("upperarmL", None, lambda p: _past_shoulder(p, 1)),
                                ("upperarmR", None, lambda p: _past_shoulder(p, -1))], [("chest", None, None)]),
     ("forearm, hand / skirt, hips", [(b, None, None) for b in ("forearmL", "forearmR", "handL", "handR")],
-     [(b, None, None) for b in ("pelvis", "skirtF", "skirtB", "skirtL", "skirtR", "thighL", "thighR")]),
+     [(b, None, None) for b in ("pelvis", "thighL", "thighR") + SKIRT_BONES]),
     ("helmet / bevor", [("head", ARMOUR, None)], [("neck", ("bevor",), None)]),
     ("face / bevor, cowl", [("head", (body.FLESH,), None)], [("neck", ("bevor",), None), ("chest", CLOTH, None)]),
     ("helmet, plume / mantle, pauldrons", [("head", ARMOUR, None), ("plume", None, None), ("plumeTip", None, None)],
@@ -781,14 +790,23 @@ CLASH_PAIRS = (
     ("bevor / pauldron", [("neck", ("bevor",), None)], [(b, ("pauldron", "strap", "buckle"), None) for b in ("clavL", "clavR")]),
     ("pauldron / trunk", [(b, ("pauldron",), None) for b in ("clavL", "clavR")], [("chest", None, None)]),
     ("cape / skirt, hips", [("cape", None, None), ("capeTip", None, None)],
-     [(b, None, None) for b in ("pelvis", "skirtF", "skirtB", "skirtL", "skirtR")]),
+     [(b, None, None) for b in ("pelvis",) + SKIRT_BONES]),
+    ("skirt / shins, feet", [(b, None, None) for b in SKIRT_BONES],
+     [(b, None, None) for b in ("shinL", "shinR", "footL", "footR", "toeL", "toeR")]),
     ("cape / legs", [("cape", None, None), ("capeTip", None, None)],
-     [(b, None, None) for b in ("thighL", "thighR", "shinL", "shinR")]),
+     [(b, None, None) for b in ("thighL", "thighR", "shinL", "shinR", "footL", "footR")]),
 )
-# what each hanging garment must keep covered: garment bone -> bones underneath.  Of a thigh only the
-# part below the skirt's yoke counts (its top is inside the yoke, which is rigid on the pelvis).
-UNDER = {"skirtF": ("thighL", "thighR"), "skirtB": ("thighL", "thighR"), "skirtL": ("thighL",), "skirtR": ("thighR",),
-         "cape": ("pelvis", "skirtB"), "capeTip": ("pelvis", "skirtB", "thighL", "thighR")}
+# what the hanging garments must keep covered: (label, garment bones, bones underneath).  Of a thigh only
+# the part below the skirt's yoke counts (its top is inside the yoke, which is rigid on the pelvis).
+# Of the lower leg only the knee counts for the skirt: shin and foot hang below the hem or - heel kicked up
+# behind - are legitimately OUTSIDE it (they got there round the hem, not through the cloth); whether they
+# cut into the cloth is measured as an ordinary clash instead ("skirt / shins, feet").
+LEGS = ("thighL", "thighR", "shinL", "shinR", "footL", "footR")
+THROUGH = (
+    ("thighs, knees through the skirt", SKIRT_BONES, ("thighL", "thighR", "shinL", "shinR")),
+    ("skirt gore through its neighbour", SKIRT_BONES, SKIRT_BONES),
+    ("hips, skirt, legs through the cape", ("cape", "capeTip"), ("pelvis",) + SKIRT_BONES + LEGS),
+)
 
 
 def under_mask(bone: str, p) -> np.ndarray:
@@ -796,3 +814,10 @@ def under_mask(bone: str, p) -> np.ndarray:
     if bone.startswith("thigh"):
         return p[:, 1] < rig.HIP[1][1] - m(0.090)
     return np.ones(len(p), bool)
+
+
+def under_skirt_mask(bone: str, p) -> np.ndarray:
+    """... and which of them the SKIRT is responsible for: of a shin only the knee."""
+    if bone.startswith("shin"):
+        return p[:, 1] > rig.KNEE[1][1] - m(0.075)
+    return under_mask(bone, p)

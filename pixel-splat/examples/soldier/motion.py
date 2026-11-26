@@ -53,8 +53,20 @@ def smoothstep(x):
 
 
 def soft_pos(x, eps=3.0):
-    """Smooth max(x, 0): exactly 0 at x = 0, x - eps/2 for large x."""
-    return 0.5 * (x + math.sqrt(x * x + eps * eps)) - 0.5 * eps
+    """Smooth max(x, 0): exactly 0 for x <= 0, exactly x for x >= eps, and in between a curve whose
+    slope runs continuously from 0 to 1 (so nothing driven by it jerks, and nothing falls short)."""
+    if x <= 0.0:
+        return 0.0
+    if x >= eps:
+        return x
+    t = x / eps
+    return x * t * t * (3.0 - 2.0 * t)
+
+
+def soft_max(values, k=1.0):
+    """Smooth maximum (log-sum-exp): never below the true maximum, at most k * ln(n) above it."""
+    top = max(values)
+    return top + k * math.log(sum(math.exp((v - top) / k) for v in values))
 
 
 def _about(pivot_rest, pivot_world, pitch, point_rest):
@@ -254,74 +266,262 @@ def thigh_swing(R_thigh_local: np.ndarray, s: int) -> Tuple[float, float]:
     return math.degrees(math.atan2(d[2], -d[1])), math.degrees(math.atan2(s * d[0], -d[1]))
 
 
-SKIRT_REACH = 0.55  # the skirt must clear the thigh this far down it (fraction of the thigh: about the hem)
-SKIRT_GAP = 0.056 * H  # thigh radius there + room for the cloth
-SKIRT_FOLLOW = 0.8  # how much of the thigh's swing a side panel is dragged along
+# The cloth is not simulated.  Every piece is rigid and is turned, each frame, by an angle worked out
+# from the body: a gore of the skirt swings out just far enough to lie ON the legs under it, the cape
+# hangs plumb but leans back as far as it must to pass behind hips, skirt and legs.
+CLOTH_GAP = 0.0125 * H  # room kept between a limb and the middle of the cloth lying on it
+CAPE_GAP = 0.024 * H  # ... and behind it, for the cape (which hangs in folds and curls round)
+THIGH_R = (0.052, 0.035)  # radius of the thigh at the hip / at the knee (fractions of H)
+SHIN_R = (0.034, 0.023)
+FOOT_R = 0.021
+GORE_SOFT = 1.5  # degrees: how softly a gore blends between the points that push it
+GORE_MAX = 125.0  # a gore never swings further than this (a thigh raised past ~105 deg cannot be covered)
+CAPE_SOFT = 1.0
+FALL_RATE = {"gore": 200.0, "cape": 120.0}  # degrees per second lifted cloth drops back (with ``prev``)
 
 
-def _cape_lean(R_chest_local: np.ndarray) -> float:
-    """Degrees the cape has to lean back from plumb to pass behind the hips, given how the chest is
-    bent over them (the cape hangs from the upper back, which moves forward when the trunk bends)."""
-    root = rig.WAIST + R_chest_local @ (rig.CAPE[0] - rig.WAIST)  # where the cape hangs from, pelvis frame
-    need = [math.degrees(math.atan2(root[2] - b[2], root[1] - b[1])) for b in rig.CAPE_CLEAR]
-    top = max(need)
-    return top + math.log(sum(math.exp(n - top) for n in need))  # smooth max (1 degree soft): no jerk
+def leg_points(rots: Dict[str, np.ndarray]) -> Tuple[np.ndarray, np.ndarray]:
+    """A chain of balls along both legs, in the pelvis frame, for the pose ``rots``: (centres (N,3), radii (N,))."""
+    eye = np.eye(3)
+    pts, rad = [], []
+    for side, s in rig.SIDES:
+        Rt = rots.get("thigh" + side, eye)
+        Rs = Rt @ rots.get("shin" + side, eye)
+        Rf = Rs @ rots.get("foot" + side, eye)
+        hip = rig.HIP[s]
+        knee = hip + Rt @ (rig.KNEE[s] - hip)
+        ankle = knee + Rs @ (rig.ANKLE[s] - rig.KNEE[s])
+        for t in (0.30, 0.50, 0.70, 0.85, 1.0):
+            pts.append(hip + t * (knee - hip))
+            rad.append((THIGH_R[0] + t * (THIGH_R[1] - THIGH_R[0])) * H)
+        for t in (0.25, 0.50, 0.75, 1.0):
+            pts.append(knee + t * (ankle - knee))
+            rad.append((SHIN_R[0] + t * (SHIN_R[1] - SHIN_R[0])) * H)
+        heel = rig.HEEL[s] + np.array([0.0, FOOT_R * H, -0.02 * H])
+        for p in (heel, 0.5 * (heel + rig.TOE[s]), rig.TOE[s], rig.TOE_TIP[s] + np.array([0.0, 0.0, 0.01 * H])):
+            pts.append(ankle + Rf @ (p - rig.ANKLE[s]))
+            rad.append(FOOT_R * H)
+    return np.array(pts), np.array(rad)
 
 
-CAPE_LEAN_REST = _cape_lean(np.eye(3))
+# of the 13 balls per leg, the skirt only has to lie outside thigh, knee and the top of the calf: shin and
+# foot are either far below the hem or - heel kicked up behind - OUTSIDE the skirt, where it need not go
+_UNDER_SKIRT = np.array([i < 6 for i in range(13)] * 2)
 
 
-def _skirt_lift(R_thigh_local: np.ndarray, s: int) -> Tuple[float, float, float]:
-    """How far (degrees) the front, back and own-side skirt panel must swing out so that it rests ON
-    this thigh instead of cutting through it: the panel hangs from its hinge on the belt line and has to
-    pass outside the thigh's surface at SKIRT_REACH.  0 = hanging as in the rest pose."""
-    def angles(R):
-        a = rig.HIP[s] + R @ (SKIRT_REACH * (rig.KNEE[s] - rig.HIP[s]))  # a point on the thigh's axis
-        hf, hb, hs = rig.SKIRT["skirtF"][0], rig.SKIRT["skirtB"][0], rig.SKIRT["skirtL" if s > 0 else "skirtR"][0]
-        return (math.degrees(math.atan2(a[2] + SKIRT_GAP - hf[2], hf[1] - a[1])),
-                math.degrees(math.atan2(hb[2] - (a[2] - SKIRT_GAP), hb[1] - a[1])),
-                math.degrees(math.atan2(s * a[0] + SKIRT_GAP - s * hs[0], hs[1] - a[1])))
-    now, rest = angles(R_thigh_local), angles(np.eye(3))
-    return tuple(n - r for n, r in zip(now, rest))
+def _gore_geometry(name: str):
+    hinge, out, axis = rig.gore_frame(name)
+    hem = rig.SKIRT[name][1] - hinge
+    length = float(np.linalg.norm(hem))
+    slope = math.degrees(math.atan2(hem @ out, -hem[1]))  # how far the hanging gore flares, degrees from plumb
+    reach = float(np.hypot(hinge[0], hinge[2] - rig.SKIRT_ZC))  # hinge's distance from the skirt's axis
+    return hinge, out, axis, np.cross(np.array([0.0, 1.0, 0.0]), out), length, slope, reach
+
+
+GORE_GEOMETRY = {name: _gore_geometry(name) for name in rig.GORES}
+_G = {k: np.array([GORE_GEOMETRY[n][i] for n in rig.GORES]) for i, k in
+      enumerate(("hinge", "out", "axis", "tangent", "length", "slope", "reach"))}
+_TAN_HALF = math.tan(math.radians(rig.GORE_HALF))
+
+
+def _fade(x):
+    """0 -> 1 as x goes 0 -> 1, smooth at both ends (arrays)."""
+    x = np.clip(x, 0.0, 1.0)
+    return x * x * (3.0 - 2.0 * x)
+
+
+def _soft_max_rows(v: np.ndarray, k: float) -> np.ndarray:
+    top = v.max(1, keepdims=True)
+    return (top + k * np.log(np.exp((v - top) / k).sum(1, keepdims=True)))[:, 0]
+
+
+def gore_needs(points: np.ndarray, radii: np.ndarray) -> np.ndarray:
+    """For each of the eight gores (in rig.GORES order): the degrees it has to swing out, from hanging,
+    so that none of the balls cuts through it (negative = that much room to spare).
+
+    A gore is a strip: only so long and so wide.  A ball beyond its end, or beside it, is faded out of
+    the reckoning smoothly - a term that dropped out abruptly would make the cloth jerk."""
+    rel = points[None, :, :] - _G["hinge"][:, None, :]  # (8, N, 3)
+    rho = (rel * _G["out"][:, None, :]).sum(-1)
+    lat = np.abs((rel * _G["tangent"][:, None, :]).sum(-1))
+    drop = -rel[..., 1]
+    dist = np.maximum(np.hypot(rho, drop), 1e-6)
+    r = (radii + CLOTH_GAP)[None, :]
+    t = (lat - (_G["reach"][:, None] + np.maximum(rho, 0.0)) * _TAN_HALF) / r - 0.5  # how far beside the gore, in radii
+    r_eff = r * np.sqrt(1.0 - np.clip(t, 0.0, 0.5) ** 2)  # (kept generous: half a radius wider than the strip)
+    angle = np.degrees(np.arctan2(rho, drop) + np.arcsin(np.minimum(r_eff / dist, 1.0))) - _G["slope"][:, None]
+    angle -= 200.0 * _fade((t - 0.5) / 0.5)  # beside the gore
+    angle -= 200.0 * _fade((dist - r - _G["length"][:, None]) / (0.06 * H))  # beyond its hem
+    return _soft_max_rows(np.concatenate([angle, np.full((len(angle), 1), -90.0)], 1), GORE_SOFT)
+
+
+def cape_need(root: np.ndarray, points: np.ndarray, radii: np.ndarray) -> float:
+    """Degrees the cape has to lean back from plumb to pass behind the balls ``points`` (pelvis frame),
+    hanging from ``root``.  Balls beside the cape, above its root or below its hem fade out smoothly."""
+    drop = root[1] - points[:, 1]
+    gap = np.where(radii > 0, CAPE_GAP, 0.0)
+    angle = np.degrees(np.arctan2(root[2] - (points[:, 2] - radii - gap), np.maximum(drop, 1e-3)))
+    r = np.maximum(radii, 0.01 * H)
+    angle -= 200.0 * _fade((np.abs(points[:, 0]) - rig.CAPE_HALF_WIDTH) / r)  # beside it
+    angle *= 1.0 - _fade((drop - CAPE_LENGTH - radii) / (0.12 * H))  # below its hem: eases in before it gets there
+    angle -= 200.0 * _fade((0.08 * H - drop) / (0.04 * H))  # level with / above its root
+    return float(_soft_max_rows(np.concatenate([angle, [-90.0]])[None, :], CAPE_SOFT)[0])
+
+
+CAPE_LENGTH = float(rig.CAPE[0][1] - rig.CAPE[2][1])
+_UP = np.array([0.0, 1.0, 0.0])
+_BACK = [list(rig.GORES).index(n) for n in ("skirtBL", "skirtB", "skirtBR")]
+_CLEAR = np.array(rig.CAPE_CLEAR)
+
+
+def _behind_cape(legs, swing: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    """Everything the cape has to hang behind: fixed points on hips and skirt, the legs, and the hems of
+    the back gores wherever they have swung to."""
+    pts, rad = [_CLEAR, legs[0]], [np.zeros(len(_CLEAR)), legs[1]]
+    for i in _BACK:
+        ang = math.radians(_G["slope"][i] + swing[i])
+        d = math.sin(ang) * _G["out"][i] - math.cos(ang) * _UP
+        pts.append(_G["hinge"][i] + np.array([[0.35], [0.7], [1.0]]) * _G["length"][i] * d)
+        rad.append(np.full(3, 0.010 * H))
+    return np.concatenate(pts), np.concatenate(rad)
+
+
+_REST_LEGS = leg_points({})
+GORE_REST = np.maximum(gore_needs(_REST_LEGS[0][_UNDER_SKIRT], _REST_LEGS[1][_UNDER_SKIRT]), 0.0)  # per gore, >= 0
+CAPE_REST = cape_need(rig.CAPE[0], *_behind_cape(_REST_LEGS, np.zeros(len(rig.GORES))))
 
 
 def drive_helpers(rots: Dict[str, np.ndarray], phase: float = 0.0, walk: float = 0.0, chest_spin: float = 0.0,
-                  head_spin: float = 0.0) -> Dict[str, np.ndarray]:
-    """Set the helper bones from the pose (in place): skirt panels are pushed out by the thighs, the
-    cape hangs plumb from the shoulders and trails, the plume nods.  Purely procedural, loops with ``phase``.
+                  head_spin: float = 0.0, prev: Optional[dict] = None, dt: float = 1.0 / 24.0) -> Dict[str, np.ndarray]:
+    """Set the twelve costume bones from the pose ``rots`` (in place, returned): the skirt's gores are
+    pushed out by the legs, the cape hangs plumb from the shoulders and leans back behind hips and legs,
+    the plume nods.  Works for ANY pose - nothing here knows about walking.
 
-    ``walk`` 0..1 = how much walking sway to add; ``*_spin`` = turning speed in degrees per cycle."""
+    walk, phase   optional walking sway (0..1, and the walk phase it loops with); 0 = none
+    *_spin        turning speed of chest / head in degrees per cycle (~ per second): cloth and plume trail
+    prev, dt      optional inertia: pass the SAME dict every frame (start with {}) and the frame time in
+                  seconds.  Lifted cloth then falls back at a limited speed instead of snapping down, and
+                  the turning speeds are taken from the change since the last frame when not given.
+                  Without it the result depends on the pose alone (loops stay loops)."""
     eye = np.eye(3)
-    tl, tr = rots.get("thighL", eye), rots.get("thighR", eye)
-    (fl, bl, sl), (fr, br, sr) = _skirt_lift(tl, 1), _skirt_lift(tr, -1)
-    swing_l, swing_r = thigh_swing(tl, 1)[0], thigh_swing(tr, -1)[0]
-    flutter = walk * math.sin(2 * TAU * phase - 1.1)
-    # front / back panel: lifted by whichever thigh pushes further (smooth max, so no jerk as the legs pass)
-    front = soft_pos(fr + soft_pos(fl - fr, 6.0))
-    back = soft_pos(br + soft_pos(bl - br, 6.0))
-    rots["skirtF"] = rig.euler(pitch=-(front + 1.0 * walk * (1 + flutter)))
-    rots["skirtB"] = rig.euler(pitch=back + 1.0 * walk * (1 - flutter))
-    # side panels: pushed out by their own thigh, and dragged along with its swing
-    sway = 1.2 * walk * math.sin(TAU * phase - 0.9)
-    rots["skirtL"] = rig.euler(pitch=-SKIRT_FOLLOW * swing_l, roll=soft_pos(sl) + sway)
-    rots["skirtR"] = rig.euler(pitch=-SKIRT_FOLLOW * swing_r, roll=-soft_pos(sr) + sway)
-    # cape: hangs plumb whatever the chest does (it undoes the chest's bend and lean and part of its turn -
-    # the hips hold the cloth back), leans back as far as it must to pass behind the hips, streams back
-    # when walking, swings out against a turn; the hem lags
+    legs = leg_points(rots)
     R_chest = rots.get("chest", eye)
     cp, cy, cr = rig.joint_angles("chest", R_chest)
-    lean = soft_pos(_cape_lean(R_chest) - CAPE_LEAN_REST, 2.0) + 0.9 * back  # the back of the skirt pushes it too
+    head_yaw = cy + rig.joint_angles("head", rots.get("head", eye))[1]
+    if prev is not None and "chest_yaw" in prev and dt > 0:
+        if chest_spin == 0.0:
+            chest_spin = (cy - prev["chest_yaw"]) / dt
+        if head_spin == 0.0:
+            head_spin = (head_yaw - prev["head_yaw"]) / dt
+    # skirt: each gore swings outwards about its hinge on the belt line, by what the legs under it need
+    flutter = walk * math.sin(2 * TAU * phase - 1.1)
+    need = gore_needs(legs[0][_UNDER_SKIRT], legs[1][_UNDER_SKIRT]) - GORE_REST
+    swing = np.zeros(len(rig.GORES))
+    for i, (name, az) in enumerate(rig.GORES.items()):
+        a = min(soft_pos(float(need[i]), 2.0), GORE_MAX)
+        a += walk * (0.8 + 0.8 * flutter * math.cos(math.radians(az)))  # the hem stirs a little with each step
+        if prev is not None and "gore" in prev:
+            a = max(a, prev["gore"][i] - FALL_RATE["gore"] * dt)
+        swing[i] = a
+        rots[name] = rig.rot_axis(_G["axis"][i], a)
+    # cape: undo the chest's bend and lean and half its turn (the hips hold the cloth back), then lean back
+    # as far as hips, skirt and legs demand; streams back when walking, swings out against a turn
+    root = rig.WAIST + R_chest @ (rig.CAPE[0] - rig.WAIST)  # where the cape hangs from, pelvis frame
+    lean = soft_pos(cape_need(root, *_behind_cape(legs, swing)) - CAPE_REST, 2.0)
+    if prev is not None and "lean" in prev:
+        lean = max(lean, prev["lean"] - FALL_RATE["cape"] * dt)
     lag = -0.035 * chest_spin
     plumb = rig.rot_x(-cp) @ rig.rot_z(-cr) @ rig.rot_y(-0.50 * cy)
     rots["cape"] = plumb @ rig.euler(pitch=lean + walk * (6.0 + 3.0 * math.sin(2 * TAU * phase - 1.0)), yaw=0.5 * lag,
                                      roll=walk * 2.5 * math.sin(TAU * phase - 0.8) + 0.15 * lag)
-    rots["capeTip"] = rig.euler(pitch=-0.5 * lean + walk * (3.0 + 4.0 * math.sin(2 * TAU * phase - 1.9)),
+    rots["capeTip"] = rig.euler(pitch=walk * (3.0 + 4.0 * math.sin(2 * TAU * phase - 1.9)),
                                 yaw=0.5 * lag, roll=walk * 3.0 * math.sin(TAU * phase - 1.6) + 0.25 * lag)
     # plume: nods with every step, leans away from a head turn
-    sway_p = -0.02 * head_spin
+    sway_p = max(min(-0.02 * head_spin, 25.0), -25.0)
     rots["plume"] = rig.euler(pitch=walk * (3.0 + 4.0 * math.sin(2 * TAU * phase - 0.6)), roll=0.5 * sway_p)
     rots["plumeTip"] = rig.euler(pitch=walk * (2.0 + 5.0 * math.sin(2 * TAU * phase - 1.5)), roll=sway_p)
+    if prev is not None:
+        prev.update(gore=swing, lean=lean, chest_yaw=cy, head_yaw=head_yaw)
     return rots
+
+
+# ---------------------------------------------------------------- big movements (synthetic, for testing the costume)
+# NOT motion capture and not ground-accurate (no foot planting): just the joint ranges of a sprint and
+# of a tucked jump, to see what the skirt, cape and sleeves do when the legs really move.
+def run_rots(skel: Skeleton, phase: float):
+    """A sprint-like cycle: thighs from 80 deg forward to 20 deg back, knees up to ~125 deg, arms pumping."""
+    rots = {"pelvis": rig.euler(pitch=9.0, yaw=-7.0 * math.cos(TAU * phase))}
+    rots["chest"] = rig.local_rot("chest", pitch=8.0, yaw=16.0 * math.cos(TAU * phase))
+    rots["head"] = rig.local_rot("head", pitch=-8.0, yaw=-9.0 * math.cos(TAU * phase))
+    for side, s in rig.SIDES:
+        psi = phase + (0.0 if s > 0 else 0.5)
+        c = math.cos(TAU * psi)  # +1: this thigh is furthest forward
+        recover = max(0.0, math.sin(TAU * (psi - 0.5)))  # the leg folding up as it swings forward
+        rots["thigh" + side] = rig.local_rot("thigh" + side, pitch=-30.0 - 50.0 * c, roll=s * 3.0)
+        rots["shin" + side] = rig.local_rot("shin" + side, pitch=18.0 + 105.0 * recover ** 1.2 + 30.0 * max(0.0, c) ** 2)
+        rots["foot" + side] = rig.local_rot("foot" + side, pitch=10.0 + 25.0 * recover)
+        rots["upperarm" + side] = rig.local_rot("upperarm" + side, pitch=-5.0 + 50.0 * c, roll=s * 14.0)
+        rots["forearm" + side] = rig.local_rot("forearm" + side, pitch=-95.0 + 15.0 * c)
+    bounce = 0.02 * H * math.cos(2 * TAU * phase)
+    drive_helpers(rots)
+    return rots, np.array([0.0, -0.03 * H + bounce, 0.0])
+
+
+def run_pose(skel: Skeleton, phase: float):
+    rots, root = run_rots(skel, phase)
+    return skel.world_mats(rots, root_offset=root), root
+
+
+JUMP_KEYS = (  # phase, thigh pitch, knee, thigh spread, shoulder pitch, elbow, trunk pitch, root height / H
+    (0.00, 0.0, 0.0, 0.0, 2.0, -8.0, 0.0, 0.00),  # standing
+    (0.22, -75.0, 110.0, 6.0, 45.0, -30.0, 22.0, -0.20),  # crouch, arms back
+    (0.36, -5.0, 8.0, 2.0, -150.0, -15.0, 0.0, 0.10),  # take-off, arms thrown up
+    (0.55, -100.0, 125.0, 12.0, -110.0, -60.0, 10.0, 0.42),  # tucked at the top
+    (0.74, -30.0, 30.0, 4.0, -60.0, -40.0, 6.0, 0.12),  # reaching for the ground
+    (0.86, -70.0, 100.0, 8.0, -20.0, -50.0, 18.0, -0.18),  # landing, deep
+    (1.00, 0.0, 0.0, 0.0, 2.0, -8.0, 0.0, 0.00))
+
+
+def jump_rots(skel: Skeleton, phase: float):
+    """A standing tuck jump: crouch, spring, knees to the chest (thighs 100 deg), land, stand up."""
+    phase = phase % 1.0
+    k = max(i for i, key in enumerate(JUMP_KEYS[:-1]) if key[0] <= phase)
+    a, b = JUMP_KEYS[k], JUMP_KEYS[k + 1]
+    w = smoothstep((phase - a[0]) / (b[0] - a[0]))
+    thigh, knee, spread, arm, elbow, trunk, height = (x + (y - x) * w for x, y in zip(a[1:], b[1:]))
+    rots = {"pelvis": rig.euler(pitch=0.5 * trunk), "chest": rig.local_rot("chest", pitch=0.5 * trunk)}
+    for side, s in rig.SIDES:
+        rots["thigh" + side] = rig.local_rot("thigh" + side, pitch=thigh, roll=s * spread)
+        rots["shin" + side] = rig.local_rot("shin" + side, pitch=knee)
+        rots["foot" + side] = rig.local_rot("foot" + side, pitch=min(max(-0.2 * thigh - 10.0, -15.0), 40.0))
+        rots["upperarm" + side] = rig.local_rot("upperarm" + side, pitch=arm, roll=s * 12.0)
+        rots["forearm" + side] = rig.local_rot("forearm" + side, pitch=elbow)
+    drive_helpers(rots)
+    return rots, np.array([0.0, height * H, 0.0])
+
+
+def jump_pose(skel: Skeleton, phase: float):
+    rots, root = jump_rots(skel, phase)
+    return skel.world_mats(rots, root_offset=root), root
+
+
+def big_poses() -> Dict[str, Dict[str, np.ndarray]]:
+    """Single poses at the edge of what running and jumping ask of the costume (helper bones driven)."""
+    L = rig.local_rot
+    P = {
+        "thigh_100": {"thighL": L("thighL", pitch=-100), "shinL": L("shinL", pitch=120)},
+        "thigh_100_spread_30": {"thighL": L("thighL", pitch=-100, roll=30), "shinL": L("shinL", pitch=110),
+                                "thighR": L("thighR", roll=-30)},
+        "spread_30": {"thighL": L("thighL", roll=30), "thighR": L("thighR", roll=-30)},
+        "stride": {"thighL": L("thighL", pitch=-85), "shinL": L("shinL", pitch=70),
+                   "thighR": L("thighR", pitch=20), "shinR": L("shinR", pitch=125)},
+        "tuck": {"thighL": L("thighL", pitch=-100, roll=12), "shinL": L("shinL", pitch=130),
+                 "thighR": L("thighR", pitch=-100, roll=-12), "shinR": L("shinR", pitch=130)},
+        "heel_to_seat": {"thighR": L("thighR", pitch=20), "shinR": L("shinR", pitch=140)},
+    }
+    for rots in P.values():
+        drive_helpers(rots)
+    return P
 
 
 # ---------------------------------------------------------------- diagnostics

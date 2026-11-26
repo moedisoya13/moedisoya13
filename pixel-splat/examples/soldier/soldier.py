@@ -463,6 +463,15 @@ def _animate(a, sc, model, bones):
             shots.append(R.frame(cam, poses[pose_name], az=az))
         save(sheet(shots, 3), "costume_sheet")
         print(f"[animate] costume close-ups ({time.time() - t0:.0f}s)")
+    if "big" in clips:  # synthetic sprint and tuck jump: what skirt, cape and sleeves do in big movements
+        shots = []
+        for fn, phases, az in ((motion.run_pose, (0.0, 0.125, 0.25, 0.375), WALK_AZ), (motion.jump_pose, (0.22, 0.36, 0.55, 0.86), 40)):
+            for ph in phases:
+                mats, root = fn(SKEL, ph)
+                tgt = (CENTER[0], CENTER[1] + float(root[1]), CENTER[2])
+                shots.append(R.frame(camera(az, 8, px, target=tgt), mats, root, az=az))
+        save(sheet(shots, 4), "big_sheet")
+        print(f"[animate] run / jump sheet ({time.time() - t0:.0f}s)")
     if "gbuffer" in clips:
         mats, root = motion.walk_pose(SKEL, 0.1)
         cam = camera(WALK_AZ, 8, px)
@@ -855,37 +864,46 @@ def clash_depths(sc: Sculpt, mats, verts=None) -> Dict[str, float]:
                     if m_.any():
                         d = max(d, float(-_group_sdf(h, b_, q[m_]).min()))
         out[label] = d
-    for garment, under in costume.UNDER.items():
+    for label, garments, under in costume.THROUGH:
+        skirt = garments[0] in rig.GORES
         poke = -np.inf
         for u_ in under:
             pts = verts[u_][0]
-            world = body.apply(mats[SKEL.index[u_]], pts[costume.under_mask(u_, pts)].astype(np.float64))
-            q = body.apply(inv[SKEL.index[garment]], world).astype(np.float32)
-            poke = max(poke, float(costume.COVERS[garment](q).max()))
-        out["through " + garment] = poke
+            mask = costume.under_skirt_mask(u_, pts) if skirt else costume.under_mask(u_, pts)
+            world = body.apply(mats[SKEL.index[u_]], pts[mask].astype(np.float64))
+            for g in garments:
+                if g != u_:
+                    q = body.apply(inv[SKEL.index[g]], world).astype(np.float32)
+                    cover = costume.COVERS_GORE if (skirt and u_ in rig.GORES) else costume.COVERS
+                    poke = max(poke, float(cover[g](q).max()))
+        out[label] = poke
     return out
 
 
-def clash_report(sc: Sculpt, walk: int = 32, turn: int = 16) -> Dict[str, Dict[str, object]]:
-    """Costume against costume and costume against body over the walk loop, the turntable demo and the
-    limit poses.  Per pair: depth at rest, the worst depth of each motion, and the worst limit pose."""
+def clash_report(sc: Sculpt, walk: int = 32, turn: int = 16, run: int = 16, jump: int = 16) -> Dict[str, Dict[str, object]]:
+    """Costume against costume and costume against body: at rest, over the walk loop, the turntable demo,
+    a synthetic sprint and tuck jump (motion.run_pose / jump_pose), and the worst of the big single poses
+    (motion.big_poses: thigh 100 deg, legs spread 30 deg ...) and of the limit poses."""
     verts = _visible_verts(sc)
     sets = {"walk": [motion.walk_pose(SKEL, k / walk)[0] for k in range(walk)],
-            "turn": [motion.turn_pose(SKEL, k / turn)[0] for k in range(turn)]}
+            "turn": [motion.turn_pose(SKEL, k / turn)[0] for k in range(turn)],
+            "run": [motion.run_pose(SKEL, k / run)[0] for k in range(run)],
+            "jump": [motion.jump_pose(SKEL, k / jump)[0] for k in range(jump)]}
     rest = clash_depths(sc, SKEL.world_mats({}), verts)
     rep = {k: dict(rest=v) for k, v in rest.items()}
     for name, poses in sets.items():
         ds = [clash_depths(sc, m_, verts) for m_ in poses]
         for k in rest:
             rep[k][name] = max(d[k] for d in ds)
-    worst = {k: (-np.inf, "") for k in rest}
-    for pose_name, rots in named_poses().items():
-        d = clash_depths(sc, SKEL.world_mats(rots), verts)
+    for group, poses in (("big", motion.big_poses()), ("limit", named_poses())):
+        worst = {k: (-np.inf, "") for k in rest}
+        for pose_name, rots in poses.items():
+            d = clash_depths(sc, SKEL.world_mats(rots), verts)
+            for k in rest:
+                if d[k] > worst[k][0]:
+                    worst[k] = (d[k], pose_name)
         for k in rest:
-            if d[k] > worst[k][0]:
-                worst[k] = (d[k], pose_name)
-    for k in rest:
-        rep[k]["limit"], rep[k]["limit_pose"] = worst[k]
+            rep[k][group], rep[k][group + "_pose"] = worst[k]
     return rep
 
 
@@ -958,8 +976,8 @@ def _verify(a, sc, model, bones):
         print("== costume clashes (world units; depth 0 = clear, 'through' > 0 = the body shows through a garment)")
         rep["clash"] = clash_report(sc)
         for k, d in rep["clash"].items():
-            print(f"   {k:28s} rest {d['rest']:+.4f}  walk {d['walk']:+.4f}  turn {d['turn']:+.4f}  "
-                  f"limit poses {d['limit']:+.4f} ({d['limit_pose']})")
+            print(f"   {k:34s} rest {d['rest']:+.4f}  walk {d['walk']:+.4f}  turn {d['turn']:+.4f}  run {d['run']:+.4f}  "
+                  f"jump {d['jump']:+.4f}  big {d['big']:+.4f} ({d['big_pose']})  limit {d['limit']:+.4f} ({d['limit_pose']})")
     json.dump(rep, open(path, "w"), indent=1)
     print(f"[verify] done ({time.time() - t0:.0f}s) -> {path}")
     return rep
@@ -985,7 +1003,7 @@ def main():
     ap.add_argument("--cycle-frames", type=int, default=24, help="frames per loop")
     ap.add_argument("--fps", type=int, default=24)
     ap.add_argument("--clips", default="sheets,joints,costume,gbuffer,walk,turn",
-                    help="what to render: sheets, joints, costume, gbuffer, walk, across, turn")
+                    help="what to render: sheets, joints, costume, big, gbuffer, walk, across, turn")
     ap.add_argument("--checks", default="proportions,rigid,sdf,feet,loop,cull,clash",
                     help="verify: which checks to run (" + ", ".join(CHECKS) + "); gaps renders ~40 views, run it alone")
     ap.add_argument("--look", default="stylized", choices=look.LOOKS)

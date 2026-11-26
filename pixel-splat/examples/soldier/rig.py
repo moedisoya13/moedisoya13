@@ -25,7 +25,7 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from pixelsplat.skin import Bone, Skeleton, rot_x, rot_y, rot_z  # noqa: E402
+from pixelsplat.skin import Bone, Skeleton, rot_axis, rot_x, rot_y, rot_z  # noqa: E402,F401
 
 H = 1.80  # body height in world units (a 1.75 m man -> 1 unit = 0.972 m)
 GROUND = -1.0
@@ -112,28 +112,61 @@ SHIN_LEN = float(np.linalg.norm(ANKLE[1] - KNEE[1]))
 
 # ---------------------------------------------------------------- helper bones for the costume (stage 2)
 # No surface is attached to these yet; motion.drive_helpers() already animates them.
-BELT_H = 0.585  # where the belt sits (just below the waist turntable): the skirt panels hinge here
+BELT_H = 0.585  # the upper edge of the gores (just below the belt, inside the yoke)
 HEM_H = 0.385  # hem of the tabard skirt: mid-thigh
-SKIRT = {  # panel -> (hinge on the belt line, hem end); children of the pelvis
-    "skirtF": (V(0.0, Y(BELT_H), 0.062 * H), V(0.0, Y(HEM_H), 0.075 * H)),
-    "skirtB": (V(0.0, Y(BELT_H), -0.060 * H), V(0.0, Y(HEM_H), -0.075 * H)),
-    "skirtL": (V(0.088 * H, Y(BELT_H), 0.0), V(0.102 * H, Y(HEM_H), 0.0)),
-    "skirtR": (V(-0.088 * H, Y(BELT_H), 0.0), V(-0.102 * H, Y(HEM_H), 0.0)),
-}
+# The skirt is an elliptical cone round the hips: half width (x) and half depth (z) at three heights.
+SKIRT_H = (HEM_H, 0.500, 0.6055)  # hem, bottom of the yoke (the part fixed to the pelvis), top (under the belt)
+SKIRT_A = (0.1278, 0.1167, 0.0744)  # half width at those heights (fractions of H)
+SKIRT_B = (0.0900, 0.0783, 0.0644)  # half depth
+SKIRT_ZC = -0.0028 * H  # its axis sits a little behind the body axis (buttocks)
+# Below the yoke the skirt hangs in eight gores (strips), each hinged on the belt line and free to swing
+# outwards only - like the pleats of a kilt.  name -> azimuth of its middle (deg from front towards his left)
+GORES = {"skirtF": 0.0, "skirtFL": 45.0, "skirtL": 90.0, "skirtBL": 135.0, "skirtB": 180.0, "skirtBR": -135.0,
+         "skirtR": -90.0, "skirtFR": -45.0}
+GORE_HALF = 23.0  # half the angle one gore covers (they overlap their neighbours by half a degree)
+
+
+def skirt_radii(y):
+    """(half width, half depth) of the skirt cone at world height(s) y."""
+    ys = [Y(h) for h in SKIRT_H]
+    return np.interp(y, ys, np.array(SKIRT_A) * H), np.interp(y, ys, np.array(SKIRT_B) * H)
+
+
+def _skirt_point(az_deg: float, h: float) -> np.ndarray:
+    a, b = skirt_radii(Y(h))
+    t = math.radians(az_deg)  # the direction (sin t, cos t) scaled onto the ellipse of that height
+    k = 1.0 / math.hypot(math.sin(t) / a, math.cos(t) / b)
+    return V(k * math.sin(t), Y(h), SKIRT_ZC + k * math.cos(t))
+
+
+GORE_HINGE_H = SKIRT_H[2]  # the gores hinge right under the belt
+SKIRT = {name: (_skirt_point(az, GORE_HINGE_H), _skirt_point(az, HEM_H)) for name, az in GORES.items()}  # hinge, hem
+
+
+def gore_frame(name: str) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """(hinge point, outward direction, hinge axis) of a gore, rest pose.  Turning the gore by +angle
+    about the hinge axis swings its hem outwards."""
+    hinge = SKIRT[name][0]
+    t = math.radians(GORES[name])
+    out = V(math.sin(t), 0.0, math.cos(t))
+    return hinge, out, np.cross(out, V(0.0, 1.0, 0.0))
+
+
 CAPE = (V(0.0, Y(0.800), -0.066 * H), V(0.0, Y(0.560), -0.099 * H), V(0.0, Y(0.330), -0.128 * H))  # root, hinge, hem
 PLUME = (V(0.0, Y(0.985), -0.050 * H), V(0.0, Y(1.046), -0.080 * H), V(0.0, Y(1.090), -0.125 * H))  # root, mid, tip
 
 # points on the back of the hips / skirt (in the pelvis frame) that the cape has to hang behind
 CAPE_CLEAR = (V(0.0, Y(0.620), -0.081 * H), V(0.0, Y(0.555), -0.092 * H), V(0.0, Y(0.500), -0.097 * H),
               V(0.0, Y(0.400), -0.107 * H))
+CAPE_HALF_WIDTH = 0.095 * H  # (the costume's cape is this wide at most; what is further out cannot touch it)
 
 GEOMETRY_BONES: List[str] = []  # bones that carry mannequin surface (filled below)
 HELPER_BONES: List[str] = []
 
 
 def make_skeleton() -> Skeleton:
-    """28 bones, parents first.  Every surface piece belongs to exactly one of the first 20;
-    the last 8 are costume helpers without surface."""
+    """32 bones, parents first.  The first 20 carry the mannequin; the last 12 are costume helpers
+    (8 skirt gores, cape, capeTip, plume, plumeTip) that only the outfit gives a surface."""
     b = [Bone("pelvis", None, PELVIS, WAIST),
          Bone("chest", "pelvis", WAIST, NECK),  # joint = waist turntable
          Bone("neck", "chest", NECK, HEAD),
@@ -277,16 +310,113 @@ def rest_angles(bone: str) -> Tuple[float, float, float]:
     return joint_angles(bone, np.eye(3))
 
 
+def _wrap_into(angle: float, lo: float, hi: float) -> float:
+    """The representative of an angle (mod 360) that lies in / nearest to [lo, hi]."""
+    mid = 0.5 * (lo + hi)
+    return angle - 360.0 * round((angle - mid) / 360.0)
+
+
+def _geodesic(A: np.ndarray, B: np.ndarray) -> float:
+    """Angle in degrees of the rotation that takes A to B."""
+    c = (np.trace(A.T @ B) - 1.0) / 2.0
+    if c > 0.999999:  # acos loses precision near 0: use the chord instead
+        return math.degrees(float(np.linalg.norm(A - B)) / math.sqrt(2.0))
+    return math.degrees(math.acos(max(c, -1.0)))
+
+
+def _nearest_in_box(J: np.ndarray, lim) -> Tuple[Tuple[float, float, float], float]:
+    """Angles (pitch, yaw, roll) inside the limit box whose rotation is nearest to J, and how far it is
+    (degrees).  Exact - also at the gimbal lock roll = +-90, where pitch and yaw are not unique."""
+    lo = np.array([l[0] for l in lim], float)
+    hi = np.array([l[1] for l in lim], float)
+    p, y, r = euler_angles(J)
+    if abs(r) < 89.0:  # away from the lock the reading is unique: inside the box means inside the limits
+        x = np.array([_wrap_into(a, l, h) for a, l, h in zip((p, y, r), lo, hi)])
+        if np.all(x >= lo) and np.all(x <= hi):
+            return (float(x[0]), float(x[1]), float(x[2])), 0.0
+    seeds = [(p, y, r), (p + 180.0, y + 180.0, 180.0 - r)]  # the two Euler branches of the same rotation
+    if abs(r) > 60.0:  # near the lock only pitch + yaw (roll = +90) or yaw - pitch (roll = -90) is defined
+        sgn = 1.0 if r > 0 else -1.0
+        total = math.degrees(math.atan2(J[0, 2], J[2, 2]))  # = yaw + sgn * pitch at the lock
+        for pp in (lo[0], hi[0], 0.5 * (lo[0] + hi[0]), float(np.clip(_wrap_into(p, lo[0], hi[0]), lo[0], hi[0]))):
+            seeds.append((pp, total - sgn * pp, r))
+        for yy in (lo[1], hi[1], 0.5 * (lo[1] + hi[1])):
+            seeds.append((sgn * (total - yy), yy, r))
+    best, best_err = None, 1e9
+    for seed in seeds:
+        x = np.array([np.clip(_wrap_into(a, l, h), l, h) for a, l, h in zip(seed, lo, hi)])
+        err = _geodesic(euler(*x), J)
+        for _ in range(12):  # projected Gauss-Newton on || R(x) - J ||, damped
+            if err < 1e-9:
+                break
+            R0 = euler(*x)
+            D = np.stack([(euler(*(x + e)) - R0).ravel() / 1e-4 for e in np.eye(3) * 1e-4], 1)  # per degree
+            g = D.T @ (J - R0).ravel()
+            step = np.linalg.solve(D.T @ D + 1e-9 * np.eye(3), g)
+            moved = False
+            for scale in (1.0, 0.5, 0.25, 0.1):
+                x1 = np.clip(x + scale * step, lo, hi)
+                e1 = _geodesic(euler(*x1), J)
+                if e1 < err - 1e-12:
+                    x, err, moved = x1, e1, True
+                    break
+            if not moved:
+                break
+        if err < best_err:
+            best, best_err = tuple(float(v) for v in x), err
+    return best, best_err
+
+
+def clamp_rot(bone: str, R_local: np.ndarray):
+    """The rotation within the limits of ``bone`` that is nearest to ``R_local``.
+
+    Returns (R_local_clamped, (pitch, yaw, roll) of it, excess) where ``excess`` = how many degrees the
+    input lay outside the limits (0 = it was inside).  Bones without limits are returned unchanged.
+    Use this rather than comparing ``joint_angles`` with the limits: Euler angles are not unique at
+    roll = +-90 (arm raised straight out sideways), and this picks the reading that is allowed."""
+    lim = limits(bone)
+    if lim is None:
+        return np.asarray(R_local, float), None, 0.0
+    J = _frame(PARENT[bone]).T @ np.asarray(R_local, float) @ _frame(bone)
+    angles, excess = _nearest_in_box(J, lim)
+    if excess < 1e-7:
+        return np.asarray(R_local, float), angles, 0.0
+    return local_rot(bone, *angles), angles, excess
+
+
+def clamp_pose(rots: Dict[str, np.ndarray]) -> Tuple[Dict[str, np.ndarray], Dict[str, float]]:
+    """Every joint of a pose brought inside its limits (see ``clamp_rot``).  Returns the clamped pose (a
+    new dict; bones without limits and the root are passed through) and {bone: excess in degrees} of the
+    joints that had to be moved."""
+    out, moved = {}, {}
+    for bone, R in rots.items():
+        out[bone], _, excess = clamp_rot(bone, R)
+        if excess > 0:
+            moved[bone] = excess
+    return out, moved
+
+
 def check_limits(rots: Dict[str, np.ndarray], tol: float = 0.05) -> List[Tuple[str, str, float, float, float]]:
-    """Joint angles outside their limits: [(bone, axis, angle, min, max), ...]; empty = all fine."""
+    """Joints outside their limits: [(bone, axis, angle, min, max), ...]; empty = all fine.
+
+    A joint is outside when NO pitch / yaw / roll within its limits gives its rotation to within ``tol``
+    degrees.  The entry names the axis that is furthest out in the nearest allowed reading."""
     bad = []
     for bone, R in rots.items():
         lim = limits(bone)
         if lim is None:
             continue
-        for axis, ang, (lo, hi) in zip(("pitch", "yaw", "roll"), joint_angles(bone, R), lim):
-            if ang < lo - tol or ang > hi + tol:
-                bad.append((bone, axis, float(ang), lo, hi))
+        J = _frame(PARENT[bone]).T @ np.asarray(R, float) @ _frame(bone)
+        nearest, excess = _nearest_in_box(J, lim)
+        if excess <= tol:
+            continue
+        # describe it: the Euler reading of the rotation that continues from the nearest allowed angles
+        ang = euler_angles(J)
+        alt = (ang[0] + 180.0, ang[1] + 180.0, 180.0 - ang[2])
+        pick = min((ang, alt), key=lambda a: sum(abs(_wrap_into(v, n, n) - n) for v, n in zip(a, nearest)))
+        out = [max(l - _wrap_into(v, l, h), _wrap_into(v, l, h) - h, 0.0) for v, (l, h) in zip(pick, lim)]
+        k = int(np.argmax(out)) if max(out) > 0 else 0
+        bad.append((bone, ("pitch", "yaw", "roll")[k], float(_wrap_into(pick[k], *lim[k])), lim[k][0], lim[k][1]))
     return bad
 
 
