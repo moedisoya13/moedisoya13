@@ -11,7 +11,7 @@ Runs the real commands on a tiny job and checks numbers, not just exit codes:
   5 render      one "Almost Pixel Perfect" frame of a walking pose -> out/selftest/selftest_app.png
   6 feet        over a travelling walk cycle the planted foot does not move in the world
   7 arms        the mitten hands close into a fist (grip 0 -> 1) and an elbow tucked into the chest is swung out
-                of it with the wrist left where it was
+                of it with the wrist left where it was and the glove turned 10 degrees at most
 
 Exit code 0 = all passed.  Open the PNG and look at it: a number cannot tell a figure from a blob.
 """
@@ -166,11 +166,16 @@ def main():
         rep = arms.clear_elbows(frames, np.zeros((3, 3)), 30.0)["R"]
         moved = float(np.linalg.norm(rt.at(rt.fk(frames[1]), "handR", rig.WRIST[-1]) - wrist))
         assert before > 0.02, f"the test pose is not inside the chest ({before:.4f})"
-        assert rep["inside_after"] == 0 and not rep["not_cleared"], f"elbow still inside: {rep['depth_after']:.4f}"
+        assert rep["inside_after"] == 0, f"elbow still inside: {rep['depth_after']:.4f}"
+        # the glove turns 10 degrees at most (arms.HAND_TURN_MOST); frames that would need more keep part of the
+        # 7 mm margin and must be the ones listed as held by that cap - nothing else may be left uncleared
+        assert rep["hand_turned_max"] <= arms.HAND_TURN_MOST + 1e-3, f"hand turned {rep['hand_turned_max']:.2f} deg"
+        assert set(rep["not_cleared"]) <= set(rep["hand_cap_limited"]), f"not cleared: {rep['not_cleared']}"
         assert moved < 1e-3 and not rig.check_limits(frames[1]), f"wrist moved {moved:.2e}"
         return (f"fist reaches {reach[1.0]:.3f} from the wrist (open hand {reach[0.0]:.3f}); elbow {before:+.3f} -> "
                 f"{rep['depth_after']:+.3f} in the chest by a {rep['swivel_max']:.0f} deg swivel, wrist moved {moved:.1e}, "
-                f"hand turned {rep['hand_turned_max']:.1f} deg")
+                f"hand turned {rep['hand_turned_max']:.1f} deg (cap {arms.HAND_TURN_MOST:g}; "
+                f"{len(rep['hand_cap_limited'])} frames held inside the margin by it)")
 
     failed = [n for n, ok, *_ in results if not ok]
     print(f"\n{len(results) - len(failed)}/{len(results)} passed in {time.time() - t_all:.0f}s"

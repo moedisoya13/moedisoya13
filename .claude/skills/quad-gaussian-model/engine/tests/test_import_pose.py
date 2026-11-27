@@ -314,6 +314,7 @@ def test_an_elbow_inside_the_trunk_is_swung_out_by_default_and_the_hand_stays():
     assert 20.0 < v["swivel_max"] < 90.0 and v["depth_before"] > 0.03 and v["depth_after"] <= -arms.CLEAR_MARGIN + 1e-4
     assert v["wrist_moved_max"] < 1e-3 and v["hand_turned_max"] < 1.0 and v["not_cleared"] == []
     assert rep1["elbows"]["L"]["frames"] == 0 and rep1["params"]["clear_elbows"] is True
+    assert rep1["params"]["hand_turn_max"] == 10.0 and rep1["elbows"]["hand_turn_most"] == 10.0 and v["hand_cap_limited"] == []
     src = source([dict(rot=pose)])
     res = ip.measure(src, c1)  # against the source: the hand is still the source's hand, the upper arm is not
     assert res["orientation"]["handR"]["max"] < 1.0 and res["orientation"]["upperarmR"]["max"] > 15.0

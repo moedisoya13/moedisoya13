@@ -62,7 +62,7 @@ WORK/
 | ⑩ | 검증 | — | `verify`, `verify --checks gaps` | §4 전부 + 눈 |
 | ⑪ | 모션 캡처 | `mocap.py` | `retarget` → `retarget.json` | `axes` 세 값 ≈ 1, `slip.slide_contact_max < 0.02` |
 | ⑫ | 다른 뼈대의 모션 가져오기 | `import_pose.py` `SOMA`(관절 대응 표) | `retarget` → `import.json`, `render --compare` | 보고서의 `clamps`·`feet`·`wrap`을 읽고, `compare_*.mp4`를 원본 막대 뼈대와 나란히, **정면 뷰 포함**해서 봄 |
-| ⑬ | 팔 마무리: 팔꿈치 빼기 + 주먹 | `arms.py` (⑫가 기본으로 걺; 다른 클립은 `arms.py fix`) | `import.json`의 `elbows`·`grip` | `inside_after = 0`, `not_cleared = []`, `wrist_moved_max ≈ 0`, 펀치마다 `grip_at_full = 1`, 가드에서 grip 0. `hand_turned_*`는 읽고 보고 |
+| ⑬ | 팔 마무리: 팔꿈치 빼기 + 주먹 | `arms.py` (⑫가 기본으로 걺; 다른 클립은 `arms.py fix`) | `import.json`의 `elbows`·`grip` | `wrist_moved_max ≈ 0`, `hand_turned_max` ≤ 상한(기본 10°), 펀치마다 `grip_at_full = 1`, 가드에서 grip 0. `inside_after`·`hand_cap_limited`(상한에 막혀 위팔이 일부 든 프레임)·`not_cleared`·`wrist_end_inside`는 읽고 수치로 보고 |
 
 ①~④는 템플릿에 이미 서 있다. 성인 남성 평균 체형이라면 **⓪ → ⑤ → ⑦~⑩**만 한다. ⑪~⑬은 모션을 밖에서 가져올 때만.
 손은 벙어리장갑식이다(손바닥 + 손가락 뭉치 + 엄지, 손마다 숫자 하나 `grip` 0…1로 쥠 → [`rig.md`](references/rig.md) 10절).
@@ -114,7 +114,7 @@ nohup python template/soldier.py bake -o out/fig --splats 60000 --res 320 --view
 | 관절 가동 범위 | `rig.py` `LIMITS`, 옷이 좁히는 값은 `costume.py` `LIMITS` | 판정·제한은 `rig.clamp_rot` / `check_limits`로만 |
 | 손(쥐는 모양·주먹) | `rig.py` `KNUCKLE` `THUMB_BASE` `FIST_CURL` `THUMB_FIST`, `body.py` `_hand` `_fingers` `_thumb`, 장갑은 `costume._mitt` | 마디의 원통·엄지 밑동의 공도 구슬 ≥ 소켓. 모양을 바꾸면 `animate --clips grip`으로 0…1을 다 본다. 90°를 넘게 도는 경첩은 pitch 축에 둔다 |
 | 새 뼈(관절)를 더하기 | `rig.make_skeleton`(맨 **뒤**에 붙임), `JOINTS`, `LIMITS`, `body.BUILDERS`·`_boxes` | 끼워 넣으면 옛 모델·클립의 뼈 번호가 밀린다. `limit_poses`에 새 관절의 끝 자세가 들어가는지 확인(숨는 면) |
-| 펀치에 맞춘 주먹, 팔꿈치 빼기 | `arms.py`의 상수(`PUNCH_MIN` `CLOSE_S` `HOLD` `OPEN` / `ARM_BALLS` `CLEAR_MARGIN` `SMOOTH_S` `HAND_TURN_MOST`) | 규칙과 잰 값은 [`motion.md`](references/motion.md). 형태가 아니라 모션이므로 굽지 않고 retarget·렌더만 다시 |
+| 펀치에 맞춘 주먹, 팔꿈치 빼기 | `arms.py`의 상수(`PUNCH_MIN` `CLOSE_S` `HOLD` `OPEN` / `ARM_BALLS` `CLEAR_MARGIN` `SMOOTH_S` `HAND_TURN_MOST`; CLI `--hand-turn-max`) | 규칙과 잰 값은 [`motion.md`](references/motion.md). 형태가 아니라 모션이므로 굽지 않고 retarget·렌더만 다시 |
 | **옷·갑옷·소품** | `costume.py`의 `layers()` `paint()` `MAT` | 뼈마다 `{층 이름: 거리}`. 아래 "복식의 규칙" |
 | 늘어지는 천·깃털·꼬리 | `rig.py` 보조 뼈(`GORES` `CAPE` `PLUME`, `make_skeleton`) + `motion.drive_helpers` + `costume.BONES` | 뼈 구조가 바뀌므로 sculpt·bake 다시. 안 쓰는 보조 뼈는 층을 안 주면 splat이 없다 |
 | 걸음걸이 | `motion.py` `STRIDE` `STANCE` `PITCH_*` `SWING_LIFT` | 발 경로를 월드 좌표로 먼저 정하고 골반 높이는 발에서 역산 → [`motion.md`](references/motion.md) |
@@ -162,7 +162,7 @@ nohup python template/soldier.py bake -o out/fig --splats 60000 --res 320 --view
 - **천을 미는 매끈한 함수는 0 이하에서 정확히 0이어야 한다.** 그렇지 않으면 천이 몸 쪽으로 들어간다(`motion.soft_pos`).
 - **agent 보고는 믿지 말고 이미지와 수치를 직접 확인한다.** 관통 표의 옆쪽 수치가 잘못된 환산으로 실제의 약 0.7배로 나왔던 적이 있다.
 - **선으로만 된 뼈대에서 지은 모션은 팔꿈치가 가슴 속에 든다.** 방향 오차 0°로 옮겨도 위팔이 가슴에 묻히고 아래팔이 명치에서 솟는다(원본에는 몸통 두께가 없다). `import_pose.py`가 기본으로 팔꿈치를 어깨–손목 선 둘레로 돌려 뺀다. 옆모습은 멀쩡해 보이니 **정면 뷰**를 본다.
-- **팔을 통째로 돌려 빼면 장갑도 같이 돈다.** 손의 월드 방향은 따로 지키고 손목이 그 차이를 받게 한다. 손목 한계에 걸려 남는 회전(잰 값 평균 11°)은 보고한다.
+- **팔을 통째로 돌려 빼면 장갑도 같이 돈다.** 손의 월드 방향은 따로 지키고 손목이 그 차이를 받게 한다. 손목 한계에 걸려 남는 회전은 기본 10°까지만 허용하고(`--hand-turn-max`), 그 때문에 덜 빠진 프레임은 수치로 보고한다.
 - **MediaPipe는 시스템 라이브러리 `libegl1`·`libgles2`가 있어야 돈다.** 없으면 실제 영상 캡처는 못 하고 합성 캡처로만 확인된다 — 그렇게 보고한다.
 - **저작권**: 참고 이미지에서 가져오는 것은 역사적·일반적 복식 요소(형태·색·재질·무늬)다. 얼굴·머리 모양 같은 인물의 생김새는 일반형으로 둔다. 참고 이미지 파일은 저장소에 넣지 않고, 사진에서 뽑은 파생 윤곽만 남긴다.
 
@@ -181,7 +181,7 @@ nohup python template/soldier.py bake -o out/fig --splats 60000 --res 320 --view
 
 - 사진 여러 장에서 장면을 자동 복원하지 않는다(photogrammetry·NeRF의 일). 입력은 코드로 빚은 형태, 또는 3D mesh 파일(`python -m pixelsplat bake model.glb`).
 - 천은 휘지 않는 강체 조각이다. 손은 벙어리장갑까지다(손가락 넷이 한 덩어리로 마디에서만 꺾임 — 낱손가락·가운데 마디 없음). 표정은 없다.
-- 팔꿈치 빼기는 손목을 움직이지 않는다: 원본이 **손 자체**를 몸통 속에 두면 빼지 못하고 보고만 한다. 이벤트가 없는 훅·어퍼컷은 주먹 규칙이 잡지 못한다.
+- 팔꿈치 빼기는 손목을 움직이지 않는다: 원본이 **손목·손 자체**를 몸통 속에 두면 빼지 못하고 보고만 한다(`wrist_end_inside`). 장갑은 기본 10°까지만 돌므로, 그보다 더 돌아야 빠지는 프레임에서는 위팔이 가슴에 일부 남는다(`hand_cap_limited`). 이벤트가 없는 훅·어퍼컷은 주먹 규칙이 잡지 못한다.
 - 학습은 쉬는 자세만 본다. 쉬는 자세에서 가려진 splat(60000개 기준 약 40 %)은 메시 초기값 그대로다.
 - 한 대의 카메라 영상에서는 깊이가 모호하다. 옆에서 찍은 영상이 가장 정확하다.
 
