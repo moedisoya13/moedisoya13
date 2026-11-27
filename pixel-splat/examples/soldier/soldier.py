@@ -1,6 +1,6 @@
 """Soldier - a human-proportioned figure built for motion, then dressed.
 
-  rig.py      layer 1     real proportions, joint positions, 28 bones, rotation limits
+  rig.py      layer 1     real proportions, joint positions, 36 bones, rotation limits, grip (mitten hands)
   body.py     layers 2-4  one solid per bone: joint beads, waist/neck turntables, mannequin flesh
   costume.py  layer 5     the kit: sallet, bevor, pauldrons, mantle, tabard, sleeves, hose ... (an "outfit")
   motion.py   walk loop (planted feet, heel strike -> toe-off), turntable demo, costume helper bones
@@ -415,6 +415,19 @@ COSTUME_SHOTS = (
     ("rest", (0.0, 0.55, 0.0), 180, 8, 0.30))
 
 
+GRIP_STEPS = (0.0, 0.25, 0.5, 0.75, 1.0)  # the grips of the ``grip`` sheet
+GRIP_AZ = (70, -55)  # camera azimuths: the back of his left hand, its palm side
+GRIP_EXTENT = 0.085  # half height of those close-ups, as a fraction of H
+
+
+def grip_pose(grip: float) -> Dict[str, np.ndarray]:
+    """His left hand held up in front of the chest, both hands at ``grip`` (0 = open mitten, 1 = fist)."""
+    rots = {"upperarmL": rig.local_rot("upperarmL", pitch=-45.0, roll=15.0), "forearmL": rig.local_rot("forearmL", pitch=-100.0)}
+    rig.set_grip(rots, grip, grip)
+    assert not rig.check_limits(rots)
+    return motion.drive_helpers(rots)
+
+
 def cmd_animate(a):
     sc, model, bones = load_model(a.out)
     with sc.worn():
@@ -472,6 +485,15 @@ def _animate(a, sc, model, bones):
                 shots.append(R.frame(camera(az, 8, px, target=tgt), mats, root, az=az))
         save(sheet(shots, 4), "big_sheet")
         print(f"[animate] run / jump sheet ({time.time() - t0:.0f}s)")
+    if "grip" in clips:  # the mitten hands: open -> fist, the left hand from its back and from its palm side
+        tgt = tuple(SKEL.world_mats(grip_pose(0.0))[SKEL.index["handL"]] @ np.append(rig.hand_point(1, (0.045, 0.006, 0.0)), 1.0))
+        cams = [(az, camera(az, 10, int(px * 0.75), 1.0, target=tgt, extent=GRIP_EXTENT * H)) for az in GRIP_AZ]
+        shots = [R.frame(cam, SKEL.world_mats(grip_pose(g)), az=az) for az, cam in cams for g in GRIP_STEPS]
+        save(sheet(shots, len(GRIP_STEPS)), "grip_sheet", a.scale)
+        frames = [upscale(np.concatenate([R.frame(cam, SKEL.world_mats(grip_pose(0.5 - 0.5 * math.cos(2 * math.pi * i / n))), az=az)
+                                          for az, cam in cams], 1), a.scale) for i in range(n)]
+        nike.save_anim(frames, a.out, "grip_cycle" + sfx, a.fps)
+        print(f"[animate] grip: sheet of {len(GRIP_STEPS)} grips x {len(GRIP_AZ)} views + grip_cycle {n} frames ({time.time() - t0:.0f}s)")
     if "gbuffer" in clips:
         mats, root = motion.walk_pose(SKEL, 0.1)
         cam = camera(WALK_AZ, 8, px)
@@ -527,7 +549,7 @@ def measure(sc: Sculpt) -> Dict[str, float]:
     hp = cat("pelvis", "thighL", "thighR")
     band = hp[np.abs(hp[:, 1] - rig.HIP[1][1]) < 0.02 * H]
     m["hip_width"] = float(band[:, 0].max() - band[:, 0].min()) / H
-    m["fingertip"] = h(posed["handL"][:, 1].min())
+    m["fingertip"] = h(cat("handL", "fingersL")[:, 1].min())
     ft = cat("footL", "toeL")
     m["foot_length"] = float(ft[:, 2].max() - ft[:, 2].min()) / H
     m["foot_width"] = float(ft[:, 0].max() - ft[:, 0].min()) / H
@@ -1003,7 +1025,7 @@ def main():
     ap.add_argument("--cycle-frames", type=int, default=24, help="frames per loop")
     ap.add_argument("--fps", type=int, default=24)
     ap.add_argument("--clips", default="sheets,joints,costume,gbuffer,walk,turn",
-                    help="what to render: sheets, joints, costume, big, gbuffer, walk, across, turn")
+                    help="what to render: sheets, joints, costume, big, grip, gbuffer, walk, across, turn")
     ap.add_argument("--checks", default="proportions,rigid,sdf,feet,loop,cull,clash",
                     help="verify: which checks to run (" + ", ".join(CHECKS) + "); gaps renders ~40 views, run it alone")
     ap.add_argument("--look", default="stylized", choices=look.LOOKS)

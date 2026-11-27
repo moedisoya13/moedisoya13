@@ -64,9 +64,11 @@ def test_skeleton_layout():
     names = [b.name for b in SKEL.bones]
     for b in SKEL.bones:  # parents first, as Skeleton.world_mats needs
         assert b.parent is None or names.index(b.parent) < names.index(b.name)
-    assert names[:len(rig.GEOMETRY_BONES)] == body.BONES
+    assert names == rig.GEOMETRY_BONES + rig.HELPER_BONES + rig.HAND_BONES  # new bones are appended, never inserted
+    assert body.BONES == rig.GEOMETRY_BONES + rig.HAND_BONES  # the mannequin: the body and its mitten hands
     assert rig.HELPER_BONES == list(rig.GORES) + ["cape", "capeTip", "plume", "plumeTip"] and len(rig.GORES) == 8
-    assert len(SKEL) == 32
+    assert rig.HAND_BONES == ["fingersL", "thumbL", "fingersR", "thumbR"]
+    assert len(rig.GEOMETRY_BONES) == 20 and len(SKEL) == 36
     for j in rig.JOINTS:  # the bead is never smaller than the socket it sits in
         assert j.bead >= j.shared > 0
         assert np.allclose(SKEL.bones[SKEL.index[j.bone]].head, j.pos, atol=1e-6)
@@ -74,7 +76,8 @@ def test_skeleton_layout():
 
 def test_joint_angles_round_trip_and_limits():
     rng = np.random.default_rng(0)
-    for bone in ("chest", "head", "upperarmL", "upperarmR", "forearmR", "handL", "thighR", "footL"):
+    for bone in ("chest", "head", "upperarmL", "upperarmR", "forearmR", "handL", "thighR", "footL", "fingersL",
+                 "fingersR", "thumbL", "thumbR"):
         lim = rig.limits(bone)
         a = [rng.uniform(lo, hi) for lo, hi in lim]
         back = rig.joint_angles(bone, rig.local_rot(bone, *a))
@@ -205,7 +208,7 @@ def test_bake_with_training_keeps_bone_labels(sc, tmp_path):
 
 
 def test_costume_dresses_every_bone_and_leaves_the_body_alone(sc, dressed):
-    assert dressed.outfit == "soldier" and dressed.names == rig.GEOMETRY_BONES + rig.HELPER_BONES
+    assert dressed.outfit == "soldier" and dressed.names == body.BONES + rig.HELPER_BONES
     assert body.outfit() is None  # sculpting did not leave the outfit on
     with dressed.worn():
         assert body.bones() == dressed.names
@@ -220,7 +223,7 @@ def test_costume_dresses_every_bone_and_leaves_the_body_alone(sc, dressed):
     assert rig.limits("head")[0] == (-20.0, 25.0)  # ... and the bare limits are back
     model = SplatModel.from_mesh(dressed.parts(True), 8000, seed=0)
     bones = soldier.splat_bones(dressed, model)
-    assert len(np.unique(bones)) == 32
+    assert len(np.unique(bones)) == 36
     rep = soldier.rigid_report(model, bones, [motion.walk_pose(SKEL, 0.3)[0], motion.turn_pose(SKEL, 0.2)[0]])
     assert rep["one_hot"] and rep["max_distance_change"] < 1e-5
 
@@ -386,3 +389,92 @@ def test_big_motions_and_cloth_inertia():
     assert swing(b, "skirtFL") == 0  # ... and comes to rest
     turn = motion.drive_helpers({"chest": L("chest", yaw=20)}, prev={"chest_yaw": 0.0, "head_yaw": 0.0}, dt=1 / 24)
     assert abs(rig.euler_angles(L("chest", yaw=20) @ turn["cape"])[1] - 10) > 1  # the cape trails the turn it measured
+
+
+# ---------------------------------------------------------------- mitten hands: fingers, thumb, grip
+def test_grip_curls_the_mitten_into_a_fist():
+    """One number per hand: 0 leaves the hand as sculpted (open, relaxed), 1 is the fist - the finger block
+    curled onto the palm, the thumb across it - on both hands alike, inside the joint limits all the way."""
+    hand = lambda s, q: rig.hand_point(s, q)  # noqa: E731
+    assert all(np.array_equal(R, np.eye(3)) for side in "LR" for R in rig.grip_rots(side, 0.0).values())
+    for g in np.linspace(0.0, 1.0, 11):
+        rots = rig.set_grip({}, g, 1.0 - g)
+        assert not rig.check_limits(rots)
+        assert abs(rig.grip_of(rots, "L") - g) < 1e-9 and abs(rig.grip_of(rots, "R") - (1.0 - g)) < 1e-9
+    assert rig.grip_of({}, "L") == 0.0  # a pose that knows no finger bones holds an open hand
+    assert rig.check_limits({"fingersL": rig.local_rot("fingersL", pitch=rig.FIST_CURL + 10)})
+    reach = {}
+    for side, s in rig.SIDES:
+        M = SKEL.world_mats(rig.grip_rots(side, 1.0))
+        at = lambda b, p: M[SKEL.index[b]][:, :3] @ p + M[SKEL.index[b]][:, 3]  # noqa: E731
+        a, n, w = rig.hand_axes(s)
+        tip = (at("fingers" + side, rig.FINGERTIP[s]) - rig.WRIST[s]) / rig.H  # where the fingertips end up
+        assert tip @ a < 0.03 and 0.0 < tip @ n < 0.04  # the bone's tail: back by the heel of the hand, on its palm side
+        thumb = (at("thumb" + side, rig.THUMB_END[s]) - rig.WRIST[s]) / rig.H
+        assert thumb @ n > 0.012 and thumb @ w < 0.0  # the thumb lies across the folded fingers
+        reach[s] = tip @ a, tip @ n, thumb @ a, thumb @ n, thumb @ w
+        # the fist is the short hand: nothing of it reaches as far from the wrist as the open fingers did
+        far = max(float(((at(b + side, p) - rig.WRIST[s]) @ a).max()) for b, p in
+                  (("fingers", rig.FINGERTIP[s]), ("thumb", rig.THUMB_END[s]), ("fingers", rig.KNUCKLES[s])))
+        assert far < 0.6 * rig.RATIO["hand"] * rig.H
+    assert np.allclose(reach[1], reach[-1], atol=1e-6)  # the right hand is the mirror image of the left
+
+
+def test_knuckles_and_thumb_base_cannot_open(sc):
+    """The same ball-joint principle as every other joint: palm and finger block both contain the barrel
+    round the knuckle line, palm and thumb both contain the ball at the thumb's base - open, half closed
+    and as a fist; and the finger bones carry surface of their own (so a fist is seen to close)."""
+    poses = {f"grip{g}": SKEL.world_mats(rig.set_grip({}, g, g)) for g in (0.0, 0.3, 0.6, 1.0)}
+    poses["fist_bent_wrist"] = SKEL.world_mats(rig.set_grip({"handL": rig.local_rot("handL", pitch=60),
+                                                             "handR": rig.local_rot("handR", pitch=-60)}, 1.0, 1.0))
+    rep = soldier.sdf_gap_report(poses)
+    assert rep["shared_ball"] < 0 and rep["posed_ball"] < 0 and rep["pivot"] < 1e-5 and rep["core"] < -0.3, rep
+    joints = {j.name: j for j in rig.JOINTS}
+    for side in "LR":
+        k, t = joints["knuckle" + side], joints["thumb" + side]
+        assert k.kind == "hinge" and k.parent == "hand" + side and t.kind == "bead" and t.parent == "hand" + side
+        # along the whole knuckle line (not only at its middle) the barrel is inside palm AND finger block
+        axis = rig.hand_axes(1 if side == "L" else -1)[2]
+        line = k.pos + np.linspace(-1, 1, 9)[:, None] * rig.KNUCKLE_HALF * rig.H * axis
+        ring = np.concatenate([line + 0.97 * k.shared * d for d in rig.hand_axes(1 if side == "L" else -1)[:2]]
+                              + [line - 0.97 * k.shared * d for d in rig.hand_axes(1 if side == "L" else -1)[:2]])
+        assert float(body.bone_sdf("hand" + side, ring).max()) < 0 and float(body.bone_sdf("fingers" + side, ring).max()) < 0
+    i = {n: k for k, n in enumerate(sc.names)}
+    for b in rig.HAND_BONES:
+        assert len(sc.faces[i[b]]) > 50 and sc.keep[i[b]].any(), b
+
+
+def test_older_clips_and_models_without_finger_bones_still_play(sc, tmp_path):
+    """A clip saved by the 32-bone rig (no fingers, no thumbs) loads and plays with open hands; a model
+    sculpted then (20 body bones) still gets its splats moved by the 36-bone skeleton."""
+    import clip as clip_mod
+    old_bones = rig.GEOMETRY_BONES + rig.HELPER_BONES  # the 32 of before
+    frames = [motion.walk_rots(SKEL, k / 6)[0] for k in range(6)]
+    old = clip_mod.Clip.from_rots(24.0, frames, np.zeros((6, 3)), bones=old_bones)
+    path = str(tmp_path / "old.npz")
+    old.save(path)
+    back = clip_mod.Clip.load(path)
+    assert len(back.bones) == 32 and not set(rig.HAND_BONES) & set(back.bones)
+    mats, _ = back.pose(3)
+    assert mats.shape == (36, 3, 4) and np.isfinite(mats).all()
+    for side in "LR":  # the fingers ride on the hand exactly as sculpted: an open mitten
+        assert np.allclose(mats[SKEL.index["fingers" + side]], mats[SKEL.index["hand" + side]], atol=1e-6)
+        assert np.allclose(mats[SKEL.index["thumb" + side]], mats[SKEL.index["hand" + side]], atol=1e-6)
+    new = clip_mod.Clip.from_rots(24.0, [rig.set_grip(dict(f), 1.0, 0.25) for f in frames], np.zeros((6, 3)))
+    assert abs(rig.grip_of(new.body_rots(2), "L") - 1.0) < 1e-5 and abs(rig.grip_of(new.body_rots(2), "R") - 0.25) < 1e-5
+    joined = clip_mod.blend(back, new, 2)  # old and new can still be joined: on the bones both have
+    assert not set(rig.HAND_BONES) & set(joined.bones) and joined.pose(0)[0].shape == (36, 3, 4)
+    # an old model: only the 20 body bones have meshes
+    keep = [k for k, n in enumerate(sc.names) if n in rig.GEOMETRY_BONES]
+    pick = lambda xs: [xs[k] for k in keep]  # noqa: E731
+    old_sc = soldier.Sculpt(pick(sc.names), pick(sc.verts), pick(sc.faces), pick(sc.normals), pick(sc.colors),
+                            pick(sc.rough), pick(sc.metal), pick(sc.keep), "none")
+    mesh = str(tmp_path / soldier.MESH_FILE)
+    old_sc.save(mesh)
+    old_sc = soldier.Sculpt.load(mesh)
+    model = SplatModel.from_mesh(old_sc.parts(True), 3000, seed=0)
+    bones = soldier.splat_bones(old_sc, model)
+    assert set(np.unique(bones)) == {SKEL.index[b] for b in rig.GEOMETRY_BONES}
+    R = soldier.Renderer(model, bones, app=False)
+    img = R.frame(soldier.camera(30, 8, 48), SKEL.world_mats(rig.set_grip({}, 1.0, 1.0)))
+    assert img.shape[:2] == (48, 36) and np.isfinite(img).all()

@@ -181,36 +181,68 @@ def _forearm(p, s):
     return {FLESH: flesh, BEAD: sdf.sphere(p, a, rig.BEAD["elbow"] * H)}
 
 
-# mitten-style hand: four fingers side by side (blended, so they read as one block with grooves) + thumb
+# ---- the mitten hand: palm (bone ``hand``) + the four fingers as one block on a knuckle hinge (``fingers``)
+# + the thumb on a ball at its base (``thumb``).  Same principle as every other joint: the moving part
+# carries the bead (a barrel along the knuckle line / a ball), the palm the slightly smaller socket around
+# the same centre, so palm and fingers overlap at any curl and the fist cannot open a gap at the knuckles.
 FINGERS = ((0.0150, 0.92), (0.0050, 1.00), (-0.0050, 0.94), (-0.0150, 0.78))  # (forward offset, length factor)
+FINGER_SEG = (0.0245, 0.0265)  # length of the near / far half of the longest finger (fractions of H)
+FINGER_BEND = (6.0, 34.0)  # degrees each half already leans towards the palm in the open, relaxed mitten
+FINGER_R = (0.0066, 0.0060, 0.0053)  # radius at the knuckle, at the bend, at the tip
 
 
 def hand_frame(s):
     """Unit vectors of the hand: along the arm, towards the palm side (the body), forward (thumb side)."""
-    a = rig.ARM_AXIS[s]
-    w = np.array([0.0, 0.0, 1.0])
-    n = s * np.cross(a, w)
-    return a, n, w
+    return rig.hand_axes(s)
+
+
+def _hand_coords(p, s):
+    """World points -> (along, palmwards, forward) from the wrist, in fractions of H."""
+    a, n, w = hand_frame(s)
+    d = p - P(rig.WRIST[s])
+    return np.stack([d @ P(a), d @ P(n), d @ P(w)], -1) / F32(H)
+
+
+def _barrel(q, c, half, r):
+    """Capsule along the hand's forward axis (the knuckle line), in hand coordinates."""
+    return sdf.capsule(q, P((c[0], c[1], c[2] - half)), P((c[0], c[1], c[2] + half)), r)
 
 
 def _hand(p, s):
-    a, n, w = hand_frame(s)
-    d = p - P(rig.WRIST[s])
-    q = np.stack([d @ P(a), d @ P(n), d @ P(w)], -1) / F32(H)  # (along, palmwards, forward) in fractions of H
-    L = rig.RATIO["hand"]
+    q = _hand_coords(p, s)
     palm = round_box(q, (0.0310, 0.0, 0.002), (0.0255, 0.0075, 0.0220), 0.0065)  # starts inside the wrist bead
+    mount = sdf.round_cone(q, P((0.0200, 0.0015, 0.0100)), P(rig.THUMB_BASE), 0.0085, rig.SOCKET["thumb"])  # ball of the thumb
+    flesh = sdf.smin(palm, mount, 0.004)
+    flesh = np.minimum(flesh, _barrel(q, rig.KNUCKLE, rig.KNUCKLE_HALF, rig.SOCKET["knuckle"]))  # knuckle socket
+    flesh = np.minimum(flesh, sdf.sphere(q, P(rig.THUMB_BASE), rig.SOCKET["thumb"]))  # thumb socket
+    return {FLESH: flesh * F32(H), BEAD: sdf.sphere(p, rig.WRIST[s], rig.BEAD["wrist"] * H)}
+
+
+def _fingers(p, s):
+    q = _hand_coords(p, s)
+    kx, ky, _ = rig.KNUCKLE
+    a1, a2 = (np.radians(v) for v in FINGER_BEND)
     fingers = []
     for wz, ln in FINGERS:
-        k0 = P((0.0555, 0.0005, wz))
-        tip = (L - 0.0048) * ln
-        k1 = P((0.0555 + 0.50 * (tip - 0.0555), 0.0035, wz))
-        k2 = P((tip, 0.0105, wz))
-        fingers.append(sdf.smin(sdf.round_cone(q, k0, k1, 0.0059, 0.0052), sdf.round_cone(q, k1, k2, 0.0052, 0.0046),
-                                0.002))
-    t0, t1, t2 = P((0.018, 0.003, 0.018)), P((0.041, 0.007, 0.034)), P((0.058, 0.0095, 0.0365))
+        l1, l2 = FINGER_SEG[0] * ln, FINGER_SEG[1] * ln
+        k0 = P((kx, ky, wz))
+        k1 = P((kx + l1 * np.cos(a1), ky + l1 * np.sin(a1), wz))
+        k2 = P((k1[0] + l2 * np.cos(a2), k1[1] + l2 * np.sin(a2), wz))
+        fingers.append(sdf.smin(sdf.round_cone(q, k0, k1, FINGER_R[0], FINGER_R[1]),
+                                sdf.round_cone(q, k1, k2, FINGER_R[1], FINGER_R[2]), 0.002))
+    # the web: the near half of the four fingers is one slab (a mitten), so solid material runs out of the
+    # knuckle barrel into the block everywhere along the knuckle line, not only down the middle of each finger
+    web = round_box(q, (kx + 0.0105, ky + 0.0012, 0.0), (0.0115, FINGER_R[1] - 0.0008, 0.0165), 0.0040)
+    flesh = sdf.smin(blend(fingers, 0.0045), web, 0.003)
+    bead = _barrel(q, rig.KNUCKLE, rig.KNUCKLE_HALF, rig.BEAD["knuckle"])
+    return {FLESH: flesh * F32(H), BEAD: bead * F32(H)}
+
+
+def _thumb(p, s):
+    q = _hand_coords(p, s)
+    t0, t1, t2 = P(rig.THUMB_BASE), P((0.041, 0.007, 0.034)), P(rig.THUMB_TIP)
     thumb = sdf.smin(sdf.round_cone(q, t0, t1, 0.0080, 0.0062), sdf.round_cone(q, t1, t2, 0.0062, 0.0052), 0.002)
-    flesh = sdf.smin(sdf.smin(palm, blend(fingers, 0.0045), 0.004), thumb, 0.004)
-    return {FLESH: flesh * F32(H), BEAD: sdf.sphere(p, rig.WRIST[s], rig.BEAD["wrist"] * H)}
+    return {FLESH: thumb * F32(H), BEAD: sdf.sphere(q, t0, rig.BEAD["thumb"]) * F32(H)}
 
 
 def _thigh(p, s):
@@ -279,9 +311,10 @@ def _sided(fn, s):
 BUILDERS: Dict[str, Callable] = {"pelvis": _pelvis, "chest": _chest, "neck": _neck, "head": _head}
 for _side, _s in rig.SIDES:
     for _name, _fn in (("clav", _clav), ("upperarm", _upperarm), ("forearm", _forearm), ("hand", _hand),
-                       ("thigh", _thigh), ("shin", _shin), ("foot", _foot), ("toe", _toe)):
+                       ("thigh", _thigh), ("shin", _shin), ("foot", _foot), ("toe", _toe),
+                       ("fingers", _fingers), ("thumb", _thumb)):
         BUILDERS[_name + _side] = _sided(_fn, _s)
-BONES: List[str] = [b for b in rig.GEOMETRY_BONES]  # bones of the bare mannequin
+BONES: List[str] = rig.GEOMETRY_BONES + rig.HAND_BONES  # bones of the bare mannequin (the hands' fingers last)
 assert set(BONES) == set(BUILDERS)
 
 # ---------------------------------------------------------------- outfit (stage 2)
@@ -393,7 +426,9 @@ def _boxes() -> Dict[str, Tuple[np.ndarray, np.ndarray]]:
         b["clav" + side] = _box([rig.CLAV[s], rig.SHOULDER[s]], u(0.047))
         b["upperarm" + side] = _box([rig.SHOULDER[s], rig.ELBOW[s]], u(0.051))
         b["forearm" + side] = _box([rig.ELBOW[s], rig.WRIST[s]], u(0.045))
-        b["hand" + side] = _box([rig.WRIST[s], rig.FINGERTIP[s]], u(0.058))
+        b["hand" + side] = _box([rig.WRIST[s], rig.KNUCKLES[s]], u(0.046))
+        b["fingers" + side] = _box([rig.KNUCKLES[s], rig.hand_point(s, (0.110, 0.022, 0.0))], u(0.034))
+        b["thumb" + side] = _box([rig.THUMB[s], rig.THUMB_END[s]], u(0.020))
         b["thigh" + side] = _box([rig.HIP[s], rig.KNEE[s]], u(0.066))
         b["shin" + side] = _box([rig.KNEE[s], rig.ANKLE[s]], u(0.058))
         b["foot" + side] = _box([rig.ANKLE[s], rig.TOE[s], P((rig.ANKLE[s][0], GROUND, -rig.HEEL_BACK * rig.FOOT_LEN))],
@@ -403,7 +438,7 @@ def _boxes() -> Dict[str, Tuple[np.ndarray, np.ndarray]]:
 
 
 BOXES = _boxes()  # of the bare mannequin
-VOXEL_SCALE = {"hand": 0.55, "head": 0.8, "toe": 0.8, "foot": 0.9}  # finer grid where the detail is small
+VOXEL_SCALE = {"hand": 0.55, "fingers": 0.5, "thumb": 0.5, "head": 0.8, "toe": 0.8, "foot": 0.9}  # finer grid where the detail is small
 
 
 def box(bone: str) -> Tuple[np.ndarray, np.ndarray]:

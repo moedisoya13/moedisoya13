@@ -82,7 +82,9 @@ def geodesic_deg(Ra: np.ndarray, Rb: np.ndarray) -> np.ndarray:
 
 # ---------------------------------------------------------------- the clip
 def body_bones() -> List[str]:
-    """Bones a clip must define; everything else in the skeleton is a costume helper that is driven."""
+    """Bones a clip must define.  Of the rest of the skeleton the costume helpers are driven when the clip is
+    played, and the hands' fingers and thumbs (``rig.HAND_BONES``) are optional: a clip that has them keeps
+    them (``rig.grip_rots`` wrote them), a clip made before they existed plays with open hands."""
     return list(rig.GEOMETRY_BONES)
 
 
@@ -152,7 +154,7 @@ class Clip:
     def rots(self, i: int, helpers: bool = True) -> Dict[str, np.ndarray]:
         """{bone: 3x3 local rotation} of frame ``i`` for the bones the current skeleton knows."""
         M = quat_to_mat(self.quat[i])
-        body = set(body_bones())
+        body = set(body_bones()) | set(rig.HAND_BONES)  # (fingers and thumbs are stored, not driven again)
         return {b: M[k] for k, b in enumerate(self.bones) if b in rig.PARENT and (helpers or b in body)}
 
     def body_rots(self, i: int) -> Dict[str, np.ndarray]:
