@@ -71,6 +71,18 @@ def test_swivel_keeps_the_wrist_and_the_hands_world_orientation():
         assert abs(np.linalg.norm(e - wr) - rig.RATIO["forearm"] * rig.H) < 1e-6
 
 
+def test_a_swivel_that_takes_the_upper_arm_past_its_limits_is_made_by_turning_it_about_itself():
+    """A guard swung 25 degrees outwards: the upper arm would leave its limits.  It is turned about its own
+    length instead (``keep_axis``) and the forearm takes the twist - the wrist and the hand stay exactly."""
+    pose = guard("R", elbow=-90.0)
+    assert not rig.check_limits(pose)
+    after = dict(pose)
+    cost = arms.swivel_arm(after, "R", 25.0)
+    assert abs(cost["over"]["twist"] - (-18.36)) < 0.3  # (measured: -18.36 degrees about the upper arm)
+    assert cost["wrist_miss"] < 1e-7 and cost["hand_turn"] < 1e-5 and cost["over"]["upperarm"] == 0.0
+    assert cost["elbow_moved"] > 0.02 and not rig.check_limits(after)
+
+
 def test_a_swivel_the_wrist_cannot_follow_turns_the_hand_only_by_what_is_missing():
     """Past its limits the wrist stops (the side bend is 30 degrees): the wrist's POSITION is still kept, the
     hand turns by the rest, and ``wrist_give`` lets the ball go further for a hand that must not turn."""
@@ -85,6 +97,9 @@ def test_a_swivel_the_wrist_cannot_follow_turns_the_hand_only_by_what_is_missing
     part = dict(before)
     cost3 = arms.swivel_arm(part, "R", -75.0, wrist_give=5.0)
     assert abs(cost3["hand_turn"] - (cost["hand_turn"] - 5.0)) < 0.05
+    # "past its limits" is the angle to the nearest allowed rotation - the same (geodesic) degrees as the turn
+    assert abs(cost3["over"]["hand_past"] - 5.0) < 0.02 and abs(rig.clamp_rot("handR", part["handR"])[2] - 5.0) < 0.02
+    assert cost["over"]["hand_past"] == 0.0 and abs(cost2["over"]["hand_past"] - cost["hand_turn"]) < 0.02
 
 
 # ---------------------------------------------------------------- elbows out of the trunk
@@ -99,22 +114,33 @@ def test_resting_standing_and_walking_arms_are_left_alone():
     assert all(np.array_equal(f[b], k[b]) for f, k in zip(frames, keep) for b in k)
 
 
-def test_an_elbow_tucked_into_the_chest_is_swung_out_of_it():
-    """A guard that slides its elbow in front of the chest and back out: while it is in, the elbow is swung
-    out by the smallest angle that clears; the wrist does not move; the swing grows and shrinks smoothly."""
-    T = 48
+MARGIN = 0.0072  # arms.CLEAR_MARGIN = 0.004 H, H = 1.8 (written out: the tests must not follow a changed constant)
+
+
+def tucked(T=48):
+    """A guard that slides its elbow in front of the chest and back out (frames, a copy of them)."""
     tuck = np.sin(np.linspace(0, np.pi, T)) ** 2  # out - in - out
     frames = [dict(guard("R", t), **guard("L")) for t in tuck]
-    before = [{b: R.copy() for b, R in f.items()} for f in frames]
+    return frames, [{b: R.copy() for b, R in f.items()} for f in frames]
+
+
+def test_an_elbow_tucked_into_the_chest_is_swung_out_of_it():
+    """A guard that slides its elbow in front of the chest and back out: while it is in, the elbow is swung
+    out by the smallest angle that clears; the wrist does not move; the swing grows and shrinks smoothly.
+    (With the hand allowed to turn 30 degrees: this tuck needs 10.8 at most, so nothing caps it.)"""
+    T = 48
+    frames, before = tucked(T)
     roots = np.zeros((T, 3))
     deep = np.array([arms.arm_depth(f, "R") for f in before])
-    assert deep[0] < -arms.CLEAR_MARGIN and deep.max() > 0.03  # (the pose as given: clear, then well inside)
-    rep = arms.clear_elbows(frames, roots, FPS)
+    assert deep[0] < -MARGIN and deep.max() > 0.03  # (the pose as given: clear, then well inside)
+    assert arms.CLEAR_MARGIN == pytest.approx(MARGIN)
+    rep = arms.clear_elbows(frames, roots, FPS, hand_turn_most=30.0)
     v = rep["R"]
-    assert v["needed_frames"] == int((deep > -arms.CLEAR_MARGIN).sum()) and v["inside_before"] == int((deep > 0).sum())
+    assert rep["margin"] == pytest.approx(MARGIN) and rep["hand_turn_most"] == 30.0
+    assert v["needed_frames"] == int((deep > -MARGIN).sum()) == 32 and v["inside_before"] == int((deep > 0).sum())
     assert abs(v["depth_before"] - deep.max()) < 1e-4
     after = np.array([arms.arm_depth(f, "R") for f in frames])
-    assert after.max() <= -arms.CLEAR_MARGIN + 1e-6 and v["inside_after"] == 0 and v["not_cleared"] == []
+    assert after.max() <= -MARGIN + 1e-6 and v["inside_after"] == 0 and v["not_cleared"] == [] and v["hand_cap_limited"] == []
     assert abs(v["depth_after"] - after.max()) < 1e-4
     psi = np.array(v["swivel"])
     assert 10.0 < v["swivel_max"] < 120.0 and psi[0] == 0.0 and psi[-1] == 0.0
@@ -123,7 +149,7 @@ def test_an_elbow_tucked_into_the_chest_is_swung_out_of_it():
     for t in range(T):
         assert np.linalg.norm(world(frames[t], "handR", rig.WRIST[-1]) - world(before[t], "handR", rig.WRIST[-1])) < 1e-3
         turned = clip_mod.geodesic_deg(world(frames[t], "handR"), world(before[t], "handR"))
-        assert turned <= v["hand_turned_max"] + 1e-3 <= arms.HAND_TURN_MOST + 1e-3
+        assert turned <= v["hand_turned_max"] + 1e-3 <= 30.0 + 1e-3
         assert not rig.check_limits(frames[t])
         for b in ("upperarmL", "forearmL", "chest", "pelvis"):  # nothing else is touched
             assert np.array_equal(frames[t].get(b, np.eye(3)), before[t].get(b, np.eye(3)))
@@ -133,10 +159,66 @@ def test_an_elbow_tucked_into_the_chest_is_swung_out_of_it():
     half = dict(before[k])
     arms.swivel_arm(half, "R", 0.5 * psi[k])
     assert arms.arm_depth(half, "R") > -arms.CLEAR_MARGIN
-    # with the wrist's ball allowed past its limits the hand does not turn at all
+    assert abs(v["hand_turned_max"] - 10.81) < 0.05  # (what clearing this tuck turns the glove by)
+    # with the wrist's ball allowed past its limits the hand does not turn at all (and the default cap does not bite)
     again = [{b: R.copy() for b, R in f.items()} for f in before]
     rep2 = arms.clear_elbows(again, roots, FPS, wrist_give=90.0)
-    assert rep2["R"]["hand_turned_max"] < 1e-3 and rep2["R"]["inside_after"] == 0
+    assert rep2["R"]["hand_turned_max"] < 1e-3 and rep2["R"]["inside_after"] == 0 and rep2["R"]["not_cleared"] == []
+    assert 10.0 < rep2["R"]["wrist_past_limits_max"] < 11.5
+
+
+def test_the_glove_turns_ten_degrees_at_most_and_the_elbow_stays_in_where_that_is_not_enough():
+    """The default: the hand may turn by 10 degrees (the angle between its world orientations).  On the four
+    deepest frames of the tuck that is not enough to take the elbow the full margin clear: there it is swung
+    only as far as the cap allows, and those frames are listed - not hidden, not pushed past the cap."""
+    T = 48
+    frames, before = tucked(T)
+    assert arms.HAND_TURN_MOST == 10.0
+    rep = arms.clear_elbows(frames, np.zeros((T, 3)), FPS)
+    v = rep["R"]
+    assert rep["hand_turn_most"] == 10.0
+    turned = np.array([clip_mod.geodesic_deg(world(frames[t], "handR"), world(before[t], "handR")) for t in range(T)])
+    assert turned.max() <= 10.0 + 1e-3 and abs(v["hand_turned_max"] - turned.max()) < 1e-3 and turned.max() > 9.9
+    assert v["hand_cap_limited"] == [22, 23, 24, 25] and v["not_cleared"] == [22, 23, 24, 25] and v["under_margin_after"] == 4
+    after = np.array([arms.arm_depth(f, "R") for f in frames])
+    deep = np.array([arms.arm_depth(f, "R") for f in before])
+    held = [22, 23, 24, 25]
+    assert (after[held] > -MARGIN).all() and (after[held] < 0.0).all() and v["inside_after"] == 0  # in the margin, out of the chest
+    assert (after[held] < deep[held] - 0.05).all()  # (swung as far as the cap allows: most of the way out)
+    rest = [t for t in range(T) if t not in held]
+    assert after[rest].max() <= -MARGIN + 1e-6
+    for t in range(T):
+        assert np.linalg.norm(world(frames[t], "handR", rig.WRIST[-1]) - world(before[t], "handR", rig.WRIST[-1])) < 1e-3
+        assert not rig.check_limits(frames[t])
+    # the cap is a parameter: 30 lets the same tuck come fully clear (see the test above), 0 swings nothing
+    none = [{b: R.copy() for b, R in f.items()} for f in before]
+    rep0 = arms.clear_elbows(none, np.zeros((T, 3)), FPS, hand_turn_most=0.0)
+    assert rep0["R"]["hand_turned_max"] < 1e-3 and rep0["R"]["inside_after"] > 0
+
+
+def test_the_forearm_is_measured_to_the_wrist():
+    """The whole forearm is checked, to the wrist.  A pose with only the wrist end against the chest: that
+    is reported (``wrist_end_*``), and since no swivel moves the wrist, it is not swung for."""
+    assert [(b, a, r) for b, a, r in arms.ARM_BALLS if b == "forearm"][-3:] == [
+        ("forearm", 0.78, 0.0165), ("forearm", 0.90, 0.0151), ("forearm", 1.00, 0.0144)]
+    pose = {"upperarmR": L("upperarmR", pitch=-90.0, yaw=30.0, roll=-20.0), "forearmR": L("forearmR", pitch=-130.0)}
+    assert not rig.check_limits(pose)
+    assert abs(arms.arm_depth(pose, "R") - 0.0144) < 0.001 and abs(arms.arm_depth(pose, "R", which="end") - 0.0144) < 0.001
+    assert abs(arms.arm_depth(pose, "R", which="steer") - (-0.0158)) < 0.001
+    frames = [dict(pose) for _ in range(3)]
+    rep = arms.clear_elbows(frames, np.zeros((3, 3)), FPS)["R"]
+    assert rep["needed_frames"] == 0 and rep["frames"] == 0 and rep["wrist_end_inside_frames"] == 3
+    assert rep["wrist_end_inside"] == [0, 1, 2] and abs(rep["wrist_end_depth_after"] - 0.0144) < 0.001
+
+
+def test_the_forearm_must_stay_out_of_the_pelvis_and_the_head_too():
+    """Not only the chest: a forearm folded down across the belly is in the pelvis, one folded over the
+    head is in the head - with the chest well clear in both."""
+    belly = {"upperarmR": L("upperarmR", pitch=10.0, yaw=60.0), "forearmR": L("forearmR", pitch=-50.0)}
+    over = {"upperarmR": L("upperarmR", pitch=-150.0, yaw=30.0, roll=-30.0), "forearmR": L("forearmR", pitch=-125.0)}
+    for pose, deep in ((belly, 0.0494), (over, 0.1074)):
+        assert not rig.check_limits(pose)
+        assert abs(arms.arm_depth(pose, "R") - deep) < 0.002
 
 
 def test_an_arm_no_swivel_can_clear_is_reported_and_not_made_worse():
@@ -159,6 +241,53 @@ def test_spread_never_drops_below_what_a_frame_needs():
         assert np.abs(np.diff(out)).max() < np.abs(np.diff(need)).max()
     assert np.array_equal(arms._spread(np.zeros(6), 3, False), np.zeros(6))
     assert arms._spread(need, 2, False)[-1] == 0.0 and arms._spread(need, 0, False).tolist() == need.tolist()
+
+
+def test_spread_of_runs_that_swing_to_opposite_sides():
+    """Two runs close together that swing the elbow opposite ways: neither is cut by the other (each keeps at
+    least its need), the gap between them goes through 0, and outside the clip nothing is needed (no value
+    is carried in from beyond the first / last frame).  (The old spread subtracted the two sides: frames
+    2..5 got 40 down to 17, frame 0 got 40.)"""
+    want = np.array([0, 0, 40, 40, 40, 40, 0, -40, -40, -40, -40, 0, 0], float)
+    out = arms._spread(want, 3, False)
+    assert np.allclose(out, [28.571, 34.286, 40, 40, 40, 40, 0, -40, -40, -40, -40, -34.286, -28.571], atol=1e-3)
+    assert np.allclose(arms._spread(want, 3, True), [5.714, 20.571, 40, 40, 40, 40, 0, -40, -40, -40, -40, -20.571, -5.714], atol=1e-3)
+    # one side only: rises into the run and falls out of it, 0 again 2 r frames away
+    one = arms._spread(np.array([0, 0, 0, 0, 0, 0, 0, 30, 30, 0, 0, 0, 0, 0, 0, 0], float), 2, False)
+    assert np.allclose(one, [0, 0, 0, 6, 12, 18, 24, 30, 30, 24, 18, 12, 6, 0, 0, 0], atol=1e-9)
+
+
+def test_clear_elbows_spreads_the_signed_swivel(monkeypatch):
+    """``clear_elbows`` itself, with the per-frame need given (the arm's geometry stubbed out; the frame is
+    told by its root): the swivel it applies is the signed spread above - not one side minus the other."""
+    want = [0, 0, 40, 40, 40, 40, 0, -40, -40, -40, -40, 0, 0]
+    T = len(want)
+    x0 = {side: float(arms._Arm({}, (0.0, 0.0, 0.0), side).shoulder[0]) for side in "LR"}
+
+    class Stub(arms._Arm):
+        def frame(self):
+            return int(round((self.shoulder[0] - x0[self.side]) / 1e-3))
+
+        def depth(self, psi=0.0, which="steer"):
+            return 0.02 if (want[self.frame()] and not psi) else -0.02
+
+        def need(self, sign, margin=arms.CLEAR_MARGIN, step=arms.SWIVEL_STEP, most=arms.SWIVEL_MOST):
+            w = float(want[self.frame()])
+            return (w, w, -0.02, None) if np.sign(w) == sign else (None, 0.0, 0.02, "none")
+
+        def kept(self, psi):
+            return True
+
+        def pose(self, psi):
+            return {}, 0.0, 0.0, {"hand_past": 0.0}
+
+    monkeypatch.setattr(arms, "_Arm", Stub)
+    frames = [{} for _ in range(T)]
+    roots = np.array([[1e-3 * t, 0.0, 0.0] for t in range(T)])
+    rep = arms.clear_elbows(frames, roots, 60.0, smooth_s=0.05)
+    assert rep["smooth_frames"] == 3
+    for side in "LR":
+        assert np.allclose(rep[side]["swivel"], [28.57, 34.29, 40, 40, 40, 40, 0, -40, -40, -40, -40, -34.29, -28.57], atol=0.01)
 
 
 # ---------------------------------------------------------------- grip: the fist follows the punch
@@ -206,6 +335,46 @@ def test_the_fist_closes_as_the_punch_goes_out_and_opens_as_the_hand_comes_back(
     frames_r, _, peak_r = punch_frames("R")
     g_r, _ = arms.grip_track(frames_r, np.zeros((T, 3)), FPS)
     assert np.allclose(g_r[:, 1], left) and g_r[:, 0].max() == 0.0 and peak_r == peak
+
+
+def test_a_fist_opens_over_a_tenth_of_a_second_however_fast_the_hand_comes_back():
+    """The hand snaps back to its guard in two frames: the fist still takes 0.10 s (6 frames at 60 fps) to
+    open - never more than a sixth of the way in one frame."""
+    frames, launch, peak = punch_frames("L", back=2)
+    g, rep = arms.grip_track(frames, np.zeros((len(frames), 3)), FPS)
+    row = rep["L"]["punches"][0]
+    assert (row["peak_frame"], row["release_frame"], row["open_frame"]) == (25, 29, 36)
+    assert np.allclose(g[30:37, 0], [0.9352, 0.7686, 0.6019, 0.4352, 0.2686, 0.1019, 0.0], atol=1e-4)
+    assert -np.diff(g[:, 0]).max() <= 1.0 / 6.0 + 1e-9
+
+
+def test_the_fist_does_not_close_again_on_the_way_back():
+    """Back half way, then out again slowly (too slow for a punch), then home: once the fist has begun to
+    open it never closes again until the next punch."""
+    bend = ([-115.0] * 20 + [-115 + 100 * (k + 1) / 6 for k in range(6)] + [-15.0] * 4 + [-15 - 50 * (k + 1) / 8 for k in range(8)]
+            + [-65 + 25 * (k + 1) / 12 for k in range(12)] + [-40 - 75 * (k + 1) / 10 for k in range(10)] + [-115.0] * 20)
+    frames = [dict(guard("L", elbow=b), **guard("R")) for b in bend]
+    g, rep = arms.grip_track(frames, np.zeros((len(frames), 3)), FPS)
+    assert len(rep["L"]["punches"]) == 1 and rep["L"]["punches"][0]["peak_frame"] == 25
+    assert (np.diff(g[25:, 0]) <= 1e-12).all()
+    assert abs(g[40, 0] - 0.935) < 0.002 and abs(g[50, 0] - 0.935) < 0.002 and g[58, 0] == 0.0  # held while it goes out again
+
+
+def test_a_guard_hand_riding_out_a_little_is_not_a_punch():
+    """A fast but small extension (0.13 of the arm's length, as the guard hand rides out with the turning
+    shoulders) does not make a fist; 0.17 does."""
+    def ride(to):
+        bend = [-115.0] * 20 + [-115 + (to + 115) * (k + 1) / 4 for k in range(4)] + [to] * 6 \
+            + [to + (-115 - to) * (k + 1) / 8 for k in range(8)] + [-115.0] * 20
+        frames = [dict(guard("L", elbow=b), **guard("R")) for b in bend]
+        e = arms.reach(frames)[:, 0]
+        g, rep = arms.grip_track(frames, np.zeros((len(frames), 3)), FPS)
+        return float(e.max() - e[19]), float((np.diff(e) * FPS).max()), g, rep
+    gain, speed, g, rep = ride(-95.0)
+    assert 0.13 < gain < 0.14 and speed > 2.0  # fast enough to be a launch, too short to be a punch
+    assert g.max() == 0.0 and rep["L"]["punches"] == []
+    gain, speed, g, rep = ride(-90.0)
+    assert 0.16 < gain < 0.17 and len(rep["L"]["punches"]) == 1 and g[:, 0].max() == 1.0
 
 
 def test_grip_uses_the_sources_punch_and_contact_events():

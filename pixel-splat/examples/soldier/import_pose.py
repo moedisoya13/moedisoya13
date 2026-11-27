@@ -36,8 +36,11 @@ How a pose is carried over (``retarget``):
   * elbows out of the trunk (``arms.clear_elbows``, on by default, ``--no-clear-elbows`` turns it off): a
     source with a trunk that is a line can tuck an elbow where the mannequin has ribs.  That arm's elbow is
     swung about its shoulder-wrist line by the smallest angle that takes it clear; the wrist stays where it
-    is and the hand keeps its orientation in the world as far as the wrist's limits allow.  The report says
-    on how many frames, by how much, how deep the arm was and is, and how far wrist and hand moved.
+    is and the hand keeps its orientation in the world as far as the wrist's limits allow.  The glove may
+    turn by at most ``--hand-turn-max`` degrees (10): where clearing the elbow would turn it further, the
+    elbow is swung only that far and stays partly inside on those frames.  The report says on how many
+    frames, by how much, how deep the arm was and is (to the wrist), how far wrist and hand moved, and on
+    which frames the cap held the elbow inside.
     (``--clear-trunk`` is the older way - the whole arm turned rigidly, hand included - kept for comparison.)
   * grip (``arms.grip_track``, on by default, ``--no-grip``): the mitten hands close into a fist as a punch
     is launched and open as the hand comes back, from the arm's own reach and the source's punch events.
@@ -238,6 +241,7 @@ class Params:
     keep_axis: bool = True  # a clamped upper arm keeps its direction; the forearm takes the twist (``keep_axis``)
     clear_elbows: bool = True  # swing an elbow that is inside the trunk out of it, hand kept (``arms.clear_elbows``)
     wrist_give: float = 0.0  # degrees the wrist may go past its limits there, to keep the hand exactly as it was
+    hand_turn_max: float = arms.HAND_TURN_MOST  # degrees the glove may turn there (the elbow then stays partly in)
     grip: bool = True  # the hands close into fists with the punches (``arms.grip_track``)
     clear_trunk: bool = False  # the older way: turn the WHOLE arm, hand too, out of the trunk (``swivel_clear``)
     stretch: str = "root"  # "root" = the squash-and-stretch raises / lowers the pelvis; "none" = ignored
@@ -513,7 +517,8 @@ def retarget(src: Source, par: Optional[Params] = None, table: Optional[Dict[str
     # the arms, once the whole motion is known (both look along the time axis; neither touches trunk or legs)
     elbows = grip = None
     if par.clear_elbows and par.limits == "clamp":  # (it keeps the joints inside their limits: not for "report")
-        elbows = arms.clear_elbows(frames, roots, src.fps, loop=bool(src.meta.get("loop")), wrist_give=par.wrist_give)
+        elbows = arms.clear_elbows(frames, roots, src.fps, loop=bool(src.meta.get("loop")), wrist_give=par.wrist_give,
+                                   hand_turn_most=par.hand_turn_max)
     if par.grip:
         g, grip = arms.grip_track(frames, roots, src.fps, src.events)
         arms.apply_grip(frames, g)
@@ -789,11 +794,17 @@ def step_report(src: Source, c: Clip, table: Dict[str, Tuple[str, str]], k: floa
     return out
 
 
+MESH_TOL = 0.001  # world units (about 1 mm): a pair counts as "in" on a frame when it is this much deeper than at rest
+
+
 def mesh_checks(sc, c: Clip, step: int = 1) -> dict:
     """What only the sculpted surface can say (``sc`` = the baked model's ``Sculpt``): how far the lowest
     point of each foot's surface is under / over the ground, and how deep the surface of forearm and hand
     runs into the head, the trunk and the other arm (world units; the rest pose is given for comparison,
-    since the mannequin's upper arm already lies a little in its ribs there)."""
+    since the mannequin's upper arm already lies a little in its ribs there).  Per pair: the deepest frame
+    (and which side's limb it is), the mean over the frames measured, and the frames that are deeper than
+    at rest by more than MESH_TOL (``frames``; ``frame_list`` names them), and the depth on every frame
+    measured (``track``)."""
     import body
     names = list(sc.names)
     # the surface some pose can show (the faces sculpting kept), every other vertex of it
@@ -807,12 +818,12 @@ def mesh_checks(sc, c: Clip, step: int = 1) -> dict:
              "hand+forearm / other arm": (hand, ("upperarm{O}", "forearm{O}", "hand{O}")),
              "thigh+shin / other leg": (("thigh{S}", "shin{S}", "foot{S}"), ("thigh{O}", "shin{O}", "foot{O}"))}
 
-    def depths(mats) -> Dict[str, float]:
+    def depths(mats) -> Dict[str, Tuple[float, str]]:
         mats = np.asarray(mats, np.float64)
         inv = body.invert(mats)
         out = {}
         for label, (A, B) in pairs.items():
-            d = 0.0
+            d, worst = 0.0, ""
             for side, other in (("L", "R"), ("R", "L")):
                 for a in A:
                     a = a.replace("{S}", side)
@@ -822,25 +833,34 @@ def mesh_checks(sc, c: Clip, step: int = 1) -> dict:
                     for b in B:
                         b = b.replace("{O}", other)
                         q = body.apply(inv[SKEL.index[b]], world).astype(np.float32)
-                        d = max(d, float(-body.body_sdf(b, q).min()))
-            out[label] = d
+                        e = float(-body.body_sdf(b, q).min())
+                        if e > d:
+                            d, worst = e, f"{a} in {b}"
+            out[label] = (d, worst)
         return out
 
     assert all(n in names for n in ("footL", "toeL", "footR", "toeR"))
-    rest = depths(rt.fk({}))
-    worst = {label: (0.0, 0) for label in pairs}
+    rest = {label: d for label, (d, _) in depths(rt.fk({})).items()}
+    track = {label: {} for label in pairs}
     low = np.zeros((len(c), 2))
     for t in range(0, len(c), step):
         M = rt.fk(c.body_rots(t), c.root[t])
-        for label, d in depths(M).items():
-            if d > worst[label][0]:
-                worst[label] = (d, t)
+        for label, dw in depths(M).items():
+            track[label][t] = dw
         for i, (side, _, _) in enumerate(SIDES):
             low[t, i] = min(float(body.apply(M[SKEL.index[b + side]], verts[b + side])[:, 1].min()) for b in ("foot", "toe"))
     used = low[::step] - GROUND
     planted = c.contact[::step] >= 0.999
-    return dict(clash={label: dict(rest=round(rest[label], 4), max=round(d, 4), worst_frame=t)
-                       for label, (d, t) in worst.items()},
+    clash = {}
+    for label, tr in track.items():
+        ts = sorted(tr)
+        d = np.array([tr[t][0] for t in ts])
+        k = int(d.argmax())
+        over = [t for t in ts if tr[t][0] > rest[label] + MESH_TOL]
+        clash[label] = dict(rest=round(rest[label], 4), max=round(float(d[k]), 4), worst_frame=ts[k],
+                            worst=tr[ts[k]][1], mean=round(float(d.mean()), 4), frames=len(over), frame_list=over,
+                            track=[round(float(x), 4) for x in d])
+    return dict(clash=clash,
                 sole=dict(lowest=round(float(used.min()), 5), lowest_frame=int(np.unravel_index(used.argmin(), used.shape)[0]) * step,
                           planted_lowest=round(float(used[planted].min()), 5) if planted.any() else None,
                           planted_highest=round(float(used[planted].max()), 5) if planted.any() else None))
@@ -863,7 +883,8 @@ def print_report(report: dict, res: Optional[dict] = None, log=print):
             f"frames ({100 * v['share']:5.1f} %), by {v['mean']:5.1f} deg on average, {v['max']:5.1f} at most (frame {v['worst_frame']})")
     el = report.get("elbows")
     if el:
-        log(f"  elbows out of the trunk (clear by {el['margin']:.4f}, spread over {el['smooth_s']:.2f} s, wrist give {el['wrist_give']:g} deg):")
+        log(f"  elbows out of the trunk (clear by {el['margin']:.4f}, spread over {el['smooth_s']:.2f} s, wrist give {el['wrist_give']:g} deg, "
+            f"hand turns {el['hand_turn_most']:g} deg at most):")
         for side in ("L", "R"):
             v = el[side]
             log(f"    elbow {side}: swung on {v['frames']:3d} frames ({v['needed_frames']} needed it), by {v['swivel_mean']:5.1f} deg on "
@@ -871,7 +892,12 @@ def print_report(report: dict, res: Optional[dict] = None, log=print):
                 f"deepest in the trunk {v['depth_before']:+.4f} -> {v['depth_after']:+.4f}, frames inside {v['inside_before']} -> "
                 f"{v['inside_after']}; wrist moved {v['wrist_moved_max']:.5f} at most; hand turned {v['hand_turned_mean']:.2f} deg on "
                 f"average, {v['hand_turned_max']:.2f} at most ({v['hand_turned_frames']} frames; wrist past its limits by "
-                f"{v['wrist_past_limits_max']:.1f} at most)" + (f"; NOT cleared on frames {v['not_cleared']}" if v["not_cleared"] else ""))
+                f"{v['wrist_past_limits_max']:.1f} at most)"
+                + (f"; held inside by the hand-turn cap on {len(v['hand_cap_limited'])} frames {v['hand_cap_limited']}"
+                   if v["hand_cap_limited"] else "")
+                + (f"; NOT cleared on frames {v['not_cleared']}" if v["not_cleared"] else "")
+                + (f"; the wrist end of the forearm (which no swivel moves) inside on {v['wrist_end_inside_frames']} frames, "
+                   f"{v['wrist_end_depth_after']:+.4f} at most" if v["wrist_end_inside_frames"] else ""))
     gr = report.get("grip")
     if gr:
         for side in ("L", "R"):
@@ -946,7 +972,8 @@ def print_report(report: dict, res: Optional[dict] = None, log=print):
     if "mesh" in res:
         log(f"  surface: sole {res['mesh']['sole']}")
         for label, v in res["mesh"]["clash"].items():
-            log(f"    {label:30s} rest {v['rest']:.4f}  worst {v['max']:.4f} (frame {v['worst_frame']})")
+            log(f"    {label:30s} rest {v['rest']:.4f}  worst {v['max']:.4f} (frame {v['worst_frame']}: {v['worst'] or '-'}), "
+                f"mean {v['mean']:.4f}, deeper than at rest on {v['frames']} frames")
 
 
 def _json(path: str, obj):
@@ -964,7 +991,7 @@ def _wearing(outfit: str):
 def cmd_retarget(a):
     src = load_source(a.source, a.who)
     par = Params(limits=a.limits, stretch=a.stretch, foot_ik=a.foot_ik, keep_axis=a.keep_axis, clear_trunk=a.clear_trunk,
-                 clear_elbows=a.clear_elbows, wrist_give=a.wrist_give, grip=a.grip)
+                 clear_elbows=a.clear_elbows, wrist_give=a.wrist_give, hand_turn_max=a.hand_turn_max, grip=a.grip)
     os.makedirs(a.out, exist_ok=True)
     with _wearing(a.outfit):  # the limits are those of the outfit that will be worn
         c, report = retarget(src, par)
@@ -1150,7 +1177,10 @@ def main():
                    help="leave an elbow that ends up inside the trunk where the source has it (default: swing it out about "
                         "the shoulder-wrist line; the wrist stays, the hand keeps its orientation)")
     p.add_argument("--wrist-give", type=float, default=0.0,
-                   help="degrees the wrist may go past its limits while an elbow is swung out, so the hand does not turn at all")
+                   help="degrees the wrist may go past its limits while an elbow is swung out, so the hand turns less (or not at all)")
+    p.add_argument("--hand-turn-max", type=float, default=arms.HAND_TURN_MOST,
+                   help=f"degrees the glove may turn while an elbow is swung out (default {arms.HAND_TURN_MOST:g}); an elbow that "
+                        "would need more is swung only that far and stays partly inside the trunk on those frames (reported)")
     p.add_argument("--no-grip", dest="grip", action="store_false",
                    help="leave the hands open (default: they close into fists as punches are launched)")
     p.add_argument("--clear-trunk", dest="clear_trunk", action="store_true",
