@@ -33,9 +33,14 @@ How a pose is carried over (``retarget``):
     One joint is treated more kindly than "nearest allowed rotation": an upper arm that would be clamped
     keeps its DIRECTION and is only turned about itself, and the forearm takes that twist up (``keep_axis``),
     so elbow, wrist and hand stay where the source has them.  That too is counted and reported.
-  * optional (``--clear-trunk``): a source with a thin trunk can tuck an elbow where the mannequin has
-    ribs; the arm is then swung about its shoulder-wrist line until it is out (``swivel_clear``).  Off by
-    default: the default is the motion as it is, and the report says how deep the arm goes in.
+  * elbows out of the trunk (``arms.clear_elbows``, on by default, ``--no-clear-elbows`` turns it off): a
+    source with a trunk that is a line can tuck an elbow where the mannequin has ribs.  That arm's elbow is
+    swung about its shoulder-wrist line by the smallest angle that takes it clear; the wrist stays where it
+    is and the hand keeps its orientation in the world as far as the wrist's limits allow.  The report says
+    on how many frames, by how much, how deep the arm was and is, and how far wrist and hand moved.
+    (``--clear-trunk`` is the older way - the whole arm turned rigidly, hand included - kept for comparison.)
+  * grip (``arms.grip_track``, on by default, ``--no-grip``): the mitten hands close into a fist as a punch
+    is launched and open as the hand comes back, from the arm's own reach and the source's punch events.
 
 ``measure`` holds the clip against the source (orientation and bone-axis errors, punch timing, hit-stops,
 planted feet, ``step_report``: landings and lift-offs, how far a planted foot moves, whether the feet pass
@@ -62,13 +67,14 @@ PROJECT = HERE.parents[1]
 sys.path.insert(0, str(PROJECT))
 sys.path.insert(0, str(HERE))
 
+import arms  # noqa: E402
 import clip as clip_mod  # noqa: E402
 import motion  # noqa: E402
 import retarget as rt  # noqa: E402
 import rig  # noqa: E402
 from clip import Clip  # noqa: E402
 
-VERSION = "import-1"
+VERSION = "import-2"
 GROUND = rig.GROUND
 SKEL = rig.SKELETON
 EZ = np.array([0.0, 0.0, 1.0])
@@ -230,7 +236,10 @@ def hip_scale(src: Source, table: Dict[str, Tuple[str, str]]) -> float:
 class Params:
     limits: str = "clamp"  # "clamp" = bring every joint inside the rig's limits; "report" = only measure
     keep_axis: bool = True  # a clamped upper arm keeps its direction; the forearm takes the twist (``keep_axis``)
-    clear_trunk: bool = False  # swing an elbow that is inside the trunk out of it (``swivel_clear``)
+    clear_elbows: bool = True  # swing an elbow that is inside the trunk out of it, hand kept (``arms.clear_elbows``)
+    wrist_give: float = 0.0  # degrees the wrist may go past its limits there, to keep the hand exactly as it was
+    grip: bool = True  # the hands close into fists with the punches (``arms.grip_track``)
+    clear_trunk: bool = False  # the older way: turn the WHOLE arm, hand too, out of the trunk (``swivel_clear``)
     stretch: str = "root"  # "root" = the squash-and-stretch raises / lowers the pelvis; "none" = ignored
     foot_ik: bool = True  # False = copy the leg orientations too (feet then slide and sink: for comparison)
     scale: Optional[float] = None  # our units per source metre (None = ratio of the hip heights)
@@ -301,39 +310,14 @@ def _clamper(mode: str, log: Dict[str, float], asked: Optional[Dict[str, np.ndar
 KEEP_AXIS = ("upperarm",)
 
 
-def keep_axis(bone: str, R: np.ndarray, prefer: float = 0.0, coarse: float = 5.0) -> Tuple[np.ndarray, float]:
-    """(R · turn about the bone's own axis by phi, phi in degrees): the smallest |phi| that brings the joint
-    inside its limits (0 if it is inside already).  Where no turn does, the one that leaves it least outside.
-    ``prefer``: last frame's phi - of two equally small turns the one on that side is taken."""
-    over = lambda Q: rig.clamp_rot(bone, Q)[2]  # noqa: E731
-    if rig.limits(bone) is None or over(R) < INSIDE:
-        return R, 0.0
-    d = our_rest_dir(bone)
-    turn = lambda phi: R @ rig.rot_axis(d, phi)  # noqa: E731
-    first = 1.0 if prefer >= 0 else -1.0
-    best, best_over = 0.0, over(R)
-    for n in range(1, int(180.0 / coarse) + 1):
-        for sign in (first, -first):
-            phi = sign * n * coarse
-            e = over(turn(phi))
-            if e < INSIDE:
-                lo, hi = phi - sign * coarse, phi  # outside .. inside: find the edge
-                for _ in range(8):
-                    mid = 0.5 * (lo + hi)
-                    if over(turn(mid)) < INSIDE:
-                        hi = mid
-                    else:
-                        lo = mid
-                return turn(hi), float(hi)
-            if e < best_over:
-                best, best_over = phi, e
-    return turn(best), float(best)
+keep_axis = arms.keep_axis  # (lives with the other arm steps; this name is kept for whoever imported it from here)
 
 
-# ---- an elbow inside the trunk
+# ---- an elbow inside the trunk, the older way (``--clear-trunk``; superseded by ``arms.clear_elbows``)
 # A source whose trunk is a thin line can tuck an elbow where our mannequin has ribs.  ``clear_trunk`` turns the
 # whole arm about the line from shoulder to wrist (the wrist stays where it is, the elbow swings out) by the
-# smallest angle that brings upper arm, elbow and forearm out of the trunk's solids.
+# smallest angle that brings upper arm, elbow and forearm out of the trunk's solids.  The hand is turned along
+# with the arm - by 50 degrees on average on the one-two it was written for - which is why it is not the default.
 TRUNK = ("chest", "pelvis")
 ARM_SAMPLES = (("upperarm", (0.45, 0.6, 0.75, 0.9, 1.0), 0.040), ("forearm", (0.15, 0.3, 0.45, 0.6), 0.032))  # bone, along it, its radius
 
@@ -526,6 +510,14 @@ def retarget(src: Source, par: Optional[Params] = None, table: Optional[Dict[str
         frames.append(rots)
         roots[t] = root
 
+    # the arms, once the whole motion is known (both look along the time axis; neither touches trunk or legs)
+    elbows = grip = None
+    if par.clear_elbows and par.limits == "clamp":  # (it keeps the joints inside their limits: not for "report")
+        elbows = arms.clear_elbows(frames, roots, src.fps, loop=bool(src.meta.get("loop")), wrist_give=par.wrist_give)
+    if par.grip:
+        g, grip = arms.grip_track(frames, roots, src.fps, src.events)
+        arms.apply_grip(frames, g)
+
     contact = np.stack([detect_contact(toe_src[:, i], toe_rest[s], src.fps, par)
                         for i, (_, s, _) in enumerate(SIDES)], 1).astype(np.float32)
     report = dict(version=VERSION, source=src.meta, frames=T, fps=src.fps, scale=k, params=asdict(par),
@@ -545,7 +537,7 @@ def retarget(src: Source, par: Optional[Params] = None, table: Optional[Dict[str
                   feet=dict(lift_max=float(lifted.max()), lift_frames=int((lifted > 1e-6).any(1).sum()),
                             anchor_miss_max=float(anchor_miss.max()),
                             planted_frames=[int(contact[:, 0].sum()), int(contact[:, 1].sum())]),
-                  events=src.events)
+                  elbows=elbows, grip=grip, events=src.events)
     meta = dict(name=src.meta.get("id", src.meta.get("file", "import")), kind="import", code_version=VERSION,
                 source=src.meta, scale=k, params=asdict(par), limits=dict(report["clamps"]))
     c = Clip.from_rots(src.fps, frames, roots, contact=contact, meta=meta)
@@ -807,10 +799,12 @@ def mesh_checks(sc, c: Clip, step: int = 1) -> dict:
     # the surface some pose can show (the faces sculpting kept), every other vertex of it
     verts = {n: np.asarray(v, np.float64)[np.unique(np.asarray(f)[np.asarray(keep, bool)])][::2]
              for n, v, f, keep in zip(sc.names, sc.verts, sc.faces, sc.keep)}
-    pairs = {"hand+forearm / head+neck": (("hand{S}", "forearm{S}"), ("head", "neck")),
-             "hand+forearm / chest+pelvis": (("hand{S}", "forearm{S}"), ("chest", "pelvis")),
+    hand = ("hand{S}", "forearm{S}", "fingers{S}", "thumb{S}")  # (a model sculpted before the mitten has no fingers)
+    pairs = {"hand+forearm / head+neck": (hand, ("head", "neck")),
+             "hand+forearm / chest+pelvis": (hand, ("chest", "pelvis")),
+             "forearm / chest+pelvis": (("forearm{S}",), ("chest", "pelvis")),
              "upper arm / chest": (("upperarm{S}",), ("chest",)),
-             "hand+forearm / other arm": (("hand{S}", "forearm{S}"), ("upperarm{O}", "forearm{O}", "hand{O}")),
+             "hand+forearm / other arm": (hand, ("upperarm{O}", "forearm{O}", "hand{O}")),
              "thigh+shin / other leg": (("thigh{S}", "shin{S}", "foot{S}"), ("thigh{O}", "shin{O}", "foot{O}"))}
 
     def depths(mats) -> Dict[str, float]:
@@ -822,6 +816,8 @@ def mesh_checks(sc, c: Clip, step: int = 1) -> dict:
             for side, other in (("L", "R"), ("R", "L")):
                 for a in A:
                     a = a.replace("{S}", side)
+                    if a not in verts:
+                        continue
                     world = body.apply(mats[SKEL.index[a]], verts[a])
                     for b in B:
                         b = b.replace("{O}", other)
@@ -863,8 +859,32 @@ def print_report(report: dict, res: Optional[dict] = None, log=print):
         log(f"    {b:10s} turned about itself to stay inside (its child takes the twist) on {v['frames']:3d} frames "
             f"({100 * v['share']:5.1f} %), by {v['max']:5.2f} deg at most (frame {v['worst_frame']})")
     for side, v in report.get("arms_swung_out", {}).items():
-        log(f"    arm {side}     swung about its shoulder-wrist line, out of the trunk, on {v['frames']:3d} frames "
-            f"({100 * v['share']:5.1f} %), by {v['mean']:5.1f} deg on average, {v['max']:5.1f} at most (frame {v['worst_frame']})")
+        log(f"    arm {side}     (--clear-trunk) turned whole about its shoulder-wrist line, out of the trunk, on {v['frames']:3d} "
+            f"frames ({100 * v['share']:5.1f} %), by {v['mean']:5.1f} deg on average, {v['max']:5.1f} at most (frame {v['worst_frame']})")
+    el = report.get("elbows")
+    if el:
+        log(f"  elbows out of the trunk (clear by {el['margin']:.4f}, spread over {el['smooth_s']:.2f} s, wrist give {el['wrist_give']:g} deg):")
+        for side in ("L", "R"):
+            v = el[side]
+            log(f"    elbow {side}: swung on {v['frames']:3d} frames ({v['needed_frames']} needed it), by {v['swivel_mean']:5.1f} deg on "
+                f"average, {v['swivel_max']:5.1f} at most (frame {v['swivel_worst_frame']}; {v['swivel_step_max']:.1f} a frame at most); "
+                f"deepest in the trunk {v['depth_before']:+.4f} -> {v['depth_after']:+.4f}, frames inside {v['inside_before']} -> "
+                f"{v['inside_after']}; wrist moved {v['wrist_moved_max']:.5f} at most; hand turned {v['hand_turned_mean']:.2f} deg on "
+                f"average, {v['hand_turned_max']:.2f} at most ({v['hand_turned_frames']} frames; wrist past its limits by "
+                f"{v['wrist_past_limits_max']:.1f} at most)" + (f"; NOT cleared on frames {v['not_cleared']}" if v["not_cleared"] else ""))
+    gr = report.get("grip")
+    if gr:
+        for side in ("L", "R"):
+            v = gr[side]
+            if not v["punches"]:
+                log(f"    hand {side}: no punch - open on all {v['open_frames']} frames (guard reach {v['guard_reach']:.3f} of the arm)")
+            for q in v["punches"]:
+                when = lambda f: "-" if f is None else f"{(f + 1) / report['fps']:.3f} s"  # noqa: E731
+                log(f"    hand {side}: {q['name'] or 'punch'} ({q['by']}): closing from {q['start_s']:.3f} s, fist complete at "
+                    f"{q['full_s']:.3f} s (contact event {when(q['contact_frame'])}, pressed {when(q['press_frame'])}), reach "
+                    f"peaks at {q['peak_s']:.3f} s ({q['reach_guard']:.3f} -> {q['reach_peak']:.3f} of the arm), opening from "
+                    f"{when(q['release_frame'])}, open at {when(q['open_frame'])}; grip at contact/complete {q['grip_at_full']:.2f}, "
+                    f"at the peak {q['grip_at_peak']:.2f}")
     r, f = report["root"], report["feet"]
     log(f"  pelvis lowered so the legs reach: {r['lowered_frames']} frames, at most {r['lowered_max']:.4f}; "
         f"longest leg {r['reach_max']:.4f} of its length; source stretch {r['stretch'][0]:.3f}..{r['stretch'][1]:.3f}")
@@ -943,7 +963,8 @@ def _wearing(outfit: str):
 
 def cmd_retarget(a):
     src = load_source(a.source, a.who)
-    par = Params(limits=a.limits, stretch=a.stretch, foot_ik=a.foot_ik, keep_axis=a.keep_axis, clear_trunk=a.clear_trunk)
+    par = Params(limits=a.limits, stretch=a.stretch, foot_ik=a.foot_ik, keep_axis=a.keep_axis, clear_trunk=a.clear_trunk,
+                 clear_elbows=a.clear_elbows, wrist_give=a.wrist_give, grip=a.grip)
     os.makedirs(a.out, exist_ok=True)
     with _wearing(a.outfit):  # the limits are those of the outfit that will be worn
         c, report = retarget(src, par)
@@ -1125,8 +1146,16 @@ def main():
     p.add_argument("--no-foot-ik", dest="foot_ik", action="store_false", help="copy the leg orientations too")
     p.add_argument("--no-keep-axis", dest="keep_axis", action="store_false",
                    help="clamp an upper arm to the nearest allowed rotation instead of keeping its direction")
+    p.add_argument("--no-clear-elbows", dest="clear_elbows", action="store_false",
+                   help="leave an elbow that ends up inside the trunk where the source has it (default: swing it out about "
+                        "the shoulder-wrist line; the wrist stays, the hand keeps its orientation)")
+    p.add_argument("--wrist-give", type=float, default=0.0,
+                   help="degrees the wrist may go past its limits while an elbow is swung out, so the hand does not turn at all")
+    p.add_argument("--no-grip", dest="grip", action="store_false",
+                   help="leave the hands open (default: they close into fists as punches are launched)")
     p.add_argument("--clear-trunk", dest="clear_trunk", action="store_true",
-                   help="swing an elbow that ends up inside the trunk out of it (the wrist stays where it is)")
+                   help="deprecated, kept as it was: turn the WHOLE arm out of the trunk, hand included (the glove turns "
+                        "with it); the default elbow clearance replaces it")
     p.add_argument("--model", default=None, help="baked model folder: also measure sole and self-contact on its surface")
     p.set_defaults(fn=cmd_retarget)
 
