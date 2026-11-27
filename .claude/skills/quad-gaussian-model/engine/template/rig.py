@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import math
 import sys
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -298,14 +299,65 @@ def side_of(bone: str) -> int:
 
 LIMIT_OVERRIDE: Dict[str, Tuple] = {}  # tighter limits while an outfit is worn (set by body.wear)
 
+# ---------------------------------------------------------------- limit sets: other ranges for some joints, by name
+# ``LIMITS`` above is the set "default".  Another set replaces the limits of the joints it names, for the code
+# run inside ``with limit_set(name):`` - or for one call, ``limit_set=name`` on ``limits``, ``clamp_rot``,
+# ``clamp_pose``, ``check_limits`` and ``limit_poses``.  An outfit's own limits (``LIMIT_OVERRIDE``: the helmet)
+# still apply on top of any set.  Nothing uses another set unless it is asked for.
+#
+# The wrist (``hand``) in the rig's angles (checked against ``hand_axes``: along the arm a, palmwards n, forward w):
+#   pitch = about the palm's normal n: side bend in the plane of the palm (towards the thumb = -pitch on the left)
+#   yaw   = about the hand's length a: turning the forearm over (the wrist's ball takes it)
+#   roll  = about the thumb axis w: FLEXION (fingertips towards the palm) = -roll on the left hand, +roll on the
+#           right; EXTENSION (towards the back of the hand) = +roll on the left, -roll on the right.
+# The default allows 20 degrees of flexion and 30 of extension.  "human" widens flexion and extension to 70 each
+# way: a human wrist bends about 70-80 degrees towards the palm and 60-70 back (general anatomy, not measured
+# here), so 70 / 70 stays inside the flexion figure and at the top of the extension one.  Side bend (+-70 here,
+# already wider than a human's) and the forearm's turn (+-90) are left as they are.  (The mitten's wrist is a
+# ball in a bead: no angle opens it.  What widening costs is the look - ``README.md``, "wrist range".)
+LIMIT_SETS: Dict[str, Dict[str, Tuple]] = {
+    "default": {},
+    "human": {"hand": ((-70.0, 70.0), (-90.0, 90.0), (-70.0, 70.0))},
+}
+_LIMIT_SET = ["default"]  # the set in force (``limit_set``)
 
-def limits(bone: str):
-    """((pitch_min, pitch_max), (yaw_min, yaw_max), (roll_min, roll_max)) for one bone, or None."""
+
+def _set_table(name: Optional[str]) -> Dict[str, Tuple]:
+    name = _LIMIT_SET[0] if name is None else name
+    if name not in LIMIT_SETS:
+        raise ValueError(f"no limit set {name!r} (there are: {', '.join(LIMIT_SETS)})")
+    return LIMIT_SETS[name]
+
+
+@contextmanager
+def limit_set(name: Optional[str]):
+    """``with rig.limit_set("human"): ...`` - the joints that set names have its limits inside the block (every
+    function here and everything that calls them: the import's clamps, the elbow clearance, ...).  None or
+    "default" = the table ``LIMITS``.  Restored on the way out, also after an error."""
+    _set_table(name or "default")  # (an unknown name fails here, before anything is changed)
+    prev = _LIMIT_SET[0]
+    _LIMIT_SET[0] = name or "default"
+    try:
+        yield _LIMIT_SET[0]
+    finally:
+        _LIMIT_SET[0] = prev
+
+
+def current_limit_set() -> str:
+    return _LIMIT_SET[0]
+
+
+_in_force = limit_set  # (for the functions below, whose ``limit_set`` argument hides this name)
+
+
+def limits(bone: str, limit_set: Optional[str] = None):
+    """((pitch_min, pitch_max), (yaw_min, yaw_max), (roll_min, roll_max)) for one bone, or None.
+    ``limit_set``: the set to read (None = the one in force, see ``limit_set``)."""
     s = side_of(bone)
     key = bone[:-1] if s else bone
     if key not in LIMITS:
         return None
-    p, y, r = LIMIT_OVERRIDE.get(key, LIMITS[key])
+    p, y, r = LIMIT_OVERRIDE.get(key, _set_table(limit_set).get(key, LIMITS[key]))
     if s < 0:
         y, r = (-y[1], -y[0]), (-r[1], -r[0])
     return p, y, r
@@ -419,14 +471,14 @@ def _nearest_in_box(J: np.ndarray, lim) -> Tuple[Tuple[float, float, float], flo
     return best, best_err
 
 
-def clamp_rot(bone: str, R_local: np.ndarray):
-    """The rotation within the limits of ``bone`` that is nearest to ``R_local``.
+def clamp_rot(bone: str, R_local: np.ndarray, limit_set: Optional[str] = None):
+    """The rotation within the limits of ``bone`` (of ``limit_set``; None = the set in force) nearest to ``R_local``.
 
     Returns (R_local_clamped, (pitch, yaw, roll) of it, excess) where ``excess`` = how many degrees the
     input lay outside the limits (0 = it was inside).  Bones without limits are returned unchanged.
     Use this rather than comparing ``joint_angles`` with the limits: Euler angles are not unique at
     roll = +-90 (arm raised straight out sideways), and this picks the reading that is allowed."""
-    lim = limits(bone)
+    lim = limits(bone, limit_set)
     if lim is None:
         return np.asarray(R_local, float), None, 0.0
     A, B = _joint_frames(bone)
@@ -437,26 +489,29 @@ def clamp_rot(bone: str, R_local: np.ndarray):
     return local_rot(bone, *angles), angles, excess
 
 
-def clamp_pose(rots: Dict[str, np.ndarray]) -> Tuple[Dict[str, np.ndarray], Dict[str, float]]:
-    """Every joint of a pose brought inside its limits (see ``clamp_rot``).  Returns the clamped pose (a
-    new dict; bones without limits and the root are passed through) and {bone: excess in degrees} of the
-    joints that had to be moved."""
+def clamp_pose(rots: Dict[str, np.ndarray], limit_set: Optional[str] = None
+               ) -> Tuple[Dict[str, np.ndarray], Dict[str, float]]:
+    """Every joint of a pose brought inside its limits (see ``clamp_rot``; ``limit_set`` as there).  Returns
+    the clamped pose (a new dict; bones without limits and the root are passed through) and {bone: excess in
+    degrees} of the joints that had to be moved."""
     out, moved = {}, {}
     for bone, R in rots.items():
-        out[bone], _, excess = clamp_rot(bone, R)
+        out[bone], _, excess = clamp_rot(bone, R, limit_set)
         if excess > 0:
             moved[bone] = excess
     return out, moved
 
 
-def check_limits(rots: Dict[str, np.ndarray], tol: float = 0.05) -> List[Tuple[str, str, float, float, float]]:
-    """Joints outside their limits: [(bone, axis, angle, min, max), ...]; empty = all fine.
+def check_limits(rots: Dict[str, np.ndarray], tol: float = 0.05, limit_set: Optional[str] = None
+                 ) -> List[Tuple[str, str, float, float, float]]:
+    """Joints outside their limits (of ``limit_set``; None = the set in force): [(bone, axis, angle, min, max),
+    ...]; empty = all fine.
 
     A joint is outside when NO pitch / yaw / roll within its limits gives its rotation to within ``tol``
     degrees.  The entry names the axis that is furthest out in the nearest allowed reading."""
     bad = []
     for bone, R in rots.items():
-        lim = limits(bone)
+        lim = limits(bone, limit_set)
         if lim is None:
             continue
         A, B = _joint_frames(bone)
@@ -511,11 +566,17 @@ def grip_of(rots: Dict[str, np.ndarray], side: str) -> float:
     return 0.0 if abs(g) < 1e-12 else g
 
 
-def limit_poses(n_random: int = 48, seed: int = 0, corners: bool = True) -> List[Dict[str, np.ndarray]]:
-    """Poses that sweep the rotation limits: rest, every joint at each end of each axis, the corners
-    of every multi-axis joint, and ``n_random`` whole-body poses drawn uniformly inside the limits.
-    (The hands' fingers and thumbs come after the body bones and draw from a generator of their own, so
-    the body's part of every pose is what it was before the hands had joints.)"""
+def limit_poses(n_random: int = 48, seed: int = 0, corners: bool = True, limit_set: Optional[str] = None
+                ) -> List[Dict[str, np.ndarray]]:
+    """Poses that sweep the rotation limits (of ``limit_set``; None = the set in force): rest, every joint at
+    each end of each axis, the corners of every multi-axis joint, and ``n_random`` whole-body poses drawn
+    uniformly inside the limits.  (The hands' fingers and thumbs come after the body bones and draw from a
+    generator of their own, so the body's part of every pose is what it was before the hands had joints.)"""
+    with _in_force(limit_set or current_limit_set()):
+        return _limit_poses(n_random, seed, corners)
+
+
+def _limit_poses(n_random: int, seed: int, corners: bool) -> List[Dict[str, np.ndarray]]:
     rng = np.random.default_rng(seed)
     rng_hand = np.random.default_rng([seed, 1])
     bones = [b for b in GEOMETRY_BONES + HAND_BONES if limits(b) is not None]

@@ -323,6 +323,51 @@ def test_an_elbow_inside_the_trunk_is_swung_out_by_default_and_the_hand_stays():
     assert rep2["elbows"] is None
 
 
+def bent_back(deg):
+    """The source's RightHand (local) that bends OUR right wrist ``deg`` degrees back (extension: -roll)."""
+    C = ip.corrections(source([{}]), ip.expand_map(ip.SOMA))
+    return C["forearmR"] @ rig.local_rot("handR", roll=-deg) @ C["handR"].T
+
+
+def test_the_wrist_range_and_the_hand_cap_reach_every_step_of_the_import(tmp_path, monkeypatch):
+    """A rear guard whose wrist the source bends back 45 degrees.  The default limits clamp it to 30 (reported:
+    roll 15 past); ``wrist_range="human"`` (70 each way) keeps it - for the import's clamps and for the elbow
+    clearance alike, and only for that call.  The hand-turn cap given is the one the clearance uses.  The
+    command line passes both on."""
+    pose = dict(tucked_guard(), RightHand=bent_back(45.0))
+    asked, _, _, _ = one(pose, ip.Params(limits="report", clear_elbows=False))
+    assert abs(rig.joint_angles("handR", asked["handR"])[2] - (-45.0)) < 1e-6  # (the source's wrist, as we read it)
+    plain, _, rep0, _ = one(pose)
+    wide, _, rep1, _ = one(pose, ip.Params(wrist_range="human"))
+    assert rep0["clamps"]["handR"]["axes"] == {"roll": 15.0} and rep0["limit_set"] == "default"
+    assert abs(rig.joint_angles("handR", plain["handR"])[2] - (-30.0)) < 1e-3  # (the clearance turns it no further here)
+    assert "handR" not in rep1["clamps"] and rep1["limit_set"] == "human" and rep1["params"]["wrist_range"] == "human"
+    assert rep1["wrist_limits"]["R"] == [[-70.0, 70.0], [-90.0, 90.0], [-70.0, 70.0]] and rep0["wrist_limits"]["R"][2] == [-30.0, 20.0]
+    assert rep1["elbows"]["wrist_range"] == "human" and rep0["elbows"]["wrist_range"] == "default"
+    # with the wrist bent back already, the default range leaves no room: the cap holds the elbow in the chest; the
+    # human range clears it (the wrist reaches 70 back and the glove turns the remaining 4.3 degrees)
+    v0, v1 = rep0["elbows"]["R"], rep1["elbows"]["R"]
+    assert v0["hand_cap_limited"] == [0] and abs(v0["depth_after"] - 0.0277) < 1e-4 and abs(v0["hand_turned_max"] - 9.993) < 0.01
+    assert v1["not_cleared"] == [] and abs(v1["hand_turned_max"] - 4.313) < 0.01 and abs(v1["swivel_max"] - 37.88) < 0.02
+    assert abs(rig.joint_angles("handR", wide["handR"])[2] - (-70.0)) < 1e-3
+    assert rig.check_limits(wide, limit_set="human") == [] and rig.check_limits(wide)[0][:2] == ("handR", "roll")
+    assert rig.current_limit_set() == "default"
+    _, _, rep2, _ = one(pose, ip.Params(hand_turn_max=2.5))
+    assert rep2["elbows"]["hand_turn_most"] == 2.5 and rep2["params"]["hand_turn_max"] == 2.5
+    # the command line
+    rows = lambda R: [float(v) for v in np.asarray(R).ravel()]  # noqa: E731
+    doc = dict(id="bent", dt=1 / 60, names=NAMES, parent=PARENT, tpose={k: list(v) for k, v in TPOSE.items()},
+               frames=[dict(f=[dict(rot={k: rows(v) for k, v in pose.items()}, root=[0.0, 0.0, 0.0])])] * 2)
+    (tmp_path / "src.json").write_text(json.dumps(doc))
+    monkeypatch.setattr(sys, "argv", ["import_pose.py", "retarget", str(tmp_path / "src.json"), "-o", str(tmp_path / "out"),
+                                      "--wrist-range", "human", "--hand-turn-max", "2.5", "--no-grip"])
+    ip.main()
+    rep = json.load(open(tmp_path / "out" / "import.json"))
+    assert rep["params"]["wrist_range"] == "human" and rep["limit_set"] == "human" and "handR" not in rep["clamps"]
+    assert rep["params"]["hand_turn_max"] == 2.5 and rep["elbows"]["hand_turn_most"] == 2.5 and rep["elbows"]["wrist_range"] == "human"
+    assert rig.current_limit_set() == "default"
+
+
 def test_import_closes_the_fists_with_the_punch_events():
     """The clip of a jab holds a fist at the contact event and open hands in guard; ``grip=False`` and a
     source without a punch leave the hands open; the clip stores the finger bones."""

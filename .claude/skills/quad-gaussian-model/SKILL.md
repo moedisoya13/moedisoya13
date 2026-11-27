@@ -114,7 +114,7 @@ nohup python template/soldier.py bake -o out/fig --splats 60000 --res 320 --view
 | 관절 가동 범위 | `rig.py` `LIMITS`, 옷이 좁히는 값은 `costume.py` `LIMITS` | 판정·제한은 `rig.clamp_rot` / `check_limits`로만 |
 | 손(쥐는 모양·주먹) | `rig.py` `KNUCKLE` `THUMB_BASE` `FIST_CURL` `THUMB_FIST`, `body.py` `_hand` `_fingers` `_thumb`, 장갑은 `costume._mitt` | 마디의 원통·엄지 밑동의 공도 구슬 ≥ 소켓. 모양을 바꾸면 `animate --clips grip`으로 0…1을 다 본다. 90°를 넘게 도는 경첩은 pitch 축에 둔다 |
 | 새 뼈(관절)를 더하기 | `rig.make_skeleton`(맨 **뒤**에 붙임), `JOINTS`, `LIMITS`, `body.BUILDERS`·`_boxes` | 끼워 넣으면 옛 모델·클립의 뼈 번호가 밀린다. `limit_poses`에 새 관절의 끝 자세가 들어가는지 확인(숨는 면) |
-| 펀치에 맞춘 주먹, 팔꿈치 빼기 | `arms.py`의 상수(`PUNCH_MIN` `CLOSE_S` `HOLD` `OPEN` / `ARM_BALLS` `CLEAR_MARGIN` `SMOOTH_S` `HAND_TURN_MOST`; CLI `--hand-turn-max`) | 규칙과 잰 값은 [`motion.md`](references/motion.md). 형태가 아니라 모션이므로 굽지 않고 retarget·렌더만 다시 |
+| 펀치에 맞춘 주먹, 팔꿈치 빼기 | `arms.py`의 상수(`PUNCH_MIN` `CLOSE_S` `HOLD` `OPEN` / `ARM_BALLS` `CLEAR_MARGIN` `SMOOTH_S` `HAND_TURN_MOST`; CLI `--hand-turn-max` `--wrist-range`), 손목 한계 묶음 `rig.LIMIT_SETS` | 규칙과 잰 값은 [`motion.md`](references/motion.md). 형태가 아니라 모션이므로 굽지 않고 retarget·렌더만 다시 |
 | **옷·갑옷·소품** | `costume.py`의 `layers()` `paint()` `MAT` | 뼈마다 `{층 이름: 거리}`. 아래 "복식의 규칙" |
 | 늘어지는 천·깃털·꼬리 | `rig.py` 보조 뼈(`GORES` `CAPE` `PLUME`, `make_skeleton`) + `motion.drive_helpers` + `costume.BONES` | 뼈 구조가 바뀌므로 sculpt·bake 다시. 안 쓰는 보조 뼈는 층을 안 주면 splat이 없다 |
 | 걸음걸이 | `motion.py` `STRIDE` `STANCE` `PITCH_*` `SWING_LIFT` | 발 경로를 월드 좌표로 먼저 정하고 골반 높이는 발에서 역산 → [`motion.md`](references/motion.md) |
@@ -162,7 +162,8 @@ nohup python template/soldier.py bake -o out/fig --splats 60000 --res 320 --view
 - **천을 미는 매끈한 함수는 0 이하에서 정확히 0이어야 한다.** 그렇지 않으면 천이 몸 쪽으로 들어간다(`motion.soft_pos`).
 - **agent 보고는 믿지 말고 이미지와 수치를 직접 확인한다.** 관통 표의 옆쪽 수치가 잘못된 환산으로 실제의 약 0.7배로 나왔던 적이 있다.
 - **선으로만 된 뼈대에서 지은 모션은 팔꿈치가 가슴 속에 든다.** 방향 오차 0°로 옮겨도 위팔이 가슴에 묻히고 아래팔이 명치에서 솟는다(원본에는 몸통 두께가 없다). `import_pose.py`가 기본으로 팔꿈치를 어깨–손목 선 둘레로 돌려 뺀다. 옆모습은 멀쩡해 보이니 **정면 뷰**를 본다.
-- **팔을 통째로 돌려 빼면 장갑도 같이 돈다.** 손의 월드 방향은 따로 지키고 손목이 그 차이를 받게 한다. 손목 한계에 걸려 남는 회전은 기본 10°까지만 허용하고(`--hand-turn-max`), 그 때문에 덜 빠진 프레임은 수치로 보고한다.
+- **팔을 통째로 돌려 빼면 장갑도 같이 돈다.** 손의 월드 방향은 따로 지키고 손목이 그 차이를 받게 한다. 손목 한계(신전 30°)에 걸려 남는 회전은 기본 10°까지만 허용하고(`--hand-turn-max`), 그 때문에 덜 빠진 프레임은 수치로 보고한다.
+  `--wrist-range human`(손목 굴곡·신전 70°, 선택)이면 장갑 0°로 다 빠지지만 손목이 기본 한계 밖으로 젖혀진다 — 어느 쪽을 쓸지 사용자에게 묻는다.
 - **MediaPipe는 시스템 라이브러리 `libegl1`·`libgles2`가 있어야 돈다.** 없으면 실제 영상 캡처는 못 하고 합성 캡처로만 확인된다 — 그렇게 보고한다.
 - **저작권**: 참고 이미지에서 가져오는 것은 역사적·일반적 복식 요소(형태·색·재질·무늬)다. 얼굴·머리 모양 같은 인물의 생김새는 일반형으로 둔다. 참고 이미지 파일은 저장소에 넣지 않고, 사진에서 뽑은 파생 윤곽만 남긴다.
 

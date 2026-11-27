@@ -11,7 +11,8 @@ Runs the real commands on a tiny job and checks numbers, not just exit codes:
   5 render      one "Almost Pixel Perfect" frame of a walking pose -> out/selftest/selftest_app.png
   6 feet        over a travelling walk cycle the planted foot does not move in the world
   7 arms        the mitten hands close into a fist (grip 0 -> 1) and an elbow tucked into the chest is swung out
-                of it with the wrist left where it was and the glove turned 10 degrees at most
+                of it with the wrist left where it was and the glove turned 10 degrees at most (with the wrist
+                range "human": not turned at all)
 
 Exit code 0 = all passed.  Open the PNG and look at it: a number cannot tell a figure from a blob.
 """
@@ -172,10 +173,16 @@ def main():
         assert rep["hand_turned_max"] <= arms.HAND_TURN_MOST + 1e-3, f"hand turned {rep['hand_turned_max']:.2f} deg"
         assert set(rep["not_cleared"]) <= set(rep["hand_cap_limited"]), f"not cleared: {rep['not_cleared']}"
         assert moved < 1e-3 and not rig.check_limits(frames[1]), f"wrist moved {moved:.2e}"
+        # the opt-in wrist range "human" (flexion / extension 70 each way): cleared with the glove not turned at all
+        wide = [dict(pose) for _ in range(3)]
+        rep_h = arms.clear_elbows(wide, np.zeros((3, 3)), 30.0, hand_turn_most=0.0, wrist_range="human")["R"]
+        assert rep_h["not_cleared"] == [] and rep_h["hand_turned_max"] < 1e-3, f"human wrist: {rep_h['not_cleared']}"
+        assert rig.current_limit_set() == "default" and not rig.check_limits(wide[1], limit_set="human")
         return (f"fist reaches {reach[1.0]:.3f} from the wrist (open hand {reach[0.0]:.3f}); elbow {before:+.3f} -> "
                 f"{rep['depth_after']:+.3f} in the chest by a {rep['swivel_max']:.0f} deg swivel, wrist moved {moved:.1e}, "
                 f"hand turned {rep['hand_turned_max']:.1f} deg (cap {arms.HAND_TURN_MOST:g}; "
-                f"{len(rep['hand_cap_limited'])} frames held inside the margin by it)")
+                f"{len(rep['hand_cap_limited'])} frames held inside the margin by it; with --wrist-range human "
+                f"{rep_h['swivel_max']:.0f} deg, glove 0)")
 
     failed = [n for n, ok, *_ in results if not ok]
     print(f"\n{len(results) - len(failed)}/{len(results)} passed in {time.time() - t_all:.0f}s"

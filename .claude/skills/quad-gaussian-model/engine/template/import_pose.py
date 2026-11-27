@@ -40,7 +40,9 @@ How a pose is carried over (``retarget``):
     turn by at most ``--hand-turn-max`` degrees (10): where clearing the elbow would turn it further, the
     elbow is swung only that far and stays partly inside on those frames.  The report says on how many
     frames, by how much, how deep the arm was and is (to the wrist), how far wrist and hand moved, and on
-    which frames the cap held the elbow inside.
+    which frames the cap held the elbow inside.  What stops the wrist there is its extension (30 degrees back in
+    the default limits); ``--wrist-range human`` (``rig.LIMIT_SETS``: flexion and extension 70 each way) is the
+    opt-in that lets it bend further - for every clamp of the import and for the clearance alike.
     (``--clear-trunk`` is the older way - the whole arm turned rigidly, hand included - kept for comparison.)
   * grip (``arms.grip_track``, on by default, ``--no-grip``): the mitten hands close into a fist as a punch
     is launched and open as the hand comes back, from the arm's own reach and the source's punch events.
@@ -242,6 +244,9 @@ class Params:
     clear_elbows: bool = True  # swing an elbow that is inside the trunk out of it, hand kept (``arms.clear_elbows``)
     wrist_give: float = 0.0  # degrees the wrist may go past its limits there, to keep the hand exactly as it was
     hand_turn_max: float = arms.HAND_TURN_MOST  # degrees the glove may turn there (the elbow then stays partly in)
+    # the joint limits every step keeps to: a ``rig.LIMIT_SETS`` name.  "default" = the rig's table; "human" = the
+    # wrist bends 70 degrees each way (flexion / extension), so the elbow clears with the glove turning less
+    wrist_range: str = "default"
     grip: bool = True  # the hands close into fists with the punches (``arms.grip_track``)
     clear_trunk: bool = False  # the older way: turn the WHOLE arm, hand too, out of the trunk (``swivel_clear``)
     stretch: str = "root"  # "root" = the squash-and-stretch raises / lowers the pelvis; "none" = ignored
@@ -392,8 +397,13 @@ def detect_contact(toe: np.ndarray, rest_height: float, fps: float, par: Params)
 def retarget(src: Source, par: Optional[Params] = None, table: Optional[Dict[str, Tuple[str, str]]] = None,
              log=print) -> Tuple[Clip, dict]:
     """The source's motion as a clip on the soldier's rig, and a report.  The rig's limits are those of
-    whatever outfit is worn when this is called (``body.wearing``)."""
+    whatever outfit is worn when this is called (``body.wearing``), in the set ``par.wrist_range``."""
     par = par or Params()
+    with rig.limit_set(par.wrist_range):
+        return _retarget(src, par, table, log)
+
+
+def _retarget(src: Source, par: Params, table: Optional[Dict[str, Tuple[str, str]]], log) -> Tuple[Clip, dict]:
     table = expand_map(table or SOMA)
     missing = [b for b in clip_mod.body_bones() if b not in table]
     if missing:
@@ -526,7 +536,8 @@ def retarget(src: Source, par: Optional[Params] = None, table: Optional[Dict[str
     contact = np.stack([detect_contact(toe_src[:, i], toe_rest[s], src.fps, par)
                         for i, (_, s, _) in enumerate(SIDES)], 1).astype(np.float32)
     report = dict(version=VERSION, source=src.meta, frames=T, fps=src.fps, scale=k, params=asdict(par),
-                  outfit_limits=sorted(rig.LIMIT_OVERRIDE) or "bare body",
+                  outfit_limits=sorted(rig.LIMIT_OVERRIDE) or "bare body", limit_set=rig.current_limit_set(),
+                  wrist_limits={side: [list(a) for a in rig.limits("hand" + side)] for side, _, _ in SIDES},
                   rest_gap=rest_gaps(src, table, C), clamps=clamp_table(excess, frames, par.limits, asked),
                   twist_passed_on={b: dict(frames=int((np.abs(v) > 0.05).sum()), share=round(float((np.abs(v) > 0.05).mean()), 4),
                                            max=round(float(np.abs(v).max()), 3), worst_frame=int(np.abs(v).argmax()))
@@ -868,7 +879,10 @@ def mesh_checks(sc, c: Clip, step: int = 1) -> dict:
 
 # ---------------------------------------------------------------- text report
 def print_report(report: dict, res: Optional[dict] = None, log=print):
-    log(f"  joint limits ({report['outfit_limits']}; mode {report['params']['limits']}), {report['frames']} frames:")
+    wl = report.get("wrist_limits", {}).get("L")
+    log(f"  joint limits ({report['outfit_limits']}; mode {report['params']['limits']}; set {report.get('limit_set', 'default')}"
+        + (f": left wrist roll {wl[2][0]:g}..{wl[2][1]:g} (- = flexion, + = extension)" if wl else "")
+        + f"), {report['frames']} frames:")
     if not report["clamps"]:
         log("    no joint left its limits")
     for b, v in report["clamps"].items():
@@ -884,7 +898,7 @@ def print_report(report: dict, res: Optional[dict] = None, log=print):
     el = report.get("elbows")
     if el:
         log(f"  elbows out of the trunk (clear by {el['margin']:.4f}, spread over {el['smooth_s']:.2f} s, wrist give {el['wrist_give']:g} deg, "
-            f"hand turns {el['hand_turn_most']:g} deg at most):")
+            f"hand turns {el['hand_turn_most']:g} deg at most, wrist range {el.get('wrist_range', 'default')}):")
         for side in ("L", "R"):
             v = el[side]
             log(f"    elbow {side}: swung on {v['frames']:3d} frames ({v['needed_frames']} needed it), by {v['swivel_mean']:5.1f} deg on "
@@ -896,6 +910,8 @@ def print_report(report: dict, res: Optional[dict] = None, log=print):
                 + (f"; held inside by the hand-turn cap on {len(v['hand_cap_limited'])} frames {v['hand_cap_limited']}"
                    if v["hand_cap_limited"] else "")
                 + (f"; NOT cleared on frames {v['not_cleared']}" if v["not_cleared"] else "")
+                + (f"; the wrist came in outside its limits on {v['wrist_in_past_frames']} frames ({v['wrist_in_past_max']:.1f} deg "
+                   f"at most) and was left no further out" if v.get("wrist_in_past_frames") else "")
                 + (f"; the wrist end of the forearm (which no swivel moves) inside on {v['wrist_end_inside_frames']} frames, "
                    f"{v['wrist_end_depth_after']:+.4f} at most" if v["wrist_end_inside_frames"] else ""))
     gr = report.get("grip")
@@ -991,7 +1007,8 @@ def _wearing(outfit: str):
 def cmd_retarget(a):
     src = load_source(a.source, a.who)
     par = Params(limits=a.limits, stretch=a.stretch, foot_ik=a.foot_ik, keep_axis=a.keep_axis, clear_trunk=a.clear_trunk,
-                 clear_elbows=a.clear_elbows, wrist_give=a.wrist_give, hand_turn_max=a.hand_turn_max, grip=a.grip)
+                 clear_elbows=a.clear_elbows, wrist_give=a.wrist_give, hand_turn_max=a.hand_turn_max, grip=a.grip,
+                 wrist_range=a.wrist_range)
     os.makedirs(a.out, exist_ok=True)
     with _wearing(a.outfit):  # the limits are those of the outfit that will be worn
         c, report = retarget(src, par)
@@ -1181,6 +1198,9 @@ def main():
     p.add_argument("--hand-turn-max", type=float, default=arms.HAND_TURN_MOST,
                    help=f"degrees the glove may turn while an elbow is swung out (default {arms.HAND_TURN_MOST:g}); an elbow that "
                         "would need more is swung only that far and stays partly inside the trunk on those frames (reported)")
+    p.add_argument("--wrist-range", default="default", choices=sorted(rig.LIMIT_SETS),
+                   help="the wrist's limits: default (flexion 20, extension 30 degrees) or human (70 each way; "
+                        "rig.LIMIT_SETS) - every clamp and the elbow clearance keep to them")
     p.add_argument("--no-grip", dest="grip", action="store_false",
                    help="leave the hands open (default: they close into fists as punches are launched)")
     p.add_argument("--clear-trunk", dest="clear_trunk", action="store_true",
