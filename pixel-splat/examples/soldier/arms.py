@@ -5,7 +5,10 @@
                    angle that takes it clear of the surface, while the wrist stays where it is and the hand keeps
                    its orientation in the world as far as the wrist's limits allow (the wrist's ball takes the
                    twist); the glove may turn by at most ``HAND_TURN_MOST`` (10 degrees) - an elbow that would
-                   need more is swung only that far and stays partly inside on those frames, which are reported
+                   need more is swung only that far and stays partly inside on those frames, which are reported.
+                   What stops the wrist is its extension (bending back, 30 degrees in the default limits): the
+                   glove then tips towards its palm.  ``wrist_range="human"`` (``rig.LIMIT_SETS``) lets the wrist
+                   bend 70 degrees each way - opt-in
     grip_track     the mitten hands (``rig.grip_rots``) close into a fist as a punch is launched and open
                    again as the hand comes back to its guard - read from the arm's own motion, plus the
                    source's punch / hit events when it has them
@@ -13,7 +16,7 @@
 Both take the list of per-frame poses ({bone: local rotation}) and root offsets that a retarget produces
 and change the poses in place; ``fix_clip`` does the same to a saved clip:
 
-    python examples/soldier/arms.py fix out/mocap/run/clip.npz -o out/mocap/run/clip_arms.npz
+    python examples/soldier/arms.py fix out/mocap/run/clip.npz -o out/mocap/run/clip_arms.npz [--wrist-range human]
 
 Why an elbow ends up inside the trunk: a skeleton that is only lines has no ribs.  A motion authored on one
 (or estimated from a video) can tuck an elbow a few centimetres in front of the spine; on a body with a
@@ -107,11 +110,14 @@ SWIVEL_MOST = 150.0  # an elbow is never swung further than this
 SMOOTH_S = 0.05
 WRIST_TOL = 5e-4  # world units the wrist may be off after a swivel for it to count as "kept" (0.5 mm)
 # The hand keeps its orientation in the world by bending at the wrist against the forearm's swing.  Where the
-# wrist reaches its limits first (its side bend is 30 degrees; an elbow swung 45 asks for about 40), the glove
-# turns by what is missing.  It may turn by at most this many degrees - the angle between its world orientation
-# before and after (geodesic, not per Euler axis).  An elbow that would need more to come clear is swung only as
-# far as this allows and stays partly inside the trunk on those frames (``hand_cap_limited``).  (--hand-turn-max)
+# wrist reaches its limits first, the glove turns by what is missing.  On the boxing imports that limit is the
+# wrist's EXTENSION (bending back: the rig's hand roll, 30 degrees in the default limits; an elbow swung 40-45
+# asks for 35-55), so the glove tips towards its palm, about its thumb axis.  It may turn by at most this many
+# degrees - the angle between its world orientation before and after (geodesic, not per Euler axis).  An elbow
+# that would need more to come clear is swung only as far as this allows and stays partly inside the trunk on
+# those frames (``hand_cap_limited``).  (--hand-turn-max; --wrist-range human widens the wrist instead)
 HAND_TURN_MOST = 10.0
+HAND_TURN_TOL = 1e-3  # degrees of turn that count as none (so a cap of 0 means "the glove does not turn", not "nothing moves")
 WRIST_GIVE = 0.0  # degrees the wrist may go PAST its limits to keep the hand as it was (0 = the limits hold)
 
 
@@ -144,9 +150,12 @@ class _Arm:
         self.pts, self.rad, self.part, self.steer = np.array(pts), np.array(rad), np.array(part), np.array(steer)
         inv = body.invert(np.asarray(M, np.float64))
         self._inv = {b: inv[SKEL.index[b]] for bs in OBSTACLES.values() for b in bs}
-        self._excess0 = max(rig.clamp_rot(b + side, rots.get(b + side, np.eye(3)))[2] for b in ("upperarm", "forearm", "hand"))
+        # a wrist that comes in outside its limits may stay that far outside (never further): the hand is not
+        # turned to bring it in, so the cap holds against the hand that was given and frames that are not swung
+        # (left exactly as they came) do not differ from swung ones by that clamp
+        e = float(rig.clamp_rot("hand" + side, rots.get("hand" + side, np.eye(3)))[2])
+        self.hand_in = e if e > INSIDE else 0.0
         self._posed: Dict[float, tuple] = {}
-        self._turn0: Optional[float] = None
 
     def swung(self, psi: float) -> np.ndarray:
         """The arm's balls with the elbow swung by psi."""
@@ -174,11 +183,13 @@ class _Arm:
         """({upperarm, forearm, hand: local rotation} with the elbow swung by psi, how far the wrist is then
         off (world units), how far the hand has turned (degrees: the angle between its world orientation
         before and after), {bone: degrees past its limits before the clamp; "hand_past": degrees the wrist
-        is left past its limits (``give``)}).  Upper arm and forearm turn together about the shoulder-wrist
-        line, so the elbow's own bend does not change; the hand is given the world orientation it had.  The
-        joints stay inside their limits: an upper arm that would leave them is turned about itself and the
-        forearm takes that twist up (``keep_axis``); what is still outside is clamped - and then shows up as a
-        wrist that moved (upper arm, forearm) or a hand that turned (the wrist's own limits, less ``give``).
+        is left past its limits (``give``, or as far as it came in past them)}).  Upper arm and forearm turn
+        together about the shoulder-wrist line, so the elbow's own bend does not change; the hand is given the
+        world orientation it had.  The joints stay inside their limits: an upper arm that would leave them is
+        turned about itself and the forearm takes that twist up (``keep_axis``); what is still outside is
+        clamped - and then shows up as a wrist that moved (upper arm, forearm) or a hand that turned (the
+        wrist's own limits, less ``give``).  The wrist is let out as far as ``max(give, hand_in)``: a wrist
+        given outside its limits stays no further outside than it was.
         Every angle here is a geodesic one (``rig.clamp_rot`` measures how far outside its limits a joint is as
         the angle to the nearest allowed rotation), so "past its limits" and "turned" are in the same degrees."""
         side, s = self.side, self.s
@@ -192,8 +203,9 @@ class _Arm:
         asked = W_fore.T @ self.W_hand
         hand, _, over["hand"] = rig.clamp_rot("hand" + side, asked)
         over["hand_past"] = 0.0
-        if over["hand"] > INSIDE and self.give > 0.0:  # the wrist may go this far past its limits for the hand's sake
-            hand, over["hand_past"] = _give(side, hand, asked, over["hand"], self.give)
+        give = max(self.give, self.hand_in)
+        if over["hand"] > INSIDE and give > 0.0:  # the wrist may go this far past its limits for the hand's sake
+            hand, over["hand_past"] = _give(side, hand, asked, over["hand"], give)
         wrist = self.shoulder + W_up @ (rig.ELBOW[s] - rig.SHOULDER[s]) + W_fore @ (rig.WRIST[s] - rig.ELBOW[s])
         turned = float(rt_geodesic(W_fore @ hand, self.W_hand))
         out = {"upperarm" + side: np.asarray(up, np.float64), "forearm" + side: np.asarray(fore, np.float64),
@@ -211,14 +223,11 @@ class _Arm:
 
     def kept(self, psi: float) -> bool:
         """Can the elbow be swung by psi with the wrist left where it is (within WRIST_TOL) and the hand
-        turned by no more than ``turn_most`` (HAND_TURN_MOST; plus what bringing a pose that comes in outside
-        the joint limits inside them turns it by without any swivel - 0 for a pose that is inside)?"""
+        turned by no more than ``turn_most`` (HAND_TURN_MOST) from the orientation it was given?"""
         if not psi:
             return True
-        if self._turn0 is None:  # a pose that comes in outside the limits: what bringing it inside turns the hand by
-            self._turn0 = self.pose(0.0)[2] if self._excess0 > INSIDE else 0.0
         miss, turned = self.cost(psi)
-        return miss <= WRIST_TOL and turned <= self.turn_most + self._turn0
+        return miss <= WRIST_TOL and turned <= self.turn_most + HAND_TURN_TOL
 
     def need(self, sign: float, margin: float = CLEAR_MARGIN, step: float = SWIVEL_STEP, most: float = SWIVEL_MOST
              ) -> Tuple[Optional[float], float, float, Optional[str]]:
@@ -255,8 +264,9 @@ class _Arm:
                 break
             prev = psi
         why = "hand" if "hand" in why else "joints" if why else "none"
-        # nothing that can be made clears: the least deep swivel that can - and then as far towards the next
-        # one round (less deep, but not possible) as can be made, so a hand-turn cap is used up to its edge
+        # no swivel on the grid both clears and can be made: the least deep one that can - and then as far
+        # towards the next one round (less deep, but not possible) as can be made, so a hand-turn cap is used up
+        # to its edge.  That edge may itself be clear: then the smallest clearing angle short of it is the answer
         by_psi = {round(p, 6): d for d, _, p in tried}
         for d, _, psi in sorted(tried):
             if d >= d0 - 1e-4:
@@ -270,6 +280,12 @@ class _Arm:
                     mid = 0.5 * (lo + hi)
                     lo, hi = (mid, hi) if self.kept(mid) else (lo, mid)
                 d_lo = self.depth(lo)
+                if d_lo <= -margin:  # the edge clears: the smallest angle between the grid point and it that does
+                    a, b = psi, lo  # not clear .. clear (and both can be made)
+                    for _ in range(8):
+                        mid = 0.5 * (a + b)
+                        a, b = (a, mid) if clear(mid) else (mid, b)
+                    return float(b), float(b), float(self.depth(b)), None
                 if d_lo < d:
                     psi, d = lo, d_lo
             return None, float(psi), float(d), why
@@ -382,8 +398,10 @@ def _spread(v: np.ndarray, r: int, loop: bool) -> np.ndarray:
 
 def clear_elbows(frames: Sequence[Dict[str, np.ndarray]], roots, fps: float, margin: float = CLEAR_MARGIN,
                  smooth_s: float = SMOOTH_S, loop: bool = False, wrist_give: float = WRIST_GIVE,
-                 hand_turn_most: float = HAND_TURN_MOST, log=None) -> dict:
+                 hand_turn_most: float = HAND_TURN_MOST, wrist_range: Optional[str] = None, log=None) -> dict:
     """Swing every elbow that is inside the trunk out of it, over a whole motion, in place.
+    ``wrist_range``: the joint limits to keep to (a ``rig.LIMIT_SETS`` name, e.g. "human" for a wrist that bends
+    70 degrees each way; None = the set in force, normally "default").
 
     Per arm: (1) frame by frame, the smallest swivel either way that takes the arm ``margin`` clear and can be
     made with the wrist kept (joint limits) and the hand turned by no more than ``hand_turn_most`` (the wrist's
@@ -395,18 +413,32 @@ def clear_elbows(frames: Sequence[Dict[str, np.ndarray]], roots, fps: float, mar
     through 0 between them); (4) a spread angle that cannot be made is cut back to the largest that can; (5) it
     is applied, and measured again - the whole arm, to the wrist.  Returns the report (per arm: frames swung,
     mean / largest swivel, depth before and after, how far wrist and hand moved, the frames the hand-turn cap
-    held the elbow inside, the frames that are not clear)."""
+    held the elbow inside, the frames that are not clear).
+
+    What it guarantees, per swung frame: the wrist within WRIST_TOL of where it was; the hand within
+    ``hand_turn_most`` degrees of the world orientation it was GIVEN; every joint inside its limits - except a
+    wrist that was given outside them, which stays no further outside than it came (``wrist_in_past_max``; the
+    glove is not turned to bring it in); ``wrist_give`` lets the wrist out further.  Frames that are not swung
+    are left exactly as they came.  ``not_cleared`` = the frames whose arm is, as measured after, less than
+    ``margin`` clear of the trunk (``under_margin_after``); ``hand_cap_limited`` = those of them that a larger
+    swivel would have cleared but for the hand-turn cap."""
+    with rig.limit_set(wrist_range or rig.current_limit_set()):
+        return _clear_elbows(frames, roots, fps, margin, smooth_s, loop, wrist_give, hand_turn_most, log)
+
+
+def _clear_elbows(frames, roots, fps, margin, smooth_s, loop, wrist_give, hand_turn_most, log) -> dict:
     T = len(frames)
     roots = np.asarray(roots, np.float64).reshape(T, 3)
     r = int(round(smooth_s * fps))
     report: dict = dict(margin=float(margin), smooth_s=float(smooth_s), smooth_frames=r, loop=bool(loop),
-                        wrist_give=float(wrist_give), hand_turn_most=float(hand_turn_most))
+                        wrist_give=float(wrist_give), hand_turn_most=float(hand_turn_most),
+                        wrist_range=rig.current_limit_set(), wrist_limits={side: [list(a) for a in rig.limits("hand" + side)]
+                                                                            for side, _ in SIDES})
     for side, _ in SIDES:
         arms = [_Arm(frames[t], roots[t], side, wrist_give, hand_turn_most) for t in range(T)]
         before = np.array([a.depth() for a in arms])
         end_before = np.array([a.depth(0.0, "end") for a in arms])
         want = np.zeros(T)  # signed swivel each frame needs
-        stuck: List[int] = []
         capped: List[int] = []
         hit = before > -margin
         for a_, b_ in rt.intervals(hit):
@@ -421,10 +453,8 @@ def clear_elbows(frames: Sequence[Dict[str, np.ndarray]], roots, fps: float, mar
             for t in run:
                 g = arms[t].need(sign, margin)
                 want[t] = g[1]
-                if g[0] is None:
-                    stuck.append(t)
-                    if g[3] == "hand":
-                        capped.append(t)
+                if g[0] is None and g[3] == "hand":
+                    capped.append(t)
         psi = _spread(want, r, loop)  # never below what is needed, one sign per run
         after, end_after = before.copy(), end_before.copy()
         miss, turned, moved, past = np.zeros(T), np.zeros(T), np.zeros(T), np.zeros(T)
@@ -441,6 +471,9 @@ def clear_elbows(frames: Sequence[Dict[str, np.ndarray]], roots, fps: float, mar
                     lo, hi = (mid, hi) if arm.kept(mid) else (lo, mid)
                 psi[t] = lo
                 cut.append(t)
+                if abs(psi[t]) < 1e-3:  # nothing can be made: the frame is left as it came
+                    psi[t] = 0.0
+                    continue
             new, miss[t], turned[t], over = arm.pose(psi[t])
             past[t] = over["hand_past"]
             frames[t].update(new)
@@ -449,6 +482,7 @@ def clear_elbows(frames: Sequence[Dict[str, np.ndarray]], roots, fps: float, mar
             moved[t] = float(np.linalg.norm(done.elbow - arm.elbow))
         swung = np.abs(psi) > 0.05
         left_in = after > -margin + 1e-6
+        hand_in = np.array([a.hand_in for a in arms])
         report[side] = dict(
             frames=int(swung.sum()), share=round(float(swung.mean()), 4),
             needed_frames=int(hit.sum()),
@@ -466,10 +500,12 @@ def clear_elbows(frames: Sequence[Dict[str, np.ndarray]], roots, fps: float, mar
             wrist_moved_max=round(float(miss.max()), 6), hand_turned_max=round(float(turned.max()), 3),
             hand_turned_mean=round(float(turned[swung].mean()), 3) if swung.any() else 0.0,
             hand_turned_frames=int((turned > 0.05).sum()), wrist_past_limits_max=round(float(past.max()), 3),
+            wrist_in_past_frames=int((hand_in > INSIDE).sum()), wrist_in_past_max=round(float(hand_in.max()), 3),
             elbow_moved_max=round(float(moved.max()), 4),
             hand_cap_limited=[int(t) for t in sorted(set(capped)) if left_in[t]],
-            not_cleared=[int(t) for t in sorted(set(stuck) | {int(t) for t in np.flatnonzero(left_in)})],
-            spread_cut=[int(t) for t in cut], swivel=[round(float(v), 2) for v in psi])
+            not_cleared=[int(t) for t in np.flatnonzero(left_in)],
+            spread_cut=[int(t) for t in cut], swivel=[round(float(v), 2) for v in psi],
+            swivel_needed=[round(float(v), 2) for v in want])
         if log:
             v = report[side]
             log(f"[arms] elbow {side}: swung on {v['frames']} of {T} frames ({v['needed_frames']} needed it), by "
@@ -663,21 +699,24 @@ def apply_grip(frames: Sequence[Dict[str, np.ndarray]], grip: np.ndarray) -> Non
 
 # ================================================================ a saved clip
 def fix_clip(c, clear: bool = True, grip: bool = True, events: Optional[Sequence[dict]] = None, loop: bool = False,
-             log=None, hand_turn_most: float = HAND_TURN_MOST, wrist_give: float = WRIST_GIVE):
-    """A clip with its elbows cleared and its hands gripping (see the module text): (new clip, report)."""
+             log=None, hand_turn_most: float = HAND_TURN_MOST, wrist_give: float = WRIST_GIVE, wrist_range: Optional[str] = None):
+    """A clip with its elbows cleared and its hands gripping (see the module text): (new clip, report).
+    ``wrist_range``: the wrist limits the clearance keeps to (``clear_elbows``)."""
     import clip as clip_mod
     frames = [c.rots(t) for t in range(len(c))]
     roots = c.root.astype(np.float64)
     report: dict = {}
     if clear:
         report["elbows"] = clear_elbows(frames, roots, c.fps, loop=loop, wrist_give=wrist_give, hand_turn_most=hand_turn_most,
-                                        log=log)
+                                        wrist_range=wrist_range, log=log)
     if grip:
         g, report["grip"] = grip_track(frames, roots, c.fps, events)
         apply_grip(frames, g)
     bones = list(c.bones) + [b for b in rig.HAND_BONES if b not in c.bones and grip]
+    used = report["elbows"]["wrist_range"] if clear else "default"
+    wide = {} if used == "default" else {"wrist_range": used}  # (a clip made with the default limits says nothing)
     out = clip_mod.Clip.from_rots(c.fps, frames, c.root, bones=bones, contact=c.contact, flight=c.flight, drive=c.drive,
-                                  meta=dict(c.meta, arms=dict(clear=clear, grip=grip)))
+                                  meta=dict(c.meta, arms=dict(clear=clear, grip=grip, **wide)))
     return out, report
 
 
@@ -697,6 +736,9 @@ def main():
                         "would need more is swung only that far and stays partly inside on those frames (reported)")
     p.add_argument("--wrist-give", type=float, default=WRIST_GIVE,
                    help="degrees the wrist may go past its limits there, so the glove turns less (default 0)")
+    p.add_argument("--wrist-range", default="default", choices=sorted(rig.LIMIT_SETS),
+                   help="the wrist's limits: default (flexion 20, extension 30 degrees) or human (70 each way; "
+                        "rig.LIMIT_SETS) - with human the elbow clears with the glove turning less")
     p.add_argument("--events", default=None, help="JSON file with [{t, type, name}] punch / block / hit events")
     a = ap.parse_args()
     if os.path.abspath(a.out) == os.path.abspath(a.clip):
@@ -706,7 +748,7 @@ def main():
     c = clip_mod.Clip.load(a.clip)
     with body.wearing(costume if a.outfit == "soldier" else None):
         out, report = fix_clip(c, a.clear, a.grip, events, a.loop, log=print, hand_turn_most=a.hand_turn_max,
-                               wrist_give=a.wrist_give)
+                               wrist_give=a.wrist_give, wrist_range=a.wrist_range)
     out.save(a.out)
     with open(os.path.splitext(a.out)[0] + "_arms.json", "w") as f:
         json.dump(report, f, indent=1)
