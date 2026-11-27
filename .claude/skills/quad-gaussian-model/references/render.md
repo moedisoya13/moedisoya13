@@ -25,10 +25,10 @@ python template/soldier.py sculpt -o out/fig [--voxel 0.0075] [--outfit soldier|
 |---|---|---|
 | 0.02 | selftest (마네킹) | 약 6초 (잰 값) |
 | 0.014 | 테스트용 | — |
-| **0.0075 (기본)** | 작업·최종 | 옷 입힌 32개 뼈: 34초 (잰 값; 문서값 45초) |
+| **0.0075 (기본)** | 작업·최종 | 옷 입힌 36개 뼈: 46~50초 (잰 값, 렌더와 CPU를 나눠 쓰는 중; 손 뼈가 없던 32개 때는 혼자 돌려 34초) |
 
 뼈마다 자기 상자에서 따로 marching cubes를 돌리고, 손·머리·발과 얇은 천은 `VOXEL_SCALE`로 더 촘촘하다.
-둘째 줄 로그 `buried in every one of 258 poses: 5.6% of the surface dropped`가 숨는 면이다(템플릿: 표면적 4.965 → 4.686).
+둘째 줄 로그 `buried in every one of 306 poses: 5.6% of the surface dropped`가 숨는 면이다(템플릿: 표면적 5.007 → 4.728).
 
 ## bake
 
@@ -63,6 +63,7 @@ python template/soldier.py animate -o out/fig --app --clips sheets,costume,gbuff
 | `costume` | 투구·어깨·치마·망토 확대 | 9 |
 | `joints` | 극단 자세의 관절 확대 | 9 |
 | `big` | 합성 달리기 4 + 도약 4 | 8 |
+| `grip` | 왼손 확대: grip 0 · 0.25 · 0.5 · 0.75 · 1 × 손등 쪽·손바닥 쪽 시트 + 쥐었다 펴는 GIF(두 시점 나란히) | 10 + `--cycle-frames` × 2 |
 | `gbuffer` | lit · albedo · normal · depth · material(빨강 = metallic, 초록 = roughness) · patch · 뼈 색 | 7 |
 | `walk` / `turn` | 제자리 걷기 / 회전판 loop → GIF + MP4 | 24씩 |
 | `across` | 옆에서 본 전진 걷기, **가로 2배 화면** | 48 — 아래 "메모리" 참고 |

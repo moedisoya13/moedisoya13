@@ -1,6 +1,6 @@
 ---
 name: quad-gaussian-model
-description: 'Images to model: turns reference photos or illustrations into an animated 3D pixel-art figure built as a Quad Gaussian Splat model - read the image, sculpt it in code (SDF) on a human-proportioned rig with ball joints and turntables, bake flat splats that learn the whole G-buffer, render with deferred light and Almost Pixel Perfect snapping, then walk it or drive it from video motion capture. Bundles a CPU-only engine, a soldier template, setup and a self-test. Use whenever the user wants images to model / 이미지로 3D 모델, 사진·일러스트를 3D 픽셀아트 캐릭터로, quad gaussian splat, 가우시안 스플랫 모델링, G-buffer splat, Almost Pixel Perfect, 뼈대·관절 구슬·회전판 리그, 그림 속 복식을 입힌 인물, 걷기 loop·디딤발 고정, or 영상 동작 모사·모션 캡처 (MediaPipe retarget); also to continue, re-bake, re-render or verify such a model. Not for photogrammetry or NeRF reconstruction of a real scene from many photos, nor one-click image-to-3D.'
+description: 'Images to model: turns reference photos or illustrations into an animated 3D pixel-art figure built as a Quad Gaussian Splat model - read the image, sculpt it in code (SDF) on a human-proportioned rig with ball joints and turntables, bake flat splats that learn the whole G-buffer, render with deferred light and Almost Pixel Perfect snapping, then walk it, drive it from video motion capture, or import motion made on another skeleton (elbows kept out of the trunk, mitten hands that close into fists with the punches). Bundles a CPU-only engine, a soldier template, setup and a self-test. Use whenever the user wants images to model / 이미지로 3D 모델, 사진·일러스트를 3D 픽셀아트 캐릭터로, quad gaussian splat, 가우시안 스플랫 모델링, G-buffer splat, Almost Pixel Perfect, 뼈대·관절 구슬·회전판 리그, 그림 속 복식을 입힌 인물, 걷기 loop·디딤발 고정, 영상 동작 모사·모션 캡처 (MediaPipe retarget), or 다른 뼈대의 모션 가져오기·팔꿈치 빼기·주먹 쥐기 (retarget from another rig, grip); also to continue, re-bake, re-render or verify such a model. Not for photogrammetry or NeRF reconstruction of a real scene from many photos, nor one-click image-to-3D.'
 ---
 
 # Quad Gaussian Model — 이미지에서 움직이는 3D 픽셀아트 인물까지
@@ -16,6 +16,7 @@ description: 'Images to model: turns reference photos or illustrations into an a
 - 이미지로 새 인물 → §0 → §1 표를 ⓪부터 → §3에서 템플릿 고치기.
 - 이미 만든 모델을 다시 굽기·렌더·검증 → §0(작업 폴더가 이미 있으면 생략) → §2의 해당 명령 → §4.
 - 영상의 동작을 인물에게 → [`references/mocap.md`](references/mocap.md). 기법의 원리·코어 수정 → [`references/technique.md`](references/technique.md).
+- 다른 캐릭터의 뼈대에서 만든 모션(관절 회전 열)을 인물에게, 팔꿈치가 몸통에 박히는 것 고치기, 펀치에 맞춰 주먹 쥐기 → [`references/motion.md`](references/motion.md)의 "다른 뼈대의 모션 가져오기"·"팔 마무리".
 
 ## 0. 엔진 풀기 (작업 폴더마다 한 번)
 
@@ -24,21 +25,21 @@ description: 'Images to model: turns reference photos or illustrations into an a
 
 ```bash
 bash $SKILL/scripts/setup.sh $WORK                          # engine/ → WORK/ 복사 + WORK/.venv 에 requirements 설치
-$WORK/.venv/bin/python $SKILL/scripts/selftest.py $WORK     # 마네킹 조형 → bake → 강체 → APP 한 장 → 디딤발
+$WORK/.venv/bin/python $SKILL/scripts/selftest.py $WORK     # 마네킹 조형 → bake → 강체 → APP 한 장 → 디딤발 → 주먹·팔꿈치
 ```
 
 - 설치: `uv`가 있으면 `uv`로, 없으면 `python3 -m venv` + `pip`로. Python 3.13, 버전은 `engine/requirements.txt`에 고정.
   PyPI의 torch는 CUDA 빌드라 `.venv`가 약 6 GB다(CPU에서 그대로 돈다). 처음 받으면 약 5분, uv 캐시에 이미 있으면 1초 안팎.
 - requirements가 이미 깔린 Python이 있으면 `setup.sh $WORK --no-venv` 후 그 Python으로 selftest를 돌린다.
 - 이미 있는 파일은 덮어쓰지 않는다(고친 템플릿이 남음). 번들 것으로 되돌리려면 `--force`.
-- **완료 기준**: `6/6 passed`(약 20초), 그리고 `WORK/out/selftest/selftest_app.png`를 직접 열어 구슬 관절 마네킹이 걷는 자세로 서 있는지 본다.
+- **완료 기준**: `7/7 passed`(12~31초; 31초는 렌더와 CPU를 나눠 쓰며 잰 값), 그리고 `WORK/out/selftest/selftest_app.png`를 직접 열어 구슬 관절 마네킹이 걷는 자세로 서 있는지 본다.
 
 ```
 WORK/
   pixelsplat/   코어: camera mesh gt splats raster train shade gbuffer shadow skin sdf lod cli
-  template/     병사 예제 = 새 인물의 출발점: rig body costume motion soldier · clip retarget synth mocap · look shared
+  template/     병사 예제 = 새 인물의 출발점: rig body costume motion soldier · clip retarget synth mocap · import_pose arms · look shared
   photo/        사진 실루엣 → SDF 본보기 (extract_wings.py, wings.py; 사진·결과 파일은 없음)
-  tests/        pytest 99개(코어 수정 F1~F9, 룩, 병사, 모션 캡처) — 병사 템플릿을 고정한다
+  tests/        pytest 132개(코어 수정 F1~F9, 룩, 병사, 모션 캡처, 모션 가져오기, 팔 마무리) — 병사 템플릿을 고정한다
   out/          산출물. out/ 과 .venv/ 는 커밋하지 않는다
 ```
 
@@ -52,16 +53,19 @@ WORK/
 | ① | 인체 비례 뼈대 | `rig.py` `H` `RATIO`, 관절 상수 | `verify --checks proportions` | 19항목 편차 ≤ 3 % |
 | ② | 관절 구슬⁵ | `rig.py` `BEAD` `SOCKET` | `verify --checks sdf` | `shared_ball < 0`, `posed_ball < 0`, `pivot < 1e-5`, `core < −0.3` |
 | ③ | 허리·목 회전판⁶ | `rig.py` `TURNTABLE`, `body.py` | `verify --checks sdf` | `waist_turning`·`head_turning`·`waist_static < 1e-4` |
-| ④ | 맨몸 마네킹 | `body.py` `_pelvis` `_chest` … | `sculpt --outfit none` | 오류 없이 뼈 20개 메시, `sculpt_albedo.png`를 열어 비례·구슬 확인 |
-| ⑤ | 복식 층 | `costume.py` `layers` `paint` `MAT` | `sculpt` → `animate --clips costume` | 뼈 32개 메시, `costume_sheet`를 참고 이미지와 나란히 대조 |
+| ④ | 맨몸 마네킹 | `body.py` `_pelvis` `_chest` … | `sculpt --outfit none` | 오류 없이 뼈 24개 메시(몸 20 + 손가락 뭉치·엄지 4), `sculpt_albedo.png`를 열어 비례·구슬 확인 |
+| ⑤ | 복식 층 | `costume.py` `layers` `paint` `MAT` | `sculpt` → `animate --clips costume` | 뼈 36개 메시, `costume_sheet`를 참고 이미지와 나란히 대조 |
 | ⑥ | 강체 바인딩 | (자동: 메시 part = 뼈 번호) | `verify --checks rigid` | `one_hot`, 같은 뼈 splat 거리·크기 변화 `< 1e-5` |
-| ⑦ | 굽기 | `soldier.py bake` | `bake --iters 0` → 최종 bake | 로그 `[bake] saved N splats on 32 bones`(맨몸이면 20) |
+| ⑦ | 굽기 | `soldier.py bake` | `bake --iters 0` → 최종 bake | 로그 `[bake] saved N splats on 36 bones`(맨몸이면 24) |
 | ⑧ | APP⁷ + stylized 렌더 | `look.py` | `animate --app` | 시트를 전부 열어 봄. `--checks gaps`의 빈 픽셀이 쉬는 자세 + 1 %p 이내 |
 | ⑨ | 모션 | `motion.py` | `verify --checks feet,loop`, 걷기·회전 GIF | `stance_slide < 1e-4`, `seam_position < 1e-5`, 한계 위반 0 |
 | ⑩ | 검증 | — | `verify`, `verify --checks gaps` | §4 전부 + 눈 |
 | ⑪ | 모션 캡처 | `mocap.py` | `retarget` → `retarget.json` | `axes` 세 값 ≈ 1, `slip.slide_contact_max < 0.02` |
+| ⑫ | 다른 뼈대의 모션 가져오기 | `import_pose.py` `SOMA`(관절 대응 표) | `retarget` → `import.json`, `render --compare` | 보고서의 `clamps`·`feet`·`wrap`을 읽고, `compare_*.mp4`를 원본 막대 뼈대와 나란히, **정면 뷰 포함**해서 봄 |
+| ⑬ | 팔 마무리: 팔꿈치 빼기 + 주먹 | `arms.py` (⑫가 기본으로 걺; 다른 클립은 `arms.py fix`) | `import.json`의 `elbows`·`grip` | `inside_after = 0`, `not_cleared = []`, `wrist_moved_max ≈ 0`, 펀치마다 `grip_at_full = 1`, 가드에서 grip 0. `hand_turned_*`는 읽고 보고 |
 
-①~④는 템플릿에 이미 서 있다. 성인 남성 평균 체형이라면 **⓪ → ⑤ → ⑦~⑩**만 한다.
+①~④는 템플릿에 이미 서 있다. 성인 남성 평균 체형이라면 **⓪ → ⑤ → ⑦~⑩**만 한다. ⑪~⑬은 모션을 밖에서 가져올 때만.
+손은 벙어리장갑식이다(손바닥 + 손가락 뭉치 + 엄지, 손마다 숫자 하나 `grip` 0…1로 쥠 → [`rig.md`](references/rig.md) 10절).
 ①~④를 건드리면(뼈 구조·관절 위치·반지름) 그 뒤의 sculpt·bake·검증을 전부 다시 한다.
 
 **⓪이 이 작업의 절반이다.** 이미지를 Read로 직접 열고 부위마다 한 행: 부위 · 붙는 뼈 · 층 이름 · 형태(구·캡슐·둥근 상자·
@@ -72,14 +76,19 @@ WORK/
 
 ```bash
 python template/soldier.py sculpt  -o out/rig --outfit none            # ④ 마네킹만 (황동 구슬·청색 회전판)
-python template/soldier.py sculpt  -o out/fig                          # ⑤ 뼈별 메시 32개 + 숨는 면 표시 (35~45초)
+python template/soldier.py sculpt  -o out/fig                          # ⑤ 뼈별 메시 36개 + 숨는 면 표시 (35~45초)
 python template/soldier.py bake    -o out/fig --iters 0                # ⑦ splat 30000개, 학습 없이 메시에서 (약 5초)
 python template/soldier.py animate -o out/fig --app --clips sheets,costume,gbuffer   # ⑧ 미리보기 시트 (약 2분)
 python template/soldier.py animate -o out/fig --app --clips joints,walk              # ⑨ 관절 확대 + 걷기 GIF/MP4 (약 2분)
 python template/soldier.py animate -o out/fig --app --clips turn                     # ⑨ 회전판 (약 1.5분)
+python template/soldier.py animate -o out/fig --app --clips grip                     # 손 확대: 펴진 손 → 주먹 시트 + GIF
 python template/soldier.py verify  -o out/fig                          # ⑩ 비율·강체·관절·발·loop·숨는 면·관통 (약 90초)
 python template/soldier.py verify  -o out/fig --checks gaps            # ⑩ splat 구멍, 75장 렌더 (약 1.5분) — 따로 실행
-python -m pytest -q -p no:cacheprovider tests                          # 코어·템플릿을 고쳤을 때 (약 50초)
+python -m pytest -q -p no:cacheprovider tests                          # 코어·템플릿을 고쳤을 때 (혼자 돌 때 2분 안팎; 렌더와 CPU를 나눠 쓰며 잰 값 3분 35초)
+
+python template/import_pose.py retarget motion.json -o out/punch --outfit none --model out/fig   # ⑫⑬ 다른 뼈대의 모션 → clip.npz + import.json
+python template/import_pose.py render -o out/punch --model out/fig --views catalog,front --compare --strip 30,44,49,59
+python template/arms.py fix out/mocap/run/clip.npz -o out/mocap/run/clip_arms.npz                # ⑬ 만 따로: 아무 클립에나
 
 # 최종 품질: 60000개·320px·56 views·300 step = 20~25분(3.9~5.7 s/step). 백그라운드로 돌리고 로그 끝의 "[bake] saved"를 기다린다.
 nohup python template/soldier.py bake -o out/fig --splats 60000 --res 320 --views 56 --iters 300 \
@@ -103,6 +112,9 @@ nohup python template/soldier.py bake -o out/fig --splats 60000 --res 320 --view
 | 살집(가슴·골반·팔다리 굵기, 얼굴) | `body.py`의 `_chest` `_pelvis` `_thigh` … | "touches its box"가 나오면 `body._boxes()`의 그 뼈 여유를 키운다 |
 | 관절 구슬·회전판 크기 | `rig.py` `BEAD` `SOCKET` `TURNTABLE` | 구슬 ≥ 소켓. 어기면 관절 틈이 열린다 |
 | 관절 가동 범위 | `rig.py` `LIMITS`, 옷이 좁히는 값은 `costume.py` `LIMITS` | 판정·제한은 `rig.clamp_rot` / `check_limits`로만 |
+| 손(쥐는 모양·주먹) | `rig.py` `KNUCKLE` `THUMB_BASE` `FIST_CURL` `THUMB_FIST`, `body.py` `_hand` `_fingers` `_thumb`, 장갑은 `costume._mitt` | 마디의 원통·엄지 밑동의 공도 구슬 ≥ 소켓. 모양을 바꾸면 `animate --clips grip`으로 0…1을 다 본다. 90°를 넘게 도는 경첩은 pitch 축에 둔다 |
+| 새 뼈(관절)를 더하기 | `rig.make_skeleton`(맨 **뒤**에 붙임), `JOINTS`, `LIMITS`, `body.BUILDERS`·`_boxes` | 끼워 넣으면 옛 모델·클립의 뼈 번호가 밀린다. `limit_poses`에 새 관절의 끝 자세가 들어가는지 확인(숨는 면) |
+| 펀치에 맞춘 주먹, 팔꿈치 빼기 | `arms.py`의 상수(`PUNCH_MIN` `CLOSE_S` `HOLD` `OPEN` / `ARM_BALLS` `CLEAR_MARGIN` `SMOOTH_S` `HAND_TURN_MOST`) | 규칙과 잰 값은 [`motion.md`](references/motion.md). 형태가 아니라 모션이므로 굽지 않고 retarget·렌더만 다시 |
 | **옷·갑옷·소품** | `costume.py`의 `layers()` `paint()` `MAT` | 뼈마다 `{층 이름: 거리}`. 아래 "복식의 규칙" |
 | 늘어지는 천·깃털·꼬리 | `rig.py` 보조 뼈(`GORES` `CAPE` `PLUME`, `make_skeleton`) + `motion.drive_helpers` + `costume.BONES` | 뼈 구조가 바뀌므로 sculpt·bake 다시. 안 쓰는 보조 뼈는 층을 안 주면 splat이 없다 |
 | 걸음걸이 | `motion.py` `STRIDE` `STANCE` `PITCH_*` `SWING_LIFT` | 발 경로를 월드 좌표로 먼저 정하고 골반 높이는 발에서 역산 → [`motion.md`](references/motion.md) |
@@ -149,6 +161,8 @@ nohup python template/soldier.py bake -o out/fig --splats 60000 --res 320 --view
 - **한계 판정은 각도를 거꾸로 풀지(`euler_angles`) 말고 "가장 가까운 허용 회전"으로.** roll ±90°에서 pitch·yaw가 하나로 정해지지 않는다(gimbal lock¹¹).
 - **천을 미는 매끈한 함수는 0 이하에서 정확히 0이어야 한다.** 그렇지 않으면 천이 몸 쪽으로 들어간다(`motion.soft_pos`).
 - **agent 보고는 믿지 말고 이미지와 수치를 직접 확인한다.** 관통 표의 옆쪽 수치가 잘못된 환산으로 실제의 약 0.7배로 나왔던 적이 있다.
+- **선으로만 된 뼈대에서 지은 모션은 팔꿈치가 가슴 속에 든다.** 방향 오차 0°로 옮겨도 위팔이 가슴에 묻히고 아래팔이 명치에서 솟는다(원본에는 몸통 두께가 없다). `import_pose.py`가 기본으로 팔꿈치를 어깨–손목 선 둘레로 돌려 뺀다. 옆모습은 멀쩡해 보이니 **정면 뷰**를 본다.
+- **팔을 통째로 돌려 빼면 장갑도 같이 돈다.** 손의 월드 방향은 따로 지키고 손목이 그 차이를 받게 한다. 손목 한계에 걸려 남는 회전(잰 값 평균 11°)은 보고한다.
 - **MediaPipe는 시스템 라이브러리 `libegl1`·`libgles2`가 있어야 돈다.** 없으면 실제 영상 캡처는 못 하고 합성 캡처로만 확인된다 — 그렇게 보고한다.
 - **저작권**: 참고 이미지에서 가져오는 것은 역사적·일반적 복식 요소(형태·색·재질·무늬)다. 얼굴·머리 모양 같은 인물의 생김새는 일반형으로 둔다. 참고 이미지 파일은 저장소에 넣지 않고, 사진에서 뽑은 파생 윤곽만 남긴다.
 
@@ -166,7 +180,8 @@ nohup python template/soldier.py bake -o out/fig --splats 60000 --res 320 --view
 ## 7. 이 방법이 못 하는 것
 
 - 사진 여러 장에서 장면을 자동 복원하지 않는다(photogrammetry·NeRF의 일). 입력은 코드로 빚은 형태, 또는 3D mesh 파일(`python -m pixelsplat bake model.glb`).
-- 천은 휘지 않는 강체 조각이다. 손가락 관절·표정은 없다.
+- 천은 휘지 않는 강체 조각이다. 손은 벙어리장갑까지다(손가락 넷이 한 덩어리로 마디에서만 꺾임 — 낱손가락·가운데 마디 없음). 표정은 없다.
+- 팔꿈치 빼기는 손목을 움직이지 않는다: 원본이 **손 자체**를 몸통 속에 두면 빼지 못하고 보고만 한다. 이벤트가 없는 훅·어퍼컷은 주먹 규칙이 잡지 못한다.
 - 학습은 쉬는 자세만 본다. 쉬는 자세에서 가려진 splat(60000개 기준 약 40 %)은 메시 초기값 그대로다.
 - 한 대의 카메라 영상에서는 깊이가 모호하다. 옆에서 찍은 영상이 가장 정확하다.
 

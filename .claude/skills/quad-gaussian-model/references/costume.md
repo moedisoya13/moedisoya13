@@ -188,7 +188,7 @@ def _paint_clav(p, layer, s):
 | 겉옷 | chest (몸통), pelvis (치마 윗단), skirt* 8개 | tunic, yoke, gore | 빨강 바탕 흰 마름모. 앞·뒤 ±51°는 마름모, 옆구리는 황토색 |
 | 벨트 | pelvis | (허리 회전판) + buckle | 원판을 갈색 가죽으로 칠하고 금색 징 18개 |
 | 소매 | upperarm, forearm | sleeve, cuff, head, buttons | 위팔은 바깥·앞뒤로만 부푼 녹색, 아래팔은 꼭 맞고 단추 5개 |
-| 장갑 | hand | glove, cuff | 손가락 한 덩어리 + 엄지 |
+| 장갑 | hand, fingers, thumb | glove, cuff | 벙어리장갑: 손바닥·손가락 뭉치·엄지가 각자의 뼈에. 뭉치·엄지는 살 ∪ 구슬을 함께 부풀려(`_mitt`) 장갑 낀 마디도 맨손처럼 닫힌다 |
 | 타이츠 | thigh, shin | (칠만) | 왼다리 빨강, 오른다리 크림. 무릎 구슬도 그 다리 색 |
 | 신발 | foot, toe | shoe | 발가락 뼈 전체를 덮는 뾰족한 앞코 |
 | 얼굴·목 | head, neck | (칠만) | 일반형 얼굴(코·입·턱), 목은 청록 속깃 |

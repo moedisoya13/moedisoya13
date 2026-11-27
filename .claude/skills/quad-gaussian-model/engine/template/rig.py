@@ -60,15 +60,22 @@ HEEL_ROUND = 0.145  # centre of the rounded heel, as a fraction of the foot leng
 HEEL_PIVOT = 0.122  # the heel rolls about a ground point just behind that centre
 TOE_JOINT = 0.705  # ball of the foot (toe hinge) as a fraction of the foot length from the heel
 TOE_R = 0.0150  # radius of the toe hinge = its height above the ground
+# The hand is a mitten: the palm (bone ``hand``), the four fingers as ONE block hinged on the knuckle line
+# (``fingers``), and the thumb on a ball at its base (``thumb``).  Positions in the hand's own frame
+# (``hand_axes``): (along the arm from the wrist, towards the palm side, forward = thumb side), fractions of H.
+KNUCKLE = (0.0555, 0.0020, 0.0)  # middle of the knuckle line; the hinge axis runs through it, forward
+KNUCKLE_HALF = 0.0135  # half length of the knuckle barrel along that axis
+THUMB_BASE = (0.0180, 0.0030, 0.0180)
+THUMB_TIP = (0.0580, 0.0095, 0.0365)
 
 # ---------------------------------------------------------------- joint beads / sockets / turntables
 # radius of the bead (sphere on the CHILD bone, centred on the joint) and of the socket (sphere of
 # the PARENT bone around the same centre), fractions of H.  bead >= socket, so the parent's end cap
 # always hides inside the bead; both solids contain the socket sphere in every pose -> no gap.
 BEAD = dict(hip=0.0445, knee=0.0311, ankle=0.0222, toe=TOE_R, shoulder=0.0300, elbow=0.0233, wrist=0.0167,
-            clavicle=0.0211, neck=0.0344)
+            clavicle=0.0211, neck=0.0344, knuckle=0.0090, thumb=0.0088)
 SOCKET = dict(hip=0.0390, knee=0.0278, ankle=0.0183, toe=TOE_R, shoulder=0.0261, elbow=0.0206, wrist=0.0144,
-              clavicle=0.0211, neck=0.0306)
+              clavicle=0.0211, neck=0.0306, knuckle=0.0080, thumb=0.0078)
 # turntables: a disc on the PARENT bone whose axis is the yaw axis, plus a ball of radius ``ball``
 # on the parent and a slightly smaller one (``inner``) on the child, both centred on the joint.
 TURNTABLE = dict(
@@ -81,6 +88,19 @@ def _arm_axis(s: int) -> np.ndarray:
     return V(s * math.sin(a), -math.cos(a), 0.0)
 
 
+def hand_axes(s: int) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Unit vectors of the resting hand: along the arm, towards the palm side (the body), forward (thumb side)."""
+    a = _arm_axis(s)
+    w = V(0.0, 0.0, 1.0)
+    return a, s * np.cross(a, w), w
+
+
+def hand_point(s: int, q) -> np.ndarray:
+    """A point given in the hand's frame (along, palmwards, forward; fractions of H) -> rest-pose world."""
+    a, n, w = hand_axes(s)
+    return WRIST[s] + H * (q[0] * a + q[1] * n + q[2] * w)
+
+
 WAIST = V(0.0, Y(WAIST_H), 0.0)
 PELVIS = V(0.0, Y(RATIO["hip"]) + 0.02 * H, 0.0)  # root pivot, between and a little above the hip joints
 NECK = V(0.0, Y(NECK_H), -0.007 * H)
@@ -90,6 +110,7 @@ EYE = V(0.0, Y(RATIO["eye"]), 0.045 * H)
 CHIN = V(0.0, Y(RATIO["chin"]), 0.039 * H)
 HIP, KNEE, ANKLE, TOE, TOE_TIP, HEEL = {}, {}, {}, {}, {}, {}
 CLAV, SHOULDER, ELBOW, WRIST, FINGERTIP, ARM_AXIS = {}, {}, {}, {}, {}, {}
+KNUCKLES, THUMB, THUMB_END = {}, {}, {}  # knuckle hinge (its middle), thumb base, thumb tip
 FOOT_LEN = RATIO["foot_length"] * H
 FOOT_W = RATIO["foot_width"] * H
 for _side, _s in SIDES:
@@ -107,6 +128,7 @@ for _side, _s in SIDES:
     ELBOW[_s] = SHOULDER[_s] + RATIO["upper_arm"] * H * ARM_AXIS[_s]
     WRIST[_s] = ELBOW[_s] + RATIO["forearm"] * H * ARM_AXIS[_s]
     FINGERTIP[_s] = WRIST[_s] + RATIO["hand"] * H * ARM_AXIS[_s]
+    KNUCKLES[_s], THUMB[_s], THUMB_END[_s] = hand_point(_s, KNUCKLE), hand_point(_s, THUMB_BASE), hand_point(_s, THUMB_TIP)
 THIGH_LEN = float(np.linalg.norm(KNEE[1] - HIP[1]))
 SHIN_LEN = float(np.linalg.norm(ANKLE[1] - KNEE[1]))
 
@@ -160,13 +182,17 @@ CAPE_CLEAR = (V(0.0, Y(0.620), -0.081 * H), V(0.0, Y(0.555), -0.092 * H), V(0.0,
               V(0.0, Y(0.400), -0.107 * H))
 CAPE_HALF_WIDTH = 0.095 * H  # (the costume's cape is this wide at most; what is further out cannot touch it)
 
-GEOMETRY_BONES: List[str] = []  # bones that carry mannequin surface (filled below)
-HELPER_BONES: List[str] = []
+GEOMETRY_BONES: List[str] = []  # the body bones a motion defines; they carry mannequin surface (filled below)
+HELPER_BONES: List[str] = []  # costume bones, driven from the body pose (motion.drive_helpers)
+HAND_BONES: List[str] = []  # fingers + thumb of each hand: mannequin surface too, driven by one number (``grip``)
 
 
 def make_skeleton() -> Skeleton:
-    """32 bones, parents first.  The first 20 carry the mannequin; the last 12 are costume helpers
-    (8 skirt gores, cape, capeTip, plume, plumeTip) that only the outfit gives a surface."""
+    """36 bones, parents first.  The first 20 carry the mannequin and are what a motion defines; the next 12
+    are costume helpers (8 skirt gores, cape, capeTip, plume, plumeTip) that only the outfit gives a surface;
+    the last 4 are the mitten hands (fingersL, thumbL, fingersR, thumbR), part of the mannequin, set by
+    ``grip_rots``.  New bones are appended, never inserted: the numbers of the older ones stay what they were,
+    and a clip or model made before a bone existed simply leaves it at rest."""
     b = [Bone("pelvis", None, PELVIS, WAIST),
          Bone("chest", "pelvis", WAIST, NECK),  # joint = waist turntable
          Bone("neck", "chest", NECK, HEAD),
@@ -186,9 +212,14 @@ def make_skeleton() -> Skeleton:
         b.append(Bone(name, "pelvis", head, tail))
     b += [Bone("cape", "chest", CAPE[0], CAPE[1]), Bone("capeTip", "cape", CAPE[1], CAPE[2]),
           Bone("plume", "head", PLUME[0], PLUME[1]), Bone("plumeTip", "plume", PLUME[1], PLUME[2])]
+    n_helper = len(b)
+    for side, s in SIDES:
+        b += [Bone("fingers" + side, "hand" + side, KNUCKLES[s], FINGERTIP[s]),
+              Bone("thumb" + side, "hand" + side, THUMB[s], THUMB_END[s])]
     bones = [Bone(x.name, x.parent, np.asarray(x.head, np.float32), np.asarray(x.tail, np.float32)) for x in b]
     GEOMETRY_BONES[:] = [x.name for x in bones[:n_geo]]
-    HELPER_BONES[:] = [x.name for x in bones[n_geo:]]
+    HELPER_BONES[:] = [x.name for x in bones[n_geo:n_helper]]
+    HAND_BONES[:] = [x.name for x in bones[n_helper:]]
     return Skeleton(bones)
 
 
@@ -221,9 +252,10 @@ def _joints() -> List[Joint]:
                 ("clavicle", "clav", "chest", CLAV, "clavicle"), ("shoulder", "upperarm", "clav", SHOULDER, "shoulder"),
                 ("elbow", "forearm", "upperarm", ELBOW, "elbow"), ("wrist", "hand", "forearm", WRIST, "wrist"),
                 ("hip", "thigh", "pelvis", HIP, "hip"), ("knee", "shin", "thigh", KNEE, "knee"),
-                ("ankle", "foot", "shin", ANKLE, "ankle"), ("toe", "toe", "foot", TOE, "toe")):
+                ("ankle", "foot", "shin", ANKLE, "ankle"), ("toe", "toe", "foot", TOE, "toe"),
+                ("knuckle", "fingers", "hand", KNUCKLES, "knuckle"), ("thumb", "thumb", "hand", THUMB, "thumb")):
             parent = par if par in ("chest", "pelvis") else par + side
-            j.append(Joint(nm + side, bone + side, parent, pos[s], "hinge" if nm == "toe" else "bead",
+            j.append(Joint(nm + side, bone + side, parent, pos[s], "hinge" if nm in ("toe", "knuckle") else "bead",
                            BEAD[key] * H, SOCKET[key] * H, bone + side))
     return j
 
@@ -245,11 +277,14 @@ LIMITS: Dict[str, Tuple[Tuple[float, float], Tuple[float, float], Tuple[float, f
     "clav":     ((0.0, 0.0),       (-15.0, 15.0),   (-5.0, 20.0)),    # shrug (+roll), reach forward/back (yaw)
     "upperarm": ((-170.0, 50.0),   (-70.0, 70.0),   (-20.0, 90.0)),   # shoulder
     "forearm":  ((-145.0, 0.0),    (-80.0, 80.0),   (0.0, 0.0)),      # elbow + forearm twist
-    "hand":     ((-70.0, 70.0),    (0.0, 0.0),      (-20.0, 30.0)),   # wrist
+    "hand":     ((-70.0, 70.0),    (-90.0, 90.0),   (-20.0, 30.0)),   # wrist; yaw = turning the forearm over (the ball takes it)
     "thigh":    ((-120.0, 20.0),   (-40.0, 40.0),   (-25.0, 45.0)),   # hip
     "shin":     ((0.0, 140.0),     (0.0, 0.0),      (0.0, 0.0)),      # knee
     "foot":     ((-20.0, 45.0),    (-10.0, 10.0),   (-15.0, 15.0)),   # ankle
     "toe":      ((-60.0, 10.0),    (0.0, 0.0),      (0.0, 0.0)),      # toe hinge
+    # the mitten hand (angles in the hand's own frame, see ``_joint_frames``): pitch = curl towards the palm
+    "fingers":  ((-10.0, 150.0),   (0.0, 0.0),      (0.0, 0.0)),      # knuckle hinge
+    "thumb":    ((-10.0, 50.0),    (-50.0, 10.0),   (-10.0, 65.0)),   # ball at the thumb base
 }
 
 
@@ -278,9 +313,24 @@ def limits(bone: str):
 
 def _frame(bone: Optional[str]) -> np.ndarray:
     """Rest orientation of a bone's anatomical frame: the arm chain is spread by A_POSE."""
-    if bone is not None and bone[:-1] in ("upperarm", "forearm", "hand"):
+    if bone is not None and bone[:-1] in ("upperarm", "forearm", "hand", "fingers", "thumb"):
         return rot_z((1 if bone.endswith("L") else -1) * A_POSE)
     return np.eye(3)
+
+
+def _joint_frames(bone: str) -> Tuple[np.ndarray, np.ndarray]:
+    """(A, B): the joint angles of a local rotation R are the Euler angles of A^T R B.
+
+    Body joints are read in the anatomical frame of the parent (A) and of the bone itself (B).  The finger
+    and thumb joints are read in the HAND's own frame instead, turned so that the knuckle line is the pitch
+    axis: pitch = curling towards the palm (+), on both hands; yaw = twist about the hand's length; roll =
+    swinging in the plane of the palm.  (Euler roll, the middle angle, only reaches +-90 degrees; a fist
+    curls further than that, so the curl has to be the pitch.)"""
+    if bone[:-1] in ("fingers", "thumb"):
+        s = 1 if bone.endswith("L") else -1
+        F = _frame(bone) @ rot_y(s * 90.0)
+        return F, F
+    return _frame(PARENT[bone]), _frame(bone)
 
 
 def euler(pitch: float = 0.0, yaw: float = 0.0, roll: float = 0.0) -> np.ndarray:
@@ -297,12 +347,14 @@ def euler_angles(R: np.ndarray) -> Tuple[float, float, float]:
 
 def local_rot(bone: str, pitch: float = 0.0, yaw: float = 0.0, roll: float = 0.0) -> np.ndarray:
     """Local rotation for ``Skeleton.world_mats`` from joint angles counted from the anatomical position."""
-    return _frame(PARENT[bone]) @ euler(pitch, yaw, roll) @ _frame(bone).T
+    A, B = _joint_frames(bone)
+    return A @ euler(pitch, yaw, roll) @ B.T
 
 
 def joint_angles(bone: str, R_local: np.ndarray) -> Tuple[float, float, float]:
     """(pitch, yaw, roll) of a local rotation, counted from the anatomical position."""
-    return euler_angles(_frame(PARENT[bone]).T @ np.asarray(R_local, float) @ _frame(bone))
+    A, B = _joint_frames(bone)
+    return euler_angles(A.T @ np.asarray(R_local, float) @ B)
 
 
 def rest_angles(bone: str) -> Tuple[float, float, float]:
@@ -377,7 +429,8 @@ def clamp_rot(bone: str, R_local: np.ndarray):
     lim = limits(bone)
     if lim is None:
         return np.asarray(R_local, float), None, 0.0
-    J = _frame(PARENT[bone]).T @ np.asarray(R_local, float) @ _frame(bone)
+    A, B = _joint_frames(bone)
+    J = A.T @ np.asarray(R_local, float) @ B
     angles, excess = _nearest_in_box(J, lim)
     if excess < 1e-7:
         return np.asarray(R_local, float), angles, 0.0
@@ -406,7 +459,8 @@ def check_limits(rots: Dict[str, np.ndarray], tol: float = 0.05) -> List[Tuple[s
         lim = limits(bone)
         if lim is None:
             continue
-        J = _frame(PARENT[bone]).T @ np.asarray(R, float) @ _frame(bone)
+        A, B = _joint_frames(bone)
+        J = A.T @ np.asarray(R, float) @ B
         nearest, excess = _nearest_in_box(J, lim)
         if excess <= tol:
             continue
@@ -425,11 +479,46 @@ def anatomical_rots() -> Dict[str, np.ndarray]:
     return {"upperarm" + side: local_rot("upperarm" + side) for side, _ in SIDES}
 
 
+# ---------------------------------------------------------------- grip: one number per hand
+FIST_CURL = 148.0  # degrees the finger block is curled at grip 1 (it has 34 degrees of curl built in: 182 at the tips)
+THUMB_FIST = (36.0, -38.0, 57.0)  # (pitch, yaw, roll) of the left thumb at grip 1: laid across the curled fingers
+GRIP_OPEN, GRIP_FIST = 0.0, 1.0
+
+
+def grip_rots(side: str, grip: float) -> Dict[str, np.ndarray]:
+    """{fingers, thumb of that hand: local rotation} for a grip between 0 (the open, relaxed mitten = the
+    rest pose) and 1 (a fist: the finger block curled into the palm, the thumb laid across it)."""
+    g = float(min(max(grip, 0.0), 1.0))
+    if g == 0.0:  # exactly the rest pose, as a clip without finger bones has it
+        return {"fingers" + side: np.eye(3), "thumb" + side: np.eye(3)}
+    s = 1 if side == "L" else -1
+    p, y, r = THUMB_FIST
+    return {"fingers" + side: local_rot("fingers" + side, pitch=g * FIST_CURL),
+            "thumb" + side: local_rot("thumb" + side, pitch=g * p, yaw=s * g * y, roll=s * g * r)}
+
+
+def set_grip(rots: Dict[str, np.ndarray], left: float = 0.0, right: float = 0.0) -> Dict[str, np.ndarray]:
+    """Write both hands' grip into a pose (in place; also returned)."""
+    rots.update(grip_rots("L", left))
+    rots.update(grip_rots("R", right))
+    return rots
+
+
+def grip_of(rots: Dict[str, np.ndarray], side: str) -> float:
+    """The grip a pose holds in one hand (read from the finger block; 0 for a pose without finger bones)."""
+    R = rots.get("fingers" + side)
+    g = 0.0 if R is None else float(joint_angles("fingers" + side, R)[0]) / FIST_CURL
+    return 0.0 if abs(g) < 1e-12 else g
+
+
 def limit_poses(n_random: int = 48, seed: int = 0, corners: bool = True) -> List[Dict[str, np.ndarray]]:
     """Poses that sweep the rotation limits: rest, every joint at each end of each axis, the corners
-    of every multi-axis joint, and ``n_random`` whole-body poses drawn uniformly inside the limits."""
+    of every multi-axis joint, and ``n_random`` whole-body poses drawn uniformly inside the limits.
+    (The hands' fingers and thumbs come after the body bones and draw from a generator of their own, so
+    the body's part of every pose is what it was before the hands had joints.)"""
     rng = np.random.default_rng(seed)
-    bones = [b for b in GEOMETRY_BONES if limits(b) is not None]
+    rng_hand = np.random.default_rng([seed, 1])
+    bones = [b for b in GEOMETRY_BONES + HAND_BONES if limits(b) is not None]
     poses: List[Dict[str, np.ndarray]] = [{}, anatomical_rots()]
     for b in bones:
         lim = limits(b)
@@ -446,8 +535,11 @@ def limit_poses(n_random: int = 48, seed: int = 0, corners: bool = True) -> List
                 for k, i in enumerate(free):
                     a[i] = lim[i][(code >> k) & 1]
                 poses.append({b: local_rot(b, *a)})
+    for b in HAND_BONES[::2]:  # each hand as a fist, and half closed
+        poses += [grip_rots(b[-1], 1.0), grip_rots(b[-1], 0.5)]
     for _ in range(n_random):
-        poses.append({b: local_rot(b, *[rng.uniform(lo, hi) for lo, hi in limits(b)]) for b in bones})
+        poses.append({b: local_rot(b, *[(rng_hand if b in HAND_BONES else rng).uniform(lo, hi) for lo, hi in limits(b)])
+                      for b in bones})
     return poses
 
 

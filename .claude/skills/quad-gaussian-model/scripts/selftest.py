@@ -1,4 +1,4 @@
-"""Short check (about 20 s on 4 CPU cores) that the engine in a work folder is installed and behaves.
+"""Short check (20 - 30 s on 4 CPU cores) that the engine in a work folder is installed and behaves.
 
     <python> selftest.py WORKDIR            # WORKDIR = the folder setup.sh filled
 
@@ -10,6 +10,8 @@ Runs the real commands on a tiny job and checks numbers, not just exit codes:
   4 rigid       every splat rides on exactly one bone; a pose leaves same-bone distances unchanged
   5 render      one "Almost Pixel Perfect" frame of a walking pose -> out/selftest/selftest_app.png
   6 feet        over a travelling walk cycle the planted foot does not move in the world
+  7 arms        the mitten hands close into a fist (grip 0 -> 1) and an elbow tucked into the chest is swung out
+                of it with the wrist left where it was
 
 Exit code 0 = all passed.  Open the PNG and look at it: a number cannot tell a figure from a blob.
 """
@@ -135,6 +137,40 @@ def main():
         assert rep["max_reach"] < 1.0, f"leg over-stretched ({rep['max_reach']:.4f})"
         return (f"planted point moves {rep['stance_slide']:.1e} (world units), heading {rep['stance_heading_deg']:.1e} deg, "
                 f"leg reach {rep['max_reach']:.4f}, limit violations 0")
+
+    @step("arms")
+    def _():
+        import arms
+        import retarget as rt
+        import rig
+        soldier, R = state["soldier"], state["R"]
+        skel = soldier.SKEL
+        hand = [skel.index[b] for b in ("handL", "fingersL", "thumbL")]
+        mine = np.isin(R.bones, hand)
+        assert mine.sum() > 20 and np.isin(R.bones, hand[1:]).sum() > 5, "the fingers and thumb carry no splats"
+        axis = rig.ARM_AXIS[1]
+        reach = {}
+        for g in (0.0, 1.0):  # how far the hand's splats reach from the wrist: open, and as a fist
+            rots = rig.set_grip({}, g, g)
+            assert not rig.check_limits(rots), f"grip {g} is outside the joint limits"
+            pts = R.pose(skel.world_mats(rots))[0].detach().numpy()[mine]
+            reach[g] = float(((pts - rig.WRIST[1]) @ axis).max())
+        assert reach[1.0] < 0.75 * reach[0.0], f"the fist is not shorter than the open hand ({reach[1.0]:.3f} vs {reach[0.0]:.3f})"
+        # a rear guard with its elbow slid in front of the chest (where a stick figure's elbow can go)
+        d = rt.unit(np.array([0.50, -0.78, 0.36]))
+        pose = {"upperarmR": rt.shortest_arc(rig.ARM_AXIS[-1], d) @ rig.rot_axis(rig.ARM_AXIS[-1], 30.0),
+                "forearmR": rig.local_rot("forearmR", pitch=-110.0)}
+        frames = [dict(pose) for _ in range(3)]
+        wrist = rt.at(rt.fk(pose), "handR", rig.WRIST[-1])
+        before = arms.arm_depth(pose, "R")
+        rep = arms.clear_elbows(frames, np.zeros((3, 3)), 30.0)["R"]
+        moved = float(np.linalg.norm(rt.at(rt.fk(frames[1]), "handR", rig.WRIST[-1]) - wrist))
+        assert before > 0.02, f"the test pose is not inside the chest ({before:.4f})"
+        assert rep["inside_after"] == 0 and not rep["not_cleared"], f"elbow still inside: {rep['depth_after']:.4f}"
+        assert moved < 1e-3 and not rig.check_limits(frames[1]), f"wrist moved {moved:.2e}"
+        return (f"fist reaches {reach[1.0]:.3f} from the wrist (open hand {reach[0.0]:.3f}); elbow {before:+.3f} -> "
+                f"{rep['depth_after']:+.3f} in the chest by a {rep['swivel_max']:.0f} deg swivel, wrist moved {moved:.1e}, "
+                f"hand turned {rep['hand_turned_max']:.1f} deg")
 
     failed = [n for n, ok, *_ in results if not ok]
     print(f"\n{len(results) - len(failed)}/{len(results)} passed in {time.time() - t_all:.0f}s"

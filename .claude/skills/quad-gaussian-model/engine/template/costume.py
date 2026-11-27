@@ -10,7 +10,7 @@ cape, plume) and paints every surface with a material: albedo, roughness, metall
     chest     tabard body, mantle + cowl (dagged), brooch
     clav      mantle over the shoulder, pauldron cap, strap + buckle
     upperarm  two pauldron lames, puffed sleeve    forearm   tight sleeve + buttons
-    hand      glove + cuff                         pelvis    belt (= the waist turntable), buckle, skirt yoke
+    hand      glove + cuff (fingers, thumb: glove) pelvis    belt (= the waist turntable), buckle, skirt yoke
     skirt*    tabard skirt, eight gores            cape*     the mantle's long back drape (dagged hem)
     legs      two-coloured hose                    foot/toe  shoes with a pointed toe
 
@@ -500,6 +500,13 @@ def _hand(p, s):
     return {"glove": flesh - m(0.0045), "cuff": cuff}
 
 
+def _mitt(p, bone):
+    """Glove over the finger block / the thumb: the same leather skin as over the palm, bead included - so the
+    gloved knuckles close exactly as the bare ones do."""
+    d = body.BUILDERS[bone](p)
+    return {"glove": np.minimum(d[body.FLESH], d[body.BEAD]) - m(0.0045)}
+
+
 def _paint_hand(p, layer, s):
     a, _, _ = arm_frame(s)
     al = (p - P(rig.WRIST[s])) @ a
@@ -683,7 +690,8 @@ def _paint_plume(p, layer):
 
 # ---------------------------------------------------------------- outfit interface
 def _side(bone: str) -> Tuple[str, int]:
-    if bone[-1] in "LR" and bone[:-1] in ("clav", "upperarm", "forearm", "hand", "thigh", "shin", "foot", "toe"):
+    if bone[-1] in "LR" and bone[:-1] in ("clav", "upperarm", "forearm", "hand", "fingers", "thumb", "thigh", "shin",
+                                          "foot", "toe"):
         return bone[:-1], (1 if bone[-1] == "L" else -1)
     return bone, 0
 
@@ -707,6 +715,8 @@ def layers(bone: str, p) -> Dict[str, np.ndarray]:
         return _forearm(p, s)
     if base == "hand":
         return _hand(p, s)
+    if base in ("fingers", "thumb"):
+        return _mitt(p, bone)
     if base == "toe":
         return _toe(p, s)
     if base in rig.GORES:
@@ -737,6 +747,8 @@ def paint(bone: str, p, layer):
         return _paint_forearm(p, layer, s)
     if base == "hand":
         return _paint_hand(p, layer, s)
+    if base in ("fingers", "thumb"):
+        return Paint(len(p), "leather").out()
     if base in rig.GORES:
         return _paint_skirt(p, layer, base)
     if base in ("cape", "capeTip"):
@@ -747,7 +759,7 @@ def paint(bone: str, p, layer):
 
 
 _BOX_CACHE: Dict[str, Tuple[np.ndarray, np.ndarray]] = {}
-_DRESSED = {"chest", "pelvis", "neck", "head", "clav", "upperarm", "forearm", "hand", "toe"}
+_DRESSED = {"chest", "pelvis", "neck", "head", "clav", "upperarm", "forearm", "hand", "fingers", "thumb", "toe"}
 
 
 def box(bone: str) -> Optional[Tuple[np.ndarray, np.ndarray]]:
@@ -781,7 +793,8 @@ CLOTH = ("tunic", "mantle", "cowl", "brooch")
 CLASH_PAIRS = (
     ("puffed sleeve / trunk", [("upperarmL", None, lambda p: _past_shoulder(p, 1)),
                                ("upperarmR", None, lambda p: _past_shoulder(p, -1))], [("chest", None, None)]),
-    ("forearm, hand / skirt, hips", [(b, None, None) for b in ("forearmL", "forearmR", "handL", "handR")],
+    ("forearm, hand / skirt, hips", [(b, None, None) for b in ("forearmL", "forearmR", "handL", "handR", "fingersL",
+                                                                "fingersR", "thumbL", "thumbR")],
      [(b, None, None) for b in ("pelvis", "thighL", "thighR") + SKIRT_BONES]),
     ("helmet / bevor", [("head", ARMOUR, None)], [("neck", ("bevor",), None)]),
     ("face / bevor, cowl", [("head", (body.FLESH,), None)], [("neck", ("bevor",), None), ("chest", CLOTH, None)]),
