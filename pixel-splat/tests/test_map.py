@@ -230,17 +230,31 @@ def test_to_model_keeps_the_geometry(splats):
 SPEC = isocam.RefCam()
 
 
+def test_default_camera_is_the_chosen_45_degrees():
+    """The user chose 45 degrees ("맵 카메라는 45°로"); the scale goes with it (16 px mannequin)."""
+    assert (SPEC.elev, SPEC.az, SPEC.px_per_unit, SPEC.view) == (45.0, 0.0, 11.1, (211, 124))
+    a = graybox.build_parser().parse_args(["build"])  # the command line has the same defaults
+    assert (a.elev, a.az, a.px_per_unit, a.view_w, a.view_h) == (45.0, 0.0, 11.1, 211, 124)
+    b = graybox.build_parser().parse_args(["build", "--elev", "30", "--px-per-unit", "9.6"])
+    assert (b.elev, b.px_per_unit) == (30.0, 9.6)  # the 30 degree option still works
+
+
 def test_reference_numbers():
-    assert SPEC.elev == 30.0 and SPEC.view == (211, 124)
-    assert SPEC.person_px(1.80) == pytest.approx(1.8 * math.cos(math.radians(30)) * 9.6)
+    s = math.sqrt(0.5)  # sin 45 = cos 45
+    assert SPEC.person_px(1.80) == pytest.approx(1.8 * s * 11.1)  # a 1.75 m pole: 14.1 px
     w, d = SPEC.ground_footprint()
-    assert w == pytest.approx(211 / 9.6) and d == pytest.approx(124 / 9.6 / 0.5)
+    assert w == pytest.approx(211 / 11.1) and d == pytest.approx(124 / 11.1 / s)
+    assert w / U == pytest.approx(18.5, abs=0.05) and d / U == pytest.approx(15.4, abs=0.05)  # metres per screen
+    old = isocam.RefCam(elev=30.0, px_per_unit=9.6)
+    assert old.person_px(1.80) == pytest.approx(14.96, abs=0.01)
+    assert old.ground_footprint()[1] / U == pytest.approx(25.1, abs=0.05)
 
 
 def test_axes_and_projection_scale():
     right, up, fwd = isocam.axes(SPEC)
     np.testing.assert_allclose(right, [1, 0, 0], atol=1e-12)
-    np.testing.assert_allclose(fwd, [0, -0.5, -math.cos(math.radians(30))], atol=1e-12)
+    e = math.radians(SPEC.elev)
+    np.testing.assert_allclose(fwd, [0, -math.sin(e), -math.cos(e)], atol=1e-12)
     assert up[1] > 0 and abs(up @ fwd) < 1e-12
     cam = isocam.origin_camera(SPEC)
     assert cam.ortho
@@ -256,7 +270,7 @@ def test_azimuth_turns_the_view():
     cam = isocam.origin_camera(isocam.RefCam(az=90.0))
     o = isocam.project(cam, [0, 0, 0])
     d = isocam.project(cam, [0, 0, -1]) - o  # seen from the east, north (-z) is on the right
-    np.testing.assert_allclose(d[:2], [9.6, 0], atol=1e-9)
+    np.testing.assert_allclose(d[:2], [SPEC.px_per_unit, 0], atol=1e-9)
 
 
 def test_windows_shift_pixels_only():
@@ -290,10 +304,11 @@ def test_unproject_round_trip():
     P[:, 1] = -1.0
     px = isocam.project(cam, P)
     np.testing.assert_allclose(isocam.unproject_to_plane(cam, px[:, 0], px[:, 1], -1.0), P, atol=1e-9)
-    # one pixel down on screen = 1 / (m sin e) further south on the ground (the 2:1 squash at 30 degrees)
-    flat = isocam.origin_camera(SPEC)
-    step = isocam.unproject_to_plane(flat, 1.0, 2.0, 0.0) - isocam.unproject_to_plane(flat, 1.0, 1.0, 0.0)
-    np.testing.assert_allclose(step, [0, 0, 1 / (9.6 * 0.5)], atol=1e-9)
+    # one pixel down on screen = 1 / (m sin e) further south on the ground (1.41 : 1 at 45 degrees, 2 : 1 at 30)
+    for spec in (SPEC, isocam.RefCam(elev=30.0, px_per_unit=9.6)):
+        flat = isocam.origin_camera(spec)
+        step = isocam.unproject_to_plane(flat, 1.0, 2.0, 0.0) - isocam.unproject_to_plane(flat, 1.0, 1.0, 0.0)
+        np.testing.assert_allclose(step, [0, 0, 1 / (spec.px_per_unit * math.sin(math.radians(spec.elev)))], atol=1e-9)
 
 
 def test_view_origin_and_subpixel_split():
@@ -340,7 +355,7 @@ def test_projection_agrees_with_the_rasterizer():
     px = isocam.project(cam, P[0])
     assert abs(xs.mean() + 0.5 - px[0]) < 0.6 and abs(ys.mean() + 0.5 - px[1]) < 0.6
     assert gb["depth"][gb["alpha"] > 0.5].mean() == pytest.approx(px[2], abs=0.15)
-    # footprint of a round ground splat at 30 degrees: about twice as wide as tall
+    # footprint of a round ground splat at 45 degrees: about 1.4 times as wide as tall
     assert np.ptp(xs) >= np.ptp(ys)
 
 
@@ -409,7 +424,54 @@ def test_grid_lines_are_one_pixel_wide(baked):
         pytest.skip("probe row coincides with a grid line")
     assert len(lengths) >= 2 and (lengths == 1).all()
     gaps = np.diff(np.nonzero(runs == 1)[0])
-    assert set(gaps.tolist()) <= {9, 10}  # one metre = 9.87 px
+    ppm = SPEC.px_per_unit * U  # one metre = 11.42 px
+    assert set(gaps.tolist()) <= {math.floor(ppm), math.ceil(ppm)}
+
+
+def test_pixel_steps_on_surface():
+    cam = isocam.level_camera(SPEC, [-5, -1.5, -4], [5, 2, 4])
+    up = np.array([0.0, 1.0, 0.0])
+    ex, ey = graybox.pixel_steps_on_surface(cam, up)
+    o = isocam.unproject_to_plane(cam, 0.0, 0.0, -1.0)  # flat ground: the same as unprojecting to the plane
+    np.testing.assert_allclose(ex, isocam.unproject_to_plane(cam, 1.0, 0.0, -1.0) - o, atol=1e-9)
+    np.testing.assert_allclose(ey, isocam.unproject_to_plane(cam, 0.0, 1.0, -1.0) - o, atol=1e-9)
+    # a slope rising to the north (facing the camera, like the ramp) is seen more face-on: a pixel covers
+    # less of it in z; one facing away, more
+    a = math.radians(17.7)
+    toward, away = (np.array([0.0, math.cos(a), s * math.sin(a)]) for s in (1, -1))
+    e = math.radians(SPEC.elev)
+    for n, el in ((toward, e + a), (away, e - a)):
+        _, dy = graybox.pixel_steps_on_surface(cam, n)
+        assert abs(n @ dy) < 1e-9  # it lies in the surface
+        np.testing.assert_allclose(abs(dy[2]), math.cos(a) / (SPEC.px_per_unit * math.sin(el)), rtol=1e-9)
+
+
+def test_grid_lines_stay_one_pixel_wide_on_a_ramp():
+    """With the flat-ground tolerance about half of the z lines on a ramp were two pixels thick."""
+    L = lv.Level({"size": [12, 12], "grid": {"minor": 1.0, "major": 5.0}, "elements": [
+        {"type": "ramp", "at": [0, 0], "size": [8, 6], "rot": -90, "height": [0.0, 2.5]}]})
+    cam = isocam.level_camera(SPEC, *L.bounds_world())
+    sp = L.splats(0.125, skirt=0.0)
+    gb = graybox.raster_tiled(*graybox.model_tensors(lv.to_model(sp)), cam,
+                              RasterConfig(tile=4, k=64, hard=True, cutoff=2.0))
+    P = graybox.gbuf.world_positions(cam, gb["depth"])
+    mat = np.where(gb["alpha"] > 0.5, sp.mat[np.maximum(gb["id"], 0)], -1)
+    flat_tol = graybox.grid_overlay(L, cam, P, mat, gb["albedo"])
+    per_px = graybox.grid_overlay(L, cam, P, mat, gb["albedo"], gb["normal"])
+    xm, ym, zm = P[..., 0] / U, (P[..., 1] - lv.GROUND) / U, P[..., 2] / U
+    ramp = (gb["alpha"] > 0.5) & (np.abs(xm) < 2.5) & (np.abs(zm) < 3.5) & (ym > 0.1)
+
+    def z_line_thickness(img):
+        dark = ramp & (img[..., 0] < gb["albedo"][..., 0] - 1e-6)
+        out = []
+        for col in range(dark.shape[1]):
+            d = np.diff(np.concatenate([[0], dark[:, col].astype(int), [0]]))
+            out += (np.nonzero(d == -1)[0] - np.nonzero(d == 1)[0]).tolist()
+        return np.array([v for v in out if v < 6])  # (x lines run along the column: skipped)
+
+    old, new = z_line_thickness(flat_tol), z_line_thickness(per_px)
+    assert len(new) > 40 and (old == 2).mean() > 0.2
+    assert (new == 1).mean() > 0.9
 
 
 def test_frame_is_lit_shadowed_and_outlined(baked):
@@ -441,15 +503,18 @@ def test_shaded_frames_do_not_change_when_the_window_moves(baked):
     np.testing.assert_allclose(a, full[8:38, 10:50], atol=1e-5)  # ... and equals a cut of the whole level
 
 
-def test_edge_mask_ignores_sloping_ground_but_finds_steps():
-    cam = isocam.level_camera(SPEC, [-2, -1.2, -2], [2, -0.8, 2])
+@pytest.mark.parametrize("spec", [SPEC, isocam.RefCam(elev=30.0, px_per_unit=9.6)], ids=["45deg", "30deg"])
+def test_edge_mask_ignores_sloping_ground_but_finds_steps(spec):
+    cam = isocam.level_camera(spec, [-2, -1.2, -2], [2, -0.8, 2])
     H, W = cam.height, cam.width
     ys, xs = np.mgrid[0:H, 0:W] + 0.5
     P = isocam.unproject_to_plane(cam, xs, ys, -1.0)
     n = np.zeros((H, W, 3), np.float32)
     n[..., 1] = 1
     gb = dict(alpha=np.ones((H, W), np.float32), normal=n, depth=isocam.project(cam, P)[..., 2].astype(np.float32))
-    assert np.abs(np.diff(gb["depth"], axis=0)).max() > 0.15  # neighbouring rows ARE far apart in depth ...
+    # neighbouring rows ARE far apart in depth (1 / (m tan e): 0.18 at 30 degrees, 0.09 at 45) ...
+    step = 1 / (spec.px_per_unit * math.tan(math.radians(spec.elev)))
+    np.testing.assert_allclose(np.abs(np.diff(gb["depth"], axis=0)), step, rtol=1e-3)
     assert not graybox.edge_mask(gb, P.astype(np.float32)).any()  # ... and still no outline on flat ground
     # raise the right half by 1 unit: its pixels are nearer, the step gets an outline on the near side
     P2 = P.copy()
@@ -483,6 +548,25 @@ def test_sun_matches_the_reference_shadow_direction():
     assert d[1] > 0 and abs(d[1]) < 0.3 * abs(d[0])  # and slightly towards the viewer (down on screen)
 
 
+def test_sun_keeps_the_screen_shadow_when_the_elevation_changes():
+    """The sun was read off the reference as a screen shape; under 30 degrees it is the first-tuned
+    altitude 52 / azimuth 100, under 45 another sun casts the same picture."""
+    old = isocam.RefCam(elev=30.0, px_per_unit=9.6)
+    az, alt = math.radians(100.0), math.radians(52.0)
+    np.testing.assert_allclose(graybox.sun_direction(old),
+                               [math.sin(az) * math.cos(alt), math.sin(alt), math.cos(az) * math.cos(alt)], atol=1e-12)
+
+    def pole_shadow(spec):  # tip of a 1-unit pole's shadow on screen, in units of the pole's screen height
+        sun, cam = graybox.sun_direction(spec), isocam.origin_camera(spec)
+        tip = np.array([0.0, 1.0, 0.0]) - sun / sun[1]  # the sun ray through the top of the pole hits y = 0 here
+        top = isocam.project(cam, [0, 1, 0])[:2] - isocam.project(cam, [0, 0, 0])[:2]
+        return (isocam.project(cam, tip)[:2] - isocam.project(cam, [0, 0, 0])[:2]) / np.linalg.norm(top)
+
+    np.testing.assert_allclose(pole_shadow(SPEC), pole_shadow(old), atol=1e-9)
+    np.testing.assert_allclose(pole_shadow(SPEC), graybox.SUN_SHADOW_ON_SCREEN, atol=1e-9)
+    assert math.degrees(math.asin(graybox.sun_direction(SPEC)[1])) == pytest.approx(57.66, abs=0.01)
+
+
 def test_reference_art_resamples_a_known_grid():
     """A synthetic 'video frame': random art pixels enlarged by a non-integer pitch with an offset."""
     rng = np.random.default_rng(0)
@@ -495,3 +579,26 @@ def test_reference_art_resamples_a_known_grid():
     # the recovered grid is a contiguous block of the original art pixels
     best = min(float(np.abs(got[:16, :26] - art[j:j + 16, i:i + 26]).mean()) for j in range(3) for i in range(3))
     assert best < 0.02
+
+
+BB = Path(__file__).resolve().parents[1] / "out" / "bb"
+
+
+@pytest.mark.skipif(not (BB / "soldier_splats.pt").exists(), reason="needs the baked mannequin in out/bb")
+def test_standing_mannequin_is_16_px_at_the_default_camera(tmp_path):
+    """The reference character is about 16 art px tall; the default scale is fitted so the bare mannequin
+    is too (a small flat level on the same world-locked lattice; three sub-pixel positions)."""
+    import json
+
+    torch.set_num_threads(2)
+    layout = {"name": "flat", "size": [12, 12], "elements": [], "demo": {"stand": {"at": [-1.0, 4.4], "facing": 60}}}
+    _, data = graybox.bake(lv.Level(layout), SPEC, spacing=0.25, shadow_res=64, log=quiet)
+    np.savez_compressed(tmp_path / graybox.BAKE_FILE, **data)
+    (tmp_path / "layout_used.json").write_text(json.dumps(layout))
+    st = graybox.Stage(str(tmp_path))
+    man = graybox.Mannequin(str(BB), 1000)
+    got = []
+    for at in ([-1.0, 4.4], [-0.79, 4.57], [-0.39, 4.81]):
+        st.level.demo["stand"]["at"] = at
+        got.append(graybox.figure_height_px(st, man))
+    assert got == [16, 16, 16]

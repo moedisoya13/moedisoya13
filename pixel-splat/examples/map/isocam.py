@@ -2,9 +2,15 @@
 
 Measured from the reference video (see README.md, "카메라 측정"):
     projection      orthographic (ground flow at the top and at the bottom of the screen is equal)
-    elevation       about 30 degrees above the horizon (estimate, +-8)
+    elevation       NOT measured reliably: ground-plane cues gave 25-36 degrees, one cue 44-45.
+                    The default, 45, is a CHOSEN value (the user's decision); 30 remains an option.
     visible area    211.3 x 123.5 art pixels
     person          a 1.75 m character stands about 16 art pixels tall
+
+The scale ``px_per_unit`` is fitted to the person at the chosen elevation (a standing mannequin is taller
+on screen than a pole of its height, because its body depth shows too, more so at 45 than at 30):
+    elev 45, px_per_unit 11.1   standing mannequin 16 px (README: measured at 12 sub-pixel positions)
+    elev 30, px_per_unit 9.6    standing mannequin 16 px
 
 One camera (``level_camera``) frames the whole level; every picture is a WINDOW of it (same view matrix,
 shifted principal point).  Because the projection is orthographic, moving the window by whole pixels
@@ -27,9 +33,9 @@ RADIUS = 300.0  # distance of the eye from the world origin (orthographic: only 
 
 @dataclass(frozen=True)
 class RefCam:
-    elev: float = 30.0  # degrees above the horizon (90 = straight down)
+    elev: float = 45.0  # degrees above the horizon (90 = straight down); chosen, see the module docstring
     az: float = 0.0  # 0 = camera south of the scene looking north (-z); screen right = +x
-    px_per_unit: float = 9.6  # art pixels per WORLD unit (1.80 units = 1.75 m)
+    px_per_unit: float = 11.1  # art pixels per WORLD unit (1.80 units = 1.75 m); 16 px mannequin at 45 deg
     view: Tuple[int, int] = (211, 124)  # art pixels (width, height) of one screen
 
     def ground_footprint(self) -> Tuple[float, float]:

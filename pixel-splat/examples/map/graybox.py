@@ -46,16 +46,34 @@ from pixelsplat.shadow import ShadowMap, make_shadow_map, visibility  # noqa: E4
 from pixelsplat.splats import SplatModel  # noqa: E402
 
 BAKE_FILE, SPLAT_FILE = "level_bake.npz", "level_splats.pt"
-# Sun as seen by the reference camera: shadows fall to the screen's left and a little towards the viewer,
-# about 0.7 body heights long (read off the standing character at 15 s; an estimate).
-SUN_ALT, SUN_AZ_REL = 52.0, 100.0  # altitude; azimuth measured like the camera's, relative to it (90 = screen right)
+# Sun as seen by the reference camera: shadows fall to the screen's left and a little towards the viewer
+# (read off the standing character at 15 s; an estimate).  What was read is a SCREEN shape, so it is kept
+# as one: the shadow of a vertical pole, in units of the pole's own height on screen (x right, y down).
+# It was first tuned as altitude 52 deg / azimuth 100 deg (relative to the camera, 90 = screen right) under
+# a 30 deg camera; under another elevation the same screen shadow needs another sun (45 deg: about 57.7 / 97.1).
+SUN_ALT_30, SUN_AZ_REL_30 = 52.0, 100.0
 BACKGROUND = (0.075, 0.075, 0.11)
 GUARD = 4  # art pixels shaded beyond the frame (>= the widest neighbourhood: SSAO reaches 3 px)
 
 
+def pole_shadow_on_screen(alt_deg: float, az_rel_deg: float, elev_deg: float):
+    """(x, y) on screen of the tip of a vertical pole's shadow, relative to its foot, in units of the
+    pole's screen height (orthographic: independent of the pixel scale)."""
+    alt, az, e = (math.radians(v) for v in (alt_deg, az_rel_deg, elev_deg))
+    gx, gz = -math.sin(az) / math.tan(alt), -math.cos(az) / math.tan(alt)  # shadow on the ground per unit height
+    return gx / math.cos(e), gz * math.tan(e)
+
+
+SUN_SHADOW_ON_SCREEN = pole_shadow_on_screen(SUN_ALT_30, SUN_AZ_REL_30, 30.0)  # (-0.888, +0.078)
+
+
 def sun_direction(spec: isocam.RefCam) -> np.ndarray:
-    """World direction TOWARDS the sun."""
-    az, alt = math.radians(spec.az + SUN_AZ_REL), math.radians(SUN_ALT)
+    """World direction TOWARDS the sun that casts ``SUN_SHADOW_ON_SCREEN`` under the camera ``spec``."""
+    sx, sy = SUN_SHADOW_ON_SCREEN
+    e = math.radians(spec.elev)
+    gx, gz = sx * math.cos(e), sy / math.tan(e)  # the ground shadow that projects to that screen shape
+    alt = math.atan2(1.0, math.hypot(gx, gz))
+    az = math.radians(spec.az) + math.atan2(-gx, -gz)
     return np.array([math.sin(az) * math.cos(alt), math.sin(alt), math.cos(az) * math.cos(alt)])
 
 
@@ -114,16 +132,31 @@ def model_tensors(model: SplatModel):
 
 
 # ---------------------------------------------------------------- build: layout -> splats -> baked level
-def grid_overlay(level: lv.Level, cam: Camera, P: np.ndarray, mat: np.ndarray, albedo: np.ndarray) -> np.ndarray:
+def pixel_steps_on_surface(cam: Camera, normal: np.ndarray):
+    """World displacement (…,3) along the surface for one pixel step right and one step down, per pixel
+    of an orthographic camera, on the tangent plane with that ``normal``: the screen step slid along the
+    viewing ray onto the surface.  On a slope that faces the camera a pixel covers less ground than on
+    flat ground, on one that faces away more (how much depends on the camera's elevation)."""
+    R = cam.viewmat[:3, :3]
+    sx, sy, f = R[0] / cam.A[0, 0], R[1] / cam.A[1, 1], R[2]  # one pixel right / down, the ray direction
+    n = np.asarray(normal, np.float64)
+    nf = n @ f
+    nf = np.where(np.abs(nf) < 0.2, np.copysign(0.2, nf + 1e-12), nf)  # grazing: bounded (walls get no grid)
+    return tuple(s - (n @ s / nf)[..., None] * f for s in (sx, sy))
+
+
+def grid_overlay(level: lv.Level, cam: Camera, P: np.ndarray, mat: np.ndarray, albedo: np.ndarray,
+                 normal: Optional[np.ndarray] = None) -> np.ndarray:
     """One-pixel scale lines on walkable ground, every ``grid.minor`` metres (darker every ``grid.major``).
-    Drawn per PIXEL from the pixel's world position, so the lines stay one pixel wide and crisp."""
+    Drawn per PIXEL from the pixel's world position, so the lines stay one pixel wide and crisp; the
+    half-width of a line is half the ground one pixel covers THERE (``normal``: per-pixel surface normals,
+    so ramps and hills also get one-pixel lines; None = flat ground everywhere)."""
     U = lv.UNITS_PER_M
     xm, zm = P[..., 0] / U, P[..., 2] / U
-    o = isocam.unproject_to_plane(cam, 0.0, 0.0, lv.GROUND)
-    ex = (isocam.unproject_to_plane(cam, 1.0, 0.0, lv.GROUND) - o) / U  # metres per pixel step right
-    ey = (isocam.unproject_to_plane(cam, 0.0, 1.0, lv.GROUND) - o) / U  # ... and per pixel step down
-    half_x = 0.5 * max(abs(ex[0]), abs(ey[0]))
-    half_z = 0.5 * max(abs(ex[2]), abs(ey[2]))
+    n = np.array([0.0, 1.0, 0.0]) if normal is None else normal
+    ex, ey = (s / U for s in pixel_steps_on_surface(cam, n))  # metres per pixel step right / down
+    half_x = 0.5 * np.maximum(np.abs(ex[..., 0]), np.abs(ey[..., 0]))
+    half_z = 0.5 * np.maximum(np.abs(ex[..., 2]), np.abs(ey[..., 2]))
     walk = (mat == lv.MAT["grass"]) | (mat == lv.MAT["path"])
     out = albedo.copy()
     for step, k in ((float(level.grid.get("minor", 1.0)), 0.90), (float(level.grid.get("major", 5.0)), 0.74)):
@@ -151,7 +184,7 @@ def bake(level: lv.Level, spec: isocam.RefCam, spacing: float = 0.125, shadow_re
     covered = gb["alpha"] > 0.5
     mat = np.where(covered & (gb["id"] >= 0), sp.mat[np.maximum(gb["id"], 0)], -1)
     P = gbuf.world_positions(cam, gb["depth"])
-    gb["albedo"] = grid_overlay(level, cam, P, mat, gb["albedo"])
+    gb["albedo"] = grid_overlay(level, cam, P, mat, gb["albedo"], gb["normal"])
     # the level's shadow map: the same splats seen from the sun
     sun = sun_direction(spec)
     lo, hi = level.bounds_world()
@@ -543,7 +576,7 @@ def cmd_compare(a):
           f"saved compare.png, compare_closeup.png")
 
 
-def main():
+def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
 
@@ -562,11 +595,16 @@ def main():
     b = common(sub.add_parser("build", help="layout -> splats -> baked level G-buffer + sun shadow map"))
     b.add_argument("--layout", default=None, help="layout json (default: examples/map/layout.json)")
     b.add_argument("--spacing", type=float, default=0.125, help="splat lattice step in metres")
-    b.add_argument("--elev", type=float, default=30.0, help="camera elevation in degrees (reference: about 30)")
-    b.add_argument("--az", type=float, default=0.0)
-    b.add_argument("--px-per-unit", type=float, default=9.6, help="art pixels per world unit (1.80 units = 1.75 m)")
-    b.add_argument("--view-w", type=int, default=211)
-    b.add_argument("--view-h", type=int, default=124)
+    dflt = isocam.RefCam()
+    b.add_argument("--elev", type=float, default=dflt.elev,
+                   help="camera elevation in degrees (chosen: 45; the measurements allow about 25-45, "
+                        "for 30 use --px-per-unit 9.6)")
+    b.add_argument("--az", type=float, default=dflt.az)
+    b.add_argument("--px-per-unit", type=float, default=dflt.px_per_unit,
+                   help="art pixels per world unit (1.80 units = 1.75 m); 11.1 at 45 deg and 9.6 at 30 deg make "
+                        "the standing mannequin 16 px")
+    b.add_argument("--view-w", type=int, default=dflt.view[0])
+    b.add_argument("--view-h", type=int, default=dflt.view[1])
     b.add_argument("--shadow-res", type=int, default=1024)
     b.set_defaults(fn=cmd_build)
     r = common(sub.add_parser("render", help="overview + reference-sized view with the mannequin for scale"))
@@ -585,6 +623,11 @@ def main():
     m.add_argument("--pitch", type=float, default=8.745, help="video pixels per art pixel of the reference")
     m.add_argument("--anchor", default="0.535,0.58", help="where the character's feet are in the reference frame (0..1)")
     m.set_defaults(fn=cmd_compare, scale=4)
+    return ap
+
+
+def main():
+    ap = build_parser()
     a = ap.parse_args()
     if a.cmd == "compare" and not (a.ref_video or a.ref_frame):
         ap.error("compare needs --ref-video or --ref-frame")
