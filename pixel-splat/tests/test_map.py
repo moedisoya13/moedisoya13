@@ -56,6 +56,77 @@ def test_default_layout_loads_and_has_the_blockout_elements():
         lv.Level({"size": [4, 4], "elements": [{"type": "castle"}]})
 
 
+def _problems(**changes):
+    """Problems of the small layout with one element replaced / added: changes = {index: element}."""
+    d = small_layout()
+    for i, e in changes.items():
+        i = int(i[1:])
+        if i < len(d["elements"]):
+            d["elements"][i] = e
+        else:
+            d["elements"].append(e)
+    with pytest.raises(lv.LayoutError) as err:
+        lv.Level(d)
+    return err.value.problems, str(err.value)
+
+
+def test_layout_errors_name_the_element_and_the_field():
+    """These used to be a bare KeyError: 'radius' / 'cannot unpack non-iterable int object', or nothing."""
+    probs, text = _problems(e3={"type": "pond", "name": "pond", "at": [-2, 1.5], "radius": 4, "depth": 0.3})
+    assert len(probs) == 1 and "elements[3]" in probs[0] and "pond 'pond'" in probs[0] and "'radius'" in probs[0]
+    assert "[a, b]" in probs[0] and "지금: 4" in probs[0] and text.startswith("layout.json에 고칠 곳이 1개")
+    probs, _ = _problems(e2={"type": "hill", "at": [-2, -1], "height": 0.5})
+    assert "elements[2]" in probs[0] and "'radius' 값이 없습니다" in probs[0]
+    probs, _ = _problems(e0={"type": "plateau", "at": [2, -1], "size": [2, 2], "height": 1.0, "rotation": 45})
+    assert "모르는 항목 'rotation'" in probs[0] and "혹시 'rot'" in probs[0]
+    probs, _ = _problems(e0={"type": "plateau", "at": [2, -1], "size": [2, 2], "height": -1.0})
+    assert "'height'는 0보다 큰 숫자" in probs[0]
+    probs, _ = _problems(e9={"type": "tree", "at": [3.9, 0], "height": 2.0, "radius": 0.6})  # canopy over the edge
+    assert "elements[9]" in probs[0] and "맵 밖" in probs[0]
+    probs, _ = _problems(e9={"type": "rock", "at": [30, 0], "size": [1, 1, 1]})
+    assert "맵 밖" in probs[0]
+    probs, _ = _problems(e9={"type": "tree", "at": [0, 0], "height": 2.0, "radius": 2.5, "canopy": "sphere"})
+    assert "radius(2.5)는 height(2.0)보다" in probs[0]
+    probs, _ = _problems(e9={"type": "towr", "at": [0, 0]})
+    assert "모르는 종류" in probs[0] and "'tower'" not in probs[0]
+    probs, _ = _problems(e9={"type": "ramp", "at": [0, 0], "size": [2, 1], "height": 1.0, "name": "r"})
+    assert "ramp 'r'" in probs[0] and "[시작, 끝]" in probs[0]
+    probs, _ = _problems(e9={"type": "path", "points": [[0, 0]], "width": 1}, e10={"type": "spawn", "at": [0, True]})
+    assert len(probs) == 2 and "elements[10]" in probs[1]
+    # several problems are listed together, and the top level / demo are checked as well
+    bad = dict(small_layout(), sizee=[1, 2], demo={"stand": {"at": [99, 0]}, "wlak": {}})
+    with pytest.raises(lv.LayoutError) as err:
+        lv.Level(bad)
+    msgs = err.value.problems
+    assert any("'sizee'" in m and "혹시 'size'" in m for m in msgs)
+    assert any(m.startswith("demo.stand") and "맵 밖" in m for m in msgs)
+    assert any("'wlak'" in m and "혹시 'walk'" in m for m in msgs)
+    assert isinstance(err.value, ValueError)
+
+
+def test_layout_json_syntax_errors_say_where(tmp_path):
+    p = tmp_path / "broken.json"
+    p.write_text('{"size": [8, 6],\n "elements": [\n  {"type": "hill" "at": [0, 0]}\n ]}')
+    with pytest.raises(lv.LayoutError, match="3번째 줄"):
+        lv.Level.load(p)
+
+
+def test_the_shipped_layouts_are_valid():
+    assert lv.validate_layout(lv.Level.load().layout) == []
+    assert lv.validate_layout(small_layout()) == []
+
+
+def test_bounds_hold_stacked_hills():
+    """Overlapping hills add up: the framing box used to take only the tallest single hill."""
+    L = lv.Level({"size": [10, 10], "elements": [{"type": "hill", "at": [0, 0], "radius": 3.0, "height": 1.0}
+                                               for _ in range(3)] +
+                  [{"type": "hill", "at": [0.5, 0.2], "radius": 2.0, "height": 0.8}]})
+    lo, hi = L.bounds_world()
+    sp = L.splats(0.25)
+    assert ((sp.pos[:, 1] - lv.GROUND) / U).max() > 3.5  # ~3.8 m: well above any single hill
+    assert (sp.pos >= lo - 1e-4).all() and (sp.pos <= hi + 1e-4).all()
+
+
 def test_units_match_the_soldier():
     assert 1.75 * U == pytest.approx(1.80)
     sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "examples" / "soldier"))
@@ -230,13 +301,61 @@ def test_to_model_keeps_the_geometry(splats):
 SPEC = isocam.RefCam()
 
 
+def _build_args(*argv):
+    warnings = []
+    a = graybox.resolve_build_args(graybox.build_parser().parse_args(["build", *argv]), warn=warnings.append)
+    return a, warnings
+
+
 def test_default_camera_is_the_chosen_45_degrees():
     """The user chose 45 degrees ("맵 카메라는 45°로"); the scale goes with it (16 px mannequin)."""
     assert (SPEC.elev, SPEC.az, SPEC.px_per_unit, SPEC.view) == (45.0, 0.0, 11.1, (211, 124))
-    a = graybox.build_parser().parse_args(["build"])  # the command line has the same defaults
-    assert (a.elev, a.az, a.px_per_unit, a.view_w, a.view_h) == (45.0, 0.0, 11.1, 211, 124)
-    b = graybox.build_parser().parse_args(["build", "--elev", "30", "--px-per-unit", "9.6"])
-    assert (b.elev, b.px_per_unit) == (30.0, 9.6)  # the 30 degree option still works
+    a, w = _build_args()  # the command line has the same defaults
+    assert (a.elev, a.az, a.px_per_unit, a.view_w, a.view_h, a.out) == (45.0, 0.0, 11.1, 211, 124, "out/map_45")
+    assert w == []
+    b, w = _build_args("--elev", "30", "--px-per-unit", "9.6")
+    assert (b.elev, b.px_per_unit, b.out) == (30.0, 9.6, "out/map_30")  # the 30 degree option still works
+
+
+def test_elevation_alone_picks_the_calibrated_scale_and_its_own_folder():
+    """``--elev 30`` used to keep 11.1 px per unit (a figure 17-18 px tall) and write over out/map."""
+    a, w = _build_args("--elev", "30")
+    assert (a.px_per_unit, a.out, w) == (9.6, "out/map_30", [])
+    a, w = _build_args("--elev", "37.5")  # not measured: an estimate between the two, and a warning
+    assert 9.6 < a.px_per_unit < 11.1 and a.out == "out/map_37_5"
+    assert len(w) == 1 and "no measured scale" in w[0]
+    a, w = _build_args("--elev", "45", "-o", "somewhere", "--px-per-unit", "10")
+    assert (a.px_per_unit, a.out, w) == (10.0, "somewhere", [])
+
+
+@pytest.mark.parametrize("bad", [0.0, -10.0, 4.9, 85.1, 90.0, float("nan")])
+def test_camera_elevation_is_validated(bad):
+    """elev 0 used to raise ZeroDivisionError inside sun_direction; negative or >= 90 were accepted."""
+    with pytest.raises(ValueError, match="between 5 and 85"):
+        isocam.RefCam(elev=bad)
+    with pytest.raises(SystemExit):  # the command line says so before anything is baked
+        graybox.build_parser().parse_args(["build", "--elev", str(bad)])
+    for ok in (5.0, 30.0, 45.0, 85.0):
+        assert np.isfinite(graybox.sun_direction(isocam.RefCam(elev=ok))).all()
+
+
+def test_build_refuses_to_replace_a_bake_made_with_another_camera(tmp_path, capsys):
+    import json
+
+    (tmp_path / "small.json").write_text(json.dumps({"size": [4, 4], "grid": {"minor": 1.0, "major": 0}, "elements": []}))
+    old = np.array([30.0, 0.0, 9.6, 211, 124])
+    np.savez(tmp_path / graybox.BAKE_FILE, spec=old)
+    argv = ["--layout", str(tmp_path / "small.json"), "-o", str(tmp_path), "--spacing", "0.5", "--shadow-res", "32"]
+    a, _ = _build_args(*argv)
+    with pytest.raises(SystemExit, match="another camera"):
+        graybox.cmd_build(a)
+    np.testing.assert_array_equal(graybox.bake_spec(str(tmp_path)), old)  # untouched
+    a, _ = _build_args(*argv, "--force")
+    graybox.cmd_build(a)
+    np.testing.assert_allclose(graybox.bake_spec(str(tmp_path))[:3], [45.0, 0.0, 11.1])
+    a, _ = _build_args(*argv)  # the same camera again: allowed without --force
+    graybox.cmd_build(a)
+    capsys.readouterr()
 
 
 def test_reference_numbers():
@@ -409,6 +528,11 @@ def test_bake_covers_the_level_and_labels_materials(baked):
     assert np.ptp(data["albedo"][mask], axis=1).max() < 1e-6  # still neutral grey after the grid overlay
 
 
+def _runs(dark: np.ndarray) -> np.ndarray:
+    d = np.diff(np.concatenate([[0], dark.astype(int), [0]]))
+    return np.nonzero(d == -1)[0] - np.nonzero(d == 1)[0]
+
+
 def test_grid_lines_are_one_pixel_wide(baked):
     st, data = baked
     # the meadow south of everything: flat grass; darker pixels there are grid lines only
@@ -426,6 +550,79 @@ def test_grid_lines_are_one_pixel_wide(baked):
     gaps = np.diff(np.nonzero(runs == 1)[0])
     ppm = SPEC.px_per_unit * U  # one metre = 11.42 px
     assert set(gaps.tolist()) <= {math.floor(ppm), math.ceil(ppm)}
+
+
+def test_the_x0_and_z0_lines_are_one_pixel_wide_too(baked):
+    """The world origin sits on a pixel CORNER (isocam.origin_camera), so the x = 0 line ran exactly
+    between two pixel centres and the old test |x - k| < half passed on both: 2 px in every bake."""
+    st, data = baked
+    alb, mat = data["albedo"][..., 0], data["mat"]
+    c = isocam.project(st.cam, st.level.to_world(0.0, 0.5))
+    assert abs(c[0] - round(c[0])) < 1e-9  # the tie really is there: x = 0 is a pixel boundary
+    widths = []
+    for z in np.linspace(0.4, 0.9, 6):  # flat grass east of the path's end, between the z = 0 and z = 1 lines
+        q = isocam.project(st.cam, st.level.to_world(0.0, z))
+        r, col = int(q[1]), int(round(q[0]))
+        seg, m = alb[r, col - 4:col + 4], mat[r, col - 4:col + 4]
+        assert (m == lv.MAT["grass"]).all()
+        widths.append(int((seg < seg.max() - 0.01).sum()))
+    assert widths == [1] * 6
+    # the z = 0 line, in the columns at x = 0.5 m (grass between the plateau and the path's end)
+    q = isocam.project(st.cam, st.level.to_world(0.5, 0.0))
+    col, r = int(q[0]), int(q[1])
+    seg, m = alb[r - 4:r + 5, col], mat[r - 4:r + 5, col]
+    assert (m == lv.MAT["grass"]).all()
+    assert _runs(seg < seg.max() - 0.01).tolist() == [1]
+
+
+@pytest.mark.parametrize("az", [0.0, 30.0, -55.0])
+def test_grid_lines_on_flat_ground_draw_one_pixel_per_line(az):
+    """Every x and z line, x = 0 / z = 0 included, takes exactly ONE pixel per row (or per column, for a
+    line running more across the screen than down it).  Under a turned camera a pixel's right and down
+    steps both move along x and z: the band is the larger step, not their sum (a sum is a 2 px line)."""
+    spec = isocam.RefCam(az=az)
+    cam = isocam.level_camera(spec, [-6, -1.5, -6], [6, -0.5, 6])
+    ys, xs = np.mgrid[0:cam.height, 0:cam.width] + 0.5
+    P = isocam.unproject_to_plane(cam, xs, ys, -1.0)  # flat ground, every pixel centre
+    ex, ey = graybox.pixel_steps_on_surface(cam, np.array([0.0, 1.0, 0.0]))
+    inner = (np.abs(P[..., 0]) < 5 * U) & (np.abs(P[..., 2]) < 5 * U)
+    for step in (1.0, 5.0):
+        masks = graybox.grid_line_masks(cam, P, step)
+        for axis, on in zip((0, 2), masks):
+            k = np.round(P[..., axis] / U / step).astype(int)
+            per_row = abs(ex[axis]) >= abs(ey[axis])  # the line crosses every row once (else every column)
+            lines = (on & inner) if per_row else (on & inner).T
+            kk = k if per_row else k.T
+            for r in range(lines.shape[0]):
+                hit = kk[r][lines[r]]
+                assert len(np.unique(hit)) == len(hit), (az, step, axis, r)  # one pixel per line
+        assert masks[0][inner].any() and masks[1][inner].any()
+    if az != 0:
+        return
+    # x = 0 is still drawn, by one pixel per row, although it lies exactly on a pixel boundary
+    fx = isocam.project(cam, [0.0, -1.0, 0.0])[0] % 1.0
+    assert min(fx, 1 - fx) < 1e-9
+    on_x, _ = graybox.grid_line_masks(cam, P, 1.0)
+    zero = on_x & inner & (np.round(P[..., 0] / U) == 0)
+    rows = np.unique(np.nonzero(inner)[0])
+    assert (zero[rows].sum(1) == 1).all()
+
+
+def test_bake_draws_the_grid_with_the_per_pixel_normals(monkeypatch):
+    """The ramp test calls grid_overlay directly; this checks that bake() hands it the normals."""
+    seen = {}
+    real = graybox.grid_overlay
+
+    def spy(level, cam, P, mat, albedo, normal=None):
+        seen["normal"] = normal
+        return real(level, cam, P, mat, albedo, normal)
+
+    monkeypatch.setattr(graybox, "grid_overlay", spy)
+    L = lv.Level({"size": [6, 6], "elements": [{"type": "ramp", "at": [0, 0], "size": [4, 3], "rot": -90, "height": [0, 1]}]})
+    _, data = graybox.bake(L, SPEC, spacing=0.25, shadow_res=32, log=quiet)
+    assert seen["normal"] is not None and seen["normal"].shape == data["normal"].shape
+    np.testing.assert_array_equal(seen["normal"], data["normal"])
+    assert (np.abs(seen["normal"][..., 2]) > 0.2).any()  # (the ramp's normals tilt: not all straight up)
 
 
 def test_pixel_steps_on_surface():
@@ -490,6 +687,23 @@ def test_frame_is_lit_shadowed_and_outlined(baked):
     # windows outside the level are background, partly outside are cropped without error
     np.testing.assert_allclose(st.frame(-500, -500, 16, 16), np.broadcast_to(graybox.BACKGROUND, (16, 16, 3)), atol=1e-6)
     assert st.frame(st.cam.width - 8, st.cam.height - 8, 16, 16).shape == (16, 16, 3)
+
+
+def test_cliff_faces_read_as_walls_and_nothing_else_changes(baked, monkeypatch):
+    """Camera-facing cliffs were near-black, almost the background: the bounce lifts them, on cliff
+    pixels only."""
+    st, _ = baked
+    W, H = st.cam.width, st.cam.height
+    lit, layers = st.frame(0, 0, W, H, layers=True)
+    monkeypatch.setattr(graybox, "WALL_BOUNCE", 0.0)
+    dark = st.frame(0, 0, W, H)
+    cliff = st.mat == lv.MAT["cliff"]
+    changed = np.abs(lit - dark).max(-1) > 1e-6
+    assert changed.any() and not (changed & ~cliff).any()
+    face = cliff & (st.gb["normal"][..., 2] > 0.9)  # the faces turned to the camera
+    bg = np.asarray(graybox.BACKGROUND)
+    assert np.median(lit[face].mean(-1)) > bg.mean() + 0.15 > np.median(dark[face].mean(-1))
+    assert set(layers) == {"alpha", "depth", "actor", "sun"} and layers["depth"].shape == (H, W)
 
 
 def test_shaded_frames_do_not_change_when_the_window_moves(baked):
@@ -565,6 +779,12 @@ def test_sun_keeps_the_screen_shadow_when_the_elevation_changes():
     np.testing.assert_allclose(pole_shadow(SPEC), pole_shadow(old), atol=1e-9)
     np.testing.assert_allclose(pole_shadow(SPEC), graybox.SUN_SHADOW_ON_SCREEN, atol=1e-9)
     assert math.degrees(math.asin(graybox.sun_direction(SPEC)[1])) == pytest.approx(57.66, abs=0.01)
+    # ... and when the camera turns (azimuth), the sun turns with it: same picture on screen
+    for spec in (isocam.RefCam(az=30.0), isocam.RefCam(elev=30.0, az=-70.0, px_per_unit=9.6)):
+        np.testing.assert_allclose(pole_shadow(spec), graybox.SUN_SHADOW_ON_SCREEN, atol=1e-9)
+    turned = graybox.sun_direction(isocam.RefCam(az=30.0))
+    np.testing.assert_allclose(turned[1], graybox.sun_direction(SPEC)[1], atol=1e-12)  # same altitude
+    assert not np.allclose(turned, graybox.sun_direction(SPEC))
 
 
 def test_reference_art_resamples_a_known_grid():
@@ -579,6 +799,40 @@ def test_reference_art_resamples_a_known_grid():
     # the recovered grid is a contiguous block of the original art pixels
     best = min(float(np.abs(got[:16, :26] - art[j:j + 16, i:i + 26]).mean()) for j in range(3) for i in range(3))
     assert best < 0.02
+
+
+# Extreme points of the bare mannequin standing (motion.stand_rots), feet at the origin, facing +z, in
+# world units: crown / front / back of the head and the toe tips, heels and outer edges of the soles.
+# Read off the baked out/bb2 (60k splat centres) once: the points that are highest / lowest on screen
+# at 30 and 45 degrees for 24 facings, thinned to 12.  out/ is not in git, so the real-render test below
+# skips on a clean checkout; this one always runs.
+BB_REST_EXTREMES = np.array([
+    [0.025, 1.794, 0.002], [-0.012, 1.803, 0.010], [0.014, 1.776, 0.053], [-0.029, 1.763, 0.061],
+    [-0.003, 1.770, -0.075], [0.008, 1.773, -0.073],
+    [0.089, 0.012, 0.196], [-0.105, 0.015, 0.195], [0.141, 0.014, 0.144], [-0.132, 0.009, 0.164],
+    [0.092, 0.016, -0.076], [-0.111, 0.012, -0.061]])
+
+
+def test_mannequin_extremes_span_about_16_px_at_the_calibrated_cameras():
+    """No baked model needed: the screen height (rows between the highest and lowest point, before
+    rasterization adds the splats' own size) of the standing mannequin, over 8 facings.  Rendered, 11.1
+    gives 16 px (15 at some spots facing 90 / 270), 11.3 gives 17-18 and 10.6 mostly 15; the mean span
+    for those is 15.69 / 14.72, so a +-0.15 band around the calibrated 15.41 catches either."""
+    expected = {45.0: 15.41, 30.0: 15.65}
+    for elev, ppu in isocam.CALIBRATED.items():
+        spec = isocam.RefCam(elev=elev, px_per_unit=ppu)
+        cam = isocam.origin_camera(spec)
+        spans = []
+        for facing in range(0, 360, 45):
+            mats = np.zeros((1, 3, 4))
+            mats[0, :, :3] = np.eye(3)
+            m = graybox.Mannequin.place(mats, [0.0, lv.GROUND, 0.0], facing)[0]
+            P = BB_REST_EXTREMES @ m[:, :3].T + m[:, 3] + [0, lv.GROUND, 0]
+            y = isocam.project(cam, P)[:, 1]
+            spans.append(y.max() - y.min())
+        assert np.mean(spans) == pytest.approx(expected[elev], abs=0.15), (elev, spans)
+        assert 14.5 < min(spans) and max(spans) < 16.2, (elev, spans)
+    assert isocam.CALIBRATED[SPEC.elev] == SPEC.px_per_unit
 
 
 BB = Path(__file__).resolve().parents[1] / "out" / "bb"

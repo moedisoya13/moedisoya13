@@ -9,8 +9,14 @@ Measured from the reference video (see README.md, "카메라 측정"):
 
 The scale ``px_per_unit`` is fitted to the person at the chosen elevation (a standing mannequin is taller
 on screen than a pole of its height, because its body depth shows too, more so at 45 than at 30):
-    elev 45, px_per_unit 11.1   standing mannequin 16 px (README: measured at 12 sub-pixel positions)
-    elev 30, px_per_unit 9.6    standing mannequin 16 px
+    elev 45, px_per_unit 11.1   standing mannequin about 16 px, sometimes 15: 16 at all 12 sub-pixel
+                                positions of the first fit (facing 90); a wider sample of 25 spot x facing
+                                combinations gave 16 px 21 times and 15 px 4 times (facings 90 and 270
+                                at some spots).  See README "배율".
+    elev 30, px_per_unit 9.6    standing mannequin 16 px (17 at some positions)
+
+``CALIBRATED`` holds these pairs; ``scale_for(elev)`` is what the command line uses when only an
+elevation is given.
 
 One camera (``level_camera``) frames the whole level; every picture is a WINDOW of it (same view matrix,
 shifted principal point).  Because the projection is orthographic, moving the window by whole pixels
@@ -29,14 +35,36 @@ import numpy as np
 from pixelsplat.camera import Camera, orbit_camera
 
 RADIUS = 300.0  # distance of the eye from the world origin (orthographic: only has to clear the level)
+ELEV_RANGE = (5.0, 85.0)  # degrees: below 5 the ground vanishes (and the sun math divides by tan 0), above 85
+#                           the screen's "up" stops being defined by the camera (straight down)
+CALIBRATED = {45.0: 11.1, 30.0: 9.6}  # elevation -> px_per_unit that makes the standing mannequin ~16 px
+
+
+def scale_for(elev: float) -> Tuple[float, bool]:
+    """(px_per_unit, calibrated?) for an elevation: the fitted value for 30 / 45, otherwise a straight-line
+    estimate through those two (clamped outside them) that nobody has measured."""
+    for e, s in CALIBRATED.items():
+        if abs(elev - e) < 1e-9:
+            return s, True
+    (e0, s0), (e1, s1) = sorted(CALIBRATED.items())
+    t = min(max((elev - e0) / (e1 - e0), 0.0), 1.0)
+    return round(s0 + t * (s1 - s0), 2), False
 
 
 @dataclass(frozen=True)
 class RefCam:
     elev: float = 45.0  # degrees above the horizon (90 = straight down); chosen, see the module docstring
     az: float = 0.0  # 0 = camera south of the scene looking north (-z); screen right = +x
-    px_per_unit: float = 11.1  # art pixels per WORLD unit (1.80 units = 1.75 m); 16 px mannequin at 45 deg
+    px_per_unit: float = 11.1  # art pixels per WORLD unit (1.80 units = 1.75 m); ~16 px mannequin at 45 deg
     view: Tuple[int, int] = (211, 124)  # art pixels (width, height) of one screen
+
+    def __post_init__(self):
+        lo, hi = ELEV_RANGE
+        if not (isinstance(self.elev, (int, float)) and math.isfinite(self.elev) and lo <= self.elev <= hi):
+            raise ValueError(f"camera elevation must be between {lo:g} and {hi:g} degrees above the horizon "
+                             f"(got {self.elev!r}); the map uses 45 (30 is the other calibrated choice)")
+        if not (math.isfinite(self.px_per_unit) and self.px_per_unit > 0):
+            raise ValueError(f"px_per_unit must be a positive number of art pixels per world unit (got {self.px_per_unit!r})")
 
     def ground_footprint(self) -> Tuple[float, float]:
         """(width, depth) in world units of the ground rectangle one screen shows."""

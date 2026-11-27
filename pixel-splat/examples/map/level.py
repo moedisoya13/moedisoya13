@@ -30,7 +30,7 @@ import json
 import math
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Sequence
 
 import numpy as np
 
@@ -111,22 +111,202 @@ def tone(mat: np.ndarray, height_m: np.ndarray) -> np.ndarray:
     return np.repeat(g[:, None], 3, 1).astype(np.float32)
 
 
+# ---------------------------------------------------------------- layout validation
+class LayoutError(ValueError):
+    """Everything that is wrong with a layout, one line per problem.  The lines are in Korean (the person
+    who edits layout.json reads them) and name the element (index, type, name) and the field."""
+
+    def __init__(self, problems: List[str]):
+        self.problems = list(problems)
+        super().__init__(f"layout.json에 고칠 곳이 {len(self.problems)}개 있습니다:\n" +
+                         "\n".join("  - " + p for p in self.problems))
+
+
+# value kinds: what a field must hold, and how to say so
+_KIND_TEXT = {
+    "num": "숫자",
+    "pos": "0보다 큰 숫자",
+    "nonneg": "0 이상인 숫자",
+    "xz": "[x, z] 두 숫자(미터)",
+    "pair_pos": "0보다 큰 두 숫자 [a, b](미터)",
+    "pair_nonneg": "0 이상인 두 숫자 [시작, 끝](미터)",
+    "triple_pos": "0보다 큰 세 숫자 [가로, 높이, 세로](미터)",
+    "points": "[[x, z], [x, z], ...] 점 두 개 이상(미터)",
+    "canopy": "'cone' 또는 'sphere'",
+    "text": "글자(문자열)",
+}
+# type -> {field: (kind, required)}; every element may also carry "type", "name" and "note"
+ELEMENT_FIELDS: Dict[str, Dict[str, tuple]] = {
+    "hill": {"at": ("xz", True), "radius": ("pos", True), "height": ("pos", True)},
+    "pond": {"at": ("xz", True), "radius": ("pair_pos", True), "depth": ("pos", True), "bank": ("pos", False)},
+    "plateau": {"at": ("xz", True), "size": ("pair_pos", True), "height": ("pos", True), "rot": ("num", False)},
+    "ramp": {"at": ("xz", True), "size": ("pair_pos", True), "height": ("pair_nonneg", True), "rot": ("num", False)},
+    "path": {"points": ("points", True), "width": ("pos", True)},
+    "spawn": {"at": ("xz", True), "facing": ("num", False)},
+    "rock": {"at": ("xz", True), "size": ("triple_pos", True), "rot": ("num", False)},
+    "tree": {"at": ("xz", True), "height": ("pos", True), "radius": ("pos", True), "canopy": ("canopy", False),
+             "trunk": ("pos", False)},
+}
+COMMON_FIELDS = ("type", "name", "note")
+TOP_FIELDS = ("name", "note", "size", "grid", "elements", "demo")
+DEMO_FIELDS = {"stand": {"at": ("xz", True), "facing": ("num", False)},
+               "compare": {"at": ("xz", True), "facing": ("num", False)},
+               "walk": {"points": ("points", True), "speed": ("pos", False)}}
+
+
+def _is_num(v) -> bool:
+    return isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
+
+
+def _check_value(kind: str, v) -> bool:
+    if kind == "num":
+        return _is_num(v)
+    if kind == "pos":
+        return _is_num(v) and v > 0
+    if kind == "nonneg":
+        return _is_num(v) and v >= 0
+    if kind == "text":
+        return isinstance(v, str)
+    if kind == "canopy":
+        return v in ("cone", "sphere")
+    if kind == "points":
+        return isinstance(v, list) and len(v) >= 2 and all(_check_value("xz", p) for p in v)
+    n = {"xz": 2, "pair_pos": 2, "pair_nonneg": 2, "triple_pos": 3}[kind]
+    if not (isinstance(v, (list, tuple)) and len(v) == n and all(_is_num(x) for x in v)):
+        return False
+    if kind in ("pair_pos", "triple_pos"):
+        return all(x > 0 for x in v)
+    if kind == "pair_nonneg":
+        return all(x >= 0 for x in v)
+    return True
+
+
+def _close(word: str, choices) -> str:
+    import difflib
+
+    word = str(word)
+    pre = [c for c in choices if len(c) >= 3 and (word.startswith(c) or c.startswith(word))]  # rotation -> rot
+    m = pre or difflib.get_close_matches(word, list(choices), n=1, cutoff=0.6)
+    return f" (혹시 '{m[0]}'?)" if m else ""
+
+
+def _check_fields(label: str, d: dict, fields: Dict[str, tuple], extra: Sequence = ()) -> List[str]:
+    out = []
+    for k in d:
+        if k not in fields and k not in extra:
+            out.append(f"{label}: 모르는 항목 '{k}'{_close(k, fields)} — 이 종류가 쓰는 항목: "
+                       f"{', '.join(list(fields) + [x for x in extra if x != 'type'])}")
+    for k, (kind, required) in fields.items():
+        if k not in d:
+            if required:
+                out.append(f"{label}: '{k}' 값이 없습니다 — {_KIND_TEXT[kind]}를 넣어 주세요")
+        elif not _check_value(kind, d[k]):
+            out.append(f"{label}: '{k}'는 {_KIND_TEXT[kind]}여야 합니다 (지금: {json.dumps(d[k], ensure_ascii=False)})")
+    return out
+
+
+def _footprint(e: dict) -> np.ndarray:
+    """(N, 2) points (x, z) the element covers at its widest (for the 'inside the level' check)."""
+    t, at = e["type"], np.asarray(e.get("at", [0, 0]), np.float64)
+    if t == "path":
+        return np.asarray(e["points"], np.float64)
+    if t in ("plateau", "ramp"):
+        su, sv = e["size"]
+        c, s = _rot2(e.get("rot", 0.0))
+        loc = np.array([[a * su / 2, b * sv / 2] for a in (-1, 1) for b in (-1, 1)])
+        return at + np.stack([loc[:, 0] * c - loc[:, 1] * s, loc[:, 0] * s + loc[:, 1] * c], 1)
+    if t == "pond":
+        rx, rz = e["radius"]
+        return at + np.array([[-rx, 0], [rx, 0], [0, -rz], [0, rz]])
+    if t == "rock":
+        r = max(e["size"][0], e["size"][2]) / 2
+        return at + np.array([[-r, 0], [r, 0], [0, -r], [0, r]])
+    if t == "tree":
+        r = float(e["radius"])
+        return at + np.array([[-r, 0], [r, 0], [0, -r], [0, r]])
+    return at[None]
+
+
+def validate_layout(layout) -> List[str]:
+    """All problems of a layout dict (empty list = fine).  ``Level`` raises ``LayoutError`` with them."""
+    if not isinstance(layout, dict):
+        return ["layout.json의 맨 바깥은 { ... } 객체여야 합니다"]
+    out = _check_fields("맨 위", layout, {"size": ("pair_pos", True), "name": ("text", False), "note": ("text", False)},
+                        extra=("grid", "elements", "demo"))
+    grid = layout.get("grid", {})
+    if not isinstance(grid, dict):
+        out.append("grid: {\"minor\": 1.0, \"major\": 5.0} 모양이어야 합니다")
+    else:
+        out += _check_fields("grid", grid, {"minor": ("nonneg", False), "major": ("nonneg", False)})
+    elements = layout.get("elements", [])
+    if not isinstance(elements, list):
+        return out + ["elements: [ {...}, {...} ] 목록이어야 합니다"]
+    size = layout.get("size")
+    half = np.asarray(size, np.float64) / 2 if _check_value("pair_pos", size) else None
+    for i, e in enumerate(elements):
+        if not isinstance(e, dict):
+            out.append(f"elements[{i}] ({i + 1}번째): {{\"type\": ..., ...}} 객체여야 합니다")
+            continue
+        t = e.get("type")
+        name = f" '{e['name']}'" if isinstance(e.get("name"), str) else ""
+        label = f"elements[{i}] ({i + 1}번째, {t}{name})"
+        if t not in ELEMENT_FIELDS:
+            out.append(f"elements[{i}] ({i + 1}번째): 모르는 종류 type={json.dumps(t, ensure_ascii=False)}"
+                       f"{_close(str(t), ELEMENT_FIELDS)} — 쓸 수 있는 것: {', '.join(ELEMENT_FIELDS)}")
+            continue
+        bad = _check_fields(label, e, ELEMENT_FIELDS[t], extra=COMMON_FIELDS)
+        out += bad
+        if bad:
+            continue
+        if t == "tree" and e.get("canopy", "cone") == "sphere" and e["radius"] >= e["height"]:
+            out.append(f"{label}: 구 모양 수관(canopy 'sphere')의 radius({e['radius']})는 height({e['height']})보다 "
+                       f"작아야 합니다 (줄기가 들어갈 자리가 없음)")
+        if half is not None:
+            fp = _footprint(e)
+            if (np.abs(fp) > half + 1e-9).any():
+                out.append(f"{label}: 맵 밖으로 나갑니다 — 이 요소가 덮는 범위 x {fp[:, 0].min():g}…{fp[:, 0].max():g}, "
+                           f"z {fp[:, 1].min():g}…{fp[:, 1].max():g} 가 맵(size {list(size)}: x ±{half[0]:g}, "
+                           f"z ±{half[1]:g}) 안에 들어와야 합니다")
+    demo = layout.get("demo", {})
+    if not isinstance(demo, dict):
+        out.append("demo: {\"stand\": {...}, \"walk\": {...}} 모양이어야 합니다")
+    else:
+        for k, v in demo.items():
+            if k not in DEMO_FIELDS:
+                out.append(f"demo: 모르는 항목 '{k}'{_close(k, DEMO_FIELDS)} — 쓰는 항목: {', '.join(DEMO_FIELDS)}")
+            elif not isinstance(v, dict):
+                out.append(f"demo.{k}: {{...}} 객체여야 합니다")
+            else:
+                bad = _check_fields(f"demo.{k}", v, DEMO_FIELDS[k])
+                out += bad
+                if not bad and half is not None:
+                    pts = np.asarray(v["points"] if k == "walk" else [v["at"]], np.float64)
+                    if (np.abs(pts) > half + 1e-9).any():
+                        out.append(f"demo.{k}: 맵 밖의 점이 있습니다 (맵: x ±{half[0]:g}, z ±{half[1]:g})")
+    return out
+
+
 class Level:
     def __init__(self, layout: dict):
+        problems = validate_layout(layout)
+        if problems:
+            raise LayoutError(problems)
         self.layout = layout
         self.name = layout.get("name", "level")
         self.size = tuple(float(v) for v in layout["size"])  # metres (x, z), centred on the origin
         self.grid = dict(layout.get("grid", {"minor": 1.0, "major": 5.0}))
         self.elements: List[dict] = list(layout.get("elements", []))
         self.demo = dict(layout.get("demo", {}))
-        known = {"hill", "pond", "plateau", "ramp", "path", "spawn", "rock", "tree"}
-        for e in self.elements:
-            if e.get("type") not in known:
-                raise ValueError(f"unknown element type {e.get('type')!r}; known: {sorted(known)}")
 
     @classmethod
     def load(cls, path=None) -> "Level":
-        return cls(json.loads(Path(path or DEFAULT_LAYOUT).read_text()))
+        path = Path(path or DEFAULT_LAYOUT)
+        try:
+            layout = json.loads(path.read_text())
+        except json.JSONDecodeError as err:
+            raise LayoutError([f"{path.name} {err.lineno}번째 줄 {err.colno}번째 글자: JSON 문법 오류 ({err.msg}) — "
+                               f"쉼표·괄호·따옴표를 확인해 주세요"]) from None
+        return cls(layout)
 
     def of(self, kind: str) -> List[dict]:
         return [e for e in self.elements if e["type"] == kind]
@@ -196,10 +376,13 @@ class Level:
     def bounds_world(self):
         """(lo, hi) world-space box that contains everything (for framing the camera)."""
         sx, sz = self.size
-        top = max([0.0] + [e["height"] for e in self.of("hill") + self.of("plateau")] +
-                  [max(e["height"]) for e in self.of("ramp")])
+        # the terrain's real extremes: overlapping hills ADD up, so no single element's height is the top
+        _, _, H = self.terrain_grid(0.25)
+        peaks = [float(self.height(*e["at"])) for e in self.of("hill")]
+        top = max([0.0, float(H.max())] + peaks + [e["height"] for e in self.of("plateau")] +
+                  [max(e["height"]) for e in self.of("ramp")]) + 0.02
         prop = max([0.0] + [e["height"] for e in self.of("tree")] + [e["size"][1] for e in self.of("rock")])
-        low = max([SKIRT] + [e["depth"] for e in self.of("pond")]) + 0.4  # (a coarse lattice deepens the skirt a little)
+        low = max([SKIRT, -float(H.min())] + [e["depth"] for e in self.of("pond")]) + 0.4  # (a coarse lattice deepens the skirt a little)
         U = UNITS_PER_M
         return (np.array([-sx / 2 * U, GROUND - low * U, -sz / 2 * U]),
                 np.array([sx / 2 * U, GROUND + (top + prop) * U, sz / 2 * U]))

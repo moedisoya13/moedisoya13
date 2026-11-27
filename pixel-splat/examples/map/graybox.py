@@ -1,9 +1,13 @@
 """Gray-box level in the reference game's camera (orthographic 3/4 top-down, world-locked pixel grid).
 
-    python examples/map/graybox.py build   -o out/map          # layout.json -> splats -> baked level
-    python examples/map/graybox.py render  -o out/map          # overview, reference-view still, BB for scale
-    python examples/map/graybox.py clip    -o out/map          # the BB walks a path, the camera follows
-    python examples/map/graybox.py compare -o out/map --ref-video ref.mp4 --ref-time 15.0
+    python examples/map/graybox.py build                       # layout.json -> splats -> baked level (out/map_45)
+    python examples/map/graybox.py render                      # overview, reference-view still, BB for scale
+    python examples/map/graybox.py clip                        # the BB walks a path, the camera follows
+    python examples/map/graybox.py compare --ref-video ref.mp4 --ref-time 15.0
+    python examples/map/graybox.py build --elev 30             # the 30 degree option: 9.6 px per unit, out/map_30
+
+The bake folder defaults to one per camera (``-o`` to choose another); ``build`` refuses to replace a bake
+made with another camera unless ``--force``.
 
 How a picture is made (all with the engine's own pieces: rasterize, G-buffer vote / despeckle, deferred
 shading, shadow maps, patch snapping):
@@ -41,7 +45,7 @@ from pixelsplat import gbuffer as gbuf  # noqa: E402
 from pixelsplat.camera import Camera, orbit_camera  # noqa: E402
 from pixelsplat.raster import RasterConfig, rasterize  # noqa: E402
 from pixelsplat.shade import (Light, ShadeConfig, gbuffer_from_render, postprocess, render_gbuffer_frame, shade,  # noqa: E402
-                              stylized, upscale)
+                              srgb_to_linear, stylized, upscale)
 from pixelsplat.shadow import ShadowMap, make_shadow_map, visibility  # noqa: E402
 from pixelsplat.splats import SplatModel  # noqa: E402
 
@@ -78,6 +82,13 @@ def sun_direction(spec: isocam.RefCam) -> np.ndarray:
 
 
 BB_COLOR = (0.86, 0.60, 0.36)  # flat warm clay: the one accent in a grey level, so the figure reads at 16 px
+# Cliff faces turned to the camera get no sun (it shines from the screen's right and a little from behind)
+# and little sky, so with only the shared lighting they went near-black: median (34, 35, 41) against the
+# background (19, 19, 28) - a wall read as a hole in the world.  Real walls there are lit by the bright
+# meadow in front of them; this adds that bounce, on cliff pixels only (times albedo and how vertical the
+# face is), so the rest of the look is unchanged.  Measured in README "벽".
+WALL_BOUNCE = 0.45
+BOUNCE_COLOR = (1.0, 0.98, 0.95)  # the sun's colour: the meadow is neutral grey
 
 
 def graybox_shade(sun) -> ShadeConfig:
@@ -145,25 +156,45 @@ def pixel_steps_on_surface(cam: Camera, normal: np.ndarray):
     return tuple(s - (n @ s / nf)[..., None] * f for s in (sx, sy))
 
 
+GRID_TIE = 1e-3  # the line band is shifted by this fraction of its half-width (see ``grid_line_masks``)
+
+
+def grid_line_masks(cam: Camera, P: np.ndarray, step: float, normal: Optional[np.ndarray] = None):
+    """(on_x, on_z): pixels that draw the lines x = k*step and z = k*step (metres), one pixel wide.
+
+    A line is drawn by the pixels whose world coordinate lies in a band of the width ONE pixel covers
+    there (the larger of the pixel's right / down step along that axis: one pixel per row, or per column,
+    whichever way the line runs).  The band is half-open and shifted by a hair (``GRID_TIE``) towards
+    negative coordinates: a line that falls exactly on the boundary between two pixels - the x = 0 line
+    does, because ``isocam.origin_camera`` pins the world origin to a pixel corner - then belongs to
+    exactly one of them (the one on the negative side) instead of passing the test on both, and float
+    noise in the world positions (far smaller than the shift) cannot flip it."""
+    U = lv.UNITS_PER_M
+    n = np.array([0.0, 1.0, 0.0]) if normal is None else normal
+    ex, ey = (s / U for s in pixel_steps_on_surface(cam, n))  # metres per pixel step right / down
+    out = []
+    for axis in (0, 2):
+        c = P[..., axis] / U
+        half = 0.5 * np.maximum(np.abs(ex[..., axis]), np.abs(ey[..., axis]))
+        d = c - np.round(c / step) * step  # signed distance to the nearest line
+        out.append((d >= -half * (1 + GRID_TIE)) & (d < half * (1 - GRID_TIE)))
+    return out[0], out[1]
+
+
 def grid_overlay(level: lv.Level, cam: Camera, P: np.ndarray, mat: np.ndarray, albedo: np.ndarray,
                  normal: Optional[np.ndarray] = None) -> np.ndarray:
     """One-pixel scale lines on walkable ground, every ``grid.minor`` metres (darker every ``grid.major``).
     Drawn per PIXEL from the pixel's world position, so the lines stay one pixel wide and crisp; the
     half-width of a line is half the ground one pixel covers THERE (``normal``: per-pixel surface normals,
     so ramps and hills also get one-pixel lines; None = flat ground everywhere)."""
-    U = lv.UNITS_PER_M
-    xm, zm = P[..., 0] / U, P[..., 2] / U
-    n = np.array([0.0, 1.0, 0.0]) if normal is None else normal
-    ex, ey = (s / U for s in pixel_steps_on_surface(cam, n))  # metres per pixel step right / down
-    half_x = 0.5 * np.maximum(np.abs(ex[..., 0]), np.abs(ey[..., 0]))
-    half_z = 0.5 * np.maximum(np.abs(ex[..., 2]), np.abs(ey[..., 2]))
     walk = (mat == lv.MAT["grass"]) | (mat == lv.MAT["path"])
     out = albedo.copy()
     for step, k in ((float(level.grid.get("minor", 1.0)), 0.90), (float(level.grid.get("major", 5.0)), 0.74)):
         if step <= 0:
             continue
-        on = (np.abs(xm - np.round(xm / step) * step) < half_x) | (np.abs(zm - np.round(zm / step) * step) < half_z)
-        out[walk & on] = albedo[walk & on] * k
+        on_x, on_z = grid_line_masks(cam, P, step, normal)
+        on = walk & (on_x | on_z)
+        out[on] = albedo[on] * k
     return out
 
 
@@ -201,10 +232,48 @@ def bake(level: lv.Level, spec: isocam.RefCam, spacing: float = 0.125, shadow_re
     return model, data
 
 
+def default_out(elev: float) -> str:
+    """Where a bake goes when ``-o`` is not given: one folder per camera, so a 45 degree bake never
+    lands on top of a 30 degree one (out/map_45, out/map_30, ...)."""
+    return f"out/map_{elev:g}".replace(".", "_")
+
+
+def bake_spec(folder: str) -> Optional[np.ndarray]:
+    """(elev, az, px_per_unit, view_w, view_h) of the bake in ``folder``, or None if there is none."""
+    path = os.path.join(folder, BAKE_FILE)
+    if not os.path.exists(path):
+        return None
+    with np.load(path) as d:
+        return np.asarray(d["spec"], np.float64)
+
+
+def resolve_build_args(a, warn=print):
+    """Fill in what the build command line left open: the scale for the elevation (the calibrated value at
+    30 / 45, an unmeasured estimate otherwise, with a warning) and the output folder (one per camera)."""
+    if a.px_per_unit is None:
+        a.px_per_unit, calibrated = isocam.scale_for(a.elev)
+        if not calibrated:
+            warn(f"[build] WARNING: no measured scale for elevation {a.elev:g} deg (measured: "
+                 f"{', '.join(f'{e:g} -> {s:g}' for e, s in sorted(isocam.CALIBRATED.items()))}); using the "
+                 f"straight-line estimate {a.px_per_unit:g} px per unit. The mannequin will not be exactly 16 px: "
+                 f"check render.json (figure_px) after 'render' and pass --px-per-unit")
+    if a.out is None:
+        a.out = default_out(a.elev)
+    return a
+
+
 def cmd_build(a):
+    resolve_build_args(a)
+    spec = isocam.RefCam(elev=a.elev, az=a.az, px_per_unit=a.px_per_unit, view=(a.view_w, a.view_h))
+    old = bake_spec(a.out)
+    new = np.array([spec.elev, spec.az, spec.px_per_unit, *spec.view], np.float64)
+    if old is not None and not np.allclose(old, new) and not a.force:
+        raise SystemExit(f"[build] {a.out} already holds a bake made with another camera (elev {old[0]:g}, az {old[1]:g}, "
+                         f"{old[2]:g} px per unit, view {int(old[3])}x{int(old[4])}); this one is elev {spec.elev:g}, "
+                         f"az {spec.az:g}, {spec.px_per_unit:g} px per unit. Choose another -o folder, or add --force "
+                         f"to replace it")
     os.makedirs(a.out, exist_ok=True)
     level = lv.Level.load(a.layout)
-    spec = isocam.RefCam(elev=a.elev, az=a.az, px_per_unit=a.px_per_unit, view=(a.view_w, a.view_h))
     model, data = bake(level, spec, a.spacing, a.shadow_res)
     np.savez_compressed(os.path.join(a.out, BAKE_FILE), **data)
     torch.save(model.state_dict(), os.path.join(a.out, SPLAT_FILE))
@@ -347,16 +416,22 @@ class Stage:
         return np.where(gb["alpha"] > 0.5, vis, 1.0).astype(np.float32)
 
     def frame(self, x0: int, y0: int, w: Optional[int] = None, h: Optional[int] = None, actors: Sequence = (),
-              outline: float = 0.35, ao: float = 0.45, mode: str = "lit", guard: int = GUARD) -> np.ndarray:
+              outline: float = 0.35, ao: float = 0.45, mode: str = "lit", guard: int = GUARD, layers: bool = False):
         """One art-resolution picture (h, w, 3) sRGB of the window whose top-left pixel is (x0, y0).
 
         It is shaded ``guard`` pixels larger on every side and then cut: ambient occlusion, the outline
         and the shadow filter look at neighbouring pixels, so without the band a pixel near the frame
-        would change when the frame moves."""
+        would change when the frame moves.  ``layers`` (lit mode): also return a dict of the per-pixel
+        layers behind the picture - ``alpha``, ``depth`` (camera depth, smaller = nearer), ``actor``
+        (pixels the actors cover) and ``sun`` (sun visibility 0..1, actors' shadows included)."""
         w, h = w or self.spec.view[0], h or self.spec.view[1]
         if guard > 0:
-            return self.frame(x0 - guard, y0 - guard, w + 2 * guard, h + 2 * guard, actors, outline, ao, mode,
-                              guard=0)[guard:-guard, guard:-guard]
+            out = self.frame(x0 - guard, y0 - guard, w + 2 * guard, h + 2 * guard, actors, outline, ao, mode,
+                             guard=0, layers=layers)
+            cut = (slice(guard, -guard), slice(guard, -guard))
+            if layers:
+                return out[0][cut], {k: v[cut] for k, v in out[1].items()}
+            return out[cut]
         cam, gb, actor_mask, sms = self.gbuffer(x0, y0, w, h, actors)
         sc = self.shade_cfg
         mask = gb["alpha"] > 0.5
@@ -366,6 +441,11 @@ class Stage:
             return np.where(mask[..., None], gb["normal"] * 0.5 + 0.5, np.asarray(sc.background, np.float32))
         vis = self.sun_visibility(cam, gb, sms, actor_mask=actor_mask)
         lin = shade(gb, cam, sc, light_vis=[vis, None])
+        if WALL_BOUNCE > 0:  # sunlight bounced off the meadow onto cliff faces (see WALL_BOUNCE)
+            wall = (self.mat_window(x0, y0, w, h) == lv.MAT["cliff"]) & ~actor_mask & mask
+            side = (1.0 - np.abs(gb["normal"][..., 1]))[..., None]
+            lin = lin + np.where(wall[..., None], WALL_BOUNCE * np.asarray(BOUNCE_COLOR, np.float32) * side *
+                                 srgb_to_linear(gb["albedo"]), 0.0)
         P = gbuf.world_positions(cam, gb["depth"])
         if ao > 0:  # the engine's SSAO at the scene's scale (its default radius is for a 2-unit model)
             occ = gbuf.ssao(gb, P, radius_px=3.0, world_radius=0.6)
@@ -373,7 +453,18 @@ class Stage:
         img = postprocess(lin, gb, sc, cam)
         if outline > 0:
             img = np.where(edge_mask(gb, P)[..., None], img * (1 - outline), img)
+        if layers:
+            return img.astype(np.float32), dict(alpha=gb["alpha"], depth=gb["depth"], actor=actor_mask, sun=vis)
         return img.astype(np.float32)
+
+    def mat_window(self, x0: int, y0: int, w: int, h: int) -> np.ndarray:
+        """Material index (into ``level.MATERIALS``) of the baked level in a window; -1 = nothing."""
+        out = np.full((h, w), -1, self.mat.dtype)
+        H, W = self.mat.shape
+        ax0, ay0, ax1, ay1 = max(x0, 0), max(y0, 0), min(x0 + w, W), min(y0 + h, H)
+        if ax1 > ax0 and ay1 > ay0:
+            out[ay0 - y0:ay1 - y0, ax0 - x0:ax1 - x0] = self.mat[ay0:ay1, ax0:ax1]
+        return out
 
     # -- convenience
     def window_at(self, focus_world, anchor=(0.5, 0.5), view=None):
@@ -580,8 +671,18 @@ def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
 
+    def elevation(text):
+        try:
+            v = float(text)
+            isocam.RefCam(elev=v)
+        except ValueError as err:
+            raise argparse.ArgumentTypeError(str(err)) from None
+        return v
+
     def common(p):
-        p.add_argument("-o", "--out", default="out/map")
+        p.add_argument("-o", "--out", default=None,
+                       help=f"bake folder (build: one per camera, e.g. {default_out(45)} / {default_out(30)}; "
+                            f"other commands: {default_out(isocam.RefCam().elev)})")
         p.add_argument("--bb", default="out/bb", help="folder of the baked mannequin (examples/soldier ... --outfit none)")
         p.add_argument("--bb-splats", type=int, default=1000, help="thin the mannequin to this many splats (0 = all)")
         p.add_argument("--bb-color", default=",".join(str(v) for v in BB_COLOR),
@@ -596,13 +697,15 @@ def build_parser() -> argparse.ArgumentParser:
     b.add_argument("--layout", default=None, help="layout json (default: examples/map/layout.json)")
     b.add_argument("--spacing", type=float, default=0.125, help="splat lattice step in metres")
     dflt = isocam.RefCam()
-    b.add_argument("--elev", type=float, default=dflt.elev,
-                   help="camera elevation in degrees (chosen: 45; the measurements allow about 25-45, "
-                        "for 30 use --px-per-unit 9.6)")
+    b.add_argument("--elev", type=elevation, default=dflt.elev,
+                   help=f"camera elevation in degrees, {isocam.ELEV_RANGE[0]:g}-{isocam.ELEV_RANGE[1]:g} (chosen: 45; "
+                        f"the measurements allow about 25-45; 30 is the other calibrated choice)")
     b.add_argument("--az", type=float, default=dflt.az)
-    b.add_argument("--px-per-unit", type=float, default=dflt.px_per_unit,
-                   help="art pixels per world unit (1.80 units = 1.75 m); 11.1 at 45 deg and 9.6 at 30 deg make "
-                        "the standing mannequin 16 px")
+    b.add_argument("--px-per-unit", type=float, default=None,
+                   help="art pixels per world unit (1.80 units = 1.75 m); default: the calibrated value for the "
+                        "elevation (11.1 at 45 deg, 9.6 at 30 deg: standing mannequin about 16 px), an estimate "
+                        "with a warning for any other elevation")
+    b.add_argument("--force", action="store_true", help="replace a bake in -o that was made with another camera")
     b.add_argument("--view-w", type=int, default=dflt.view[0])
     b.add_argument("--view-h", type=int, default=dflt.view[1])
     b.add_argument("--shadow-res", type=int, default=1024)
@@ -631,6 +734,14 @@ def main():
     a = ap.parse_args()
     if a.cmd == "compare" and not (a.ref_video or a.ref_frame):
         ap.error("compare needs --ref-video or --ref-frame")
+    if a.cmd != "build" and a.out is None:
+        a.out = default_out(isocam.RefCam().elev)
+    if a.cmd != "build" and not os.path.exists(os.path.join(a.out, BAKE_FILE)):
+        ap.error(f"no bake in {a.out}: run 'build' first (or pass -o with the bake folder)")
+    try:
+        lv.Level.load(a.layout if a.cmd == "build" else os.path.join(a.out, "layout_used.json"))
+    except lv.LayoutError as err:
+        raise SystemExit(str(err)) from None
     if a.threads > 0:
         torch.set_num_threads(a.threads)
     a.fn(a)
