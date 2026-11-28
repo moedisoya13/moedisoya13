@@ -5,7 +5,10 @@
                          the game and the sparring both hear the bout through it (audio.hear), so they cannot drift apart.
                          c: { men (the fighters, or a replay's captured men: x, z, and stamina / k.staminaMax if known),
                          pit (fought in the underground pit: its crowd, its concrete), you (the player's man, for the
-                         counter-chance cue; null for none), replay (a replay is throwing it again: no crowd, no bell) }
+                         counter-chance cue; null for none), replay (a replay is throwing it again: no crowd, no bell),
+                         match (the bout is a match's, game/match.mjs: a knockdown is counted, not the end, so the
+                         knockout's bell rings at the match's result, not at the blow; and the bell at each round's end
+                         and start) }
      createEars()        what the bout's state sounds like from step to step, not its events: feet on the canvas by the
                          distance walked and on every beat of a bounce on the spot, the ropes pressed. ears.watch(men, dt, c)
                          -> cues.
@@ -102,8 +105,9 @@ export function cuesOf(e, c) {
       if (down) cue('exhale', { who: e.on, delay: 0.12 });
       // (the pit's crowd at a power blow, a counter or a knockdown: as world/pit.mjs has them react)
       if (c.pit && !c.replay && (down || e.J >= 60 || e.counter)) cue(down ? 'roar' : 'cheer');
-      // (the knockout's bell: held by createAudio until the knockdown has been shown, its replay included)
-      if (down && !c.replay) cue('bell', { strikes: 3, delay: 1.1, ko: true });
+      // (the knockout's bell: held by createAudio until the knockdown has been shown, its replay included; in a match the
+      // referee counts him first, and the bell is the result's)
+      if (down && !c.replay && !c.match) cue('bell', { strikes: 3, delay: 1.1, ko: true });
       break;
     }
     case 'block':
@@ -147,6 +151,16 @@ export function cuesOf(e, c) {
     // knockdown's does; his knee on the canvas is the page's floor)
     case 'collapse':
       cue('exhale', { who: e.who });
+      break;
+    /* (the match's: the bell at the end of a round and at the start of the next; at the result, a knockout's three (KO,
+       counted out or gone down again; TKO, the third knockdown of a round: on the blow itself, so held, as the bout's own
+       knockout's is, until its replay has been shown); a decision or a draw has had the last round's bell) */
+    case 'bell':
+    case 'round':
+      if (c.match && !c.replay) cue('bell', { strikes: 1 });
+      break;
+    case 'result':
+      if (c.match && !c.replay && (e.how === 'KO' || e.how === 'TKO')) cue('bell', e.how === 'TKO' ? { strikes: 3, delay: 1.1, ko: true } : { strikes: 3, delay: 0.3 });
       break;
     // (not the bout's: the page says when a man knocked down comes down on the canvas, render/blow.mjs landed)
     case 'floor':

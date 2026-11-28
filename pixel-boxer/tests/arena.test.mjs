@@ -243,7 +243,10 @@ test('the pages choose the arena: the game and the review sheet by ?arena=, the 
     html = read('spar.html'),
     review = read('src/review.mjs');
   assert.match(main, /arenaOf\(query\.get\('arena'\)\)/);
-  assert.match(main, /createBout\(.*\{ vary: true, arena: ARENA \}\)/);
+  // (the game's bout is its match's, fought where the page says: game/card.mjs matchOf -> game/match.mjs createMatch -> createBout)
+  assert.match(main, /matchOf\(seed, \{ rounds: ROUNDS, roundTime: ROUND, arena: ARENA \}\)/);
+  assert.match(read('src/game/card.mjs'), /createMatch\(\{ seed, .*arena: o\.arena \}\)/);
+  assert.match(read('src/game/match.mjs'), /createBout\(o\.seed \|\| 1, \{ .*vary: true, arena: o\.arena \}\)/);
   assert.match(review, /arenaOf\(q\.get\('arena'\)\)/);
   assert.match(html, /<select id="wear"[^]*?<\/select>\s*<select id="arena" aria-label="경기장"><option value="ring">링<\/option><option value="underground">지하<\/option><\/select>/);
   assert.match(spar, /store\.get\('spar\.arena'\)/);

@@ -119,6 +119,9 @@ function menOf(rng) {
     if (Math.abs(rank(men[0].grade) - rank(men[1].grade)) <= SPAR.gap) return men;
   }
 }
+/* (the same two men, as the game page's fight card draws them: the first pair the sparring round of the same seed draws,
+   no more than SPAR.gap grades apart, each with his loadout: src/game/card.mjs) */
+export const pairOf = seed => menOf(dice(seed * 7919 + 13));
 function manOf(rng) {
   const grade = LEVELS[Math.floor(rng() * LEVELS.length)],
     skills = { all: grade },

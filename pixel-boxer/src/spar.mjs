@@ -499,6 +499,11 @@ function run({ manifest, get }, o) {
       $('blow').classList.remove('on');
       void $('blow').offsetWidth;
       $('blow').classList.add('on');
+    } else if (e.type === 'collapse') {
+      // (a man up too late going down again, as the game's match has it (src/main.mjs; a round of sparring ends at its first
+      // knockdown, so none comes here): watched until his knee is on the canvas, as a knockdown is; no blow)
+      falls[e.who] = { on: e.who, q: 1, out: false, landed: null };
+      shake.amp = reduced ? 0 : 3;
     } else if (e.type === 'block') {
       defend(e);
       shake.amp = reduced ? 0 : 1.2;

@@ -4,7 +4,8 @@
      const match = createMatch({ seed, sheets: [a, b], plans: [planA, planB], rounds, roundTime,
                                  skills: [a, b] (anim/skill.mjs: each one's grades; a pro's if left out),
                                  techniques: [a, b] (game/techniques.mjs: what each carries; what his grades give him if
-                                 left out: profile.mjs loadout), rehearse (the brains pick techniques not built yet, too) })
+                                 left out: profile.mjs loadout), rehearse (the brains pick techniques not built yet, too),
+                                 arena (where it is fought: the ring unless 'underground', game/bout.mjs arenaOf) })
      stepMatch(match, dt, inputs?)     advance; inputs[i] (controls) replaces boxer i's brain for this step
      match.phase                       'fight' | 'count' | 'break' (waiting for the corners) | 'over'
      nextRound(match, plans?)          after a break: the plans the corners chose (each may be left as it was)
@@ -35,7 +36,7 @@ const tally = () => ({ thrown: 0, landed: 0, power: 0, J: 0, blocked: 0, downs: 
 
 export function createMatch(o) {
   o = o || {};
-  const bout = createBout(o.seed || 1, { sheets: o.sheets, skills: o.skills, techniques: o.techniques, knockdowns: true, vary: true }),
+  const bout = createBout(o.seed || 1, { sheets: o.sheets, skills: o.skills, techniques: o.techniques, knockdowns: true, vary: true, arena: o.arena }),
     plans = o.plans || [PLANS.steady, PLANS.steady];
   return {
     bout,

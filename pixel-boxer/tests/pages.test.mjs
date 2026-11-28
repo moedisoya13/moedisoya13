@@ -7,7 +7,8 @@
      the game's frame-time readout is the time between pictures (the drawing in it), the JavaScript apart;
      the motion catalogue at 390 px: no sideways scroll;
      the sparring's clock stands at the knockdown once he is down;
-     the mute button on every page that makes sound (a-mute).
+     the mute button on every page that makes sound (a-mute);
+     the game page is a match, both corners boxed by their heads (a-screen-ai, the audit's 3-1).
    With no Playwright here, each is skipped, and says so. */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -293,4 +294,83 @@ test('the mute button: on the game, the sparring and the audition, seen, a finge
     await browser.close();
     server.close();
   }
+});
+
+/* The game page is a match (a-screen-ai, the user's answer of 2026-11-28: "고친 시합 엔진을 화면에서 보게"; the audit's 3-1):
+   nobody at the controls, both men boxed by their heads and both moving; the round's clock runs down; at the bell the break,
+   then the next round; at the end the result, a decision's or a draw's with the three judges' totals. Short rounds and four
+   times the speed (?rounds=2&round=8&rest=1&speed=4), the seed the audit's (3); the page's match is the one finish() fights
+   from the same card under node, to the result and the judges' cards (game/card.mjs). And at a phone's width, upright and
+   on its side, the page does not scroll sideways and the HUD keeps 16 px off the edges. */
+test('the game page is a match: both men move, the clock runs, the break and the next round, the result as node fights it', { skip, timeout: 420000 }, async () => {
+  const { matchOf } = await import('../src/game/card.mjs'),
+    { finish } = await import('../src/game/match.mjs'),
+    want = matchOf(3, { rounds: 2, roundTime: 8 });
+  finish(want);
+  await withPage({ path: 'index.html?seed=3&auto=1&rounds=2&round=8&rest=1&speed=4&rows=80', ready: gameReady }, async page => {
+    const seen = await page.evaluate(async () => {
+      const B = globalThis.__bout,
+        acts = [0, 0],
+        walked = [0, 0],
+        was = [null, null],
+        at = [null, null],
+        phases = [],
+        times = new Set(),
+        rounds = new Set(),
+        t0 = performance.now();
+      let breakAt = null,
+        fightAfter = false;
+      while (performance.now() - t0 < 300000 && !document.getElementById('result').classList.contains('on')) {
+        const m = B.match,
+          ph = B.phase;
+        if (phases[phases.length - 1] !== ph) phases.push(ph);
+        if (ph === 'break' && breakAt === null) breakAt = { round: m.round, clock: m.clock, shown: document.getElementById('rest').classList.contains('on'), stage: document.getElementById('stage').textContent };
+        if (breakAt && ph === 'fight' && m.round === breakAt.round + 1) fightAfter = true;
+        rounds.add(m.round);
+        times.add(document.getElementById('time').textContent);
+        B.bout.fighters.forEach((f, i) => {
+          const a = f.action ? f.action.id || f.action.name : null;
+          if (a && a !== was[i]) acts[i]++;
+          was[i] = a;
+          if (at[i]) walked[i] += Math.hypot(f.x - at[i][0], f.z - at[i][1]);
+          at[i] = [f.x, f.z];
+        });
+        await new Promise(r => setTimeout(r, 40));
+      }
+      const r = B.match.result;
+      return { acts, walked, phases, times: [...times], rounds: [...rounds], breakAt, fightAfter, result: r && { how: r.how, winner: r.winner, round: r.round, time: r.time, cards: r.cards }, totals: B.match.totals || null, verdict: document.getElementById('verdict').textContent, cardsText: document.getElementById('cards').textContent, shown: document.getElementById('result').classList.contains('on') };
+    });
+    // (both men act: actions started, metres walked)
+    for (const i of [0, 1]) {
+      assert.ok(seen.acts[i] >= 5, `corner ${i}: ${seen.acts[i]} actions`);
+      assert.ok(seen.walked[i] > 1, `corner ${i}: walked ${seen.walked[i].toFixed(2)} m`);
+    }
+    // (the clock ran down: 0:08 to 0:00, and the seconds between)
+    assert.ok(seen.times.includes('0:08') && seen.times.includes('0:00') && seen.times.length >= 6, `the clock showed ${seen.times.join(' ')}`);
+    // (the bell: the break, shown, at the round's end; then the second round)
+    assert.ok(seen.breakAt, `the phases seen: ${seen.phases.join(' > ')}`);
+    assert.equal(seen.breakAt.round, 1);
+    assert.ok(seen.breakAt.clock >= 8 - 1e-6, `the break at ${seen.breakAt.clock}`);
+    assert.ok(seen.fightAfter, 'the second round fought after the break');
+    assert.deepEqual(seen.rounds, [1, 2]);
+    // (the result shown, and it is the match node fights from the same card)
+    assert.ok(seen.shown, 'the result is shown');
+    assert.deepEqual(seen.result, { how: want.result.how, winner: want.result.winner, round: want.result.round, time: want.result.time, cards: want.result.cards });
+    assert.ok(seen.verdict.length > 0, 'a verdict');
+    if (want.result.how === 'decision' || want.result.how === 'draw') {
+      assert.deepEqual(seen.totals, want.totals);
+      assert.equal(seen.cardsText, '심판 ' + want.totals.map(t => `${t[0]}-${t[1]}`).join(' · '), 'the three judges\' totals');
+    }
+  });
+  for (const viewport of [{ width: 390, height: 780 }, { width: 780, height: 390 }])
+    await withPage({ path: 'index.html?seed=3&auto=1', ready: gameReady, viewport }, async page => {
+      await page.waitForFunction(() => __bout.bout.t > 0.5, null, { timeout: 120000 });
+      const r = await page.evaluate(() => ({
+        scroll: document.documentElement.scrollWidth,
+        view: innerWidth,
+        boxes: ['#name0', '#name1', '#hp0', '#hp1', '#time', '#stage', '#bar button', '#mute'].flatMap(sel => [...document.querySelectorAll(sel)].map(el => [sel, el.getBoundingClientRect().left, el.getBoundingClientRect().right]))
+      }));
+      assert.ok(r.scroll <= r.view, `${viewport.width}x${viewport.height}: ${r.scroll} px wide`);
+      for (const [sel, left, right] of r.boxes) assert.ok(left >= 16 - 0.5 && right <= r.view - 16 + 0.5, `${viewport.width}x${viewport.height}: ${sel} at ${left.toFixed(1)}..${right.toFixed(1)}`);
+    });
 });

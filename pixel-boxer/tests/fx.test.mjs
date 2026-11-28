@@ -369,7 +369,7 @@ test('the live picture of a knockdown plays at the true speed: no slow motion in
   assert.ok(!('slow' in FX), 'FX has no slow motion');
   // (the game and the effect study move their bout on by the real time, as it passes; the bout holds the moment of a blow itself)
   const src = f => readFileSync(new URL('../src/' + f, import.meta.url), 'utf8');
-  for (const [f, bits] of [['main.mjs', ['elapsed = Math.min(0.1, (now - last) / 1000 || 0) * SPEED', 'acc += elapsed;']], ['fxlab.mjs', ['cell.acc += elapsed;']]]) {
+  for (const [f, bits] of [['main.mjs', ['elapsed = Math.min(0.1, (now - last) / 1000 || 0) * speed', 'acc += elapsed;']], ['fxlab.mjs', ['cell.acc += elapsed;']]]) {
     for (const no of ['slowOf', 'paceOf', 'slowOn']) assert.ok(!src(f).includes(no), `${f} has no ${no}`);
     for (const bit of bits) assert.ok(src(f).includes(bit), `${f}: ${bit}`);
   }
