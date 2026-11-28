@@ -61,7 +61,7 @@
 
 | 이름 | 주소 | 현행 | 원본 | 지난 게시 커밋 | 지금 (2026-11-28) |
 |---|---|---|---|---|---|
-| 한 라운드 스파링 | https://claude.ai/artifact/QSaHbvPFewiH2uLYoWD4t1 | v8 | `spar.html`, `src/spar.mjs`, `src/spar/`, `src/mute.mjs` | d887800 | 2026-11-28 재게시(수정 라운드 1 · 2와 정리 L까지 모두 반영) |
+| 한 라운드 스파링 | https://claude.ai/artifact/QSaHbvPFewiH2uLYoWD4t1 | v9 | `spar.html`, `src/spar.mjs`, `src/spar/`, `src/mute.mjs` | 52d27fb | 2026-11-28 재게시(수정 라운드 1 · 2와 정리 L까지 모두 반영) |
 | 모션 카탈로그 | https://claude.ai/artifact/GGHUZQ9rFWLoRojwCzaK3N | v44 | `catalog.html`, `src/catalog.mjs` | d887800 | 2026-11-28 재게시(수정 라운드 1 · 2와 정리 L까지 모두 반영) |
 | 타격음 오디션 | https://claude.ai/artifact/92ZDBLW3TVC2M3XJ6bwgeQ | v2 | `sfx.html`, `src/sfx.mjs`, `src/mute.mjs` | d887800 | 2026-11-28 재게시(수정 라운드 1 · 2와 정리 L까지 모두 반영) |
 | **미결 카탈로그 (새)** | https://claude.ai/artifact/HybxKJu7LtBsGHs7M1rYpz | v5 | `open.html`, `src/open.mjs`, `src/open.data.mjs`, `src/open.clips.mjs`, `src/open.old.mjs`, `src/open.old.data.mjs`, `docs/ref/open/` | d887800 | 2026-11-28 재게시(수정 라운드 1 · 2와 정리 L까지 모두 반영) |
