@@ -317,6 +317,16 @@ def test_default_camera_is_the_chosen_45_degrees():
     assert (b.elev, b.px_per_unit, b.out) == (30.0, 9.6, "out/map_30")  # the 30 degree option still works
 
 
+def test_density_defaults_scale_the_art_pixel_settings():
+    """--density N: N times the art px per unit, the screen and the sun map, its own folder; the lattice is 0.125 / N
+    except at 2, where 0.0625 left dotted plateau edges and 0.03125 was the clean one (README "밀도 ×2")."""
+    for d, spacing in ((1, 0.125), (2, 0.03125), (3, 0.041667)):
+        a, w = _build_args("--density", str(d))
+        assert (a.px_per_unit, a.view_w, a.view_h, a.shadow_res, a.spacing, w) == \
+            (round(11.1 * d, 4), 211 * d, 124 * d, 1024 * d, spacing, [])
+        assert a.out == ("out/map_45" if d == 1 else f"out/map_45x{d}")
+
+
 def test_elevation_alone_picks_the_calibrated_scale_and_its_own_folder():
     """``--elev 30`` used to keep 11.1 px per unit (a figure 17-18 px tall) and write over out/map."""
     a, w = _build_args("--elev", "30")

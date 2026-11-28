@@ -64,6 +64,10 @@ GUARD = 4  # art pixels shaded beyond the frame (>= the widest neighbourhood: SS
 # splat count; what is tuned in world units (lattice spacing, SSAO world radius, depth tolerances) does not.
 # Lines stay ONE art pixel (grid, outline): see README "밀도".
 SPACING_1 = 0.125  # metres between lattice splats at density 1; the default is this / density (README "밀도")
+# ... except where a look at plateau / ramp edges and cone crowns chose otherwise: at density 2, 0.0625 (1.4 art px
+# per step, the ratio of 1 and 3) left dotted teeth along the ledge's top and the plateau's foot, 0.0438 and 0.0417
+# moved them to other edges; 0.03125 (0.7 art px per step) was the only clean one (README "밀도 ×2")
+SPACING_BY_DENSITY = {2: 0.03125}
 SSAO_PX = 3.0  # SSAO ring radius in art pixels at density 1
 ACTOR_SHADOW_RES = 96  # the figure's own sun shadow map, texels, at every density: its texel is 0.032 units (1 art
 #                        px at density 3); finer maps (192, 288) give the same shadow on flat ground at 5-9x the cost
@@ -285,7 +289,7 @@ def resolve_build_args(a, warn=print):
     if getattr(a, "spacing", None) is None:
         # the same number of lattice steps per art pixel as at density 1 (1.4): a coarser lattice leaves a
         # splat's round rim on every edge (dotted plateau / ramp edges, faceted cones at density 3)
-        a.spacing = round(SPACING_1 / density, 6)
+        a.spacing = SPACING_BY_DENSITY.get(density, round(SPACING_1 / density, 6))
     if a.out is None:
         a.out = default_out(a.elev, density)
     return a
@@ -761,11 +765,11 @@ def build_parser() -> argparse.ArgumentParser:
     b = common(sub.add_parser("build", help="layout -> splats -> baked level G-buffer + sun shadow map"))
     b.add_argument("--layout", default=None, help="layout json (default: examples/map/layout.json)")
     b.add_argument("--spacing", type=float, default=None,
-                   help=f"splat lattice step in metres (default {SPACING_1:g} / density)")
+                   help=f"splat lattice step in metres (default {SPACING_1:g} / density; 0.03125 at density 2)")
     b.add_argument("--density", type=int, default=1,
                    help="art pixels per reference art pixel: 1 = the measured grid (11.1 px per unit at 45 deg, "
                         "BB ~16 px), 3 = three times finer (33.3, BB ~48 px).  Scales the scale, the screen, the "
-                        "sun map and the default folder (out/map_45x3); the look is tuned to stay the same")
+                        "sun map and the default folder (out/map_45x3, out/map_45x2); the look is tuned to stay the same")
     dflt = isocam.RefCam()
     b.add_argument("--elev", type=elevation, default=dflt.elev,
                    help=f"camera elevation in degrees, {isocam.ELEV_RANGE[0]:g}-{isocam.ELEV_RANGE[1]:g} (chosen: 45; "
