@@ -302,7 +302,12 @@ class Level:
     def load(cls, path=None) -> "Level":
         path = Path(path or DEFAULT_LAYOUT)
         try:
-            layout = json.loads(path.read_text())
+            layout = json.loads(path.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            raise LayoutError([f"레이아웃 파일 {path} 이(가) 없습니다 — 경로를 확인해 주세요 "
+                               f"(기본 파일: {DEFAULT_LAYOUT})"]) from None
+        except IsADirectoryError:
+            raise LayoutError([f"{path} 은(는) 폴더입니다 — layout .json 파일 경로를 주세요"]) from None
         except json.JSONDecodeError as err:
             raise LayoutError([f"{path.name} {err.lineno}번째 줄 {err.colno}번째 글자: JSON 문법 오류 ({err.msg}) — "
                                f"쉼표·괄호·따옴표를 확인해 주세요"]) from None

@@ -856,3 +856,38 @@ def test_standing_mannequin_is_16_px_at_the_default_camera(tmp_path):
         st.level.demo["stand"]["at"] = at
         got.append(graybox.figure_height_px(st, man))
     assert got == [16, 16, 16]
+
+
+@pytest.mark.skipif(not (BB / "soldier_splats.pt").exists(), reason="needs the baked mannequin in out/bb")
+def test_tight_actor_window_draws_the_same_pixels_and_density_3_is_48_px(tmp_path):
+    """The figure is rasterized in a window just around its splats instead of a fixed square: the same pixels
+    (density 1, a standing and a lunging pose).  At density 3 (33.3 px per unit) the standing BB is ~48 px."""
+    import json
+
+    torch.set_num_threads(2)
+    layout = {"name": "flat", "size": [12, 12], "elements": [], "demo": {"stand": {"at": [-1.0, 4.4], "facing": 60}}}
+    for density in (1, 3):
+        spec = isocam.RefCam(px_per_unit=11.1 * density)
+        folder = tmp_path / f"d{density}"
+        folder.mkdir()
+        _, data = graybox.bake(lv.Level(layout), spec, spacing=0.25, shadow_res=64, log=quiet, density=density)
+        np.savez_compressed(folder / graybox.BAKE_FILE, **data)
+        (folder / "layout_used.json").write_text(json.dumps(layout))
+        st = graybox.Stage(str(folder))
+        assert st.density == density
+        man = graybox.Mannequin(str(BB), 1000, density=density, raster_k=512 if density > 1 else None)
+        assert man.model.n == 1000 * density * density
+        if density == 1:
+            for pose, phase in (("stand", 0.0), ("walk", 0.3)):
+                actors = [graybox._stand_actor(st, man, [-1.0, 4.4], 60, pose, phase)]
+                fx, fy = (int(v) for v in st.window_at(st.level.to_world(-1.0, 4.4), (0.5, 0.7), (48, 48)))
+                outs = []
+                for mode in ("square", "tight"):
+                    st.actor_window = mode
+                    _, gb, mask, _ = st.gbuffer(fx, fy, 48, 48, actors)
+                    outs.append((gb, mask))
+                np.testing.assert_array_equal(outs[0][1], outs[1][1])
+                for k in ("depth", "normal", "albedo"):
+                    np.testing.assert_array_equal(outs[0][0][k], outs[1][0][k])
+        else:
+            assert 46 <= graybox.figure_height_px(st, man) <= 50

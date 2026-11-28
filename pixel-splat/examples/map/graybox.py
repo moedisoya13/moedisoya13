@@ -57,7 +57,16 @@ BAKE_FILE, SPLAT_FILE = "level_bake.npz", "level_splats.pt"
 # a 30 deg camera; under another elevation the same screen shadow needs another sun (45 deg: about 57.7 / 97.1).
 SUN_ALT_30, SUN_AZ_REL_30 = 52.0, 100.0
 BACKGROUND = (0.075, 0.075, 0.11)
-GUARD = 4  # art pixels shaded beyond the frame (>= the widest neighbourhood: SSAO reaches 3 px)
+GUARD = 4  # art pixels shaded beyond the frame (>= the widest neighbourhood: SSAO reaches 3 px), x density
+# Pixel density: how many art pixels stand for one art pixel of the reference grid (1 = the measured
+# 11.1 px per unit at 45 deg; 3 = 33.3, the BB about 48 px tall).  Everything tuned in art pixels scales
+# with it - the SSAO ring, the guard band, the level's and the figure's shadow-map texels, the figure's
+# splat count; what is tuned in world units (lattice spacing, SSAO world radius, depth tolerances) does not.
+# Lines stay ONE art pixel (grid, outline): see README "밀도".
+SPACING_1 = 0.125  # metres between lattice splats at density 1; the default is this / density (README "밀도")
+SSAO_PX = 3.0  # SSAO ring radius in art pixels at density 1
+ACTOR_SHADOW_RES = 96  # the figure's own sun shadow map, texels, at every density: its texel is 0.032 units (1 art
+#                        px at density 3); finer maps (192, 288) give the same shadow on flat ground at 5-9x the cost
 
 
 def pole_shadow_on_screen(alt_deg: float, az_rel_deg: float, elev_deg: float):
@@ -198,7 +207,11 @@ def grid_overlay(level: lv.Level, cam: Camera, P: np.ndarray, mat: np.ndarray, a
     return out
 
 
-def bake(level: lv.Level, spec: isocam.RefCam, spacing: float = 0.125, shadow_res: int = 1024, log=print):
+def bake(level: lv.Level, spec: isocam.RefCam, spacing: float = 0.125, shadow_res: int = 1024, log=print,
+         density: int = 1):
+    """Splats of the level -> the whole level's G-buffer (2x supersampled, voted, despeckled) + the sun's
+    shadow map.  ``density`` is only recorded (the scale is already in ``spec``): the Stage reads it to
+    scale what is tuned in art pixels."""
     t0 = time.time()
     sp = level.splats(spacing)
     model = lv.to_model(sp)
@@ -228,14 +241,15 @@ def bake(level: lv.Level, spec: isocam.RefCam, spacing: float = 0.125, shadow_re
                 rough=gb["rough"], cam_view=cam.viewmat, cam_A=cam.A, cam_size=np.array([cam.width, cam.height]),
                 sun=sun, sm_view=lcam.viewmat, sm_A=lcam.A, sm_depth=sg["depth"].astype(np.float32),
                 sm_covered=sg["alpha"] > 0.5, spec=np.array([spec.elev, spec.az, spec.px_per_unit, *spec.view]),
-                spacing=np.array(spacing))
+                spacing=np.array(spacing), density=np.array(int(density)))
     return model, data
 
 
-def default_out(elev: float) -> str:
+def default_out(elev: float, density: int = 1) -> str:
     """Where a bake goes when ``-o`` is not given: one folder per camera, so a 45 degree bake never
-    lands on top of a 30 degree one (out/map_45, out/map_30, ...)."""
-    return f"out/map_{elev:g}".replace(".", "_")
+    lands on top of a 30 degree one (out/map_45, out/map_30, ...), nor a denser one on either
+    (out/map_45x3)."""
+    return f"out/map_{elev:g}".replace(".", "_") + (f"x{density}" if density != 1 else "")
 
 
 def bake_spec(folder: str) -> Optional[np.ndarray]:
@@ -250,15 +264,30 @@ def bake_spec(folder: str) -> Optional[np.ndarray]:
 def resolve_build_args(a, warn=print):
     """Fill in what the build command line left open: the scale for the elevation (the calibrated value at
     30 / 45, an unmeasured estimate otherwise, with a warning) and the output folder (one per camera)."""
+    density = int(getattr(a, "density", 1) or 1)
+    if density < 1:
+        raise SystemExit(f"[build] --density must be a whole number 1 or more (got {density})")
+    a.density = density
     if a.px_per_unit is None:
-        a.px_per_unit, calibrated = isocam.scale_for(a.elev)
+        base, calibrated = isocam.scale_for(a.elev)
+        a.px_per_unit = round(base * density, 4)
         if not calibrated:
             warn(f"[build] WARNING: no measured scale for elevation {a.elev:g} deg (measured: "
                  f"{', '.join(f'{e:g} -> {s:g}' for e, s in sorted(isocam.CALIBRATED.items()))}); using the "
                  f"straight-line estimate {a.px_per_unit:g} px per unit. The mannequin will not be exactly 16 px: "
                  f"check render.json (figure_px) after 'render' and pass --px-per-unit")
+    if getattr(a, "view_w", None) is None:
+        a.view_w = isocam.RefCam().view[0] * density
+    if getattr(a, "view_h", None) is None:
+        a.view_h = isocam.RefCam().view[1] * density
+    if getattr(a, "shadow_res", None) is None:
+        a.shadow_res = 1024 * density
+    if getattr(a, "spacing", None) is None:
+        # the same number of lattice steps per art pixel as at density 1 (1.4): a coarser lattice leaves a
+        # splat's round rim on every edge (dotted plateau / ramp edges, faceted cones at density 3)
+        a.spacing = round(SPACING_1 / density, 6)
     if a.out is None:
-        a.out = default_out(a.elev)
+        a.out = default_out(a.elev, density)
     return a
 
 
@@ -274,7 +303,7 @@ def cmd_build(a):
                          f"to replace it")
     os.makedirs(a.out, exist_ok=True)
     level = lv.Level.load(a.layout)
-    model, data = bake(level, spec, a.spacing, a.shadow_res)
+    model, data = bake(level, spec, a.spacing, a.shadow_res, density=a.density)
     np.savez_compressed(os.path.join(a.out, BAKE_FILE), **data)
     torch.save(model.state_dict(), os.path.join(a.out, SPLAT_FILE))
     shutil.copyfile(a.layout or lv.DEFAULT_LAYOUT, os.path.join(a.out, "layout_used.json"))
@@ -282,7 +311,7 @@ def cmd_build(a):
     print(f"[build] camera: orthographic, elevation {spec.elev:g} deg, {spec.px_per_unit:g} art px per unit "
           f"({spec.px_per_unit * lv.UNITS_PER_M:.2f} px per metre); one {spec.view[0]}x{spec.view[1]} screen shows "
           f"{w / lv.UNITS_PER_M:.1f} m x {d / lv.UNITS_PER_M:.1f} m of ground; a 1.75 m pole is "
-          f"{spec.person_px():.1f} px tall")
+          f"{spec.person_px():.1f} px tall; density x{a.density}, lattice {a.spacing:g} m, sun map {a.shadow_res}^2")
     print(f"[build] saved {a.out}/{BAKE_FILE}, {a.out}/{SPLAT_FILE}")
 
 
@@ -296,7 +325,15 @@ class Mannequin:
     each grown to keep the surface closed: well under a second, same picture at this size)."""
 
     def __init__(self, folder: str, splats: int = 1000, patches: int = 24, seed: int = 0, color=BB_COLOR,
-                 shadow_splats: int = 350):
+                 shadow_splats: int = 350, density: int = 1, raster_k: Optional[int] = None):
+        """``splats`` / ``shadow_splats`` are for density 1; ``splats`` grows with ``density`` squared (the figure
+        covers density^2 times the pixels; fewer splats grown larger leave a lumpy outline).  ``raster_k``:
+        the rasterizer's slots per tile to START with (it doubles on overflow anyway; a dense figure
+        always overflows the default 256 once, which costs a whole wasted pass)."""
+        density = max(1, int(density))
+        splats = splats * density * density if splats else splats
+        shadow_splats = shadow_splats * density  # the shadow is a silhouette: it needs fewer than the figure
+        self.density, self.raster_k = density, raster_k
         sys.path.insert(0, str(HERE.parent / "soldier"))
         import motion  # noqa: PLC0415
         import soldier  # noqa: PLC0415
@@ -359,11 +396,14 @@ class Stage:
         self.sm = ShadowMap(Camera(d["sm_view"], d["sm_A"], res, res, True), d["sm_depth"], d["sm_covered"])
         self.shade_cfg = graybox_shade(self.sun)
         self.level = lv.Level.load(os.path.join(folder, "layout_used.json"))
+        self.density = int(d["density"]) if "density" in d.files else 1
+        self.actor_window = "tight"  # or "square" (the old fixed window; same pixels, ~10x slower at density 3)
 
     # -- G-buffer of a window, with actors merged in by depth
     def gbuffer(self, x0: int, y0: int, w: int, h: int, actors: Sequence = ()):
         cam = isocam.window(self.cam, x0, y0, w, h)
         H, W = self.cam.height, self.cam.width
+        d = self.density
         gb = dict(alpha=np.zeros((h, w), np.float32), albedo=np.zeros((h, w, 3), np.float32),
                   rough=np.ones((h, w), np.float32), metal=np.zeros((h, w), np.float32),
                   normal=np.zeros((h, w, 3), np.float32), depth=np.zeros((h, w), np.float32))
@@ -378,15 +418,28 @@ class Stage:
                 pose = man.R.pose(mats)
             means = pose[0]
             c = means.mean(0).numpy()
-            # small window around the figure (whole pixels of the same lattice)
-            p = isocam.project(cam, c)
-            half = int(math.ceil(0.75 * man.height * self.spec.px_per_unit)) + 4
-            wx0, wy0 = int(math.floor(p[0])) - half, int(math.floor(p[1])) - half
-            wx1, wy1 = min(wx0 + 2 * half, w), min(wy0 + 2 * half, h)
+            # a window just around the figure (whole pixels of the same lattice): the splats' screen
+            # boxes (3 sigma, the rasterizer's cutoff) + a margin for the clean-up filters.  The dense
+            # rasterizer pays for every pixel x slot of the window, so this is ~10x cheaper than a fixed
+            # square at density 3, and pixel for pixel the same picture (tests/test_map.py)
+            if self.actor_window == "square":  # the old fixed square (kept to test the two agree)
+                p = isocam.project(cam, c)
+                half = int(math.ceil(0.75 * man.height * self.spec.px_per_unit)) + 4
+                wx0, wy0 = int(math.floor(p[0])) - half, int(math.floor(p[1])) - half
+                wx1, wy1 = wx0 + 2 * half, wy0 + 2 * half
+            else:
+                P = isocam.project(cam, means.numpy())
+                rad = 3.0 * pose[2].max(1).values.numpy() * float(cam.A[0, 0]) + 3.0
+                wx0, wy0 = int(math.floor((P[:, 0] - rad).min())), int(math.floor((P[:, 1] - rad).min()))
+                wx1, wy1 = int(math.ceil((P[:, 0] + rad).max())), int(math.ceil((P[:, 1] + rad).max()))
+            wx1, wy1 = min(wx1, w), min(wy1, h)
             wx0, wy0 = max(wx0, 0), max(wy0, 0)
             if wx1 - wx0 >= 4 and wy1 - wy0 >= 4:
                 sub = isocam.window(cam, wx0, wy0, wx1 - wx0, wy1 - wy0)
-                g = render_gbuffer_frame(man.model, sub, man.R.config(), pose=pose)
+                cfg = man.R.config()
+                if man.raster_k:
+                    cfg = replace(cfg, raster=replace(cfg.raster, k=int(man.raster_k)))
+                g = render_gbuffer_frame(man.model, sub, cfg, pose=pose)
                 sl = (slice(wy0, wy1), slice(wx0, wx1))
                 front = (g["alpha"] > 0.5) & ((gb["alpha"][sl] <= 0.5) | (g["depth"] < gb["depth"][sl]))
                 for k in gb:
@@ -395,7 +448,8 @@ class Stage:
             si = man.shadow_idx
             shadow_maps.append(make_shadow_map(means[si], pose[1][si], pose[2][si] * man.shadow_grow,
                                                man.model.opacity().detach()[si], self.sun, center=c,
-                                               extent=0.85 * man.height, res=96))
+                                               extent=0.85 * man.height, res=ACTOR_SHADOW_RES,
+                                               k=int(man.raster_k or 256)))
         return cam, gb, actor_mask, shadow_maps
 
     def sun_visibility(self, cam, gb, shadow_maps, crisp: bool = True, actor_mask=None) -> np.ndarray:
@@ -416,7 +470,8 @@ class Stage:
         return np.where(gb["alpha"] > 0.5, vis, 1.0).astype(np.float32)
 
     def frame(self, x0: int, y0: int, w: Optional[int] = None, h: Optional[int] = None, actors: Sequence = (),
-              outline: float = 0.35, ao: float = 0.45, mode: str = "lit", guard: int = GUARD, layers: bool = False):
+              outline: float = 0.35, ao: float = 0.45, mode: str = "lit", guard: Optional[int] = None,
+              layers: bool = False):
         """One art-resolution picture (h, w, 3) sRGB of the window whose top-left pixel is (x0, y0).
 
         It is shaded ``guard`` pixels larger on every side and then cut: ambient occlusion, the outline
@@ -425,6 +480,8 @@ class Stage:
         layers behind the picture - ``alpha``, ``depth`` (camera depth, smaller = nearer), ``actor``
         (pixels the actors cover) and ``sun`` (sun visibility 0..1, actors' shadows included)."""
         w, h = w or self.spec.view[0], h or self.spec.view[1]
+        if guard is None:
+            guard = GUARD * self.density
         if guard > 0:
             out = self.frame(x0 - guard, y0 - guard, w + 2 * guard, h + 2 * guard, actors, outline, ao, mode,
                              guard=0, layers=layers)
@@ -448,7 +505,7 @@ class Stage:
                                  srgb_to_linear(gb["albedo"]), 0.0)
         P = gbuf.world_positions(cam, gb["depth"])
         if ao > 0:  # the engine's SSAO at the scene's scale (its default radius is for a 2-unit model)
-            occ = gbuf.ssao(gb, P, radius_px=3.0, world_radius=0.6)
+            occ = gbuf.ssao(gb, P, radius_px=SSAO_PX * self.density, world_radius=0.6)
             lin = lin * (1 - ao * (1 - occ[..., None]))
         img = postprocess(lin, gb, sc, cam)
         if outline > 0:
@@ -549,6 +606,12 @@ def video_frame(path: str, t: float) -> np.ndarray:
 
 
 # ---------------------------------------------------------------- commands
+def _mannequin(a, st: "Stage") -> Mannequin:
+    """The BB for a stage: ``--bb-splats`` is for density 1 and grows with the stage's density squared."""
+    return Mannequin(a.bb, a.bb_splats, color=_bb_color(a), density=st.density,
+                     raster_k=512 if st.density > 1 else None)
+
+
 def _bb_color(a):
     return None if a.bb_color == "own" else tuple(float(v) for v in a.bb_color.split(","))
 
@@ -561,8 +624,9 @@ def figure_height_px(st: Stage, man: Mannequin) -> int:
     """Rows the standing mannequin covers on screen (measured on a flat spot of the baked level)."""
     at = st.level.demo.get("stand", {"at": [0, 0]})["at"]
     foot = st.level.to_world(at[0], at[1])
-    fx, fy = st.window_at(foot, (0.5, 0.75), (48, 48))
-    _, _, mask, _ = st.gbuffer(int(fx), int(fy), 48, 48, [_stand_actor(st, man, at, 90)])
+    n = 48 * st.density
+    fx, fy = st.window_at(foot, (0.5, 0.75), (n, n))
+    _, _, mask, _ = st.gbuffer(int(fx), int(fy), n, n, [_stand_actor(st, man, at, 90)])
     rows = np.nonzero(mask.any(1))[0]
     return int(rows[-1] - rows[0] + 1) if len(rows) else 0
 
@@ -578,7 +642,7 @@ def cmd_render(a):
     print(f"[render] overview {st.cam.width}x{st.cam.height} art px ({time.time() - t0:.1f}s)")
     if a.no_bb:
         return
-    man = Mannequin(a.bb, a.bb_splats, color=_bb_color(a))
+    man = _mannequin(a, st)
     demo = st.level.demo
     stand = demo.get("stand", {"at": [0.0, 0.0], "facing": 90})
     actors = [_stand_actor(st, man, stand["at"], stand.get("facing", 90))]
@@ -595,8 +659,9 @@ def cmd_render(a):
     c = isocam.project(isocam.window(st.cam, int(round(fx)), int(round(fy)), *st.spec.view),
                        st.level.to_world(*stand["at"], lift=0.9))
     cx, cy = int(c[0]), int(c[1])
-    crop = img[max(cy - 22, 0):cy + 22, max(cx - 26, 0):cx + 52]
-    save_png(upscale(crop, 3 * S), os.path.join(a.out, "bb_closeup.png"))
+    D = st.density
+    crop = img[max(cy - 22 * D, 0):cy + 22 * D, max(cx - 26 * D, 0):cx + 52 * D]
+    save_png(upscale(crop, max(1, 3 * S // D)), os.path.join(a.out, "bb_closeup.png"))
     px = figure_height_px(st, man)
     print(f"[render] view_bb / bb_closeup; the standing mannequin covers {px} art px in height "
           f"(reference character: about 16) ({time.time() - t0:.1f}s)")
@@ -606,7 +671,7 @@ def cmd_render(a):
 
 def cmd_clip(a):
     st = Stage(a.out)
-    man = Mannequin(a.bb, a.bb_splats, color=_bb_color(a))
+    man = _mannequin(a, st)
     walk = st.level.demo["walk"]
     pts, speed = walk["points"], float(walk.get("speed", 1.25))
     length = lv.polyline_length(pts)
@@ -647,7 +712,7 @@ def cmd_compare(a):
         ref_full = video_frame(a.ref_video, a.ref_time)
     ref = reference_art(ref_full, a.pitch)
     h, w = ref.shape[:2]
-    man = Mannequin(a.bb, a.bb_splats, color=_bb_color(a))
+    man = _mannequin(a, st)
     spot = st.level.demo.get("compare", st.level.demo.get("stand", {"at": [0, 0], "facing": 90}))
     foot = st.level.to_world(*spot["at"])
     ax, ay = (float(v) for v in a.anchor.split(","))
@@ -695,7 +760,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     b = common(sub.add_parser("build", help="layout -> splats -> baked level G-buffer + sun shadow map"))
     b.add_argument("--layout", default=None, help="layout json (default: examples/map/layout.json)")
-    b.add_argument("--spacing", type=float, default=0.125, help="splat lattice step in metres")
+    b.add_argument("--spacing", type=float, default=None,
+                   help=f"splat lattice step in metres (default {SPACING_1:g} / density)")
+    b.add_argument("--density", type=int, default=1,
+                   help="art pixels per reference art pixel: 1 = the measured grid (11.1 px per unit at 45 deg, "
+                        "BB ~16 px), 3 = three times finer (33.3, BB ~48 px).  Scales the scale, the screen, the "
+                        "sun map and the default folder (out/map_45x3); the look is tuned to stay the same")
     dflt = isocam.RefCam()
     b.add_argument("--elev", type=elevation, default=dflt.elev,
                    help=f"camera elevation in degrees, {isocam.ELEV_RANGE[0]:g}-{isocam.ELEV_RANGE[1]:g} (chosen: 45; "
@@ -706,9 +776,9 @@ def build_parser() -> argparse.ArgumentParser:
                         "elevation (11.1 at 45 deg, 9.6 at 30 deg: standing mannequin about 16 px), an estimate "
                         "with a warning for any other elevation")
     b.add_argument("--force", action="store_true", help="replace a bake in -o that was made with another camera")
-    b.add_argument("--view-w", type=int, default=dflt.view[0])
-    b.add_argument("--view-h", type=int, default=dflt.view[1])
-    b.add_argument("--shadow-res", type=int, default=1024)
+    b.add_argument("--view-w", type=int, default=None, help=f"screen width in art px (default {dflt.view[0]} x density)")
+    b.add_argument("--view-h", type=int, default=None, help=f"screen height in art px (default {dflt.view[1]} x density)")
+    b.add_argument("--shadow-res", type=int, default=None, help="sun shadow map texels per side (default 1024 x density)")
     b.set_defaults(fn=cmd_build)
     r = common(sub.add_parser("render", help="overview + reference-sized view with the mannequin for scale"))
     r.add_argument("--no-bb", action="store_true")
