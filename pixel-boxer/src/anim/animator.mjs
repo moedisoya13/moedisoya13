@@ -193,6 +193,10 @@ const HOME = { accel: 120, least: 8, punch: 90, soft: 0.05, ramp: 0.15, lock: 0.
    it: the centre of mass follows what is asked exactly while it is within that, and otherwise goes as fast as it can,
    slowing in time to arrive at rest, and the hips carry it (metres a second a second). */
 const FALL = { down: 1.3 * 9.81, up: 3 * 9.81, brake: 2.4 * 9.81, back: 15 }; // (back: how quickly he comes back onto what is asked, 1/s)
+/* (the most solves of him the hips' carrying of a height he cannot do as asked may take in a frame, FALL; and how near what
+   is asked they must bring his centre of mass, metres, as it always was) */
+const HEIGHT_TRIES = 4,
+  HEIGHT_EXACT = 2e-4;
 /* Seconds over which the first of a rise is drawn out of the pose he lay in, bone by bone. The rise itself is blended out of
    that pose as the solver takes it, but the solver does not take it exactly (it folds no arm as tight as a limp one can be,
    and puts an elbow it has unfolded back on top of the canvas), and the difference is let go of over this rather than in a
@@ -2391,11 +2395,17 @@ export function createAnimator(seed) {
       c.ly -= 0.05 * Math.abs(open);
       c.rx -= 0.09 * open;
       c.ry -= 0.05 * Math.abs(open);
+      /* (a glove knocked off by a parry or a block comes back at his grade's pace, a beginner's slowly, his arm gone after the
+         punch he turned aside; but one he throws a punch with comes back no slower than the textbook's: a beginner's
+         rear glove still out across his chest from a parry, 20 cm, was wound up from there, his elbow up from his cover over
+         a hand drawn down onto his other side, and his cross turned the upper arm past its range and went into his own lead
+         arm, docs/audit-2026-11-25/4-1.mjs) */
       for (const [side, x, yy, z] of [['L', 'lx', 'ly', 'lz'], ['R', 'rx', 'ry', 'rz']]) {
-        const gk = knock[side];
-        c[x] += spring(gk[0], 0, dt, 4.2 * knockRate, 0.55);
-        c[yy] += spring(gk[1], 0, dt, 4.2 * knockRate, 0.55);
-        c[z] += spring(gk[2], 0, dt, 4.2 * knockRate, 0.55);
+        const gk = knock[side],
+          rate = punchMove && punchMove.hand === side ? Math.max(1, knockRate) : knockRate;
+        c[x] += spring(gk[0], 0, dt, 4.2 * rate, 0.55);
+        c[yy] += spring(gk[1], 0, dt, 4.2 * rate, 0.55);
+        c[z] += spring(gk[2], 0, dt, 4.2 * rate, 0.55);
       }
 
       /* ---- down and staying there: he still breathes, hard, and the head lifts and drops with it (a man on the canvas is
@@ -3221,22 +3231,44 @@ export function createAnimator(seed) {
           height.vt = vt;
           /* (where he cannot do what is asked, his hips carry the difference, and all of him that goes with them: the hips
              move the centre of mass by about 0.85 of their own travel, the legs staying where they are, and by what it
-             turns out to be, the second time) */
+             turns out to be, the second time, and again from the last two tries while it is still off (HEIGHT_TRIES in
+             all), keeping the nearest: what the hips carry is not always in proportion, a leg let out straighter or a
+             slowed arm going with them, and a reeling man carried 1.9 mm past where he was held to in one frame came
+             down 2.6 g the next, docs/audit-2026-11-25/4-4.mjs) */
           const off = height.y - want;
-          if (Math.abs(off) > 2e-4) {
+          if (Math.abs(off) > HEIGHT_EXACT) {
             /* (but not the fist of a punch to the body on its way: it goes where it is thrown, low, and the arm reaches down
-               to it from wherever the shoulder is, as the way down to it lags: body.mjs, lower) */
+               to it from wherever the shoulder is, as the way down to it lags: body.mjs, lower. And each hand's wrist of last
+               frame goes up with it, where the solver brings a hand round toward it: left where it was, a hand thrown back
+               out of reach, a reeling man's, was brought round to it from the shoulder carried up, the elbow dropped 5 cm,
+               and the centre of mass did not go up at all) */
             const low = punchMove && punchMove.level && (action.chain.phase === 'coil' || action.chain.phase === 'throw') ? punchMove.hand : null,
               shifted = h => {
               const by = [0, h / (1 + c.st), 0],
                 moved = {};
-              for (const side of ['L', 'R']) moved[side] = side === low ? stance.hands[side] : Object.assign({}, stance.hands[side], { at: M.add(stance.hands[side].at, by) });
+              for (const side of ['L', 'R']) moved[side] = side === low ? stance.hands[side] : Object.assign({}, stance.hands[side], { at: M.add(stance.hands[side].at, by), last: stance.hands[side].last && M.add(stance.hands[side].last, by) });
               return solved(Object.assign({}, stance, { hips: M.add(stance.hips, by), hands: moved }));
             };
             let h = off / 0.85;
             pose = shifted(h);
-            const got = centre(pose)[1] - want;
-            if (Math.abs(got - off) > 2e-4 && Math.abs(got) > 1e-5) (h *= clamp(off / got, 0.5, 2)), (pose = shifted(h));
+            let got = centre(pose)[1] - want;
+            if (Math.abs(got - off) > HEIGHT_EXACT && Math.abs(got) > 1e-5) {
+              let was = { h, got, pose },
+                best = was;
+              h *= clamp(off / got, 0.5, 2);
+              pose = shifted(h);
+              got = centre(pose)[1] - want;
+              if (Math.abs(got - off) < Math.abs(best.got - off)) best = { h, got, pose };
+              for (let n = 2; n < HEIGHT_TRIES && Math.abs(got - off) > HEIGHT_EXACT && Math.abs(got - was.got) > 1e-6; n++) {
+                const next = h + ((off - got) * (h - was.h)) / (got - was.got);
+                was = { h, got, pose };
+                h = clamp(next, Math.min(was.h, best.h) * 0.5 - 0.01, Math.max(was.h, best.h) * 2 + 0.01);
+                pose = shifted(h);
+                got = centre(pose)[1] - want;
+                if (Math.abs(got - off) < Math.abs(best.got - off)) best = { h, got, pose };
+              }
+              pose = best.pose;
+            }
           }
         }
       }

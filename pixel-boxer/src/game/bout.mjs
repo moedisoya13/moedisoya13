@@ -660,10 +660,19 @@ function rollFor(bout, f, input, dt) {
 }
 /* What of his guard is in the way, for the bout's strike: the cross-arm guard he holds (its forearms; the hammer, a dirty
    great one's parry), and whether a guard put up fresh turns a punch aside the way his grade parries (not in a roll, not with a
-   cross-arm guard that takes a jab rather than meeting it) */
+   cross-arm guard that takes a jab rather than meeting it). rear: a cross-arm guard that does not parry the way his grade
+   does, put up fresh, turns aside a little all the same: a punch that meets its rear glove, the one at his chin, and nothing
+   that meets the lead arm laid across his belly (the user's choice, 2026-11-28, card a-dark-line: "크로스암 가드에 패리를
+   조금"; held as it was, it turned nothing aside but by the hammer, and the dirty great ones parried a quarter as often as
+   they do without it, docs/audit-2026-11-25/1-4.mjs). While the hammer is coming down the rear glove is the hammer's, not
+   the guard's (the strike) */
+/* (how much of his grade's window a cross-arm guard's rear glove turns a punch aside in, the freshest of it: half. All of it, a
+   pro carrying the guard parried a jab put up on any of nine frames, as his high guard does) */
+const CROSS_PARRY = 0.5;
 const guardOf = other => {
-  const cross = crossOf(other);
-  return { cross, hammer: cross && cross.hammer, parries: !other.roll && !other.shell && (!cross || cross.parry === 'meet') };
+  const cross = crossOf(other),
+    open = !other.roll && !other.shell;
+  return { cross, hammer: cross && cross.hammer, parries: open && (!cross || cross.parry === 'meet'), rear: open && !!cross && cross.parry !== 'meet' };
 };
 /* The lead shoulder (§4A.4): a ball of `r` round the shoulder joint, in the way of a punch while a cross-arm guard is up or a
    roll is on. A punch that meets it while his chest is turning away to his right at `rolling` degrees a second or more, in a
@@ -1866,9 +1875,13 @@ function strike(bout, f, other, who, dt) {
   }
   if (first.what === 'shoulder') return shouldered(bout, f, other, who, action, blow, J, felt, stop, dt, first.s);
   if (first.what === 'guard') {
-    /* (a show-off's guard turns nothing aside but by its hammer, a pro's cross-arm guard nothing at all, a guard up for a
-       roll is the roll, and one put up to press it down turns it aside only by that: met fresh, it is a block) */
-    if (guard.parries && !other.pat && other.coverAge <= other.k.parry * (0.7 + 0.3 * fatigue(other))) {
+    /* (a show-off's guard turns aside by its hammer and, a little, by its rear glove, a pro's cross-arm guard only by its
+       rear glove, a guard up for a roll is the roll, and one put up to press it down turns it aside only by that: met fresh
+       anywhere else, it is a block) */
+    // (or, a cross-arm guard's, met on its rear glove in the freshest CROSS_PARRY of the window: guardOf, rear)
+    const within = other.k.parry * (0.7 + 0.3 * fatigue(other)),
+      turns = guard.parries ? other.coverAge <= within : guard.rear && first.key === 'R' && first.c0 === other.before.R && other.coverAge <= within * CROSS_PARRY;
+    if (turns && !other.pat) {
       // turned aside: the puncher is thrown open, the defender has his opening
       begin(f, 'reel');
       f.stun = 0.6;

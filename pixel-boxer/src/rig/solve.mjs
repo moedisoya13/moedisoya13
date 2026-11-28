@@ -323,10 +323,15 @@ export function solve(stance) {
           const now = roundOf(shoulder, elbow, wrist, chestUp);
           return now === null || Math.abs(wrap(now - r.was)) <= r.most;
         };
-      // (a punch on its way is thrown, and where it goes is what it hits: its elbow is where the throw puts it)
-      // (a hook's elbow, which goes round the arm with the wrist where the throw puts it, is kept where the shoulder lets the
-      // upper arm be, too: hand.locked)
-      return hand.punch ? (hand.locked ? [onTop, ball(wrist), rate] : [onTop, rate]) : [onTop, ball(wrist), rate, swing];
+      // (a punch on its way is thrown, and where it goes is what it hits: its wrist is where the throw puts it, and its
+      // elbow is kept off the canvas and where the shoulder lets the upper arm be, and then, if it can be, to the round
+      // rate; the upper arm's swing is not limited)
+      /* (a hook's elbow, which goes round the arm with the wrist where the throw puts it, was always kept so; a straight
+         punch's was kept only off the canvas and to the round rate, and a beginner's cross thrown out of his high cover,
+         its elbow up there and its hand drawn down onto his chest in the wind-up, turned the upper arm 79 degrees past
+         what it can turn in a seeded match, docs/audit-2026-11-25/4-1.mjs. Where the elbow is round the arm does not move
+         the wrist, so the punch goes where it went) */
+      return hand.punch ? [onTop, ball(wrist), rate] : [onTop, ball(wrist), rate, swing];
     };
     // (of two ways round that will do, the one nearer where the elbow was round the arm last frame)
     const nearer = wrist => (hand.round && hand.round.was !== null && hand.round.was !== undefined ? elbow => {
