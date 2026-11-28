@@ -5,6 +5,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createMatch, stepMatch } from '../src/game/match.mjs';
 import { PLANS, SPACE, HURT, hurtOf, hurtEager } from '../src/game/brain.mjs';
+import { forBody } from '../src/game/techniques.mjs';
 import { settle, RULES } from '../src/game/bout.mjs';
 import { MOVES } from '../src/anim/moves.mjs';
 
@@ -196,4 +197,51 @@ test('brain: they fight from a distance: wait outside the jab, step in to throw,
   assert.ok(near / n < 0.05, 'within 0.9 m ' + ((100 * near) / n).toFixed(1) + '%');
   assert.ok(out / n > 0.4, 'out of reach of starting ' + ((100 * out) / n).toFixed(0) + '%');
   assert.ok(thrown > 100, thrown + ' punches in 80 s');
+});
+
+test('brain: in the middle of his combination he stays in: he does not walk back out between its punches', () => {
+  /* (the fix round's package H, 2026-11-28, "공격 흐름 상향": the same two seeds and plans as the test above, chosen before the
+     fix. Between the punches of his combination, from where he throws them (SPACE.held, 0.95 m, and further: nearer, he
+     steps back on purpose), a man walked back out to wait a third of the time (34.7% of those frames going away from the
+     other man faster than 0.1 m/s), and threw the rest of it going away; now he stays in for it) */
+  let n = 0,
+    back = 0;
+  for (const seed of [1000, 8919]) {
+    const m = createMatch({ seed, rounds: 1, roundTime: 40 });
+    while (m.phase !== 'over') {
+      stepMatch(m, DT);
+      if (m.phase !== 'fight') continue;
+      m.brains.forEach((brain, who) => {
+        if (!brain.burst.length) return;
+        const f = m.bout.fighters[who],
+          o = m.bout.fighters[1 - who],
+          far = Math.hypot(o.x - f.x, o.z - f.z) || 1;
+        if (far < SPACE.held) return;
+        n++;
+        if ((f.vx * (o.x - f.x) + f.vz * (o.z - f.z)) / far < -0.1) back++;
+      });
+    }
+  }
+  assert.ok(n > 400, `${n} frames in a combination`);
+  assert.ok(back / n < 0.15, `going back out in ${((100 * back) / n).toFixed(1)}% of them`);
+});
+
+test("brain: at a hurt man he goes for the head: his combinations' punches are not turned to the body", () => {
+  /* (package H, 2026-11-28: a body shot's knockdown always beats the count, and a hurt man covering drew body punches twice as
+     often; seed 22, pros, steady plans, the other man kept on 15 health and on 100, as the health test above does. Before:
+     10 of 36 of his punches to the body at the hurt man, 8 of 31 at the whole one) */
+  const round = hp => {
+    const m = createMatch({ seed: 22, rounds: 1, roundTime: 30 }),
+      c = { punches: 0, body: 0 };
+    while (m.phase === 'fight') {
+      m.bout.fighters[1].hp = hp;
+      stepMatch(m, DT);
+      for (const e of m.events) if (e.type === 'punch' && e.who === 0) c.punches++, forBody(e.name, m.bout.fighters[0].action) && c.body++;
+    }
+    return c;
+  };
+  const hurt = round(15),
+    whole = round(100);
+  assert.ok(whole.body / whole.punches > 0.1, `at a whole man ${whole.body} of ${whole.punches} to the body`);
+  assert.ok(hurt.body / hurt.punches < (0.5 * whole.body) / whole.punches, `at a hurt man ${hurt.body} of ${hurt.punches} to the body, at a whole one ${whole.body} of ${whole.punches}`);
 });

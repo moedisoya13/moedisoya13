@@ -87,15 +87,18 @@ export const SPAR = {
    engine's heads have them: 1 in all); counter: how often he takes an opening; power: the share of his attacks led by a
    power punch; combo: of his attacks that are more than one punch; the weights of what he starts when nothing is coming
    (attack, head: his head moved with no punch coming, cover: the guard put up, feet); reads: he stops a combination when a
-   punch of it misses; show: a show-off's taunts and tricks (4암, 5암); iq: his sense, as a technique reads it. */
+   punch of it misses; show: a show-off's taunts and tricks (4암, 5암), so that he taunts about 5% of the round (the user,
+   2026-11-28: "도발은 5% 수준으로"; 0.12 had him taunting 18% of it once a taunt ran to its end; far off, where little else
+   is picked, it is twice that, and so it does not go down in proportion: tests/taunt.test.mjs); iq: his sense, as a
+   technique reads it. */
 const STYLE = {
   1: { read: 0.4, answers: [['parry', 0.05], ['guard', 0.5], ['slip', 0.45]], counter: 0.2, power: 0.4, combo: 0.3, attack: 1, head: 0.1, cover: 0.2, feet: 0.3, reads: false, show: 0, iq: 0.2 },
   2: { read: 0.55, answers: [['parry', 0.1], ['guard', 0.4], ['slip', 0.5]], counter: 0.35, power: 0.4, combo: 0.45, attack: 1, head: 0.15, cover: 0.18, feet: 0.32, reads: false, show: 0, iq: 0.35 },
   3: { read: 0.7, answers: [['parry', 0.18], ['guard', 0.24], ['slip', 0.58]], counter: 0.55, power: 0.42, combo: 0.55, attack: 1, head: 0.2, cover: 0.14, feet: 0.36, reads: true, show: 0, iq: 0.5 },
   '4m': { read: 0.8, answers: [['parry', 0.2], ['guard', 0.16], ['slip', 0.64]], counter: 0.7, power: 0.42, combo: 0.6, attack: 1, head: 0.25, cover: 0.12, feet: 0.42, reads: true, show: 0, iq: 0.7 },
-  '4a': { read: 0.76, answers: [['parry', 0.22], ['guard', 0.22], ['slip', 0.56]], counter: 0.7, power: 0.5, combo: 0.6, attack: 1.05, head: 0.2, cover: 0.12, feet: 0.36, reads: true, show: 0.12, iq: 0.7 },
+  '4a': { read: 0.76, answers: [['parry', 0.22], ['guard', 0.22], ['slip', 0.56]], counter: 0.7, power: 0.5, combo: 0.6, attack: 1.05, head: 0.2, cover: 0.12, feet: 0.36, reads: true, show: 0.013, iq: 0.7 },
   '5m': { read: 0.88, answers: [['parry', 0.22], ['guard', 0.1], ['slip', 0.68]], counter: 0.85, power: 0.42, combo: 0.65, attack: 1, head: 0.28, cover: 0.1, feet: 0.44, reads: true, show: 0, iq: 0.9 },
-  '5a': { read: 0.84, answers: [['parry', 0.25], ['guard', 0.15], ['slip', 0.6]], counter: 0.85, power: 0.52, combo: 0.65, attack: 1.05, head: 0.22, cover: 0.1, feet: 0.38, reads: true, show: 0.12, iq: 0.9 }
+  '5a': { read: 0.84, answers: [['parry', 0.25], ['guard', 0.15], ['slip', 0.6]], counter: 0.85, power: 0.52, combo: 0.65, attack: 1.05, head: 0.22, cover: 0.1, feet: 0.38, reads: true, show: 0.013, iq: 0.9 }
 };
 const EVADE = ['slip', 'duck', 'roll', 'pull'];
 const TAUNTS = ['beckon', 'chinOut', 'wind'];

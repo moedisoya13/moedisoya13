@@ -9,7 +9,7 @@ import { MOVES } from '../anim/moves.mjs';
 import { random, incoming } from './bout.mjs';
 import { TECHNIQUES, memory, observe, situation, answerOf, counterOf, openingOf, comboOf, goingOf, bodyOf } from './techniques.mjs';
 // (his feet, his health and the ropes, the way a boxer's head has them: brain.mjs)
-import { SPACE, HURT, hurtOf, hurtEager, footwork } from './brain.mjs';
+import { SPACE, HURT, hurtOf, hurtEager, footwork, finishing } from './brain.mjs';
 
 export const LEVELS = {
   novice: { guard: 0.25, parry: 0.1, slip: 0.1, eager: 0.45, counter: 0.5, iq: 0.25, rest: [0.9, 1.7], bursts: [['jab'], ['jab', 'jab'], ['power'], ['jab', 'power']] },
@@ -94,7 +94,7 @@ export function think(rival, bout, dt) {
     const what = rival.burst.shift();
     if (typeof what === 'string') {
       input[what] = true;
-      if (bodyOf(s)) input.body = true;
+      if (bodyOf(s) && !finishing(bout, him)) input.body = true;
       rival.next = what === 'jab' ? 0.2 : 0.3;
     } else {
       const { next, ...press } = what;
@@ -112,9 +112,11 @@ export function think(rival, bout, dt) {
   }
   if (rival.inFor > 0 && (rival.inFor -= dt) <= 0) rival.rest = 0.55;
   // footwork: in to start it, or out to wait just outside his jab (brain.mjs SPACE), and round; the ropes allowed for
-  // (he circles slowly: the camera swings with the pair of them, and the player's stick is the camera's)
-  const goingIn = rival.inFor > 0;
-  Object.assign(input, footwork(bout, 1, rival, goingIn ? SPACE.step : Math.max(RANGE, SPACE.wait) + HURT.range * health.hurt, 0.2, goingIn));
+  // (he circles slowly: the camera swings with the pair of them, and the player's stick is the camera's); in the middle of a
+  // burst he stays in for the rest of it, as a boxer's head does (brain.mjs)
+  const goingIn = rival.inFor > 0,
+    inIt = goingIn || rival.burst.length > 0;
+  Object.assign(input, footwork(bout, 1, rival, inIt ? SPACE.step : Math.max(RANGE, SPACE.wait) + HURT.range * health.hurt, 0.2, inIt, rival.burst.length ? SPACE.held : undefined));
   // (hurt, he keeps his hands up while he waits, for a while at a time)
   if (health.hurt > 0 && !rival.burst.length) {
     if ((rival.guardFor -= dt) <= 0) (rival.guardUp = random(bout) < HURT.cover * health.hurt), (rival.guardFor = 0.35 + random(bout) * 0.5);

@@ -59,9 +59,12 @@ const ANSWER = { parry: 0.2, guard: 0.32, slip: 0.12 };
 /* Distance, measured and kept (shared with the rival, ai.mjs). Between his combinations a boxer waits just outside the other
    man's jab (`wait`, centre to centre; a plan that wants him further off keeps him further off, and one that sends him inside,
    nearer than `inside`, pressure and all-in, keeps him there); when he means to start one he steps in to `step` and starts it inside `start`, and
-   when it is over he steps back out to wait again. He keeps coming in for it `go` seconds at most, and gives it up after that.
-   So he gives and takes from a distance, and a plan that keeps him out of reach still comes in to work. */
-export const SPACE = { wait: MOVES.jab.reach + 0.07, step: MOVES.jab.reach - 0.12, start: MOVES.jab.reach - 0.05, inside: 0.9, go: 1.6 };
+   when it is over (not between its punches) he steps back out to wait again. He keeps coming in for it `go` seconds at most, and gives it up after that.
+   So he gives and takes from a distance, and a plan that keeps him out of reach still comes in to work. In the middle of his
+   combination he stays in, and steps back from nearer than `held` (a plan that sends him inside: from nearer than its own
+   distance), so that staying in for it does not keep the two of them inside any longer than walking out between its punches
+   did (package H, 2026-11-28). */
+export const SPACE = { wait: MOVES.jab.reach + 0.07, step: MOVES.jab.reach - 0.12, start: MOVES.jab.reach - 0.05, inside: 0.9, go: 1.6, held: 0.95 };
 
 /* The ropes. A man whose ropes are behind him (nearer than `near` metres the way he would back off) does not back onto them:
    his backing off is turned into going round the other man, `circle` of his speed at the ropes, to the side with more room
@@ -83,6 +86,14 @@ export function hurtOf(f) {
 // (the eagerness his health gives him: times)
 export const hurtEager = ({ hurt, well }) => (1 - HURT.eager * hurt) * (1 + HURT.bold * well);
 
+/* The other man hurt (HURT's measure of him, 0 to 1): a punch of a combination his sense would turn to the body goes to the
+   head instead, `head` times that share of the time. A man put down by a body shot beats the count (match.mjs), and a hurt
+   man holding his guard up drew a body punch twice as often (techniques.mjs BODY.guarded): three in four knockdowns were
+   to the body and few fights ended inside the distance (the fix round of 2026-11-28, package H: "공격 흐름 상향"). Shared
+   with the rival, ai.mjs. */
+export const FINISH = { head: 1 };
+export const finishing = (bout, him) => random(bout) < FINISH.head * hurtOf(him).hurt;
+
 // metres from (x, z) to the ropes, going the way (dx, dz) (a unit vector)
 function room(x, z, dx, dz) {
   const h = RULES.half;
@@ -97,8 +108,9 @@ function room(x, z, dx, dz) {
 /* His feet, while he waits or comes in: to `want` metres from the other man and round him (`round`: how much of his speed goes
    round, the way mind.circle has it), with the ropes allowed for (ROPES). mind keeps the way round off the ropes (ropeSide)
    and when he may pivot next (pivotAt); coming in (`coming`), he goes on in until he is there, where waiting he lets the distance
-   be anything within a few centimetres of it. -> controls ({ move }, and { away, side } for a pivot off the ropes). */
-export function footwork(bout, who, mind, want, round, coming) {
+   be anything within a few centimetres of it; nearer than `near` (if given: else 16 cm short of `want`) he steps back.
+   -> controls ({ move }, and { away, side } for a pivot off the ropes). */
+export function footwork(bout, who, mind, want, round, coming, near) {
   const me = bout.fighters[who],
     him = bout.fighters[1 - who],
     dx = him.x - me.x,
@@ -106,7 +118,7 @@ export function footwork(bout, who, mind, want, round, coming) {
     far = Math.hypot(dx, dz) || 1,
     to = [dx / far, dz / far],
     across = [to[1], -to[0]];
-  let drift = far > want + (coming ? 0 : 0.1) ? 1 : far < want - 0.16 ? -0.8 : 0,
+  let drift = far > want + (coming ? 0 : 0.1) ? 1 : far < (near ?? want - 0.16) ? -0.8 : 0,
     side = mind.circle,
     go = round;
   const behind = room(me.x, me.z, -to[0], -to[1]),
@@ -246,7 +258,8 @@ export function think(brain, bout, who, dt) {
     const what = brain.burst.shift();
     if (typeof what === 'string') {
       input[what] = true;
-      if (bodyOf(s)) input.body = true;
+      // (to the body by his sense, but at a hurt man's head: FINISH)
+      if (bodyOf(s) && !finishing(bout, him)) input.body = true;
       brain.next = what === 'jab' ? 0.2 : 0.3;
     } else {
       const { next, ...press } = what;
@@ -262,10 +275,14 @@ export function think(brain, bout, who, dt) {
     else brain.rest = 0.3 + random(bout) * 0.5;
   }
   if (brain.inFor > 0 && (brain.inFor -= dt) <= 0) brain.rest = 0.55; // (he could not get in: he waits, and tries again)
-  // ---- footwork: in to start it, or out to wait at his distance (SPACE), and round; the ropes allowed for (ROPES)
+  /* ---- footwork: in to start it, or out to wait at his distance (SPACE), and round; the ropes allowed for (ROPES). In the
+     middle of his combination, between its punches, he stays in for the rest of it (inIt): out to wait only once it is over
+     (walking back out between them, a third of the time, the cross and the hook after the jab were thrown going away and
+     fell short: the fix round of 2026-11-28, package H) */
   const goingIn = brain.inFor > 0,
-    want = goingIn ? Math.min(range, SPACE.step) : (range < SPACE.inside ? range : Math.max(range, SPACE.wait)) + HURT.range * health.hurt;
-  Object.assign(input, footwork(bout, who, brain, want, plan.circle, goingIn));
+    inIt = goingIn || brain.burst.length > 0,
+    want = inIt ? Math.min(range, SPACE.step) : (range < SPACE.inside ? range : Math.max(range, SPACE.wait)) + HURT.range * health.hurt;
+  Object.assign(input, footwork(bout, who, brain, want, plan.circle, inIt, brain.burst.length ? Math.min(want, SPACE.held) : undefined));
   /* a boxer who has been told to defend, or is getting his breath, or is hurt, keeps his hands up while he waits: up, or down,
      for a while at a time (a guard put up and taken down again every moment is fresh every moment: bout.mjs coverAge) */
   const keep = Math.min(0.9, (plan.guard > 1.25 ? 0.5 : 0) + HURT.cover * health.hurt);
