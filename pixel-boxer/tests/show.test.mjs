@@ -1106,6 +1106,49 @@ test('taunts: in seeded bouts no taunting glove goes into the other man, nor is 
   assert.deepEqual(bad, []);
   assert.ok((seen.beckon || 0) >= 5 && Object.values(seen).reduce((s, n) => s + n, 0) >= 30, JSON.stringify(seen));
 });
+/* A paw (pawDown, pawUp: game/bout.mjs paws) pushes a glove held up as a guard; it does not push a taunting man's hands.
+   The paw is chosen against his guard, and he begins a taunt a frame or three later, before the lead hand gets there (as
+   in seed 53 above, frame 2926): pushed all the same, on top of what the taunt does with them, his gloves were thrown
+   4.3 to 6.7 m/s a frame past the taunt's first 0.07 s in each of these that met one (30 of the 40; seed 53's tap of the
+   chin, 12-13 m/s). Each paw, either grade, each taunt begun one and three frames after the press: no paw meets
+   a taunting man, and away from a blow no glove of his changes velocity by more than JUMP in a frame. */
+test('taunts: a paw does not push a taunting man\'s gloves, nor throw them', () => {
+  const bad = [];
+  for (const id of ['pawDown', 'pawUp'])
+    for (const lv of SHOW)
+      for (const taunt of TAUNT_IDS)
+        for (const after of [1, 3]) {
+          const card = SHOWOFF.find(x => x.id === `${id}@${lv}`),
+            e = Object.assign({}, card, {
+              hisCover: t => t > 0.1 && t < AT + after * DT,
+              against: [[AT + after * DT, 'taunt', taunt]],
+              setup: b => (card.setup(b), (b.fighters[1].skills = { all: '4a' }))
+            }),
+            bout = freshBout(e),
+            [a, b] = bout.fighters,
+            say = `${id}@${lv}, ${taunt} ${after} frame${after > 1 ? 's' : ''} after`;
+          let prev = null,
+            prev2 = null,
+            taunted = false;
+          for (let i = 0; i < Math.round(e.loop / DT); i++) {
+            step(bout, drive(e, bout, i * DT, DT), DT);
+            a.hp = b.hp = 1000;
+            const on = b.action && MOVES[b.action.name].taunt,
+              held = bout.stop > 0,
+              g = b.points ? measure(b).gloves : null;
+            taunted = taunted || !!on;
+            for (const ev of bout.events) if (ev.type === 'paw' && on) bad.push(`${say}: pawed ${b.action.t.toFixed(2)} s into the taunt`);
+            if (on && b.action.t > 0.07 && !held && g && prev && prev2 && !bout.events.some(ev => ['hit', 'block', 'parry'].includes(ev.type)))
+              for (const k of ['Left', 'Right']) {
+                const jump = hyp(M.add(M.sub(g[k], M.scale(prev[k], 2)), prev2[k])) / DT;
+                if (jump > JUMP) bad.push(`${say}, ${b.action.t.toFixed(2)} s in: the ${k.toLowerCase()} glove's velocity changes ${jump.toFixed(1)} m/s`);
+              }
+            if (!held) (prev2 = prev), (prev = g);
+          }
+          assert.ok(taunted, `${say}: no taunt`);
+        }
+  assert.deepEqual(bad, []);
+});
 
 /* N19, beckon: held out long at the height of his face, 28 cm and more ahead of where his guard holds the lead glove (the
    same man's guard without the show-off's hand let down); beckoned three times, each pull back toward him 12 cm and more. */

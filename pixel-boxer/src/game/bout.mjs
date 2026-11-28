@@ -2064,11 +2064,15 @@ function fouls(bout, f, other, who, dt) {
 }
 
 /* A show-off's lead hand on the other man's lead glove (anim/show.mjs: paw): when it meets it, the glove is pushed down (or
-   up) out of the way, held there and let go (his body's: animator.pawed). Only once a punch, and only if it gets there. */
+   up) out of the way, held there and let go (his body's: animator.pawed). Only once a punch, and only if it gets there.
+   Only a glove held up as a guard is pushed: a taunting man's hands are the taunt's, not a guard in the punch's way (the
+   push, put on top of what the taunt does with them, threw a taunting glove 25 cm in a frame, 12 m/s of velocity changed:
+   seed 53 of tests/show.test.mjs's seeded taunts). */
 function paws(bout, f, other, who) {
   const action = f.action,
     v = action && action.variant;
   if ((v !== 'pawDown' && v !== 'pawUp') || action.pawed || other.down || !other.points || action.t > PAW.reach + PAW.hold) return;
+  if (other.action && MOVES[other.action.name] && MOVES[other.action.name].taunt) return;
   const hand = PAW.glove[v];
   if (Math.hypot(...M.sub(f.points.L, other.points[hand])) > RULES.glove * 2 + 0.01) return;
   const tier = Math.max(0, (action.level.form.dirty || 1) - 1),
