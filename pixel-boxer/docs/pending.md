@@ -1101,3 +1101,11 @@ V로 넘기는 것(점검이 잰 것): **대본 밖의 쓰러짐은 이 고침 �
 - **파기 확인(2026-11-28)**: 옛 세션 `session_01Juyi5CipAWs3ncaLCG6BsY`는 `get_session`에서 "not found"(보관할 것이 없음). 옛 미결 카탈로그(`UEM19aKseUxnixVYkrnAzd`)와 타격 이펙트 시안(`5tZd5Xyp7iiRxCuftpNwL6`) 아티팩트도 읽기 404이고 내 목록 46개에 없음 → 이미 지워졌거나 이 계정에서 열 수 없음(아무것도 지우지 않았고, 지울 것이 없음). **현재 세션은 `session_01Juyi5G1R8ZdecM2H5ELKbg`("프로 복서 프로젝트")이니 `del-session`으로 보관하면 안 된다.** 코드 파기는 E2 패키지에서(아래).
 - **수정 라운드 시작(2026-11-28)**: 사용자가 "고침"으로 고른 것을 패키지 6개로 나눠 에이전트(구현 쪽 모델, 노력 high; E2만 medium)를 한꺼번에 띄움. 각자 `d34913f`의 얼린 작업 폴더(`scratchpad/fix/wt-<패키지>`)에서 스테이지하지 않고 고침, 브리프 `scratchpad/fix/briefs/`, 보고서 `scratchpad/fix/reports/`. **A** AI · 시합 엔진(`a-standoff` `a-guard-flicker` `a-draw-winner` `a-count-ten` `a-hurt-blind` `a-ropes-stuck`(Rope-a-dope 기술은 따로 단계) + 자유 메모 거리 유지) · **B** 싸움터 · 그리기(`a-fall-edge` `a-corner` `a-pit-*` `a-hood-face` + `ring-*` `pit-*` + `arm-way` B) · **C** 소리(`a-ko-*` `a-hidden-sound` `a-replay-silent` `a-murmur-cut` `a-mute` + `sound-*`) · **D** 물리(`a-cover-punch` `a-topple` `a-reel-g` `a-single-frames` `a-dark-line`) · **E1** 스파링 · 카탈로그 · 페이지(`a-spar-link` `a-spar-race` `a-gl-lost` `a-frame-meter` `a-catalog-scroll` `catalog-2` `spar-1` `spar-4`) · **E2** 문서 · 도구 · 파기 코드(`a-spar-docs` `a-since` `a-catalog-text` `fix-taunt-text` `a-history` `a-dispose-list` + `cleanup-fx-sweat` · `cleanup-fx-versions` · `del-code-pending-old` · `del-ref-video`).
 - 이번 라운드 밖(사용자의 답은 있으나 단계가 따로): `spar-tempo`(엔진 전체 회복 단축; 시험 기준이 움직임) · `spar-finish` · `spar-evade` · `a-screen-ai`(수정 라운드 뒤 바로) · `stage-order` 단계들(N2 → … → Z) · Rope-a-dope 기술 · `a-novice`(X 단계) · `a-idle` · `a-spar-pinned`(나중에; 메모의 "같거나 한 등급 차이 대진" 규칙을 지금 넣을지 사용자에게 물을 것).
+
+
+## 사용자 지시: 도구들을 Opus로 맞춤 (2026-11-28)
+
+> 도구들을 opus로 맞춥니다.
+
+- 에이전트(Agent 도구)는 모두 `model: 'opus'`로 띄운다(기획 쪽 모델 `fable`은 쓰지 않음). 지금 도는 수정 라운드의 여섯 에이전트(A · B · C · D · E1 · E2)는 이미 모두 Opus다(노력: A~E1 high, E2 medium). 앞으로 띄우는 점검 · 구현 · 기획 에이전트도 Opus. 노력도는 `docs/handoff.md` §2의 규칙대로(구현 high, 기계적인 것 medium~high, xhigh 쓰지 않음).
+- 메인 세션의 모델은 사용자가 `/model`로 정한다(이 세션이 바꾸지 않음).
