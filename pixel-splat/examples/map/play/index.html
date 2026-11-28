@@ -40,7 +40,9 @@ kbd { font: 600 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 
 .stage::after { content: ""; position: absolute; inset: 0; border-radius: 8px; pointer-events: none;
                 box-shadow: inset 0 0 0 3px var(--focus); opacity: 0; }
 .stage.kbd-focus::after { opacity: 1; }
-#view { position: relative; overflow: hidden; outline: none; background: var(--bg); }
+/* #view is placed by layout() on whole DEVICE pixels (not centred by the grid: centring can land on a fraction of one,
+   and then the level canvas and the figure canvas are rounded to different device pixels) */
+#view { position: absolute; left: 0; top: 0; overflow: hidden; outline: none; background: var(--bg); }
 #view canvas { position: absolute; left: 0; top: 0; transform-origin: 0 0; image-rendering: pixelated; image-rendering: crisp-edges; }
 .hud { position: absolute; left: 8px; top: 6px; font: 12px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace;
        color: var(--text); background: rgba(19, 19, 28, 0.72); padding: 3px 6px; border-radius: 4px; pointer-events: none; }
@@ -135,11 +137,22 @@ kbd { font: 600 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 
   }
 
   let M, L, T, SUN, SP;               // manifest, level, terrain, ground sun, sprites
+  let UY = [0, 0, 0, 0];               // world height (units) of the level point at pixel (x, y) and depth d:
+  //                                      UY[0] x + UY[1] y + UY[2] d + UY[3] (the pixel's centre; the camera map inverted)
+  function heightRow(m) {
+    const a = m.map((r) => r.slice(0, 3)), t = m.map((r) => r[3]);
+    const det = a[0][0] * (a[1][1] * a[2][2] - a[1][2] * a[2][1]) - a[0][1] * (a[1][0] * a[2][2] - a[1][2] * a[2][0])
+              + a[0][2] * (a[1][0] * a[2][1] - a[1][1] * a[2][0]);
+    const r = [(a[1][2] * a[2][0] - a[1][0] * a[2][2]) / det, (a[0][0] * a[2][2] - a[0][2] * a[2][0]) / det,
+               (a[0][2] * a[1][0] - a[0][0] * a[1][2]) / det];   // row 1 of the inverse (the cofactors of column 1)
+    return [r[0], r[1], r[2], 0.5 * (r[0] + r[1]) - (r[0] * t[0] + r[1] * t[1] + r[2] * t[2])];
+  }
   async function load() {
     const r = await fetch("assets/manifest.json");
     if (!r.ok) throw new Error("assets/manifest.json 을(를) 불러오지 못했습니다 (" + r.status + ")");
     M = await r.json();
     const lv = M.level, sp = M.sprites, tr = lv.terrain, sn = lv.sun;
+    UY = heightRow(M.camera.world_to_screen);
     const files = [lv.color, lv.depth, tr.file, sn.file, sp.color, sp.data];
     let done = 0;
     const ims = await Promise.all(files.map((f) => loadImage("assets/" + f).then((im) => {
@@ -177,8 +190,9 @@ kbd { font: 600 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 
     }
     for (const need of ["idle", "walk", "run", "onetwo"]) if (!SP.anims[need]) throw new Error("애니메이션 " + need + " 이(가) 없습니다");
     for (const f of SP.frames) { FIGW = Math.max(FIGW, f[2]); FIGH = Math.max(FIGH, f[3]); }
-    figEl.width = FIGW; figEl.height = FIGH;
+    figEl.width = FIGW + 2; figEl.height = FIGH + 2;   // (a clear 1 px margin: the compositor softens a scaled layer's edge pixels)
     figImg = figCtx.createImageData(FIGW, FIGH); fig32 = new Uint32Array(figImg.data.buffer);
+    rowShown = new Int32Array(FIGH); rowOpaque = new Int32Array(FIGH); allowedAt = new Int32Array(FIGW * FIGH);
   }
   const LITTLE = new Uint8Array(new Uint32Array([1]).buffer)[0] === 1;
   function packRGB([r, g, b]) { return LITTLE ? ((255 << 24) | (b << 16) | (g << 8) | r) >>> 0 : ((r << 24) | (g << 16) | (b << 8) | 255) >>> 0; }
@@ -218,19 +232,48 @@ kbd { font: 600 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 
 
   // ------------------------------------------------------------------ the player
   // anim: idle | walk | run (loops) | onetwo (an action, on the spot) | a transition clip (start, stopA ...)
-  const S = { x: 0, z: 0, facing: 0, want: 0, turnT: 0, anim: "idle", t: 0, k: 0, phase: 0, queue: null };
+  // t: clip time (s) since the clip's frame k0; phase: gait cycles covered (the gait's frame follows the ground
+  // covered, not the clock); goff: frames added to phase * n so that a gait entered at a phase between two
+  // frames still shows whole frames on whole display frames; sc: speed scale (stick pushed part way: < 1)
+  const S = { x: 0, z: 0, facing: 0, want: 0, turnT: 0, anim: "idle", t: 0, k: 0, k0: 0, phase: 0, goff: 0, sc: 1,
+              queue: null };
   const dirOf = (f) => f * SP.step * Math.PI / 180;
+  // Which frame a display frame shows: the one its time (or ground covered) has reached, a quarter frame early.
+  // Not floor(t * 60): at 60 Hz the display times fall right ON the frame boundaries, and the rAF clock's jitter
+  // (16.7, 16.7, 16.6 ms) then repeats one frame and skips the next.  A quarter frame keeps 60 Hz (t * 60 near
+  // whole numbers), 120 Hz (near halves) and 30 Hz all a quarter frame clear of a boundary.
+  const LEAD = 0.25;
+  const shownAt = (v) => Math.floor(v + LEAD);        // v: frames (clip time * 60, or gait position)
+  const gaitPos = (n) => S.phase * n + S.goff;
+  function gaitShown(n) { return ((shownAt(gaitPos(n)) % n) + n) % n; }
   function frameIndex() {
     const a = SP.anims[S.anim], fr = a.frames[S.facing], n = fr.length;
-    if (a.kind === "gait") return fr[((Math.floor(S.phase * n) % n) + n) % n];
+    if (a.kind === "gait") return fr[gaitShown(n)];
     return fr[Math.max(0, Math.min(n - 1, S.k))];
   }
-  function play(name, k) { S.anim = name; S.k = k || 0; S.t = 0; }
-  function startTransition(name) {
+  function play(name, k) { S.anim = name; S.k = S.k0 = k || 0; S.t = 0; }
+  function playLoop(name, k0, t) {   // a loop that plays by the clock (the idle), from frame k0, t s on
+    const n = SP.anims[name].frames[0].length;
+    S.anim = name; S.k0 = k0 % n; S.t = t;
+    if (S.t * FPS >= n) S.t -= n / FPS;      // (one loop later the same frame again)
+    S.k = (S.k0 + shownAt(S.t * FPS)) % n;
+  }
+  function enterGait(name, phase) {   // a gait loop from this phase: its next shown frame is the one after it
+    const n = SP.anims[name].frames[0].length;
+    S.anim = name; S.phase = phase; S.goff = Math.floor(phase * n + 1e-9) - phase * n; S.t = 0;
+  }
+  function clipFrames(a) {           // a clip's frames up to its clock, with their root motion; true when it is over
+    const n = a.frames[0].length, k = shownAt(S.t * FPS);
+    while (S.k < Math.min(k, n - 1)) { S.k++; applyAdvance(a, S.k); }
+    return k >= n;
+  }
+  function startTransition(name, t0) {   // t0: clip time already past its frame 0 (a display frame that fell between)
     const a = SP.anims[name];
     if (!a) return false;
     play(name, 0);
+    S.t = t0 || 0;
     applyAdvance(a, 0);
+    clipFrames(a);
     return true;
   }
   function applyAdvance(a, k) {      // root motion of a transition frame: [forward, his left] metres
@@ -249,7 +292,11 @@ kbd { font: 600 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 
   const keys = new Set();
   const KEYMAP = { KeyW: "u", ArrowUp: "u", KeyS: "d", ArrowDown: "d", KeyA: "l", ArrowLeft: "l", KeyD: "r", ArrowRight: "r" };
   const releaseAll = () => { keys.clear(); stick.active = false; stick.dx = stick.dy = 0; showPad(false); };
+  // macOS does not send keyup for a key let go while Cmd is held: a held D would walk on for ever.  So Cmd going
+  // down or up lets go of every key (press it again to walk on)
+  const isMeta = (e) => e.key === "Meta" || e.key === "OS" || /^(Meta|OS)(Left|Right)$/.test(e.code);
   window.addEventListener("keydown", (e) => {
+    if (isMeta(e)) { keys.clear(); return; }
     if (e.ctrlKey || e.metaKey || e.altKey) return;     // browser shortcuts (Ctrl+D, Cmd+R ...) stay the browser's
     if (e.target && e.target.tagName === "BUTTON" && (e.code === "Enter" || e.code === "Space")) return;
     if (e.code === "ShiftLeft" || e.code === "ShiftRight") { keys.add("run"); return; }
@@ -257,6 +304,7 @@ kbd { font: 600 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 
     else if (e.code === "KeyJ" && !e.repeat) { requestAction(); flash("bJ"); e.preventDefault(); }
   });
   window.addEventListener("keyup", (e) => {
+    if (isMeta(e)) { keys.clear(); return; }
     if (e.code === "ShiftLeft" || e.code === "ShiftRight") keys.delete("run");
     if (KEYMAP[e.code]) keys.delete(KEYMAP[e.code]);
   });
@@ -317,17 +365,12 @@ kbd { font: 600 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 
     S.facing = (S.facing + (d <= n / 2 ? 1 : n - 1)) % n;
     S.turnT = 0.05;
   }
-  function gaitStep(name, dt, ix, iy, mag) {   // walk / run loops: the cycle advances with the ground covered
+  function gaitStep(name, dt, ix, iy) {   // walk / run loops: the cycle advances with the ground covered
     const a = SP.anims[name];
-    const step = a.speed * mag * dt;
+    const step = a.speed * S.sc * dt;
     const moved = tryMove(ix * step, iy * step);
-    const before = S.phase;
     S.phase += moved / a.stride_m;
-    return [before, moved];
-  }
-  function crossed(before, after) {   // the gait passed phase 0 or 0.5 (where its transitions start)
-    const b = Math.floor(before * 2), c = Math.floor(after * 2);
-    return c > b ? (c % 2) * 0.5 : null;
+    return moved;
   }
   function update(dt) {
     const a = SP.anims[S.anim];
@@ -335,42 +378,57 @@ kbd { font: 600 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 
     if (mag > 0) S.want = ((Math.round(Math.atan2(iy, ix) * 180 / Math.PI / SP.step) % SP.nf) + SP.nf) % SP.nf;
     if (a.kind !== "action") turnTowards(dt);   // (a punch keeps its direction)
     const moving = mag > 0 && !S.queue;
+    // Speed scale: how far the stick is pushed (keys: 1); kept when the stick is let go, so the stop that
+    // follows runs at the speed the figure had.  A gait at scale s covers ground s times slower and so plays
+    // s times slower (same stride, no skating); a transition clip does the same: its clock runs s times slower,
+    // so its root motion per second, and the pose that goes with it, are scaled together.
+    if (moving) S.sc = mag;
+    const f = dirOf(S.facing), dx = moving ? ix : Math.cos(f), dy = moving ? iy : Math.sin(f);
     if (a.kind === "transition" || a.kind === "action") {   // clips play to their end at 60 fps
-      S.t += dt;
-      const n = a.frames[0].length;
-      let k = Math.floor(S.t * FPS);
-      while (S.k < Math.min(k, n - 1)) { S.k++; applyAdvance(a, S.k); }
-      if (k >= n) {
-        if (a.kind === "action") { play("idle", 1 % SP.anims.idle.frames[0].length); return; }
-        const tgt = SP.anims[a.target];
-        if (tgt.kind === "gait") {      // carry on from the phase the clip ended at, this very frame
-          S.anim = a.target; S.phase = a.exit; S.t = 0;
-          const f = dirOf(S.facing);
-          gaitStep(a.target, dt, mag > 0 ? ix : Math.cos(f), mag > 0 ? iy : Math.sin(f), mag > 0 ? mag : 1);
-        }
-        else play(a.target, (a.exit + 1) % tgt.frames[0].length);
-      }
+      const rate = a.kind === "transition" ? S.sc : 1;
+      S.t += dt * rate;
+      if (!clipFrames(a)) return;
+      const n = a.frames[0].length, over = S.t - n / FPS;   // clip time past where the next frame would be
+      if (a.kind === "action") { playLoop("idle", 1, over); return; }
+      const tgt = SP.anims[a.target];
+      if (tgt.kind === "gait") {      // carry on from the phase the clip ended at, this very frame
+        enterGait(a.target, a.exit);
+        // its next frame is due one frame after the clip's last one: (over + 1/60) of clip time, in real seconds
+        gaitStep(a.target, Math.max(0, (over + 1 / FPS) / rate), dx, dy);
+      } else playLoop(a.target, a.exit + 1, over);
       return;
     }
     if (S.anim === "idle") {
       if (S.queue === "onetwo") { S.queue = null; play("onetwo", 0); return; }
       if (moving && SP.anims.start) { startTransition("start"); return; }
-      S.t += dt;
-      const n = a.frames[0].length;
-      while (S.t >= 1 / FPS) { S.t -= 1 / FPS; S.k = (S.k + 1) % n; }
+      playLoop("idle", S.k0, S.t + dt);
       return;
     }
     // walk or run
     const goal = !moving ? "idle" : run ? "run" : "walk";
-    const dx = moving ? ix : Math.cos(dirOf(S.facing)), dy = moving ? iy : Math.sin(dirOf(S.facing));
-    const [before, moved] = gaitStep(S.anim, dt, dx, dy, moving ? mag : 1);
-    if (goal === S.anim) return;
-    let next = goal === "idle" && S.anim === "run" ? "walk" : goal;       // run -> walk -> idle
-    let at = crossed(before, S.phase);
-    if (at === null && moved < 1e-6) at = Math.round(S.phase * 2) % 2 * 0.5;  // blocked: leave from the nearest
-    if (at === null) return;
-    const name = entryFor(S.anim, next, at);
-    if (name) startTransition(name);
+    if (goal !== S.anim) {
+      // a transition starts on the display frame after the one that showed its entry frame (phase 0 or 0.5):
+      // its frame 0 is the pose one frame after the entry, so the cut is one frame, and its root motion takes
+      // over from the gait's at the entry pose (the gait moves the figure only up to there this frame)
+      const next = goal === "idle" && S.anim === "run" ? "walk" : goal;       // run -> walk -> idle
+      const n = a.frames[0].length, vb = gaitPos(n), va = vb + a.speed * S.sc * dt / a.stride_m * n;
+      const db = shownAt(vb), da = shownAt(va);
+      for (const at of [0, 0.5]) {
+        const name = entryFor(S.anim, next, at);
+        if (!name) continue;
+        const e = Math.round(at * n), E = db + (((e - db) % n) + n) % n;   // the entry frame, at or after the one shown
+        if (E >= da) continue;          // not passed this frame
+        const go = (E - vb) / n * a.stride_m;   // to the entry pose (a hair back if the gait is a little past it)
+        tryMove(dx * go, dy * go);
+        startTransition(name, Math.max(0, va - E - 1) / FPS);
+        return;
+      }
+    }
+    const moved = gaitStep(S.anim, dt, dx, dy);
+    if (goal !== S.anim && moved < 1e-6) {    // blocked: leave from the nearest entry now
+      const name = entryFor(S.anim, goal === "idle" && S.anim === "run" ? "walk" : goal, Math.round(S.phase * 2) % 2 * 0.5);
+      if (name) startTransition(name);
+    }
   }
 
   // ------------------------------------------------------------------ drawing
@@ -381,6 +439,8 @@ kbd { font: 600 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 
   let view = { w: 200, h: 120, scale: 1, cssPerArt: 1, sDev: 1 };
   const cam = { x: 0, y: 0, lagX: 0, lagY: 0, showX: 0, showY: 0, ax: null, ay: null };
   let figImg = null, fig32 = null, FIGW = 1, FIGH = 1, lastBox = null, lastCam = null;
+  let rowShown = new Int32Array(1), rowOpaque = new Int32Array(1), rowN = 0;   // figure pixels drawn / there, per row
+  let allowedAt = new Int32Array(1), nAllowed = 0;     // ... level pixels drawn over only thanks to GROUND_BIAS
   // Whole device pixels per art pixel.  The level is art at 3x the reference grid's density, so one art pixel
   // is shown as about one CSS pixel on a phone (390 px wide: about 358 art px = 10.5 m of ground in the game
   // area) and as 2 CSS px once the game area is 700 CSS px or wider (1280 px desktop: 624 art px = 18.2 m,
@@ -391,10 +451,17 @@ kbd { font: 600 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 
     const sDev = Math.max(1, Math.round(cssPerArt * dpr));
     const w = Math.max(32, Math.floor(r.width * dpr / sDev)), h = Math.max(32, Math.floor(r.height * dpr / sDev));
     const sc = sDev / dpr;
-    view = { w, h, scale: sc, sDev, cssPerArt };
+    view = { w, h, scale: sc, sDev, cssPerArt, dpr };
     viewEl.style.width = (w * sc) + "px"; viewEl.style.height = (h * sc) + "px";
-    levelEl.style.width = (L.W * sc) + "px"; levelEl.style.height = (L.H * sc) + "px";
-    figEl.style.width = (FIGW * sc) + "px"; figEl.style.height = (FIGH * sc) + "px";
+    // centred in the stage, its top-left corner on a whole device pixel: both canvases inside move by whole
+    // device pixels from there, so they stay in register (at dpr 2.625 the centre fell on 160.125 device px)
+    const left = Math.round((r.left + (r.width - w * sc) / 2) * dpr) / dpr - r.left;
+    const top = Math.round((r.top + (r.height - h * sc) / 2) * dpr) / dpr - r.top;
+    viewEl.style.transform = `translate(${left}px, ${top}px)`;   // (a transform: layout would round left / top to 1/64 px)
+    // the canvases keep their own size in CSS px and are scaled by their transform: a CSS width of 79 * 8/7 px
+    // is rounded to 1/64 px by layout (236.99 device px for 237), and that slips a column
+    levelEl.style.width = L.W + "px"; levelEl.style.height = L.H + "px";
+    figEl.style.width = (FIGW + 2) + "px"; figEl.style.height = (FIGH + 2) + "px";
     lastCam = null;
   }
   function project(x, z) {
@@ -420,11 +487,16 @@ kbd { font: 600 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 
     cam.y = ay - Math.floor(view.h * 0.58) + cam.showY;
   }
   const BIAS = 0.15;         // world units: a sprite pixel this much behind an object still shows
-  const GROUND_BIAS = 0.6;   // ... and this much behind GROUND (slopes, banks: the ground at the feet must not cut them)
+  const GROUND_BIAS = 0.6;   // ... and this much behind GROUND at the figure's own height (slopes, banks: the
+  //                            ground at the feet must not cut them)
+  const GROUND_NEAR = 0.3;   // metres: "own height" = the ground pixel's height is within this of the feet's.  A
+  // plateau top 1.6 m up in front of a figure standing behind it is ground too, and must hide him (with the big
+  // allowance his shoulders were drawn over it).  On a pixel's ray, ground dh above the feet lies about dh in
+  // front of them, so this is "the ground within 0.3 m in front of the feet"
   function draw() {
     const x0 = cam.x, y0 = cam.y, sc = view.scale;
     if (!lastCam || lastCam[0] !== x0 || lastCam[1] !== y0) {
-      levelEl.style.transform = `translate(${-x0 * sc}px, ${-y0 * sc}px)`;
+      levelEl.style.transform = `translate(${-x0 * sc}px, ${-y0 * sc}px) scale(${sc})`;
       lastCam = [x0, y0];
     }
     const [px, py, pd] = project(S.x, S.z);
@@ -441,9 +513,11 @@ kbd { font: 600 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 
       if (b > a) fig32.set(rgba.subarray(ly * LW + bx + a, ly * LW + bx + b), row + a);
       if (b < fw) fig32.fill(L.bg, row + Math.max(b, 0), row + fw);
     }
+    nAllowed = 0;
     const ratio = L.ratio, d8 = figImg.data, depth = L.depth, flag = L.flag, LITF = L.LIT, GR = L.GROUND;
     const SW = SP.W, sdat = SP.data, srgba = SP.rgba, dscale = SP.scale, zero = SP.zero, rowD = L.rowDepth;
     const shade = !sunAt(S.x, S.z);
+    const footY = M.camera.ground_y + heightAt(S.x, S.z) * M.camera.units_per_m, nearU = GROUND_NEAR * M.camera.units_per_m;
     // 1) its shadow: flat ground at the figure's height, only where the level is at that depth and lit
     for (let v = 0; v < fh; v++) {
       const sy = by + v;
@@ -461,20 +535,29 @@ kbd { font: 600 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 
     const s0 = shade ? ratio[0] : 1, s1 = shade ? ratio[1] : 1, s2 = shade ? ratio[2] : 1;
     for (let v = 0; v < fh; v++) {
       const sy = by + v, inLevel = sy >= 0 && sy < LH;
-      let si = 4 * ((fy + v) * SW + fx), li = sy * LW + bx, o = 4 * v * FIGW;
+      let si = 4 * ((fy + v) * SW + fx), li = sy * LW + bx, o = 4 * v * FIGW, shown = 0, opaque = 0;
       for (let u = 0; u < fw; u++, si += 4, li++, o += 4) {
         if (srgba[si + 3] < 128) continue;
+        opaque++;
         const sx = bx + u;
         if (inLevel && sx >= 0 && sx < LW) {
           const dz = pd + (sdat[si] * 256 + sdat[si + 1] - zero) / dscale;
-          if (dz > depth[li] + ((flag[li] & GR) ? GROUND_BIAS : BIAS)) continue;
+          const dl = depth[li];
+          if (dz > dl + BIAS) {                         // behind the level here: hidden, unless it is ground
+            if (!(flag[li] & GR) || dz > dl + GROUND_BIAS) continue;   // at the feet's own height
+            if (Math.abs(UY[0] * sx + UY[1] * sy + UY[2] * dl + UY[3] - footY) >= nearU) continue;
+            allowedAt[nAllowed++] = li;
+          }
         }
         d8[o] = srgba[si] * s0; d8[o + 1] = srgba[si + 1] * s1; d8[o + 2] = srgba[si + 2] * s2; d8[o + 3] = 255;
+        shown++;
       }
+      rowShown[v] = shown; rowOpaque[v] = opaque;
     }
-    if (lastBox) figCtx.clearRect(0, 0, lastBox[2], lastBox[3]);
-    figCtx.putImageData(figImg, 0, 0, 0, 0, fw, fh);
-    figEl.style.transform = `translate(${(bx - x0) * sc}px, ${(by - y0) * sc}px)`;
+    rowN = fh;
+    if (lastBox) figCtx.clearRect(1, 1, lastBox[2], lastBox[3]);
+    figCtx.putImageData(figImg, 1, 1, 0, 0, fw, fh);
+    figEl.style.transform = `translate(${(bx - x0 - 1) * sc}px, ${(by - y0 - 1) * sc}px) scale(${sc})`;
     lastBox = [bx, by, fw, fh];
     return [ax, ay];
   }
@@ -500,6 +583,7 @@ kbd { font: 600 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 
       const t0 = performance.now();
       const dt = Math.min(0.05, last ? (ts - last) / 1000 : 0);
       last = ts;
+      if ((window.devicePixelRatio || 1) !== view.dpr) layout();   // (zoom, a move to another screen)
       update(dt);
       const [px, py] = project(S.x, S.z);
       follow(px, py, dt);
@@ -540,20 +624,39 @@ kbd { font: 600 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 
     play("idle", 0);
     layout();
     new ResizeObserver(() => { layout(); }).observe(stage);
+    window.addEventListener("resize", layout);        // (the stage can move without changing size)
     statusEl.hidden = true;
     canvas.focus({ preventScroll: true });
     // for automated checks (and curious players): read the state, put the figure somewhere
     window.bbDebug = {
       state: () => ({ x: S.x, z: S.z, facing: S.facing * SP.step, anim: S.anim, k: S.k, phase: S.phase, queue: S.queue,
                       height: heightAt(S.x, S.z), walkable: walkable(S.x, S.z), shade: !sunAt(S.x, S.z),
-                      view: { ...view }, cam: { x: cam.x, y: cam.y }, frame: frameIndex(), frames }),
+                      view: { ...view }, cam: { x: cam.x, y: cam.y }, frame: frameIndex(), frames, sc: S.sc, box: lastBox,
+                      gi: SP.anims[S.anim].kind === "gait" ? gaitShown(SP.anims[S.anim].frames[0].length) : -1 }),
       teleport: (x, z, facing) => {
         if (walkable(x, z)) { S.x = x; S.z = z; }
         if (facing !== undefined) S.facing = S.want = ((Math.round(facing / SP.step) % SP.nf) + SP.nf) % SP.nf;
-        play("idle", 0); cam.ax = null; cam.lagX = cam.lagY = cam.showX = cam.showY = 0; lastCam = null;
+        play("idle", 0); S.sc = 1; S.goff = 0; cam.ax = null; cam.lagX = cam.lagY = cam.showX = cam.showY = 0; lastCam = null;
         return walkable(x, z);
       },
       times: () => times.slice(),
+      // the figure's pixels in the last frame drawn, per row from the top of its box: [drawn, there]
+      rows: () => Array.from({ length: rowN }, (_, v) => [rowShown[v], rowOpaque[v]]),
+      // figure pixels drawn in the last frame only thanks to the ground allowance (the level was nearer by more
+      // than BIAS), over ground more than h metres above the feet: [lx, ly, height] (should be none for h >= 0.3)
+      drawnOver: (h) => {
+        const feet = heightAt(S.x, S.z), out = [];
+        for (let i = 0; i < nAllowed; i++) {
+          const li = allowedAt[i], lx = li % L.W, ly = (li - lx) / L.W, d = L.depth[li];
+          if (!Number.isFinite(d)) continue;
+          const gh = (UY[0] * lx + UY[1] * ly + UY[2] * d + UY[3] - M.camera.ground_y) / M.camera.units_per_m - feet;
+          if (gh > h && (L.flag[li] & L.GROUND)) out.push([lx, ly, +gh.toFixed(3)]);
+        }
+        return { allowed: nAllowed, over: out };
+      },
+      groundHeight: (pts) => pts.map(([lx, ly]) => {   // metres, of the level point a pixel shows (null: nothing)
+        const d = L.depth[ly * L.W + lx];
+        return Number.isFinite(d) ? (UY[0] * lx + UY[1] * ly + UY[2] * d + UY[3] - M.camera.ground_y) / M.camera.units_per_m : null; }),
       advance: (name, k) => { applyAdvance(SP.anims[name], k); return [S.x, S.z]; },
       fault: () => { fault = true; },
       countRed: () => {           // shown pixels of the (test) figure's pure red (the figure box)
