@@ -6,7 +6,7 @@ without drift or camera shake, walk / run speeds, the touch stick, root-motion s
 frame per display frame at 60 / 120 / 30 Hz (exact rAF timestamps), modifier keys (Cmd), error display,
 decode of the atlases, the two canvases in register at fractional device pixel ratios.
 
-The tests marked ``slow`` run on the real build (out/play4, or $PLAY_BUILD) if it exists: frame time with 4x CPU
+The tests marked ``slow`` run on the real build (out/play6, or $PLAY_BUILD) if it exists: frame time with 4x CPU
 throttling, the audit's own repro spots, the one-two's real root motion, the real cuts.  Skipped without node +
 playwright."""
 import functools
@@ -148,7 +148,7 @@ def make_export(out: Path, one_frame=False, break_anim=False, layout=None, lean=
         play.save_rgba(dat, str(assets / "sprites_data.png"))
         sprites.update(color="sprites.webp", data="sprites_data.png",
                        frames=[r + [f["ox"], f["oy"]] for r, f in zip(rects, frames)])
-    manifest = dict(version=2, density=1, camera=dict(world_to_screen=m, units_per_m=lv.UNITS_PER_M, ground_y=lv.GROUND),
+    manifest = dict(version=2, density=2, camera=dict(world_to_screen=m, units_per_m=lv.UNITS_PER_M, ground_y=lv.GROUND),
                     start=dict(at=layout["demo"]["stand"]["at"], facing=90), level=level, sprites=sprites)
     manifest["files"] = play.asset_sizes(str(assets), manifest)
     (assets / "manifest.json").write_text(json.dumps(manifest))
@@ -234,10 +234,12 @@ def test_page_runs_without_errors_on_a_phone_and_a_desktop(site):
         st, sc, status = res["results"]
         assert st["anim"] == "idle" and st["frames"] > 5 and status["hidden"]
         assert sc["scroll"] <= 0 and sc["body"] <= 0, sc
-        if touch:  # one art pixel = one CSS pixel on a phone
-            assert st["view"]["cssPerArt"] == 1 and st["view"]["sDev"] == 3
+        # (the tiny site says density 2, like the build): 1.5 CSS px per art px on a phone, 4.5 device px rounded
+        # down to 4 (more ground); 3 on the 1280 px desktop (the size of a 3x build at 1 and 2 CSS px)
+        if touch:
+            assert st["view"]["cssPerArt"] == 1.5 and st["view"]["sDev"] == 4
         else:
-            assert st["view"]["cssPerArt"] == 2 and st["view"]["sDev"] == 2
+            assert st["view"]["cssPerArt"] == 3 and st["view"]["sDev"] == 3
 
 
 def atlas_sums(assets: Path):
@@ -881,7 +883,7 @@ def test_the_page_fits_iphone_screens_inside_the_hosts_safe_area_padding(server,
             assert box[0] - cam["x"] >= 0 and box[1] - cam["y"] >= 0 and box[0] + box[2] - cam["x"] <= v["w"] \
                 and box[1] + box[3] - cam["y"] <= v["h"], why          # the figure in view
             assert abs(m["stage"][1] * dpr - round(m["stage"][1] * dpr)) < 0.02, why   # (two canvases in register)
-            assert v["sDev"] == dpr, why        # one art pixel = one CSS pixel = dpr device pixels (2 or 3)
+            assert v["sDev"] == {2: 3, 3: 4}[dpr], why   # density 2: 1.5 CSS px per art px, 4.5 rounded down at dpr 3
             share = (m["stage"][3] - m["stage"][1]) / (safe[3] - safe[1])
             if orient == "upright":
                 assert m["bJ"][1] >= m["stage"][3] and m["hint"][1] >= m["stage"][3], why   # thumbs under the game
@@ -902,7 +904,7 @@ def test_the_page_fits_iphone_screens_inside_the_hosts_safe_area_padding(server,
 
 
 # ---------------------------------------------------------------- the real build (slow)
-BUILD = Path(os.environ.get("PLAY_BUILD", ROOT / "out" / "play4"))
+BUILD = Path(os.environ.get("PLAY_BUILD", ROOT / "out" / "play6"))
 
 
 @pytest.fixture(scope="module")
@@ -1019,7 +1021,7 @@ def test_real_build_cuts_are_one_frame_and_root_motion_continuous(real):
             t, n = T[b[0]], len(loops[a[0]])
             assert a[2] == round(t["enter"] * n) % n and b[1] == 0, (a, b)
             deg = mv.jump_deg(loops[a[0]][a[2]], t["frames"][0])[0]
-            assert deg < 13.0, (b[0], deg)
+            assert deg < 14.0, (b[0], deg)   # (the rebuilt run: run -> r2w 13.55 deg, as moves.py report says)
             step = [math.hypot(q[3] - p[3], q[4] - p[4]) for p, q in zip(recs[i - 2:i + 1], recs[i - 1:i + 2])]
             assert 0.6 < step[1] / step[0] < 1.4 and 0.6 < step[2] / step[1] < 1.4, (b[0], step)
             seen.add(b[0])
@@ -1029,8 +1031,9 @@ def test_real_build_cuts_are_one_frame_and_root_motion_continuous(real):
 @pytest.mark.slow
 def test_real_build_j_while_running_punches_within_a_third_of_a_second(real):
     """J while running / walking: from the key press to the first display frame whose lead (left) hand is 5 cm or
-    more ahead of its guard position (the jab reaching out; poses from moves.py).  Run: <= 0.35 s, walk: <= 0.45 s
-    (quick stops every 1/8 run cycle, every 1/4 walk cycle).  Then a press late in the one-two chains the next one:
+    more ahead of its guard position (the jab reaching out; poses from moves.py).  Run: <= 0.35 s, walk: <= 0.6 s
+    (quick stops every 1/8 run cycle, every 1/4 walk cycle: the walk cycle is 1.0 s since the rebuilt gait, so up to
+    0.25 s of waiting; measured 0.55 s, was 0.45 with the 0.8 s cycle).  Then a press late in the one-two chains the next one:
     its first frame follows the last with a small joint jump."""
     import moves as mv  # noqa: PLC0415
 
@@ -1049,7 +1052,7 @@ def test_real_build_j_while_running_punches_within_a_third_of_a_second(real):
             return loops["idle"][r[1]]
         return ot[r[1]] if r[0] == "onetwo" else T[r[0]]["frames"][r[1]]
     out = {}
-    for keys, bound, t0 in ((["ShiftLeft", "KeyD"], 0.35, 90), (["KeyD"], 0.45, 60)):  # (t0: the start / w2r are over)
+    for keys, bound, t0 in ((["ShiftLeft", "KeyD"], 0.35, 90), (["KeyD"], 0.6, 60)):  # (t0: the start / w2r are over)
         worst = 0
         for wait in range(t0, t0 + 24, 3):  # J at 8 points of the gait cycle
             res = drive(real, [[{"op": "teleport", "x": -6.0, "z": 4.4, "facing": 0}, ticks(3)]
@@ -1089,7 +1092,8 @@ def test_real_build_stick_numbers(real_now):
     """The stick with the real clips (60 Hz, a scripted thumb; README "터치 스틱 QC" has the table): a reversal
     moves off the other way at >= 80 % speed within 100 ms (was 150 ms), the thumb on a facing edge changes the
     facing at most twice in 3 s (was 11 times a second), resting at the run threshold never drops back to a walk,
-    standing to a run at >= 80 % speed within 0.6 s (was 0.95 s: the walk start now leads straight into walk -> run),
+    standing to a run at >= 80 % speed within 0.9 s (0.95 s before play5c; then 0.55 s once the walk start led straight
+    into walk -> run; 0.87 s since the rebuilt start: 36 frames with the weight shift, was 24),
     and a 2 s circle at run is followed within 5 deg (95th percentile; was 9 deg)."""
     at = (-0.6, 1.625)
     walk = Finger().down().polar(0, 0.7, 70).mark("t").polar(180, 0.7, 30)
@@ -1115,7 +1119,7 @@ def test_real_build_stick_numbers(real_now):
     assert "run" in names and not any(x.startswith("r2w") for x in names), sorted(set(names))
     g = go.marks["t"]
     t80 = next(i for i in range(g, len(e)) if (e[i][3] - e[i - 1][3]) * 60 >= 0.8 * 3.75) - g + 1
-    assert t80 / 60 <= 0.6, t80
+    assert t80 / 60 <= 0.9, t80
     g = circ.marks["t"]
     v = np.diff(np.array([[r[3], r[4]] for r in f[g - 1:g + 240]]), axis=0)
     want = 360 * np.arange(240) / 120

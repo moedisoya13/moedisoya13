@@ -2,6 +2,7 @@
 walkable cells, the manifest <-> files check, and the page template's hosting rules.  CPU, seconds."""
 import json
 import math
+import os
 import re
 import sys
 from pathlib import Path
@@ -230,19 +231,20 @@ def test_atlas_pages_hold_every_frame_once_within_the_page_size(tiny_export, tmp
     assert any("no atlas page 3" in p for p in problems) and any("level.png" in p for p in problems), problems
 
 
-PLAY = ROOT / "out" / "play4"
+PLAY = Path(os.environ.get("PLAY_BUILD", ROOT / "out" / "play6"))
 
 
-@pytest.mark.skipif(not (PLAY / "assets" / "manifest.json").exists(), reason="needs a built out/play4 (play.py build)")
+@pytest.mark.skipif(not (PLAY / "assets" / "manifest.json").exists(), reason=f"needs a built {PLAY} (play.py build)")
 def test_the_built_page_is_consistent():
     import moves as mv
 
     assert play.check(str(PLAY)) == []
     m = json.loads((PLAY / "assets" / "manifest.json").read_text())
     S = m["sprites"]
-    assert S["facings"] == list(range(0, 360, 45)) and m["density"] == 3
+    assert S["facings"] == list(range(0, 360, 45)) and m["density"] == 2
+    assert S["mannequin"]["splats"] == 1000 * 2 * 2 and m["camera"]["px_per_unit"] == pytest.approx(22.2, abs=0.05)
     A = S["anims"]
-    assert len(A["walk"]["frames"][0]) == mv.WALK_FRAMES == 48 and len(A["run"]["frames"][0]) == mv.RUN_FRAMES == 40
+    assert len(A["walk"]["frames"][0]) == mv.WALK_FRAMES == 60 and len(A["run"]["frames"][0]) == mv.RUN_FRAMES == 40
     assert A["walk"]["speed"] == pytest.approx(1.4) and A["run"]["speed"] == pytest.approx(3.75)
     assert len(A["onetwo"]["frames"][0]) == 144 and "inout" not in A  # 60 fps, the step is gone
     for a in A.values():

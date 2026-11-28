@@ -676,16 +676,21 @@ kbd { font: 600 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 
   let figImg = null, fig32 = null, FIGW = 1, FIGH = 1, lastBox = null, lastCam = null;
   let rowShown = new Int32Array(1), rowOpaque = new Int32Array(1), rowN = 0;   // figure pixels drawn / there, per row
   let allowedAt = new Int32Array(1), nAllowed = 0;     // ... level pixels drawn over only thanks to GROUND_BIAS
-  // Whole device pixels per art pixel.  The level is art at 3x the reference grid's density, so one art pixel
-  // is shown as one CSS pixel (one point) on a phone - the figure about 48 pt tall, 1 m of ground 34 pt: an iPhone
-  // 15 upright shows 361 art px = 10.5 m across, on its side 734 = 21 m (the reference screen's width).  Fewer
-  // device pixels per art pixel would show more ground but shrink the figure to 32 pt (dpr 3) or 24 pt (dpr 2);
-  // more would show only 7.9 m across.  2 CSS px once the game area is 700 CSS px or wider (1280 px desktop:
-  // 624 art px = 18.2 m, one reference screen)
+  // Whole device pixels per art pixel, chosen so the figure and the ground have the same size on screen at
+  // every density (manifest "density": art pixels per reference art pixel).  The size is that of a 3x build
+  // shown one art pixel per CSS pixel (one point) on a phone: the figure about 48 pt tall, 1 m of ground 34 pt,
+  // and 2 CSS px per 3x art pixel once the game area is 700 CSS px or wider (1280 px desktop: 18.2 m across,
+  // one reference screen).  So CSS px per art px = 3 / density x that, and device px per art px is the whole
+  // number nearest to it; exactly half way (a 2x build at dpr 3: 4.5) it takes the smaller one, which shows
+  // more ground: an iPhone 15 upright 4 device px = 1.33 pt per art px, 270 art px = 11.8 m across (3x: 10.5 m),
+  // the figure 43 pt; on its side 550 art px = 24 m.  5 would make it 53 pt but only 9.5 m across.
+  function zoom(width, dpr, density) {
+    const css = (3 / density) * Math.max(1, Math.round(width / 700));   // CSS px per art px wanted
+    return { cssPerArt: css, sDev: Math.max(1, Math.ceil(css * dpr - 0.5 - 1e-9)) };
+  }
   function layout() {
     const dpr = window.devicePixelRatio || 1, r = stage.getBoundingClientRect();
-    const cssPerArt = Math.max(1, Math.round(r.width / 700));
-    const sDev = Math.max(1, Math.round(cssPerArt * dpr));
+    const { cssPerArt, sDev } = zoom(r.width, dpr, (M && M.density) || 3);
     const w = Math.max(32, Math.floor(r.width * dpr / sDev)), h = Math.max(32, Math.floor(r.height * dpr / sDev));
     const sc = sDev / dpr;
     view = { w, h, scale: sc, sDev, cssPerArt, dpr, css: [+r.width.toFixed(2), +r.height.toFixed(2)] };

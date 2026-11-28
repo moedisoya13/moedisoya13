@@ -686,9 +686,9 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
     b = sub.add_parser("build", help="export the level layers, the BB sprites and the page")
-    b.add_argument("-o", "--out", default="out/play4")
-    b.add_argument("--bake", default=graybox.default_out(isocam.RefCam().elev, 3),
-                   help="baked level folder (graybox.py build --density 3)")
+    b.add_argument("-o", "--out", default="out/play6")
+    b.add_argument("--bake", default=graybox.default_out(isocam.RefCam().elev, 2),
+                   help="baked level folder (graybox.py build --density 2; the page sizes every density alike)")
     b.add_argument("--bb", default="out/bb2", help="baked bare mannequin (mitten hands)")
     b.add_argument("--onetwo", default=DEFAULT_ONETWO, help="the imported one-two clip (60 fps; its first frame is "
                                                              "the guard the idle breathes around)")
@@ -702,7 +702,7 @@ def main():
     b.add_argument("--max-frames", type=int, default=0, help="render at most this many frames per animation (tests)")
     b.add_argument("--threads", type=int, default=1, help="torch threads per worker")
     c = sub.add_parser("check", help="manifest <-> files")
-    c.add_argument("-o", "--out", default="out/play4")
+    c.add_argument("-o", "--out", default="out/play6")
     a = ap.parse_args()
     if a.cmd == "check":
         problems = check(a.out)
