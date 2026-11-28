@@ -1,9 +1,9 @@
 #!/usr/bin/env node
-/* The recorded clips of the pending catalogue (src/clips.data.mjs): motion that is not in this checkout yet (a stage not
+/* The recorded clips of the old catalogue's cards (src/clips.data.mjs; played by src/open.old.mjs in the open catalogue): motion that is not in this checkout yet (a stage not
    merged, a checker's variant), fought in the checkout that has it and kept frame by frame, so that the page can play it
    beside the motion as it is now. Each clip is one script of one checkout (a catalogue script, or one changed as the
    manifest says: the other man stood at another distance, a press at another time), fought the way the page fights a card
-   (src/pending.mjs: tick), from its start, and kept over its window: for each frame, both men's poses as the renderer wants
+   (src/open.old.mjs: tick), from its start, and kept over its window: for each frame, both men's poses as the renderer wants
    them (each joint's turn, the root, the stretch, where he is on the canvas and which way he faces) and the blows of the
    frame (what the page draws the effects from), with what it was measured to show (tools/clips.mjs: MEASURES) and where it
    came from (the checkout's commit or folder, and a digest of the engine's own files).
@@ -52,7 +52,7 @@ async function engine(root) {
   const { MOVES } = await src('anim/moves.mjs');
   // (the combinations' cards, where the checkout has them: SCENES.combo)
   const combos = existsSync(path.resolve(root, 'src', 'combos.mjs')) ? await src('combos.mjs') : null;
-  // (the scripts the page starts afresh each loop though the boxer throws nothing: src/pending.mjs byId)
+  // (the scripts the page starts afresh each loop though the boxer throws nothing: src/open.old.mjs byId)
   const fresh = new Set([...(body.LIVER_BLOCK || []), ...(defense.CROSS_BODY || []), ...(defense.BLOCK_FIRE || []), ...(defense.SHELL || [])].map(e => e.id));
   if (NAMES.length !== JOINTS) throw new Error(`${root}: ${NAMES.length} joints, not ${JOINTS}`);
   return { step, freshBout: foot.freshBout, drive: foot.drive, HOME: foot.HOME, SCRIPTS, measure, NAMES, fk, fresh, M, MOVES, defense, body, RADIUS, combos };
@@ -196,7 +196,7 @@ export const SCENES = {
   }
 };
 
-/* ---- what a clip is measured to show (the line under it on the page: src/pending.mjs CLIP_SAY). Each is handed the run: the
+/* ---- what a clip is measured to show (the line under it on the page: src/open.old.mjs CLIP_SAY). Each is handed the run: the
    frames (k: the step it was, men: { f (the fighter as he stands after it), m (the checkout's audit measure of him) }), the
    events with their frames, the window's first and last frame, the checkout, the script and the clip's own `of`. */
 const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
@@ -492,7 +492,7 @@ function pack(f, NAMES, out, k) {
   return k;
 }
 
-/* One clip fought: the run from its start to the end of its window, the page's way (src/pending.mjs tick). */
+/* One clip fought: the run from its start to the end of its window, the page's way (src/open.old.mjs tick). */
 export async function record(clip, root, E) {
   E = E || (await engine(root));
   const entry = scriptOf(clip, E),

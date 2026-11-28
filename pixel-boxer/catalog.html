@@ -83,7 +83,8 @@
   }
   .info { flex: 1; background: var(--card); border-top: 1.5px solid var(--line); padding: 12px 14px 14px; display: flex; flex-direction: column; gap: 8px; }
   h3 { margin: 0; font: 400 21px/1.2 var(--display); letter-spacing: .02em; }
-  h3 .en { font: 500 11px/1 var(--data); color: var(--dim); letter-spacing: .04em; margin-left: 6px; white-space: nowrap; }
+  /* (the English name wraps where it must: one of them, out-counter's, is longer than a phone is wide) */
+  h3 .en { font: 500 11px/1 var(--data); color: var(--dim); letter-spacing: .04em; margin-left: 6px; overflow-wrap: anywhere; }
   .info p { margin: 0; color: var(--dim); font-size: 14px; }
   .feet { margin-top: auto; padding-top: 6px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; font: 500 12px/1 var(--data); color: var(--dim); font-variant-numeric: tabular-nums; }
   .lamp { width: 12px; height: 12px; border: 1.5px solid currentColor; }

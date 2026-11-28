@@ -1,7 +1,8 @@
 /* The instant replay: what the game, a card, the effect study and the review sheet show again of two moments the bout makes.
    A brilliant defence (game/bout.mjs: a miss by a whisker, or on the last frame of the window, and a loaded punch back within
    0.4 s): when the counter has landed, it plays back at a quarter of the speed from the moment the other man's punch was
-   pressed to a moment after the counter met him.
+   pressed to a moment after the counter met him; unless a knockdown comes before it plays (the counter puts him down): then
+   only the knockdown's is played, as every knockdown is shown.
    A knockdown (docs/moves-plan-6.md §2.4D, the user's instruction of 2026-11-24): the fall is shown live, at the true speed,
    from the ordinary camera, all the way down; then, once every effect of the blow and of the landing has gone out and he is
    down and all but still, the picture cuts to a closer camera, from above or from wherever the blow is seen best (viewOf),
@@ -14,7 +15,9 @@
    steps in which the bout held the moment of a blow (its time did not move on) are left out of it, so that no picture of it
    is the same as the one before. The blows of the steps it keeps (hits, blocks, parries) and where a falling man came down
    are kept with them, so that what they threw can be thrown again as the replay comes to them, in its own time (a
-   knockdown's replay ends before he comes down: it throws again his blow's motes and ripple, never the landing's).
+   knockdown's replay ends before he comes down: it throws again his blow's motes and ripple, never the landing's); and
+   with them the events that are only heard (HEARD: the punch pressed, a slip, a dash ...), so that a replay is heard from
+   its start, the punch's breath and swing first.
      const r = createReplay({ keep, slow, lead, tail, fall, yaw, room, brilliant, capture })
        keep: seconds kept (2); slow: the speed a brilliant defence's plays at (0.25); lead: seconds before the punch was
        pressed it starts from (0.05); tail: seconds after the counter lands it goes on to, live, before it plays (0.25);
@@ -34,7 +37,7 @@
                          and last steps), hit (the blow: who, on, hand, at...); a page draws it at distOf
      r.next(dt)          what to draw now, dt seconds of real time on: a step it kept, or one between two of them (null once
                          it is over: playing is false again). r.crossed: the steps kept that it has come to since it was
-                         last asked (each step's { events: its blows, landed: { fall, landing } if a falling man came down
+                         last asked (each step's { events: its blows and what is only heard of it, landed: { fall, landing } if a falling man came down
                          in it }), the first of them on the first call; r.started: true on that first call; r.moved: the
                          bout's seconds the picture moved on since the last (what the effects thrown again move on by)
      r.skip()            ends it now (a key, a tap or a button in the game): the bout goes on from where it stood
@@ -127,6 +130,10 @@ export function blend(a, b, k) {
 }
 
 const BLOWS = ['hit', 'block', 'parry'];
+/* (and the events that are only heard, kept with the steps too so that a replay is heard as it was, the press of its punch
+   first: nothing is drawn of them, so a page that throws again what is drawn of each step's events is not changed by them.
+   A whiff and a graze are drawn by a defence's lines, render/guard.mjs, and so are not kept: their sound is not heard again) */
+const HEARD = ['punch', 'taunt', 'slip', 'duck', 'roll', 'pull', 'collar', 'duckIn', 'dash', 'hopPivot', 'hopCircle', 'paw', 'foul'];
 
 /* A knockdown's replay: all its numbers, in one place (docs/moves-plan-6.md §2.4D). Each can be set apart in createReplay's
    `fall`.
@@ -416,7 +423,7 @@ export function createReplay(o) {
       clock += dt;
       drawn = null;
       const snap = o.capture(bout);
-      snap.events = bout.events.filter(e => BLOWS.includes(e.type));
+      snap.events = bout.events.filter(e => BLOWS.includes(e.type) || HEARD.includes(e.type));
       kept.push({ clock, t: bout.t, snap });
       for (const e of bout.events) {
         if (e.type === 'punch') presses[e.who] = { name: e.name, t: bout.t };
@@ -431,6 +438,9 @@ export function createReplay(o) {
         if (down && (F.of === 'every' || e.out || bout.over !== null)) {
           const p = presses[e.who];
           fall = Object.assign(down, { hit: { t: bout.t, who: e.who, on: e.on, hand: e.hand, at: e.at.slice(), vec: e.vec.slice(), trunk: e.trunk || null }, from: Math.max(p && p.name === e.name ? p.t : -Infinity, bout.t - F.windup), landT: null, quietAt: null, stillAt: null, calm: 0, was: null });
+          /* (a brilliant defence whose counter puts him down is replayed as the knockdown alone: its quarter speed would cut
+             into the fall, before he is down: the knockdown's showing is live all the way down first, then its replay) */
+          armed = met = null;
         }
       }
       // (what is kept: the last `keep` seconds, and, while a knockdown's replay is awaited, everything from where it starts)

@@ -995,7 +995,7 @@ test("taunts: no taunting glove goes into a legend throwing his cross", () => {
    changes by more than the audit's JUMP in a frame of the taunt, as his chest sees it. One room is watched, not held: the
    windmill at 5a under the legend's cross (its lead glove 4.1 m/s in a frame as the cross begins), which the engine before
    this stage breaks too (5.59 m/s in the same room), and whose mend cost clearance in other rooms: measured and printed
-   here, JUMP left as it is (the user's decision of 2026-11-24, src/pending.data.mjs u-wind-room). */
+   here, JUMP left as it is (the user's decision of 2026-11-24, src/open.old.data.mjs u-wind-room). */
 const WATCHED_ROOM = (id, lv, r) => id === 'wind' && lv === '5a' && r.hit;
 test('taunts: a hand the room moves is not thrown about', t => {
   const bad = [],

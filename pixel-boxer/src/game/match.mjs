@@ -41,7 +41,7 @@ export function createMatch(o) {
     round: 1,
     clock: 0, // seconds into the round
     phase: 'fight',
-    count: null, // { who, n, up (the count he will rise at, or none), t }
+    count: null, // { who, n, up (the count he will rise at, or none), t, rising (he has beaten it and is getting up) }
     stats: [[tally(), tally()]], // a tally a round, a boxer
     cards: [], // [round][judge] = [points for 0, points for 1]
     result: null,
@@ -93,7 +93,9 @@ function decision(match) {
     zero = votes.filter(v => v === 0).length,
     one = votes.filter(v => v === 1).length;
   match.totals = totals;
-  end(match, zero >= 2 ? 0 : one >= 2 ? 1 : zero > one ? 0 : one > zero ? 1 : null, zero >= 2 || one >= 2 ? 'decision' : 'draw');
+  // (two of the three cards for the same man win it; anything else is a draw, and a draw has no winner: one judge for him and
+  // two level is a majority draw, not a win)
+  end(match, zero >= 2 ? 0 : one >= 2 ? 1 : null, zero >= 2 || one >= 2 ? 'decision' : 'draw');
 }
 
 export function stepMatch(match, dt, inputs) {
@@ -115,13 +117,15 @@ export function stepMatch(match, dt, inputs) {
       far = Math.hypot(...away) || 1,
       stand = far < 2.1 ? { move: [away[0] / far, away[1] / far] } : {};
     step(bout, c.who === 0 ? [{}, stand] : [stand, {}], dt);
-    c.t += dt;
+    // (once he has beaten the count and is getting up, the referee counts no further: he watches him up onto his feet, and
+    // no number is called over a man on his way up, ten least of all)
+    if (!c.rising) c.t += dt;
     const n = Math.min(10, Math.floor(c.t / MATCH.count) + 1);
     if (n !== c.n) (c.n = n), match.events.push({ type: 'count', who: c.who, n });
     if (c.up && n >= c.up && f.down) {
       // up, at the count he had in him (a man doubled up by a body shot keeps what health he still had)
       f.hp = Math.max(f.hp, c.health);
-      getUp(bout, f);
+      if (getUp(bout, f)) c.rising = true;
       match.events.push({ type: 'up', who: c.who, n });
     }
     if (!f.down && (!f.action || !MOVES[f.action.name].floor)) {

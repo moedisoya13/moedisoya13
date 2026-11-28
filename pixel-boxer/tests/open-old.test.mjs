@@ -1,11 +1,13 @@
-// The pending catalogue (docs/pending-catalog.md): the scoped override its variant cards run under (src/tune.mjs, §2) leaves
-// the game's tables as they were, whatever happens inside it, and a card stepped between two steps of a variant fights exactly
-// as it does alone; its data (src/pending.data.mjs) names only fields that are there and scripts the catalogue has, with ids
-// fit to save decisions under; and what the variant cards show is what tools/pending.mjs measured (src/pending.numbers.mjs).
+// The old catalogue's cards as the open-questions catalogue plays them (src/open.old.mjs, src/open.old.data.mjs; moved
+// 2026-11-28 from the old catalogue's own page and its test when those were deleted, del-code-pending-old): the scoped
+// override its variant cards run under (src/tune.mjs) leaves the game's tables as they were, whatever happens inside it, and a
+// card stepped between two steps of a variant fights exactly as it does alone; its data names only fields that are there and
+// scripts the catalogue has; and what the variant cards show is what was measured (src/open.old.data.mjs NUMBERS).
 // The recorded cards (src/clips.data.mjs, tools/clips.mjs): every clip of the manifest is there, as long as its window says,
 // whole, and named by a card; a card that is one option of a decision names an option its item has, and carries its words;
 // a clip recorded from this checkout, or from this checkout with a root's edits made in a copy of it, is recorded again the
-// same; and a root's edit that is not in its file exactly once fails, the copy taken away.
+// same; and a root's edit that is not in its file exactly once fails, the copy taken away. What was deleted with the old page
+// is named nowhere.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
@@ -13,8 +15,7 @@ import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { withTune, patchesOf, guardAt } from '../src/tune.mjs';
-import { ITEMS, PARTS, TUNES, VERSIONS, FX_SCENES, DECIDED, answered, sortOut, ANSWERED_LINE } from '../src/pending.data.mjs';
-import { NUMBERS } from '../src/pending.numbers.mjs';
+import { ITEMS, TUNES, NUMBERS } from '../src/open.old.data.mjs';
 import { SCRIPTS } from '../src/audit.mjs';
 import { step, RULES } from '../src/game/bout.mjs';
 import { freshBout, drive } from '../src/footwork.mjs';
@@ -85,9 +86,9 @@ test('a card stepped between the steps of a variant fights as it does alone (liv
 
 test('the data: every override names a field that is there, every card a catalogue script, every id fit to save under', () => {
   assert.equal(ITEMS.length, 84);
-  // (in the page's order: what the work of 2026-11-23 left open first, then the four parts)
-  assert.deepEqual(PARTS.map(P => P.n), [5, 1, 2, 3, 4]);
-  assert.deepEqual(PARTS.map(P => ITEMS.filter(i => i.part === P.n).length), [56, 2, 7, 13, 6]);
+  // (in the old page's order: what the work of 2026-11-23 left open first, then the four parts)
+  assert.deepEqual([5, 1, 2, 3, 4].map(n => ITEMS.filter(i => i.part === n).length), [56, 2, 7, 13, 6]);
+  assert.deepEqual([...new Set(ITEMS.map(i => i.part))], [5, 1, 2, 3, 4]);
   const ids = new Set();
   for (const item of ITEMS) {
     assert.match(item.id, /^[a-z0-9]+(-[a-z0-9]+)*$/, item.id);
@@ -96,7 +97,9 @@ test('the data: every override names a field that is there, every card a catalog
     const options = item.options.map(o => o.id);
     assert.equal(new Set(options).size, options.length, `${item.id}: a choice id twice`);
     for (const o of options) assert.match(o, /^[a-z0-9]+(-[a-z0-9]+)*$/, `${item.id}: ${o}`);
-    assert.ok(options.includes(item.recommend), `${item.id}: the recommended choice ${item.recommend} is not one of them`);
+    // (an item decided before is kept as it was decided: one of its own choices, the day, how; one still open has its ★)
+    if (item.decided) assert.ok(options.includes(item.decided.choice) && /^\d{4}-\d\d-\d\d$/.test(item.decided.at) && ['chat', 'built'].includes(item.decided.how), `${item.id}: decided ${JSON.stringify(item.decided)}`);
+    else if (item.state) assert.ok(options.includes(item.recommend), `${item.id}: the recommended choice ${item.recommend} is not one of them`);
     // (two items sharing a row of cards: the second follows the first, and each has its one card)
     if (item.pair) {
       const next = ITEMS[ITEMS.indexOf(item) + 1];
@@ -119,7 +122,8 @@ test('the data: every override names a field that is there, every card a catalog
       const [o, k] = patchesOf([p], TABLES)[0];
       assert.ok(Object.prototype.hasOwnProperty.call(o, k), `${p.slice(0, -1).join('.')}: not a field of its own`);
     }
-    if (card.version) assert.ok(VERSIONS.some(v => v.id === card.version) && FX_SCENES[card.scene].entry === card.entry, `${card.entry} ${card.version}`);
+    // (the hit effect's versions went with the old page: cleanup-fx-versions)
+    assert.equal(card.version, undefined, `${card.entry}: an effect version card`);
   }
   for (const item of ITEMS) for (const r of [...(item.refs || []).map(x => x.href), ...(item.banner ? [item.banner.image] : [])]) assert.ok(existsSync(path.join(root, r)), r);
   // (the two cards of a comparison see it from the same place)
@@ -128,11 +132,11 @@ test('the data: every override names a field that is there, every card a catalog
       for (const [a, b] of g.rows) assert.deepEqual(a.view || byId[a.entry].view, b.view || byId[b.entry].view, `${item.id}: the two cards' camera`);
 });
 
-test('what the variant cards show is what tools/pending.mjs measured: the blow, and what became of the punch', () => {
+test('what the variant cards show is what was measured for them: the blow, and what became of the punch', () => {
   for (const card of allCards.filter(c => c.key)) {
     const c = cell(card),
       want = NUMBERS.cards && NUMBERS.cards[card.key];
-    assert.ok(want, `${card.key}: not measured (node tools/pending.mjs --write)`);
+    assert.ok(want, `${card.key}: not measured (src/open.old.data.mjs NUMBERS)`);
     for (let i = 0; i < Math.round(c.entry.loop / DT); i++) tick(c);
     const landed = c.events.find(e => e.type === 'hit' && e.who === 0),
       met = c.events.filter(e => (e.type === 'parry' ? e.on : e.who) === 1 && ['hit', 'block', 'whiff', 'graze', 'parry'].includes(e.type)).pop();
@@ -180,66 +184,41 @@ test('the options\' cards: each names an option of its item and carries its word
       }
   // (the cards of the options of seven items, and the clips of the manifest: what the work of 2026-11-24 added; and the defence
   // effects' samples, 19 cards of options of three items more and six clips; and the samples of two options not recorded before
-  // (downside-front's from04, rocked-slow's mid) and of the cross counter's first round, 12 cards of options and 12 clips more)
-  assert.equal(n, 67, 'cards of options');
-  assert.equal(CLIPS.length, 66, 'clips');
+  // (downside-front's from04, rocked-slow's mid) and of the cross counter's first round, 12 cards of options and 12 clips more:
+  // 67 cards and 66 clips. 2026-11-28: the decided items' cards and clips went with the old page (del-code-pending-old):
+  // downside-front 9, rocked-slow 6 and the cross counter's 7 cards of options, and the 29 clips only decided items showed)
+  assert.equal(n, 45, 'cards of options');
+  assert.equal(CLIPS.length, 37, 'clips');
   // (a row of two whose second is the blank: its first is a card, as beckon-room's)
   for (const item of ITEMS) for (const g of item.groups || []) for (const [a, b] of g.rows) if (b.fill) assert.ok(!a.fill && (a.clip || a.entry || a.image), `${item.id}: a blank row`);
 });
 
-/* Answered: an item the store holds a choice for, or, with no document, one the data says was decided, is left out of its
-   part's open items (and so of the page's list and counts) and is in the part's answered ones, which the line at the part's
-   end opens; a document whose choice is none takes it back. */
-test('an answered item is hidden by default and shown by its part\'s line; a choice taken back on the page opens it again', () => {
-  // (what was decided away from the page: an item each, one of its own choices; every item whose state says so has it)
-  for (const [id, d] of Object.entries(DECIDED)) {
-    const item = ITEMS.find(i => i.id === id);
-    assert.ok(item && item.decided === d, `${id}: no such item`);
-    assert.ok(item.options.some(o => o.id === d.choice) && /^\d{4}-\d\d-\d\d$/.test(d.at) && ['chat', 'built'].includes(d.how), `${id}: ${d.choice} ${d.at} ${d.how}`);
-  }
-  assert.deepEqual(ITEMS.filter(i => /^정해짐/.test(i.state)).map(i => i.id).sort(), Object.keys(DECIDED).sort(), 'the items whose state says decided');
-  // (the store as it may stand: one item chosen there, one decided item taken back to none, one with a choice it has not)
-  const docs = { 'cross-arm-shape': { choice: 'upright', note: '', at: '2026-11-22T15:30:39.105Z' }, 'merge-bar': { choice: null, note: '', at: '2026-11-24T08:00:00.000Z' }, 'wave-speed': { choice: 'gone', note: 'x', at: '2026-11-24T08:00:00.000Z' } };
-  let hidden = 0;
-  for (const P of PARTS) {
-    const { open, answered: done } = sortOut(P.n, docs);
-    assert.deepEqual([...open, ...done].map(i => i.id).sort(), ITEMS.filter(i => i.part === P.n).map(i => i.id).sort(), `part ${P.n}: every item once`);
-    for (const i of done) assert.ok(answered(i, docs[i.id]) && !open.includes(i), i.id);
-    assert.match(ANSWERED_LINE(done.length), new RegExp(`^답한 항목 ${done.length}개 보기$`));
-    hidden += done.length;
-  }
-  const where = id => (sortOut(ITEMS.find(i => i.id === id).part, docs).answered.some(i => i.id === id) ? 'answered' : 'open');
-  assert.equal(where('cross-arm-shape'), 'answered', 'chosen in the store');
-  assert.equal(where('hookr-bound'), 'answered', 'decided in the data, nothing in the store');
-  assert.equal(where('merge-bar'), 'open', 'decided, then taken back to none on the page');
-  assert.equal(where('wave-speed'), 'open', 'a choice it has not');
-  assert.equal(where('liver-hook-power'), 'open', 'nothing anywhere');
-  // (the decided ones, merge-bar taken back and cross-arm-shape chosen instead)
-  assert.equal(hidden, Object.keys(DECIDED).length);
-  // (with nothing in the store, what the data decided is hidden, and nothing else)
-  assert.deepEqual(PARTS.flatMap(P => sortOut(P.n).answered).map(i => i.id).sort(), Object.keys(DECIDED).sort());
-});
-
 /* (what was taken away for good: the ground ring's light-or-darker question, and the order of the stages; and what only they
-   used, their clips: nothing of them is left in the data, the clips or the groups, and the recorded files are gone) */
+   used, their clips: nothing of them is left in the data, the clips or the groups, and the recorded files are gone. And
+   2026-11-28, with the old page: the clips only decided items showed, and the ground ring's comparison videos, del-ref-video) */
 test('no deleted item is named anywhere: the data, the clips, the groups', () => {
   const GONE = ['fx-ground-ring-game', 'order-memo-first'],
-    CLIPS_GONE = ['front-now', 'front-v1', 'collar-now', 'collar-u2', 'hookin-pren', 'hookin-now'];
+    CLIPS_GONE = ['front-now', 'front-v1', 'collar-now', 'collar-u2', 'hookin-pren', 'hookin-now',
+      ...'beckon10-now beckon10-u1 beckon10-u2 beckon12-now beckon12-u2 hookr-pren hookr-now rollc-pren weak-pren weak-now ds-revert db-revert ds-accept db-accept ds-from04 db-from04 rk-before rk-keep rk-mid rk-shorter xc-3 xc-4m xc-4a xc-5m xc-5a xc-3-never xc-early xc-late xc-out'.split(' ')];
   for (const id of GONE) assert.ok(!ITEMS.some(i => i.id === id), `${id}: still an item`);
   for (const id of CLIPS_GONE) {
     assert.ok(!CLIPS.some(c => c.id === id) && !CLIPS_MADE[id] && !LOAD[id], `${id}: still a clip`);
     assert.ok(!existsSync(path.join(root, 'src', 'clips', `${id}.mjs`)), `${id}: its file`);
   }
   for (const card of allCards) assert.ok(!(card.image || '').includes('ground-ring-game') && !CLIPS_GONE.includes(card.clip), JSON.stringify(card));
-  for (const file of ['src/pending.data.mjs', 'src/clips.data.mjs', 'src/clips/index.mjs']) {
+  for (const file of ['src/open.old.data.mjs', 'src/clips.data.mjs', 'src/clips/index.mjs']) {
     const text = readFileSync(path.join(root, file), 'utf8');
     // (the ground ring's item and its two pictures, docs/ref/ground-ring-game-*.jpg; the order's item; their clips)
-    for (const name of ['ground-ring-game', ...GONE]) assert.ok(!text.includes(name), `${file} names ${name}`);
+    for (const name of ['ground-ring-game', 'ground-shake-', ...GONE]) assert.ok(!text.includes(name), `${file} names ${name}`);
     for (const id of CLIPS_GONE) assert.ok(!text.includes(`'${id}'`), `${file} names ${id}`);
     for (const id of ['front', 'collar', 'hookin']) assert.ok(!text.includes(`pair('${id}'`), `${file} makes the clips ${id}-*`);
   }
-  // (the two pictures stay in the repository, out of the page)
+  // (the two pictures stay in the repository, out of the page; the ground ring's comparison videos and stills are gone)
   for (const n of [1, 2]) assert.ok(existsSync(path.join(root, 'docs', 'ref', `ground-ring-game-${n}.jpg`)));
+  assert.deepEqual(readdirSync(path.join(root, 'docs', 'ref')).filter(f => f.startsWith('ground-shake-')), []);
+  // (and the old page and every file only it used)
+  for (const f of ['pending.html', 'src/pending.mjs', 'src/pending.data.mjs', 'src/pending.numbers.mjs', 'tools/pending.mjs', 'tests/pending.test.mjs', 'docs/pending-catalog.md'])
+    assert.ok(!existsSync(path.join(root, f)), `${f} is still there`);
 });
 
 test('a clip recorded from this checkout is recorded again the same: the frames, the blows and what it measured', async () => {

@@ -1,7 +1,6 @@
 /* Short-lived splats over the match: the streak a glove leaves along the path it really took, sparks off a blow (where they
-   start and which way they go: render/blow.mjs), the lava a knockdown's blow throws in their place (globs and embers), the
-   sweat that leaves the far side of a head when it is hit (a study, not drawn in the game), dust from a foot, and the
-   shadows that pin the boxers to the canvas. Each is a stretched gaussian from a to b (a glob is three of them, an ember
+   start and which way they go: render/blow.mjs), the lava a knockdown's blow throws in their place (globs and embers), dust
+   from a foot, and the shadows that pin the boxers to the canvas. Each is a stretched gaussian from a to b (a glob is three of them, an ember
    one or two); every frame the live ones are written into one array of rows for the renderer.
      heatOf(it)   the colours a glob or an ember is drawn in now: a glob's [tail, body, head] as it flies, [rim, core] once it
                   is stuck to the canvas; an ember's [head, tail], null while it is winked out (for drawing it, and for
@@ -281,39 +280,6 @@ export function createFx(random) {
         });
       }
       return n;
-    },
-    /* Sweat: beads that were sitting on the side of his head away from the glove. The blow drives the head into them, so
-       at first they ride it; when the neck stops the head they keep going, each one letting go as the head slows under it
-       (the loosest first, at nearly the head's top speed; the ones that cling longest leave slower and fall short). Nothing
-       here is aimed: where they go is where the head was going.
-         head()   -> the middle of his head now, in the world
-         from     where the glove met it
-         colours  what a bead goes through as it flies, or several of those, one taken for each bead
-         o        { clock(): the bout's own time, seconds (it stands still while the moment of a blow is held, and the
-                    picture may be drawn more often than the bout is stepped: the head's speed is reckoned by this),
-                    size: metres across, gain: how much faster than the head they leave (it is a game), fan: how much they
-                    spread out round the head's way, life: seconds, drag, tail: seconds of path a bead is drawn along } */
-    sweat(head, from, n, colours, o) {
-      const c = head(),
-        far = M.sub(c, from),
-        fl = len(far) || 1,
-        f = M.scale(far, 1 / fl),
-        // (two directions square to it, to put the beads round the far side)
-        s = len([f[2], 0, -f[0]]) > 1e-3 ? M.scale([f[2], 0, -f[0]], 1 / len([f[2], 0, -f[0]])) : [1, 0, 0],
-        u = [f[1] * s[2] - f[2] * s[1], f[2] * s[0] - f[0] * s[2], f[0] * s[1] - f[1] * s[0]];
-      for (let i = 0; i < n; i++) {
-        // on the far half of the head, more of them toward its top and back (hair holds sweat), a little way off the skin
-        const out = 0.25 + 0.75 * rnd(),
-          round = rnd() * Math.PI * 2,
-          wide = Math.sqrt(1 - out * out),
-          dir = M.add(M.scale(f, out), M.add(M.scale(s, wide * Math.cos(round)), M.scale(u, wide * Math.sin(round)))),
-          off = M.scale([dir[0], dir[1] + 0.25 * rnd(), dir[2]], 0.115 + 0.02 * rnd());
-        add({
-          a: M.add(c, off), b: M.add(c, off), stick: head, clock: o.clock, at: o.clock(), off, dir, grip: 0.55 + 0.42 * rnd(), last: M.add(c, off), vel: [0, 0, 0], top: 0, topV: [0, 0, 0], on: 0,
-          g: -9.8, drag: o.drag ?? 2, width: o.size * (0.75 + 0.5 * rnd()), pal: Array.isArray(colours[0]) ? colours[Math.floor(rnd() * colours.length)] : colours, life: 9, fly: (o.life ?? 0.45) * (0.6 + 0.8 * rnd()), tail: o.tail ?? 0.008, shrink: 0.45, splat: true,
-          gain: (o.gain ?? 1.3) * (0.55 + 0.75 * rnd()), fan: (o.fan ?? 0.16) * rnd()
-        });
-      }
     },
     dust(at, n, colours, dir) {
       for (let i = 0; i < n; i++) {

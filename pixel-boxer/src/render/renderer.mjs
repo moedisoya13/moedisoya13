@@ -7,6 +7,17 @@ const FOV = (38 * Math.PI) / 180; // ink-studio's own, so a splat is the size on
 const MAX_BONES = 24;
 const MAX_PALETTE = 48;
 const NO_RINGS = new Float32Array(8);
+/* (a man's own forearms and gloves are taken as this many metres nearer the eye than they are, for deciding what is nearest
+   only: the sculpted chest is fuller than the ball his arms are kept out of (rig/body.mjs RADIUS.Chest), and a rear forearm
+   held against it in the guard went under its skin, the training suit's most of all (the user, 2026-11-28, card arm-way: B).
+   Nothing moves where it is drawn.) */
+export const ARM_PULL = 0.04;
+/* Palette entries the page's own code draws with and no bake does, put after the baked palette (rig/boxer.mjs PALETTE, 44
+   entries) in every palette a layer is drawn with (paletteArray): the canvas's two lightest blues again, for the sparks a
+   block throws (render/blow.mjs met), so that an arena that draws its floor in other colours (the pit's concrete,
+   world/pit.mjs pitPalette, put in the canvas's place) leaves them blue. */
+export const LOOSE = { at: 44, colours: [0x546890, 0x7890b6] };
+export const SPARK_BLUE = [LOOSE.at, LOOSE.at + 1];
 
 const SPLAT_VS = `#version 300 es
 precision highp float;
@@ -23,6 +34,11 @@ uniform vec2 u_shake;  // pixels
 uniform vec2 u_depth;  // near, far
 uniform vec4 u_wave;   // a ripple through what was struck: where it began (world), and how far out its front is now
 uniform float u_mask;
+uniform float u_loose; // 1 for a layer with no bones (whose a_misc.y of 1 marks a speck of light), 0 for one on bones
+uniform vec4 u_cut;    // a layer thinned on the camera's side: the camera's way out [x, z], and the cosines between the way out
+                       // to a splat (from the middle, flat) and it at and past which the splat is not drawn and below which it
+                       // all is (between, dithered); x > 1.5 for none. Only what stands higher than u_cutY, out past 1 m.
+uniform float u_cutY;
 uniform vec3 u_waveK;  // its width (metres), its strength (0 is no ripple; by the damage, render/blow.mjs), and how far it sways what it passes (metres)
 uniform vec4 u_ground; // a ring through the canvas: where it began (world x, z), how far out its front is, and its width (metres)
 uniform vec2 u_groundK; // how high it lifts what it passes (metres; 0 is no ring), and the lift past which a tile is drawn a step lighter (0: never)
@@ -33,6 +49,7 @@ out vec3 v_conic;
 flat out float v_pal;
 flat out float v_al;
 flat out float v_light;
+flat out float v_keep; // (how much of this splat is drawn, 0..1, through a 4x4 dither: SPLAT_FS)
 flat out vec3 v_floor; // (the rings' dark line: where on the canvas this splat lies, world x and z, and 1 if the line may darken it)
 flat out vec4 v_jac;   // (and the canvas round it: the metres along it, x and z, that an art pixel across and one up the picture go)
 /* The other kind of ring through the canvas (u_rings): no light and no lift, only the picture of the canvas shaken as the
@@ -58,6 +75,7 @@ vec2 shaken(vec4 ring, float most, vec3 world, vec3 c) {
 void main() {
   v_floor = vec3(0.0);
   v_jac = vec4(0.0);
+  v_keep = 1.0;
   int b = int(max(a_misc.y, 0.0) + 0.5) * 3;
   vec4 r0 = u_bones[b], r1 = u_bones[b + 1], r2 = u_bones[b + 2];
   mat3 R = mat3(r0.x, r1.x, r2.x, r0.y, r1.y, r2.y, r0.z, r1.z, r2.z);
@@ -111,9 +129,17 @@ void main() {
   }
   float dist = -c.z;
   if (dist < u_depth.x) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
+  /* (thinned on the camera's side: what stands round the pit between the camera and the fight, world/stage.mjs) */
+  if (u_cut.x < 1.5 && world.y > u_cutY && length(world.xz) > 1.0) {
+    float k = dot(normalize(world.xz), u_cut.xy);
+    v_keep = 1.0 - smoothstep(u_cut.w, u_cut.z, k);
+    if (v_keep <= 0.0) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
+  }
   /* (a loose splat may be taken as a little nearer the eye than it is, for deciding what is nearest only: the parts of one
      glob, so that its head is drawn over its body and its body over its tail from any side; render/fx.mjs) */
   float pull = max(-a_misc.y, 0.0);
+  // (and a man's forearms and gloves, his bones 11 to 14 behind bone 0: rig/skeleton.mjs NAMES; a man is drawn with mask 1)
+  if (u_mask > 0.9 && a_misc.y > 10.5 && a_misc.y < 14.5) pull = ${ARM_PULL.toFixed(3)};
   float iz = 1.0 / dist;
   vec3 ja = vec3(u_focal * iz, 0.0, u_focal * c.x * iz * iz);
   vec3 jb = vec3(0.0, u_focal * iz, u_focal * c.y * iz * iz);
@@ -122,7 +148,8 @@ void main() {
   if (det <= 0.0) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
   v_conic = vec3(D, -B, A) / det;
   v_al = a_misc.z;
-  v_light = u_mask < 0.9 && a_misc.y > 0.5 ? 1.0 : 0.0;
+  // (a speck of light only in a layer with no bones: in one on bones, the pit's crowd, a_misc.y is its bone, world/pit.mjs)
+  v_light = u_mask < 0.9 && u_loose > 0.5 && a_misc.y > 0.5 ? 1.0 : 0.0;
   v_pal = pal;
   // the ellipse ends where density * exp(-m2 / 2) falls to a half
   float m2 = 2.0 * log(max(a_misc.z, 0.51) * 2.0);
@@ -138,12 +165,15 @@ in vec3 v_conic;
 flat in float v_pal;
 flat in float v_al;
 flat in float v_light;
+flat in float v_keep;
 flat in vec3 v_floor;
 flat in vec4 v_jac;
 uniform vec3 u_palette[${MAX_PALETTE}];
 uniform float u_mask;  // what kind of thing this is, kept in alpha for the second pass
 uniform vec4 u_rings[2];
 uniform vec3 u_ringsK;
+uniform vec4 u_top; // a layer thinned toward the top of its cell: the cell's top (pixels), and the fractions of its height
+                    // from the top above which none of it is drawn and below which all of it is (between, dithered); w 0 for none
 out vec4 o;
 /* The rings' dark line (u_ringsK.z): the canvas a step darker on one art pixel along each ring's front, where the point of
    the canvas this pixel shows (as it was before the ring moved it) is within half a pixel of it; thinned through a 4x4
@@ -159,6 +189,13 @@ float crest(vec4 ring, float push, vec2 p, mat2 J) {
 void main() {
   float pw = -0.5 * (v_conic.x * v_d.x * v_d.x + v_conic.z * v_d.y * v_d.y) - v_conic.y * v_d.x * v_d.y;
   if (v_al * exp(pw) < 0.5) discard;
+  float keep = v_keep;
+  if (u_top.w > 0.5) keep *= clamp(((u_top.x - gl_FragCoord.y) / u_top.w - u_top.y) / max(u_top.z - u_top.y, 1e-4), 0.0, 1.0);
+  if (keep < 1.0) {
+    int i = int(gl_FragCoord.x) & 3, j = int(gl_FragCoord.y) & 3;
+    int m[16] = int[16](0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5);
+    if ((float(m[j * 4 + i]) + 0.5) / 16.0 >= keep) discard;
+  }
   float pal = v_pal;
   if (v_floor.z > 0.5 && pal > 22.5) {
     mat2 J = mat2(v_jac.xy, v_jac.zw);
@@ -276,7 +313,9 @@ export function shakeOf(row, p, pal, cam, rows, raw) {
 export const rgb = hex => [((hex >> 16) & 255) / 255, ((hex >> 8) & 255) / 255, (hex & 255) / 255];
 export function paletteArray(palette) {
   const out = new Float32Array(MAX_PALETTE * 3);
+  if (palette.length > LOOSE.at) throw new Error(`A palette of ${palette.length}: the loose entries begin at ${LOOSE.at}`);
   palette.forEach((hex, i) => out.set(rgb(hex), i * 3));
+  LOOSE.colours.forEach((hex, k) => out.set(rgb(hex), (LOOSE.at + k) * 3));
   return out;
 }
 
@@ -362,6 +401,13 @@ export function createRenderer(canvas, o) {
                              lifts nothing),
                            silhouette: k, 1 to 8 (every pixel of the cell this layer covers is kept as silhouette k, whether or not
                              something nearer hides it there: its whole outline in the picture, not only what shows of it),
+                           cut: [x, z, hide, show, above] (a layer thinned on the camera's side: of what stands higher than
+                             `above` metres, out past a metre from the middle, a splat whose way out from the middle has a
+                             cosine of `hide` or more with the way [x, z] is not drawn, one of `show` or less all is, and between
+                             it is thinned through a 4x4 dither: world/stage.mjs, the pit's edge and crowd),
+                           top: [from, to] (a layer thinned toward the top of the cell: none of it above `from` of the cell's
+                             height from its top, all of it below `to`, dithered between: the pit's crowd under the page's
+                             lettering),
                            outside: k (this layer is drawn only off silhouette k, in front of it or behind it alike; elsewhere depth
                              decides as for anything else. Such a layer is drawn after the cell's others, wherever it is in the
                              list, so that the silhouette is all there when it comes: what a blow throws off a man, which must
@@ -411,6 +457,12 @@ export function createRenderer(canvas, o) {
       gl.uniform4fv(splat.u.u_bones, layer.bones || still);
       gl.uniform3fv(splat.u.u_palette, layer.palette);
       gl.uniform1f(splat.u.u_mask, layer.mask === undefined ? 0.5 : layer.mask);
+      gl.uniform1f(splat.u.u_loose, layer.bones ? 0 : 1);
+      const ct = layer.cut;
+      gl.uniform4f(splat.u.u_cut, ct ? ct[0] : 2, ct ? ct[1] : 0, ct ? ct[2] : 2, ct ? ct[3] : 2);
+      gl.uniform1f(splat.u.u_cutY, ct && ct.length > 4 ? ct[4] : -1e3);
+      const tp = layer.top;
+      gl.uniform4f(splat.u.u_top, r.y + r.h, tp ? tp[0] : 0, tp ? tp[1] : 0, tp ? r.h : 0);
       const wv = layer.wave;
       gl.uniform4f(splat.u.u_wave, wv ? wv[0] : 0, wv ? wv[1] : 0, wv ? wv[2] : 0, wv ? wv[3] : 0);
       gl.uniform3f(splat.u.u_waveK, wv ? wv[4] : 1, wv ? wv[5] : 0, wv ? wv[6] : 0);

@@ -32,11 +32,13 @@ export const ARENA_SAID = { ring: '링', underground: '지하 격투장' };
 export const arenaOf = name => (ARENAS.includes(name) ? name : 'ring');
 
 export const PIT = {
-  edge: 2.76, // the inner face of the walls and the drums (a man stopped at RING.half has his back to them)
+  // the inner face of the walls and the drums: a man stopped at RING.half has his back to them, and the rear foot of his stance
+  // short of them (2.76 before 2026-11-28, card a-pit-foot: the foot went 6.5 cm into the bricks, 10.4 cm in a corner)
+  edge: 2.9,
   wall: { high: 0.46, deep: 0.24, course: 0.077, brick: 0.235 },
   drum: { r: 0.29, high: 0.88 },
   lamp: [0, 4.3, 0],
-  floor: { half: 5.8, inner: 2.95, fine: 0.1, coarse: 0.16 },
+  floor: { half: 5.8, inner: 3.1, fine: 0.1, coarse: 0.16 },
   hall: [0x1a1513, 0x120f0e, 0x0c0a0a, 0x070606]
 };
 /* The crowd: rows of figures standing on the floor round the edge, the first `first` metres out, each next row `row`
@@ -44,7 +46,7 @@ export const PIT = {
    about its own shoulders: they all stand on the floor for it), sectors twelfths round the pit, each drawn as its own layer;
    `budget` splats at most. */
 export const CROWD = {
-  first: 3.42,
+  first: 3.56, // (3.42 before the edge went out to 2.9: behind the drums, 0.58 m deep)
   rows: 4,
   row: 0.5,
   gap: 0.47,
@@ -207,6 +209,10 @@ function figure(h, shirt, trousers, skin, hair, bulk) {
     [0, [0, 1.47, 0.01], [0.045, 0.05, 0.045], skin, 1],
     [0, [0, 1.58, 0.015], [0.09, 0.11, 0.095], skin, 2],
     [0, [0, 1.64, -0.01], [0.093, 0.065, 0.095], hair, 1],
+    // a face (the user, 2026-11-28, card pit-crowd-face): the eyes a dark line across it, a mouth under them, a pixel or two
+    // each at the distance it is watched from, on the front of the head (from behind it, the head is nearer and hides them)
+    [0, [0, 1.6, 0.098], [0.056, 0.012, 0.012], hair, 0],
+    [0, [0, 1.532, 0.094], [0.03, 0.009, 0.012], skin, 0],
     // each arm: the sleeve, the forearm and the hand, hanging from the shoulder (1.4)
     ...[-1, 1].flatMap(s => {
       const part = s > 0 ? 1 : 2,
@@ -346,7 +352,8 @@ export function createCrowd() {
     /* which twelfths to draw for a camera at `yaw` (renderer.mjs viewOf: its eye is out along [sin yaw, cos yaw]): not those
        between it and the fight, within `wide` radians either side of the way to it */
     facing(yaw, wide) {
-      wide = wide ?? 1.3;
+      // (1.3 before 2026-11-28; a twelfth within 1.45 of the camera is all of it within world/stage.mjs NEAR.crowd, not drawn)
+      wide = wide ?? 1.45;
       const out = [];
       for (let s = 0; s < S; s++) {
         const a = (s / S) * Math.PI * 2,

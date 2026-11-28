@@ -44,6 +44,8 @@
   .card b { font-size: 14px; line-height: 1.2; overflow-wrap: anywhere; }
   .card span { font-size: 11.5px; line-height: 1.35; color: var(--muted); overflow-wrap: anywhere; }
   .card.demo b { color: var(--gold); }
+  .since, .card.changed b::after { font-style: normal; font-size: 10px; font-weight: 700; letter-spacing: .06em; color: var(--ink); background: var(--gold); padding: 1px 4px; vertical-align: 1px; }
+  .card.changed b::after { content: '바뀜'; margin-left: 6px; }
   #log { margin: 0; min-height: 3.2em; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
   footer { font-size: 11px; color: var(--muted); }
 </style>
@@ -52,7 +54,8 @@
 <div class="page">
   <header>
     <h1>타격음 <em>오디션</em></h1>
-    <p class="lede">게임과 스파링이 쓰는 소리를 하나씩 들어 봅니다. 파일 없이 모두 그 자리에서 합성합니다(<code>src/game/audio.mjs</code>). 주먹을 낼 때의 이 사이 날숨, 맞는 소리, 막기와 쳐내기, 피하기, 맞은 사람의 목소리, 발과 바닥과 로프, 관중과 공.</p>
+    <p class="lede">게임과 스파링이 쓰는 소리를 하나씩 들어 봅니다. 파일 없이 모두 그 자리에서 합성합니다(<code>src/game/audio.mjs</code>). 주먹을 낼 때 입으로 내뿜는 숨, 맞는 소리, 막기와 쳐내기, 피하기, 발과 바닥과 로프, 관중과 공.</p>
+    <p class="lede"><i class="since">바뀜</i> 2026-11-28, 고르신 대로 다시 만든 소리: 숨(이 사이 “쉭” → 입으로 “훅”), 타격(더 낮게, 북 같은 사인 대신 짧고 묵직한 “텁”; 머리의 “팍”은 더 밝고 길게; 다운은 약한 주먹이라도 강타만큼), 막기 · 쳐내기(더 낮은 “퍽” · “탁”), 발 · 대시 · 쓰러짐 · 로프(더 작게, 다른 소리; 제자리 바운스에도 발소리), 공(놋쇠 공의 울림), 관중(여러 무리 · 목소리 · 박수). 맞은 사람의 “욱” · “헉” · 헐떡임은 뺐습니다. 아무도 귀로 들어 보지 않았습니다(잰 값만).</p>
     <p id="state">소리 잠김: 아무 곳이나 한 번 누르면 켜집니다</p>
     <div class="controls">
       <div class="ctl">선수 목소리<div class="seg" id="who"><button data-who="0" aria-pressed="true">빨강</button><button data-who="1" aria-pressed="false">파랑</button></div></div>

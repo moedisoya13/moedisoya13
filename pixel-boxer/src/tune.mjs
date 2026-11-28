@@ -1,4 +1,4 @@
-/* A scoped override: a card of the pending catalogue (docs/pending-catalog.md §2) that shows what the same engine does with
+/* A scoped override: a card of the old catalogue (played by src/open.old.mjs; its plan was docs/pending-catalog.md §2, deleted 2026-11-28) that shows what the same engine does with
    one or two values of the game's own tables changed (MOVES.hookBody.land, CROSS['4a'].R, ...). Nothing in the game reads a
    value of its own for it: the table's field is set to the card's value for as long as the card's own code runs (making its
    bout, a step of it, measuring it) and put back the moment it returns or throws, so the card beside it, stepped between
@@ -64,7 +64,7 @@ export function guardAt(base, frames, gap) {
   });
 }
 
-/* The rear forearm off the vertical (docs/pending-catalog.md §6.6, the frame tests/show.test.mjs shape() measures in): from
+/* The rear forearm off the vertical (the old catalogue's plan §6.6, the frame tests/show.test.mjs shape() measures in): from
    the elbow to the middle of the glove, 7.5 cm on from the hand along the forearm, in his own space. Degrees. */
 export function rearTilt(f) {
   const { p } = fk(f.pose),

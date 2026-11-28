@@ -65,8 +65,8 @@
 | 모션 카탈로그 | https://claude.ai/artifact/GGHUZQ9rFWLoRojwCzaK3N | v43 | `catalog.html`, `src/catalog.mjs` | 54592a0 (그 뒤 바뀐 파일 없음) |
 | 타격음 오디션 | https://claude.ai/artifact/92ZDBLW3TVC2M3XJ6bwgeQ | v1 | `sfx.html`, `src/sfx.mjs` | 85417ad |
 | **미결 카탈로그 (새)** | https://claude.ai/artifact/HybxKJu7LtBsGHs7M1rYpz | v4 | `open.html`, `src/open.mjs`, `src/open.data.mjs`, `src/open.clips.mjs`, `docs/ref/open/` | e6f0bb4 |
-| 미결 카탈로그 (옛) | https://claude.ai/artifact/UEM19aKseUxnixVYkrnAzd | v36 | `pending.html`, `src/pending*.mjs` | 54592a0 · **파기 후보**(§7) |
-| 타격 이펙트 시안 | https://claude.ai/artifact/5tZd5Xyp7iiRxCuftpNwL6 | v9 (11-24) | `fxlab.html`, `src/fxlab.mjs` | 엔진보다 낡음 · **파기 후보**(§7) |
+| 미결 카탈로그 (옛) | https://claude.ai/artifact/UEM19aKseUxnixVYkrnAzd | v36 | `pending.html`, `src/pending*.mjs` | 54592a0 · **파기 승인됨**(§7, 아티팩트 지우기는 조정자) |
+| 타격 이펙트 시안 | https://claude.ai/artifact/5tZd5Xyp7iiRxCuftpNwL6 | v9 (11-24) | `fxlab.html`, `src/fxlab.mjs` | 37fb302 · 엔진보다 낡음 · **파기 승인됨**(§7, 아티팩트 지우기는 조정자) |
 
 - **다시 게시**: 커밋한 뒤 `node tools/artifact.mjs <page>.html src/<entry>.mjs <out.html> --since <지난 게시 커밋> > <files.json>`(바뀐 파일만 나오고, 없어진 것은 null; `{}`이면 바뀐 것이 없음) → Artifact 도구에 `url`(위 주소), `file_path`(<out.html>), `root`(`pixel-boxer`의 절대 경로), `files`(그 JSON 그대로). `capabilities`는 생략한다(저장된 선언과 db가 유지됨). 처음 게시하는 세션은 먼저 `action: "read"`로 그 주소를 읽어야 하고, "not read as published"로 거절되면 `action: "list", scope: "files"`를 한 번 한 뒤 다시 한다. 페이지 아래의 "빌드 …"가 게시한 커밋을 보여 준다.
 - **언제**: 단계를 합칠 때마다, 그리는 법·소리가 바뀔 때마다 스파링을 다시 게시한다(사용자 요청 "개발적 변화가 있을 때마다 자동 업데이트"). 소리를 고치면 오디션도. 카탈로그는 동작이 바뀌면(`SINCE`에 단계와 날짜, 사용자가 본 단계는 `REVIEWED`에).
@@ -109,13 +109,13 @@
    - `arm-way`: 체육복·후드를 입으면 가드를 올리지 않은 자세에서 오른 팔뚝이 자기 가슴에 묻힌다(보이는 비율 0.15, 최저 0.01; 맨몸 0.41). 원인은 옷이 아니라 자세(해법은 팔을 가슴 0.13 m 밖에 두는데 조각된 가슴은 0.20 × 0.14 m; 맨몸은 옛 가드 자세로 구운 것이라 가려지지 않을 뿐). A 자세를 고침(근본, 모든 동작을 다시 잼) / B 그릴 때만 앞으로(작음, 권장) / C·D(권하지 않음). 비교 영상 `arm`, 시험판 고침 `docs/ref/open/patches/`.
    - 소리: 층마다 듣고 좋음/고침/뺌(오디션 페이지). 머리의 "팍"이 30 ms뿐, 발소리는 걸은 거리 기준.
    - 링·지하: 기댐이 작음(16° 요청에 약 7°; 비교 영상 `lean`), 맨 아래 로프는 눌리지 않음, 세로 화면에서 가까운 통·벽이 가림, 관중 얼굴 없음, 관중 조각이 통째로 나타남, 지하에는 기대기 없음.
-   - 스파링: 동작과 동작 사이의 회복(주먹 뒤 25~40프레임; 사용자 "아직도 모션과 모션 사이 딜레이가 많습니다"; 비교 영상 `tempo`), 약한 마무리 타격(50판 중 15판이 45 N·s 미만), 피하기가 드묾.
+   - 스파링: 동작과 동작 사이의 회복(주먹 뒤 25~40프레임; 사용자 "아직도 모션과 모션 사이 딜레이가 많습니다"; 비교 영상 `tempo`), 약한 마무리 타격(50판 중 13판이 45 N·s 미만, 최저 7.6 N·s; 11-28 다시 잼), 피하기가 드묾.
    - `audit-10`: 승인되어 끝남(2026-11-25; "정해진 것"으로 옮김). `stage-order`: 남은 단계의 순서.
 2. **기획의 기본값**(옛 미결 카탈로그에서 넘어온 것 40개 남짓: 방어 이펙트, 팔방, 소스 C·D, 콤보, 로드아웃, 리버 훅 세기, 다운패링 타이밍, `twist-chin` 등). 답이 없으면 그 단계를 시작할 때 ★대로 가도 되는지 다시 묻는다.
 3. **엔진 한계를 받아들일지**(아래 §6과 README의 알려진 한계).
 4. **파기 승인**(§7).
 
-카드는 136장(점검에서 찾은 것 39, 카탈로그 점검 4, 지금 정할 것 22, 기획의 기본값 44, 엔진 한계 17, 파기 승인 9, 자유 메모 1; 2026-11-26 v4). 옛 카탈로그의 열린 60항목은 모두 넘어왔고 글은 `src/pending.data.mjs`에서 읽는다(그 파일을 지우려면 먼저 `src/open.data.mjs`로 옮긴다).
+카드는 136장(점검에서 찾은 것 39, 카탈로그 점검 4, 지금 정할 것 22, 기획의 기본값 44, 엔진 한계 17, 파기 승인 9, 자유 메모 1; 2026-11-26 v4). 옛 카탈로그의 열린 60항목은 모두 넘어왔고 글과 카드는 `src/open.old.data.mjs`에서 읽는다(2026-11-28에 옛 `src/pending.data.mjs`에서 굳혀 옮김; 옛 카드를 돌리는 것은 `src/open.old.mjs`).
 
 **비교 영상의 시험판을 재 본 값** (고침은 `docs/ref/open/patches/`, 다시 녹화는 `node tools/openclips.mjs arm lean tempo --modules <ink-studio가 있는 node_modules>`)
 
@@ -155,15 +155,15 @@
 
 | id | 무엇 | 지우는 법 | 비고 |
 |---|---|---|---|
-| `del-session` | 이전 세션 `session_01Juyi5CipAWs3ncaLCG6BsY`("프로 복서", 2026-11-22~25) | `archive_session`(보관; 되돌릴 수 있음) | 인계가 확인된 뒤 |
-| `del-art-pending-old` | 옛 미결 카탈로그 아티팩트 | Artifact `delete`(되돌릴 수 없음) | 새 카탈로그가 대신함 |
-| `del-art-fxlab` | 타격 이펙트 시안 아티팩트 | Artifact `delete` | 이펙트는 확정됨(용암·불티, 두 번) |
-| `del-code-pending-old` | `pending.html`, `src/pending.mjs`, `src/pending.data.mjs`, `docs/pending-catalog.md`, 답이 난 항목의 클립(`src/clips/`) | 커밋으로 지움 | 새 카탈로그가 옛 플레이어(`src/replay.mjs`, `src/clips.data.mjs`)를 쓰는 동안은 그 부분을 남김 |
-| `cleanup-fx-versions` | 쓰지 않는 이펙트 시안 버전(`src/pending.data.mjs`의 `VERSIONS`·`TUNES`·`MIST`, `fxlab`) | 커밋으로 지움 | |
-| `cleanup-fx-sweat` | `src/render/fx.mjs`의 관성 땀 `sweat()` | 커밋으로 지움 | 권장: 승인 |
-| `cleanup-limp-out` | 한꺼번에 풀리는 림프 `out` | 커밋으로 지움 | 시험이 아직 씀 |
-| `cleanup-fxlab-now` | `fxlab`의 "지금" 비교 카드 | 커밋으로 지움 | |
-| `del-ref-video` | `docs/ref/ground-shake-*`(webm·jpg 11개) | 커밋으로 지움 | `fx-ground-shake`가 정해진 뒤 |
+| `del-session` | 이전 세션 `session_01Juyi5CipAWs3ncaLCG6BsY`("프로 복서", 2026-11-22~25) | `archive_session`(보관; 되돌릴 수 있음) | 승인됨(11-28). 인계가 확인된 뒤. 조정자 |
+| `del-art-pending-old` | 옛 미결 카탈로그 아티팩트 | Artifact `delete`(되돌릴 수 없음) | 승인됨(11-28). 새 카탈로그가 대신함. 조정자 |
+| `del-art-fxlab` | 타격 이펙트 시안 아티팩트 | Artifact `delete` | 승인됨(11-28). 이펙트는 확정됨(용암·불티, 두 번). 조정자 |
+| `del-code-pending-old` | `pending.html`, `src/pending.mjs`, `src/pending.data.mjs`, `src/pending.numbers.mjs`, `tools/pending.mjs`, `tests/pending.test.mjs`, `docs/pending-catalog.md`, 정해진 항목만 쓰던 클립 29개(`src/clips/`의 파일, `src/clips.data.mjs`의 줄과 그 클립만의 출처 일곱) | 커밋으로 지움 | **지움(11-28)**. 새 미결 카탈로그가 쓰던 것은 먼저 옮김: `src/open.data.mjs`가 읽던 `src/pending.data.mjs`(옛 항목의 글 · 카드 · 기대 수치)는 `src/open.old.data.mjs`로, `src/open.mjs`가 불러 쓰던 `src/pending.mjs`(옛 카드를 돌리는 부분)는 `src/open.old.mjs`로, 그 시험은 `tests/open-old.test.mjs`로. `src/replay.mjs`(게임 · 모션 카탈로그 · 스파링 · `fxlab` · 리뷰가 씀), `src/clips.data.mjs`와 남은 클립 37개, `tools/clips.mjs`는 남김 |
+| `cleanup-fx-versions` | 쓰지 않는 이펙트 시안 버전: `src/pending.data.mjs`의 `VERSIONS` · `MIST` · `FX_SCENES`(`fxlab`의 두 열 “전” · “확정”은 둘 다 보이므로 지울 것이 없음; `TUNES`는 이펙트가 아니라 옛 카드의 조정안 값으로 `src/open.old.data.mjs`에 남음) | 커밋으로 지움 | **지움(11-28)**, `del-code-pending-old`와 함께 |
+| `cleanup-fx-sweat` | `src/render/fx.mjs`의 관성 땀 `sweat()`(부르는 곳 0, `grep`) | 커밋으로 지움 | **지움(11-28)**, 함수 하나만 |
+| `cleanup-limp-out` | 한꺼번에 풀리는 림프 `out` | 커밋으로 지움 | **보류**(사용자 11-28). 시험이 아직 씀 |
+| `cleanup-fxlab-now` | `fxlab`의 "지금" 비교 열 | — | 승인됨(11-28). 이미 없음(3dc3c39에서 "전" · "확정" 두 열로 바뀜): 지울 것이 없어 확인만 함 |
+| `del-ref-video` | `docs/ref/ground-shake-*` 12개(`back-bare` · `back-light` · `back-shake` · `front-light` · `front-shake`의 `.webm` · `.jpg` 10개, `game-light` · `game-shake`의 `.jpg` 2개)와 그것을 부르던 옛 카드(`fx-ground-shake`의 비교 네 묶음) | 커밋으로 지움 | **지움(11-28)**. `fx-ground-shake`는 "픽셀 진동"으로 정해짐. `ground-ring-game-1/2.jpg`는 목록에 없어 남김(§10) |
 | (선택하지 않은 시험판) | `docs/ref/open/patches/`의 고침과 그 영상 | 커밋으로 지움 | `arm-way`·`ring-lean`·`spar-tempo`가 정해진 뒤 |
 
 이전 세션의 스크래치패드(리뷰 시트, 측정 스크립트, 얼린 작업 폴더)는 세션과 함께 사라진다. 승인이 필요 없다(§9에 무엇이 사라지는지).
@@ -224,7 +224,7 @@
 | `source-c.jpg`, `source-d.jpg` | 콤비네이션 1-S-5-2-3-2, 연속 백스텝 | `docs/source-cd-proposal.md` |
 | `cross-counter.jpg` | 크로스 카운터 | `docs/cross-counter-plan.md` (Y) |
 | `bearing-cells.svg` | 팔방의 여덟 칸 | `docs/bearing-system-plan.md` |
-| `ground-ring-game-*.jpg`, `ground-shake-*` | 바닥 고리: 빛 대 픽셀 진동 | 미결 `fx-ground-shake` |
+| `ground-ring-game-1.jpg`, `-2.jpg` | 바닥 고리: 게임 화면에서 빛으로 그린 고리(예전 항목 `fx-ground-ring-game`의 그림) | 어느 페이지에도 나오지 않음; `tests/open-old.test.mjs`가 남아 있는지만 봄. 파기 목록(§7)에 없어 남김. (비교 영상 `ground-shake-*` 12개는 2026-11-28에 지움: `del-ref-video`) |
 | `open/` | 새 미결 카탈로그의 비교 영상과 시험판 고침 | `src/open.clips.mjs` |
 
 ## 11. 문서 지도
@@ -235,5 +235,5 @@
 - `docs/audit-2026-11-25.md`: 자체 점검의 결과(재현된 38건, 확정 못 한 것), 재현 스크립트 `docs/audit-2026-11-25/`.
 - `docs/open-catalog.md`: 새 미결 카탈로그의 형식과 읽는 법. `docs/artifact-history.md`: 게시 이력.
 - 기획: `docs/moves-plan-4.md`, `-5.md`, `-6.md`(허리, 이펙트 §2~§2.4C, 단계 K~Z), `docs/skill-motion-plan.md`(숙련도 2차: 풋워크와 공격), `docs/defense-footwork-grades-plan.md`(숙련도 3차: 수비와 풋워크 드릴의 7단계), `docs/leaping-hook.md`, `docs/combos-plan.md`, `docs/source-ab-plan.md`, `docs/source-cd-proposal.md`, `docs/bearing-system-plan.md`, `docs/waist-more-plan.md`, `docs/cross-counter-plan.md`.
-- 기록: `docs/stage-n.md`(N의 구현 기록과 한계), `docs/physics-audit.md`(물리 점검이 재는 것), `docs/spar.md`(스파링 페이지), `docs/pending-catalog.md`(옛 미결 카탈로그의 기획; 파기 후보).
+- 기록: `docs/stage-n.md`(N의 구현 기록과 한계), `docs/physics-audit.md`(물리 점검이 재는 것), `docs/spar.md`(스파링 페이지). 옛 미결 카탈로그의 기획 `docs/pending-catalog.md`는 2026-11-28에 지움(git 이력: `git show d34913f:pixel-boxer/docs/pending-catalog.md`).
 - `docs/game-sketch.md`: 게임 시스템의 스케치(선수 생활의 칩 서른 장, 백·흑 주사위). 기획이 아니다.

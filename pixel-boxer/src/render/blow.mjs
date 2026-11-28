@@ -76,6 +76,7 @@
 import * as M from '../rig/m3.mjs';
 import { RADIUS } from '../rig/body.mjs';
 import { toWorld } from '../anim/pose.mjs';
+import { SPARK_BLUE } from './renderer.mjs';
 
 export const FX = {
   head: 0.115,
@@ -259,8 +260,11 @@ export function blow(fx, e, struck) {
   return n;
 }
 
+// (a block's sparks: white and the canvas's blue, the blue in entries of their own (renderer.mjs LOOSE), not the canvas's, so
+// that they stay blue on the pit's concrete floor; they are drawn with the floor's colours)
+export const BLOCK_SPARKS = [38, SPARK_BLUE[1], SPARK_BLUE[0]];
 export function met(fx, e) {
-  if (e.type === 'block') fx.sparks(e.at, 4, [38, 25, 24], 2.5, e.dir);
+  if (e.type === 'block') fx.sparks(e.at, 4, BLOCK_SPARKS, 2.5, e.dir);
   else if (e.type === 'parry') fx.sparks(e.at, 14, [38, 38, 39, 40], 5);
 }
 

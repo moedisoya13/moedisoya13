@@ -1,5 +1,6 @@
-/* The other corner. He reads the same state the picture is drawn from and works the same controls: closes to range, circles,
-   throws in bursts, and answers what he sees coming some of the time. The techniques his fighter carries (game/techniques.mjs)
+/* The other corner. He reads the same state the picture is drawn from and works the same controls: waits just outside the
+   other man's jab and steps in to throw his bursts, circles, keeps off the ropes and minds his health (the feet and the health
+   a boxer's head has: brain.mjs footwork, HURT), and answers what he sees coming some of the time. The techniques his fighter carries (game/techniques.mjs)
    come in where they do for a boxer's head (brain.mjs), with his level's numbers where a head has a sheet and a plan: his
    parry, guard and slip for the shares of his answers, his counter for his eye for an opening, his iq for his sense.
      const rival = createRival(level, o?)        level: one of LEVELS; o.rehearse: as brain.mjs createBrain
@@ -7,6 +8,8 @@
 import { MOVES } from '../anim/moves.mjs';
 import { random, incoming } from './bout.mjs';
 import { TECHNIQUES, memory, observe, situation, answerOf, counterOf, openingOf, comboOf, goingOf, bodyOf } from './techniques.mjs';
+// (his feet, his health and the ropes, the way a boxer's head has them: brain.mjs)
+import { SPACE, HURT, hurtOf, hurtEager, footwork } from './brain.mjs';
 
 export const LEVELS = {
   novice: { guard: 0.25, parry: 0.1, slip: 0.1, eager: 0.45, counter: 0.5, iq: 0.25, rest: [0.9, 1.7], bursts: [['jab'], ['jab', 'jab'], ['power'], ['jab', 'power']] },
@@ -16,7 +19,7 @@ export const LEVELS = {
 const RANGE = 1.0;
 
 export function createRival(level, o) {
-  return { level: LEVELS[level] || LEVELS.contender, rest: 1, burst: [], next: 0, circle: 1, circleFor: 1.5, answer: null, seen: null, hold: 0, mem: memory(), used: null, holding: null, tried: null, rests: 0, going: null, rehearse: !!(o && o.rehearse) };
+  return { level: LEVELS[level] || LEVELS.contender, rest: 1, burst: [], next: 0, circle: 1, circleFor: 1.5, answer: null, seen: null, hold: 0, mem: memory(), used: null, holding: null, tried: null, rests: 0, going: null, inFor: 0, guardUp: false, guardFor: 0, ropeSide: 0, pivotAt: 0, rehearse: !!(o && o.rehearse) };
 }
 
 export function think(rival, bout, dt) {
@@ -101,20 +104,31 @@ export function think(rival, bout, dt) {
     if (!rival.burst.length) (rival.rest = L.rest[0] + random(bout) * (L.rest[1] - L.rest[0])), rival.rests++;
     return input;
   }
-  // footwork: close to range, hold it, circle
-  const drift = far > RANGE + 0.1 ? 1 : far < RANGE - 0.16 ? -0.8 : 0;
+  // ready for his next burst: whether he goes for it (once each time he is ready; less when he is hurt), and then in to start it
+  const health = hurtOf(me);
+  if (!rival.burst.length && rival.rest <= 0 && rival.inFor <= 0 && !me.action && me.stun <= 0) {
+    if (random(bout) < L.eager * hurtEager(health)) rival.inFor = SPACE.go;
+    else rival.rest = 0.3 + random(bout) * 0.5;
+  }
+  if (rival.inFor > 0 && (rival.inFor -= dt) <= 0) rival.rest = 0.55;
+  // footwork: in to start it, or out to wait just outside his jab (brain.mjs SPACE), and round; the ropes allowed for
   // (he circles slowly: the camera swings with the pair of them, and the player's stick is the camera's)
-  input.move = [to[0] * drift + across[0] * rival.circle * 0.2, to[1] * drift + across[1] * rival.circle * 0.2];
-  const going = rival.burst.length ? null : goingOf(s);
+  const goingIn = rival.inFor > 0;
+  Object.assign(input, footwork(bout, 1, rival, goingIn ? SPACE.step : Math.max(RANGE, SPACE.wait) + HURT.range * health.hurt, 0.2, goingIn));
+  // (hurt, he keeps his hands up while he waits, for a while at a time)
+  if (health.hurt > 0 && !rival.burst.length) {
+    if ((rival.guardFor -= dt) <= 0) (rival.guardUp = random(bout) < HURT.cover * health.hurt), (rival.guardFor = 0.35 + random(bout) * 0.5);
+    if (rival.guardUp && !input.away) input.cover = true;
+  }
+  const going = rival.burst.length || input.away ? null : goingOf(s);
   if (going) Object.assign(input, going, { cover: false });
-  if (!rival.burst.length && rival.rest <= 0 && far < MOVES.jab.reach - 0.05 && !me.action && me.stun <= 0) {
-    if (random(bout) < L.eager) {
-      rival.burst = L.bursts[Math.floor(random(bout) * L.bursts.length)].slice();
-      // (one he would start with a power punch may be a technique's instead: techniques.mjs, combination)
-      const tech = rival.burst[0] === 'power' ? comboOf(s) : null;
-      if (tech) rival.burst = tech;
-      rival.next = 0;
-    } else rival.rest = 0.3 + random(bout) * 0.5;
+  if (goingIn && far < SPACE.start && !me.action && me.stun <= 0) {
+    rival.inFor = 0;
+    rival.burst = L.bursts[Math.floor(random(bout) * L.bursts.length)].slice();
+    // (one he would start with a power punch may be a technique's instead: techniques.mjs, combination)
+    const tech = rival.burst[0] === 'power' ? comboOf(s) : null;
+    if (tech) rival.burst = tech;
+    rival.next = 0;
   }
   return input;
 }

@@ -50,7 +50,7 @@
      warpOf(style, frames)   a clip's frames ({ events } each, 60 a second) played at true speed with the brilliant slow in
                            it: { span (real seconds), at(u) (the frame at u real seconds), pace(u) }, or null if it has none */
 import * as M from '../rig/m3.mjs';
-import { met } from './blow.mjs';
+import { met, BLOCK_SPARKS } from './blow.mjs';
 import { MOVES } from '../anim/moves.mjs';
 
 export const STYLES = {
@@ -225,7 +225,7 @@ export function createGuard(style) {
           if (e.type === 'parry') out.white = whiteOf(style);
         } else if (A === 'keep-no-white') {
           // (today's call, the same dice in the same order, the colours without their white)
-          if (e.type === 'block') fx.sparks(e.at, 4, noWhite([38, 25, 24]), 2.5, e.dir);
+          if (e.type === 'block') fx.sparks(e.at, 4, noWhite(BLOCK_SPARKS), 2.5, e.dir);
           else fx.sparks(e.at, 14, noWhite([38, 38, 39, 40]), 5);
         } else if (e.type === 'block') block(e, men, own, A === 'lines-sparks', out, fx);
         else parry(e, men, own, A === 'lines-sparks');

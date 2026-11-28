@@ -6,7 +6,7 @@
      CARDS      the cards, in order. A card is one question (its id is the answer's key) or a note (kind: 'note', no question):
                 { id, group, title, state (what it is now; `code` and **strong** marks), more (the long text, folded), list
                 (lines), links ([{ href, say }]), clips (a group of src/open.clips.mjs: the builds side by side), old (true: the
-                item's own cards from the old catalogue, src/pending.data.mjs, played by src/pending.mjs), opts ([[value, label,
+                item's own cards from the old catalogue, src/open.old.data.mjs, played by src/open.old.mjs), opts ([[value, label,
                 what it means]]), star (the value recommended; '' for none), why (the reason), memo (false: no memo), multi
                 (true: several values), follow ({ 'value[,value]': [question] }: opened on the same card by that answer; a
                 question { id, title, note, opts, star, multi, memo }) }. Carried items keep the old ids and option ids.
@@ -15,7 +15,7 @@
      STORE, SEND, MODELS, EFFORTS  where the answers are kept and where 제출 sends them
    The answers: picks { question id: value ('a,b' for several) }, notes { question id: text }. A question counts only once
    picked: ★ is the default the page recommends, never an answer. */
-import { ITEMS } from './pending.data.mjs';
+import { ITEMS } from './open.old.data.mjs';
 
 export const STORE = { doc: 'picks/open', local: 'open-catalog.picks' };
 // (page: this page's address once it is published, for the new session's prompt; empty until the coordinator sets it)
@@ -33,7 +33,7 @@ export const MODELS = [['claude-opus-5-5', 'Opus 5.5'], ['claude-fable-5-2', 'Fa
 export const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'];
 
 /* On the pages the two branches of grades 4 and 5 read L (명, clean) and D (암, dirty); the old data keeps 명 and 암. The same
-   rule as src/pending.mjs asLD (which writes its page when imported and so cannot lend it). */
+   rule as src/open.old.mjs asLD (which writes its cards when imported and so cannot lend it). */
 export function asLD(s) {
   const after = { L: { 는: '은', 와: '과', 가: '이', 를: '을' }, D: { 은: '는', 과: '와', 이: '가', 을: '를' } },
     swap = (ld, j = '') => ld + (after[ld][j] || j);
@@ -497,7 +497,7 @@ const DECIDED_NEW = [
   { id: 'audit-10', title: '새 세션의 가벼운 자체 점검 — 버그와 게임성', said: '승인 (10회, 구현 쪽 모델 · high, 읽기만; 재현한 것만 목록으로, 고칠지는 목록을 보고 정함)', at: '2026-11-25', how: 'chat' }
 ];
 
-/* ---- groups 2-4: the old catalogue's open items (src/pending.data.mjs), tightened: a long state is cut to SHORT here, the
+/* ---- groups 2-4: the old catalogue's open items (src/open.old.data.mjs), tightened: a long state is cut to SHORT here, the
    whole of it kept under 자세히 */
 const SHORT = {
   'fx-defence-amount': '지금 막음은 불꽃 4개(흰색 · 파랑), 패리는 불꽃 14개와 화면 흰빛, 피하기 · 숄더 롤 · 커버는 그림이 없습니다. 제안: 방어는 선과 작은 파문(막은 충격량에 비례, 잽의 타격보다 작게). 아래는 같은 녹화를 선택지마다 그린 것.',
@@ -530,10 +530,10 @@ const OLD_DB = { 'cleanup-old-artifacts': 'approve', 'cleanup-old-session': 'app
 const isOpen = (i) => !i.decided && !OLD_DB[i.id];
 // (what a carried card of the disposals removes, and a note a carried item now needs)
 const ADDED = {
-  'cleanup-fx-versions': '이펙트는 정해졌습니다(11-22: 입자는 지금 것, 파문은 A). 지울 것: `src/fxlab.mjs`에서 쓰지 않는 버전 값. “타격 이펙트 시안” 아티팩트는 아래 따로(`del-art-fxlab`).',
-  'cleanup-fx-sweat': '지울 것: `src/render/fx.mjs`의 함수 `sweat()` 하나(지우기 전에 부르는 곳을 `grep`).',
+  'cleanup-fx-versions': '이펙트는 정해졌습니다(11-22: 입자는 지금 것, 파문은 A). 쓰지 않는 버전 값은 `src/fxlab.mjs`가 아니라 옛 카탈로그의 데이터(`src/pending.data.mjs`의 `VERSIONS` · `MIST` · `FX_SCENES`)에 있었고, **11-28에 옛 카탈로그 파일과 함께 지웠습니다**(`del-code-pending-old`). `fxlab`의 두 열(전 · 확정)은 둘 다 보이는 것이라 둡니다. “타격 이펙트 시안” 아티팩트는 아래 따로(`del-art-fxlab`).',
+  'cleanup-fx-sweat': '**11-28에 지웠습니다**: `src/render/fx.mjs`의 함수 `sweat()` 하나(지우기 전에 `grep`로 부르는 곳 0을 확인).',
   'cleanup-limp-out': '지울 것: 한꺼번에 풀리는 림프 `out`과 그것을 쓰는 시험의 줄(시험을 먼저 바꿈).',
-  'cleanup-fxlab-now': '지울 것: `src/fxlab.mjs`의 “지금” 비교 열.'
+  'cleanup-fxlab-now': '`src/fxlab.mjs`의 “지금” 비교 열은 이미 없습니다(3dc3c39에서 “전” · “확정” 두 열로 바뀜). 11-28에 확인만 했고 지울 것이 없었습니다.'
 };
 function carried(item, group) {
   const long = item.state.length > 180 || !!SHORT[item.id];
@@ -617,7 +617,7 @@ const DISPOSE = [
     id: 'del-art-pending-old',
     group: 'dispose',
     title: '옛 미결 카탈로그 아티팩트',
-    state: '지울 것: 아티팩트 하나와 그 db(`decisions/<항목>` 문서들). 이 페이지가 대신합니다. 그 결정은 아래 “정해진 것”과 `src/pending.data.mjs`에 남아 있습니다. 파일(`pending.html` 등)은 아래 따로.',
+    state: '지울 것: 아티팩트 하나와 그 db(`decisions/<항목>` 문서들). 이 페이지가 대신합니다. 그 결정은 아래 “정해진 것”과 `src/open.old.data.mjs`에 남아 있습니다. 파일(`pending.html` 등)은 아래 따로(11-28에 지움).',
     links: [{ href: 'https://claude.ai/artifact/UEM19aKseUxnixVYkrnAzd', say: '옛 미결 카탈로그' }],
     opts: APPROVE,
     star: 'hold'
@@ -626,7 +626,7 @@ const DISPOSE = [
     id: 'del-art-fxlab',
     group: 'dispose',
     title: '타격 이펙트 시안 아티팩트',
-    state: '지울 것: 아티팩트 하나(“전” · “확정” 두 열, 장면 여섯). 이펙트는 정해졌습니다. 파일 `fxlab.html` · `src/fxlab.mjs`는 그대로(아래 `cleanup-fxlab-now`가 그 안의 열).',
+    state: '지울 것: 아티팩트 하나(“전” · “확정” 두 열, 장면 여섯). 이펙트는 정해졌습니다. 파일 `fxlab.html` · `src/fxlab.mjs`는 그대로(그 안의 “지금” 열은 이미 없음: `cleanup-fxlab-now`).',
     links: [{ href: 'https://claude.ai/artifact/5tZd5Xyp7iiRxCuftpNwL6', say: '타격 이펙트 시안' }],
     opts: APPROVE,
     star: 'hold'
@@ -635,7 +635,7 @@ const DISPOSE = [
     id: 'del-code-pending-old',
     group: 'dispose',
     title: '옛 미결 카탈로그의 파일',
-    state: '지울 것: `pending.html`, `src/pending.mjs` · `src/pending.data.mjs` · `src/pending.numbers.mjs`, `tools/pending.mjs`, `tests/pending.test.mjs`, `docs/pending-catalog.md`, 답이 난 항목만의 클립(`src/clips/`의 그 파일과 `src/clips.data.mjs`의 줄). **이 페이지가 옛 카드를 `src/pending.mjs`로 돌리는 동안은 둡니다**: 승인하시면 그 카드들을 새 녹화로 옮긴 뒤에 지웁니다.',
+    state: '**11-28에 지웠습니다**: `pending.html`, `src/pending.mjs` · `src/pending.data.mjs` · `src/pending.numbers.mjs`, `tools/pending.mjs`, `tests/pending.test.mjs`, `docs/pending-catalog.md`, 정해진 항목만 쓰던 클립 29개(`src/clips/`의 그 파일과 `src/clips.data.mjs`의 줄, 그 클립만의 출처 일곱). **이 페이지가 쓰던 것은 먼저 옮겼습니다**: 옛 카드를 돌리는 부분은 `src/open.old.mjs`로, 옛 항목의 글 · 카드 · 기대 수치는 `src/open.old.data.mjs`로, 그 시험은 `tests/open-old.test.mjs`로. `src/replay.mjs`(게임 · 모션 카탈로그 · 스파링 · `fxlab` · 리뷰가 씀)와 남은 클립 37개(`src/clips.data.mjs`, `src/clips/`: 이 페이지의 옛 카드)는 둡니다.',
     opts: APPROVE,
     star: 'hold'
   },
@@ -643,7 +643,7 @@ const DISPOSE = [
     id: 'del-ref-video',
     group: 'dispose',
     title: '바닥 고리 비교 영상 (`docs/ref/ground-shake-*`)',
-    state: '지울 것: `docs/ref/ground-shake-back-bare` · `back-light` · `back-shake` · `front-light` · `front-shake`의 `.webm` · `.jpg`와 `game-light` · `game-shake`의 `.jpg`(12개). **`fx-ground-shake`(기획의 기본값)가 정해진 뒤에만**: 그 카드가 이 영상을 씁니다.',
+    state: '**11-28에 지웠습니다**: `docs/ref/ground-shake-back-bare` · `back-light` · `back-shake` · `front-light` · `front-shake`의 `.webm` · `.jpg`(10개)와 `game-light` · `game-shake`의 `.jpg`(2개), 모두 12개, 그리고 그것을 부르던 옛 카드(`fx-ground-shake`의 비교 네 묶음). `fx-ground-shake`는 11-28에 “픽셀 진동”으로 정해졌습니다. `docs/ref/ground-ring-game-1.jpg` · `-2.jpg`는 이 목록에 없어 남깁니다(어느 페이지에도 나오지 않음).',
     opts: APPROVE,
     star: 'hold'
   }

@@ -3,15 +3,17 @@
    supplies it), and the list of files the page loads, with the media type the host cannot guess from `.mjs`.
      node tools/artifact.mjs <out.html>                                  the game
      node tools/artifact.mjs catalog.html src/catalog.mjs <out.html>     the footwork catalogue
-     node tools/artifact.mjs pending.html src/pending.mjs <out.html>     the pending catalogue (or fxlab.html src/fxlab.mjs)
+     node tools/artifact.mjs fxlab.html src/fxlab.mjs <out.html>         the effect study
      node tools/artifact.mjs spar.html src/spar.mjs <out.html>           the one-round sparring (its outfits' splats with it)
      node tools/artifact.mjs sfx.html src/sfx.mjs <out.html>             the sounds' audition page (its modules alone: no assets)
-     node tools/artifact.mjs open.html src/open.mjs <out.html>           the open-questions catalogue (the old catalogue's player
-                                                                         and its cards with it, and every recording of
+     node tools/artifact.mjs open.html src/open.mjs <out.html>           the open-questions catalogue (the old catalogue's cards,
+                                                                         src/open.old.mjs, with it, and every recording of
                                                                          src/open.clips.mjs: docs/ref/open/<id>.webm and .jpg)
      ... --since <commit>                                                the same, and the files map printed holds only the
                                                                          files changed since that commit, and those gone
-                                                                         since then as null (for publishing again)
+                                                                         since then as null (for publishing again); the
+                                                                         page's own .html too when it changed (so {} means
+                                                                         truly nothing changed)
    Either way the files map is printed as JSON: the modules (those imported, those loaded later by import('./...'), and a
    worker's, new URL('./...', import.meta.url)), the assets (a page of boxers alone, without the ring: the catalogues and the
    effect study; the game and the sparring with both places, the ring with its ropes and the pit with its crowd; the
@@ -73,7 +75,7 @@ async function filesOf(read) {
     for (const m of text.matchAll(/docs\/ref\/(?:open\/)?[\w-]+\.(?:jpg|webm)/g)) sheets.add(m[0]);
     // (and an outfit a module dresses a card in by name, its outfits' list: the motion catalogue's new samples, src/samples.data.mjs)
     if (/\bwear: /.test(text)) for (const w of outfits) if (text.includes(`'${w}'`)) wears.add(w);
-    // (and a module it loads only when it is wanted, import('./...'): the pending catalogue's recorded clips, src/clips/index.mjs;
+    // (and a module it loads only when it is wanted, import('./...'): the old catalogue's recorded clips, src/clips/index.mjs;
     // and a worker's, new URL('./...', import.meta.url): the sparring's planner)
     for (const m of text.matchAll(/(?:from |import\()'(\.[^']+)'/g)) follow(path.posix.join(path.posix.dirname(file), m[1]));
     for (const m of text.matchAll(/new URL\('(\.[^']+\.mjs)', import\.meta\.url\)/g)) follow(path.posix.join(path.posix.dirname(file), m[1]));
@@ -91,7 +93,7 @@ async function filesOf(read) {
   const wear = /spar/.test(entry) ? Object.values(manifest.wear || {}).map(w => w.file.replace(/\.splats\.txt$/, '')) : [];
   // (and the places a bout is fought in, the game's and the sparring's: the ring and its ropes, the pit and its crowd)
   const places = ['ring', 'ropes', 'pit', 'crowd'].filter(k => manifest[k]).map(k => manifest[k].file.replace(/\.splats\.txt$/, ''));
-  for (const part of /catalog|pending|fxlab|open/.test(entry) ? ['boxer'] : ['boxer', ...places, ...wear]) files[`assets/${part}.splats.txt`] = `assets/${part}.splats.txt`;
+  for (const part of /catalog|fxlab|open/.test(entry) ? ['boxer'] : ['boxer', ...places, ...wear]) files[`assets/${part}.splats.txt`] = `assets/${part}.splats.txt`;
   for (const w of [...wears].sort()) files[`assets/boxer-${w}.splats.txt`] = `assets/boxer-${w}.splats.txt`;
   for (const sheet of [...sheets].sort()) files[sheet] = sheet;
   return files;
@@ -107,10 +109,14 @@ if (since) {
         return null;
       }
     }),
-    changed = new Set(git('diff', '--name-only', '--relative', since, '--', ...Object.keys(files)).split('\n').filter(Boolean)),
+    changed = new Set(git('diff', '--name-only', '--relative', since, '--', pageFile, ...Object.keys(files)).split('\n').filter(Boolean)),
     out = {};
   for (const [k, v] of Object.entries(files)) if (changed.has(k) || !(k in then)) out[k] = v;
   for (const k of Object.keys(then)) if (!(k in files)) out[k] = null;
+  /* (the page's own .html: the page made from it is what is published as file_path, never a file of the map; but a change to
+     it alone must not print {}, “nothing changed”: so it is named in the map, the original document under its own path,
+     which does no harm published beside the page. Also when the page is new since that commit.) */
+  if (changed.has(pageFile) || here(pageFile) !== null && (() => { try { git('cat-file', '-e', `${since}:./${pageFile}`); return false; } catch { return true; } })()) out[pageFile] = pageFile;
   files = out;
 }
 console.log(JSON.stringify(files, null, 1));

@@ -33,6 +33,7 @@ import { punchName, labelOf, saidOf, shortOf } from './spar/names.mjs';
 import { createKnockdown } from './spar/knock.mjs';
 import { arenaOf, loadArena, createArena } from './world/stage.mjs';
 import { ARENAS } from './world/pit.mjs';
+import { watchLost } from './lost.mjs';
 
 const DT = 1 / 60;
 const $ = id => document.getElementById(id);
@@ -111,8 +112,10 @@ function start(data) {
 }
 
 function run({ manifest, get }, o) {
-  const canvas = $('view'),
-    R = createRenderer(canvas),
+  const canvas = $('view');
+  // (the graphics context lost: a notice and a reload button over the picture, not a blank white canvas: src/lost.mjs)
+  watchLost(canvas, { note: '다시 불러오면 같은 대련 번호(주소의 #s-…)로 다시 엽니다.' });
+  const R = createRenderer(canvas),
     audio = createAudio(),
     bind = fk(guardPose());
   const fx = [createFx(), createFx(), createFx()],
@@ -158,7 +161,8 @@ function run({ manifest, get }, o) {
     falls = [null, null],
     ground = null,
     again = null, // what a knockdown's replay throws again, in its own time
-    resultAt = null; // (the picture's time the result was shown at)
+    resultAt = null, // (the picture's time the result was shown at)
+    linked = null; // (the round a link named, waiting for 다시 보기 to play it; gone once any round is arranged)
   const cam = { target: [0, 0.8, 0], yaw: 0, pitch: 0.5, dist: 8 },
     shake = { amp: 0, t: 0 },
     stats = { frames: 0, ms: 0 },
@@ -251,7 +255,9 @@ function run({ manifest, get }, o) {
       $('hp' + i).style.transform = `scaleX(${Math.max(0, f.hp) / RULES.hp})`;
       $('hpn' + i).textContent = phase === 'rest' || phase === 'wait' ? '' : String(Math.max(0, Math.ceil(f.hp)));
     });
-    $('time').textContent = clock(phase === 'play' || phase === 'over' ? bout.t : 0);
+    // (the round's clock stands at the knockdown once he is down, as the result says it: the bout is stepped on under the
+    // fall and its replay and the result)
+    $('time').textContent = clock(phase === 'over' ? bout.overAt : phase === 'play' ? bout.t : 0);
   }
   const show = (id, on) => $(id).classList.toggle('on', on);
   /* ---- the four lanes, drawn each picture: red's techniques, red's footwork, blue's footwork, blue's techniques; time runs
@@ -367,7 +373,7 @@ function run({ manifest, get }, o) {
   function note() {
     const done = plan.rails.reduce((n, r) => n + r.filter(b => ACTS.includes(b.kind) && b.from < k).length, 0),
       walked = plan.feet.reduce((n, r) => n + r.filter(b => b.from < k).length, 0),
-      text = `약속 → 기술 ${done}/${plan.count || 0} · 발 ${walked}/${plan.walked || 0}${plan.done ? '' : '…'}`;
+      text = `기술 ${done}/${plan.count || 0} · 발 ${walked}/${plan.walked || 0}${plan.done ? '' : '…'}`;
     if (text !== noteAt) $('railnote').textContent = noteAt = text;
   }
   // the whole of it, the two men side by side in the order things start: what, and what came of it; footwork smaller
@@ -417,6 +423,8 @@ function run({ manifest, get }, o) {
   }
   function newRound(seed) {
     audio.unlock && sound && audio.unlock();
+    // (a round arranged, whichever: the link's waiting round is not 다시 보기's any more)
+    if (linked !== null) (linked = null), ($('againbtn').textContent = '다시 보기');
     arrange(seed);
     try {
       history.replaceState(null, '', '#s-' + seed);
@@ -433,6 +441,7 @@ function run({ manifest, get }, o) {
     named();
   }
   function replay() {
+    if (linked !== null) return newRound(linked);
     if (!plan || !plan.men) return;
     if (ready()) begin();
   }
@@ -689,12 +698,18 @@ function run({ manifest, get }, o) {
   $('rails').addEventListener('click', openFull);
   $('rails').addEventListener('keydown', e => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), openFull()));
   addEventListener('keydown', e => e.key === 'Escape' && $('full').classList.contains('on') && (show('full', false), $('rails').focus()));
-  /* (another arena: drawn at once, and a round under way arranged again there, from its start, the same seed) */
+  /* (another arena: drawn at once, and a round under way arranged again there, from its start, the same seed). Only the
+     latest choice is taken: a load asked for before it that comes in after it is dropped (a phone's slow network), so the
+     page is always in what the select shows. The same for the outfit. */
+  let arenaAsk = 0,
+    wearAsk = 0;
   $('arena').value = o.arena;
   $('arena').addEventListener('change', () => {
-    const name = arenaOf($('arena').value);
+    const name = arenaOf($('arena').value),
+      ask = ++arenaAsk;
     placed(name)
       .then(A => {
+        if (ask !== arenaAsk) return;
         arena = A;
         if (sound) audio.ambience(A.crowd ? 'pit' : null);
         store.set('spar.arena', name);
@@ -704,9 +719,10 @@ function run({ manifest, get }, o) {
   });
   $('wear').value = wear;
   $('wear').addEventListener('change', () => {
-    const w = $('wear').value;
+    const w = $('wear').value,
+      ask = ++wearAsk;
     dressed(w)
-      .then(() => ((wear = w), store.set('spar.wear', w)))
+      .then(() => ask === wearAsk && ((wear = w), store.set('spar.wear', w)))
       .catch(err => console.error(err));
   });
   addEventListener('hashchange', () => {
@@ -726,7 +742,9 @@ function run({ manifest, get }, o) {
   }
   globalThis.__spar = { get plan() { return plan; }, get bout() { return bout; }, get phase() { return phase; }, get k() { return k; }, stats, cam, newRound, replay, tick: ms => frame((clockAt += ms)) };
 
-  Promise.all([dressed(''), wear ? dressed(wear) : null, placed(o.arena).then(A => (arena = A))]).then(() => {
+  // (the first arena, unless another has been chosen and come in meanwhile)
+  const first = arenaAsk;
+  Promise.all([dressed(''), wear ? dressed(wear) : null, placed(o.arena).then(A => (!arena || first === arenaAsk) && (arena = A))]).then(() => {
     pose(true);
     hud();
     $('loading').remove();
@@ -736,12 +754,7 @@ function run({ manifest, get }, o) {
       $('startbtn').textContent = '시작';
       $('againbtn').disabled = false;
       $('againbtn').textContent = `#${o.seed} 보기`;
-      $('againbtn').onclick = e => {
-        e.stopImmediatePropagation();
-        $('againbtn').onclick = null;
-        $('againbtn').textContent = '다시 보기';
-        newRound(o.seed);
-      };
+      linked = o.seed;
     }
     if (!capture) requestAnimationFrame(frame);
     else frame((clockAt = 1));

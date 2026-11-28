@@ -153,12 +153,15 @@ function suit(k, up) {
     tube('Neck1', [0, -0.05, 0], [0, 0.08, 0], 0.07, 0.068, MAT.cloth);
     S.torus(at('Chest', [0, 0.18, -0.012]), 0.08, 0.036, MAT.cloth, opt('Chest', { ax: tilted('Chest', 16) }));
     head();
-    const hood = S.ball(at('Head', [0, 0.118, -0.012]), [0.14, 0.158, 0.156], MAT.cloth, opt('Head', { hold: true })),
-      face = S.ball(at('Head', [0, 0.085, 0.165]), [0.094, 0.118, 0.11], MAT.cloth, opt('Head', { hold: true }));
+    /* (its front edge 3 cm behind the face's: seen from the side, as the game's camera mostly sees the men, the brow, the nose
+       and the chin stand out of it, where before it reached as far forward as the face and hid it: the user, 2026-11-28,
+       card a-hood-face, a pixel of face a man) */
+    const hood = S.ball(at('Head', [0, 0.118, -0.04]), [0.14, 0.158, 0.15], MAT.cloth, opt('Head', { hold: true })),
+      face = S.ball(at('Head', [0, 0.085, 0.15]), [0.1, 0.12, 0.11], MAT.cloth, opt('Head', { hold: true }));
     S.join('cut', hood, face, opt('Head', { r: 0, ax: undefined, inner: MAT.lining.r }));
     ball('Head', [0, 0.165, -0.085], [0.1, 0.1, 0.095], MAT.cloth); // its crown, a little back
     ball('Head', [0, -0.02, -0.06], [0.11, 0.08, 0.095], MAT.cloth); // down the back of the neck
-    ball('Head', [0, 0.198, 0.112], [0.08, 0.018, 0.03], MAT.cloth); // the peak
+    ball('Head', [0, 0.198, 0.082], [0.08, 0.018, 0.03], MAT.cloth); // the peak
     ball('Chest', [0, 0.165, -0.085], [0.13, 0.06, 0.07], MAT.cloth); // where it is sewn on, over the shoulders behind
   } else {
     // the hood down, bunched behind the neck

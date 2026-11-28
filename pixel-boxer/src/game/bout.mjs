@@ -72,7 +72,9 @@ import { toWorld } from '../anim/pose.mjs';
 import { createChain, stepChain, effectiveMass, preload } from '../phys/chain.mjs';
 import * as P from '../anim/pose.mjs';
 import { RING } from '../world/ring.mjs';
-import { pressOf as ropesPressed, ROPE, SIDES } from '../world/ropes.mjs';
+import { pressOf as ropesPressed, ROPE, SIDES, BODY } from '../world/ropes.mjs';
+import { push as edgePush, jointR } from '../world/edge.mjs';
+import { NAMES } from '../rig/skeleton.mjs';
 import { arenaOf } from '../world/pit.mjs';
 import { LEN } from '../rig/solve.mjs';
 import { body, blank, fatigue, COST, loadout } from './profile.mjs';
@@ -1441,6 +1443,7 @@ function dashLeft(f, other) {
   return [gx * far, gz * far];
 }
 // solve boxer i for this step, and find his gloves and head on the canvas
+const EDGE_SLIDE = 4; // metres a second at the most that a man down is moved in off the edge (world/edge.mjs)
 function solvePose(bout, f, i, dt) {
   const pose = f.animator.update(viewOf(bout, i), dt);
   // (a man knocked down takes his place with him as he slides: anim/animator.mjs)
@@ -1448,6 +1451,24 @@ function solvePose(bout, f, i, dt) {
     const d = M.app(M.ry((f.yaw * 180) / Math.PI), [pose.drift[0], 0, pose.drift[1]]);
     f.x += d[0];
     f.z += d[2];
+  }
+  /* (and a man down, or getting up off the canvas, is kept inside the ropes, off the posts and pads, inside the pit's walls,
+     every joint of him as a ball: his place moved in under him as far as the deepest of them went past: world/edge.mjs) */
+  if (f.down || (f.action && MOVES[f.action.name].floor)) {
+    const lying = { R: M.ry((f.yaw * 180) / Math.PI), p: [f.x, 0, f.z] },
+      joint = n => toWorld(lying, pose.at[n], pose.stretch),
+      neck = joint('Neck1'),
+      head = joint('Head'),
+      up = M.sub(head, neck),
+      // (the middle of his head as the bout keeps it, f.points.head, beyond the joint it turns on)
+      skull = M.add(head, M.scale(up, 0.1 / (Math.hypot(up[0], up[1], up[2]) || 1))),
+      [dx, dz] = edgePush(bout.arena, [...NAMES.map(n => [joint(n), jointR(n)]), [skull, BODY.find(([n]) => n === 'head')[1]]], false),
+      // (no faster than EDGE_SLIDE: the canvas slides him in under his fall, it does not snap him back)
+      most = EDGE_SLIDE * dt,
+      far = Math.hypot(dx, dz),
+      k = far > most ? most / far : 1;
+    f.x += dx * k;
+    f.z += dz * k;
   }
   const place = { R: M.ry((f.yaw * 180) / Math.PI), p: [f.x, 0, f.z] },
     at = name => toWorld(place, pose.at[name], pose.stretch),
@@ -1472,6 +1493,9 @@ function solvePose(bout, f, i, dt) {
     // how fast his chest is turning, docs/moves-plan-5.md §4A.4)
     LS: at('LeftArm'),
     RS: at('RightArm'),
+    // (and his knees, which meet the bottom rope: world/ropes.mjs BODY)
+    kneeL: at('LeftShin'),
+    kneeR: at('RightShin'),
     // (and his trunk: the spine from his hips to his chest, and which way his shoulders lie: game/trunk.mjs)
     ...trunk(at)
   };
@@ -2076,30 +2100,55 @@ function collars(bout, f, other, who) {
 function ropes(f, other, dt) {
   f.rope = null;
   if (f.down || !f.points || (f.action && MOVES[f.action.name].floor)) return;
-  const press = ropesPressed(f.points),
-    L = ROPE.lean;
-  let best = null;
+  const press = ropesPressed(f.points);
   SIDES.forEach(([axis, s], side) => {
     const key = axis ? 'z' : 'x',
-      knock = axis ? 'kz' : 'kx',
-      walk = axis ? 'vz' : 'vx';
+      knock = axis ? 'kz' : 'kx';
     if (press[side] > 0) {
       f[key] -= s * ROPE.k * press[side] * dt;
       if (s * f[knock] > 0) f[knock] *= -ROPE.bounce;
     }
-    const near = smooth((s * f[key] - (RULES.half - L.near)) / L.near);
+  });
+  f.rope = leanOf(f, other, press, 1);
+  /* (and where the ropes cannot give, near a corner where they are tied, and at the corner pads: his body kept off them, as it
+     was last solved and carried on as far as he has gone since: world/edge.mjs) */
+  const since = [f.x - f.px, f.z - f.pz],
+    [dx, dz] = edgePush('ring', BODY.map(([n, r]) => [f.points[n] && [f.points[n][0] + since[0], f.points[n][1], f.points[n][2] + since[1]], r]), true, ROPE.drawn.most);
+  f.x += dx;
+  f.z += dz;
+  f.x = Math.max(-RULES.half, Math.min(RULES.half, f.x));
+  f.z = Math.max(-RULES.half, Math.min(RULES.half, f.z));
+}
+
+/* (how far he leans back on what is behind him at the edge, 0..1, `scale` of it, and the way to it in his own terms:
+   { press, way } or null. His centre within ROPE.lean.near of where he must stop, his back toward it, and something putting
+   him onto it: the ropes pressed (press, per side: the ring's), his own walking, a blow carrying him there, or the other man
+   up against him from the inside) */
+function leanOf(f, other, press, scale) {
+  const L = ROPE.lean;
+  let best = null;
+  SIDES.forEach(([axis, s], side) => {
+    const key = axis ? 'z' : 'x',
+      knock = axis ? 'kz' : 'kx',
+      walk = axis ? 'vz' : 'vx',
+      near = smooth((s * f[key] - (RULES.half - L.near)) / L.near);
     if (near <= 0) return;
-    // (the way to the ropes, in his own terms: [to his left, ahead of him]; how much of it is behind him)
+    // (the way to the edge, in his own terms: [to his left, ahead of him]; how much of it is behind him)
     const way = local(f, axis ? 0 : s, axis ? s : 0),
       back = smooth((-way[1] - 0.2) / 0.6),
       inside = s * (f[key] - other[key]) > 0.25 && Math.hypot(f.x - other.x, f.z - other.z) < RULES.gap + 0.05,
-      drive = Math.max(press[side] / 0.1, (s * f[walk]) / 1, (s * f[knock]) / 0.6, inside ? 0.8 : 0),
-      k = near * back * Math.max(0, Math.min(1, drive));
+      drive = Math.max((press ? press[side] : 0) / 0.1, (s * f[walk]) / 1, (s * f[knock]) / 0.6, inside ? 0.8 : 0),
+      k = near * back * Math.max(0, Math.min(1, drive)) * scale;
     if (k > 0 && (!best || k > best.press)) best = { press: k, way };
   });
-  f.rope = best;
-  f.x = Math.max(-RULES.half, Math.min(RULES.half, f.x));
-  f.z = Math.max(-RULES.half, Math.min(RULES.half, f.z));
+  return best;
+}
+/* The pit's walls and drums give nothing (the user, 2026-11-28, card pit-lean: add): a man at them with his back to them
+   leans back toward them as he would onto the ropes, ROPE.lean.pit of it, and nothing pushes him off them */
+function walls(f, other) {
+  f.rope = null;
+  if (f.down || !f.points || (f.action && MOVES[f.action.name].floor)) return;
+  f.rope = leanOf(f, other, null, ROPE.lean.pit);
 }
 
 /* Up off the canvas, where he lies (his place turned and moved under him: anim/animator.mjs getUp), the way that fits how
@@ -2168,6 +2217,7 @@ export function step(bout, inputs, dt) {
     f.x = Math.max(-RULES.half, Math.min(RULES.half, f.x));
     f.z = Math.max(-RULES.half, Math.min(RULES.half, f.z));
     if (bout.arena === 'ring') ropes(f, f === a ? b : a, dt);
+    else walls(f, f === a ? b : a);
     // how fast the canvas really went past under him this step, ropes and the other man allowed for: what his feet walk to
     f.gx = (f.x - f.px) / dt;
     f.gz = (f.z - f.pz) / dt;

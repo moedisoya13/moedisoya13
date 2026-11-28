@@ -1,6 +1,8 @@
-/* The recorded clips of the pending catalogue: which script of which checkout each is, over which seconds of its run, and
-   what it is measured to show. tools/clips.mjs records them (src/clips/), src/pending.mjs plays them, and the items of
-   src/pending.data.mjs name them in their rows. Nothing here knows the page or the renderer.
+/* The recorded clips of the old catalogue's cards, as the open-questions catalogue still plays them: which script of which
+   checkout each is, over which seconds of its run, and what it is measured to show. tools/clips.mjs records them
+   (src/clips/), src/open.old.mjs plays them, and the items of src/open.old.data.mjs name them in their rows. Nothing here
+   knows the page or the renderer. (2026-11-28, del-code-pending-old: the clips only decided items showed went with the old
+   catalogue, and the roots only they came from.)
      ROOTS   the checkouts the clips come from, by key: what the page calls each (say), and where it was when the clips were
              recorded (where: for the person recording them again; the command takes the folder as --root key=dir). Or a
              root made from another by edits: from (the key of a root that is a folder: `now`, this checkout, or a frozen
@@ -12,18 +14,15 @@
              seconds of the run, measure (tools/clips.mjs MEASURES), of (what the measure is told: move, the punch whose
              waist is timed), defence (true: its events keep what the defence effects are drawn from, render/guard.mjs) }
    Record them all again, when the stages change (every root made by edits with it):
-     node tools/clips.mjs --write --root prem=<before M> --root pren=<before N> --root prey=<before Y and V> --root u1=<U, first round> --root u2=<U, last round> --root v1=<V, last round> --root y1=<Y, last round>
+     node tools/clips.mjs --write --root prem=<before M> --root pren=<before N> --root u2=<U, last round> --root v1=<V, last round>
    (`now` is this checkout.) */
 export const ROOTS = {
   now: { say: '지금 (게시된 동작)', where: 'this checkout' },
   prem: { say: 'M 전 (합치기 전의 동작)', where: 'before stage M was merged: git archive 8b17869 src tools' },
   pren: { say: 'N 전 (합치기 전의 동작)', where: 'before stage N was merged: git archive cd8dbe4 src tools' },
-  prey: { say: 'Y·V 전 (합치기 전의 동작)', where: 'before stages Y and V were merged: git archive bdd9347 src tools' },
-  u1: { say: 'U 1차 (첫 구현)', where: 'stage U, first round: scratchpad/wt-u/pixel-boxer (4c726b9 + its changes)' },
   u2: { say: 'U 6차 (N 없이 만든 그대로; 합치기를 멈춤 11-24)', where: 'stage U, round 6 on the head: scratchpad/pcwork/u6/pixel-boxer (0ac7c0c + the staged change of scratchpad/u3)' },
   v1: { say: 'V 6차 (N 없이 만든 그대로; 11-24 합침)', where: 'stage V, round 6 on the head: scratchpad/pcwork/v6/pixel-boxer (0ac7c0c + the staged change of scratchpad/v3)' },
-  y1: { say: 'Y 1차 (크로스 카운터의 첫 구현; 11-24 3차를 합침)', where: 'stage Y, round 1: scratchpad/pcwork/y1/pixel-boxer (ff592fa + the staged change of scratchpad/ywt)' },
-  /* (the options of the decisions, each the checkout with the one change the option is: src/pending.data.mjs, the items'
+  /* (the options of the decisions, each the checkout with the one change the option is: src/open.old.data.mjs, the items'
      own groups) */
   // inside-rule: the rule that keeps a pressed inside chain on it, at every grade, and off (game/bout.mjs RULES.insideTo)
   insideAll: { say: '지금 + 규칙을 모든 등급에 (RULES.insideTo 3 → 5)', from: 'now', edits: [{ file: 'src/game/bout.mjs', find: 'insideTo: 3', replace: 'insideTo: 5' }] },
@@ -36,43 +35,26 @@ export const ROOTS = {
   /* combo-tempo: the combination's card pressed by the clock as the head presses now (src/combos.mjs: 'clock'), its first beat
      pressed on his beat as the card's is ('tempo'), so that the two start together and only the clock between beats differs */
   clockFirst: { say: '지금 + 둘째 주먹부터 시계로 누름 (첫 주먹은 카드처럼 그의 박자에)', from: 'now', edits: [{ file: 'src/combos.mjs', find: "first = how === 'tempo' ? cue(", replace: "first = how !== 'fast' ? cue(" }] },
-  // rocked-slow: a rocked man's arms slowed only once he is rocked 0.1 and more, or 0.05 (V's anim/animator.mjs WOBBLE.slowed)
-  slowed01: { say: 'V 6차 + 느린 팔이 켜지는 정도 0.02 → 0.1 (WOBBLE.slowed)', from: 'v1', edits: [{ file: 'src/anim/animator.mjs', find: 'slowed: 0.02,', replace: 'slowed: 0.1,' }] },
-  slowed005: { say: 'V 6차 + 느린 팔이 켜지는 정도 0.02 → 0.05 (WOBBLE.slowed)', from: 'v1', edits: [{ file: 'src/anim/animator.mjs', find: 'slowed: 0.02,', replace: 'slowed: 0.05,' }] },
-  // downside-front: the hip's ligament taken up later, from 0.4 of the way (V's phys/fall.mjs LIGAMENT.from)
-  hip04: { say: 'V 6차 + 엉덩이 인대를 늦게 건다 (LIGAMENT.from 0.3 → 0.4)', from: 'v1', edits: [{ file: 'src/phys/fall.mjs', find: 'const LIGAMENT = { from: 0.3,', replace: 'const LIGAMENT = { from: 0.4,' }] },
-  /* xc-gain: the cross counter's own switch for the counter's gain (stage Y's game/bout.mjs CROSSING.counter), none. (Its
-     trade, CROSSING.through 0.5, was recorded on the late card too and threw the same: the jab lands while the cross has barely
-     started, so the cross is cut either way; no root for it.) */
-  xcNever: { say: 'Y 1차 + 카운터의 값 없음 (CROSSING.counter out → never)', from: 'y1', edits: [{ file: 'src/game/bout.mjs', find: "counter: 'out', elbow: 0.8, through: 0 }", replace: "counter: 'never', elbow: 0.8, through: 0 }" }] }
 };
 
 // (each pair is the same script, the same window, of two checkouts: what differs between them is the motion)
 const pair = (id, roots, rest) => roots.map(root => Object.assign({ id: `${id}-${root}`, root }, rest));
-// the rear hook aimed low at his left side, a legend rolling as late as it is pressed (tests/show.test.mjs, stage N)
-const WEAK = { scene: 'aimed', level: '5a', punch: 'hookR', aim: [1.2, -60], roll: 0 };
 export const CLIPS = [
   // low2-block: the grade-2 two-arm block's guard coming down after the elbow has met the body hook (close, slow), and the
   // drill with an uppercut pressed at 1.133 s (stage M's timing sweep: 0.8 s + 20 frames)
   ...pair('low2', ['prem', 'now'], { script: 'block-elbow@2', window: [0.8, 1.2], measure: 'block' }),
   ...pair('low2up', ['prem', 'now'], { script: 'block-elbow@2', change: { also: [[0.8 + 20 / 60, 'power']] }, window: [0.45, 1.6], measure: 'block' }),
-  // beckon-room: the beckon of 4암 at 1.0 m between centres (the distance of a real bout), and at the card's 1.2 m
-  ...pair('beckon10', ['now', 'u1', 'u2'], { script: 'beckon@4a', change: { him: 1.0 }, window: [0.4, 2.2], measure: 'reach' }),
-  ...pair('beckon12', ['now', 'u2'], { script: 'beckon@4a', change: { him: 1.2 }, window: [0.4, 2.2], measure: 'reach' }),
-  // hookr-bound: the rear hook of grade 3 and the counter out of 4명's shoulder roll, with the waist and before it
-  ...pair('hookr', ['pren', 'now'], { script: 'hookR@3', window: [0.45, 1.3], measure: 'turning', of: { move: 'hookR' } }),
-  ...pair('rollc', ['pren', 'now'], { script: 'rollCounter@4m', window: [0.75, 1.55], measure: 'thrown' }),
+  // hookr-bound (decided): the counter out of 4명's shoulder roll, kept for the defence effects' samples (fx-defence-amount)
+  ...pair('rollc', ['now'], { script: 'rollCounter@4m', window: [0.75, 1.55], measure: 'thrown' }),
   // shrug-view: 4암's shrug as stage U made it (played from two cameras)
   { id: 'shrug-u2', root: 'u2', script: 'shrug@4a', window: [1.15, 2.2], measure: 'spread' },
   // jump-watch: three frames of the engine as it is that stage M's watched check counts (each played at full speed and slow)
   { id: 'jump-guard', root: 'now', script: 'guard@5a', window: [2.05, 2.4], measure: 'jump' },
   { id: 'jump-onetwo', root: 'now', script: 'onetwo@5a', window: [0.9, 1.3], measure: 'jump', of: { who: 1 } },
   { id: 'jump-cross', root: 'now', script: 'crossArm@5m', window: [1.05, 1.45], measure: 'jump' },
-  // crossarm-weak: the rear hook at a legend's cross-arm guard, rolled as it is pressed
-  ...pair('weak', ['pren', 'now'], { script: WEAK, window: [0.6, 1.3], measure: 'taken' }),
 
   /* ---- the options of the decisions still open, each recorded from code that does what the option says (the items' groups:
-     src/pending.data.mjs OPTIONS) */
+     src/open.old.data.mjs) */
   // inside-rule: the power button pressed three times 0.3 s apart from 0.64 m, at a pro's and at a great clean one's
   ...['3', '5m'].flatMap(lv => [['low', 'now'], ['all', 'insideAll'], ['none', 'insideNone']].map(([o, root]) => ({ id: `in${lv}-${o}`, root, script: { scene: 'chain', level: lv, gap: 0.64 }, window: [0.55, 1.65], measure: 'chain' }))),
   // waist-bound: the inside hook of a pro (and a legend's flicker), as built, before stage N (no waist: the plan's bound), and
@@ -85,22 +67,13 @@ export const CLIPS = [
     { id: `twc-${o}`, root, script: 'out-twist', window: [1.1, 1.45], measure: 'fall' },
     { id: `tw-${o}`, root, script: 'out-twist', window: [1.0, 2.4], measure: 'fall' }
   ]),
-  // downside-front: the hook knockdown, the fall and the getting up, and the straight's, the fall and lying: before V (prey,
-  // as before V's ligament), V's, and V's with the ligament taken up later
-  ...[['revert', 'prey'], ['accept', 'v1'], ['from04', 'hip04']].flatMap(([o, root]) => [
-    { id: `ds-${o}`, root, script: 'down-side', window: [0.95, 5.15], measure: 'lying', of: { at: 2.8 } },
-    { id: `db-${o}`, root, script: 'down-back', window: [0.5, 3.0], measure: 'lying', of: { at: 2.4 } }
-  ]),
-  // rocked-slow: the rocked card with a third press of his 0.4 s after the hook (the checker's scene): before V (prey), V's, and
-  // V's slowed only from 0.05 and from 0.1
-  ...[['before', 'prey'], ['keep', 'v1'], ['mid', 'slowed005'], ['shorter', 'slowed01']].map(([o, root]) => ({ id: `rk-${o}`, root, script: 'stagger', change: { also: [[1.55, 'power']], loop: 4 }, window: [0.7, 2.0], measure: 'guard' })),
   // combo-tempo: the one-two and hook of a pro and of a great clean one, pressed on contact (the card's tempo, the plan's) and
   // by the clock (as the head presses now), the first beat on the same frame; each from four frames before it
   ...[['3', [0.9, 1.9]], ['5m', [0.5833, 1.5833]]].flatMap(([lv, window]) => [
     { id: `ct${lv}-faster`, root: 'now', script: { scene: 'combo', row: '1-2-3', level: lv, press: 'tempo' }, window, measure: 'tempo' },
     { id: `ct${lv}-keep`, root: 'clockFirst', script: { scene: 'combo', row: '1-2-3', level: lv, press: 'clock' }, window, measure: 'tempo' }
   ]),
-  // fx-parry-white: a pro's parry (played twice, the screen's white flash drawn on one: src/pending.mjs)
+  // fx-parry-white: a pro's parry (played twice, the screen's white flash drawn on one: src/open.old.mjs)
   { id: 'pw-parry', root: 'now', script: 'parry@3', window: [0.6, 1.4], measure: 'taken' },
 
   /* ---- the defence effects (fx-defence-amount, fx-defence-evade, fx-brilliant-game): the motion as it is, each clip played
@@ -115,14 +88,5 @@ export const CLIPS = [
   { id: 'dg-far', root: 'now', script: 'duck@5a', window: [1.0, 1.55], measure: 'missed', defence: true },
   { id: 'dg-edge', root: 'now', script: 'slip@3', window: [0.7, 1.2], measure: 'missed', defence: true },
   // a brilliant defence: 4명's slip under the jab by 2.9 cm and the cross back at once (the catalogue's replay card)
-  { id: 'dg-brilliant', root: 'now', script: 'counter@4m', window: [0.7, 1.35], measure: 'missed', defence: true },
-  /* the cross counter (stage Y, round 1; docs/cross-counter-plan.md): the card of each grade it opens at, against the same pro's
-     jab pressed at 0.8 s; a pro's with no counter's gain (xc-gain); a pro's pressed two frames early and two late (xc-trade); and
-     the knockout (a great clean one's, pressed on the last frame of his window). Kept as the defence clips are (defence: the
-     bout's margin of the jab's miss, which the line says; the page draws no defence style for a card with no fx) */
-  ...['3', '4m', '4a', '5m', '5a'].map(lv => ({ id: `xc-${lv}`, root: 'y1', script: `crossCounter@${lv}`, window: [0.55, 1.35], measure: 'over', defence: true })),
-  { id: 'xc-3-never', root: 'xcNever', script: 'crossCounter@3', window: [0.55, 1.35], measure: 'over', defence: true },
-  { id: 'xc-early', root: 'y1', script: 'crossCounter-early@3', window: [0.55, 1.35], measure: 'over', defence: true },
-  { id: 'xc-late', root: 'y1', script: 'crossCounter-late@3', window: [0.55, 1.35], measure: 'over', defence: true },
-  { id: 'xc-out', root: 'y1', script: 'out-counter', window: [0.6, 2.8], measure: 'over', defence: true }
+  { id: 'dg-brilliant', root: 'now', script: 'counter@4m', window: [0.7, 1.35], measure: 'missed', defence: true }
 ];

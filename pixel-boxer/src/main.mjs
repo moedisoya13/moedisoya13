@@ -24,6 +24,7 @@ import { arenaOf, loadArena, createArena } from './world/stage.mjs';
 import { createRival, think } from './game/ai.mjs';
 import { createInput } from './game/input.mjs';
 import { createAudio } from './game/audio.mjs';
+import { watchLost } from './lost.mjs';
 
 const DT = 1 / 60;
 const query = new URLSearchParams(location.search);
@@ -74,6 +75,8 @@ async function load() {
 }
 
 function start({ manifest, arena: parts, boxers }) {
+  // (the graphics context lost: a notice and a reload button over the canvas, not a blank white picture: src/lost.mjs)
+  watchLost(canvas, { note: '다시 불러오면 시합을 처음부터 엽니다.' });
   const R = createRenderer(canvas),
     arena = createArena(R, manifest, parts),
     audio = createAudio(),
@@ -119,7 +122,10 @@ function start({ manifest, arena: parts, boxers }) {
     replayEnd = -Infinity; // the bout's time when the last replay was over (or skipped)
   const cam = { target: [0, 0.8, 0], yaw: 0, pitch: 0.5, dist: 8 },
     shake = { amp: 0 },
-    stats = { frames: 0, ms: 0, drawn: 0 },
+    /* (the frame-time readout, ?fps=1 or #fps: ms is the time between pictures, the middle of the last 30 intervals of
+       requestAnimationFrame, which takes in the drawing the GPU does; js is the JavaScript of a picture alone, the queuing of
+       it, as the readout measured before, which leaves the GPU's work out) */
+    stats = { frames: 0, ms: 0, js: 0, drawn: 0, gaps: [] },
     // (a knockdown's replay, and no other: every step kept, src/replay.mjs; the side the men are seen from, the live camera's)
     replay = createReplay({ brilliant: false, yaw: () => cam.yaw, room: (at, Z, size) => roomFor(at, Z, distOf({ size, closer: FALL.view.closer, push: 0 }, cam.dist, R.target.w / R.target.h, 0)) });
 
@@ -383,8 +389,14 @@ function start({ manifest, arena: parts, boxers }) {
     });
     stats.frames++;
     stats.drawn = drawn;
-    stats.ms += (performance.now() - t0 - stats.ms) * 0.05;
-    if (stats.frames % 30 === 0 && (query.has('fps') || location.hash === '#fps')) $('fps').textContent = `${stats.ms.toFixed(1)} ms · ${drawn} splats · ${R.target.w}×${R.target.h}`;
+    stats.js += (performance.now() - t0 - stats.js) * 0.05;
+    if (stats.at !== undefined) {
+      stats.gaps.push(now - stats.at);
+      if (stats.gaps.length > 30) stats.gaps.shift();
+      stats.ms = [...stats.gaps].sort((x, y) => x - y)[stats.gaps.length >> 1];
+    }
+    stats.at = now;
+    if (stats.frames % 30 === 0 && (query.has('fps') || location.hash === '#fps')) $('fps').textContent = `프레임 ${stats.ms.toFixed(1)} ms (JS ${stats.js.toFixed(1)}) · ${drawn} splats · ${R.target.w}×${R.target.h}`;
     requestAnimationFrame(frame);
   }
 

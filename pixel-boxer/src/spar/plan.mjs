@@ -384,6 +384,9 @@ function think(m, his, bout, k, steer) {
      time, named in the controls (walk) for the rails; off the ropes; and never so far round that the line between them
      leaves the picture's width (the camera does not turn) */
   const feet = () => {
+    /* (a taunt, pressed or under way: his feet stand for it, the stream of steps left off until it is over; the bout ends a
+       taunt the moment he sets off, game/bout.mjs, so a step under it would end it on its first frame) */
+    if (c.taunt || (me.action && MOVES[me.action.name].taunt)) return (m.step = null), (m.stepAt = k), c;
     const tilt = Math.atan2(Math.abs(dz), Math.abs(dx)) * (180 / Math.PI),
       // (which way round brings the line back across the picture)
       turn = d => Math.abs(dz - across[1] * d * 0.1) / (Math.abs(dx - across[0] * d * 0.1) || 1e-6),

@@ -12,7 +12,7 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { GROUPS, CARDS, QUESTIONS, DECIDED_LIST, STORE, SEND, MODELS, question, live, counts, starRest, answersText } from '../src/open.data.mjs';
 import { GROUPS as CLIPS } from '../src/open.clips.mjs';
-import { ITEMS } from '../src/pending.data.mjs';
+import { ITEMS } from '../src/open.old.data.mjs';
 import { CLIPS as OLD_CLIPS } from '../src/clips.data.mjs';
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -141,7 +141,7 @@ test('the page is made as an artifact with every file it loads', () => {
   assert.match(page, /^<title>미결 카탈로그 · 프로 복서<\/title>/);
   assert.match(page, /<script type="module" src="src\/open\.mjs"><\/script>/);
   assert.doesNotMatch(page, /<html|<head>|<body/);
-  for (const f of ['src/open.mjs', 'src/open.data.mjs', 'src/open.clips.mjs', 'src/pending.mjs', 'src/pending.data.mjs', 'src/replay.mjs', 'src/clips/index.mjs', 'assets/manifest.json', 'assets/boxer.splats.txt']) assert.ok(files[f], f);
+  for (const f of ['src/open.mjs', 'src/open.data.mjs', 'src/open.clips.mjs', 'src/open.old.mjs', 'src/open.old.data.mjs', 'src/replay.mjs', 'src/clips/index.mjs', 'assets/manifest.json', 'assets/boxer.splats.txt']) assert.ok(files[f], f);
   for (const g of Object.values(CLIPS)) for (const c of g.clips) for (const f of [c.file, c.poster]) if (f) assert.ok(files[f], f);
   for (const i of ITEMS.filter((x) => CARDS.some((c) => c.id === x.id && c.old)))
     for (const k of (i.groups || []).flatMap((g) => g.rows.flat())) for (const f of [k.video, k.image]) if (f) assert.ok(files[f], `${i.id}: ${f}`);

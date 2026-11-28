@@ -7,7 +7,8 @@
                          pit (fought in the underground pit: its crowd, its concrete), you (the player's man, for the
                          counter-chance cue; null for none), replay (a replay is throwing it again: no crowd, no bell) }
      createEars()        what the bout's state sounds like from step to step, not its events: feet on the canvas by the
-                         distance walked, the ropes pressed, a spent man panting. ears.watch(men, dt, c) -> cues.
+                         distance walked and on every beat of a bounce on the spot, the ropes pressed. ears.watch(men, dt, c)
+                         -> cues.
 
      const audio = createAudio({ context, random })   context: an AudioContext (or OfflineAudioContext) to use instead of
                                                       making one at unlock; random: () => [0, 1) for the small variations
@@ -19,8 +20,20 @@
      audio.hear(e, c)                cuesOf(e, c) played, panned by where each man stands in the picture (c.yaw, c.target:
                                      the camera's) -> what was played
      audio.watch(men, dt, c)         one step of the bout's state (createEars) played
-     audio.ambience(kind)            'pit' starts the pit crowd's murmur loop, anything else stops it
-     audio.mute(on)
+     audio.ambience(kind)            'pit' starts the pit crowd's murmur loop, anything else fades it out
+     audio.mute(on)                  everything off at once, what was already scheduled too (and nothing held kept); on again
+                                     for what comes next
+     audio.muted                     whether it is
+     audio.ambient                   'pit' while the pit's murmur goes, else null
+     audio.held                      the names of the cues held for later (the knockout's bell)
+
+   The knockout's bell is held (a cue with o.ko): a page that replays a knockdown (the game, the sparring) calls hear with
+   c.replay for what the replay throws again and watch for every live step, and the bell rings on the first live step after
+   the replay (skipped or played out), or KO_WAIT seconds of live steps after the blow if no replay came; never over the
+   replay. It also lets the pit's murmur go: the bout is over. A page that replays nothing says so (c.replays === false: the
+   audition) and hears it at its own delay. A bell already ringing when a replay starts is cut short.
+   A page hidden (another tab, another app) suspends the sound and a page shown again resumes it (document visibilitychange,
+   pagehide / pageshow), whatever page it is on.
 
    The mix: every cue goes through its own gain and a stereo pan (±0.4 at the picture's edges) into one of the buses (MIX),
    the buses into a master gain, a compressor and a limiter, so stacked blows never clip. The voice, air, guard and feet
@@ -36,9 +49,15 @@ export const MIX = { voice: 0.85, impact: 1, guard: 0.8, air: 0.55, feet: 0.5, c
 export const VOICE = [{ pitch: 1.07, low: 132 }, { pitch: 0.92, low: 106 }];
 export const LIMIT = { voices: 18, gap: 0.035, pan: 0.4, wide: 2.2 };
 export const STRIDE = 0.38; // metres walked to a footstep
+// (bouncing on the spot: a beat of his feet is a soft step if he went less than this far since the one before)
+export const SPOT = 0.12;
+// (seconds of live steps after a knockout's blow that its bell waits for a replay, if none comes: past the longest a
+// knockdown's replay waits to start, replay.mjs FALL.most 2.5)
+export const KO_WAIT = 2.6;
 // (events that make no sound of their own: a guard put up, a power press meant as a shift, where the glove went on to, the
-// wave held, and a brilliant defence, whose whiff or parry speaks for it)
-export const QUIET = ['cover', 'shell', 'shift', 'follow', 'wave', 'brilliant'];
+// wave held, and a brilliant defence, whose whiff or parry speaks for it; a man doubled up going down, since the struck man's
+// own voice was dropped (the user's answer of 2026-11-28, sound-hurt): his blow said it)
+export const QUIET = ['cover', 'shell', 'shift', 'follow', 'wave', 'brilliant', 'buckle'];
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const smooth = (a, b, v) => {
@@ -77,13 +96,14 @@ export function cuesOf(e, c) {
       const J = e.J * (e.counter ? COUNTER_GAIN : 1),
         where = e.part === 'body' ? 'body' : 'head',
         down = !!(e.down || e.out);
+      // (no "욱" or "헉" from the struck man: dropped, the user's answer of 2026-11-28, sound-hurt; a knockdown's breath going
+      // out of him stays)
       cue('impact', { who: e.on, J, where, counter: !!e.counter, down });
       if (down) cue('exhale', { who: e.on, delay: 0.12 });
-      else if (where === 'body' && J >= 45) cue('grunt', { who: e.on, J, delay: 0.03 });
-      else if (where === 'head' && J >= 70) cue('gasp', { who: e.on, J, delay: 0.02 });
       // (the pit's crowd at a power blow, a counter or a knockdown: as world/pit.mjs has them react)
       if (c.pit && !c.replay && (down || e.J >= 60 || e.counter)) cue(down ? 'roar' : 'cheer');
-      if (down && !c.replay) cue('bell', { strikes: 3, delay: 1.1 });
+      // (the knockout's bell: held by createAudio until the knockdown has been shown, its replay included)
+      if (down && !c.replay) cue('bell', { strikes: 3, delay: 1.1, ko: true });
       break;
     }
     case 'block':
@@ -123,9 +143,6 @@ export function cuesOf(e, c) {
       if (e.name === 'stomp') cue('step', { who: e.on, v: 3, pit: !!c.pit });
       else cue('graze', { who: e.on });
       break;
-    case 'buckle':
-      cue('grunt', { who: e.who, J: 110 });
-      break;
     // (not the bout's: the page says when a man knocked down comes down on the canvas, render/blow.mjs landed)
     case 'floor':
       cue('floor', { who: e.who, pit: !!c.pit });
@@ -134,7 +151,9 @@ export function cuesOf(e, c) {
   return out;
 }
 
-/* ---- what the state sounds like, step by step */
+/* ---- what the state sounds like, step by step: his feet (a step for every stride walked, and, bouncing on the spot, one for
+   every beat a foot comes down: the animator's rhythm, game/bout.mjs f.animator.rhythm.halves; the user's answer of
+   2026-11-28, sound-steps), and the ropes taking him. (No panting: the spent man's voice was dropped, sound-hurt.) */
 export function createEars() {
   let seen = [];
   return {
@@ -146,24 +165,30 @@ export function createEars() {
       const out = [];
       (men || []).forEach((f, i) => {
         if (!f) return;
-        const s = seen[i];
-        if (!s) return void (seen[i] = { x: f.x, z: f.z, walked: 0, rope: 0, ropeAt: -9, pant: 0, breath: 0, t: 0 });
+        const s = seen[i],
+          beat = f.animator && f.animator.rhythm ? f.animator.rhythm : null;
+        if (!s) return void (seen[i] = { x: f.x, z: f.z, walked: 0, rope: 0, ropeAt: -9, t: 0, halves: beat ? beat.halves : null, since: 0 });
         s.t += dt;
         const d = Math.hypot(f.x - s.x, f.z - s.z);
         s.x = f.x;
         s.z = f.z;
         // (a man down, one in a dash (it has its own scuff), or one put somewhere new: no steps)
-        if (f.down || (f.action && f.action.name === 'dash') || d > 0.5) s.walked = 0;
+        const off = f.down || (f.action && f.action.name === 'dash') || d > 0.5;
+        if (off) s.walked = 0;
         else if ((s.walked += d) >= STRIDE) (s.walked -= STRIDE), out.push({ name: 'step', o: { who: i, v: d / Math.max(dt, 1e-6), pit: !!c.pit } });
+        // (a foot coming down on the beat while he bounces where he stands: doing nothing else, and not gone a stride's way)
+        if (beat) {
+          s.since += d;
+          if (s.halves !== null && beat.halves !== s.halves) {
+            if (!off && !f.action && !beat.stopped && s.since < SPOT) out.push({ name: 'step', o: { who: i, v: 0.5, bounce: true, pit: !!c.pit } });
+            s.since = 0;
+          }
+          s.halves = beat.halves;
+        }
         // (the ropes taking him: the first moment he is pressed well onto them)
         const press = f.rope ? f.rope.press || 0 : 0;
         if (!c.pit && press > 0.35 && s.rope <= 0.35 && s.t - s.ropeAt > 0.5) (s.ropeAt = s.t), out.push({ name: 'rope', o: { who: i, press } });
         s.rope = press;
-        // (a man spent and doing nothing: his breath, in and out)
-        const tired = tiredOf(f);
-        if (tired > 0.7 && !f.down && !f.action) {
-          if ((s.pant += dt) >= 0.75) (s.pant = 0), (s.breath = 1 - s.breath), out.push({ name: 'pant', o: { who: i, tired, out: !!s.breath } });
-        } else s.pant = 0;
       });
       return out;
     }
@@ -183,24 +208,30 @@ export function panOf(c, who) {
 
 /* ---- the sounds: each makes itself with the kit at its moment (k) from its options (o) and says its level and length.
    bus: which gain it goes through; pri: who gives way when the voices are all taken (the lowest first); gap: seconds before
-   the same one for the same man again */
+   the same one for the same man again. (Changed 2026-11-28 by the user's answers on the audition's cards: the breath, the
+   blows, the blocks and parries, the feet, the bell and the crowd made again, the struck man's voice dropped; what each was
+   and is, measured, in README's sound section.) */
+const DOWN = 1.3; // a knockdown's blow is never lighter than this much of a clean cross (110 N·s): its sub and its length
 const SOUNDS = {
-  // the exhale through the teeth as a punch goes: a jab's short and high "tss", a straight's "shh", a hook's and an
-  // uppercut's longer and sweeping down; a power blow's with a voiced push under it ("hup"); a tired man's breathier, longer,
-  // lower
+  // the breath blown out as a punch goes: not through the teeth (the old "tss") but out of the mouth, a short "훅": the lips
+  // letting go (a tick), then the air through the open mouth in two bands (its vowel), gliding down as it empties; a jab's
+  // short and a little brighter, a hook's and an uppercut's longer and sweeping further down; a power blow's with a voiced
+  // push under it ("흡"); a tired man's longer, lower, with a rasp under it
   breath: {
     bus: 'voice',
     pri: 3,
     make(k, o) {
       const v = VOICE[o.who] || VOICE[0],
         tired = o.tired || 0,
-        [f0, f1, len, q, lvl] = { jab: [5600, 5000, 0.07, 2.2, 0.85], straight: [4700, 4100, 0.095, 1.8, 1], hook: [4500, 2900, 0.12, 1.6, 1], upper: [4100, 2700, 0.13, 1.6, 1] }[o.kind] || [4700, 4100, 0.095, 1.8, 1],
-        pitch = v.pitch * k.vary(0.04) * (1 - 0.22 * tired),
+        [len, f1, f2, glide, lvl] = { jab: [0.07, 1500, 3200, 0.9, 0.85], straight: [0.095, 1300, 2900, 0.84, 1], hook: [0.12, 1350, 2800, 0.66, 1], upper: [0.13, 1200, 2600, 0.64, 1] }[o.kind] || [0.095, 1300, 2900, 0.84, 1],
+        pitch = v.pitch * k.vary(0.04) * (1 - 0.18 * tired),
         dur = len * k.vary(0.08) * (1 + 0.7 * tired);
-      k.noise({ f: f0 * pitch, to: f1 * pitch, q: q * (1 - 0.45 * tired), attack: 0.003, dur, peak: 1, hp: 1900 });
-      if (tired > 0.05) k.noise({ f: 1500 * v.pitch, to: 1100 * v.pitch, q: 0.9, attack: 0.012, dur: dur * 1.25, peak: 0.3 * tired });
+      k.noise({ type: 'highpass', f: 3600 * pitch, attack: 0.0008, dur: 0.007, peak: 0.5 });
+      k.noise({ f: f1 * pitch, to: f1 * pitch * glide, q: 1.3, attack: 0.004, dur, peak: 1 });
+      k.noise({ f: f2 * pitch, to: f2 * pitch * glide, q: 1.7, attack: 0.003, dur: dur * 0.8, peak: 0.55 });
+      if (tired > 0.05) k.noise({ f: 650 * v.pitch, to: 480 * v.pitch, q: 0.9, attack: 0.012, dur: dur * 1.25, peak: 0.5 * tired });
       if (o.power) k.voiced({ f: v.low * 1.12 * k.vary(0.03), to: v.low * 0.9, formants: [[640, 3, 1], [1150, 4, 0.4]], attack: 0.006, dur: 0.075, peak: 0.55 });
-      return { level: 1.1 * lvl * k.vary(0.15) * (o.soft === undefined ? 1 : o.soft) * (1 - 0.12 * tired), dur: dur * 1.25 };
+      return { level: 1.6 * lvl * k.vary(0.15) * (o.soft === undefined ? 1 : o.soft) * (1 - 0.12 * tired), dur: dur * 1.25 };
     }
   },
   // the air a big arc moves: soft, under the breath (hooks, uppercuts, power blows)
@@ -214,57 +245,69 @@ const SOUNDS = {
       return { level: (o.power ? 0.26 : 0.2) * k.vary(0.1), dur };
     }
   },
-  // leather on flesh, sized by the impulse: a low thump falling, a leather smack, and for heavy blows a sub drop and a longer
-  // body; the head's sharper and brighter ("pop"), the body's duller, lower, longer; a counter's with a crack in it
+  // leather on flesh, sized by the impulse: lower than before and not a drum's sine alone, the weight going in as a short
+  // burst through a resonant lowpass sweeping down ("thup") over a low falling thud; for heavy blows a sub drop under it and a
+  // longer body. The head's with a bright "팍" of leather on bone that lasts (60 ms and more), the body's duller, lower, longer;
+  // a counter's with a crack in it; a knockdown's at least as heavy as a heavy blow (DOWN), however light the punch
   impact: {
     bus: 'impact',
     pri: 4,
     gap: 0.02,
     make(k, o) {
-      const s = clamp((o.J === undefined ? 60 : o.J) / CLEAN, 0.12, 2),
+      const down = !!o.down,
+        s = Math.max(clamp((o.J === undefined ? 60 : o.J) / CLEAN, 0.12, 2), down ? DOWN : 0),
         heavy = smooth(0.5, 1.3, s),
         head = o.where !== 'body',
         thump = (head ? 0.09 : 0.14) + 0.1 * s;
-      k.tone({ type: 'sine', f: (head ? 120 : 100) * (1.08 - 0.1 * s), to: (head ? 52 : 42) * (1.05 - 0.08 * s), attack: 0.002, dur: thump, peak: head ? 0.75 : 1 });
-      k.noise({ f: (head ? 2600 : 1300) * (1 - 0.1 * s), q: head ? 1.1 : 0.8, attack: 0.001, dur: (head ? 0.026 : 0.035) + (head ? 0.012 : 0.02) * s, peak: head ? 1.6 : 0.55 });
-      if (head) k.noise({ type: 'highpass', f: 3500, attack: 0.0008, dur: 0.01, peak: 0.9 });
-      else k.noise({ type: 'lowpass', f: 520, attack: 0.002, dur: 0.08 + 0.06 * s, peak: 0.5 });
+      k.tone({ type: 'sine', f: (head ? 92 : 74) * (1.08 - 0.1 * s), to: (head ? 44 : 35) * (1.05 - 0.08 * s), attack: 0.002, dur: thump, peak: head ? 0.8 : 1 });
+      k.noise({ type: 'lowpass', f: head ? 260 : 200, to: head ? 110 : 85, q: 3, attack: 0.0015, dur: (head ? 0.05 : 0.07) + 0.03 * s, peak: head ? 1.1 : 1.3 });
+      if (head) {
+        k.noise({ f: 3000, to: 2200, q: 0.8, hp: 1800, attack: 0.0008, dur: 0.06 + 0.02 * s, peak: 1.5 });
+        k.noise({ type: 'highpass', f: 5200, attack: 0.0006, dur: 0.022 + 0.01 * s, peak: 0.8 });
+      } else {
+        k.noise({ f: 650 * (1 - 0.1 * s), q: 0.8, attack: 0.001, dur: 0.04 + 0.025 * s, peak: 0.6 });
+        k.noise({ type: 'lowpass', f: 380, attack: 0.002, dur: 0.09 + 0.07 * s, peak: 0.55 });
+      }
       let dur = thump;
       if (heavy > 0) {
-        const sub = (head ? 0.2 : 0.28) + 0.25 * s + (o.down ? 0.25 : 0);
-        k.tone({ type: 'sine', f: 62, to: 30, attack: 0.004, dur: sub, peak: (head && !o.down ? 0.55 : 0.9) * heavy });
-        k.noise({ type: 'lowpass', f: 700, attack: 0.003, dur: 0.15 + 0.15 * s, peak: 0.35 * heavy });
+        const sub = (head ? 0.2 : 0.28) + 0.25 * s + (down ? 0.25 : 0);
+        k.tone({ type: 'sine', f: 50, to: 26, attack: 0.004, dur: sub, peak: (head && !down ? 0.55 : 0.9) * heavy });
+        k.noise({ type: 'lowpass', f: 420, attack: 0.003, dur: 0.15 + 0.15 * s, peak: 0.35 * heavy });
         dur = Math.max(dur, sub);
       }
       if (o.counter) k.noise({ type: 'bandpass', f: 4200, q: 0.8, hp: 2500, attack: 0.0006, dur: 0.014, peak: 0.9 });
-      if (o.down) k.duck(0.35, 0.45);
-      return { level: (0.26 + 0.42 * Math.pow(s, 0.8)) * (o.down ? 1.15 : 1), dur };
+      if (down) k.duck(0.35, 0.45);
+      return { level: (0.26 + 0.42 * Math.pow(s, 0.8)) * (down ? 1.15 : 1), dur };
     }
   },
-  // glove on glove and forearm: a muffled slap, no sub, no metal (a shoulder rolled off: softer, with a brush after it)
+  // glove on glove and forearm: padded leather meeting, a dull "퍽" through a resonant lowpass falling and the arm's low knock
+  // under it, the leather's skin a short soft slap (lower than the old tick), no sub, no metal (a shoulder rolled off: softer,
+  // with a brush after it)
   block: {
     bus: 'guard',
     pri: 3,
     make(k, o) {
       const s = clamp((o.J === undefined ? 50 : o.J) / CLEAN, 0.1, 1.6),
-        c = o.part === 'glove' ? 850 : o.part === 'shoulder' ? 450 : 560,
+        glove = o.part === 'glove',
+        shoulder = o.part === 'shoulder',
+        c = glove ? 520 : shoulder ? 300 : 380,
         dur = 0.035 + 0.025 * s;
-      k.noise({ f: c * (1 - 0.1 * s), q: 1.3, attack: 0.002, dur, peak: 1 });
-      k.tone({ type: 'triangle', f: 210, to: 140, attack: 0.002, dur: 0.05 + 0.02 * s, peak: 0.35, lp: 900 });
-      k.noise({ f: 1800, q: 1.5, attack: 0.001, dur: 0.015, peak: o.part === 'glove' ? 0.3 : 0.15 });
-      if (o.part === 'shoulder') k.noise({ f: 900, to: 600, q: 0.9, attack: 0.02, dur: 0.12, peak: 0.4, at: 0.01 });
-      return { level: (0.5 + 0.6 * s) * (o.part === 'shoulder' ? 0.8 : 1), dur: Math.max(dur, o.part === 'shoulder' ? 0.15 : 0.07) };
+      k.noise({ type: 'lowpass', f: c * (1 - 0.1 * s), to: c * 0.6, q: 2.2, attack: 0.0015, dur, peak: 1 });
+      k.tone({ type: 'sine', f: glove ? 150 : 125, to: glove ? 90 : 75, attack: 0.002, dur: 0.05 + 0.02 * s, peak: 0.5 });
+      k.noise({ f: 1100, q: 1.2, attack: 0.001, dur: 0.012, peak: glove ? 0.3 : 0.15 });
+      if (shoulder) k.noise({ f: 600, to: 380, q: 0.9, attack: 0.02, dur: 0.12, peak: 0.45, at: 0.01 });
+      return { level: (0.375 + 0.45 * s) * (shoulder ? 1.14 : 1), dur: Math.max(dur, shoulder ? 0.15 : 0.07) };
     }
   },
-  // a punch turned aside: a lighter, quicker tick-slap (a hammer or a press down: a little more weight)
+  // a punch turned aside: a lighter, quicker "탁", lower than before (a hammer or a press down: a little more weight)
   parry: {
     bus: 'guard',
     pri: 3,
     make(k, o) {
-      k.noise({ f: 1500, q: 2, attack: 0.0008, dur: 0.016, peak: 1 });
-      k.noise({ f: 800, q: 1.4, attack: 0.002, dur: 0.03, peak: 0.6, at: 0.004 });
-      if (o.hammer || o.down) k.tone({ type: 'triangle', f: 240, to: 150, attack: 0.002, dur: 0.06, peak: 0.4, lp: 900, at: 0.004 });
-      return { level: o.hammer || o.down ? 1.9 : 1.6, dur: 0.07 };
+      k.noise({ f: 1000, q: 1.6, attack: 0.0008, dur: 0.016, peak: 1 });
+      k.noise({ type: 'lowpass', f: 520, q: 2, attack: 0.002, dur: 0.03, peak: 0.8, at: 0.004 });
+      if (o.hammer || o.down) k.tone({ type: 'triangle', f: 170, to: 105, attack: 0.002, dur: 0.06, peak: 0.45, lp: 700, at: 0.004 });
+      return { level: o.hammer || o.down ? 1.9 : 1.75, dur: 0.07 };
     }
   },
   // a touch that was no punch: a thin brush
@@ -298,34 +341,6 @@ const SOUNDS = {
       return { level: 0.36 * k.vary(0.1), dur };
     }
   },
-  // the struck man: a low forced grunt from a body blow ("욱")
-  grunt: {
-    bus: 'voice',
-    pri: 3,
-    gap: 0.25,
-    make(k, o) {
-      const v = VOICE[o.who] || VOICE[0],
-        s = clamp((o.J || 60) / CLEAN, 0.4, 1.6),
-        dur = (0.13 + 0.08 * s) * k.vary(0.08);
-      k.noise({ f: 600 * v.pitch, q: 1.2, attack: 0.002, dur: 0.025, peak: 0.5 });
-      k.voiced({ f: v.low * 0.92 * k.vary(0.04), to: v.low * 0.78, formants: [[380, 2.5, 1], [850, 3, 0.4]], attack: 0.01, dur, peak: 1, lp: 1300 });
-      return { level: (0.28 + 0.18 * s) * k.vary(0.1), dur };
-    }
-  },
-  // a heavy blow to the head: a sharp clipped exhale ("헉")
-  gasp: {
-    bus: 'voice',
-    pri: 3,
-    gap: 0.25,
-    make(k, o) {
-      const v = VOICE[o.who] || VOICE[0],
-        s = clamp((o.J || 80) / CLEAN, 0.5, 1.6),
-        dur = 0.085 * k.vary(0.08);
-      k.noise({ f: 1700 * v.pitch, q: 1.2, attack: 0.004, dur, peak: 1, clip: true });
-      k.voiced({ f: v.low * 1.3, to: v.low * 1.15, formants: [[900, 3, 1]], attack: 0.004, dur: 0.04, peak: 0.3 });
-      return { level: (0.12 + 0.07 * s) * k.vary(0.1), dur };
-    }
-  },
   // knocked down: a long breath going out of him
   exhale: {
     bus: 'voice',
@@ -338,76 +353,75 @@ const SOUNDS = {
       return { level: 0.3, dur: 0.65 };
     }
   },
-  // a spent man between exchanges: in and out
-  pant: {
-    bus: 'voice',
-    pri: 1,
-    gap: 0.3,
-    make(k, o) {
-      const v = VOICE[o.who] || VOICE[0];
-      k.noise({ f: (o.out ? 1500 : 2200) * v.pitch, q: 1, attack: 0.05, dur: 0.17, peak: 1 });
-      return { level: 0.1 * (o.tired || 1) * k.vary(0.15), dur: 0.22 };
-    }
-  },
-  // a foot on the canvas: a soft scuff (in the pit, grittier: concrete)
+  // a foot on the canvas: quieter than before and not a scrape, a soft padded pat of the sole (a resonant low band) with the
+  // faintest canvas hiss (a bounce's shorter and softer still); in the pit, two grains of grit on concrete
   step: {
     bus: 'feet',
     pri: 1,
     gap: 0.08,
     make(k, o) {
       const v = clamp((o.v || 1) / 1.5, 0.3, 1.6);
-      k.noise({ f: 300, to: 180, q: 0.9, attack: 0.004, dur: 0.05, peak: 1 });
-      if (o.pit) k.noise({ f: 3500, q: 0.5, hp: 2500, attack: 0.002, dur: 0.04, peak: 0.6 });
-      else k.noise({ f: 1800, q: 1, attack: 0.003, dur: 0.02, peak: 0.25 });
-      return { level: 0.8 * v * k.vary(0.2), dur: 0.06 };
+      k.noise({ type: 'lowpass', f: 240, to: 150, q: 1.6, attack: 0.003, dur: o.bounce ? 0.03 : 0.04, peak: 1 });
+      if (o.pit) k.noise({ f: 3000, q: 1.2, hp: 2200, attack: 0.001, dur: 0.012, peak: 0.35 }), k.noise({ f: 3600, q: 1.2, hp: 2200, attack: 0.001, dur: 0.01, peak: 0.25, at: 0.018 });
+      else k.noise({ type: 'highpass', f: 2600, attack: 0.004, dur: 0.025, peak: 0.04 });
+      return { level: 0.7 * v * (o.bounce ? 0.6 : 1) * k.vary(0.2), dur: 0.05 };
     }
   },
-  // a quick step: a quicker scuff, the shoe squeaking on the canvas (in the pit, grit and no squeak)
+  // a quick step: quieter, and the shoe's drag on the canvas, a falling scuff and its pat, in place of the old squeak (in the
+  // pit, grit dragged)
   dash: {
     bus: 'feet',
     pri: 2,
     gap: 0.1,
     make(k, o) {
-      k.noise({ f: 420, to: 220, q: 0.9, attack: 0.002, dur: 0.04, peak: 1 });
-      if (o.pit) k.noise({ f: 3200, to: 2400, q: 0.5, hp: 2200, attack: 0.002, dur: 0.07, peak: 0.7 });
-      else k.tone({ type: 'triangle', f: 2400 * k.vary(0.05), to: 2900, attack: 0.008, dur: 0.045, peak: 0.25, at: 0.01 });
-      return { level: 0.45 * k.vary(0.1), dur: o.pit ? 0.08 : 0.06 };
+      k.noise({ type: 'lowpass', f: 300, to: 170, q: 1.6, attack: 0.002, dur: 0.035, peak: 1 });
+      if (o.pit) k.noise({ f: 2800, to: 2000, q: 0.8, hp: 1800, attack: 0.003, dur: 0.06, peak: 0.45 });
+      else k.noise({ f: 900, to: 450, q: 1.2, attack: 0.006, dur: 0.06, peak: 0.5 });
+      return { level: (o.pit ? 0.44 : 1.6) * k.vary(0.1), dur: 0.07 };
     }
   },
-  // a man coming down on the floor: a big low boom (the ring's with its canvas's hollow ring; the pit's dead and dry)
+  // a man coming down on the floor: a body's thud, not a drum's boom (its weight through a resonant lowpass over a low sine),
+  // the slap of him on the canvas; the ring's boards under it with a short hollow knock and the ropes shaken, the pit's
+  // concrete dead and dry, with grit
   floor: {
     bus: 'impact',
     pri: 4,
     gap: 0.3,
     make(k, o) {
-      const dur = o.pit ? 0.25 : 0.45;
-      k.tone({ type: 'sine', f: 70, to: 32, attack: 0.004, dur, peak: 1 });
-      k.noise({ type: 'lowpass', f: o.pit ? 500 : 300, attack: 0.003, dur: o.pit ? 0.15 : 0.25, peak: 0.6 });
-      if (o.pit) k.noise({ f: 2800, q: 0.6, hp: 1800, attack: 0.001, dur: 0.03, peak: 0.35 });
+      const dur = o.pit ? 0.22 : 0.4;
+      k.tone({ type: 'sine', f: 58, to: 30, attack: 0.004, dur, peak: 1 });
+      k.noise({ type: 'lowpass', f: o.pit ? 420 : 170, to: o.pit ? 200 : 80, q: o.pit ? 1 : 3, attack: 0.003, dur: o.pit ? 0.12 : 0.3, peak: 1 });
+      k.noise({ f: o.pit ? 1600 : 480, q: 0.9, attack: 0.001, dur: o.pit ? 0.03 : 0.06, peak: o.pit ? 0.5 : 0.45 });
+      if (o.pit) k.noise({ f: 3200, q: 0.6, hp: 2000, attack: 0.001, dur: 0.025, peak: 0.25 });
       else {
-        k.tone({ type: 'sine', f: 118, to: 114, attack: 0.006, dur: 0.5, peak: 0.18 });
-        k.tone({ type: 'sine', f: 177, to: 172, attack: 0.006, dur: 0.38, peak: 0.12 });
-        k.noise({ f: 220, q: 8, attack: 0.004, dur: 0.35, peak: 0.25 });
+        k.tone({ type: 'sine', f: 96, to: 92, attack: 0.004, dur: 0.22, peak: 0.25 });
+        k.tone({ type: 'sine', f: 143, to: 139, attack: 0.004, dur: 0.16, peak: 0.15 });
+        k.noise({ f: 1300, q: 7, attack: 0.01, dur: 0.18, peak: 0.1, at: 0.03 });
       }
-      return { level: 0.72, dur: o.pit ? 0.25 : 0.5 };
+      return { level: 0.62, dur: o.pit ? 0.22 : 0.42 };
     }
   },
-  // the ropes taking a man's weight: a short creak and thrum
+  // the ropes taking a man's weight: quieter, a low thrum as the rope gives and its cover creaking on the posts (a few short
+  // grains, close and uneven), in place of the old hum and buzz
   rope: {
     bus: 'feet',
     pri: 2,
     gap: 0.5,
     make(k, o) {
-      k.tone({ type: 'triangle', f: 92, to: 88, attack: 0.01, dur: 0.35, peak: 0.5 });
-      k.tone({ type: 'sine', f: 184, to: 178, attack: 0.01, dur: 0.25, peak: 0.2 });
-      k.noise({ f: 1200, q: 6, attack: 0.01, dur: 0.08, peak: 0.3 });
-      return { level: 0.12 + 0.2 * clamp(o.press || 0.5, 0, 1), dur: 0.36 };
+      k.tone({ type: 'sine', f: 74, to: 70, attack: 0.02, dur: 0.3, peak: 0.5 });
+      k.tone({ type: 'triangle', f: 148, to: 141, attack: 0.02, dur: 0.18, peak: 0.12, lp: 600 });
+      [0, 0.022, 0.05, 0.071, 0.1, 0.135].forEach((at, i) => k.noise({ f: (950 + 130 * (i % 3)) * k.vary(0.06), q: 9, attack: 0.001, dur: 0.012, peak: 0.4 - 0.04 * i, at }));
+      return { level: (0.12 + 0.2 * clamp(o.press || 0.5, 0, 1)) * 0.55, dur: 0.32 };
     }
   },
-  // the pit's crowd (world/pit.mjs): a cheer at a power blow or a counter, a roar at a knockdown
-  cheer: { bus: 'crowd', pri: 2, gap: 0.4, make: k => (k.crowd(1.1, 500, 1100), { level: 0.22, dur: 1.1 }) },
-  roar: { bus: 'crowd', pri: 3, gap: 1, make: k => (k.crowd(3.2, 450, 1300), { level: 0.36, dur: 3.2 }) },
-  // the ring bell: one strike at the start, three quick ones at the knockout (three inharmonic partials, a long decay)
+  // the pit's crowd (world/pit.mjs): a cheer at a power blow or a counter, a roar at a knockdown; many people, not one band
+  // of noise: knots of them each in a vowel's band, coming in at their own moments (as the figures jump, 0.04-0.3 s late),
+  // voices among them going up ("와!"), and in a cheer hands clapping
+  cheer: { bus: 'crowd', pri: 2, gap: 0.4, make: k => (k.crowd({ dur: 1.1, bands: 6, voices: 5, claps: 10, low: 450, high: 2600 }), { level: 0.23, dur: 1.1 }) },
+  roar: { bus: 'crowd', pri: 3, gap: 1, make: k => (k.crowd({ dur: 3.2, bands: 8, voices: 8, claps: 6, low: 380, high: 2800 }), { level: 0.45, dur: 3.2 }) },
+  // the ring bell: one strike at the start, three quick ones at the knockout. A struck brass dome: the hammer's click and
+  // first clang, then six of the dome's modes (1, 2.04, 2.76, 4.07, 5.4, 6.9 times 820 Hz), each a close pair 1.2 Hz apart
+  // a mode (the shimmer a real bell has), the higher dying first, the lowest ringing on 2.2 s
   bell: {
     bus: 'bell',
     pri: 5,
@@ -415,11 +429,13 @@ const SOUNDS = {
     make(k, o) {
       const n = o.strikes || 1;
       for (let i = 0; i < n; i++) {
-        const at = i * 0.3;
-        k.noise({ type: 'highpass', f: 3000, attack: 0.0005, dur: 0.008, peak: 0.4, at });
-        [[740, 1, 1.6], [1856, 0.55, 1], [2913, 0.3, 0.55]].forEach(([f, peak, dur]) => k.tone({ type: 'sine', f, to: f * 0.998, attack: 0.002, dur, peak, at }));
+        const at = i * 0.3,
+          hard = i ? 0.92 : 1;
+        k.noise({ type: 'highpass', f: 4000, attack: 0.0004, dur: 0.006, peak: 0.45 * hard, at });
+        k.noise({ f: 3300, q: 3, attack: 0.0006, dur: 0.03, peak: 0.25 * hard, at });
+        for (const [r, peak, dur] of BELL) for (const side of [-1, 1]) k.tone({ type: 'sine', f: 820 * r + side * 1.2 * r, to: (820 * r + side * 1.2 * r) * 0.999, attack: 0.0015, dur, peak: peak * 0.55 * hard, at });
       }
-      return { level: 0.3, dur: (n - 1) * 0.3 + 1.6 };
+      return { level: n > 1 ? 0.24 : 0.3, dur: (n - 1) * 0.3 + 2.2 };
     }
   },
   // the result, as before: up for a win, down for a loss
@@ -428,6 +444,8 @@ const SOUNDS = {
   // the player's man turned a punch aside: his counter is open (the game's HUD says so too)
   chance: { bus: 'ui', pri: 2, make: k => (k.tone({ type: 'triangle', f: 880, to: 880, attack: 0.004, dur: 0.07, peak: 1 }), k.tone({ type: 'triangle', f: 1320, to: 1320, attack: 0.004, dur: 0.12, peak: 1, at: 0.07 }), { level: 0.3, dur: 0.2 }) }
 };
+// (the bell's modes: [times its lowest, peak, seconds])
+const BELL = [[1, 1, 2.2], [2.04, 0.5, 1.3], [2.76, 0.42, 1], [4.07, 0.22, 0.6], [5.4, 0.14, 0.4], [6.9, 0.07, 0.25]];
 // (the old names, from before: kept for any caller still using them)
 const OLD = { hit: ['impact', { J: 60 }], heavy: ['impact', { J: 110 }], deflect: ['parry', {}], dodge: ['evade', {}] };
 export const NAMES = [...Object.keys(SOUNDS), ...Object.keys(OLD)];
@@ -445,7 +463,12 @@ export function createAudio(opts) {
     muted = false,
     active = [],
     murmur = null,
-    wantMurmur = false;
+    wantMurmur = false,
+    // (cues held for later: the knockout's bell; the live steps' seconds watched, to time them by; and whether the sound was
+    // suspended because the page was hidden)
+    held = [],
+    stepT = 0,
+    asleep = false;
   function build(c) {
     ctx = c;
     noise = ctx.createBuffer(1, Math.round(ctx.sampleRate * 2), ctx.sampleRate);
@@ -479,12 +502,31 @@ export function createAudio(opts) {
   }
   function unlock() {
     try {
-      if (ctx) return ctx.state === 'suspended' && ctx.resume && ctx.resume();
+      if (ctx) return ctx.state === 'suspended' && ctx.resume && ((asleep = false), ctx.resume());
       if (opts.context) return build(opts.context);
       const AC = globalThis.AudioContext || globalThis.webkitAudioContext;
       if (AC) build(new AC());
     } catch {
       ctx = null; // (no audio here: everything stays silent)
+    }
+  }
+  // (the page hidden: the sound suspended, so nothing goes on in the background; shown again: resumed, if it was running.
+  // Not an offline context's: it renders on its own clock)
+  const doc = globalThis.document;
+  function sleep(hidden) {
+    try {
+      if (!ctx || typeof ctx.startRendering === 'function' || !ctx.suspend) return;
+      if (hidden && ctx.state === 'running') (asleep = true), ctx.suspend();
+      else if (!hidden && asleep) (asleep = false), ctx.resume();
+    } catch {
+      asleep = false;
+    }
+  }
+  if (doc && doc.addEventListener) {
+    doc.addEventListener('visibilitychange', () => sleep(!!doc.hidden));
+    if (globalThis.addEventListener) {
+      globalThis.addEventListener('pagehide', () => sleep(true));
+      globalThis.addEventListener('pageshow', () => sleep(!!doc.hidden));
     }
   }
 
@@ -514,17 +556,19 @@ export function createAudio(opts) {
         for (const x of nodes) n = n.connect(x);
         n.connect(g).connect(out);
       };
-    return {
+    const kit = {
       ends,
       vary: amount => 1 + (random() * 2 - 1) * amount,
-      // filtered noise: a band (or a highpass / lowpass) swept from f to `to`, with an extra highpass `hp` if asked
+      // filtered noise: a band (or a highpass / lowpass, resonant by q if given) swept from f to `to`, with an extra
+      // highpass `hp` if asked; loop: for one longer than the noise kept (2 s)
       noise(o) {
         const at = t + (o.at || 0) * L,
           src = ctx.createBufferSource(),
-          band = filter(o.type || 'bandpass', o.f, o.type === 'highpass' || o.type === 'lowpass' ? 0.7 : o.q || 1),
+          band = filter(o.type || 'bandpass', o.f, o.q || (o.type === 'highpass' || o.type === 'lowpass' ? 0.7 : 1)),
           g = ctx.createGain(),
           nodes = [band];
         src.buffer = noise;
+        if (o.loop) src.loop = true;
         band.frequency.setValueAtTime(hz(o.f), at);
         if (o.to) band.frequency.exponentialRampToValueAtTime(hz(o.to), at + (o.attack + o.dur) * L);
         if (o.hp) nodes.push(filter('highpass', o.hp, 0.7));
@@ -570,24 +614,24 @@ export function createAudio(opts) {
         osc.stop(end + 0.05);
         ends.push(end);
       },
-      // a crowd: the noise looped and let through low, swelling and dying away over `dur` seconds
-      crowd(dur, low, high) {
-        const src = ctx.createBufferSource(),
-          band = filter('bandpass', low, 0.6),
-          g = ctx.createGain(),
-          d = dur * L;
-        src.buffer = noise;
-        src.loop = true;
-        band.frequency.setValueAtTime(hz(low), t);
-        band.frequency.linearRampToValueAtTime(hz(high), t + d * 0.3);
-        band.frequency.linearRampToValueAtTime(hz(low), t + d);
-        g.gain.setValueAtTime(0.0001, t);
-        g.gain.exponentialRampToValueAtTime(1, t + d * 0.2);
-        g.gain.exponentialRampToValueAtTime(0.0001, t + d);
-        src.connect(band).connect(g).connect(out);
-        src.start(t, random() * 1.2);
-        src.stop(t + d + 0.05);
-        ends.push(t + d);
+      /* a crowd over `dur` seconds (its swell at about a quarter of it, then dying away): `bands` knots of people, each the noise
+         through a vowel's band between `low` and `high` Hz, coming in at its own moment (0.04-0.3 s late, as the figures
+         jump); `voices` of them going up together, a buzz through the "아" / "오" formants; and `claps` hands, short bright
+         grains through the swell */
+      crowd(o) {
+        const D = o.dur;
+        for (let i = 0; i < o.bands; i++) {
+          const late = 0.04 + 0.26 * random(),
+            f = o.low * Math.pow(o.high / o.low, (i + 0.5 * random()) / o.bands);
+          kit.noise({ f, to: f * (0.85 + 0.1 * random()), q: 1.4, attack: 0.22 * D, dur: 0.75 * D - late, peak: 1 / Math.sqrt(o.bands), at: late, loop: true });
+        }
+        for (let i = 0; i < o.voices; i++) {
+          const late = 0.04 + 0.26 * random(),
+            f = 150 + 120 * random(),
+            ah = i % 2 === 0;
+          kit.voiced({ f, to: f * (1.2 + 0.15 * random()), formants: ah ? [[750, 4, 1], [1200, 5, 0.6], [2600, 6, 0.2]] : [[480, 4, 1], [900, 5, 0.5], [2500, 6, 0.15]], attack: 0.18 * D, dur: 0.55 * D, peak: 0.6 / o.voices, at: late });
+        }
+        for (let i = 0; i < o.claps; i++) kit.noise({ f: 1600 + 900 * random(), q: 1.1, hp: 900, attack: 0.001, dur: 0.012, peak: 0.25, at: 0.12 * D + 0.6 * D * random() });
       },
       // the quieter buses pulled down to `to` and let back up over `back` seconds (a knockdown blow)
       duck(to, back) {
@@ -598,8 +642,16 @@ export function createAudio(opts) {
         g.setTargetAtTime(1, t + 0.02 + back * L * 0.4, back * L * 0.3);
       }
     };
+    return kit;
   }
 
+  // (a voice silenced now, over `over` seconds, and let go)
+  function hush(v, now, over) {
+    v.out.gain.cancelScheduledValues(now);
+    v.out.gain.setValueAtTime(v.level, now);
+    v.out.gain.linearRampToValueAtTime(0.0001, now + over);
+    v.end = Math.min(v.end, now + over);
+  }
   function play(name, o) {
     try {
       o = o || {};
@@ -619,9 +671,7 @@ export function createAudio(opts) {
       if (active.length >= LIMIT.voices) {
         const low = active.reduce((a, v) => (v.pri < a.pri || (v.pri === a.pri && v.at < a.at) ? v : a));
         if (low.pri > s.pri) return null;
-        low.out.gain.cancelScheduledValues(now);
-        low.out.gain.setValueAtTime(low.level, now);
-        low.out.gain.linearRampToValueAtTime(0.0001, now + 0.02);
+        hush(low, now, 0.02);
         active.splice(active.indexOf(low), 1);
       }
       last.set(key, t);
@@ -636,60 +686,149 @@ export function createAudio(opts) {
         made = s.make(k, o);
       out.gain.setValueAtTime(made.level, now);
       const end = Math.max(t + made.dur * L, ...k.ends);
-      active.push({ end, pri: s.pri, at: t, out, level: made.level, name });
+      active.push({ end, pri: s.pri, at: t, out, level: made.level, name, ko: !!o.ko });
       return { name, level: made.level, dur: end - t, at: t, pan };
     } catch {
       return null; // (a sound that cannot be made here is not worth the bout)
     }
   }
-  const cast = (cues, c) => cues.map(q => play(q.name, Object.assign({ pan: panOf(c, q.o.who), rate: c && c.rate }, q.o))).filter(Boolean);
+  // (the cues played; a knockout's held, unless the page replays nothing)
+  function cast(cues, c) {
+    const out = [];
+    for (const q of cues) {
+      const o = Object.assign({ pan: panOf(c, q.o.who), rate: c && c.rate }, q.o);
+      if (o.ko && !(c && c.replays === false)) {
+        if (ctx && !muted) held.push({ name: q.name, o, due: stepT + KO_WAIT, made: ctx.currentTime, replayed: false });
+        continue;
+      }
+      const r = play(q.name, o);
+      if (r) out.push(r);
+    }
+    return out;
+  }
+  // (on a live step: what was held rung, once a replay has been shown since it was held or its wait is over; a stale one,
+  // not rung for so long that the page cannot have been stepping, let go)
+  function release() {
+    if (!held.length || !ctx) return [];
+    const out = [],
+      keep = [];
+    for (const h of held) {
+      if (ctx.currentTime - h.made > 12) continue;
+      if (!h.replayed && stepT < h.due - 1e-9) {
+        keep.push(h);
+        continue;
+      }
+      const r = play(h.name, Object.assign({}, h.o, { delay: 0, rate: 1 }));
+      if (r) out.push(r);
+      // (the knockout's bell: the bout is over, the pit's crowd stops waiting)
+      if (h.o.ko) ambience(null, 2.5);
+    }
+    held = keep;
+    return out;
+  }
+  // (a replay starting: whatever is held waits for it to be over, and a knockout's bell already ringing is cut short)
+  function replaying() {
+    for (const h of held) h.replayed = true;
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    for (const v of active) if (v.ko && v.end > now) hush(v, now, 0.08);
+  }
 
-  function ambience(kind) {
+  function ambience(kind, fade) {
     wantMurmur = kind === 'pit';
     if (!ctx) return;
     if (murmur && !wantMurmur) {
+      // (faded out on its own gain, which nothing else moves: the voices' wander is upstream of it, so it goes to nothing)
       const g = murmur.g.gain,
-        now = ctx.currentTime;
+        now = ctx.currentTime,
+        over = fade || 0.6;
       g.cancelScheduledValues(now);
-      g.setValueAtTime(g.value || 0.0001, now);
-      g.linearRampToValueAtTime(0.0001, now + 0.4);
-      murmur.src.stop(now + 0.45);
-      murmur.lfo.stop(now + 0.45);
+      g.setValueAtTime(Math.max(0.0001, murmur.level), now);
+      g.exponentialRampToValueAtTime(0.0001, now + over);
+      for (const n of murmur.sources) n.stop(now + over + 0.05);
       murmur = null;
     } else if (!murmur && wantMurmur) {
-      // (the pit's crowd waiting: low noise through a low band, its level wandering slowly)
+      /* (the pit's crowd waiting: a babble of people talking, not one band of noise: seven knots of them, each the noise
+         through a vowel's band (300-2600 Hz), its level rising and falling at a syllable's rate (2.5-5.5 a second) and
+         wandering slowly, and three low voices droning through the "어" formants, their pitch drifting; all under a lowpass,
+         as from across the room. The fade is the last gain, `g`, alone) */
       const now = ctx.currentTime,
-        src = ctx.createBufferSource(),
-        lp = ctx.createBiquadFilter(),
-        band = ctx.createBiquadFilter(),
         g = ctx.createGain(),
-        lfo = ctx.createOscillator(),
-        depth = ctx.createGain();
-      src.buffer = noise;
-      src.loop = true;
+        bed = ctx.createGain(),
+        lp = ctx.createBiquadFilter(),
+        sources = [],
+        level = 0.065,
+        oscs = [],
+        osc = (f, type) => {
+          const x = ctx.createOscillator();
+          x.type = type || 'sine';
+          x.frequency.value = f;
+          oscs.push(x);
+          return x;
+        },
+        // (a gain sitting at `base` and swung `depth` either way by a slow oscillator at f Hz)
+        swung = (base, depth, f) => {
+          const a = ctx.createGain(),
+            d = ctx.createGain();
+          a.gain.value = base;
+          d.gain.value = depth;
+          osc(f).connect(d).connect(a.gain);
+          return a;
+        };
       lp.type = 'lowpass';
-      lp.frequency.value = 700;
-      band.type = 'bandpass';
-      band.frequency.value = 380;
-      band.Q.value = 0.5;
+      lp.frequency.value = 2400;
+      bed.gain.value = 1;
+      for (const f of [320, 460, 620, 850, 1150, 1600, 2300]) {
+        const src = ctx.createBufferSource(),
+          band = ctx.createBiquadFilter(),
+          talk = swung(0.5, 0.45, 2.5 + 3 * random()),
+          wander = swung(0.65, 0.3, 0.07 + 0.2 * random());
+        src.buffer = noise;
+        src.loop = true;
+        band.type = 'bandpass';
+        band.frequency.value = f * (0.9 + 0.2 * random());
+        band.Q.value = 2.2;
+        src.connect(band).connect(talk).connect(wander).connect(bed);
+        src.start(now, random() * 1.9);
+        sources.push(src);
+      }
+      for (let i = 0; i < 3; i++) {
+        const v = osc(105 + 40 * random(), 'sawtooth'),
+          drift = ctx.createGain(),
+          f1 = ctx.createBiquadFilter(),
+          f2 = ctx.createBiquadFilter(),
+          talk = swung(0.05, 0.045, 3 + 2 * random());
+        drift.gain.value = 6;
+        osc(0.2 + 0.3 * random()).connect(drift).connect(v.frequency);
+        f1.type = f2.type = 'bandpass';
+        f1.frequency.value = 520;
+        f1.Q.value = 5;
+        f2.frequency.value = 1000;
+        f2.Q.value = 6;
+        v.connect(f1).connect(talk);
+        v.connect(f2).connect(talk);
+        talk.connect(bed);
+      }
       g.gain.setValueAtTime(0.0001, now);
-      g.gain.linearRampToValueAtTime(0.09, now + 1.5);
-      lfo.frequency.value = 0.13;
-      depth.gain.value = 0.03;
-      lfo.connect(depth).connect(g.gain);
-      src.connect(lp).connect(band).connect(g).connect(buses.crowd);
-      src.start(now);
-      lfo.start(now);
-      murmur = { src, lfo, g };
+      g.gain.linearRampToValueAtTime(level, now + 1.5);
+      bed.connect(lp).connect(g).connect(buses.crowd);
+      for (const x of oscs) x.start(now), sources.push(x);
+      murmur = { g, sources, level };
     }
   }
 
   return {
     unlock,
     play,
-    hear: (e, c) => cast(cuesOf(e, c), c),
-    watch: (men, dt, c) => cast(ears.watch(men, dt, c), c),
-    reset: () => ears.reset(),
+    hear: (e, c) => {
+      if (c && c.replay) return replaying(), cast(cuesOf(e, c), c);
+      return cast(cuesOf(e, c), c).concat(release());
+    },
+    watch: (men, dt, c) => {
+      stepT += dt || 0;
+      return cast(ears.watch(men, dt, c), c).concat(release());
+    },
+    reset: () => (ears.reset(), (held = []), (stepT = 0)),
     ambience(kind) {
       try {
         ambience(kind);
@@ -699,11 +838,35 @@ export function createAudio(opts) {
     },
     mute(on) {
       muted = !!on;
-      if (master) master.gain.value = muted ? 0 : 1;
+      if (muted) held = [];
+      if (!ctx || !master) return;
+      try {
+        const now = ctx.currentTime,
+          g = master.gain;
+        g.cancelScheduledValues(now);
+        g.setValueAtTime(clamp(g.value, 0, 1), now);
+        g.linearRampToValueAtTime(muted ? 0 : 1, now + 0.02);
+        // (and what was already scheduled, sounding or still to come: let go, so that it does not come back with the sound)
+        if (muted) for (const v of active) hush(v, now, 0.02);
+        if (muted) active = [];
+      } catch {
+        master.gain.value = muted ? 0 : 1;
+      }
+    },
+    get muted() {
+      return muted;
+    },
+    // ('pit' while the pit's murmur is going, else null)
+    get ambient() {
+      return murmur ? 'pit' : null;
     },
     // (what is sounding now: for the audition page and the tests)
     get voices() {
       return ctx ? active.filter(v => v.end > ctx.currentTime).length : 0;
+    },
+    // (cues held for later, by name: the knockout's bell until the knockdown has been shown)
+    get held() {
+      return held.map(h => h.name);
     },
     get context() {
       return ctx;

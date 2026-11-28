@@ -1,6 +1,6 @@
 /* The open-questions catalogue (open.html; docs/open-catalog.md): every decision still open, written from src/open.data.mjs.
    Each card: where it stands, the builds side by side (the recorded videos of src/open.clips.mjs on one clock, or the old
-   catalogue's own cards, lent by src/pending.mjs onto the canvas behind the page), the choices, a follow-up opened on the
+   catalogue's own cards, played by src/open.old.mjs onto the canvas behind the page), the choices, a follow-up opened on the
    same card by a choice, a memo. A pick or a keystroke is saved at once: the artifact's db document picks/open
    ({ picks, notes, log, sent, at }); with no store, this browser only (and the page says so). 제출 sends the answers as text
    (answersText) to the session watching the page (a comment sent to Claude) or to a new session (the Claude Code Remote
@@ -56,7 +56,7 @@ function cmpHtml(key) {
     <input class="scrub" type="range" min="0" max="${Math.max(0, (g.frames || 1) - 1)}" step="1" value="0" aria-label="프레임">
     <div class="ctl"><button type="button" data-view="all" aria-pressed="true">나란히</button>${g.clips.map((c) => `<button type="button" data-view="${esc(c.id)}" aria-pressed="false">${esc(String(c.say).split(' · ')[0])} 크게</button>`).join('')}<button type="button" data-step="-1" aria-label="한 프레임 뒤로">◀</button><button type="button" data-step="1" aria-label="한 프레임 앞으로">▶</button><button type="button" data-rate="1" aria-pressed="true">1×</button><button type="button" data-rate="0.5" aria-pressed="false">½×</button><button type="button" data-rate="0.25" aria-pressed="false">¼×</button><span class="fr"></span></div></div>`;
 }
-// the old catalogue's cards (src/pending.mjs lends them into the slot), with the old player's own controls
+// the old catalogue's cards (src/open.old.mjs writes them into the slot), with the old player's own controls
 const oldHtml = (id) => `<div class="old" data-old="${esc(id)}"><div data-pending-cards="${esc(id)}"></div>
   <div class="ctl"><button type="button" data-wide aria-pressed="false">크게</button><button type="button" data-old-step="-1" aria-label="한 프레임 뒤로 (녹화 카드만)">◀</button><button type="button" data-old-step="1" aria-label="한 프레임 앞으로">▶</button><button type="button" data-speed="1" aria-pressed="true">1×</button><button type="button" data-speed="0.5" aria-pressed="false">½×</button><button type="button" data-speed="0.25" aria-pressed="false">¼×</button><span class="fr">옛 카탈로그의 카드 · 속도는 옛 카드 모두에</span></div></div>`;
 function cardHtml(c) {
@@ -188,10 +188,10 @@ function setPlaying(v) {
 }
 $('#play').addEventListener('click', () => setPlaying(!playing));
 
-/* ---- the old catalogue's cards: lent by src/pending.mjs (loaded only when this page has a slot for them); its own speed
+/* ---- the old catalogue's cards: played by src/open.old.mjs (loaded only when this page has a slot for them); its own speed
    buttons (data-speed, for all its cards), a frame on (its bouts are stepped; its recordings sought), and 크게 */
 if (document.querySelector('[data-pending-cards]')) {
-  import('./pending.mjs').catch((err) => console.error('open: the old cards', err));
+  import('./open.old.mjs').catch((err) => console.error('open: the old cards', err));
   document.addEventListener('click', (e) => {
     const b = e.target.closest('.old button');
     if (!b) return;

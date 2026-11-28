@@ -26,7 +26,7 @@ import { fk, NAMES } from '../src/rig/skeleton.mjs';
 import { toWorld } from '../src/anim/pose.mjs';
 import { step } from '../src/game/bout.mjs';
 import { freshBout, drive } from '../src/footwork.mjs';
-import { DEFENSE } from '../src/defense.mjs';
+import { DEFENSE, OUT_COUNTER } from '../src/defense.mjs';
 import { BODYSHOTS } from '../src/bodyshots.mjs';
 
 const DT = 1 / 60,
@@ -157,6 +157,17 @@ test('it shows from the press of the punch to a moment after the blow, and ends 
   }
 });
 
+// (2026-11-28, a-replay-silent: a replay is heard from its start, the punch's breath first, and what is drawn of it does not change)
+test('a knockdown\'s replay keeps what is only heard as well: the press of the punch that did it is on its first step, and nothing drawn is added', () => {
+  for (const id of CARDS) {
+    const c = runs[id],
+      { crossed } = play(card(id).r),
+      kinds = new Set(crossed.flatMap(k => k.events.map(e => e.type)));
+    assert.ok(crossed[0].events.some(e => e.type === 'punch' && e.who === c.hit.who && e.name === c.hit.name), `${id}: the punch pressed, on its first step`);
+    for (const drawnOnly of ['whiff', 'graze', 'brilliant', 'cover', 'follow']) assert.ok(!kinds.has(drawnOnly), `${id}: no ${drawnOnly} kept`);
+  }
+});
+
 /* What is drawn of a man, joint by joint: where each joint is in the world, and how each is turned (its local turn). */
 const drawnOf = snap => snap.men.map(m => {
   const { p } = fk(m.pose);
@@ -262,4 +273,45 @@ test('one switch narrows it to the knockdowns that end the match', () => {
   // (the catalogue's knockdowns are counted: one he gets up from does not end it, one out cold does)
   assert.equal(card('down-back', { fall: { of: 'ending' } }).start, null, 'down-back: none');
   assert.ok(card('out-log', { fall: { of: 'ending' } }).start !== null, 'out-log: replayed');
+});
+
+/* A brilliant defence whose counter puts him down (the catalogue's out-counter card, look 2026-11-26 catalog-2): shown as every
+   knockdown is, live all the way down and then the knockdown's replay; its quarter-speed replay is not played (it cut into
+   the fall 0.46 s before he came down, and the card played two replays a loop) */
+test('a brilliant defence that puts him down: the fall is shown live all the way down, then the knockdown\'s replay, and no other', () => {
+  const e = OUT_COUNTER,
+    bout = freshBout(e),
+    rnd = dice(7),
+    motes = [createFx(rnd), createFx(rnd)],
+    ripples = [null, null],
+    r = createReplay({ yaw: () => e.view.yaw }),
+    starts = [];
+  let ground = null,
+    fall = null,
+    land = null,
+    brilliant = false;
+  for (let i = 0; i < Math.round(e.loop / DT); i++) {
+    if (r.playing) {
+      r.next(DT);
+      continue;
+    }
+    motes.forEach(f => f.update(DT));
+    ripples.forEach(x => x && (x.age += DT));
+    if (ground) ground.age += DT;
+    step(bout, drive(e, bout, i * DT, DT), DT);
+    bout.fighters[1].hp = 1000;
+    for (const ev of bout.events) {
+      if (ev.type === 'brilliant') brilliant = true;
+      if (ev.type === 'hit') (blow(motes[ev.on], ev, bout.fighters[ev.on]), (ripples[ev.on] = rippleOf(ev, bout.fighters[ev.on])));
+      if (ev.type === 'hit' && fallOf(ev)) fall = fallOf(ev);
+    }
+    if (fall && land === null) {
+      const l = landed(fall, bout.fighters[fall.on]);
+      if (l) (land = bout.t), (ripples[fall.on] = landRipple(fall, bout.fighters[fall.on], l)), (ground = groundOf(fall, l));
+    }
+    if (r.watch(bout, DT, quietOf(motes, ripples, ground))) starts.push({ t: bout.t, kind: r.kind });
+  }
+  assert.ok(brilliant && fall && land !== null, 'the card: a brilliant defence, its counter down, and he lands');
+  assert.deepEqual(starts.map(s => s.kind), ['fall'], 'one replay a loop, the knockdown\'s');
+  assert.ok(starts[0].t > land, `the replay at ${starts[0].t.toFixed(2)} s, after he came down at ${land.toFixed(2)} s`);
 });

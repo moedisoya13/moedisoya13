@@ -3,9 +3,11 @@
    BODY round the points of him the bout keeps (game/bout.mjs f.points: his hips, his spine, his head); where one of them
    goes past the near side of a rope, at that rope's height, the rope is pressed out there by as far as it went, and is
    drawn bent out round that place, ROPE.drawn.wide metres either way of it (and never at the corners, where it is tied).
-     contacts(points, out)     -> per rope (side * 3 + level: SIDES, RING.heights) { d, u }: how far out it is pressed
-                                  (metres, 0 if he does not touch it) and where along it (the coordinate along its side)
-     pressOf(points)           -> per side, the deepest any of its ropes is pressed: what the bout pushes him back by
+     contacts(points, out, balls)  -> per rope (side * 3 + level: SIDES, RING.heights) { d, u }: how far out it is pressed
+                                  (metres, 0 if he does not touch it) and where along it (the coordinate along its side), by
+                                  the balls of BODY (or those given)
+     pressOf(points)           -> per side, the deepest any of its ropes is pressed by his trunk and head (PUSHED): what the
+                                  bout pushes him back by
      bend(u, at, d)            how far out a rope is drawn at u along it, pressed d metres at `at`
      createRopes(rows, count)  the baked ropes (assets/ropes.splats.txt), bent where they are pressed:
                                  update(men, dt) -> whether the rows changed (each man's points, or null), the rows moved
@@ -20,19 +22,29 @@ export const ROPE = {
   k: 4,
   bounce: 0.45,
   // (the lean: his centre within `near` of where he must stop, his back toward the ropes; `most` degrees of trunk laid back, the
-  // hips `hips` metres forward under it, `side` degrees toward a rope at his side; sprung at hz, damped by ratio)
-  lean: { near: 0.2, most: 16, hips: 0, side: 7, hz: 2.2, ratio: 0.45 },
-  drawn: { hz: 3.2, ratio: 0.14, most: 0.3, wide: 1.1 }
+  // hips `hips` metres forward under it, `side` degrees toward a rope at his side; sprung at hz, damped by ratio. Of the 16
+  // asked before 2026-11-28 about 7 showed at his spine, his centre stopped and the ropes pushing him back in; 34 asked (the
+  // user, card ring-lean: more) is about 14 to 16 seen, 13 from his guard to the most of it. In the pit (pit: the user, card
+  // pit-lean: add) he leans back toward its walls and drums `pit` of it, about 6 seen: less than onto ropes that give, by
+  // more than the 6 the ropes are held to lean further than the pit, tests/arena.test.mjs)
+  lean: { near: 0.2, most: 34, hips: 0, side: 7, hz: 2.2, ratio: 0.45, pit: 0.4 },
+  // (a drawn rope let go of: a spring of hz, damped by ratio. 0.14 before 2026-11-28, which swung back 64% of how far it was
+  // pressed and on through three swings; 0.35 swings back about a third of it once, and is still in under a second: the
+  // user, card ring-lean, "로프 physics 자연스럽게")
+  drawn: { hz: 3.2, ratio: 0.35, most: 0.3, wide: 1.1 }
 };
-// the balls of him that meet the ropes: the bout's points, each so thick (the trunk's, game/trunk.mjs TRUNK; the head's)
-export const BODY = [['hips', 0.13], ['waist', 0.12], ['belly', 0.125], ['chest', 0.13], ['head', 0.12]];
+// the balls of him that meet the ropes: the bout's points, each so thick (the trunk's, game/trunk.mjs TRUNK; the head's; and
+// his knees, game/bout.mjs f.points, which press the bottom rope: the user, 2026-11-28, card ring-rope-legs)
+export const BODY = [['hips', 0.13], ['waist', 0.12], ['belly', 0.125], ['chest', 0.13], ['head', 0.12], ['kneeL', 0.08], ['kneeR', 0.08]];
+// (what the bout pushes him back in by: his trunk and his head, as before his knees met the ropes; they bend the rope drawn)
+export const PUSHED = BODY.slice(0, 5);
 // each side by the axis across it and its sign: the ropes at x = +rope, x = -rope, z = +rope, z = -rope
 export const SIDES = [[0, 1], [0, -1], [2, 1], [2, -1]];
 const ROPES = SIDES.length * RING.heights.length,
   FACE = RING.rope - RING.thick, // (the near side of a rope)
   END = RING.rope; // (each is tied at the corners, this far along its side either way)
 
-export function contacts(points, out) {
+export function contacts(points, out, balls) {
   out = out || Array.from({ length: ROPES }, () => ({ d: 0, u: 0 }));
   for (const c of out) (c.d = 0), (c.u = 0);
   if (!points) return out;
@@ -40,7 +52,7 @@ export function contacts(points, out) {
     const t = 2 - a;
     RING.heights.forEach((h, level) => {
       const c = out[side * RING.heights.length + level];
-      for (const [name, r] of BODY) {
+      for (const [name, r] of balls || BODY) {
         const p = points[name];
         if (!p) continue;
         const dy = p[1] - h;
@@ -53,7 +65,7 @@ export function contacts(points, out) {
   return out;
 }
 export function pressOf(points) {
-  const c = contacts(points),
+  const c = contacts(points, null, PUSHED),
     n = RING.heights.length;
   return SIDES.map((_, side) => Math.max(...c.slice(side * n, side * n + n).map(x => x.d)));
 }

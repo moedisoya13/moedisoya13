@@ -1,27 +1,19 @@
-/* The pending catalogue (docs/pending-catalog.md): every question still open, each with where it stands, its numbers
-   against the plan, the bouts that show it, and the choice, saved as it is made. The bouts are the motion catalogue's
-   (src/catalog.mjs): one canvas behind the page, each card's stage a window onto its own looped bout, the cards of a clock
-   stepped together while any of them is on screen, and a blow drawn as the game draws it (render/blow.mjs). The hit
-   effect's cards (an item decided: the versions it was decided among, kept as they were compared) draw the blow each its
-   own way: a version's spray kept outside the struck man's silhouette and its ripple through him, or the blow as it was
-   drawn before, its sparks where it landed and the struck man white for 0.07 s (his palette made white: the renderer has
-   no flash any more). A variant card is the same
-   engine with a value or two of the game's tables replaced while its own code runs (src/tune.mjs), so the card beside it
-   runs on the defaults. What a variant card should show was measured by tools/pending.mjs (src/pending.numbers.mjs), and is
-   written beside what it does show. A recorded card (a clip: src/clips.data.mjs, recorded by tools/clips.mjs) is motion that
-   is not in this checkout yet, a stage's or a checker's, fought where it is and kept frame by frame: it is played back through
-   the same renderer and the same blows (each man's pose as it was kept, each frame's blows thrown as the frame is reached), the
-   frames between two kept ones blended (src/replay.mjs blend) so that it plays as smoothly at a quarter of the speed. The
-   clips of a comparison are one clock: they start together, go at their own speeds (a slow one's beside its full speed one
-   goes round once while the other goes round four times), and start again together after a moment held on the last frame.
-   A clip's frames are loaded only as its row comes near the screen. A recorded card that is one option of a decision has the
-   option's own words over the rest (choice: the words of its button); and one that asks for it (white) has the game's white
-   flash at a parry drawn over its picture, as main.mjs draws it over the screen.
-   The decisions: a document an item in the artifact's store (collection `decisions`, the item's id: { choice, note, at }),
-   read once as the page opens and written one at a time, only when changed; where there is no store, this browser's
-   localStorage (`pending:<id>`) in the same shape. The page is written once they are read: an item answered (a document
-   with one of its choices, or with none, decided in the data: src/pending.data.mjs answered) is left out of its part and of
-   the counts, and folded at the part's end behind one line, where its choice can still be changed. */
+/* The old catalogue's cards as the open-questions catalogue (open.html, src/open.mjs) plays them: a page with places marked
+   data-pending-cards="<item id>" has each named item's cards (src/open.old.data.mjs: its groups, or its one card) written into
+   its place and played there (moved here 2026-11-28 from what was src/pending.mjs, the old catalogue's page, when that page was
+   deleted: del-code-pending-old). The bouts are the motion catalogue's (src/catalog.mjs): one canvas behind the page, each
+   card's stage a window onto its own looped bout, the cards of a clock stepped together while any of them is on screen, and a
+   blow drawn as the game draws it (render/blow.mjs). A variant card is the same engine with a value or two of the game's
+   tables replaced while its own code runs (src/tune.mjs), so the card beside it runs on the defaults; what it was measured to
+   show (src/open.old.data.mjs NUMBERS) is written beside what it does show. A recorded card (a clip: src/clips.data.mjs,
+   recorded by tools/clips.mjs) is motion that is not in this checkout, a stage's or a checker's, fought where it was and kept
+   frame by frame: it is played back through the same renderer and the same blows (each man's pose as it was kept, each
+   frame's blows thrown as the frame is reached), the frames between two kept ones blended (src/replay.mjs blend) so that it
+   plays as smoothly at a quarter of the speed. The clips of a comparison are one clock: they start together, go at their own
+   speeds, and start again together after a moment held on the last frame. A clip's frames are loaded only as its row comes
+   near the screen. A recorded card that is one option of a decision has the option's own words over the rest (choice); and
+   one that asks for it (white) has the game's white flash at a parry drawn over its picture, as main.mjs draws it over the
+   screen. globalThis.__pending: the page's handle on the cards (src/open.mjs: its step and seek buttons, its pause). */
 import { createRenderer, paletteArray, rgb } from './render/renderer.mjs';
 import { createFx } from './render/fx.mjs';
 import { blow, met, rippleOf, rippleRow } from './render/blow.mjs';
@@ -40,8 +32,7 @@ import { MOVES } from './anim/moves.mjs';
 import { CROSS, LEVEL } from './anim/skill.mjs';
 import { TECHNIQUES } from './game/techniques.mjs';
 import { withTune, patchesOf, guardAt, rearTilt } from './tune.mjs';
-import { PARTS, ITEMS, VERSIONS, MIST, FX_SCENES, STASH_NOTE, sortOut, ANSWERED_LINE } from './pending.data.mjs';
-import { NUMBERS } from './pending.numbers.mjs';
+import { ITEMS, NUMBERS } from './open.old.data.mjs';
 import { ROOTS } from './clips.data.mjs';
 import { CLIPS_MADE, LOAD } from './clips/index.mjs';
 import { blend } from './replay.mjs';
@@ -49,7 +40,7 @@ import { trunk } from './game/trunk.mjs';
 import { toWorld } from './anim/pose.mjs';
 
 const DT = 1 / 60;
-// the tables a card's tune may name (docs/pending-catalog.md §2.1)
+// the tables a card's tune may name (src/tune.mjs)
 const TABLES = { MOVES, CROSS, LEVEL, RULES, TECHNIQUES };
 // the catalogue's scripts, as src/catalog.mjs knows them (the liver block, the cross-arm against the body, block and fire and
 // the shell start each loop from a fresh bout though the boxer throws nothing)
@@ -57,7 +48,6 @@ const byId = Object.fromEntries([...ENTRIES, ...DEFENSE, ...STANCES, ...LADDER, 
 // what became of the punch, and what met it, as a card says it (src/catalog.mjs)
 const SAID = { whiff: '빗나감', graze: '스침', block: '막음', parry: '패리', hit: '명중' };
 const MET = { glove: '글러브', forearm: '팔뚝', elbow: '팔꿈치', shoulder: '어깨' };
-const HEAD = 0.115; // the head, as a ball, for the spray: metres (src/fxlab.mjs)
 const N = NUMBERS || {};
 const f1 = x => (x === undefined || x === null ? '–' : (+x).toFixed(1));
 const f0 = x => (x === undefined || x === null ? '–' : String(Math.round(x)));
@@ -87,27 +77,12 @@ function shownAsLD(root) {
     for (const k of ['aria-label', 'title', 'alt']) if (el.hasAttribute(k)) el.setAttribute(k, asLD(el.getAttribute(k)));
 }
 
-/* ---- the page, written from the data: the contents, then each part and its items */
-const main = document.getElementById('pending'),
-  CLOCKS = [], // [{ card, el }] each: cards stepped together, started again together
-  REELS = [], // the same for the recorded cards: [{ card, el }] each, played together
-  cardWant = card => (card.key && N.cards ? N.cards[card.key] : null),
-  colgroup = n => `<colgroup><col style="width:${n <= 2 ? 34 : n === 3 ? 30 : n === 4 ? 25 : 21}%">${'<col>'.repeat(n - 1)}</colgroup>`,
-  table = t => `<table class="nums">${colgroup(t.head.length)}<thead><tr>${t.head.map(h => `<th scope="col">${fmt(h)}</th>`).join('')}</tr></thead><tbody>${t.rows.map(r => `<tr>${r.map((c, i) => (i ? `<td>${fmt(c)}</td>` : `<th scope="row">${fmt(c)}</th>`)).join('')}</tr>`).join('')}</tbody></table>`,
-  PAIR_NO = ['', '①', '②', '③', '④'];
 
-function head(item, no) {
-  const el = document.createElement('div');
-  el.className = 'item-head';
-  el.id = `item-${item.id}`;
-  el.innerHTML = `<h3>${fmt(item.title)}</h3>
-    <div class="meta"><span>${(PARTS.find(P => P.n === item.part) || {}).mark || item.part + '부'} · ${no}</span><code>${esc(item.id)}</code>${item.pairNo ? `<span class="pairno">비교 쌍 ${PAIR_NO[item.pairNo]}</span>` : ''}</div>
-    <p class="state"><b>현재 상태.</b> ${fmt(item.state)}</p>
-    ${(item.tables || []).map(table).join('')}
-    ${(item.notes || []).map(n => `<p class="note">${fmt(n)}</p>`).join('')}
-    ${item.refs ? `<div class="refs">${item.refs.map(r => `<a href="${esc(r.href)}" target="_blank" rel="noopener">${fmt(r.say)} ↗</a>`).join('')}</div>` : ''}`;
-  return el;
-}
+/* ---- the cards, written into their places */
+const CLOCKS = [], // [{ card, el }] each: cards stepped together, started again together
+  REELS = [], // the same for the recorded cards: [{ card, el }] each, played together
+  cardWant = card => (card.key && N.cards ? N.cards[card.key] : null);
+
 // a card: a bout (its numbers under it), a reference sheet, or the empty half of a row
 function cardEl(card) {
   if (card.fill) {
@@ -250,313 +225,7 @@ function clocks(groups) {
   }
   return out;
 }
-// the choice: a radio a choice, the recommended one marked; back to none; a note; and how its saving stands
-function decide(item) {
-  const el = document.createElement('fieldset'),
-    rec = item.options.find(o => o.id === item.recommend);
-  el.className = 'decide';
-  el.dataset.item = item.id;
-  el.disabled = true; // (until the saved decisions are in, or it is clear they will not come)
-  el.innerHTML = `<legend>결정</legend>
-    <div class="opts">${item.options.map(o => `<label class="opt"><input type="radio" name="choice-${item.id}" value="${o.id}"><span><b>${fmt(o.name)}</b>${o.id === item.recommend ? '<i class="rec">권장</i>' : ''}<span class="says">${fmt(o.says)}</span></span></label>`).join('')}</div>
-    ${rec ? `<p class="why">권장: <b>${fmt(rec.name)}</b>${item.why ? `. ${fmt(item.why)}` : ''}</p>` : ''}
-    <textarea maxlength="2000" rows="2" aria-label="메모" placeholder="메모 (선택, 2000자까지)"></textarea>
-    <div class="row"><button type="button" data-clear>고르지 않음</button><span class="saved" data-saved aria-live="polite">아직 정하지 않음</span></div>`;
-  return el;
-}
-function article(item, no) {
-  const el = document.createElement('article');
-  el.className = 'item';
-  el.append(head(item, no));
-  if (item.banner) {
-    el.insertAdjacentHTML('beforeend', `<a class="banner" href="${esc(item.banner.image)}" target="_blank" rel="noopener"><img src="${esc(item.banner.image)}" alt="${esc(item.banner.say)}" loading="lazy"></a><p class="banner-note">${fmt(item.banner.say)}</p>`);
-  }
-  if (item.groups) el.append(clocks(item.groups));
-  // (one of two items that share a row of cards, written without the other: its card alone, the blank beside it)
-  else if (item.card) el.append(clocks([{ rows: [[item.card, { fill: true }]], apart: true }]));
-  el.append(decide(item));
-  return el;
-}
-// two items that share a row of cards: [A's head][B's head], the row, [A's choice][B's choice]
-function pairing(a, b, no) {
-  const el = document.createElement('section'),
-    heads = document.createElement('div'),
-    choices = document.createElement('div');
-  el.className = 'pairing';
-  heads.className = choices.className = 'two';
-  heads.append(head(a, no), head(b, no + 1));
-  choices.append(decide(a), decide(b));
-  // (two scripts that have nothing to do with each other: a clock each)
-  el.append(heads, clocks([{ rows: [[a.card, b.card]], apart: true }]), choices);
-  return el;
-}
-
-/* The page is written once the saved decisions are in (or it is clear they will not come soon): each part's items still
-   open, and at its end, behind one line, those answered, folded away with what was chosen, so that a choice can still be
-   changed there (src/pending.data.mjs answered, sortOut). It is laid out by the decisions as they stood when it opened: an
-   item chosen during a visit stays where it is until the next, so a slip can be put right where it was made. */
-let SHOWN = []; // (the items written open)
-const day = iso => {
-  const m = /^\d{4}-(\d\d)-(\d\d)/.exec(iso || '');
-  return m ? `${+m[1]}월 ${+m[2]}일` : '';
-};
-const decidedSaid = d => `${d.how === 'chat' ? '대화로 정함' : '권장대로 만듦'} · ${day(d.at)}`;
-const optionSaid = (item, id) => ((item.options.find(o => o.id === id) || {}).name || '').replace(/`/g, '');
-function contents(parts) {
-  const folded = parts.reduce((n, p) => n + p.answered.length, 0);
-  // (the contents are folded away until asked for: the count stays in sight on the fold's own line)
-  document.getElementById('toc').innerHTML = `<details class="toc-fold"><summary><span class="toc-title">차례</span><span class="toc-count" id="count">${SHOWN.length}개 가운데 <b>0</b>개를 정했습니다</span>${folded ? `<span class="toc-folded">답한 ${folded}개는 부마다 끝에 접어 둠</span>` : ''}</summary>
-    <ol class="toc-parts">${parts.map(({ P, open }) => `<li><a class="toc-part" href="#part-${P.n}">${P.mark ? '' : P.n + '. '}${fmt(P.title)}</a><ul class="toc-rows">${open.map(i => `<li><a href="#item-${i.id}" data-toc="${i.id}"><span class="dot" aria-hidden="true"></span><span>${fmt(i.title)}</span><span class="pick"></span></a></li>`).join('')}</ul></li>`).join('')}</ol></details>`;
-}
-// a part's open items, numbered in the order they are written, two that share a row of cards side by side
-function lay(items) {
-  for (let k = 0; k < items.length; k++) {
-    const a = items[k],
-      b = items[k + 1];
-    if (a.pair && b && b.id === a.pair) main.append(pairing(a, b, k + 1)), k++;
-    else main.append(article(a, k + 1));
-  }
-}
-// the answered items of a part, behind one line: each folded to its title and what was chosen, the whole item inside
-function answeredFold(items, docs) {
-  const box = document.createElement('details');
-  box.className = 'answered';
-  box.innerHTML = `<summary>${ANSWERED_LINE(items.length)}</summary><div class="answered-list"></div>`;
-  for (const item of items) {
-    const one = document.createElement('details'),
-      doc = docs[item.id],
-      said = doc ? `${optionSaid(item, doc.choice)} · 저장됨 · ${when(doc.at)}` : `${optionSaid(item, item.decided.choice)} · ${decidedSaid(item.decided)}`;
-    one.className = 'ans';
-    one.innerHTML = `<summary><span class="t">${fmt(item.title)}</span><span class="pick">${esc(said)}</span></summary>`;
-    one.append(article(item, '답함'));
-    box.lastElementChild.append(one);
-  }
-  return box;
-}
-function write(docs) {
-  const parts = PARTS.map(P => Object.assign({ P }, sortOut(P.n, docs)));
-  SHOWN = parts.flatMap(p => p.open);
-  contents(parts);
-  for (const { P, open, answered: done } of parts) {
-    main.insertAdjacentHTML('beforeend', `<h2 class="part" id="part-${P.n}"><span class="no">${P.mark || P.n}</span>${fmt(P.title)}</h2><p class="part-note">${fmt(P.note)}</p>`);
-    lay(open);
-    if (done.length) main.append(answeredFold(done, docs));
-    if (P.n === 4) main.insertAdjacentHTML('beforeend', `<p class="part-note" style="margin:0">${fmt(STASH_NOTE)}</p>`);
-  }
-  shownAsLD(document.body);
-  // (opened at an item's address: the page is written by now, so go there, opening the folds it is in)
-  const at = location.hash && document.getElementById(location.hash.slice(1));
-  if (at) {
-    for (let d = at.closest('details'); d; d = d.parentElement.closest('details')) d.open = true;
-    at.scrollIntoView();
-  }
-}
-
-/* ---- the decisions and where they are kept */
-const KEY = id => `pending:${id}`;
-/* The store: the artifact's db when this view has it (one document an item in `decisions`), otherwise this browser.
-   all() -> { id: doc }, set(id, doc). Only this object knows which. */
-const store = {
-  db: null,
-  mode: 'loading', // 'loading' | 'db' | 'local'
-  async all() {
-    if (this.db) {
-      const snap = await this.db.collection('decisions').get();
-      return Object.fromEntries(snap.docs.filter(d => d.exists).map(d => [d.id, d.data()]));
-    }
-    const out = {};
-    for (const item of ITEMS)
-      try {
-        const v = localStorage.getItem(KEY(item.id));
-        if (v) out[item.id] = JSON.parse(v);
-      } catch {
-        // (blocked or unreadable storage: nothing kept here)
-      }
-    return out;
-  },
-  async set(id, doc) {
-    if (this.db) return this.db.doc(`decisions/${id}`).set(doc);
-    localStorage.setItem(KEY(id), JSON.stringify(doc));
-  }
-};
-let readOnly = false;
-/* each item's choice as it stands (made once the page is written: wire): what is saved, what was decided away from the page
-   where nothing is saved (preset: the item's decided), what is shown, and how its saving goes */
-let state = {};
-const known = (item, choice) => item.options.some(o => o.id === choice);
-const when = iso => {
-  const d = new Date(iso);
-  return isNaN(d) ? '' : `${d.getMonth() + 1}월 ${d.getDate()}일 ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-};
-const storeLine = document.getElementById('store');
-function storeSays(text, kind) {
-  storeLine.textContent = text;
-  storeLine.className = 'store' + (kind ? ' ' + kind : '');
-}
-
-// how an item's saving stands, under its choice, and its mark in the contents
-function status(id) {
-  const s = state[id],
-    line = s.box.querySelector('[data-saved]'),
-    where = store.mode === 'local' ? '이 브라우저에만 저장됨' : '저장됨';
-  line.className = 'saved';
-  if (s.busy) (line.textContent = '저장 중…'), line.classList.add('busy');
-  else if (s.failed) {
-    line.innerHTML = '<button type="button" data-retry>저장하지 못했습니다. 다시 시도</button>';
-    line.querySelector('[data-retry]').addEventListener('click', () => save(id, true));
-  } else if (s.saved && known(s.item, s.saved.choice)) (line.textContent = `${where} · ${when(s.saved.at)}`), line.classList.add('ok');
-  else if (s.saved && s.saved.note) (line.textContent = `고르지 않음 · 메모 ${store.mode === 'local' ? '이 브라우저에만 ' : ''}저장됨 · ${when(s.saved.at)}`), line.classList.add('ok');
-  else if (!s.saved && s.preset && s.choice === s.preset.choice && !s.note) (line.textContent = `정해짐 · ${decidedSaid(s.preset)}`), line.classList.add('ok');
-  else line.textContent = store.mode === 'local' ? '아직 정하지 않음 · 이 브라우저에만 저장됨' : '아직 정하지 않음';
-  const link = document.querySelector(`[data-toc="${id}"]`),
-    chosen = s.saved && known(s.item, s.saved.choice);
-  // (an answered item, folded away, has no line in the contents)
-  if (link) {
-    link.classList.toggle('chosen', !!chosen);
-    link.querySelector('.pick').textContent = chosen ? asLD(s.item.options.find(o => o.id === s.saved.choice).name.replace(/`/g, '')) : '';
-    link.setAttribute('aria-label', `${asLD(s.item.title.replace(/`/g, ''))}: ${chosen ? '정함' : '정하지 않음'}`);
-  }
-  document.querySelector('#count b').textContent = String(SHOWN.filter(i => state[i.id].saved && known(i, state[i.id].saved.choice)).length);
-}
-// what is shown: the choice and the note as they stand
-function show(id) {
-  const s = state[id];
-  for (const r of s.box.querySelectorAll('input[type="radio"]')) r.checked = r.value === s.choice;
-  const note = s.box.querySelector('textarea');
-  if (document.activeElement !== note) note.value = s.note;
-  status(id);
-}
-/* Save an item: one write at a time for a document, and only when what it holds has changed (a change made while one is on
-   its way is written once that one is done). force: write it again whether or not (the retry after a failure). */
-function save(id, force) {
-  const s = state[id];
-  if (readOnly) return;
-  if (s.busy) return void (s.again = true);
-  const base = s.saved || (s.preset && { choice: s.preset.choice, note: '' }),
-    same = base && base.choice === s.choice && (base.note || '') === s.note;
-  if ((same || (!base && s.choice === null && !s.note)) && !force && !s.failed) return status(id);
-  const doc = { choice: s.choice, note: s.note, at: new Date().toISOString() };
-  s.busy = true;
-  s.failed = false;
-  status(id);
-  Promise.resolve()
-    .then(() => store.set(id, doc))
-    .then(
-      () => (s.saved = doc),
-      error => {
-        s.failed = true;
-        console.warn('pending: saving', id, error);
-        // (a well-formed write refused: this viewer may not write here, for the rest of the visit)
-        if (error && error.code === 'invalid_argument') lock('읽기 전용: 이 페이지의 결정을 바꿀 수 없습니다');
-      }
-    )
-    .finally(() => {
-      s.busy = false;
-      status(id);
-      if (s.again) (s.again = false), save(id);
-    });
-}
-function lock(text) {
-  readOnly = true;
-  storeSays(text, 'warn');
-  for (const s of Object.values(state)) (s.box.disabled = true), s.box.setAttribute('data-readonly', '');
-}
-function wire(docs) {
-  state = Object.fromEntries(
-    ITEMS.map(item => {
-      const box = document.querySelector(`fieldset[data-item="${item.id}"]`),
-        preset = item.decided && !(docs && docs[item.id]) ? item.decided : null;
-      return [item.id, { item, box, saved: null, preset, choice: preset ? preset.choice : null, note: '', busy: false, again: false, failed: false, touched: false, timer: 0 }];
-    })
-  );
-  for (const s of Object.values(state)) listen(s);
-  if (readOnly) for (const s of Object.values(state)) (s.box.disabled = true), s.box.setAttribute('data-readonly', '');
-}
-function listen(s) {
-  const id = s.item.id,
-    note = s.box.querySelector('textarea');
-  s.box.addEventListener('change', e => {
-    if (e.target.type !== 'radio') return;
-    s.touched = true;
-    s.choice = e.target.value;
-    save(id);
-  });
-  s.box.querySelector('[data-clear]').addEventListener('click', () => {
-    s.touched = true;
-    s.choice = null;
-    show(id);
-    save(id);
-  });
-  // (the note: once typing has stopped for 0.8 s, and as it loses the focus)
-  note.addEventListener('input', () => {
-    s.touched = true;
-    s.note = note.value.slice(0, 2000);
-    clearTimeout(s.timer);
-    s.timer = setTimeout(() => save(id), 800);
-  });
-  note.addEventListener('blur', () => {
-    clearTimeout(s.timer);
-    s.note = note.value.slice(0, 2000);
-    save(id);
-  });
-  show(id);
-}
-// the saved decisions, put in: a choice the item no longer has shows as none, its note kept; an id that is no item is left be
-function fill(docs) {
-  for (const [id, doc] of Object.entries(docs || {})) {
-    const s = state[id];
-    if (!s || !doc || typeof doc !== 'object' || s.touched) continue;
-    s.saved = { choice: typeof doc.choice === 'string' ? doc.choice : null, note: typeof doc.note === 'string' ? doc.note : '', at: doc.at };
-    s.preset = null; // (what is saved is what counts)
-    s.choice = known(s.item, s.saved.choice) ? s.saved.choice : null;
-    s.note = s.saved.note;
-    show(id);
-  }
-}
-const open = () => {
-  if (!readOnly) for (const s of Object.values(state)) s.box.disabled = false;
-};
-const within = (p, ms) => Promise.race([p, new Promise(resolve => setTimeout(() => resolve('late'), ms))]);
-async function connect() {
-  let db = null,
-    user = null;
-  try {
-    const use = window.claude && window.claude.use ? name => window.claude.use(name) : null;
-    if (use) [db, user] = await within(Promise.all([use('db'), use('user').catch(() => null)]), 10000).then(r => (r === 'late' ? [null, null] : r));
-  } catch (error) {
-    console.warn('pending: the store', error);
-  }
-  let docs = {},
-    said = null,
-    later = null;
-  if (db) {
-    store.db = db;
-    store.mode = 'db';
-    // (told this viewer may not write: shown read-only; told nothing, the controls stay and a refused write decides)
-    if (user) user.can('data.write').then(can => can === false && lock('읽기 전용: 결정을 볼 수만 있습니다'), () => {});
-    const read = store.all();
-    const got = await within(read, 10000).catch(error => ({ error }));
-    if (got === 'late') (said = ['저장된 결정을 아직 불러오지 못했습니다. 들어오는 대로 채웁니다', 'warn']), (later = read);
-    else if (got && got.error) console.warn('pending: reading the decisions', got.error), (said = ['저장된 결정을 불러오지 못했습니다. 고르면 다시 저장을 시도합니다', 'warn']);
-    else (docs = got || {}), (said = readOnly ? null : ['결정은 이 페이지에 저장되고, 함께 보는 사람과 같습니다', 'ok']);
-  } else {
-    store.mode = 'local';
-    docs = await store.all();
-    said = ['이 브라우저에만 저장됨', 'warn'];
-  }
-  // (the page, laid out by the decisions as they are now; and the decisions put in)
-  write(docs);
-  wire(docs);
-  fill(docs);
-  if (said && !(readOnly && said[1] === 'ok')) storeSays(...said);
-  open();
-  if (later) later.then(d => (fill(d), readOnly || storeSays('결정은 이 페이지에 저장되고, 함께 보는 사람과 같습니다', 'ok')), () => storeSays('저장된 결정을 불러오지 못했습니다', 'warn'));
-  for (const id of Object.keys(state)) status(id);
-}
-/* Lent (the open-questions catalogue, open.html and src/open.mjs, which carries some of these items and keeps its own
-   answers): a page with no `#pending` but places marked data-pending-cards="<item id>" has each named item's cards written
-   into its place and played as they are here (its banner, its clocks, or its one card of a pair), and nothing else of this
-   page: no contents, no choices, no store. */
+/* Each place marked data-pending-cards="<item id>" gets that item's cards: its banner, its clocks, or its one card of a pair. */
 function lend() {
   for (const slot of document.querySelectorAll('[data-pending-cards]')) {
     const item = ITEMS.find(i => i.id === slot.dataset.pendingCards);
@@ -567,7 +236,7 @@ function lend() {
     shownAsLD(slot);
   }
 }
-const written = main ? connect() : Promise.resolve(lend());
+lend();
 
 /* ---- the bouts */
 function floor(half, centre) {
@@ -591,13 +260,6 @@ async function load() {
   const boxer = unpack(fromBase64(await (await fetch('assets/' + manifest.boxer.file)).text()), manifest.boxer);
   return { manifest, boxer };
 }
-// the dice of an effect card: the same for the four cards of a scene and thrown again from the start every loop (src/fxlab.mjs)
-const dice = seed => () => {
-  seed = (seed + 0x6d2b79f5) | 0;
-  let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
-  t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-};
 const flash = el => {
   el.classList.remove('on');
   void el.offsetWidth;
@@ -611,8 +273,6 @@ function start({ manifest, boxer }) {
     tiles = floor(3.2, [0.6, 0]),
     meshes = { boxer: R.mesh(boxer, manifest.boxer.count), floor: R.mesh(tiles.rows, tiles.count) },
     palettes = [paletteArray(manifest.palette), paletteArray(manifest.palette.map((hex, i) => RIVAL[i] ?? hex))],
-    // (a struck man in white, as the blow was drawn before: only the effect cards' "now" draws it)
-    white = paletteArray(manifest.palette.map(() => 0xffffff)),
     mats = new Float32Array(NAMES.length * 12),
     ink = new Float32Array(rgb(manifest.palette[0]));
   let speed = 1,
@@ -622,15 +282,11 @@ function start({ manifest, boxer }) {
   const q = (el, s) => el.querySelector(s);
   function makeCell({ card, el }) {
     const entry = card.guard !== undefined ? guardAt(byId[card.entry], card.guard, card.gap) : byId[card.entry],
-      version = card.version ? VERSIONS.find(v => v.id === card.version) : null,
-      scene = version ? FX_SCENES[card.scene] : null,
       view = card.view || entry.view,
       cell = {
         card,
         entry,
         patches: patchesOf(card.tune, TABLES),
-        version,
-        scene,
         el,
         stage: q(el, '.stage'),
         tag: q(el, '[data-tag]'),
@@ -638,24 +294,15 @@ function start({ manifest, boxer }) {
         out: Object.fromEntries(['a', 'b', 'c', 'j', 'blow', 'own', 'beads', 'reach', 'tilt'].map(k => [k, q(el, `[data-${k}]`)])),
         exchange: entry.punch !== undefined || !!entry.fresh,
         bones: [new Float32Array(R.maxBones * 12), new Float32Array(R.maxBones * 12)],
-        seed: scene ? 7 + card.scene : 0,
-        rnd: Math.random,
-        waves: [null, null],
         ripples: [null, null],
-        whites: [0, 0],
-        cam: scene ? { target: [scene.struck ? 1.2 : -0.45, 1.3, 0], yaw: view.yaw, pitch: view.pitch, dist: 2.9 } : { target: [0.45, entry.level ? 0.95 : entry.punch !== undefined ? 0.85 : 0.52, 0], yaw: view.yaw, pitch: view.pitch, dist: 5.4 },
+        cam: { target: [0.45, entry.level ? 0.95 : entry.punch !== undefined ? 0.85 : 0.52, 0], yaw: view.yaw, pitch: view.pitch, dist: 5.4 },
         shake: 0,
         t: 0
       };
-    cell.fx = createFx(() => cell.rnd());
+    cell.fx = createFx();
     cell.mesh = R.mesh(cell.fx.rows, 0, true);
-    // (an effect card's spray off each man apart from the rest: it is kept off his own silhouette, and only his)
-    cell.sprays = scene ? [0, 1].map(() => {
-      const spray = createFx(() => cell.rnd());
-      return { fx: spray, mesh: R.mesh(spray.rows, 0, true) };
-    }) : [];
-    // (and on any other card, what a blow throws off each man as the game draws it, kept off his own silhouette)
-    cell.motes = scene ? [] : [0, 1].map(() => {
+    // (what a blow throws off each man as the game draws it, kept off his own silhouette)
+    cell.motes = [0, 1].map(() => {
       const m = createFx();
       return { fx: m, mesh: R.mesh(m.rows, 0, true) };
     });
@@ -670,10 +317,7 @@ function start({ manifest, boxer }) {
     cell.bout = withTune(cell.patches, () => freshBout(cell.entry));
     cell.t = 0;
     cell.m = { own: [], tilt: [], held: 0, path: [] };
-    cell.waves = [null, null];
     cell.ripples = [null, null];
-    cell.whites = [0, 0];
-    if (cell.scene) cell.rnd = dice(cell.seed);
   }
   const put = (cell, k, v) => cell.out[k] && (cell.out[k].textContent = v);
   function tell(cell, text, blow) {
@@ -697,13 +341,11 @@ function start({ manifest, boxer }) {
       step(bout, controls, DT);
       b.hp = 1000; // he is here to be stood in front of, not beaten
       if (!entry.hurt) a.hp = 1000;
-      cell.whites = cell.whites.map(w => Math.max(0, w - DT));
       for (const e of bout.events) {
         const by = e.type === 'parry' ? e.on : e.who;
         if (by === 1 && SAID[e.type]) tell(cell, e.down && e.type !== 'parry' ? (e.out ? '실신' : '다운') : e.roll ? '굴림' : e.type === 'parry' && e.down ? '눌러 내림' : SAID[e.type], e.J);
         if (e.who === 0 && ['hit', 'block', 'whiff', 'graze'].includes(e.type) && e.J !== undefined) (m.own = m.own.concat(Math.round(e.J)).slice(-3)), put(cell, 'own', m.own.join(' · '));
-        if (cell.scene) blowFx(cell, e);
-        else struck(cell, e, bout.fighters);
+        struck(cell, e, bout.fighters);
         switch (card.kind) {
           case 'liver':
             if (e.type === 'hit' && e.who === 0) {
@@ -726,7 +368,7 @@ function start({ manifest, boxer }) {
       }
       cell.shake *= 0.82;
       if (card.kind === 'cross') {
-        // the rear forearm's lean, averaged over the loop while the guard has been up 0.3 s and more (tools/pending.mjs)
+        // the rear forearm's lean, averaged over the loop while the guard has been up 0.3 s and more (as NUMBERS were measured)
         // (said once the guard comes down, when the whole of it has been averaged)
         if (!a.cover && m.held >= 0.3 - 1e-9 && m.tilt.length) put(cell, 'tilt', f1(m.tilt.reduce((s, x) => s + x, 0) / m.tilt.length));
         m.held = a.cover ? m.held + DT : 0;
@@ -759,32 +401,6 @@ function start({ manifest, boxer }) {
       if (e.type === 'block' || e.type === 'parry') cell.shake = e.type === 'parry' ? 2 : 1;
     } else if (e.type === 'block') (met(cell.fx, e), (cell.shake = 1));
     else if (e.type === 'parry') (met(cell.fx, e), (cell.shake = 2));
-  }
-  // a blow as an effect card draws it: the version's spray and ripple, or the blow as it is drawn now (src/fxlab.mjs)
-  function blowFx(cell, e) {
-    const { version, scene } = cell;
-    if (e.type === 'hit') {
-      const k = Math.min(1.6, e.J / 85),
-        struck = cell.bout.fighters[e.on];
-      let n;
-      if (version.spray) {
-        // the sweat off the shadowed side of what was struck (a blow to the body: off the trunk, at 0.6 of the amount and reach)
-        const o = scene.body ? Object.assign({}, version.spray, { n: version.spray.n * 0.6, range: version.spray.range * 0.6 }) : version.spray,
-          part = scene.body && e.trunk ? e.trunk : { at: struck.points.head, r: HEAD };
-        n = cell.sprays[e.on].fx.spray(part, e.vec, e.J, MIST, o);
-        cell.waves[e.on] = { off: [e.at[0] - struck.points.head[0], e.at[1] - struck.points.head[1], e.at[2] - struck.points.head[2]], age: 0, strength: Math.min(1, e.J / 60) };
-        put(cell, 'reach', String(Math.round(o.range * Math.min(1.7, e.J / 85) * 100)));
-      } else {
-        cell.fx.sparks(e.at, Math.round(5 + 12 * k), [38, 39, 40, 41], 2.5 + 3 * k, e.dir);
-        cell.fx.sparks(e.at, Math.round(3 + 8 * k), [41, 41, 25], 2.5 + 2 * k, e.dir);
-        n = Math.round(5 + 12 * k) + Math.round(3 + 8 * k);
-        cell.whites[e.on] = 0.07;
-        put(cell, 'reach', '–');
-      }
-      cell.shake = e.down ? scene.shake || 5 : 1 + 2.5 * k;
-      put(cell, 'blow', String(Math.round(e.J)));
-      put(cell, 'beads', String(n));
-    } else if (e.type === 'block') (cell.fx.sparks(e.at, 4, [38, 25, 24], 2.5, e.dir), (cell.shake = 1));
   }
 
   /* A clock: its cards step together, so the same moment of the script is in all of them; an exchange starts again, all of
@@ -1028,54 +644,29 @@ function start({ manifest, boxer }) {
       ease = 1 - Math.exp(-elapsed * 4),
       clock = cell.rec ? cell.at / 60 : cell.t,
       jolt = cell.shake > 0.3 ? [Math.sin(clock * 97) * cell.shake, Math.cos(clock * 83) * cell.shake * 0.6] : null;
-    if (cell.scene) {
-      for (const s of cell.sprays) s.mesh.update(s.fx.rows, s.fx.update(elapsed));
-      // each man's ripple, if one is going through him: from where the glove met him, wherever his head is now
-      const waves = [a, b].map((f, i) => {
-        const wv = cell.waves[i],
-          set = cell.version.wave;
-        if (!wv || !set) return null;
-        wv.age += elapsed;
-        if (wv.age >= set.last) return (cell.waves[i] = null);
-        const hd = f.points.head;
-        return [hd[0] + wv.off[0], hd[1] + wv.off[1], hd[2] + wv.off[2], set.speed * wv.age, set.width, wv.strength * (1 - wv.age / set.last) ** 1.2, set.sway];
-      });
-      layers.push(
-        { mesh: cell.mesh, palette: palettes[0], mask: 0.6 },
-        { mesh: meshes.boxer, bones: cell.bones[0], palette: cell.whites[0] > 0 ? white : palettes[0], mask: 1, wave: waves[0], silhouette: 1 },
-        { mesh: meshes.boxer, bones: cell.bones[1], palette: cell.whites[1] > 0 ? white : palettes[1], mask: 1, wave: waves[1], silhouette: 2 },
-        // (the spray off each man is never seen over him: where it crosses his own outline it is not there)
-        ...cell.sprays.map((s, i) => ({ mesh: s.mesh, palette: palettes[0], mask: 0.6, outside: i + 1 }))
-      );
-      // framed on the man who is hit, a little behind him: the room is on the far side of him, for what the blow throws off
-      const [hit, other] = cell.scene.struck ? [b, a] : [a, b];
-      cell.cam.target[0] += (hit.x * 1.45 - other.x * 0.45 - cell.cam.target[0]) * ease;
-      cell.cam.target[2] += (hit.z * 1.45 - other.z * 0.45 - cell.cam.target[2]) * ease;
-    } else {
-      for (const m of cell.motes) m.mesh.update(m.fx.rows, m.fx.update(elapsed));
-      const ripples = [a, b].map((f, i) => {
-        const r = cell.ripples[i];
-        if (!r) return null;
-        r.age += elapsed;
-        return rippleRow(r, f) || (cell.ripples[i] = null);
-      });
-      layers.push(
-        { mesh: cell.mesh, palette: palettes[0], mask: 0.6 },
-        { mesh: meshes.boxer, bones: cell.bones[0], palette: palettes[0], mask: 1, wave: ripples[0], silhouette: 1 },
-        { mesh: meshes.boxer, bones: cell.bones[1], palette: palettes[1], mask: 1, wave: ripples[1], silhouette: 2 },
-        ...cell.motes.map((m, i) => ({ mesh: m.mesh, palette: palettes[0], mask: 0.6, outside: i + 1 }))
-      );
-      // (an exchange is framed on the two of them, close; footwork on the boxer whose feet these are; a recorded card where it
-      // says, its target already set)
-      const mine = cell.exchange ? 0.5 : 0.6;
-      if (!cell.rec) {
-        cell.cam.target[0] += (a.x * mine + b.x * (1 - mine) - cell.cam.target[0]) * ease;
-        cell.cam.target[2] += (a.z * mine + b.z * (1 - mine) - cell.cam.target[2]) * ease;
-      }
-      // far enough back that both men are in the picture from the feet up, whatever shape the window is (or as near as it says)
-      const [near, wide] = cell.rec ? [3.3, 2.5] : cell.entry.level ? [3.4, 2.1] : cell.exchange ? [3.3, 2.5] : [5.2, 3.6];
-      cell.cam.dist = fixed || Math.max(near, wide / (2 * Math.tan((19 * Math.PI) / 180) * (rect.w / rect.h)));
+    for (const m of cell.motes) m.mesh.update(m.fx.rows, m.fx.update(elapsed));
+    const ripples = [a, b].map((f, i) => {
+      const r = cell.ripples[i];
+      if (!r) return null;
+      r.age += elapsed;
+      return rippleRow(r, f) || (cell.ripples[i] = null);
+    });
+    layers.push(
+      { mesh: cell.mesh, palette: palettes[0], mask: 0.6 },
+      { mesh: meshes.boxer, bones: cell.bones[0], palette: palettes[0], mask: 1, wave: ripples[0], silhouette: 1 },
+      { mesh: meshes.boxer, bones: cell.bones[1], palette: palettes[1], mask: 1, wave: ripples[1], silhouette: 2 },
+      ...cell.motes.map((m, i) => ({ mesh: m.mesh, palette: palettes[0], mask: 0.6, outside: i + 1 }))
+    );
+    // (an exchange is framed on the two of them, close; footwork on the boxer whose feet these are; a recorded card where it
+    // says, its target already set)
+    const mine = cell.exchange ? 0.5 : 0.6;
+    if (!cell.rec) {
+      cell.cam.target[0] += (a.x * mine + b.x * (1 - mine) - cell.cam.target[0]) * ease;
+      cell.cam.target[2] += (a.z * mine + b.z * (1 - mine) - cell.cam.target[2]) * ease;
     }
+    // far enough back that both men are in the picture from the feet up, whatever shape the window is (or as near as it says)
+    const [near, wide] = cell.rec ? [3.3, 2.5] : cell.entry.level ? [3.4, 2.1] : cell.exchange ? [3.3, 2.5] : [5.2, 3.6];
+    cell.cam.dist = fixed || Math.max(near, wide / (2 * Math.tan((19 * Math.PI) / 180) * (rect.w / rect.h)));
     R.cell(rect, { camera: cell.cam, layers, shake: jolt });
   }
 
@@ -1104,7 +695,7 @@ function start({ manifest, boxer }) {
         .forEach(clock => {
           for (let i = 0; i < Math.round(sec / DT); i++) {
             stepClock(clock);
-            for (const cell of clock.cells) (cell.fx.update(DT, [], 22), cell.sprays.forEach(sp => sp.fx.update(DT)), cell.motes.forEach(m => m.fx.update(DT)), cell.waves.forEach(wv => wv && (wv.age += DT)), cell.ripples.forEach(r => r && (r.age += DT)));
+            for (const cell of clock.cells) (cell.fx.update(DT, [], 22), cell.motes.forEach(m => m.fx.update(DT)), cell.ripples.forEach(r => r && (r.age += DT)));
           }
         })
   };
@@ -1114,8 +705,8 @@ function start({ manifest, boxer }) {
   requestAnimationFrame(frame);
 }
 
-// (the bouts once the page that holds their cards is written)
-Promise.all([load(), written]).then(([assets]) => start(assets)).catch(error => {
+// (the bouts, once the cards are written)
+load().then(assets => start(assets)).catch(error => {
   console.error(error);
   const loading = document.getElementById('loading');
   if (loading) loading.textContent = '불러오지 못했습니다: ' + error.message;

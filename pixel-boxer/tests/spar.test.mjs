@@ -178,3 +178,44 @@ test('the artifact tool builds the page with its worker, its outfits and a build
   // (the committed page is left as it is)
   assert.doesNotMatch(readFileSync(path.join(root, 'spar.html'), 'utf8'), /name="build"/);
 });
+
+/* A show-off's taunts are seen (look 2026-11-26 spar-1: 43 of 44 ended on their first frame or two, his feet walking him out
+   of them while the lane counted each as an action): his feet stand while he taunts, so a taunt goes on until it is over or
+   something takes him out of it (a punch coming, a blow); never his own walking. On the look's two rounds (4암 in both). */
+test('a taunt is not walked out of: the show-off\'s feet stand for it', () => {
+  let n = 0,
+    walked = 0,
+    short = 0;
+  for (const seed of [13, 16]) {
+    const plan = planOf(seed),
+      on = [null, null];
+    replayOf(plan, (bout, k) => {
+      if (k >= plan.ko.step) return;
+      bout.fighters.forEach((f, i) => {
+        const t = f.action && MOVES[f.action.name].taunt ? f.action : null;
+        if (t && (!on[i] || on[i].a !== t)) (on[i] = { a: t, n: 0 }), n++;
+        if (t) on[i].n++;
+        else if (on[i]) {
+          const inp = plan.inputs[k][i] || {};
+          if (Math.hypot(...(inp.move || [0, 0])) > 0.3 && !inp.cover) walked++;
+          if (on[i].n <= 2) short++;
+          on[i] = null;
+        }
+      });
+    });
+  }
+  assert.ok(n >= 10, `${n} taunts in the two rounds`);
+  assert.equal(walked, 0, `${walked} of ${n} taunts ended by his walking`);
+  assert.ok(short <= n * 0.1, `${short} of ${n} taunts over within 2 frames`);
+});
+
+// (the lanes' colours are all in the legend over them: a taunt's too)
+test('the legend over the lanes names every colour they use', () => {
+  const html = readFileSync(path.join(root, 'spar.html'), 'utf8'),
+    js = readFileSync(path.join(root, 'src/spar.mjs'), 'utf8'),
+    legend = /<div id="legend">([\s\S]*?)<\/div>/.exec(html)[1],
+    named = [...legend.matchAll(/class="k (\w)">([^<]+)</g)].map(m => m[2]),
+    kinds = Object.keys(Function('return ' + /const KIND = (\{[^}]+\})/.exec(js)[1])()).filter(k => k !== 'down');
+  assert.deepEqual(named, ['공격', '회피', '방어', '도발', '피격', '거리', '축']);
+  assert.deepEqual(kinds, ['attack', 'evade', 'guard', 'show', 'hurt', 'distance', 'axis']);
+});

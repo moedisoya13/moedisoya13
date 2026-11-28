@@ -9,7 +9,7 @@
 <style>
   /* the open-questions catalogue (docs/open-catalog.md): a sticky answer bar (what is picked, whether it is saved, where 제출
      sends it), then the open decisions in five groups, each a card: where it stands, the builds side by side on one clock
-     (src/open.clips.mjs videos, or the old catalogue's own cards played by src/pending.mjs on the canvas behind the page),
+     (src/open.clips.mjs videos, or the old catalogue's own cards played by src/open.old.mjs on the canvas behind the page),
      the choices (★ the default recommended, never read as picked), a follow-up opened on the same card by a choice, a memo.
      Dark by default, light when the viewer asks for it. */
   :root {
@@ -29,7 +29,7 @@
   html { scroll-padding-top: 190px; }
   body { margin: 0; background: var(--bg); color: var(--ink); font: 400 15px/1.55 var(--body); }
   body, h1, h2, h3, p, li, td, button { word-break: keep-all; overflow-wrap: anywhere; }
-  /* the old catalogue's cards draw on one canvas behind the page (src/pending.mjs): every box above a stage is see-through */
+  /* the old catalogue's cards draw on one canvas behind the page (src/open.old.mjs): every box above a stage is see-through */
   #view { position: fixed; inset: 0; width: 100%; height: 100%; display: block; image-rendering: pixelated; z-index: 0; background: var(--bg); }
   .wrap { position: relative; z-index: 1; max-width: 920px; margin: 0 auto; padding-block: 20px 56px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: 14px; }
   .wrap * { min-width: 0; }
@@ -138,7 +138,7 @@
   .ctl button[aria-pressed="true"] { background: #e8e1d2; color: #05060a; border-color: #e8e1d2; }
   .ctl .fr { margin-left: auto; font: 500 11px/1 var(--data); color: #8c8a99; font-variant-numeric: tabular-nums; white-space: nowrap; }
 
-  /* the old catalogue's cards, lent (src/pending.mjs lend): its classes, on this page's tokens */
+  /* the old catalogue's cards (src/open.old.mjs): the old page's classes, on this page's tokens */
   .old { --card: var(--panel); --fg: var(--ink); --dim: var(--muted); --accent: var(--star); --changed: var(--lava); --new: var(--ok); display: flex; flex-direction: column; gap: 8px; }
   .old.wide .grid { grid-template-columns: minmax(0, 1fr); }
   .old .ctl { background: var(--bg); }
