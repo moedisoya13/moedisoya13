@@ -1,3 +1,5 @@
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
+addopts = "-m 'not slow'"
+markers = ["slow: runs on a real build in out/ (minutes); deselect with -m 'not slow'"]

@@ -52,12 +52,13 @@ import level as lv  # noqa: E402
 TEMPLATE = HERE / "play" / "index.html"
 FACINGS = tuple(range(0, 360, 45))  # layout convention: 0 = +x (screen right), 90 = +z (towards the camera)
 DEPTH_EMPTY = 65535
-SPRITE_DEPTH_SCALE = 2048.0  # sprite depth offsets: 1/2048 world unit steps, +-16 units
+SPRITE_DEPTH_SCALE = 512.0  # sprite depth offsets: 1/512 world unit steps (2 mm), +-64 units; coarser steps
+#                             than the old 1/2048 pack smaller (the occlusion tests need ~1 cm)
 HEIGHT_ZERO = 32768  # terrain heights: millimetres + this
-WALK_FRAMES = 24
-CLIP_FPS = 30.0
-WALK_SPEED = 1.4  # metres per second the page walks at (the demo path uses 1.25)
-IDLE = dict(clip="onetwo", first=0, count=18, fps=15.0)  # the guard at the start of the one-two, ping-pong
+SUN_CELL = 0.0625  # metres: the ground's own sun map (where the level shades the ground), see export_level
+LIT, GROUND = 128, 64  # level_depth.png B channel bits: sunlit, walkable ground (grass / path / water)
+DEFAULT_ONETWO = "out/onetwo4/5m/clip.npz"  # the one-two, wrist range "human"
+ATLAS_MAX_AREA = 4096 * 4096  # the largest canvas every browser reads back (iOS Safari: 16.7 M pixels)
 
 
 # ---------------------------------------------------------------- encodings (the page decodes these)
@@ -191,10 +192,13 @@ def export_level(st: graybox.Stage, assets: str, cell: float = 0.25, log=print) 
     d = L["depth"][valid]
     lo, hi = float(np.floor(d.min() - 1.0)), float(np.ceil(d.max() + 1.0))
     save_rgba(to_u8(img), os.path.join(assets, "level.png"))
-    save_rgba(pack_depth16(L["depth"], valid, lo, hi, np.where(lit, 255, 0).astype(np.uint8)),
-              os.path.join(assets, "level_depth.png"))
-    # how much the level's own shadow darkens walkable ground (per channel): the page darkens with it
     m = st.mat
+    ground_px = valid & ((m == lv.MAT["grass"]) | (m == lv.MAT["path"]) | (m == lv.MAT["water"]))
+    flags = (np.where(lit, LIT, 0) | np.where(ground_px, GROUND, 0)).astype(np.uint8)
+    save_rgba(pack_depth16(L["depth"], valid, lo, hi, flags), os.path.join(assets, "level_depth.png"))
+    sun = ground_sun(st, SUN_CELL)
+    save_rgba(np.repeat(np.where(sun, 255, 0).astype(np.uint8)[..., None], 3, -1), os.path.join(assets, "sun.png"))
+    # how much the level's own shadow darkens walkable ground (per channel): the page darkens with it
     ground = valid & ((m == lv.MAT["grass"]) | (m == lv.MAT["path"]))
     ratio = np.median(img[ground & ~lit], 0) / np.maximum(np.median(img[ground & lit], 0), 1e-3)
     grid = walk_grid(st.level, cell)
@@ -208,16 +212,47 @@ def export_level(st: graybox.Stage, assets: str, cell: float = 0.25, log=print) 
     return dict(color="level.png", depth="level_depth.png", size=[W, H], depth_lo=lo, depth_hi=hi,
                 depth_empty=DEPTH_EMPTY, background=[float(v) for v in graybox.BACKGROUND],
                 shadow_ratio=[round(float(v), 4) for v in ratio], flat_depth_per_row=flat_row,
+                depth_flags=dict(lit=LIT, ground=GROUND),
+                sun=dict(file="sun.png", cell=SUN_CELL, origin=[-st.level.size[0] / 2, -st.level.size[1] / 2],
+                         size=[int(sun.shape[1]), int(sun.shape[0])],
+                         note="the ground's own sunlight (the level's shadows only), one pixel per cell: R >= 128 = lit"),
                 terrain=dict(file="terrain.png", cell=cell, origin=list(grid["origin"]),
                              size=[int(grid["walk"].shape[1]), int(grid["walk"].shape[0])], height_zero=HEIGHT_ZERO,
                              height_scale=1000.0))
 
 
+def ground_sun(st: graybox.Stage, cell: float = SUN_CELL) -> np.ndarray:
+    """(nz, nx) bool: is the GROUND at each cell centre in the sun (the level's own shadows: trees, cliffs,
+    rocks)?  What decides whether a figure standing there is lit - not whatever covers its feet on screen
+    (a tree crown between the camera and the feet is in the sun itself)."""
+    from pixelsplat.shadow import visibility  # noqa: PLC0415
+
+    sx, sz = st.level.size
+    nx, nz = int(round(sx / cell)), int(round(sz / cell))
+    x = -sx / 2 + (np.arange(nx) + 0.5) * cell
+    z = -sz / 2 + (np.arange(nz) + 0.5) * cell
+    X, Z = np.meshgrid(x, z)
+    Hm = st.level.height(X, Z)
+    U = lv.UNITS_PER_M
+    P = np.stack([X * U, lv.GROUND + Hm * U, Z * U], -1)
+    e = 0.5 * cell
+    gx = (st.level.height(X + e, Z) - st.level.height(X - e, Z)) / (2 * e)
+    gz = (st.level.height(X, Z + e) - st.level.height(X, Z - e)) / (2 * e)
+    n = np.stack([-gx, np.ones_like(gx), -gz], -1)
+    n /= np.linalg.norm(n, axis=-1, keepdims=True)
+    vis = visibility(st.sm, P, bias=0.06, pcf=1, normals=n)
+    return vis > 0.5
+
+
 # ---------------------------------------------------------------- sprites
-def flat_stage(spec: isocam.RefCam, folder: str) -> graybox.Stage:
-    """A small flat meadow with the same camera and sun as the level: what the sprites are lit on."""
+def flat_stage(spec: isocam.RefCam, folder: str, density: int = 0) -> graybox.Stage:
+    """A small flat meadow with the same camera and sun as the level: what the sprites are lit on.
+    ``density`` 0 = from the scale (the calibrated scale times a whole number)."""
+    if not density:
+        density = max(1, int(round(spec.px_per_unit / isocam.scale_for(spec.elev)[0])))
     layout = {"name": "sprite_stage", "size": [10, 10], "grid": {"minor": 0, "major": 0}, "elements": []}
-    _, data = graybox.bake(lv.Level(layout), spec, spacing=0.25, shadow_res=128, log=lambda *a: None)
+    _, data = graybox.bake(lv.Level(layout), spec, spacing=0.25, shadow_res=128 * density, log=lambda *a: None,
+                           density=density)
     np.savez_compressed(os.path.join(folder, graybox.BAKE_FILE), **data)
     Path(folder, "layout_used.json").write_text(json.dumps(layout))
     return graybox.Stage(folder)
@@ -227,10 +262,12 @@ class SpriteRenderer:
     """Renders BB frames on the flat stage: the figure's ground point sits on the centre of pixel
     (cx, cy) of the stage camera; the frame window is (W, H) art px with that pixel at (AX, AY)."""
 
-    W, H, AX, AY = 72, 52, 38, 38
+    W, H, AX, AY = 84, 58, 44, 42  # at density 1; times the stage's density
 
     def __init__(self, st: graybox.Stage, man: graybox.Mannequin):
         self.st, self.man = st, man
+        d = st.density
+        self.W, self.H, self.AX, self.AY = self.W * d, self.H * d, self.AX * d, self.AY * d
         c = isocam.project(st.cam, st.level.to_world(0.0, 0.0))
         self.cx, self.cy = int(math.floor(c[0])), int(math.floor(c[1]))
         self.ground = isocam.unproject_to_plane(st.cam, self.cx + 0.5, self.cy + 0.5, lv.GROUND)
@@ -254,96 +291,147 @@ def strip_root(mats: np.ndarray, root) -> np.ndarray:
     return out.astype(np.float32)
 
 
-def load_clips(specs: Sequence[str]) -> Dict[str, object]:
-    import clip as cl  # noqa: PLC0415 (examples/soldier, on sys.path once a Mannequin exists)
+def sprite_sequences(onetwo: str, max_frames: int = 0):
+    """The moves (``moves.py``) as (name, [Frame], meta) in render order."""
+    import moves as mv  # noqa: PLC0415
 
-    out = {}
-    for s in specs:
-        name, path = s.split("=", 1)
-        c = cl.Clip.load(path)
-        step = max(1, int(round(c.fps / CLIP_FPS)))
-        out[name] = (c.sub(0, len(c), step), path)
-    return out
+    m = mv.Moves(onetwo)
+    seqs = []
+    for name, frames in m.loops().items():
+        meta = dict(kind="loop", fps=mv.FPS)
+        if name in ("walk", "run"):
+            stride = (mv.WALK_SPEED if name == "walk" else mv.RUN_SPEED) * len(frames) / mv.FPS
+            meta.update(kind="gait", stride_m=round(stride, 5), speed=round(stride * mv.FPS / len(frames), 5),
+                        frames_per_cycle=len(frames))
+        seqs.append((name, frames, meta))
+    seqs.append(("onetwo", m.onetwo(), dict(kind="action", fps=mv.FPS, source=onetwo, then="idle")))
+    for name, t in m.transitions().items():
+        meta = dict(kind="transition", fps=mv.FPS, source=t["source"], target=t["target"], enter=t["enter"],
+                    exit=t["exit"], advance=[[round(float(a), 6), round(float(b), 6)] for a, b in t["advance"]])
+        seqs.append((name, t["frames"], meta))
+    if max_frames:
+        seqs = [(n, f[:max_frames], dict(m, advance=m["advance"][:max_frames]) if "advance" in m else m)
+                for n, f, m in seqs]
+    return seqs
 
 
-def render_sprites(bb: str, clip_specs: Sequence[str], spec: isocam.RefCam, facings=FACINGS, splats: int = 1000,
-                   max_frames: int = 0, log=print):
-    """All frames: (frames, anims).  ``frames`` = list of dicts (rgba crop, data crop, ox, oy);
-    ``anims`` = {name: {per-facing frame indices, fps, root motion ...}}."""
+def _render_worker(args):
+    """One process: one stage + mannequin, a list of (facing, sequence index) jobs -> cropped frames."""
+    bb, spec_t, splats, density, jobs, poses, threads, log_path = args
+    import torch  # noqa: PLC0415
+
+    torch.set_num_threads(threads)
+    spec = isocam.RefCam(*spec_t[:3], view=tuple(spec_t[3]))
     tmp = tempfile.mkdtemp(prefix="bb_stage_")
     try:
         st = flat_stage(spec, tmp)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
-    man = graybox.Mannequin(bb, splats)
-    import motion  # noqa: PLC0415
-
+    man = graybox.Mannequin(bb, splats, density=density, raster_k=512 if density > 1 else None)
     sr = SpriteRenderer(st, man)
-    clips = load_clips(clip_specs)
-    frames: List[dict] = []
-    anims: Dict[str, dict] = {}
+    out = []
     t0 = time.time()
-
-    def add(r) -> int:
-        cover = r["actor"] | r["shadow"]
-        ys, xs = np.nonzero(cover)
-        if len(ys) == 0:
-            raise RuntimeError("an empty sprite frame (the figure left the render window?)")
-        y0, y1, x0, x1 = ys.min(), ys.max() + 1, xs.min(), xs.max() + 1
-        if y0 == 0 or x0 == 0 or y1 == sr.H or x1 == sr.W:
-            raise RuntimeError(f"a sprite frame touches the render window's edge ({x0},{y0})-({x1},{y1}): enlarge it")
-        sl = (slice(y0, y1), slice(x0, x1))
-        rgba = np.zeros((y1 - y0, x1 - x0, 4), np.uint8)
-        rgba[..., :3] = to_u8(r["color"][sl])
-        rgba[..., 3] = np.where(r["actor"][sl], 255, 0)
-        data = pack_offset16(r["offset"][sl], r["actor"][sl], np.where(r["shadow"][sl], 255, 0).astype(np.uint8))
-        frames.append(dict(rgba=rgba, data=data, ox=int(x0 - sr.AX), oy=int(y0 - sr.AY)))
-        return len(frames) - 1
-
-    # one sequence of poses per animation: (name, [(mats_rig, root_xz_rel)], fps)
-    seqs = []
-    n = WALK_FRAMES if not max_frames else min(WALK_FRAMES, max_frames)
-    walk = [man.mats("walk", i / WALK_FRAMES) for i in range(n)]  # treadmill: the page moves the figure
-    seqs.append(("walk", [(m, None) for m in walk], None))
-    for name, (c, _) in clips.items():
-        poses = []
-        n = len(c) if not max_frames else min(len(c), max_frames)
-        root0 = c.root[0].astype(np.float64)
-        for i in range(n):
-            with man.sculpt.worn():
-                mats, root = c.pose(i)
-            poses.append((strip_root(mats, root), (root - root0)[[2, 0]]))  # (forward = rig +z, side = rig +x)
-        seqs.append((name, poses, c.fps))
-    total = len(facings) * sum(len(p) for _, p, _ in seqs)
-    done = 0
-    for name, poses, fps in seqs:
-        per_facing = []
-        for f in facings:
-            idx = []
-            for mats, _ in poses:
-                idx.append(add(sr.render(mats, f)))
-                done += 1
-                if done % 50 == 0:
-                    el = time.time() - t0
-                    log(f"[sprites] {done}/{total} frames ({el:.0f}s, about {el / done * (total - done):.0f}s left)")
-            per_facing.append(idx)
-        a = dict(frames=per_facing)
-        if name == "walk":
-            a.update(loop=True, stride_m=motion.STRIDE / lv.UNITS_PER_M, frames_per_cycle=len(poses))
-        else:
-            U = lv.UNITS_PER_M
-            a.update(loop=False, fps=float(fps), root=[[round(float(r[0]) / U, 5), round(float(r[1]) / U, 5)]
-                                                      for _, r in poses], source=clips[name][1])
-        anims[name] = a
-    if "onetwo" in anims:
-        anims["idle"] = dict(of="onetwo", first=IDLE["first"],
-                             count=min(IDLE["count"], len(anims["onetwo"]["frames"][0])), fps=IDLE["fps"], pingpong=True)
-    log(f"[sprites] {len(frames)} frames rendered ({time.time() - t0:.0f}s)")
-    return frames, anims, dict(splats=splats, bb=bb, color=list(graybox.BB_COLOR))
+    for n, (facing, key, i) in enumerate(jobs):
+        r = sr.render(poses[key][i], facing)
+        out.append(crop_frame(r, sr))
+        if log_path and (n + 1) % 25 == 0:
+            with open(log_path, "a") as f:
+                el = time.time() - t0
+                f.write(f"[sprites] worker {os.getpid()}: {n + 1}/{len(jobs)} ({el:.0f}s, ~{el / (n + 1) * (len(jobs) - n - 1):.0f}s left)\n")
+    return out
 
 
-def pack_atlas(frames: List[dict], width: int = 1024):
-    """Shelf packing (tallest first, 1 px gap).  Returns (colour atlas, data atlas, rects [x, y, w, h])."""
+def crop_frame(r: dict, sr: "SpriteRenderer") -> dict:
+    cover = r["actor"] | r["shadow"]
+    ys, xs = np.nonzero(cover)
+    if len(ys) == 0:
+        raise RuntimeError("an empty sprite frame (the figure left the render window?)")
+    y0, y1, x0, x1 = ys.min(), ys.max() + 1, xs.min(), xs.max() + 1
+    if y0 == 0 or x0 == 0 or y1 == sr.H or x1 == sr.W:
+        raise RuntimeError(f"a sprite frame touches the render window's edge ({x0},{y0})-({x1},{y1}): enlarge it")
+    sl = (slice(y0, y1), slice(x0, x1))
+    rgba = np.zeros((y1 - y0, x1 - x0, 4), np.uint8)
+    rgba[..., :3] = to_u8(r["color"][sl])
+    rgba[..., 3] = np.where(r["actor"][sl], 255, 0)
+    rgba[..., :3] *= (rgba[..., 3:] > 0)  # nothing hidden under transparent pixels (smaller files, exact decode)
+    data = pack_offset16(r["offset"][sl], r["actor"][sl], np.where(r["shadow"][sl], 255, 0).astype(np.uint8))
+    return dict(rgba=rgba, data=data, ox=int(x0 - sr.AX), oy=int(y0 - sr.AY))
+
+
+def _frame_key(mats: np.ndarray, facing: float, spec: isocam.RefCam, density: int, splats: int, bb: str) -> str:
+    import hashlib  # noqa: PLC0415
+
+    h = hashlib.sha1(np.round(np.asarray(mats, np.float64), 7).astype(np.float32).tobytes())
+    h.update(repr((float(facing), spec.elev, spec.az, spec.px_per_unit, density, splats, os.path.abspath(bb),
+                   SpriteRenderer.W, SpriteRenderer.H, SPRITE_DEPTH_SCALE)).encode())
+    return h.hexdigest()
+
+
+def render_sprites(bb: str, onetwo: str, spec: isocam.RefCam, density: int = 1, facings=FACINGS, splats: int = 1000,
+                   max_frames: int = 0, workers: int = 2, threads: int = 2, log=print, log_path: Optional[str] = None,
+                   cache: Optional[str] = None):
+    """All frames: (frames, anims, info).  ``frames`` = de-duplicated list of dicts (rgba crop, data crop,
+    ox, oy); ``anims`` = {name: {per-facing frame indices, kind, fps, ...}}.  Rendered by ``workers``
+    processes (each with its own stage and mannequin), facings split between them."""
+    import multiprocessing as mp  # noqa: PLC0415
+
+    import gzip  # noqa: PLC0415
+    import pickle  # noqa: PLC0415
+
+    seqs = sprite_sequences(onetwo, max_frames)
+    poses = {name: [f.mats() for f in frames] for name, frames, _ in seqs}
+    every = [(f, name, i) for f in facings for name, frames, _ in seqs for i in range(len(frames))]
+    keys = {j: _frame_key(poses[j[1]][j[2]], j[0], spec, density, splats, bb) for j in every}
+    store: Dict[str, dict] = {}
+    if cache and os.path.exists(cache):  # frames rendered before from the very same pose, camera and figure
+        with gzip.open(cache, "rb") as fh:
+            store = pickle.load(fh)
+    jobs = [j for j in every if keys[j] not in store]
+    t0 = time.time()
+    log(f"[sprites] {len(every)} frames ({len(facings)} facings x {len(every) // len(facings)}); {len(every) - len(jobs)} "
+        f"from the cache, {len(jobs)} to render with {workers} workers")
+    spec_t = (spec.elev, spec.az, spec.px_per_unit, list(spec.view))
+    parts = [p for p in (jobs[k::workers] for k in range(max(workers, 1))) if p]
+    args = [(bb, spec_t, splats, density, p, poses, threads, log_path) for p in parts]
+    if len(args) > 1:
+        with mp.get_context("spawn").Pool(len(args)) as pool:
+            results = pool.map(_render_worker, args)
+    else:
+        results = [_render_worker(a) for a in args]
+    for part, res in zip(parts, results):
+        for job, fr in zip(part, res):
+            store[keys[job]] = fr
+    if cache and jobs:
+        tmp = cache + ".tmp"
+        with gzip.open(tmp, "wb", compresslevel=3) as fh:
+            pickle.dump({keys[j]: store[keys[j]] for j in every}, fh)
+        os.replace(tmp, cache)
+    rendered = {j: store[keys[j]] for j in every}
+    frames: List[dict] = []
+    seen: Dict[bytes, int] = {}
+
+    def add(fr) -> int:  # identical frames (a still idle, a held pose) are stored once
+        key = fr["rgba"].tobytes() + fr["data"].tobytes() + np.array([fr["ox"], fr["oy"], *fr["rgba"].shape]).tobytes()
+        if key not in seen:
+            seen[key] = len(frames)
+            frames.append(fr)
+        return seen[key]
+
+    anims: Dict[str, dict] = {}
+    for name, fr_list, meta in seqs:
+        anims[name] = dict(meta, frames=[[add(rendered[(f, name, i)]) for i in range(len(fr_list))] for f in facings])
+    log(f"[sprites] {len(jobs)} frames rendered, {len(frames)} distinct of {len(every)} ({time.time() - t0:.0f}s)")
+    return frames, anims, dict(splats=splats * density * density, bb=bb, color=list(graybox.BB_COLOR), density=density)
+
+
+def pack_atlas(frames: List[dict], width: int = 0):
+    """Shelf packing (tallest first, 1 px gap).  Returns (colour atlas, data atlas, rects [x, y, w, h]).
+    ``width`` 0 = the narrowest power of two from 1024 whose atlas is about as tall as wide."""
+    if not width:
+        area = sum((f["rgba"].shape[0] + 1) * (f["rgba"].shape[1] + 1) for f in frames)
+        width = 1024
+        while width * width < area * 1.15 and width < 4096:
+            width *= 2
     order = sorted(range(len(frames)), key=lambda i: (-frames[i]["rgba"].shape[0], -frames[i]["rgba"].shape[1]))
     rects = [None] * len(frames)
     x = y = shelf = 0
@@ -354,6 +442,8 @@ def pack_atlas(frames: List[dict], width: int = 1024):
         rects[i] = [x, y, w, h]
         x, shelf = x + w + 1, max(shelf, h)
     H = y + shelf
+    if H * width > ATLAS_MAX_AREA:
+        raise RuntimeError(f"sprite atlas {width}x{H} is larger than a phone browser reads back ({ATLAS_MAX_AREA} px)")
     color = np.zeros((H, width, 4), np.uint8)
     data = np.zeros((H, width, 4), np.uint8)
     data[..., 3] = 255
@@ -362,6 +452,32 @@ def pack_atlas(frames: List[dict], width: int = 1024):
         color[y:y + h, x:x + w] = f["rgba"]
         data[y:y + h, x:x + w] = f["data"]
     return color, data, rects
+
+
+def save_webp_lossless(arr: np.ndarray, path: str):
+    """Lossless WebP (exact bytes, about half a PNG's size here); verified to decode exactly in Chromium by
+    tests/test_play_page.py."""
+    from PIL import Image
+
+    Image.fromarray(np.ascontiguousarray(arr), "RGBA").save(path, "WEBP", lossless=True, quality=100, method=6, exact=True)
+
+
+def check_start(st: graybox.Stage, at, cell: float, log=print):
+    """The start spot, moved to the nearest walkable cell reachable over the level if it is not walkable."""
+    grid = walk_grid(st.level, cell)
+    j, i = cell_of(grid, *at)
+    ok = 0 <= j < grid["walk"].shape[0] and 0 <= i < grid["walk"].shape[1] and grid["walk"][j, i]
+    if ok:
+        return [float(at[0]), float(at[1])]
+    from scipy.ndimage import label  # noqa: PLC0415
+
+    lab, _ = label(grid["walk"])
+    big = np.argmax(np.bincount(lab.ravel())[1:]) + 1  # the largest walkable region
+    jj, ii = np.nonzero(lab == big)
+    k = int(np.argmin((grid["x"][ii] - at[0]) ** 2 + (grid["z"][jj] - at[1]) ** 2))
+    new = [float(grid["x"][ii[k]]), float(grid["z"][jj[k]])]
+    log(f"[build] WARNING: the start {list(at)} is not walkable; using the nearest walkable spot {new}")
+    return new
 
 
 # ---------------------------------------------------------------- the whole build
@@ -373,28 +489,37 @@ def build(a, log=print):
     man_path = os.path.join(assets, "manifest.json")
     manifest = json.loads(Path(man_path).read_text()) if os.path.exists(man_path) else {}
     lv_demo = st.level.demo.get("stand", {"at": [0.0, 0.0], "facing": 90})
-    manifest.update(version=1, name="BB field test", layout=st.level.name,
+    import moves as mv  # noqa: PLC0415
+
+    manifest.update(version=2, name="BB field test", layout=st.level.name, density=st.density,
                     camera=dict(elev=st.spec.elev, az=st.spec.az, px_per_unit=st.spec.px_per_unit,
                                 world_to_screen=world_to_screen(st.cam), units_per_m=lv.UNITS_PER_M,
                                 ground_y=lv.GROUND, note="row 0: pixel x, row 1: pixel y, row 2: camera depth "
                                                          "(smaller = nearer) of world (x, y, z, 1)"),
-                    start=dict(at=[float(v) for v in lv_demo["at"]],
+                    start=dict(at=check_start(st, lv_demo["at"], a.cell, log),
                                facing=int(round(float(lv_demo.get("facing", 90)) / 45.0)) % 8 * 45),
-                    walk_speed=WALK_SPEED)
+                    walk_speed=round(mv.WALK_SPEED, 5), run_speed=round(mv.RUN_SPEED, 5))
     if "level" in only:
         manifest["level"] = export_level(st, assets, a.cell, log=log)
     if "sprites" in only:
-        frames, anims, info = render_sprites(a.bb, a.clip, st.spec, max_frames=a.max_frames, log=log)
+        frames, anims, info = render_sprites(a.bb, a.onetwo, st.spec, st.density, max_frames=a.max_frames,
+                                             workers=a.workers, threads=a.threads, log=log,
+                                             log_path=a.out.rstrip("/") + "_render.log",
+                                             cache=a.cache or a.out.rstrip("/") + "_sprite_cache.pkl.gz")
         color, data, rects = pack_atlas(frames)
-        save_rgba(color, os.path.join(assets, "sprites.png"))
+        for old in ("sprites.png", "sprites.webp"):
+            if os.path.exists(os.path.join(assets, old)):
+                os.remove(os.path.join(assets, old))
+        cname = "sprites.webp" if a.webp else "sprites.png"
+        (save_webp_lossless if a.webp else save_rgba)(color, os.path.join(assets, cname))
         save_rgba(data, os.path.join(assets, "sprites_data.png"))
-        manifest["sprites"] = dict(color="sprites.png", data="sprites_data.png", depth_scale=SPRITE_DEPTH_SCALE,
+        manifest["sprites"] = dict(color=cname, data="sprites_data.png", depth_scale=SPRITE_DEPTH_SCALE,
                                    depth_zero=32768, facings=list(FACINGS), anims=anims, mannequin=info,
                                    frames=[r + [f["ox"], f["oy"]] for r, f in zip(rects, frames)],
                                    frame_note="[x, y, w, h, ox, oy]: rectangle in both atlases; its top-left "
                                               "pixel lies (ox, oy) from the anchor pixel (the pixel that holds "
                                               "the figure's ground point)")
-    Path(man_path).write_text(json.dumps(manifest, indent=1, ensure_ascii=False))
+    Path(man_path).write_text(json.dumps(manifest, separators=(",", ":"), ensure_ascii=False))
     if "page" in only:
         shutil.copyfile(TEMPLATE, os.path.join(a.out, "index.html"))
     problems = check(a.out)
@@ -424,12 +549,12 @@ def check(folder: str) -> List[str]:
                 out.append(f"{L[k]} missing")
             elif list(load_rgba(p).shape[1::-1]) != L["size"]:
                 out.append(f"{L[k]} is not {L['size']}")
-        T = L["terrain"]
-        p = os.path.join(assets, T["file"])
-        if not os.path.exists(p):
-            out.append(f"{T['file']} missing")
-        elif list(load_rgba(p).shape[1::-1]) != T["size"]:
-            out.append(f"{T['file']} is not {T['size']}")
+        for T in [L["terrain"]] + ([L["sun"]] if "sun" in L else []):
+            p = os.path.join(assets, T["file"])
+            if not os.path.exists(p):
+                out.append(f"{T['file']} missing")
+            elif list(load_rgba(p).shape[1::-1]) != T["size"]:
+                out.append(f"{T['file']} is not {T['size']}")
     else:
         out.append("no level in the manifest")
     if "sprites" in m:
@@ -461,8 +586,17 @@ def check(folder: str) -> List[str]:
                 out.append(f"anim {name}: facings have different frame counts {lens}")
             if any(not (0 <= i < n) for f in an["frames"] for i in f):
                 out.append(f"anim {name}: frame index out of range")
-            if not an.get("loop") and len(an.get("root", [])) != len(an["frames"][0]):
-                out.append(f"anim {name}: {len(an.get('root', []))} root motion entries for {len(an['frames'][0])} frames")
+            nf = len(an["frames"][0]) if an["frames"] else 0
+            if nf < 1:
+                out.append(f"anim {name}: no frames")
+            if "root" in an and len(an["root"]) != nf:
+                out.append(f"anim {name}: {len(an['root'])} root motion entries for {nf} frames")
+            if an.get("kind") == "transition":
+                if len(an.get("advance", [])) != nf:
+                    out.append(f"anim {name}: {len(an.get('advance', []))} advance entries for {nf} frames")
+                for k in ("source", "target"):
+                    if an.get(k) not in S["anims"]:
+                        out.append(f"anim {name}: {k} {an.get(k)!r} is not an animation")
     else:
         out.append("no sprites in the manifest")
     return out
@@ -472,25 +606,33 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
     b = sub.add_parser("build", help="export the level layers, the BB sprites and the page")
-    b.add_argument("-o", "--out", default="out/play")
-    b.add_argument("--bake", default=graybox.default_out(isocam.RefCam().elev), help="baked level folder (graybox.py build)")
+    b.add_argument("-o", "--out", default="out/play3")
+    b.add_argument("--bake", default=graybox.default_out(isocam.RefCam().elev, 3),
+                   help="baked level folder (graybox.py build --density 3)")
     b.add_argument("--bb", default="out/bb2", help="baked bare mannequin (mitten hands)")
-    b.add_argument("--clip", action="append", default=None,
-                   help="name=path of an imported clip (repeatable); default: onetwo=out/onetwo3/5m/clip.npz and "
-                        "inout=out/inout3/5m/clip.npz")
+    b.add_argument("--onetwo", default=DEFAULT_ONETWO, help="the imported one-two clip (60 fps; its first frame is "
+                                                             "the guard the idle breathes around)")
+    b.add_argument("--workers", type=int, default=4, help="sprite rendering processes")
+    b.add_argument("--cache", default=None, help="rendered-frame cache (default: <out>_sprite_cache.pkl.gz, next to the "
+                                                "folder: frames whose pose did not change are not rendered again)")
+    b.add_argument("--png", dest="webp", action="store_false",
+                   help="colour atlas as PNG instead of lossless WebP (the data atlas is always PNG)")
     b.add_argument("--only", default="level,sprites,page", help="comma list of: level, sprites, page")
     b.add_argument("--cell", type=float, default=0.25, help="terrain cell (metres)")
     b.add_argument("--max-frames", type=int, default=0, help="render at most this many frames per animation (tests)")
-    b.add_argument("--threads", type=int, default=2)
+    b.add_argument("--threads", type=int, default=1, help="torch threads per worker")
     c = sub.add_parser("check", help="manifest <-> files")
-    c.add_argument("-o", "--out", default="out/play")
+    c.add_argument("-o", "--out", default="out/play3")
     a = ap.parse_args()
     if a.cmd == "check":
         problems = check(a.out)
         print("\n".join(problems) if problems else "[check] ok")
         raise SystemExit(1 if problems else 0)
-    if a.clip is None:
-        a.clip = ["onetwo=out/onetwo3/5m/clip.npz", "inout=out/inout3/5m/clip.npz"]
+    for path, what in ((os.path.join(a.bake, graybox.BAKE_FILE), "--bake (graybox.py build)"), (a.onetwo, "--onetwo"),
+                       (os.path.join(a.bb, "model.pt"), "--bb")):
+        if "sprites" in a.only or what.startswith("--bake"):
+            if not os.path.exists(path) and not (what == "--bb" and os.path.isdir(a.bb)):
+                raise SystemExit(f"[build] {what}: {path} does not exist")
     import torch  # noqa: PLC0415
 
     if a.threads > 0:

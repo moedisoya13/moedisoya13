@@ -145,7 +145,19 @@ def test_level_layers_match_the_bake(tiny_export):
     covered = st.gb["alpha"] > 0.5
     np.testing.assert_array_equal(np.isfinite(d), covered)
     assert np.abs(d[covered] - st.gb["depth"][covered]).max() < (level["depth_hi"] - level["depth_lo"]) / 65534
-    assert ((dep[..., 2] == 0) & covered).any() and ((dep[..., 2] == 255) & covered).any()  # shade and sun
+    lit, ground = (dep[..., 2] & play.LIT) > 0, (dep[..., 2] & play.GROUND) > 0
+    assert (~lit & covered).any() and (lit & covered).any()  # shade and sun
+    mat = st.mat
+    np.testing.assert_array_equal(ground, covered & np.isin(mat, [lv.MAT[k] for k in ("grass", "path", "water")]))
+    assert not ground[mat == lv.MAT["canopy"]].any() and not ground[mat == lv.MAT["cliff"]].any()
+    # the ground's own sun map: lit where the level picture's ground is lit, mostly (it is sampled on the
+    # ground, not through the screen); in shade right under the tree's crown, west of it
+    sun = play.load_rgba(str(out / "assets" / "sun.png"))[..., 0] >= 128
+    S = level["sun"]
+    assert list(sun.shape[::-1]) == S["size"] and 0.05 < (~sun).mean() < 0.6
+    tree = [-2.0, -1.0]
+    i, j = int((tree[0] - 0.6 - S["origin"][0]) / S["cell"]), int((tree[1] + 0.1 - S["origin"][1]) / S["cell"])
+    assert not sun[j, i]
     # one row down on flat ground: nearer by 1 / (m tan e)
     assert level["flat_depth_per_row"] == pytest.approx(-1 / (11.1 * math.tan(math.radians(45))), rel=1e-6)
     assert all(0.3 < r < 0.8 for r in level["shadow_ratio"])
@@ -171,20 +183,28 @@ def test_check_finds_a_consistent_export_and_the_broken_ones(tiny_export, tmp_pa
     assert any("terrain.png missing" in p for p in problems) and any("frame 1 lies outside" in p for p in problems)
 
 
-PLAY = ROOT / "out" / "play"
+PLAY = ROOT / "out" / "play3"
 
 
-@pytest.mark.skipif(not (PLAY / "assets" / "manifest.json").exists(), reason="needs a built out/play (play.py build)")
+@pytest.mark.skipif(not (PLAY / "assets" / "manifest.json").exists(), reason="needs a built out/play3 (play.py build)")
 def test_the_built_page_is_consistent():
+    import moves as mv
+
     assert play.check(str(PLAY)) == []
     m = json.loads((PLAY / "assets" / "manifest.json").read_text())
     S = m["sprites"]
-    assert S["facings"] == list(range(0, 360, 45))
-    assert len(S["anims"]["walk"]["frames"][0]) == play.WALK_FRAMES
-    for name in ("onetwo", "inout"):
-        assert S["anims"][name]["fps"] == pytest.approx(30.0)
-    size = sum(p.stat().st_size for p in PLAY.rglob("*") if p.is_file())
-    assert size < 8e6
+    assert S["facings"] == list(range(0, 360, 45)) and m["density"] == 3
+    A = S["anims"]
+    assert len(A["walk"]["frames"][0]) == mv.WALK_FRAMES == 48 and len(A["run"]["frames"][0]) == mv.RUN_FRAMES == 40
+    assert A["walk"]["speed"] == pytest.approx(1.4) and A["run"]["speed"] == pytest.approx(3.75)
+    assert len(A["onetwo"]["frames"][0]) == 144 and "inout" not in A  # 60 fps, the step is gone
+    for a in A.values():
+        assert a["fps"] == 60.0
+    # 60 fps at walking speed: one cycle of frames per cycle of ground, no frame shown twice or skipped
+    assert A["walk"]["stride_m"] / A["walk"]["speed"] * 60 == pytest.approx(len(A["walk"]["frames"][0]))
+    assert A["run"]["stride_m"] / A["run"]["speed"] * 60 == pytest.approx(len(A["run"]["frames"][0]))
+    files = [p for p in PLAY.rglob("*") if p.is_file() and p.suffix in (".html", ".png", ".webp", ".json")]
+    assert sum(p.stat().st_size for p in files) < 15e6 and max(p.stat().st_size for p in files) < 8e6
 
 
 # ------------------------------------------------------------------ the page template

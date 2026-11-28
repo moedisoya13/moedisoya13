@@ -15,6 +15,7 @@
   --pad-edge: rgba(236, 235, 232, 0.28);
   --knob: rgba(236, 235, 232, 0.55);
   --btn: rgba(28, 28, 39, 0.78);
+  --hint-bg: rgba(19, 19, 28, 0.80);
 }
 html, body { height: 100%; margin: 0; overflow: hidden; background: var(--bg); color: var(--text); }
 body { font: 14px/1.4 system-ui, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif; }
@@ -35,20 +36,28 @@ kbd { font: 600 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 
 @media (pointer: coarse) { .touch-only { display: inline; } .keys-only { display: none; } }
 .stage { position: relative; flex: 1; min-height: 0; display: grid; place-items: center; overflow: hidden;
          border-radius: 8px; background: var(--bg); touch-action: none; user-select: none; -webkit-user-select: none; }
-canvas#view { display: block; image-rendering: pixelated; image-rendering: crisp-edges; outline: none; border-radius: 2px; }
-canvas#view:focus-visible { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--focus); }
+/* the focus ring is drawn by the stage (inset), so the stage's own clipping cannot hide it */
+.stage::after { content: ""; position: absolute; inset: 0; border-radius: 8px; pointer-events: none;
+                box-shadow: inset 0 0 0 3px var(--focus); opacity: 0; }
+.stage.kbd-focus::after { opacity: 1; }
+#view { position: relative; overflow: hidden; outline: none; background: var(--bg); }
+#view canvas { position: absolute; left: 0; top: 0; transform-origin: 0 0; image-rendering: pixelated; image-rendering: crisp-edges; }
 .hud { position: absolute; left: 8px; top: 6px; font: 12px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace;
        color: var(--text); background: rgba(19, 19, 28, 0.72); padding: 3px 6px; border-radius: 4px; pointer-events: none; }
-.status { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); text-align: center; padding: 16px; }
+.status { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); text-align: center; padding: 16px;
+          background: rgba(19, 19, 28, 0.55); }
+.status.error { color: var(--text); background: rgba(19, 19, 28, 0.88); }
 .status[hidden] { display: none; }
 .pad { position: absolute; width: 120px; height: 120px; margin: -60px 0 0 -60px; border-radius: 50%;
        background: var(--pad); border: 2px solid var(--pad-edge); pointer-events: none; display: none; }
+.pad::before { content: ""; position: absolute; inset: 10px; border-radius: 50%; border: 1px dashed var(--pad-edge); }
 .pad .knob { position: absolute; left: 50%; top: 50%; width: 52px; height: 52px; margin: -26px 0 0 -26px; border-radius: 50%;
              background: var(--knob); }
+.pad.run .knob { background: var(--accent); }
 .pad.on { display: block; }
 .pad-hint { position: absolute; left: 14px; bottom: 14px; width: 104px; height: 104px; border-radius: 50%;
-            border: 2px dashed var(--pad-edge); color: var(--muted); font-size: 12px; display: none; place-items: center;
-            text-align: center; pointer-events: none; }
+            border: 2px dashed var(--pad-edge); background: var(--hint-bg); color: var(--text); font-size: 13px; font-weight: 600;
+            display: none; place-items: center; text-align: center; pointer-events: none; }
 @media (pointer: coarse) { .pad-hint { display: grid; } .stage.sticking .pad-hint { display: none; } }
 .acts { position: absolute; right: 12px; bottom: 12px; display: flex; gap: 12px; align-items: flex-end; }
 .acts button {
@@ -57,11 +66,10 @@ canvas#view:focus-visible { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--foc
   transition: transform 80ms ease-out, background-color 80ms ease-out;
 }
 .acts button small { display: block; font-size: 11px; font-weight: 600; color: var(--muted); }
-.acts button:nth-child(2) { transform: translateY(-22px); }
 .acts button.down, .acts button:active { background: var(--accent); color: var(--accent-ink); }
 .acts button.down small, .acts button:active small { color: var(--accent-ink); }
 .acts button:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
-@media (pointer: fine) { .acts button { width: 54px; height: 54px; font-size: 13px; } .acts button:nth-child(2) { transform: none; } }
+@media (pointer: fine) { .acts button { width: 54px; height: 54px; font-size: 13px; } }
 @media (pointer: coarse) { .acts button { width: 76px; height: 76px; font-size: 17px; } .acts button small { display: none; } }
 @media (prefers-reduced-motion: reduce) { .acts button { transition: none; } }
 </style>
@@ -69,21 +77,22 @@ canvas#view:focus-visible { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--foc
 <div class="app">
   <header class="bar">
     <h1>BB 필드 테스트</h1>
-    <p>기본 몸(BB)을 그레이박스 테스트 맵에 세운 것 · 45° 카메라 · 모션은 복싱 카탈로그에서 가져옴</p>
+    <p>기본 몸(BB)을 그레이박스 테스트 맵에 세운 것 · 45° 카메라 · 걷기·달리기는 리그, 원투는 복싱 카탈로그에서</p>
     <p class="help">
-      <span class="keys-only">이동 <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 또는 방향키 · <kbd>J</kbd> 원투 · <kbd>K</kbd> 스텝 인·아웃</span>
-      <span class="touch-only">왼쪽을 누른 채 끌면 이동 · 오른쪽 버튼: 원투, 스텝</span>
+      <span class="keys-only">이동 <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 또는 방향키 · <kbd>Shift</kbd> 누른 채 달리기 · <kbd>J</kbd> 원투</span>
+      <span class="touch-only">왼쪽을 누른 채 끌면 걷기, 끝까지 밀면 달리기 · 오른쪽 버튼: 원투</span>
     </p>
   </header>
   <main class="stage" id="stage">
-    <canvas id="view" tabindex="0" aria-label="게임 화면: 그레이박스 맵 위의 BB. 방향키로 걷고 J, K로 동작"></canvas>
+    <div id="view" tabindex="0" role="img" aria-label="게임 화면: 그레이박스 맵 위의 BB. 방향키로 걷고, Shift로 달리고, J로 원투">
+      <canvas id="level"></canvas><canvas id="fig"></canvas>
+    </div>
     <div class="hud" id="hud" aria-hidden="true"></div>
     <div class="status" id="status" role="status">불러오는 중…</div>
     <div class="pad-hint" aria-hidden="true">끌어서<br>이동</div>
     <div class="pad" id="pad" aria-hidden="true"><div class="knob" id="knob"></div></div>
     <div class="acts">
       <button type="button" id="bJ" aria-label="원투 (J)">원투<small>J</small></button>
-      <button type="button" id="bK" aria-label="스텝 인·아웃 (K)">스텝<small>K</small></button>
     </div>
   </main>
 </div>
@@ -93,13 +102,26 @@ canvas#view:focus-visible { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--foc
   "use strict";
   const $ = (id) => document.getElementById(id);
   const stage = $("stage"), canvas = $("view"), hud = $("hud"), statusEl = $("status");
-  const ctx = canvas.getContext("2d", { alpha: false });
+  const viewEl = canvas, levelEl = $("level"), figEl = $("fig");
+  const figCtx = figEl.getContext("2d");
+  const FPS = 60;
+  let running = true;
+
+  function fail(err) {               // anything that goes wrong is shown, never a silent freeze
+    running = false;
+    statusEl.hidden = false;
+    statusEl.classList.add("error");
+    statusEl.textContent = "오류가 나서 멈췄습니다: " + (err && err.message ? err.message : String(err));
+    if (window.console) console.error(err);
+  }
+  window.addEventListener("error", (e) => fail(e.error || e.message));
+  window.addEventListener("unhandledrejection", (e) => fail(e.reason));
 
   // ------------------------------------------------------------------ assets
-  const loadImage = (src) => new Promise((ok, fail) => {
+  const loadImage = (src) => new Promise((ok, no) => {
     const im = new Image();
     im.onload = () => ok(im);
-    im.onerror = () => fail(new Error(src + " 을(를) 불러오지 못했습니다"));
+    im.onerror = () => no(new Error(src + " 을(를) 불러오지 못했습니다"));
     im.src = src;
   });
   function pixels(im) {
@@ -107,26 +129,36 @@ canvas#view:focus-visible { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--foc
     c.width = im.naturalWidth; c.height = im.naturalHeight;
     const x = c.getContext("2d", { willReadFrequently: true });
     x.drawImage(im, 0, 0);
-    return x.getImageData(0, 0, c.width, c.height);
+    const d = x.getImageData(0, 0, c.width, c.height);
+    c.width = c.height = 0;          // let the browser drop the scratch canvas now
+    return d;
   }
 
-  let M, L, T, SP;           // manifest, level, terrain, sprites
+  let M, L, T, SUN, SP;               // manifest, level, terrain, ground sun, sprites
   async function load() {
-    M = await (await fetch("assets/manifest.json")).json();
-    const lv = M.level, sp = M.sprites, tr = lv.terrain;
-    const [ci, di, ti, si, sdi] = await Promise.all(
-      [lv.color, lv.depth, tr.file, sp.color, sp.data].map((f) => loadImage("assets/" + f)));
-    const col = pixels(ci), dep = pixels(di), ter = pixels(ti);
+    const r = await fetch("assets/manifest.json");
+    if (!r.ok) throw new Error("assets/manifest.json 을(를) 불러오지 못했습니다 (" + r.status + ")");
+    M = await r.json();
+    const lv = M.level, sp = M.sprites, tr = lv.terrain, sn = lv.sun;
+    const files = [lv.color, lv.depth, tr.file, sn.file, sp.color, sp.data];
+    let done = 0;
+    const ims = await Promise.all(files.map((f) => loadImage("assets/" + f).then((im) => {
+      statusEl.textContent = "불러오는 중… " + (++done) + " / " + files.length; return im; })));
+    const [col, dep, ter, sun, sc, sd] = ims.map(pixels);
+    levelEl.width = col.width; levelEl.height = col.height;   // the level picture, moved by the compositor
+    levelEl.getContext("2d").putImageData(col, 0, 0);
     const W = col.width, H = col.height;
-    // level: colour as packed 32-bit pixels, depth as floats (Infinity = nothing), sunlit flag
-    const depth = new Float32Array(W * H), lit = new Uint8Array(W * H);
-    const k = (lv.depth_hi - lv.depth_lo) / (lv.depth_empty - 1);
-    for (let i = 0; i < W * H; i++) {
-      const q = dep.data[4 * i] * 256 + dep.data[4 * i + 1];
+    // level: colour as packed 32-bit pixels, depth as floats (Infinity = nothing), flags (sunlit, ground)
+    const depth = new Float32Array(W * H), flag = new Uint8Array(W * H);
+    const k = (lv.depth_hi - lv.depth_lo) / (lv.depth_empty - 1), dd = dep.data;
+    for (let i = 0, j = 0; i < W * H; i++, j += 4) {
+      const q = dd[j] * 256 + dd[j + 1];
       depth[i] = q >= lv.depth_empty ? Infinity : lv.depth_lo + q * k;
-      lit[i] = dep.data[4 * i + 2] >= 128 ? 1 : 0;
+      flag[i] = dd[j + 2];
     }
-    L = { W, H, rgba: new Uint32Array(col.data.buffer.slice(0)), depth, lit,
+    const bgc = lv.background.map((v) => Math.round(v * 255));
+    L = { W, H, rgba: new Uint32Array(col.data.buffer), depth, flag, LIT: lv.depth_flags.lit, GROUND: lv.depth_flags.ground,
+          bgCss: `rgb(${bgc[0]}, ${bgc[1]}, ${bgc[2]})`,
           bg: packRGB(lv.background.map((v) => Math.round(v * 255))), ratio: lv.shadow_ratio, rowDepth: lv.flat_depth_per_row };
     const nx = tr.size[0], nz = tr.size[1];
     const height = new Float32Array(nx * nz), walk = new Uint8Array(nx * nz);
@@ -135,18 +167,26 @@ canvas#view:focus-visible { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--foc
       walk[i] = ter.data[4 * i + 2] >= 128 ? 1 : 0;
     }
     T = { nx, nz, cell: tr.cell, ox: tr.origin[0], oz: tr.origin[1], height, walk };
-    const sc = pixels(si), sd = pixels(sdi);
-    SP = { W: sc.width, rgba: sc.data, data: sd.data, frames: sp.frames, anims: sp.anims, scale: sp.depth_scale, zero: sp.depth_zero };
+    const lit = new Uint8Array(sn.size[0] * sn.size[1]);
+    for (let i = 0; i < lit.length; i++) lit[i] = sun.data[4 * i] >= 128 ? 1 : 0;
+    SUN = { nx: sn.size[0], nz: sn.size[1], cell: sn.cell, ox: sn.origin[0], oz: sn.origin[1], lit };
+    SP = { W: sc.width, rgba: sc.data, data: sd.data, frames: sp.frames, anims: sp.anims, scale: sp.depth_scale,
+           zero: sp.depth_zero, nf: sp.facings.length, step: 360 / sp.facings.length };
+    for (const [name, a] of Object.entries(SP.anims)) {
+      if (!a.frames || !a.frames.length || !a.frames[0].length) throw new Error("애니메이션 " + name + " 에 프레임이 없습니다");
+    }
+    for (const need of ["idle", "walk", "run", "onetwo"]) if (!SP.anims[need]) throw new Error("애니메이션 " + need + " 이(가) 없습니다");
+    for (const f of SP.frames) { FIGW = Math.max(FIGW, f[2]); FIGH = Math.max(FIGH, f[3]); }
+    figEl.width = FIGW; figEl.height = FIGH;
+    figImg = figCtx.createImageData(FIGW, FIGH); fig32 = new Uint32Array(figImg.data.buffer);
   }
   const LITTLE = new Uint8Array(new Uint32Array([1]).buffer)[0] === 1;
   function packRGB([r, g, b]) { return LITTLE ? ((255 << 24) | (b << 16) | (g << 8) | r) >>> 0 : ((r << 24) | (g << 16) | (b << 8) | 255) >>> 0; }
 
   // ------------------------------------------------------------------ terrain
-  function cellIndex(x, z) {
-    const i = Math.floor((x - T.ox) / T.cell), j = Math.floor((z - T.oz) / T.cell);
-    return (i < 0 || j < 0 || i >= T.nx || j >= T.nz) ? -1 : j * T.nx + i;
-  }
-  const walkable = (x, z) => { const c = cellIndex(x, z); return c >= 0 && T.walk[c] === 1; };
+  function cellOf(x, z) { return [Math.floor((x - T.ox) / T.cell), Math.floor((z - T.oz) / T.cell)]; }
+  function walkCell(i, j) { return i >= 0 && j >= 0 && i < T.nx && j < T.nz && T.walk[j * T.nx + i] === 1; }
+  const walkable = (x, z) => { const [i, j] = cellOf(x, z); return walkCell(i, j); };
   function heightAt(x, z) {          // bilinear between cell centres
     const fx = (x - T.ox) / T.cell - 0.5, fz = (z - T.oz) / T.cell - 0.5;
     const i0 = Math.max(0, Math.min(T.nx - 2, Math.floor(fx))), j0 = Math.max(0, Math.min(T.nz - 2, Math.floor(fz)));
@@ -154,54 +194,89 @@ canvas#view:focus-visible { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--foc
     const h = T.height, n = T.nx, a = j0 * n + i0;
     return (h[a] * (1 - tx) + h[a + 1] * tx) * (1 - tz) + (h[a + n] * (1 - tx) + h[a + n + 1] * tx) * tz;
   }
+  function sunAt(x, z) {             // the GROUND's own sunlight where the figure stands (not what covers its feet)
+    const i = Math.floor((x - SUN.ox) / SUN.cell), j = Math.floor((z - SUN.oz) / SUN.cell);
+    return i < 0 || j < 0 || i >= SUN.nx || j >= SUN.nz ? 1 : SUN.lit[j * SUN.nx + i];
+  }
+  // a step may go to a cell that is walkable AND, when it crosses a cell corner diagonally, both cells it
+  // passes between are too: no squeezing between two rocks that touch at a corner (play.reachable is
+  // 4-connected, so is this)
+  function canStep(x0, z0, x1, z1) {
+    const [i0, j0] = cellOf(x0, z0), [i1, j1] = cellOf(x1, z1);
+    if (!walkCell(i1, j1)) return false;
+    if (Math.abs(i1 - i0) > 1 || Math.abs(j1 - j0) > 1) return false;   // (steps are far shorter than a cell)
+    if (i1 !== i0 && j1 !== j0) return walkCell(i1, j0) && walkCell(i0, j1);
+    return true;
+  }
   function tryMove(dx, dz) {          // slide along walls: the whole step, else one axis
     const p = S;
-    if (walkable(p.x + dx, p.z + dz)) { p.x += dx; p.z += dz; return Math.hypot(dx, dz); }
-    if (Math.abs(dx) > 1e-6 && walkable(p.x + dx, p.z)) { p.x += dx; return Math.abs(dx); }
-    if (Math.abs(dz) > 1e-6 && walkable(p.x, p.z + dz)) { p.z += dz; return Math.abs(dz); }
+    if (canStep(p.x, p.z, p.x + dx, p.z + dz)) { p.x += dx; p.z += dz; return Math.hypot(dx, dz); }
+    if (Math.abs(dx) > 1e-6 && canStep(p.x, p.z, p.x + dx, p.z)) { p.x += dx; return Math.abs(dx); }
+    if (Math.abs(dz) > 1e-6 && canStep(p.x, p.z, p.x, p.z + dz)) { p.z += dz; return Math.abs(dz); }
     return 0;
   }
 
   // ------------------------------------------------------------------ the player
-  const S = { x: 0, z: 0, facing: 0, anim: "idle", t: 0, phase: 0, k: 0 };
-  const FACING_DEG = (i) => i * 45;
-  function startAction(name) {
-    if (!SP || !SP.anims[name] || S.anim === "onetwo" || S.anim === "inout") return;
-    S.anim = name; S.t = 0; S.k = 0;
+  // anim: idle | walk | run (loops) | onetwo (an action, on the spot) | a transition clip (start, stopA ...)
+  const S = { x: 0, z: 0, facing: 0, want: 0, turnT: 0, anim: "idle", t: 0, k: 0, phase: 0, queue: null };
+  const dirOf = (f) => f * SP.step * Math.PI / 180;
+  function frameIndex() {
+    const a = SP.anims[S.anim], fr = a.frames[S.facing], n = fr.length;
+    if (a.kind === "gait") return fr[((Math.floor(S.phase * n) % n) + n) % n];
+    return fr[Math.max(0, Math.min(n - 1, S.k))];
   }
-  function currentFrame() {
-    const a = SP.anims;
-    if (S.anim === "walk") {
-      const w = a.walk, n = w.frames[S.facing].length;
-      return w.frames[S.facing][((Math.floor(S.phase * w.frames_per_cycle) % n) + n) % n];
+  function play(name, k) { S.anim = name; S.k = k || 0; S.t = 0; }
+  function startTransition(name) {
+    const a = SP.anims[name];
+    if (!a) return false;
+    play(name, 0);
+    applyAdvance(a, 0);
+    return true;
+  }
+  function applyAdvance(a, k) {      // root motion of a transition frame: [forward, his left] metres
+    if (!a.advance || !a.advance[k]) return;
+    const f = dirOf(S.facing), c = Math.cos(f), s = Math.sin(f), [fw, sd] = a.advance[k];
+    tryMove(fw * c + sd * s, fw * s - sd * c);
+  }
+  function entryFor(src, dst, phase) {   // the transition clip from a loop at this phase, if one starts here
+    for (const [name, a] of Object.entries(SP.anims)) {
+      if (a.kind === "transition" && a.source === src && a.target === dst && Math.abs(a.enter - phase) < 1e-6) return name;
     }
-    if (S.anim === "onetwo" || S.anim === "inout") return a[S.anim].frames[S.facing][S.k];
-    const idle = a.idle, src = a[idle.of].frames[S.facing], n = idle.count;
-    const step = Math.floor(S.t * idle.fps) % (2 * n - 2);
-    return src[idle.first + (step < n ? step : 2 * n - 2 - step)];
+    return null;
   }
 
   // ------------------------------------------------------------------ input
   const keys = new Set();
   const KEYMAP = { KeyW: "u", ArrowUp: "u", KeyS: "d", ArrowDown: "d", KeyA: "l", ArrowLeft: "l", KeyD: "r", ArrowRight: "r" };
+  const releaseAll = () => { keys.clear(); stick.active = false; stick.dx = stick.dy = 0; showPad(false); };
   window.addEventListener("keydown", (e) => {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;     // browser shortcuts (Ctrl+D, Cmd+R ...) stay the browser's
     if (e.target && e.target.tagName === "BUTTON" && (e.code === "Enter" || e.code === "Space")) return;
+    if (e.code === "ShiftLeft" || e.code === "ShiftRight") { keys.add("run"); return; }
     if (KEYMAP[e.code]) { keys.add(KEYMAP[e.code]); e.preventDefault(); }
-    else if (e.code === "KeyJ" && !e.repeat) { startAction("onetwo"); flash("bJ"); }
-    else if (e.code === "KeyK" && !e.repeat) { startAction("inout"); flash("bK"); }
+    else if (e.code === "KeyJ" && !e.repeat) { requestAction(); flash("bJ"); e.preventDefault(); }
   });
-  window.addEventListener("keyup", (e) => { if (KEYMAP[e.code]) keys.delete(KEYMAP[e.code]); });
-  window.addEventListener("blur", () => { keys.clear(); stick.active = false; showPad(false); });
+  window.addEventListener("keyup", (e) => {
+    if (e.code === "ShiftLeft" || e.code === "ShiftRight") keys.delete("run");
+    if (KEYMAP[e.code]) keys.delete(KEYMAP[e.code]);
+  });
+  window.addEventListener("blur", releaseAll);
+  document.addEventListener("visibilitychange", () => { if (document.hidden) releaseAll(); });
   function flash(id) { const b = $(id); b.classList.add("down"); setTimeout(() => b.classList.remove("down"), 140); }
-  for (const [id, name] of [["bJ", "onetwo"], ["bK", "inout"]]) {
-    const b = $(id);
-    b.addEventListener("pointerdown", (e) => { e.preventDefault(); e.stopPropagation(); startAction(name); flash(id); });
-    b.addEventListener("click", (e) => { if (e.detail === 0) { startAction(name); flash(id); } });  // keyboard (Enter / Space)
-  }
-  // virtual stick: press anywhere on the left part of the game area and drag
+  const bJ = $("bJ");
+  bJ.addEventListener("pointerdown", (e) => { e.preventDefault(); e.stopPropagation(); requestAction(); flash("bJ"); });
+  bJ.addEventListener("click", (e) => { if (e.detail === 0) { requestAction(); flash("bJ"); } });  // keyboard (Enter / Space)
+  // the ring shows when the game area got focus from the keyboard (Tab), not from the page's own focus() at
+  // load or a tap: a phone should not wear a ring around the game all the time
+  let viaKeyboard = false;
+  window.addEventListener("keydown", (e) => { if (e.key === "Tab") viaKeyboard = true; }, true);
+  window.addEventListener("pointerdown", () => { viaKeyboard = false; }, true);
+  canvas.addEventListener("focus", () => { if (viaKeyboard) stage.classList.add("kbd-focus"); });
+  canvas.addEventListener("blur", () => stage.classList.remove("kbd-focus"));
+  // virtual stick: press anywhere on the left part of the game area and drag; pushed past 80 % = run
   const stick = { active: false, id: -1, cx: 0, cy: 0, dx: 0, dy: 0 };
-  const pad = $("pad"), knob = $("knob"), R = 52;
-  function showPad(on) { pad.classList.toggle("on", on); stage.classList.toggle("sticking", on); }
+  const pad = $("pad"), knob = $("knob"), R = 52, RUN_AT = 0.8;
+  function showPad(on) { pad.classList.toggle("on", on); stage.classList.toggle("sticking", on); if (!on) pad.classList.remove("run"); }
   stage.addEventListener("pointerdown", (e) => {
     if (e.pointerType === "mouse" || stick.active) return;
     const r = stage.getBoundingClientRect();
@@ -218,6 +293,7 @@ canvas#view:focus-visible { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--foc
     const m = Math.hypot(dx, dy);
     if (m > R) { dx *= R / m; dy *= R / m; }
     stick.dx = dx / R; stick.dy = dy / R;
+    pad.classList.toggle("run", Math.hypot(stick.dx, stick.dy) >= RUN_AT);
     knob.style.transform = `translate(${dx}px, ${dy}px)`;
   });
   const endStick = (e) => { if (e.pointerId === stick.id) { stick.active = false; stick.dx = stick.dy = 0; showPad(false); } };
@@ -226,66 +302,111 @@ canvas#view:focus-visible { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--foc
   function inputVector() {          // screen-relative: x = right, y = down (= world +x, +z: the camera looks north)
     let x = 0, y = 0;
     if (keys.has("l")) x -= 1; if (keys.has("r")) x += 1; if (keys.has("u")) y -= 1; if (keys.has("d")) y += 1;
-    if (x || y) { const m = Math.hypot(x, y); return [x / m, y / m, 1]; }
-    if (stick.active) { const m = Math.hypot(stick.dx, stick.dy); if (m > 0.25) return [stick.dx / m, stick.dy / m, Math.min(1, m)]; }
-    return [0, 0, 0];
+    if (x || y) { const m = Math.hypot(x, y); return [x / m, y / m, 1, keys.has("run")]; }
+    if (stick.active) { const m = Math.hypot(stick.dx, stick.dy); if (m > 0.25) return [stick.dx / m, stick.dy / m, Math.min(1, m), m >= RUN_AT]; }
+    return [0, 0, 0, false];
   }
+  function requestAction() { if (SP && S.anim !== "onetwo") S.queue = "onetwo"; }
 
-  // ------------------------------------------------------------------ update
+  // ------------------------------------------------------------------ update (one call per displayed frame)
+  function turnTowards(dt) {           // facings change one step (45 deg) at a time, 50 ms apart
+    if (S.want === S.facing) { S.turnT = 0; return; }
+    S.turnT -= dt;
+    if (S.turnT > 0) return;
+    const n = SP.nf, d = ((S.want - S.facing) % n + n) % n;
+    S.facing = (S.facing + (d <= n / 2 ? 1 : n - 1)) % n;
+    S.turnT = 0.05;
+  }
+  function gaitStep(name, dt, ix, iy, mag) {   // walk / run loops: the cycle advances with the ground covered
+    const a = SP.anims[name];
+    const step = a.speed * mag * dt;
+    const moved = tryMove(ix * step, iy * step);
+    const before = S.phase;
+    S.phase += moved / a.stride_m;
+    return [before, moved];
+  }
+  function crossed(before, after) {   // the gait passed phase 0 or 0.5 (where its transitions start)
+    const b = Math.floor(before * 2), c = Math.floor(after * 2);
+    return c > b ? (c % 2) * 0.5 : null;
+  }
   function update(dt) {
-    const a = SP.anims;
-    if (S.anim === "onetwo" || S.anim === "inout") {
-      const an = a[S.anim], n = an.frames[S.facing].length;
+    const a = SP.anims[S.anim];
+    const [ix, iy, mag, run] = inputVector();
+    if (mag > 0) S.want = ((Math.round(Math.atan2(iy, ix) * 180 / Math.PI / SP.step) % SP.nf) + SP.nf) % SP.nf;
+    if (a.kind !== "action") turnTowards(dt);   // (a punch keeps its direction)
+    const moving = mag > 0 && !S.queue;
+    if (a.kind === "transition" || a.kind === "action") {   // clips play to their end at 60 fps
       S.t += dt;
-      const k = Math.min(n - 1, Math.floor(S.t * an.fps));
-      if (k !== S.k) {                // root motion of the frames passed, turned to the facing
-        const f = FACING_DEG(S.facing) * Math.PI / 180, c = Math.cos(f), s = Math.sin(f);
-        const fw = an.root[k][0] - an.root[S.k][0], sd = an.root[k][1] - an.root[S.k][1];
-        tryMove(fw * c + sd * s, fw * s - sd * c);
-        S.k = k;
+      const n = a.frames[0].length;
+      let k = Math.floor(S.t * FPS);
+      while (S.k < Math.min(k, n - 1)) { S.k++; applyAdvance(a, S.k); }
+      if (k >= n) {
+        if (a.kind === "action") { play("idle", 1 % SP.anims.idle.frames[0].length); return; }
+        const tgt = SP.anims[a.target];
+        if (tgt.kind === "gait") {      // carry on from the phase the clip ended at, this very frame
+          S.anim = a.target; S.phase = a.exit; S.t = 0;
+          const f = dirOf(S.facing);
+          gaitStep(a.target, dt, mag > 0 ? ix : Math.cos(f), mag > 0 ? iy : Math.sin(f), mag > 0 ? mag : 1);
+        }
+        else play(a.target, (a.exit + 1) % tgt.frames[0].length);
       }
-      if (S.t * an.fps >= n) { S.anim = "idle"; S.t = 0; }
       return;
     }
-    const [ix, iy, mag] = inputVector();
-    if (mag > 0) {
-      const ang = Math.atan2(iy, ix) * 180 / Math.PI;
-      S.facing = ((Math.round(ang / 45) % 8) + 8) % 8;
-      const step = M.walk_speed * mag * dt;
-      const moved = tryMove(ix * step, iy * step);
-      if (S.anim !== "walk") { S.anim = "walk"; S.phase = 0.07; }
-      S.phase += moved / a.walk.stride_m;   // the cycle advances with the ground covered: no foot sliding
-      if (moved < 1e-5) S.phase = Math.round(S.phase * 2) / 2 + 0.07;  // blocked: a planted pose, not a treadmill
-    } else if (S.anim === "walk") { S.anim = "idle"; S.t = 0; }
-    else S.t += dt;
+    if (S.anim === "idle") {
+      if (S.queue === "onetwo") { S.queue = null; play("onetwo", 0); return; }
+      if (moving && SP.anims.start) { startTransition("start"); return; }
+      S.t += dt;
+      const n = a.frames[0].length;
+      while (S.t >= 1 / FPS) { S.t -= 1 / FPS; S.k = (S.k + 1) % n; }
+      return;
+    }
+    // walk or run
+    const goal = !moving ? "idle" : run ? "run" : "walk";
+    const dx = moving ? ix : Math.cos(dirOf(S.facing)), dy = moving ? iy : Math.sin(dirOf(S.facing));
+    const [before, moved] = gaitStep(S.anim, dt, dx, dy, moving ? mag : 1);
+    if (goal === S.anim) return;
+    let next = goal === "idle" && S.anim === "run" ? "walk" : goal;       // run -> walk -> idle
+    let at = crossed(before, S.phase);
+    if (at === null && moved < 1e-6) at = Math.round(S.phase * 2) % 2 * 0.5;  // blocked: leave from the nearest
+    if (at === null) return;
+    const name = entryFor(S.anim, next, at);
+    if (name) startTransition(name);
   }
 
   // ------------------------------------------------------------------ drawing
-  let view = { w: 200, h: 120, scale: 2 }, buf = null, buf32 = null;
+  // Two layers in the game area: the whole LEVEL picture as one canvas that the browser moves by a CSS
+  // transform (whole device pixels: exact, no redraw when the camera moves - the compositor does it), and a
+  // small FIGURE canvas on top that holds, for the figure's box only, the level's pixels with the figure
+  // composited in (shadow, occlusion by depth, shade).  Per frame the CPU fills only that box.
+  let view = { w: 200, h: 120, scale: 1, cssPerArt: 1, sDev: 1 };
   const cam = { x: 0, y: 0, lagX: 0, lagY: 0, showX: 0, showY: 0, ax: null, ay: null };
+  let figImg = null, fig32 = null, FIGW = 1, FIGH = 1, lastBox = null, lastCam = null;
+  // Whole device pixels per art pixel.  The level is art at 3x the reference grid's density, so one art pixel
+  // is shown as about one CSS pixel on a phone (390 px wide: about 358 art px = 10.5 m of ground in the game
+  // area) and as 2 CSS px once the game area is 700 CSS px or wider (1280 px desktop: 624 art px = 18.2 m,
+  // one reference screen)
   function layout() {
     const dpr = window.devicePixelRatio || 1, r = stage.getBoundingClientRect();
-    const sCss = Math.max(2, Math.floor(Math.min(r.width / 200, r.height / 118)));
-    const sDev = Math.max(2, Math.round(sCss * dpr));          // whole device pixels per art pixel
+    const cssPerArt = Math.max(1, Math.round(r.width / 700));
+    const sDev = Math.max(1, Math.round(cssPerArt * dpr));
     const w = Math.max(32, Math.floor(r.width * dpr / sDev)), h = Math.max(32, Math.floor(r.height * dpr / sDev));
-    view = { w, h, scale: sDev / dpr };
-    canvas.width = w; canvas.height = h;
-    canvas.style.width = (w * sDev / dpr) + "px"; canvas.style.height = (h * sDev / dpr) + "px";
-    buf = ctx.createImageData(w, h); buf32 = new Uint32Array(buf.data.buffer);
+    const sc = sDev / dpr;
+    view = { w, h, scale: sc, sDev, cssPerArt };
+    viewEl.style.width = (w * sc) + "px"; viewEl.style.height = (h * sc) + "px";
+    levelEl.style.width = (L.W * sc) + "px"; levelEl.style.height = (L.H * sc) + "px";
+    figEl.style.width = (FIGW * sc) + "px"; figEl.style.height = (FIGH * sc) + "px";
+    lastCam = null;
   }
-  const W2S = () => M.camera.world_to_screen;
   function project(x, z) {
-    const U = M.camera.units_per_m, X = x * U, Y = M.camera.ground_y + heightAt(x, z) * U, Z = z * U, m = W2S();
+    const U = M.camera.units_per_m, X = x * U, Y = M.camera.ground_y + heightAt(x, z) * U, Z = z * U, m = M.camera.world_to_screen;
     return [m[0][0] * X + m[0][1] * Y + m[0][2] * Z + m[0][3], m[1][0] * X + m[1][1] * Y + m[1][2] * Z + m[1][3],
             m[2][0] * X + m[2][1] * Y + m[2][2] * Z + m[2][3]];
   }
   function follow(px, py, dt) {
-    // The camera trails the player by a smooth lag (it keeps its place in the world while the player moves,
-    // then catches up), measured on the player's EXACT screen position so it is a smooth number, steady at
-    // a steady walk.  The camera itself sits a whole number of art pixels from the player's snapped pixel,
-    // and that number changes only when the smooth lag has moved 0.75 px away from it (hysteresis): while
-    // walking at a steady speed the camera and the figure step by the same pixel in the same frame, so the
-    // figure does not shake by a pixel on screen.
+    // The camera trails the player by a smooth lag measured on the player's EXACT screen position; it sits a
+    // whole number of art pixels from the player's anchor pixel and changes that number only when the smooth
+    // lag is 0.75 px away from it (hysteresis): at a steady walk camera and figure step together.  During the
+    // one-two the anchor does not move at all (its root motion is inside the sprites), so neither does the camera.
     const ax = Math.floor(px), ay = Math.floor(py);
     if (cam.ax !== null) { cam.lagX += cam.ax - px; cam.lagY += cam.ay - py; }
     cam.ax = px; cam.ay = py;
@@ -298,95 +419,162 @@ canvas#view:focus-visible { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--foc
     cam.x = ax - Math.floor(view.w / 2) + cam.showX;
     cam.y = ay - Math.floor(view.h * 0.58) + cam.showY;
   }
-  const BIAS = 0.15;                    // world units: a sprite pixel this much behind the level still shows (feet on slopes)
+  const BIAS = 0.15;         // world units: a sprite pixel this much behind an object still shows
+  const GROUND_BIAS = 0.6;   // ... and this much behind GROUND (slopes, banks: the ground at the feet must not cut them)
   function draw() {
-    const { w, h } = view, x0 = cam.x, y0 = cam.y;
-    // level window (world-locked: whole pixels of one image)
-    for (let r = 0; r < h; r++) {
-      const ly = y0 + r, row = r * w;
-      if (ly < 0 || ly >= L.H) { buf32.fill(L.bg, row, row + w); continue; }
-      const a = Math.max(0, -x0), b = Math.min(w, L.W - x0);
-      if (a > 0) buf32.fill(L.bg, row, row + Math.min(a, w));
-      if (b > a) buf32.set(L.rgba.subarray(ly * L.W + x0 + a, ly * L.W + x0 + b), row + a);
-      if (b < w) buf32.fill(L.bg, row + Math.max(b, 0), row + w);
+    const x0 = cam.x, y0 = cam.y, sc = view.scale;
+    if (!lastCam || lastCam[0] !== x0 || lastCam[1] !== y0) {
+      levelEl.style.transform = `translate(${-x0 * sc}px, ${-y0 * sc}px)`;
+      lastCam = [x0, y0];
     }
-    // the figure
     const [px, py, pd] = project(S.x, S.z);
     const ax = Math.floor(px), ay = Math.floor(py);
-    const fi = currentFrame(), [fx, fy, fw, fh, ox, oy] = SP.frames[fi];
-    const ratio = L.ratio, d8 = buf.data;
-    const inShade = (ax >= 0 && ay >= 0 && ax < L.W && ay < L.H) ? !L.lit[ay * L.W + ax] : false;
+    const fi = frameIndex(), [fx, fy, fw, fh, ox, oy] = SP.frames[fi];
+    const bx = ax + ox, by = ay + oy;                 // the box, in level pixels
+    const LW = L.W, LH = L.H, rgba = L.rgba;
+    // 0) the level's own pixels in the box
+    for (let v = 0; v < fh; v++) {
+      const ly = by + v, row = v * FIGW;
+      if (ly < 0 || ly >= LH) { fig32.fill(L.bg, row, row + fw); continue; }
+      const a = Math.max(0, -bx), b = Math.min(fw, LW - bx);
+      if (a > 0) fig32.fill(L.bg, row, row + Math.min(a, fw));
+      if (b > a) fig32.set(rgba.subarray(ly * LW + bx + a, ly * LW + bx + b), row + a);
+      if (b < fw) fig32.fill(L.bg, row + Math.max(b, 0), row + fw);
+    }
+    const ratio = L.ratio, d8 = figImg.data, depth = L.depth, flag = L.flag, LITF = L.LIT, GR = L.GROUND;
+    const SW = SP.W, sdat = SP.data, srgba = SP.rgba, dscale = SP.scale, zero = SP.zero, rowD = L.rowDepth;
+    const shade = !sunAt(S.x, S.z);
     // 1) its shadow: flat ground at the figure's height, only where the level is at that depth and lit
     for (let v = 0; v < fh; v++) {
-      const sy = ay + oy + v, ry = sy - y0;
-      if (ry < 0 || ry >= h || sy < 0 || sy >= L.H) continue;
-      const want = pd + (oy + v) * L.rowDepth;
-      for (let u = 0; u < fw; u++) {
-        const si = 4 * ((fy + v) * SP.W + fx + u);
-        if (SP.data[si + 2] < 128) continue;
-        const sx = ax + ox + u, rx = sx - x0;
-        if (rx < 0 || rx >= w || sx < 0 || sx >= L.W) continue;
-        const li = sy * L.W + sx;
-        if (!L.lit[li] || Math.abs(L.depth[li] - want) > 0.35) continue;
-        const o = 4 * (ry * w + rx);
+      const sy = by + v;
+      if (sy < 0 || sy >= LH) continue;
+      const want = pd + (oy + v) * rowD;
+      let si = 4 * ((fy + v) * SW + fx), li = sy * LW + bx, o = 4 * v * FIGW;
+      for (let u = 0; u < fw; u++, si += 4, li++, o += 4) {
+        if (sdat[si + 2] < 128) continue;
+        const sx = bx + u;
+        if (sx < 0 || sx >= LW || !(flag[li] & LITF) || Math.abs(depth[li] - want) > 0.35) continue;
         d8[o] = d8[o] * ratio[0]; d8[o + 1] = d8[o + 1] * ratio[1]; d8[o + 2] = d8[o + 2] * ratio[2];
       }
     }
-    // 2) its pixels, where they are nearer than the level
-    const sh = inShade ? ratio : [1, 1, 1];
+    // 2) its pixels, where they are nearer than the level (ground gets the larger allowance)
+    const s0 = shade ? ratio[0] : 1, s1 = shade ? ratio[1] : 1, s2 = shade ? ratio[2] : 1;
     for (let v = 0; v < fh; v++) {
-      const sy = ay + oy + v, ry = sy - y0;
-      if (ry < 0 || ry >= h) continue;
-      for (let u = 0; u < fw; u++) {
-        const si = 4 * ((fy + v) * SP.W + fx + u);
-        if (SP.rgba[si + 3] < 128) continue;
-        const sx = ax + ox + u, rx = sx - x0;
-        if (rx < 0 || rx >= w) continue;
-        const dz = pd + (SP.data[si] * 256 + SP.data[si + 1] - SP.zero) / SP.scale;
-        const ld = (sx >= 0 && sy >= 0 && sx < L.W && sy < L.H) ? L.depth[sy * L.W + sx] : Infinity;
-        if (dz > ld + BIAS) continue;
-        const o = 4 * (ry * w + rx);
-        d8[o] = SP.rgba[si] * sh[0]; d8[o + 1] = SP.rgba[si + 1] * sh[1]; d8[o + 2] = SP.rgba[si + 2] * sh[2]; d8[o + 3] = 255;
+      const sy = by + v, inLevel = sy >= 0 && sy < LH;
+      let si = 4 * ((fy + v) * SW + fx), li = sy * LW + bx, o = 4 * v * FIGW;
+      for (let u = 0; u < fw; u++, si += 4, li++, o += 4) {
+        if (srgba[si + 3] < 128) continue;
+        const sx = bx + u;
+        if (inLevel && sx >= 0 && sx < LW) {
+          const dz = pd + (sdat[si] * 256 + sdat[si + 1] - zero) / dscale;
+          if (dz > depth[li] + ((flag[li] & GR) ? GROUND_BIAS : BIAS)) continue;
+        }
+        d8[o] = srgba[si] * s0; d8[o + 1] = srgba[si + 1] * s1; d8[o + 2] = srgba[si + 2] * s2; d8[o + 3] = 255;
       }
     }
-    ctx.putImageData(buf, 0, 0);
+    if (lastBox) figCtx.clearRect(0, 0, lastBox[2], lastBox[3]);
+    figCtx.putImageData(figImg, 0, 0, 0, 0, fw, fh);
+    figEl.style.transform = `translate(${(bx - x0) * sc}px, ${(by - y0) * sc}px)`;
+    lastBox = [bx, by, fw, fh];
     return [ax, ay];
+  }
+  function shownPixel(sx, sy) {      // what the game area shows at view pixel (sx, sy): the figure box, else the level
+    const lx = cam.x + sx, ly = cam.y + sy;
+    if (lastBox && lx >= lastBox[0] && ly >= lastBox[1] && lx < lastBox[0] + lastBox[2] && ly < lastBox[1] + lastBox[3]) {
+      const o = 4 * ((ly - lastBox[1]) * FIGW + lx - lastBox[0]);
+      return [figImg.data[o], figImg.data[o + 1], figImg.data[o + 2]];
+    }
+    if (lx < 0 || ly < 0 || lx >= L.W || ly >= L.H) return [L.bg & 255, (L.bg >>> 8) & 255, (L.bg >>> 16) & 255];
+    const p = L.rgba[ly * L.W + lx];
+    return [p & 255, (p >>> 8) & 255, (p >>> 16) & 255];
   }
 
   // ------------------------------------------------------------------ loop
-  let last = 0, hudT = 0;
+  let last = 0, hudT = 0, frames = 0;
+  const times = [];
+  let fault = false;
   function frame(ts) {
-    const dt = Math.min(0.05, last ? (ts - last) / 1000 : 0);
-    last = ts;
-    update(dt);
-    const [px, py] = project(S.x, S.z);
-    follow(px, py, dt);
-    draw();
-    hudT -= dt;
-    if (hudT <= 0) {
-      hudT = 0.2;
-      hud.textContent = `x ${S.x.toFixed(1)}  z ${S.z.toFixed(1)}  높이 ${heightAt(S.x, S.z).toFixed(2)} m  ×${+view.scale.toFixed(2)}`;
-    }
+    if (!running) return;
+    try {
+      if (fault) throw new Error("시험용 오류");
+      const t0 = performance.now();
+      const dt = Math.min(0.05, last ? (ts - last) / 1000 : 0);
+      last = ts;
+      update(dt);
+      const [px, py] = project(S.x, S.z);
+      follow(px, py, dt);
+      draw();
+      frames++;
+      times.push(performance.now() - t0); if (times.length > 240) times.shift();
+      hudT -= dt;
+      if (hudT <= 0) {
+        hudT = 0.2;
+        const what = { idle: "대기", walk: "걷기", run: "달리기", onetwo: "원투" }[S.anim] || "전환";
+        hud.textContent = `x ${S.x.toFixed(1)}  z ${S.z.toFixed(1)}  높이 ${heightAt(S.x, S.z).toFixed(2)} m  ${what}`;
+      }
+    } catch (err) { fail(err); return; }
     requestAnimationFrame(frame);
+  }
+
+  function nearestWalkable(x, z) {
+    if (walkable(x, z)) return [x, z];
+    let best = null, bd = Infinity;
+    for (let j = 0; j < T.nz; j++) for (let i = 0; i < T.nx; i++) {
+      if (!T.walk[j * T.nx + i]) continue;
+      const cx = T.ox + (i + 0.5) * T.cell, cz = T.oz + (j + 0.5) * T.cell, d = (cx - x) ** 2 + (cz - z) ** 2;
+      if (d < bd) { bd = d; best = [cx, cz]; }
+    }
+    return best || [x, z];
   }
 
   async function start() {
     try {
       await load();
     } catch (err) {
+      statusEl.classList.add("error");
       statusEl.textContent = "불러오지 못했습니다: " + err.message;
       return;
     }
-    S.x = M.start.at[0]; S.z = M.start.at[1]; S.facing = Math.round(M.start.facing / 45) % 8; S.anim = "idle";
+    [S.x, S.z] = nearestWalkable(M.start.at[0], M.start.at[1]);
+    S.facing = S.want = ((Math.round(M.start.facing / SP.step) % SP.nf) + SP.nf) % SP.nf;
+    play("idle", 0);
     layout();
     new ResizeObserver(() => { layout(); }).observe(stage);
     statusEl.hidden = true;
     canvas.focus({ preventScroll: true });
     // for automated checks (and curious players): read the state, put the figure somewhere
     window.bbDebug = {
-      state: () => ({ ...S, height: heightAt(S.x, S.z), walkable: walkable(S.x, S.z), view: { ...view }, cam: { x: cam.x, y: cam.y } }),
-      teleport: (x, z, facing) => { if (walkable(x, z)) { S.x = x; S.z = z; } if (facing !== undefined) S.facing = Math.round(facing / 45) % 8; return walkable(x, z); },
-      walkable, heightAt,
+      state: () => ({ x: S.x, z: S.z, facing: S.facing * SP.step, anim: S.anim, k: S.k, phase: S.phase, queue: S.queue,
+                      height: heightAt(S.x, S.z), walkable: walkable(S.x, S.z), shade: !sunAt(S.x, S.z),
+                      view: { ...view }, cam: { x: cam.x, y: cam.y }, frame: frameIndex(), frames }),
+      teleport: (x, z, facing) => {
+        if (walkable(x, z)) { S.x = x; S.z = z; }
+        if (facing !== undefined) S.facing = S.want = ((Math.round(facing / SP.step) % SP.nf) + SP.nf) % SP.nf;
+        play("idle", 0); cam.ax = null; cam.lagX = cam.lagY = cam.showX = cam.showY = 0; lastCam = null;
+        return walkable(x, z);
+      },
+      times: () => times.slice(),
+      advance: (name, k) => { applyAdvance(SP.anims[name], k); return [S.x, S.z]; },
+      fault: () => { fault = true; },
+      countRed: () => {           // shown pixels of the (test) figure's pure red (the figure box)
+        let n = 0, maxR = 0;
+        const d = figImg.data;
+        if (lastBox) for (let v = 0; v < lastBox[3]; v++) for (let u = 0; u < lastBox[2]; u++) {
+          const i = 4 * (v * FIGW + u), r = d[i], g = d[i + 1], b = d[i + 2];
+          if (r > 90 && g < 50 && b < 50 && r > 2.5 * Math.max(g, b, 1)) { n++; if (r > maxR) maxR = r; }
+        }
+        return [n, maxR];
+      },
+      walkable, heightAt, sunAt, canStep, project,
+      pixel: shownPixel,
+      level: (lx, ly) => { const p = L.rgba[ly * L.W + lx]; return [p & 255, (p >>> 8) & 255, (p >>> 16) & 255]; },
+      levelDepth: (pts) => pts.map(([lx, ly]) => { const d = L.depth[ly * L.W + lx]; return Number.isFinite(d) ? d : null; }),
+      atlasSums: () => {          // byte sums of the decoded atlases (tests compare them with the files)
+        let c = 0, d = 0;
+        for (let i = 0; i < SP.rgba.length; i += 4) if (SP.rgba[i + 3] === 255) c += SP.rgba[i] + 3 * SP.rgba[i + 1] + 7 * SP.rgba[i + 2];
+        for (let i = 0; i < SP.data.length; i++) d += SP.data[i] * ((i % 4) + 1);
+        return [c, d];
+      },
     };
     requestAnimationFrame(frame);
   }
