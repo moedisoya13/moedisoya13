@@ -35,7 +35,7 @@ STRIDE = 0.64 * H  # distance one foot travels per cycle (two steps)
 STANCE = 0.62  # fraction of the cycle a foot is on the ground
 SPEED = STRIDE  # world units per cycle (the name the Nike example uses)
 HEEL_ROCK = 0.16  # part of the stance spent rolling from the heel onto the sole
-HEEL_OFF = 0.52  # part of the stance after which the heel lifts
+HEEL_OFF = 0.40  # part of the stance after which the heel lifts
 PITCH_STRIKE = -14.0  # foot pitch at heel strike (toes up), degrees
 PITCH_OFF = 38.0  # foot pitch at toe-off (heel up)
 SWING_LIFT = 0.038 * H  # extra ankle height in mid swing
@@ -50,6 +50,12 @@ MAX_REACH = 0.995  # legs never straighten further than this fraction of their l
 def smoothstep(x):
     x = min(max(x, 0.0), 1.0)
     return x * x * (3 - 2 * x)
+
+
+def smootherstep(x):
+    """0 -> 1 with zero speed AND zero acceleration at both ends (a step whose ends do not jolt)."""
+    x = min(max(x, 0.0), 1.0)
+    return x * x * x * (x * (6 * x - 15) + 10)
 
 
 def soft_pos(x, eps=3.0):
@@ -85,18 +91,18 @@ def foot_path(psi: float, s: int) -> Dict[str, object]:
     if psi < STANCE:
         t = psi / STANCE
         if t < HEEL_ROCK:
-            pitch = PITCH_STRIKE * (1 - smoothstep(t / HEEL_ROCK))
+            pitch = PITCH_STRIKE * (1 - smootherstep(t / HEEL_ROCK))
             return dict(ankle=_about(Hc, Hc, pitch, A0) - A0, pitch=pitch, toe=0.0, contact="heel")
         if t < HEEL_OFF:
             return dict(ankle=np.zeros(3), pitch=0.0, toe=0.0, contact="sole")
-        pitch = PITCH_OFF * smoothstep((t - HEEL_OFF) / (1 - HEEL_OFF))
+        pitch = PITCH_OFF * smootherstep((t - HEEL_OFF) / (1 - HEEL_OFF))
         return dict(ankle=_about(T0, T0, pitch, A0) - A0, pitch=pitch, toe=-pitch, contact="toe")
     t = (psi - STANCE) / (1 - STANCE)
     start = _about(T0, T0, PITCH_OFF, A0) - A0  # where toe-off left the ankle
     end = _about(Hc, Hc, PITCH_STRIKE, A0) - A0 + np.array([0.0, 0.0, STRIDE])  # next heel strike, one stride on
-    ankle = start + (end - start) * smoothstep(t)  # zero world speed at both ends
+    ankle = start + (end - start) * smootherstep(t)  # zero world speed at both ends
     ankle[1] += SWING_LIFT * math.sin(math.pi * t) ** 2
-    pitch = PITCH_OFF + (PITCH_STRIKE - PITCH_OFF) * smoothstep((t - SWING_HOLD) / (1 - SWING_HOLD))
+    pitch = PITCH_OFF + (PITCH_STRIKE - PITCH_OFF) * smootherstep((t - SWING_HOLD) / (1 - SWING_HOLD))
     toe = -PITCH_OFF * (1 - smoothstep(t / 0.70))  # toes straighten out during the swing (slowly: the shoe is long)
     return dict(ankle=ankle, pitch=pitch, toe=toe, contact=None)
 
@@ -158,6 +164,170 @@ def _pelvis_world(R_pelvis, root):
     return lambda p: R_pelvis @ (p - ph) + ph + root
 
 
+# ---------------------------------------------------------------- balance of a gait (centre of mass, ZMP)
+# A loop whose pelvis just glides along at a constant speed is not balanced: the swinging leg and arms
+# carry the centre of mass ahead in early single support - exactly when a real body slows down, rising
+# over its planted leg (an inverted pendulum) - so the ground would have to pull (template/qc.py,
+# README "걷기 균형").  The loops below therefore choose the pelvis's forward travel so that the WHOLE
+# body's centre of mass moves the way gravity allows: its ground point "ZMP" (where the floor pushes)
+# stays on the planted foot, rolling from heel to ball.  For a body of height y over the ground:
+#     x'' = (y'' + g) / y * (x - p)            p = the ZMP, 0 factor in flight (ballistic)
+# solved once per loop on a periodic grid (a linear system); the pelvis offset that puts the centre of
+# mass on that path is found by a few fixed-point steps.  The masses are de Leva's (as in qc.py).
+G_ACC = 9.81
+M_PER_UNIT = 1.75 / H  # metres per world unit (1.80 units = a 1.75 m man)
+_DE_LEVA_TRUNK_MM = (145.7, 215.5, 170.7)  # low, middle, upper trunk (de Leva 1996, males)
+
+
+def _com_table():
+    mid_hip = 0.5 * (rig.HIP[1] + rig.HIP[-1])
+    top = rig.NECK
+    tot = sum(_DE_LEVA_TRUNK_MM)
+    navel = mid_hip + (top - mid_hip) * _DE_LEVA_TRUNK_MM[0] / tot
+    xiph = mid_hip + (top - mid_hip) * (_DE_LEVA_TRUNK_MM[0] + _DE_LEVA_TRUNK_MM[1]) / tot
+    segs = [("head", rig.VERTEX + 0.5002 * (top - rig.VERTEX), 0.0694)]
+    for a, b, f, m in ((top, xiph, 0.5066, 0.1596), (xiph, navel, 0.4502, 0.1633), (navel, mid_hip, 0.6115, 0.1117)):
+        q = a + f * (b - a)
+        segs.append(("chest" if q[1] >= rig.WAIST[1] else "pelvis", q, m))
+    for side, s in rig.SIDES:
+        for bone, a, b, f, m in (("upperarm", rig.SHOULDER[s], rig.ELBOW[s], 0.5772, 0.0271),
+                                 ("forearm", rig.ELBOW[s], rig.WRIST[s], 0.4574, 0.0162),
+                                 ("hand", rig.WRIST[s], rig.FINGERTIP[s], 0.3624, 0.0061),
+                                 ("thigh", rig.HIP[s], rig.KNEE[s], 0.4095, 0.1416),
+                                 ("shin", rig.KNEE[s], rig.ANKLE[s], 0.4459, 0.0433)):
+            segs.append((bone + side, a + f * (b - a), m))
+        heel = -rig.HEEL_BACK * rig.FOOT_LEN
+        z = heel + 0.4415 * (float(rig.TOE_TIP[s][2]) - heel)
+        ank = rig.ANKLE[s]
+        segs.append(("foot" + side, np.array([ank[0], rig.GROUND + 0.5 * (ank[1] - rig.GROUND), z]), 0.0137))
+    idx = np.array([rig.SKELETON.index[b] for b, _, _ in segs])
+    pts = np.array([q for _, q, _ in segs], np.float64)
+    mass = np.array([m for _, _, m in segs])
+    return idx, pts, mass / mass.sum()
+
+
+_COM = _com_table()
+
+
+def mass_points(mats: np.ndarray) -> np.ndarray:
+    """(S, 3) world positions of the body segments' centres of mass (weights: ``_COM[2]``)."""
+    idx, pts, _ = _COM
+    M = np.asarray(mats, np.float64)[idx]
+    return np.einsum("sij,sj->si", M[:, :, :3], pts) + M[:, :, 3]
+
+
+def multibody_zmp(seg: np.ndarray, dt: float, periodic: bool = True, travel: float = 0.0) -> np.ndarray:
+    """(T, 2) ZMP [x, z] of point masses ``seg`` (T, S, 3, world units) sampled dt apart (ground y = GROUND):
+    the point the floor must push through for the segments to accelerate as they do (qc.zmp).  ``periodic``:
+    one loop that advances ``travel`` along z per period."""
+    _, _, mass = _COM
+    y = (seg - np.array([0.0, rig.GROUND, 0.0])) * M_PER_UNIT
+    if periodic:
+        T = len(y)
+        flat = y.copy()
+        flat[..., 2] -= (travel * M_PER_UNIT * np.arange(T) / T)[:, None]  # a steady glide does not accelerate
+        a = (np.roll(flat, -1, 0) - 2 * flat + np.roll(flat, 1, 0)) / dt ** 2
+    else:
+        a = np.gradient(np.gradient(y, dt, axis=0), dt, axis=0)
+    fy = np.einsum("s,ts->t", mass, a[..., 1] + G_ACC)
+    out = np.stack([np.einsum("s,ts->t", mass, (a[..., 1] + G_ACC) * y[..., k] - a[..., k] * y[..., 1]) for k in (0, 2)], 1)
+    return out / fy[:, None] / M_PER_UNIT
+
+
+def com_of(mats: np.ndarray) -> np.ndarray:
+    """World centre of mass of a pose (rest->posed bone matrices of ``rig.SKELETON``)."""
+    idx, pts, mass = _COM
+    M = np.asarray(mats, np.float64)[idx]
+    return np.einsum("s,sk->k", mass, np.einsum("sij,sj->si", M[:, :, :3], pts) + M[:, :, 3])
+
+
+def zmp_follow(p: np.ndarray, c: np.ndarray, dt: float, travel: float) -> np.ndarray:
+    """Periodic solution of x'' = c (x - p) on a grid of N samples dt apart, for a ZMP track ``p`` that
+    advances ``travel`` per period (p[i] - travel * i / N is periodic).  Returns x (absolute)."""
+    N = len(p)
+    t = np.arange(N) / N
+    pr = np.asarray(p, np.float64) - travel * t
+    D2 = (np.roll(np.eye(N), 1, 1) + np.roll(np.eye(N), -1, 1) - 2 * np.eye(N)) / dt ** 2
+    xr = np.linalg.solve(D2 - np.diag(c), -np.asarray(c) * pr)
+    return xr + travel * t
+
+
+def periodic_d2(y: np.ndarray, dt: float) -> np.ndarray:
+    return (np.roll(y, -1) - 2 * y + np.roll(y, 1)) / dt ** 2
+
+
+def fourier_fit(y: np.ndarray, harmonics) -> np.ndarray:
+    """Least-squares coefficients [c0, a_k, b_k ...] of y over one period sampled at i / N."""
+    N = len(y)
+    ph = np.arange(N) / N
+    A = _fourier_basis(ph, harmonics)
+    return np.linalg.lstsq(A, y, rcond=None)[0]
+
+
+def _fourier_basis(ph, harmonics) -> np.ndarray:
+    ph = np.atleast_1d(np.asarray(ph, np.float64))
+    cols = [np.ones_like(ph)]
+    for k in harmonics:
+        cols += [np.cos(TAU * k * ph), np.sin(TAU * k * ph)]
+    return np.stack(cols, -1)
+
+
+def fourier_eval(coef: np.ndarray, harmonics, phase, deriv: int = 0) -> float:
+    """Value (or d^n / dphase^n) of a ``fourier_fit`` series at ``phase``."""
+    ph = float(phase)
+    out = coef[0] if deriv == 0 else 0.0
+    for j, k in enumerate(harmonics):
+        a, b = coef[1 + 2 * j], coef[2 + 2 * j]
+        w = TAU * k
+        if deriv == 0:
+            out += a * math.cos(w * ph) + b * math.sin(w * ph)
+        elif deriv == 1:
+            out += w * (-a * math.sin(w * ph) + b * math.cos(w * ph))
+        else:
+            out += -w * w * (a * math.cos(w * ph) + b * math.sin(w * ph))
+    return float(out)
+
+
+def smooth_below(limit: np.ndarray, harmonics, margin: float = 0.0, acc_max: Optional[float] = None,
+                 period: float = 1.0) -> np.ndarray:
+    """The highest smooth periodic curve (a Fourier series with these harmonics, highest on average) that
+    stays below ``limit`` (sampled at i / N) everywhere.  A pelvis that rides exactly on its leg-reach limit
+    follows the limit's corners (where the limiting leg changes) - a kink the eye sees and the vertical
+    acceleration shows (-1 g -> +0.8 g within 5 frames); this one rounds them off from below."""
+    from scipy.optimize import linprog
+
+    N = len(limit)
+    ph = np.arange(N) / N
+    A = _fourier_basis(ph, harmonics)
+    A_ub, b_ub = [A], [np.asarray(limit) - margin]
+    if acc_max is not None:  # |d2y/dt2| <= acc_max (world units / s^2) at every sample: linear in the coefficients
+        D = np.zeros_like(A)
+        for j, k in enumerate(harmonics):
+            w = TAU * k
+            D[:, 1 + 2 * j] = -w * w * np.cos(w * ph)
+            D[:, 2 + 2 * j] = -w * w * np.sin(w * ph)
+        D /= period ** 2
+        A_ub += [D, -D]
+        b_ub += [np.full(N, acc_max), np.full(N, acc_max)]
+    res = linprog(-A.mean(0), A_ub=np.concatenate(A_ub), b_ub=np.concatenate(b_ub),
+                  bounds=[(None, None)] * A.shape[1], method="highs")
+    if not res.success:
+        raise RuntimeError(f"smooth_below: {res.message}")
+    return res.x
+
+
+def leg_limits(R_pelvis, root_xz, ankles, reach: float = MAX_REACH) -> Dict[int, float]:
+    """Per leg: the highest pelvis offset (y) at which it still reaches its ankle at ``reach`` x its length."""
+    ph = rig.PELVIS
+    reach2 = (reach * (rig.THIGH_LEN + rig.SHIN_LEN)) ** 2
+    out = {}
+    for s, ankle in ankles.items():
+        hip = R_pelvis @ (rig.HIP[s] - ph) + ph
+        dx, dz = ankle[0] - hip[0] - root_xz[0], ankle[2] - hip[2] - root_xz[1]
+        out[s] = ankle[1] - hip[1] + math.sqrt(max(reach2 - dx * dx - dz * dz, 1e-9))
+    return out
+
+
 def stand_rots(arm_out: float = 10.0, elbow: float = 8.0) -> Tuple[Dict[str, np.ndarray], np.ndarray]:
     """Relaxed standing: arms hang a little away from the body, elbows slightly bent."""
     rots = {}
@@ -167,9 +337,11 @@ def stand_rots(arm_out: float = 10.0, elbow: float = 8.0) -> Tuple[Dict[str, np.
     return rots, np.zeros(3)
 
 
-def walk_rots(skel: Skeleton, phase: float, advance: float = 0.0, info: Optional[dict] = None):
-    """Local rotations + root offset for walk phase in [0,1).  ``info`` (optional dict) receives the
-    world targets of both feet and the leg reach, for tests."""
+def _walk_core(phase: float, advance: float = 0.0, dz: float = 0.0, height: Optional[float] = None,
+               info: Optional[dict] = None, helpers: bool = True, dx: Optional[float] = None):
+    """The walk pose with the pelvis ``dz`` ahead of its even glide, ``dx`` to the side (None = the old
+    sway, ROOT_SWAY) and at ``height`` (None = the old rule: as high as both legs allow, ``root_height``).
+    ``walk_rots`` passes the balanced values."""
     c1 = math.cos(TAU * phase)  # +1 when the left heel strikes (left leg forward)
     over = math.cos(TAU * (phase - MID_STANCE))  # +1 when the body is over the left foot
     bob = math.cos(2 * TAU * (phase - MID_STANCE))  # +1 over either foot, -1 with both feet down
@@ -182,8 +354,10 @@ def walk_rots(skel: Skeleton, phase: float, advance: float = 0.0, info: Optional
         f = foot_path(psi, s)
         origin = np.array([0.0, 0.0, advance + plant_shift(psi)])  # plant frame -> world
         feet[s], ankles[s] = (psi, f, origin), rig.ANKLE[s] + origin + f["ankle"]
-    sway = ROOT_SWAY * over
-    root = np.array([sway, root_height(R_pelvis, (sway, advance), ankles), advance])
+    sway = ROOT_SWAY * over if dx is None else dx
+    if height is None:
+        height = root_height(R_pelvis, (sway, advance + dz), ankles)
+    root = np.array([sway, height, advance + dz])
     rots = {"pelvis": R_pelvis}
     # trunk: counter-turn at the waist turntable, shoulders stay level, head keeps looking ahead
     chest_yaw = 4.0 * c1  # world heading of the chest
@@ -211,14 +385,353 @@ def walk_rots(skel: Skeleton, phase: float, advance: float = 0.0, info: Optional
         rots["upperarm" + side] = rig.local_rot("upperarm" + side, pitch=-3.0 + 21.0 * sw, roll=s * 9.0)
         rots["forearm" + side] = rig.local_rot("forearm" + side, pitch=-(19.0 - 11.0 * sw), yaw=s * 8.0)
         rots["hand" + side] = rig.local_rot("hand" + side, pitch=-6.0)
-    drive_helpers(rots, phase=phase, walk=1.0)
+    if info is not None:
+        info["_limits"] = (R_pelvis, (sway, advance + dz), ankles)
+    if helpers:
+        drive_helpers(rots, phase=phase, walk=1.0)
     return rots, root
+
+
+WALK_PERIOD = 0.8  # seconds per cycle the walk is balanced for (the play page: STRIDE 1.12 m at 1.4 m/s)
+_WALK_DZ_H = (2, 4, 6, 8)  # harmonics of the forward offset (it repeats every step: even only)
+_WALK_DX_H = (1, 3, 5)  # ... of the sideways sway (it changes sides every step: odd only)
+ZMP_INSET = 0.008 * H  # the floor pushes a little inside the ankle line (the arch side), world units
+_WALK_H_H = (2, 4, 6)  # ... and of the pelvis height
+WALK_REACH = 0.99  # the pelvis stays low enough for the legs to reach with this fraction of their length
+WALK_PELVIS_ACC = 0.45 * G_ACC / M_PER_UNIT  # ... and never rises or sinks faster than this (world units / s^2)
+
+
+def walk_zmp_ref(phase: float) -> np.ndarray:
+    """Where the floor should push ([x, z], world units, advance = STRIDE * phase): on the planted foot,
+    rolling from a quarter of the way from heel to ball, to the ball; in double support from the trailing
+    ball to the leading foot."""
+    d = STANCE - 0.5  # double support at the start of each half cycle
+
+    def foot(origin, s, u):
+        heel, ball = origin + rig.HEEL[s][2], origin + rig.TOE[s][2]
+        return np.array([rig.ANKLE[s][0] - s * ZMP_INSET, heel + (0.25 + 0.75 * u) * (ball - heel)])
+
+    ph = phase % 1.0
+    cyc = STRIDE * math.floor(phase)
+    zL = STRIDE * MID_STANCE + cyc
+    if ph < d:  # right ball -> left foot
+        return foot(STRIDE * (MID_STANCE - 0.5) + cyc, -1, 1.0) * (1 - ph / d) + foot(zL, 1, 0.0) * (ph / d)
+    if ph < 0.5:
+        return foot(zL, 1, (ph - d) / (0.5 - d))
+    zR = STRIDE * (MID_STANCE + 0.5) + cyc
+    if ph < 0.5 + d:
+        u = (ph - 0.5) / d
+        return foot(zL, 1, 1.0) * (1 - u) + foot(zR, -1, 0.0) * u
+    return foot(zR, -1, (ph - 0.5 - d) / (0.5 - d))
+
+
+def _balance_loop(core, zmp_ref, travel: float, period: float, dz_h, h_h, n: int = 120, rounds: int = 6,
+                  height_fn=None, reach: float = MAX_REACH, height_margin: float = 0.0005 * H, dx_h=(1, 3, 5),
+                  relax: float = 1.0, height_acc: Optional[float] = None):
+    """Shared by the walk and the run: the pelvis's forward offset (Fourier coefficients over the phase) that
+    puts the centre of mass on the balanced path, and the pelvis height (coefficients) - the smooth curve
+    under the legs' reach (``height_fn`` = None) or ``height_fn(limits)`` for a designed one."""
+    ph = np.arange(n) / n
+    dt = period / n
+    dz = np.zeros(n)
+    dx = np.zeros(n)
+    hgt = [None] * n
+    out = {}
+    for _ in range(rounds):
+        com, lim = np.zeros((n, 3)), np.zeros(n)
+        seg = np.zeros((n, len(_COM[0]), 3))
+        for i, f in enumerate(ph):
+            info: dict = {}
+            rots, root = core(f, travel * f, dz[i], hgt[i], info=info, helpers=False, dx=dx[i])
+            mats = rig.SKELETON.world_mats(rots, root_offset=root)
+            com[i] = com_of(mats)
+            seg[i] = mass_points(mats)
+            Rp, rxz, ank = info["_limits"]
+            lim[i] = min(leg_limits(Rp, rxz, ank, reach).values())
+        y = (com[:, 1] - rig.GROUND) * M_PER_UNIT
+        c = (periodic_d2(y, dt) + G_ACC) / y
+        c = np.maximum(c, 0.0)
+        p = np.array([zmp_ref(f) for f in ph])
+        # the whole body moved by d(t) moves the ZMP by d - (y / (y'' + g)) d'': the correction that puts the
+        # multi-body ZMP (swinging limbs included, not just the centre of mass) on the reference
+        z0 = multibody_zmp(seg, dt, travel=travel)
+        err = zmp_follow(p[:, 1] - z0[:, 1], c, dt, 0.0)
+        err_x = zmp_follow(p[:, 0] - z0[:, 0], c, dt, 0.0)
+        out["dz"] = fourier_fit(dz + relax * err, dz_h)
+        dz = _fourier_basis(ph, dz_h) @ out["dz"]
+        out["dx"] = fourier_fit(dx + relax * err_x, dx_h)
+        dx = _fourier_basis(ph, dx_h) @ out["dx"]
+        if height_fn is None:
+            out["h"] = smooth_below(np.minimum(lim, -ROOT_CAP), h_h, height_margin, height_acc, period)
+        else:
+            out["h"] = height_fn(ph, lim)
+        hgt = list(_fourier_basis(ph, h_h) @ out["h"])
+    out.update(dz_h=dz_h, h_h=h_h, dx_h=dx_h, period=period, travel=travel, n=n,
+               com_err=float(max(np.abs(err).max(), np.abs(err_x).max())))
+    return out
+
+
+_BALANCE_CACHE: Dict[tuple, dict] = {}
+
+
+def walk_balance(period: float = WALK_PERIOD) -> dict:
+    """The walk's balanced pelvis track (computed once per period, about a second)."""
+    key = ("walk", round(float(period), 6), STRIDE, STANCE)
+    if key not in _BALANCE_CACHE:
+        _BALANCE_CACHE[key] = _balance_loop(_walk_core, walk_zmp_ref, STRIDE, period, _WALK_DZ_H, _WALK_H_H,
+                                            reach=WALK_REACH, dx_h=_WALK_DX_H, height_acc=WALK_PELVIS_ACC)
+    return _BALANCE_CACHE[key]
+
+
+def walk_rots(skel: Skeleton, phase: float, advance: float = 0.0, info: Optional[dict] = None):
+    """Local rotations + root offset for walk phase in [0,1).  ``info`` (optional dict) receives the
+    world targets of both feet and the leg reach, for tests.  The pelvis follows ``walk_balance``: it
+    slows while it rises over the planted leg and gains speed again as it falls onto the next one, and its
+    height is a smooth curve under what the legs reach (README "걷기 균형")."""
+    b = walk_balance()
+    dz = fourier_eval(b["dz"], b["dz_h"], phase)
+    h = fourier_eval(b["h"], b["h_h"], phase)
+    dx = fourier_eval(b["dx"], b["dx_h"], phase)
+    return _walk_core(phase, advance, dz, h, info, dx=dx)
 
 
 def walk_pose(skel: Skeleton, phase: float, advance: float = 0.0):
     """(B,3,4) rest->posed matrices + root offset, same call as the Nike example's walk_pose."""
     rots, root = walk_rots(skel, phase, advance)
     return skel.world_mats(rots, root_offset=root), root
+
+
+# ---------------------------------------------------------------- run loop (a jog with a flight phase)
+# Built like the walk: feet first, in WORLD space (a planted foot is a fixed point - it lands near flat,
+# rolls onto the ball and pushes off; the swinging foot leaves and lands with zero world speed, its heel
+# kicked up behind on the way), legs by two-bone IK, the pelvis's height designed (ballistic in flight,
+# dipping in stance) and its forward / sideways travel balanced like the walk's (``_balance_loop``: in flight
+# nothing pushes, so the body glides; in stance the floor pushes through the planted foot).
+RUN_PERIOD = 40 / 60  # seconds per cycle (two steps): 90 steps a minute per leg, 180 in all
+RUN_SPEED_MS = 3.75  # metres per second
+RUN_STRIDE = RUN_SPEED_MS * RUN_PERIOD / M_PER_UNIT  # world units per cycle (2.5 m)
+RUN_STANCE = 0.27  # fraction of the cycle a foot is down (0.18 s); each step has 0.23 x 0.667 s = 0.15 s of flight
+RUN_MID = RUN_STANCE / 2
+RUN_STRIKE = -7.0  # foot pitch at touchdown (degrees, toes up a little: lands on the outer heel / midfoot)
+RUN_ROLL = 0.22  # part of the stance spent rolling flat
+RUN_HEEL_OFF = 0.25  # part of the stance after which the heel lifts
+RUN_PITCH_OFF = 42  # foot pitch at toe-off
+RUN_LIFT = 0.13 * H  # extra ankle height at the top of the heel kick
+RUN_NARROW = 0.018 * H  # runners put their feet nearer the midline than walkers
+RUN_BOUNCE = 0.6  # the pelvis's up-and-down as a fraction of a free fall's (see run_height_shape)
+RUN_REACH = 0.985  # the pelvis stays low enough for the stance leg to keep a little bend
+_RUN_DZ_H = (2, 4, 6, 8)
+_RUN_DX_H = (1, 3, 5)
+_RUN_H_H = (2, 4, 6, 8, 10, 12)
+
+
+def run_foot_path(psi: float, s: int) -> Dict[str, object]:
+    """One foot of the run over leg phase psi in [0,1) (0 = touchdown), in its plant frame (see ``foot_path``)."""
+    psi = psi % 1.0
+    A0, T0, Hc = rig.ANKLE[s], rig.TOE[s], rig.HEEL[s]
+    if psi < RUN_STANCE:
+        t = psi / RUN_STANCE
+        if t < RUN_ROLL:
+            pitch = RUN_STRIKE * (1 - smootherstep(t / RUN_ROLL))
+            return dict(ankle=_about(Hc, Hc, pitch, A0) - A0, pitch=pitch, toe=0.0, contact="heel")
+        if t < RUN_HEEL_OFF:
+            return dict(ankle=np.zeros(3), pitch=0.0, toe=0.0, contact="sole")
+        pitch = RUN_PITCH_OFF * smootherstep((t - RUN_HEEL_OFF) / (1 - RUN_HEEL_OFF))
+        return dict(ankle=_about(T0, T0, pitch, A0) - A0, pitch=pitch, toe=-pitch, contact="toe")
+    t = (psi - RUN_STANCE) / (1 - RUN_STANCE)
+    start = _about(T0, T0, RUN_PITCH_OFF, A0) - A0
+    end = _about(Hc, Hc, RUN_STRIKE, A0) - A0 + np.array([0.0, 0.0, RUN_STRIDE])
+    ankle = start + (end - start) * smoothstep(t)
+    # up and down in one arch (the foot leaves and lands moving: a runner's foot is not set down gently).  A
+    # foot that came down early would hang at the landing spot far ahead of a body in flight and pull the
+    # whole loop's pelvis down to reach it
+    ankle[1] += RUN_LIFT * math.sin(math.pi * t ** 1.3)
+    pitch = RUN_PITCH_OFF + (RUN_STRIKE - RUN_PITCH_OFF) * smootherstep((t - 0.12) / 0.80)
+    toe = -RUN_PITCH_OFF * (1 - smootherstep(t / 0.5))
+    return dict(ankle=ankle, pitch=pitch, toe=toe, contact=None)
+
+
+def _soft_clamp(x: float, lo: float, hi: float, eps: float) -> float:
+    """x kept inside [lo, hi], bending smoothly onto the bound over the last ``eps`` (degrees)."""
+    x = lo + soft_pos(x - lo, eps)
+    return hi - soft_pos(hi - x, eps)
+
+
+def run_zmp_ref(phase: float) -> np.ndarray:
+    """[x, z] the floor pushes through while a foot is down: from just behind the ankle to the ball."""
+    ph = phase % 1.0
+    cyc = RUN_STRIDE * math.floor(phase)
+    for s, start in ((1, 0.0), (-1, 0.5)):
+        u = ph - start
+        if 0.0 <= u < RUN_STANCE:
+            origin = RUN_STRIDE * (RUN_MID + start) + cyc
+            heel, ball = origin + rig.HEEL[s][2], origin + rig.TOE[s][2]
+            return np.array([rig.ANKLE[s][0] - s * (RUN_NARROW + ZMP_INSET),
+                             heel + (0.35 + 0.65 * u / RUN_STANCE) * (ball - heel)])
+    return np.array([0.0, RUN_STRIDE * phase])  # flight: not used (nothing pushes)
+
+
+def _run_core(phase: float, advance: float = 0.0, dz: float = 0.0, height: Optional[float] = None,
+              info: Optional[dict] = None, helpers: bool = True, dx: Optional[float] = None):
+    c1 = math.cos(TAU * phase)  # +1 when the left foot touches down (left leg forward)
+    over = math.cos(TAU * (phase - RUN_MID))
+    bob = math.cos(2 * TAU * (phase - RUN_MID))
+    yaw_p = -8.0 * c1
+    R_pelvis = rig.euler(pitch=8.0, yaw=yaw_p, roll=4.0 * over)
+    feet, ankles = {}, {}
+    for side, s in rig.SIDES:
+        psi = (phase + (0.0 if s > 0 else 0.5)) % 1.0
+        f = run_foot_path(psi, s)
+        origin = np.array([-s * RUN_NARROW, 0.0, advance + RUN_STRIDE * (RUN_MID - psi)])
+        feet[s], ankles[s] = (psi, f, origin), rig.ANKLE[s] + origin + f["ankle"]
+    sway = 0.0 if dx is None else dx
+    if height is None:
+        height = root_height(R_pelvis, (sway, advance + dz), ankles)
+    root = np.array([sway, height, advance + dz])
+    rots = {"pelvis": R_pelvis}
+    chest_yaw = 9.0 * c1  # the shoulders turn against the hips
+    rots["chest"] = rig.local_rot("chest", pitch=7.0 + 1.5 * bob, yaw=chest_yaw - yaw_p, roll=-2.5 * over)
+    rots["neck"] = rig.local_rot("neck", pitch=-5.0 - 1.5 * bob, roll=-0.5 * over)
+    rots["head"] = rig.local_rot("head", pitch=-7.0, yaw=-chest_yaw)
+    to_world = _pelvis_world(R_pelvis, root)
+    fwd = rig.euler(yaw=0.5 * yaw_p) @ np.array([0.0, 0.0, 1.0])
+    for side, s in rig.SIDES:
+        psi, f, origin = feet[s]
+        W_thigh, W_shin, reach = leg_ik(to_world(rig.HIP[s]), ankles[s], fwd, s)
+        pitch = f["pitch"]
+        if f["contact"] is None:  # in the air the ankle keeps inside its range, eased (no stop at the limit)
+            (lo, hi), _, _ = rig.limits("foot" + side)
+            local = rig.joint_angles("foot" + side, W_shin.T @ rot_x(pitch))[0]
+            pitch += _soft_clamp(local, lo + 2.0, hi - 2.0, 6.0) - local
+        W_foot = rot_x(pitch)
+        rots["thigh" + side] = R_pelvis.T @ W_thigh
+        rots["shin" + side] = W_thigh.T @ W_shin
+        rots["foot" + side] = W_shin.T @ W_foot
+        rots["toe" + side] = rig.local_rot("toe" + side, pitch=f["toe"])
+        if info is not None:
+            info[side] = dict(psi=psi, contact=f["contact"], ankle=ankles[s], reach=reach, pitch=f["pitch"],
+                              origin=origin)
+    for side, s in rig.SIDES:  # arms pump against the legs, elbows near a right angle
+        sw = c1 * s
+        rots["clav" + side] = rig.local_rot("clav" + side, yaw=-s * 4.0 * sw)
+        rots["upperarm" + side] = rig.local_rot("upperarm" + side, pitch=-6.0 + 38.0 * sw, roll=s * 10.0)
+        rots["forearm" + side] = rig.local_rot("forearm" + side, pitch=-(86.0 - 16.0 * sw), yaw=s * 10.0)
+        rots["hand" + side] = rig.local_rot("hand" + side, pitch=-10.0)
+    if info is not None:
+        info["_limits"] = (R_pelvis, (sway, advance + dz), ankles)
+    if helpers:
+        drive_helpers(rots, phase=phase, walk=1.0)
+    return rots, root
+
+
+def run_height_shape(phase) -> np.ndarray:
+    """The pelvis's up-and-down per step, world units, 0 at touchdown: a dip while a foot is down, a free-fall
+    parabola in flight (it leaves and lands at the speed gravity gives a flight of that length)."""
+    tc, tf = RUN_STANCE * RUN_PERIOD, (0.5 - RUN_STANCE) * RUN_PERIOD
+    g = RUN_BOUNCE * G_ACC  # the pelvis bounces less than the centre of mass: the legs swing up and down under it
+    vy = g * tf / 2
+    u = np.asarray(phase, np.float64) % 0.5 * RUN_PERIOD
+    st = -(vy * tc / math.pi) * np.sin(math.pi * np.minimum(u, tc) / tc)
+    fl = vy * (u - tc) - 0.5 * g * (u - tc) ** 2
+    return np.where(u < tc, st, fl) / M_PER_UNIT
+
+
+def _run_height(ph, lim):
+    shape = run_height_shape(ph)
+    base = float(np.min(lim - shape)) - 0.002 * H
+    return fourier_fit(base + shape, _RUN_H_H)
+
+
+def run_balance() -> dict:
+    key = ("run", RUN_PERIOD, RUN_STRIDE, RUN_STANCE)
+    if key not in _BALANCE_CACHE:
+        _BALANCE_CACHE[key] = _balance_loop(_run_core, run_zmp_ref, RUN_STRIDE, RUN_PERIOD, _RUN_DZ_H, _RUN_H_H,
+                                            height_fn=_run_height, reach=RUN_REACH, dx_h=_RUN_DX_H, rounds=12,
+                                            relax=0.6)
+    return _BALANCE_CACHE[key]
+
+
+def run_gait_rots(skel: Skeleton, phase: float, advance: float = 0.0, info: Optional[dict] = None):
+    """The run loop (3.75 m/s at RUN_PERIOD; ``advance = RUN_STRIDE * phase`` to travel, 0 = on the spot).
+    Not the same as ``run_rots`` (a synthetic sprint for testing the costume, no foot planting)."""
+    b = run_balance()
+    return _run_core(phase, advance, fourier_eval(b["dz"], b["dz_h"], phase), fourier_eval(b["h"], b["h_h"], phase),
+                     info, dx=fourier_eval(b["dx"], b["dx_h"], phase))
+
+
+def run_gait_pose(skel: Skeleton, phase: float, advance: float = 0.0):
+    rots, root = run_gait_rots(skel, phase, advance)
+    return skel.world_mats(rots, root_offset=root), root
+
+
+# ---------------------------------------------------------------- feet pinned to the floor; the guard idle
+def leg_state(rots: Dict[str, np.ndarray], root) -> Dict[int, dict]:
+    """Per leg of a pose: the ankle's world position, the foot's world rotation, the knee's bend direction
+    and the leg's twist (what ``leg_ik`` alone would not reproduce), for ``pin_legs``."""
+    skel = rig.SKELETON
+    M = np.asarray(skel.world_mats(rots, root_offset=np.asarray(root, np.float64)), np.float64)
+    out = {}
+    for side, s in rig.SIDES:
+        Mt, Ms, Mf = (M[skel.index[b + side]] for b in ("thigh", "shin", "foot"))
+        hip, knee = Mt[:, :3] @ rig.HIP[s] + Mt[:, 3], Mt[:, :3] @ rig.KNEE[s] + Mt[:, 3]
+        ankle = Mf[:, :3] @ rig.ANKLE[s] + Mf[:, 3]
+        axis = (ankle - hip) / max(np.linalg.norm(ankle - hip), 1e-9)
+        bend = knee - hip
+        bend = bend - (bend @ axis) * axis  # the knee's offset across the hip-ankle line
+        nb = np.linalg.norm(bend)
+        bend = bend / nb if nb > 1e-6 else Mt[:, :3] @ np.array([0.0, 0.0, 1.0])  # a straight leg: the knee's front
+        W_t, W_s, _ = leg_ik(hip, ankle, bend, s)
+        out[s] = dict(ankle=ankle, W_foot=Mf[:, :3].copy(), bend=bend, twist=(W_t.T @ Mt[:, :3], W_s.T @ Ms[:, :3]))
+    return out
+
+
+def pin_legs(rots: Dict[str, np.ndarray], root, pins: Dict[int, dict]) -> Dict[str, np.ndarray]:
+    """Re-aim thigh, shin and foot (in place) so each pinned ankle sits at ``pins[s]["ankle"]`` with the foot
+    turned ``W_foot`` in the world, whatever the pelvis did - the leg keeps its twist and bend direction."""
+    skel = rig.SKELETON
+    M = np.asarray(skel.world_mats(rots, root_offset=np.asarray(root, np.float64)), np.float64)
+    W_p = M[skel.index["pelvis"], :, :3]
+    for side, s in rig.SIDES:
+        if s not in pins:
+            continue
+        p = pins[s]
+        Mt = M[skel.index["thigh" + side]]
+        hip = Mt[:, :3] @ rig.HIP[s] + Mt[:, 3]
+        W_t, W_s, _ = leg_ik(hip, p["ankle"], p["bend"], s)
+        W_t, W_s = W_t @ p["twist"][0], W_s @ p["twist"][1]
+        rots["thigh" + side] = W_p.T @ W_t
+        rots["shin" + side] = W_t.T @ W_s
+        rots["foot" + side] = W_s.T @ p["W_foot"]
+    return rots
+
+
+IDLE_BREATH = 1.2  # degrees the chest lifts with a breath
+IDLE_SHRUG = 1.6  # degrees the shoulders rise with it
+IDLE_BOB = 0.0030 * H  # the knees give this much, twice a loop
+IDLE_SHIFT = 0.0030 * H  # weight shift from foot to foot, once a loop
+
+
+def guard_idle_rots(base_rots: Dict[str, np.ndarray], base_root, phase: float, amount: float = 1.0):
+    """A breathing guard loop around a held pose (``base_rots``, ``base_root``: e.g. the first frame of a
+    boxing clip): one breath per loop (chest and shoulders rise), the knees give a little twice, the weight
+    drifts from one foot to the other and back.  The feet stay exactly where the held pose has them
+    (``pin_legs``); at phase 0 the pose IS the held pose, so the loop starts and ends on it."""
+    b = math.sin(TAU * phase) * amount
+    bob = (0.5 - 0.5 * math.cos(2 * TAU * phase)) * amount
+    shift = math.sin(TAU * phase) * amount
+    pins = leg_state(base_rots, base_root)
+    rots = {k: np.asarray(v, np.float64).copy() for k, v in base_rots.items()}
+    root = np.asarray(base_root, np.float64) + np.array([IDLE_SHIFT * shift, -IDLE_BOB * bob, 0.0])
+    eye = np.eye(3)
+    rots["pelvis"] = rig.euler(roll=-0.8 * shift) @ rots.get("pelvis", eye)
+    rots["chest"] = rots.get("chest", eye) @ rig.euler(pitch=-IDLE_BREATH * b, roll=0.8 * shift)
+    rots["neck"] = rots.get("neck", eye) @ rig.euler(pitch=0.5 * IDLE_BREATH * b)
+    rots["head"] = rots.get("head", eye) @ rig.euler(pitch=0.5 * IDLE_BREATH * b)
+    for side, s in rig.SIDES:
+        rots["clav" + side] = rots.get("clav" + side, eye) @ rig.euler(roll=s * IDLE_SHRUG * b)
+        rots["upperarm" + side] = rots.get("upperarm" + side, eye) @ rig.euler(roll=-s * 0.6 * IDLE_SHRUG * b)
+    pin_legs(rots, root, pins)
+    return rots, root
 
 
 # ---------------------------------------------------------------- turntable demo
