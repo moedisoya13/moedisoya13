@@ -17,25 +17,50 @@
   --btn: rgba(28, 28, 39, 0.78);
   --hint-bg: rgba(19, 19, 28, 0.80);
 }
-html, body { height: 100%; margin: 0; overflow: hidden; background: var(--bg); color: var(--text); }
+html, body { height: 100%; margin: 0; overflow: hidden; overscroll-behavior: none; background: var(--bg); color: var(--text);
+             -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+html.scroll, html.scroll body { overflow: auto; }   /* (a window too short for the game: scroll rather than clip) */
 body { font: 14px/1.4 system-ui, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif; }
 *, *::before, *::after { box-sizing: border-box; }
+/* The host already pads :root by the top and bottom safe-area insets (the notch / Dynamic Island, the home
+   indicator).  The app adds only what is left of them (--inset-top / --inset-bottom, set by fit(): 0 inside the
+   host, the insets themselves when the page is opened on its own) - adding env() again here doubled them
+   (93 CSS px of an iPhone 15's 852).  The sides are ours (viewport-fit-sides: cover). */
 .app {
-  height: 100%; display: flex; flex-direction: column; gap: 8px;
+  height: 100%; min-height: 260px; display: flex; flex-direction: column; gap: 8px;
   padding-left: max(16px, env(safe-area-inset-left, 0px));
   padding-right: max(16px, env(safe-area-inset-right, 0px));
-  padding-block: max(10px, env(safe-area-inset-top, 0px)) max(10px, env(safe-area-inset-bottom, 0px));
+  padding-top: calc(8px + var(--inset-top, 0px)); padding-bottom: calc(8px + var(--inset-bottom, 0px));
 }
-.bar { flex: none; display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 14px; row-gap: 2px; min-width: 0; }
-.bar h1 { font-size: 16px; margin: 0; font-weight: 700; letter-spacing: 0.01em; }
-.bar p { margin: 0; color: var(--muted); font-size: 13px; min-width: 0; }
+.bar { flex: none; display: flex; flex-wrap: wrap; align-items: center; column-gap: 14px; row-gap: 2px; min-width: 0; }
+.bar h1 { font-size: 16px; line-height: 22px; margin: 0; font-weight: 700; letter-spacing: 0.01em; }
+.bar p { margin: 0; color: var(--muted); font-size: 13px; line-height: 18px; min-width: 0; }
 .bar .help { color: var(--text); flex-basis: 100%; }
 kbd { font: 600 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 2px 5px; border: 1px solid var(--line);
       border-bottom-width: 2px; border-radius: 4px; background: var(--panel); color: var(--text); }
 .touch-only { display: none; }
-@media (pointer: coarse) { .touch-only { display: inline; } .keys-only { display: none; } }
-.stage { position: relative; flex: 1; min-height: 0; display: grid; place-items: center; overflow: hidden;
-         border-radius: 8px; background: var(--bg); touch-action: none; user-select: none; -webkit-user-select: none; }
+@media (pointer: coarse) {
+  .touch-only { display: inline; } .keys-only { display: none; }
+  .bar .desc { display: none; }                 /* phones: a compact header, the game gets the screen */
+  .bar .help { flex-basis: auto; font-size: 12.5px; }
+}
+@media (pointer: coarse) and (max-height: 500px) {   /* a phone on its side: one short line */
+  .app { gap: 6px; padding-top: calc(4px + var(--inset-top, 0px)); padding-bottom: calc(6px + var(--inset-bottom, 0px)); }
+  .bar { flex-wrap: nowrap; white-space: nowrap; overflow: hidden; }
+  .bar h1 { font-size: 14px; line-height: 20px; } .bar p { line-height: 20px; } .bar .help { overflow: hidden; text-overflow: ellipsis; }
+}
+/* .play: the game area (.stage) and, on a phone held upright, the control deck under it; the stick and the button
+   live in .play.  Upright, the game area is at most 7:5 (tall:wide) and the deck takes the rest: the thumbs do not
+   cover the game, and the figure stands in the upper half of the screen (a preview that shows only the top of the
+   page still shows him) */
+.play { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px;
+        touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.stage { position: relative; flex: 1 1 0; min-height: 0; overflow: hidden; border-radius: 8px; background: var(--bg); }
+.deck { display: none; }
+@media (pointer: coarse) and (orientation: portrait) {
+  .stage { flex: 100 1 0; max-height: calc((100vw - 32px) * 1.4); min-height: 160px; }
+  .deck { display: block; flex: 1 0 160px; border-radius: 8px; background: var(--panel); }
+}
 /* the focus ring is drawn by the stage (inset), so the stage's own clipping cannot hide it */
 .stage::after { content: ""; position: absolute; inset: 0; border-radius: 8px; pointer-events: none;
                 box-shadow: inset 0 0 0 3px var(--focus); opacity: 0; }
@@ -46,11 +71,14 @@ kbd { font: 600 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 
 #view canvas { position: absolute; left: 0; top: 0; transform-origin: 0 0; image-rendering: pixelated; image-rendering: crisp-edges; }
 .hud { position: absolute; left: 8px; top: 6px; font: 12px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace;
        color: var(--text); background: rgba(19, 19, 28, 0.72); padding: 3px 6px; border-radius: 4px; pointer-events: none; }
-.status { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); text-align: center; padding: 16px;
-          background: rgba(19, 19, 28, 0.55); }
+.status { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 10px; color: var(--muted);
+          text-align: center; padding: 16px; background: rgba(19, 19, 28, 0.55); }
 .status.error { color: var(--text); background: rgba(19, 19, 28, 0.88); }
 .status[hidden] { display: none; }
-.pad { position: absolute; width: 120px; height: 120px; margin: -60px 0 0 -60px; border-radius: 50%;
+.status .meter { width: min(240px, 60vw); height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
+.status .meter i { display: block; height: 100%; width: 0; background: var(--accent); transition: width 120ms linear; }
+.status.error .meter { display: none; }
+.pad { position: absolute; width: 120px; height: 120px; margin: -60px 0 0 -60px; border-radius: 50%; z-index: 2;
        background: var(--pad); border: 2px solid var(--pad-edge); pointer-events: none; display: none; }
 .pad::before { content: ""; position: absolute; inset: 10px; border-radius: 50%; border: 1px dashed var(--pad-edge); }
 .pad .knob { position: absolute; left: 50%; top: 50%; width: 52px; height: 52px; margin: -26px 0 0 -26px; border-radius: 50%;
@@ -60,8 +88,9 @@ kbd { font: 600 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 
 .pad-hint { position: absolute; left: 14px; bottom: 14px; width: 104px; height: 104px; border-radius: 50%;
             border: 2px dashed var(--pad-edge); background: var(--hint-bg); color: var(--text); font-size: 13px; font-weight: 600;
             display: none; place-items: center; text-align: center; pointer-events: none; }
-@media (pointer: coarse) { .pad-hint { display: grid; } .stage.sticking .pad-hint { display: none; } }
-.acts { position: absolute; right: 12px; bottom: 12px; display: flex; gap: 12px; align-items: flex-end; }
+@media (pointer: coarse) { .pad-hint { display: grid; } .play.sticking .pad-hint { display: none; } }
+.acts { position: absolute; right: 12px; bottom: 12px; display: flex; gap: 12px; align-items: flex-end; z-index: 1; }
+@media (pointer: coarse) and (orientation: portrait) { .pad-hint { left: 22px; bottom: 22px; } .acts { right: 22px; bottom: 36px; } }
 .acts button {
   width: 64px; height: 64px; border-radius: 50%; border: 2px solid var(--accent); background: var(--btn); color: var(--text);
   font: 700 15px/1 system-ui, sans-serif; touch-action: none; cursor: pointer; display: grid; place-items: center; gap: 2px;
@@ -73,24 +102,27 @@ kbd { font: 600 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 
 .acts button:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 @media (pointer: fine) { .acts button { width: 54px; height: 54px; font-size: 13px; } }
 @media (pointer: coarse) { .acts button { width: 76px; height: 76px; font-size: 17px; } .acts button small { display: none; } }
-@media (prefers-reduced-motion: reduce) { .acts button { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .acts button { transition: none; } .status .meter i { transition: none; } }
 </style>
 
-<div class="app">
+<div class="app" id="app">
   <header class="bar">
     <h1>BB 필드 테스트</h1>
-    <p>기본 몸(BB)을 그레이박스 테스트 맵에 세운 것 · 45° 카메라 · 걷기·달리기는 리그, 원투는 복싱 카탈로그에서</p>
+    <p class="desc">기본 몸(BB)을 그레이박스 테스트 맵에 세운 것 · 45° 카메라 · 걷기·달리기는 리그, 원투는 복싱 카탈로그에서</p>
     <p class="help">
       <span class="keys-only">이동 <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 또는 방향키 · <kbd>Shift</kbd> 누른 채 달리기 · <kbd>J</kbd> 원투</span>
-      <span class="touch-only">왼쪽을 누른 채 끌면 걷기, 끝까지 밀면 달리기 · 오른쪽 버튼: 원투</span>
+      <span class="touch-only">왼쪽 끌기: 걷기 · 끝까지: 달리기 · 원투 버튼</span>
     </p>
   </header>
-  <main class="stage" id="stage">
-    <div id="view" tabindex="0" role="img" aria-label="게임 화면: 그레이박스 맵 위의 BB. 방향키로 걷고, Shift로 달리고, J로 원투">
-      <canvas id="level"></canvas><canvas id="fig"></canvas>
+  <main class="play" id="play">
+    <div class="stage" id="stage">
+      <div id="view" tabindex="0" role="img" aria-label="게임 화면: 그레이박스 맵 위의 BB. 방향키로 걷고, Shift로 달리고, J로 원투">
+        <canvas id="level"></canvas><canvas id="fig"></canvas>
+      </div>
+      <div class="hud" id="hud" aria-hidden="true"></div>
+      <div class="status" id="status" role="status"><span id="statusText">불러오는 중…</span><div class="meter" aria-hidden="true"><i id="meter"></i></div></div>
     </div>
-    <div class="hud" id="hud" aria-hidden="true"></div>
-    <div class="status" id="status" role="status">불러오는 중…</div>
+    <div class="deck" aria-hidden="true"></div>
     <div class="pad-hint" aria-hidden="true">끌어서<br>이동</div>
     <div class="pad" id="pad" aria-hidden="true"><div class="knob" id="knob"></div></div>
     <div class="acts">
@@ -103,37 +135,144 @@ kbd { font: 600 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 
 (() => {
   "use strict";
   const $ = (id) => document.getElementById(id);
-  const stage = $("stage"), canvas = $("view"), hud = $("hud"), statusEl = $("status");
+  const app = $("app"), play_ = $("play"), stage = $("stage"), canvas = $("view"), hud = $("hud"), statusEl = $("status");
+  const statusText = $("statusText"), meter = $("meter");
   const viewEl = canvas, levelEl = $("level"), figEl = $("fig");
   const figCtx = figEl.getContext("2d");
   const FPS = 60;
   let running = true;
 
+  function say(text, frac) {
+    statusText.textContent = text;
+    if (frac !== undefined) meter.style.width = (Math.max(0, Math.min(1, frac)) * 100).toFixed(1) + "%";
+  }
   function fail(err) {               // anything that goes wrong is shown, never a silent freeze
     running = false;
     statusEl.hidden = false;
     statusEl.classList.add("error");
-    statusEl.textContent = "오류가 나서 멈췄습니다: " + (err && err.message ? err.message : String(err));
+    say("오류가 나서 멈췄습니다: " + (err && err.message ? err.message : String(err)));
     if (window.console) console.error(err);
   }
   window.addEventListener("error", (e) => fail(e.error || e.message));
   window.addEventListener("unhandledrejection", (e) => fail(e.reason));
 
+  // ------------------------------------------------------------------ fitting the screen
+  // The page fills what is visible, never more: html / body are 100 % of the window inside the host's padding (the
+  // safe areas top and bottom).  fit() adds what the host did not pad (a page opened on its own), and when the
+  // visible area is shorter than the layout (the on-screen keyboard, a browser bar over the page) it shrinks the
+  // app to the visual viewport, so nothing ends up below the bottom edge where overflow: hidden would hide it.
+  const probe = document.createElement("div");
+  probe.style.cssText = "position:fixed;left:0;top:0;width:0;height:0;visibility:hidden;pointer-events:none;" +
+                        "padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px) 0";
+  document.body.appendChild(probe);
+  const px = (v) => parseFloat(v) || 0;
+  function fit() {
+    const root = getComputedStyle(document.documentElement), env = getComputedStyle(probe);
+    const padT = px(root.paddingTop), padB = px(root.paddingBottom);
+    app.style.setProperty("--inset-top", Math.max(0, px(env.paddingTop) - padT) + "px");
+    app.style.setProperty("--inset-bottom", Math.max(0, px(env.paddingBottom) - padB) + "px");
+    app.style.height = "";
+    let bottom = window.innerHeight - padB;          // the body's bottom edge when the window is all visible
+    const vv = window.visualViewport;
+    if (vv && Math.abs(vv.scale - 1) < 0.01) bottom = Math.min(bottom, vv.offsetTop + vv.height);   // (not when pinch-zoomed)
+    const top = app.getBoundingClientRect().top + (window.scrollY || 0), r = app.getBoundingClientRect();
+    if (r.bottom > bottom + 0.5) app.style.height = Math.max(260, bottom - top) + "px";
+    document.documentElement.classList.toggle("scroll", bottom - top < 260);
+    if (!document.documentElement.classList.contains("scroll") && (window.scrollX || window.scrollY)) window.scrollTo(0, 0);
+  }
+  fit();
+
   // ------------------------------------------------------------------ assets
-  const loadImage = (src) => new Promise((ok, no) => {
-    const im = new Image();
-    im.onload = () => ok(im);
-    im.onerror = () => no(new Error(src + " 을(를) 불러오지 못했습니다"));
-    im.src = src;
-  });
-  function pixels(im) {
+  // Downloads all files at once (with progress: the build lists every file's size in the manifest), then decodes
+  // them one by one.  The sprite atlases are the big ones (15.8 M pixels): they are drawn into a small canvas a strip
+  // at a time and each frame's pixels are copied into two compact arrays (colour + flags, depth), so the memory
+  // never holds a whole decoded atlas twice (image + full-size canvas + full ImageData, as before: ~315 MB peak).
+  async function fetchAll(urls, sizes) {
+    const got = urls.map(() => 0), total = sizes.reduce((a, b) => a + b, 0) || 1;
+    const show = () => {
+      const g = got.reduce((a, b) => a + b, 0);
+      say("불러오는 중… " + (g / 1e6).toFixed(1) + " / " + (total / 1e6).toFixed(1) + " MB", 0.9 * g / total);
+    };
+    show();
+    return Promise.all(urls.map(async (u, i) => {
+      const r = await fetch(u);
+      if (!r.ok) throw new Error(u + " 을(를) 불러오지 못했습니다 (" + r.status + ")");
+      if (!r.body || !r.body.getReader) { const b = await r.blob(); got[i] = b.size; show(); return b; }
+      const rd = r.body.getReader(), parts = [];
+      for (;;) {
+        const { done, value } = await rd.read();
+        if (done) break;
+        parts.push(value); got[i] += value.length; show();
+      }
+      return new Blob(parts, { type: r.headers.get("content-type") || "" });
+    }));
+  }
+  // Decoded pixels from the bytes: an ImageBitmap where there is one (it is let go the moment it is used: close()),
+  // else an <img>.  No premultiplying and no colour conversion: byte-exact (tests).  Returns [image, release].
+  async function decode(blob, name) {
+    if (window.createImageBitmap) {
+      try {
+        const bm = await createImageBitmap(blob, { premultiplyAlpha: "none", colorSpaceConversion: "none" });
+        return [bm, () => bm.close()];
+      } catch (_) { /* (an older Safari: no options, or no blobs) the <img> below */ }
+    }
+    const im = await decodeImg(blob, name);
+    return [im, () => { im.src = ""; }];
+  }
+  async function decodeImg(blob, name) {
+    const url = URL.createObjectURL(blob), im = new Image();
+    try {
+      im.src = url;
+      await new Promise((ok, no) => { im.onload = ok; im.onerror = () => no(new Error(name + " 을(를) 풀지 못했습니다")); });
+      return im;
+    } finally { URL.revokeObjectURL(url); }
+  }
+  function pixels([im, release]) {   // small images only (the level layers)
     const c = document.createElement("canvas");
-    c.width = im.naturalWidth; c.height = im.naturalHeight;
+    c.width = im.naturalWidth || im.width; c.height = im.naturalHeight || im.height;
     const x = c.getContext("2d", { willReadFrequently: true });
     x.drawImage(im, 0, 0);
     const d = x.getImageData(0, 0, c.width, c.height);
     c.width = c.height = 0;          // let the browser drop the scratch canvas now
+    release();
     return d;
+  }
+  const STRIP = 256;                  // rows per strip (4096 x 256 x 4 = 4 MB of canvas and as much ImageData)
+  // copy one atlas page into the compact arrays: "color" -> RGB + opaque bit, "data" -> depth + shadow bit
+  function unpackPage([im, release], kind, page, frames, base) {
+    const W = im.naturalWidth || im.width, H = im.naturalHeight || im.height, c = document.createElement("canvas");
+    c.width = W; c.height = Math.min(STRIP, H);
+    const x = c.getContext("2d", { willReadFrequently: true });
+    x.imageSmoothingEnabled = false;
+    const pxs = SP.px, dz = SP.dz, zero = SP.zero;
+    for (let y0 = 0; y0 < H; y0 += STRIP) {
+      const h = Math.min(STRIP, H - y0);
+      x.clearRect(0, 0, W, c.height);
+      x.drawImage(im, 0, y0, W, h, 0, 0, W, h);
+      const d = x.getImageData(0, 0, W, h).data;
+      for (let i = 0; i < frames.length; i++) {
+        const f = frames[i];
+        if ((f[6] || 0) !== page || f[1] >= y0 + h || f[1] + f[3] <= y0) continue;
+        const fw = f[2], v0 = Math.max(0, y0 - f[1]), v1 = Math.min(f[3], y0 + h - f[1]);
+        for (let v = v0; v < v1; v++) {
+          let s = 4 * ((f[1] + v - y0) * W + f[0]), o = base[i] + v * fw;
+          if (kind === "color") {
+            for (let u = 0; u < fw; u++, s += 4, o++) {
+              const q = 4 * o;
+              pxs[q] = d[s]; pxs[q + 1] = d[s + 1]; pxs[q + 2] = d[s + 2];
+              pxs[q + 3] = (pxs[q + 3] & 1) | (d[s + 3] >= 128 ? 0x80 : 0);
+            }
+          } else {
+            for (let u = 0; u < fw; u++, s += 4, o++) {
+              dz[o] = d[s] * 256 + d[s + 1] - zero;
+              if (d[s + 2] >= 128) pxs[4 * o + 3] |= 1;
+            }
+          }
+        }
+      }
+    }
+    c.width = c.height = 0;
+    release();
   }
 
   let M, L, T, SUN, SP;               // manifest, level, terrain, ground sun, sprites
@@ -147,17 +286,49 @@ kbd { font: 600 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 
                (a[0][2] * a[1][0] - a[0][0] * a[1][2]) / det];   // row 1 of the inverse (the cofactors of column 1)
     return [r[0], r[1], r[2], 0.5 * (r[0] + r[1]) - (r[0] * t[0] + r[1] * t[1] + r[2] * t[2])];
   }
+  const nextFrame = () => new Promise((ok) => setTimeout(ok, 0));   // (lets the progress text paint between decodes)
   async function load() {
     const r = await fetch("assets/manifest.json");
     if (!r.ok) throw new Error("assets/manifest.json 을(를) 불러오지 못했습니다 (" + r.status + ")");
     M = await r.json();
     const lv = M.level, sp = M.sprites, tr = lv.terrain, sn = lv.sun;
     UY = heightRow(M.camera.world_to_screen);
-    const files = [lv.color, lv.depth, tr.file, sn.file, sp.color, sp.data];
-    let done = 0;
-    const ims = await Promise.all(files.map((f) => loadImage("assets/" + f).then((im) => {
-      statusEl.textContent = "불러오는 중… " + (++done) + " / " + files.length; return im; })));
-    const [col, dep, ter, sun, sc, sd] = ims.map(pixels);
+    // atlas pages: [{color, data}] (play.py now), or one colour + one data atlas (older builds)
+    const pages = sp.pages || [{ color: sp.color, data: sp.data }];
+    const files = [lv.color, lv.depth, tr.file, sn.file].concat(...pages.map((p) => [p.color, p.data]));
+    const sizes = files.map((f) => (M.files && M.files[f]) || 0);
+    const blobs = await fetchAll(files.map((f) => "assets/" + f), sizes);
+    say("그림 푸는 중…", 0.9);
+    await nextFrame();
+    const lvIm = [];                   // the level layers: small (2 M pixels at most)
+    for (let i = 0; i < 4; i++) { lvIm.push(pixels(await decode(blobs[i], files[i]))); blobs[i] = null; }
+    setupLevel(lvIm[0], lvIm[1], lvIm[2], lvIm[3], lv, tr, sn);
+    lvIm.length = 0;
+    // sprites: every frame's pixels, packed one after another (its rectangle's rows), in two arrays
+    const frames = sp.frames, base = new Int32Array(frames.length);
+    let n = 0;
+    for (let i = 0; i < frames.length; i++) { base[i] = n; n += frames[i][2] * frames[i][3]; }
+    SP = { px: new Uint8Array(4 * n), dz: new Int16Array(n), base, frames, anims: sp.anims, scale: sp.depth_scale,
+           zero: sp.depth_zero, nf: sp.facings.length, step: 360 / sp.facings.length, pixels: n };
+    for (let p = 0; p < pages.length; p++) {
+      for (const kind of ["data", "color"]) {
+        const i = 4 + 2 * p + (kind === "color" ? 0 : 1);
+        say("그림 푸는 중… " + (p + 1) + " / " + pages.length, 0.9 + 0.1 * (2 * p + (kind === "data" ? 0 : 1)) / (2 * pages.length));
+        await nextFrame();
+        unpackPage(await decode(blobs[i], files[i]), kind, p, frames, base);
+        blobs[i] = null;
+      }
+    }
+    for (const [name, a] of Object.entries(SP.anims)) {
+      if (!a.frames || !a.frames.length || !a.frames[0].length) throw new Error("애니메이션 " + name + " 에 프레임이 없습니다");
+    }
+    for (const need of ["idle", "walk", "run", "onetwo"]) if (!SP.anims[need]) throw new Error("애니메이션 " + need + " 이(가) 없습니다");
+    for (const f of SP.frames) { FIGW = Math.max(FIGW, f[2]); FIGH = Math.max(FIGH, f[3]); }
+    figEl.width = FIGW + 2; figEl.height = FIGH + 2;   // (a clear 1 px margin: the compositor softens a scaled layer's edge pixels)
+    figImg = figCtx.createImageData(FIGW, FIGH); fig32 = new Uint32Array(figImg.data.buffer);
+    rowShown = new Int32Array(FIGH); rowOpaque = new Int32Array(FIGH); allowedAt = new Int32Array(FIGW * FIGH);
+  }
+  function setupLevel(col, dep, ter, sun, lv, tr, sn) {
     levelEl.width = col.width; levelEl.height = col.height;   // the level picture, moved by the compositor
     levelEl.getContext("2d").putImageData(col, 0, 0);
     const W = col.width, H = col.height;
@@ -183,16 +354,6 @@ kbd { font: 600 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 
     const lit = new Uint8Array(sn.size[0] * sn.size[1]);
     for (let i = 0; i < lit.length; i++) lit[i] = sun.data[4 * i] >= 128 ? 1 : 0;
     SUN = { nx: sn.size[0], nz: sn.size[1], cell: sn.cell, ox: sn.origin[0], oz: sn.origin[1], lit };
-    SP = { W: sc.width, rgba: sc.data, data: sd.data, frames: sp.frames, anims: sp.anims, scale: sp.depth_scale,
-           zero: sp.depth_zero, nf: sp.facings.length, step: 360 / sp.facings.length };
-    for (const [name, a] of Object.entries(SP.anims)) {
-      if (!a.frames || !a.frames.length || !a.frames[0].length) throw new Error("애니메이션 " + name + " 에 프레임이 없습니다");
-    }
-    for (const need of ["idle", "walk", "run", "onetwo"]) if (!SP.anims[need]) throw new Error("애니메이션 " + need + " 이(가) 없습니다");
-    for (const f of SP.frames) { FIGW = Math.max(FIGW, f[2]); FIGH = Math.max(FIGH, f[3]); }
-    figEl.width = FIGW + 2; figEl.height = FIGH + 2;   // (a clear 1 px margin: the compositor softens a scaled layer's edge pixels)
-    figImg = figCtx.createImageData(FIGW, FIGH); fig32 = new Uint32Array(figImg.data.buffer);
-    rowShown = new Int32Array(FIGH); rowOpaque = new Int32Array(FIGH); allowedAt = new Int32Array(FIGW * FIGH);
   }
   const LITTLE = new Uint8Array(new Uint32Array([1]).buffer)[0] === 1;
   function packRGB([r, g, b]) { return LITTLE ? ((255 << 24) | (b << 16) | (g << 8) | r) >>> 0 : ((r << 24) | (g << 16) | (b << 8) | 255) >>> 0; }
@@ -236,7 +397,7 @@ kbd { font: 600 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 
   // covered, not the clock); goff: frames added to phase * n so that a gait entered at a phase between two
   // frames still shows whole frames on whole display frames; sc: speed scale (stick pushed part way: < 1)
   const S = { x: 0, z: 0, facing: 0, want: 0, turnT: 0, anim: "idle", t: 0, k: 0, k0: 0, phase: 0, goff: 0, sc: 1,
-              queue: null };
+              gaitSc: 1, scFrom: 1, queue: null };
   const dirOf = (f) => f * SP.step * Math.PI / 180;
   // Which frame a display frame shows: the one its time (or ground covered) has reached, a quarter frame early.
   // Not floor(t * 60): at 60 Hz the display times fall right ON the frame boundaries, and the rAF clock's jitter
@@ -271,10 +432,19 @@ kbd { font: 600 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 
     const a = SP.anims[name];
     if (!a) return false;
     play(name, 0);
+    const src = SP.anims[a.source];
+    S.scFrom = src && src.kind === "gait" ? S.gaitSc : S.sc;
     S.t = t0 || 0;
     applyAdvance(a, 0);
     clipFrames(a);
     return true;
+  }
+  // A transition's clock runs at the speed scale: from the one the gait it leaves had to the one the input asks for
+  // now, across the clip (walk at half push -> run: its root motion starts at the walk's speed and ends at the run's;
+  // before, the whole clip took the new scale and the speed jumped at its first frame)
+  function clipRate(a) {
+    const n = a.frames[0].length;
+    return S.scFrom + (S.sc - S.scFrom) * Math.min(1, S.k / Math.max(1, n - 1));
   }
   function applyAdvance(a, k) {      // root motion of a transition frame: [forward, his left] metres
     if (!a.advance || !a.advance[k]) return;
@@ -285,7 +455,7 @@ kbd { font: 600 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 
   // ------------------------------------------------------------------ input
   const keys = new Set();
   const KEYMAP = { KeyW: "u", ArrowUp: "u", KeyS: "d", ArrowDown: "d", KeyA: "l", ArrowLeft: "l", KeyD: "r", ArrowRight: "r" };
-  const releaseAll = () => { keys.clear(); stick.active = false; stick.dx = stick.dy = 0; showPad(false); };
+  const releaseAll = () => { keys.clear(); endStick(null); };
   // macOS does not send keyup for a key let go while Cmd is held: a held D would walk on for ever.  So Cmd going
   // down or up lets go of every key (press it again to walk on)
   const isMeta = (e) => e.key === "Meta" || e.key === "OS" || /^(Meta|OS)(Left|Right)$/.test(e.code);
@@ -315,38 +485,63 @@ kbd { font: 600 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 
   window.addEventListener("pointerdown", () => { viaKeyboard = false; }, true);
   canvas.addEventListener("focus", () => { if (viaKeyboard) stage.classList.add("kbd-focus"); });
   canvas.addEventListener("blur", () => stage.classList.remove("kbd-focus"));
-  // virtual stick: press anywhere on the left part of the game area and drag; pushed past 80 % = run
-  const stick = { active: false, id: -1, cx: 0, cy: 0, dx: 0, dy: 0 };
-  const pad = $("pad"), knob = $("knob"), R = 52, RUN_AT = 0.8;
-  function showPad(on) { pad.classList.toggle("on", on); stage.classList.toggle("sticking", on); if (!on) pad.classList.remove("run"); }
-  stage.addEventListener("pointerdown", (e) => {
+  // Virtual stick: press anywhere on the left 60 % of the play area (game area, and the deck under it on an upright
+  // phone) and drag.  R: the knob's reach (CSS px).  Pushed past RUN_ON = run, back under RUN_OFF = walk again
+  // (a gap, so a thumb resting near the edge does not flip between the two).  A finger dragged past the reach pulls
+  // the stick's centre along behind it (a floating stick): turning back then takes one reach of travel, not more.
+  const stick = { active: false, id: -1, cx: 0, cy: 0, dx: 0, dy: 0, run: false };
+  const pad = $("pad"), knob = $("knob"), R = 52, DEAD = 0.25, RUN_ON = 0.8, RUN_OFF = 0.68;
+  function showPad(on) { pad.classList.toggle("on", on); play_.classList.toggle("sticking", on); if (!on) pad.classList.remove("run"); }
+  play_.addEventListener("pointerdown", (e) => {
     if (e.pointerType === "mouse" || stick.active) return;
-    const r = stage.getBoundingClientRect();
+    const r = play_.getBoundingClientRect();
     if (e.clientX - r.left > r.width * 0.6) return;
-    stick.active = true; stick.id = e.pointerId; stick.cx = e.clientX - r.left; stick.cy = e.clientY - r.top; stick.dx = stick.dy = 0;
+    stick.active = true; stick.id = e.pointerId; stick.cx = e.clientX - r.left; stick.cy = e.clientY - r.top;
+    stick.dx = stick.dy = 0; stick.run = false;
     pad.style.left = stick.cx + "px"; pad.style.top = stick.cy + "px"; knob.style.transform = ""; showPad(true);
-    try { stage.setPointerCapture(e.pointerId); } catch (_) { /* (synthetic events have nothing to capture) */ }
+    try { play_.setPointerCapture(e.pointerId); } catch (_) { /* (synthetic events have nothing to capture) */ }
     e.preventDefault();
   });
-  stage.addEventListener("pointermove", (e) => {
+  play_.addEventListener("pointermove", (e) => {
     if (!stick.active || e.pointerId !== stick.id) return;
-    const r = stage.getBoundingClientRect();
+    const r = play_.getBoundingClientRect();
     let dx = e.clientX - r.left - stick.cx, dy = e.clientY - r.top - stick.cy;
     const m = Math.hypot(dx, dy);
-    if (m > R) { dx *= R / m; dy *= R / m; }
+    if (m > R) {                     // follow the finger: the centre stays one reach behind it
+      stick.cx += dx * (1 - R / m); stick.cy += dy * (1 - R / m);
+      dx *= R / m; dy *= R / m;
+      pad.style.left = stick.cx + "px"; pad.style.top = stick.cy + "px";
+    }
     stick.dx = dx / R; stick.dy = dy / R;
-    pad.classList.toggle("run", Math.hypot(stick.dx, stick.dy) >= RUN_AT);
+    const push = Math.hypot(stick.dx, stick.dy);
+    stick.run = push >= RUN_ON || (stick.run && push >= RUN_OFF);
+    pad.classList.toggle("run", stick.run);
     knob.style.transform = `translate(${dx}px, ${dy}px)`;
   });
-  const endStick = (e) => { if (e.pointerId === stick.id) { stick.active = false; stick.dx = stick.dy = 0; showPad(false); } };
-  stage.addEventListener("pointerup", endStick);
-  stage.addEventListener("pointercancel", endStick);
-  function inputVector() {          // screen-relative: x = right, y = down (= world +x, +z: the camera looks north)
+  function endStick(e) {
+    if (e && e.pointerId !== stick.id) return;
+    stick.active = false; stick.dx = stick.dy = 0; stick.run = false; stick.id = -1; showPad(false);
+  }
+  play_.addEventListener("pointerup", endStick);
+  play_.addEventListener("pointercancel", endStick);
+  // [x, y, push 0..1, run, analog]: screen-relative (x = right, y = down = world +x, +z: the camera looks north)
+  function inputVector() {
     let x = 0, y = 0;
     if (keys.has("l")) x -= 1; if (keys.has("r")) x += 1; if (keys.has("u")) y -= 1; if (keys.has("d")) y += 1;
-    if (x || y) { const m = Math.hypot(x, y); return [x / m, y / m, 1, keys.has("run")]; }
-    if (stick.active) { const m = Math.hypot(stick.dx, stick.dy); if (m > 0.25) return [stick.dx / m, stick.dy / m, Math.min(1, m), m >= RUN_AT]; }
-    return [0, 0, 0, false];
+    if (x || y) { const m = Math.hypot(x, y); return [x / m, y / m, 1, keys.has("run"), false]; }
+    if (stick.active) { const m = Math.hypot(stick.dx, stick.dy); if (m > DEAD) return [stick.dx / m, stick.dy / m, Math.min(1, m), stick.run, true]; }
+    return [0, 0, 0, false, false];
+  }
+  // The facing the input asks for.  Keys give one of the 8 directions exactly.  The stick gives any angle: it keeps
+  // the facing it asked for until it points FACE_HOLD degrees past that facing's 45 deg sector (a thumb resting on
+  // a sector's edge used to flip the figure between two facings every few frames)
+  const FACE_HOLD = 8;
+  function wantedFacing(ix, iy, analog) {
+    const ang = Math.atan2(iy, ix) * 180 / Math.PI, n = SP.nf;
+    const f = ((Math.round(ang / SP.step) % n) + n) % n;
+    if (!analog || f === S.want) return f;
+    const off = Math.abs(((ang - S.want * SP.step) % 360 + 540) % 360 - 180);
+    return off <= SP.step / 2 + FACE_HOLD ? S.want : f;
   }
   // J: one queued one-two at most.  During a one-two a press counts only once its cross is out (frame
   // chain_from on): it plays the next one-two straight from this one's last frame (both are the guard); earlier
@@ -361,18 +556,20 @@ kbd { font: 600 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 
   const quickInto = (src) => Object.values(SP.anims).some((q) => q.kind === "transition" && q.source === src && q.target === "onetwo");
 
   // ------------------------------------------------------------------ update (one call per displayed frame)
-  function turnTowards(dt) {           // facings change one step (45 deg) at a time, 50 ms apart
+  // Facings change one step (45 deg) at a time: 50 ms apart, or 33 ms (2 frames) while 90 deg or more remain to
+  // turn (a reversal: 100 ms instead of 150).  Standing (the idle), the figure turns 45 deg per frame before it
+  // sets off: the walk start is a clip played in his facing, so starting the other way turned him on the move.
+  function turnTowards(dt, still) {
     if (S.want === S.facing) { S.turnT = 0; return; }
     S.turnT -= dt;
-    if (S.turnT > 0) return;
-    const n = SP.nf, d = ((S.want - S.facing) % n + n) % n;
+    if (S.turnT > 1e-6) return;
+    const n = SP.nf, d = ((S.want - S.facing) % n + n) % n, left = Math.min(d, n - d);
     S.facing = (S.facing + (d <= n / 2 ? 1 : n - 1)) % n;
-    S.turnT = 0.05;
+    S.turnT = still ? 0 : (left >= 2 ? 2 / FPS : 0.05) - 0.5 / FPS;   // (half a frame early: the rAF clock jitters)
   }
-  // Turning: the 8 facings change 45 deg per 50 ms, so a reversal takes 0.2 s.  Meanwhile the figure must not
-  // walk backwards or sideways: the gait's speed is scaled by cos(angle between where it goes and where it
-  // faces, less the 22.5 deg the 8 facings cannot avoid), and by 0 past 112.5 deg: on a reversal it stands for
-  // about 0.1 s while it turns its back (its legs stop with it: the gait follows the ground covered), then
+  // Turning: the figure must not walk backwards or sideways: the gait's speed is scaled by cos(angle between where
+  // it goes and where it faces, less the 22.5 deg the 8 facings cannot avoid), and by 0 past 112.5 deg: on a
+  // reversal it stands while it turns its back (its legs stop with it: the gait follows the ground covered), then
   // moves off at 38 % (90 deg off), 92 % (45 deg off), full speed once it faces the way
   const TURN_FREE = 22.5;
   function turnScale(dx, dy) {
@@ -384,14 +581,17 @@ kbd { font: 600 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 
     const step = a.speed * S.sc * turnScale(ix, iy) * dt;
     const moved = tryMove(ix * step, iy * step);
     S.phase += moved / a.stride_m;
+    S.gaitSc = S.sc;
     return moved;
   }
+  let lastGoal = "idle";
   function update(dt) {
     const a = SP.anims[S.anim];
-    const [ix, iy, mag, run] = inputVector();
-    if (mag > 0) S.want = ((Math.round(Math.atan2(iy, ix) * 180 / Math.PI / SP.step) % SP.nf) + SP.nf) % SP.nf;
-    if (a.kind !== "action" && a.target !== "onetwo") turnTowards(dt);   // (a punch, and the stop into it, keep their direction)
+    const [ix, iy, mag, run, analog] = inputVector();
+    if (mag > 0) S.want = wantedFacing(ix, iy, analog);
+    if (a.kind !== "action" && a.target !== "onetwo") turnTowards(dt, S.anim === "idle");   // (a punch, and the stop into it, keep their direction)
     const moving = mag > 0 && !S.queue;
+    lastGoal = moving ? (run ? "run" : "walk") : "idle";
     // Speed scale: how far the stick is pushed (keys: 1); kept when the stick is let go, so the stop that
     // follows runs at the speed the figure had.  A gait at scale s covers ground s times slower and so plays
     // s times slower (same stride, no skating); a transition clip does the same: its clock runs s times slower,
@@ -399,7 +599,7 @@ kbd { font: 600 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 
     if (moving) S.sc = mag;
     const f = dirOf(S.facing), dx = moving ? ix : Math.cos(f), dy = moving ? iy : Math.sin(f);
     if (a.kind === "transition" || a.kind === "action") {   // clips play to their end at 60 fps
-      const rate = a.kind === "transition" ? S.sc : 1;
+      const rate = a.kind === "transition" ? clipRate(a) : 1;
       S.t += dt * rate;
       if (!clipFrames(a)) return;
       const n = a.frames[0].length, over = S.t - n / FPS;   // clip time past where the next frame would be
@@ -410,6 +610,13 @@ kbd { font: 600 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 
       }
       const tgt = SP.anims[a.target];
       if (tgt.kind === "gait") {      // carry on from the phase the clip ended at, this very frame
+        // a clip that ends exactly at the entry of the transition the input now wants (the walk start ends at phase
+        // 0.5, where walk -> run 0.5 begins): that one follows straight away instead of a whole walk cycle later
+        const goal = !moving ? "idle" : run ? "run" : "walk";
+        const chain = goal !== a.target && Object.entries(SP.anims).find(([, q]) => q.kind === "transition" && q.source === a.target &&
+                        q.target === (goal === "idle" && a.target === "run" ? "walk" : goal) &&
+                        Math.abs(((q.enter - a.exit) % 1 + 1.5) % 1 - 0.5) * tgt.frames[0].length < 0.5);
+        if (chain) { S.phase = a.exit; S.gaitSc = rate; startTransition(chain[0], Math.max(0, over)); return; }
         enterGait(a.target, a.exit);
         // its next frame is due one frame after the clip's last one: (over + 1/60) of clip time, in real seconds
         gaitStep(a.target, Math.max(0, (over + 1 / FPS) / rate), dx, dy);
@@ -419,7 +626,8 @@ kbd { font: 600 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 
     }
     if (S.anim === "idle") {
       if (S.queue === "onetwo") { S.queue = null; play("onetwo", 0); return; }
-      if (moving && SP.anims.start) { startTransition("start"); return; }
+      // set off once he faces within 45 deg of the way (he turns 45 deg a frame standing): no start the wrong way
+      if (moving && SP.anims.start && turnScale(ix, iy) > 0.9) { startTransition("start"); return; }
       playLoop("idle", S.k0, S.t + dt);
       return;
     }
@@ -469,28 +677,32 @@ kbd { font: 600 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 
   let rowShown = new Int32Array(1), rowOpaque = new Int32Array(1), rowN = 0;   // figure pixels drawn / there, per row
   let allowedAt = new Int32Array(1), nAllowed = 0;     // ... level pixels drawn over only thanks to GROUND_BIAS
   // Whole device pixels per art pixel.  The level is art at 3x the reference grid's density, so one art pixel
-  // is shown as about one CSS pixel on a phone (390 px wide: about 358 art px = 10.5 m of ground in the game
-  // area) and as 2 CSS px once the game area is 700 CSS px or wider (1280 px desktop: 624 art px = 18.2 m,
-  // one reference screen)
+  // is shown as one CSS pixel (one point) on a phone - the figure about 48 pt tall, 1 m of ground 34 pt: an iPhone
+  // 15 upright shows 361 art px = 10.5 m across, on its side 734 = 21 m (the reference screen's width).  Fewer
+  // device pixels per art pixel would show more ground but shrink the figure to 32 pt (dpr 3) or 24 pt (dpr 2);
+  // more would show only 7.9 m across.  2 CSS px once the game area is 700 CSS px or wider (1280 px desktop:
+  // 624 art px = 18.2 m, one reference screen)
   function layout() {
     const dpr = window.devicePixelRatio || 1, r = stage.getBoundingClientRect();
     const cssPerArt = Math.max(1, Math.round(r.width / 700));
     const sDev = Math.max(1, Math.round(cssPerArt * dpr));
     const w = Math.max(32, Math.floor(r.width * dpr / sDev)), h = Math.max(32, Math.floor(r.height * dpr / sDev));
     const sc = sDev / dpr;
-    view = { w, h, scale: sc, sDev, cssPerArt, dpr };
+    view = { w, h, scale: sc, sDev, cssPerArt, dpr, css: [+r.width.toFixed(2), +r.height.toFixed(2)] };
     viewEl.style.width = (w * sc) + "px"; viewEl.style.height = (h * sc) + "px";
     // centred in the stage, its top-left corner on a whole device pixel: both canvases inside move by whole
     // device pixels from there, so they stay in register (at dpr 2.625 the centre fell on 160.125 device px)
     const left = Math.round((r.left + (r.width - w * sc) / 2) * dpr) / dpr - r.left;
     const top = Math.round((r.top + (r.height - h * sc) / 2) * dpr) / dpr - r.top;
     viewEl.style.transform = `translate(${left}px, ${top}px)`;   // (a transform: layout would round left / top to 1/64 px)
+    if (!L) return;
     // the canvases keep their own size in CSS px and are scaled by their transform: a CSS width of 79 * 8/7 px
     // is rounded to 1/64 px by layout (236.99 device px for 237), and that slips a column
     levelEl.style.width = L.W + "px"; levelEl.style.height = L.H + "px";
     figEl.style.width = (FIGW + 2) + "px"; figEl.style.height = (FIGH + 2) + "px";
     lastCam = null;
   }
+  function relayout() { fit(); layout(); }
   function project(x, z) {
     const U = M.camera.units_per_m, X = x * U, Y = M.camera.ground_y + heightAt(x, z) * U, Z = z * U, m = M.camera.world_to_screen;
     return [m[0][0] * X + m[0][1] * Y + m[0][2] * Z + m[0][3], m[1][0] * X + m[1][1] * Y + m[1][2] * Z + m[1][3],
@@ -511,7 +723,7 @@ kbd { font: 600 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 
     if (Math.abs(cam.lagX - cam.showX) > 0.75) cam.showX = Math.round(cam.lagX);
     if (Math.abs(cam.lagY - cam.showY) > 0.75) cam.showY = Math.round(cam.lagY);
     cam.x = ax - Math.floor(view.w / 2) + cam.showX;
-    cam.y = ay - Math.floor(view.h * 0.58) + cam.showY;
+    cam.y = ay - Math.floor(view.h * (view.h > view.w ? 0.52 : 0.58)) + cam.showY;   // (upright: nearer the middle)
   }
   const BIAS = 0.15;         // world units: a sprite pixel this much behind an object still shows
   const GROUND_BIAS = 0.6;   // ... and this much behind GROUND at the figure's own height (slopes, banks: the
@@ -528,7 +740,7 @@ kbd { font: 600 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 
     }
     const [px, py, pd] = project(S.x, S.z);
     const ax = Math.floor(px), ay = Math.floor(py);
-    const fi = frameIndex(), [fx, fy, fw, fh, ox, oy] = SP.frames[fi];
+    const fi = frameIndex(), [, , fw, fh, ox, oy] = SP.frames[fi], base = SP.base[fi];
     const bx = ax + ox, by = ay + oy;                 // the box, in level pixels
     const LW = L.W, LH = L.H, rgba = L.rgba;
     // 0) the level's own pixels in the box
@@ -542,7 +754,7 @@ kbd { font: 600 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 
     }
     nAllowed = 0;
     const ratio = L.ratio, d8 = figImg.data, depth = L.depth, flag = L.flag, LITF = L.LIT, GR = L.GROUND;
-    const SW = SP.W, sdat = SP.data, srgba = SP.rgba, dscale = SP.scale, zero = SP.zero, rowD = L.rowDepth;
+    const spx = SP.px, sdz = SP.dz, dscale = SP.scale, rowD = L.rowDepth;   // sprite pixel i: spx[4i..4i+3], sdz[i]
     const shade = !sunAt(S.x, S.z);
     const footY = M.camera.ground_y + heightAt(S.x, S.z) * M.camera.units_per_m, nearU = GROUND_NEAR * M.camera.units_per_m;
     // 1) its shadow: flat ground at the figure's height, only where the level is at that depth and lit
@@ -550,9 +762,9 @@ kbd { font: 600 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 
       const sy = by + v;
       if (sy < 0 || sy >= LH) continue;
       const want = pd + (oy + v) * rowD;
-      let si = 4 * ((fy + v) * SW + fx), li = sy * LW + bx, o = 4 * v * FIGW;
-      for (let u = 0; u < fw; u++, si += 4, li++, o += 4) {
-        if (sdat[si + 2] < 128) continue;
+      let si = base + v * fw, li = sy * LW + bx, o = 4 * v * FIGW;
+      for (let u = 0; u < fw; u++, si++, li++, o += 4) {
+        if (!(spx[4 * si + 3] & 1)) continue;
         const sx = bx + u;
         if (sx < 0 || sx >= LW || !(flag[li] & LITF) || Math.abs(depth[li] - want) > 0.35) continue;
         d8[o] = d8[o] * ratio[0]; d8[o + 1] = d8[o + 1] * ratio[1]; d8[o + 2] = d8[o + 2] * ratio[2];
@@ -562,13 +774,14 @@ kbd { font: 600 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 
     const s0 = shade ? ratio[0] : 1, s1 = shade ? ratio[1] : 1, s2 = shade ? ratio[2] : 1;
     for (let v = 0; v < fh; v++) {
       const sy = by + v, inLevel = sy >= 0 && sy < LH;
-      let si = 4 * ((fy + v) * SW + fx), li = sy * LW + bx, o = 4 * v * FIGW, shown = 0, opaque = 0;
-      for (let u = 0; u < fw; u++, si += 4, li++, o += 4) {
-        if (srgba[si + 3] < 128) continue;
+      let si = base + v * fw, li = sy * LW + bx, o = 4 * v * FIGW, shown = 0, opaque = 0;
+      for (let u = 0; u < fw; u++, si++, li++, o += 4) {
+        const q = 4 * si;
+        if (!(spx[q + 3] & 0x80)) continue;
         opaque++;
         const sx = bx + u;
         if (inLevel && sx >= 0 && sx < LW) {
-          const dz = pd + (sdat[si] * 256 + sdat[si + 1] - zero) / dscale;
+          const dz = pd + sdz[si] / dscale;
           const dl = depth[li];
           if (dz > dl + BIAS) {                         // behind the level here: hidden, unless it is ground
             if (!(flag[li] & GR) || dz > dl + GROUND_BIAS) continue;   // at the feet's own height
@@ -576,7 +789,7 @@ kbd { font: 600 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 
             allowedAt[nAllowed++] = li;
           }
         }
-        d8[o] = srgba[si] * s0; d8[o + 1] = srgba[si + 1] * s1; d8[o + 2] = srgba[si + 2] * s2; d8[o + 3] = 255;
+        d8[o] = spx[q] * s0; d8[o + 1] = spx[q + 1] * s1; d8[o + 2] = spx[q + 2] * s2; d8[o + 3] = 255;
         shown++;
       }
       rowShown[v] = shown; rowOpaque[v] = opaque;
@@ -638,32 +851,38 @@ kbd { font: 600 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 
     return best || [x, z];
   }
 
+  // the window, the visible area or the orientation changes: fit the app to it, then the game area to the app
+  window.addEventListener("resize", relayout);
+  window.addEventListener("orientationchange", () => setTimeout(relayout, 60));   // (iOS reports the new size late)
+  if (window.visualViewport) window.visualViewport.addEventListener("resize", relayout);
+  new ResizeObserver(() => layout()).observe(stage);
+  layout();
+
   async function start() {
     try {
       await load();
     } catch (err) {
       statusEl.classList.add("error");
-      statusEl.textContent = "불러오지 못했습니다: " + err.message;
+      say("불러오지 못했습니다: " + err.message);
       return;
     }
     [S.x, S.z] = nearestWalkable(M.start.at[0], M.start.at[1]);
     S.facing = S.want = ((Math.round(M.start.facing / SP.step) % SP.nf) + SP.nf) % SP.nf;
     play("idle", 0);
-    layout();
-    new ResizeObserver(() => { layout(); }).observe(stage);
-    window.addEventListener("resize", layout);        // (the stage can move without changing size)
+    relayout();
     statusEl.hidden = true;
     canvas.focus({ preventScroll: true });
     // for automated checks (and curious players): read the state, put the figure somewhere
     window.bbDebug = {
-      state: () => ({ x: S.x, z: S.z, facing: S.facing * SP.step, anim: S.anim, k: S.k, phase: S.phase, queue: S.queue,
-                      height: heightAt(S.x, S.z), walkable: walkable(S.x, S.z), shade: !sunAt(S.x, S.z),
+      state: () => ({ x: S.x, z: S.z, facing: S.facing * SP.step, want: S.want * SP.step, anim: S.anim, k: S.k, phase: S.phase,
+                      queue: S.queue, height: heightAt(S.x, S.z), walkable: walkable(S.x, S.z), shade: !sunAt(S.x, S.z),
                       view: { ...view }, cam: { x: cam.x, y: cam.y }, frame: frameIndex(), frames, sc: S.sc, box: lastBox,
+                      stick: { active: stick.active, dx: stick.dx, dy: stick.dy, run: stick.run, cx: stick.cx, cy: stick.cy },
                       gi: SP.anims[S.anim].kind === "gait" ? gaitShown(SP.anims[S.anim].frames[0].length) : -1 }),
       teleport: (x, z, facing) => {
         if (walkable(x, z)) { S.x = x; S.z = z; }
         if (facing !== undefined) S.facing = S.want = ((Math.round(facing / SP.step) % SP.nf) + SP.nf) % SP.nf;
-        play("idle", 0); S.sc = 1; S.goff = 0; cam.ax = null; cam.lagX = cam.lagY = cam.showX = cam.showY = 0; lastCam = null;
+        play("idle", 0); S.sc = S.gaitSc = S.scFrom = 1; S.goff = 0; cam.ax = null; cam.lagX = cam.lagY = cam.showX = cam.showY = 0; lastCam = null;
         return walkable(x, z);
       },
       times: () => times.slice(),
@@ -699,11 +918,17 @@ kbd { font: 600 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 
       pixel: shownPixel,
       level: (lx, ly) => { const p = L.rgba[ly * L.W + lx]; return [p & 255, (p >>> 8) & 255, (p >>> 16) & 255]; },
       levelDepth: (pts) => pts.map(([lx, ly]) => { const d = L.depth[ly * L.W + lx]; return Number.isFinite(d) ? d : null; }),
-      atlasSums: () => {          // byte sums of the decoded atlases (tests compare them with the files)
-        let c = 0, d = 0;
-        for (let i = 0; i < SP.rgba.length; i += 4) if (SP.rgba[i + 3] === 255) c += SP.rgba[i] + 3 * SP.rgba[i + 1] + 7 * SP.rgba[i + 2];
-        for (let i = 0; i < SP.data.length; i++) d += SP.data[i] * ((i % 4) + 1);
-        return [c, d];
+      // the decoded sprite pixels, frame after frame, row by row (tests compare them with the atlas files):
+      // [sum of r + 3g + 7b over opaque pixels, sum of depth offset * (i % 13 + 1), shadow pixels, opaque pixels]
+      atlasSums: () => {
+        let c = 0, d = 0, sh = 0, op = 0;
+        for (let i = 0; i < SP.pixels; i++) {
+          const q = 4 * i;
+          if (SP.px[q + 3] & 0x80) { c += SP.px[q] + 3 * SP.px[q + 1] + 7 * SP.px[q + 2]; op++; }
+          if (SP.px[q + 3] & 1) sh++;
+          d += SP.dz[i] * ((i % 13) + 1);
+        }
+        return [c, d, sh, op];
       },
     };
     requestAnimationFrame(frame);

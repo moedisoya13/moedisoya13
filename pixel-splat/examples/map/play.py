@@ -17,11 +17,13 @@ What the page gets (``out/play``: ``index.html`` + ``assets/``):
     terrain.png       one pixel per ``cell`` metres of the layout: R, G = ground height in millimetres
                       + 32768 (16 bits); B = 255 walkable, 0 blocked (level edge, cliff faces both sides,
                       steep steps, water, tree trunks, rocks)
-    sprites.png       BB frames on a transparent background, 8 facings x (walk, one-two, step in/out)
-    sprites_data.png  the same rectangles: R, G = depth of the pixel relative to the depth of the
+    sprites_N.webp    BB frames on a transparent background, 8 facings x (idle, walk, run, one-two,
+                      transitions); atlas page N, at most PAGE_W x PAGE_H (a phone decodes one page at a time)
+    sprites_data_N.png  the same rectangles: R, G = depth of the pixel relative to the depth of the
                       figure's ground point, ``(R*256 + G - 32768) / depth_scale`` world units (negative =
                       nearer); B = 255 where the figure's own shadow falls on flat ground; A = 255
-    manifest.json     camera (world -> pixel/depth), file names, encodings, frames, animations
+    manifest.json     camera (world -> pixel/depth), file names, encodings, frames [x, y, w, h, ox, oy, page],
+                      animations, every file's bytes (``files``: the page's progress bar)
 
 The page composites per pixel: a sprite pixel shows where root depth + its offset is nearer than the
 level's depth (so trees and cliffs hide the figure), its shadow darkens only ground pixels at the depth
@@ -59,6 +61,7 @@ SUN_CELL = 0.0625  # metres: the ground's own sun map (where the level shades th
 LIT, GROUND = 128, 64  # level_depth.png B channel bits: sunlit, walkable ground (grass / path / water)
 DEFAULT_ONETWO = "out/onetwo4/5m/clip.npz"  # the one-two, wrist range "human"
 ATLAS_MAX_AREA = 4096 * 4096  # the largest canvas every browser reads back (iOS Safari: 16.7 M pixels)
+PAGE_W, PAGE_H = 4096, 2048  # sprite atlas pages (pack_atlas_pages): each decoded on its own, 34 MB at most
 
 
 # ---------------------------------------------------------------- encodings (the page decodes these)
@@ -363,7 +366,8 @@ def _frame_key(mats: np.ndarray, facing: float, spec: isocam.RefCam, density: in
     import hashlib  # noqa: PLC0415
 
     h = hashlib.sha1(np.round(np.asarray(mats, np.float64), 7).astype(np.float32).tobytes())
-    h.update(repr((float(facing), spec.elev, spec.az, spec.px_per_unit, density, splats, os.path.abspath(bb),
+    # (realpath: the same figure reached through a symlinked out/ - a git worktree - keeps its cached frames)
+    h.update(repr((float(facing), spec.elev, spec.az, spec.px_per_unit, density, splats, os.path.realpath(bb),
                    SpriteRenderer.W, SpriteRenderer.H, SPRITE_DEPTH_SCALE)).encode())
     return h.hexdigest()
 
@@ -455,6 +459,40 @@ def pack_atlas(frames: List[dict], width: int = 0):
     return color, data, rects
 
 
+def pack_atlas_pages(frames: List[dict], width: int = PAGE_W, page_h: int = PAGE_H):
+    """Shelf packing (tallest first, 1 px gap) onto pages of at most ``width`` x ``page_h``: a phone decodes one
+    page at a time (4096 x 2048 = 8.4 M pixels, 34 MB decoded), and more clips only add pages - no page nears the
+    16.7 M pixel canvas limit of iOS Safari.  Returns ([(colour, data)] per page, rects [x, y, w, h, page])."""
+    order = sorted(range(len(frames)), key=lambda i: (-frames[i]["rgba"].shape[0], -frames[i]["rgba"].shape[1]))
+    rects = [None] * len(frames)
+    heights = []
+    x = y = shelf = page = 0
+    for i in order:
+        h, w = frames[i]["rgba"].shape[:2]
+        if w > width or h > page_h:
+            raise RuntimeError(f"a sprite frame {w}x{h} is larger than an atlas page {width}x{page_h}")
+        if x + w > width:
+            x, y, shelf = 0, y + shelf + 1, 0
+        if y + h > page_h:
+            heights.append(y - 1)
+            x = y = shelf = 0
+            page += 1
+        rects[i] = [x, y, w, h, page]
+        x, shelf = x + w + 1, max(shelf, h)
+    heights.append(y + shelf)
+    pages = []
+    for p, H in enumerate(heights):
+        color = np.zeros((H, width, 4), np.uint8)
+        data = np.zeros((H, width, 4), np.uint8)
+        data[..., 3] = 255
+        data[..., 0] = 128  # (offset 0 where nothing is)
+        pages.append((color, data))
+    for f, (x, y, w, h, p) in zip(frames, rects):
+        pages[p][0][y:y + h, x:x + w] = f["rgba"]
+        pages[p][1][y:y + h, x:x + w] = f["data"]
+    return pages, rects
+
+
 def save_webp_lossless(arr: np.ndarray, path: str):
     """Lossless WebP (exact bytes, about half a PNG's size here); verified to decode exactly in Chromium by
     tests/test_play_page.py."""
@@ -507,19 +545,26 @@ def build(a, log=print):
                                              workers=a.workers, threads=a.threads, log=log,
                                              log_path=a.out.rstrip("/") + "_render.log",
                                              cache=a.cache or a.out.rstrip("/") + "_sprite_cache.pkl.gz")
-        color, data, rects = pack_atlas(frames)
-        for old in ("sprites.png", "sprites.webp"):
-            if os.path.exists(os.path.join(assets, old)):
+        pages, rects = pack_atlas_pages(frames)
+        for old in os.listdir(assets):  # earlier atlases (one file each, or pages)
+            if old.startswith("sprites") and old.endswith((".png", ".webp")):
                 os.remove(os.path.join(assets, old))
-        cname = "sprites.webp" if a.webp else "sprites.png"
-        (save_webp_lossless if a.webp else save_rgba)(color, os.path.join(assets, cname))
-        save_rgba(data, os.path.join(assets, "sprites_data.png"))
-        manifest["sprites"] = dict(color=cname, data="sprites_data.png", depth_scale=SPRITE_DEPTH_SCALE,
+        ext = "webp" if a.webp else "png"
+        page_files = []
+        for p, (color, data) in enumerate(pages):
+            cname, dname = f"sprites_{p}.{ext}", f"sprites_data_{p}.png"
+            (save_webp_lossless if a.webp else save_rgba)(color, os.path.join(assets, cname))
+            save_rgba(data, os.path.join(assets, dname))
+            page_files.append(dict(color=cname, data=dname, size=[int(color.shape[1]), int(color.shape[0])]))
+        log(f"[sprites] {len(pages)} atlas pages: " + ", ".join(f"{q['size'][0]}x{q['size'][1]}" for q in page_files))
+        manifest.pop("sprites", None)
+        manifest["sprites"] = dict(pages=page_files, depth_scale=SPRITE_DEPTH_SCALE,
                                    depth_zero=32768, facings=list(FACINGS), anims=anims, mannequin=info,
-                                   frames=[r + [f["ox"], f["oy"]] for r, f in zip(rects, frames)],
-                                   frame_note="[x, y, w, h, ox, oy]: rectangle in both atlases; its top-left "
-                                              "pixel lies (ox, oy) from the anchor pixel (the pixel that holds "
-                                              "the figure's ground point)")
+                                   frames=[r[:4] + [f["ox"], f["oy"], r[4]] for r, f in zip(rects, frames)],
+                                   frame_note="[x, y, w, h, ox, oy, page]: rectangle in both atlases of that page; "
+                                              "its top-left pixel lies (ox, oy) from the anchor pixel (the pixel "
+                                              "that holds the figure's ground point)")
+    manifest["files"] = asset_sizes(assets, manifest)
     Path(man_path).write_text(json.dumps(manifest, separators=(",", ":"), ensure_ascii=False))
     if "page" in only:
         shutil.copyfile(TEMPLATE, os.path.join(a.out, "index.html"))
@@ -530,6 +575,22 @@ def build(a, log=print):
         "assets/" + n for n in sorted(os.listdir(assets))] if os.path.exists(os.path.join(a.out, f))}
     log("[build] " + ", ".join(f"{k} {v / 1024:.0f} KB" for k, v in sizes.items()) +
         f"; total {sum(sizes.values()) / 1e6:.2f} MB")
+
+
+def atlas_pages(sprites: dict) -> List[dict]:
+    """The manifest's atlas pages: [{color, data, size}] (``pages``), or the one pair of older builds."""
+    return sprites.get("pages") or [dict(color=sprites["color"], data=sprites["data"])]
+
+
+def asset_sizes(assets: str, manifest: dict) -> Dict[str, int]:
+    """Bytes of every file the page downloads (it shows the download's progress with them)."""
+    names = []
+    if "level" in manifest:
+        L = manifest["level"]
+        names += [L["color"], L["depth"], L["terrain"]["file"]] + ([L["sun"]["file"]] if "sun" in L else [])
+    if "sprites" in manifest:
+        names += [f for p in atlas_pages(manifest["sprites"]) for f in (p["color"], p["data"])]
+    return {n: os.path.getsize(os.path.join(assets, n)) for n in names if os.path.exists(os.path.join(assets, n))}
 
 
 def check(folder: str) -> List[str]:
@@ -560,20 +621,38 @@ def check(folder: str) -> List[str]:
         out.append("no level in the manifest")
     if "sprites" in m:
         S = m["sprites"]
-        shapes = {}
-        for k in ("color", "data"):
-            p = os.path.join(assets, S[k])
-            if not os.path.exists(p):
-                out.append(f"{S[k]} missing")
-            else:
-                shapes[k] = load_rgba(p).shape
-        if len(set(shapes.values())) > 1:
-            out.append(f"sprite atlases differ in size: {shapes}")
-        if shapes:
-            Hh, Ww = next(iter(shapes.values()))[:2]
-            for i, (x, y, w, h, ox, oy) in enumerate(S["frames"]):
-                if x < 0 or y < 0 or x + w > Ww or y + h > Hh or w <= 0 or h <= 0:
-                    out.append(f"frame {i} lies outside the atlas")
+        sizes = []  # per page: (H, W), or None
+        for pg in atlas_pages(S):
+            shapes = {}
+            for k in ("color", "data"):
+                p = os.path.join(assets, pg[k])
+                if not os.path.exists(p):
+                    out.append(f"{pg[k]} missing")
+                else:
+                    shapes[k] = load_rgba(p).shape
+            if len(set(shapes.values())) > 1:
+                out.append(f"sprite atlases differ in size: {shapes}")
+            hw = next(iter(shapes.values()))[:2] if shapes else None
+            if hw and "size" in pg and list(hw[::-1]) != pg["size"]:
+                out.append(f"{pg['color']} is not {pg['size']}")
+            if hw and hw[0] * hw[1] > ATLAS_MAX_AREA:
+                out.append(f"{pg['color']} has more pixels than a phone browser reads back ({ATLAS_MAX_AREA})")
+            sizes.append(hw)
+        for i, fr in enumerate(S["frames"]):
+            x, y, w, h = fr[:4]
+            p = fr[6] if len(fr) > 6 else 0
+            if not 0 <= p < len(sizes):
+                out.append(f"frame {i}: no atlas page {p}")
+                continue
+            if sizes[p] is None:
+                continue
+            Hh, Ww = sizes[p]
+            if x < 0 or y < 0 or x + w > Ww or y + h > Hh or w <= 0 or h <= 0:
+                out.append(f"frame {i} lies outside the atlas")
+        for f, b in m.get("files", {}).items():
+            q = os.path.join(assets, f)
+            if os.path.exists(q) and os.path.getsize(q) != b:
+                out.append(f"{f}: {os.path.getsize(q)} bytes, the manifest says {b}")
         n = len(S["frames"])
         for name, an in S["anims"].items():
             if "of" in an:
