@@ -73,6 +73,10 @@ async function align(page) {
         const queue = []; let ts = 1000;
         window.requestAnimationFrame = (cb) => { queue.push(cb); return queue.length; };
         window.__tick = (dt) => { ts += dt; const q = queue.splice(0); for (const f of q) f(ts); return q.length; };
+        // pointer events the page has received: Chromium hands touch moves to the page aligned to ITS OWN frames,
+        // so a "drag" step waits for each one to arrive before it ticks (else the page saw them ticks late)
+        window.__pev = 0;
+        for (const t of ["pointerdown", "pointermove", "pointerup", "pointercancel"]) window.addEventListener(t, () => { window.__pev++; }, true);
       });
       if (job.cpu) { const cdp = await ctx.newCDPSession(page); await cdp.send("Emulation.setCPUThrottlingRate", { rate: job.cpu }); }
       await page.goto(job.url, { waitUntil: "load" });
@@ -101,6 +105,21 @@ async function align(page) {
           await res.cdp.send("Input.dispatchTouchEvent", { type: s.type, touchPoints: s.points.map(([x, y, id]) => ({ x, y, id })) });
         } else if (s.op === "ticks") res.results.push(await page.evaluate((dts) => dts.map((dt) => {
           window.__tick(dt); const st = window.bbDebug.state(); return [st.anim, st.k, st.gi, st.x, st.z, st.frame, st.facing, st.phase]; }), s.dts));
+        else if (s.op === "drag") {   // a scripted finger, one display frame at a time (with job.manualRaf)
+          if (!res.cdp) res.cdp = await ctx.newCDPSession(page);
+          const recs = [];
+          for (const [dt, type, pts] of s.frames) {
+            if (type) {
+              const n0 = await page.evaluate(() => window.__pev);
+              await res.cdp.send("Input.dispatchTouchEvent", { type, touchPoints: (pts || []).map(([x, y, id]) => ({ x, y, id })) });
+              await page.waitForFunction((n) => window.__pev > n, n0, { timeout: 1000, polling: 2 }).catch(() => {});
+            }
+            recs.push(await page.evaluate((dt) => {
+              window.__tick(dt); const st = window.bbDebug.state();
+              return [st.anim, st.k, st.gi, st.x, st.z, st.frame, st.facing, st.phase, st.sc, st.want === undefined ? null : st.want]; }, dt));
+          }
+          res.results.push(recs);
+        }
         else if (s.op === "align") res.results.push(await align(page));
         else if (s.op === "status") res.results.push(await page.evaluate(() => { const e = document.getElementById("status"); return { hidden: e.hidden, text: e.textContent, error: e.classList.contains("error") }; }));
         else throw new Error("unknown step " + s.op);
