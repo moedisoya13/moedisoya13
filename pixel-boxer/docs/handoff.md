@@ -61,10 +61,10 @@
 
 | 이름 | 주소 | 현행 | 원본 | 지난 게시 커밋 | 지금 (2026-11-28) |
 |---|---|---|---|---|---|
-| 한 라운드 스파링 | https://claude.ai/artifact/QSaHbvPFewiH2uLYoWD4t1 | v7 | `spar.html`, `src/spar.mjs`, `src/spar/`, `src/mute.mjs` | 85417ad | **재게시 대기**: 수정 라운드의 링크 · 장소 경쟁 · 흰 화면 안내 · 시계(E1), 소리(C), 대진 규칙 · 음소거 단추(J), 도발 5%(H), 엔진 변경(A · B · D · G · I · K) |
-| 모션 카탈로그 | https://claude.ai/artifact/GGHUZQ9rFWLoRojwCzaK3N | v43 | `catalog.html`, `src/catalog.mjs` | 54592a0 | **재게시 대기**: 휴대폰 가로 스크롤 · out-counter 리플레이(E1), 설명 글(E2 · J), 엔진 변경 |
-| 타격음 오디션 | https://claude.ai/artifact/92ZDBLW3TVC2M3XJ6bwgeQ | v1 | `sfx.html`, `src/sfx.mjs`, `src/mute.mjs` | 85417ad | **재게시 대기**: 소리를 다시 만듦(C), 음소거 단추(J) |
-| **미결 카탈로그 (새)** | https://claude.ai/artifact/HybxKJu7LtBsGHs7M1rYpz | v4 | `open.html`, `src/open.mjs`, `src/open.data.mjs`, `src/open.clips.mjs`, `src/open.old.mjs`, `src/open.old.data.mjs`, `docs/ref/open/` | e6f0bb4 | **재게시 대기**: 11-28에 답한 131장을 “정해진 것”으로(고친 결과와 함께), 새 카드 11장(수정 라운드), `l-sfx` · `l-open` 수치 갱신(L); 옛 플레이어 파일 이름이 바뀜(E2: `src/pending*.mjs` → `src/open.old*.mjs`) |
+| 한 라운드 스파링 | https://claude.ai/artifact/QSaHbvPFewiH2uLYoWD4t1 | v8 | `spar.html`, `src/spar.mjs`, `src/spar/`, `src/mute.mjs` | d887800 | 2026-11-28 재게시(수정 라운드 1 · 2와 정리 L까지 모두 반영) |
+| 모션 카탈로그 | https://claude.ai/artifact/GGHUZQ9rFWLoRojwCzaK3N | v44 | `catalog.html`, `src/catalog.mjs` | d887800 | 2026-11-28 재게시(수정 라운드 1 · 2와 정리 L까지 모두 반영) |
+| 타격음 오디션 | https://claude.ai/artifact/92ZDBLW3TVC2M3XJ6bwgeQ | v2 | `sfx.html`, `src/sfx.mjs`, `src/mute.mjs` | d887800 | 2026-11-28 재게시(수정 라운드 1 · 2와 정리 L까지 모두 반영) |
+| **미결 카탈로그 (새)** | https://claude.ai/artifact/HybxKJu7LtBsGHs7M1rYpz | v5 | `open.html`, `src/open.mjs`, `src/open.data.mjs`, `src/open.clips.mjs`, `src/open.old.mjs`, `src/open.old.data.mjs`, `docs/ref/open/` | d887800 | 2026-11-28 재게시(수정 라운드 1 · 2와 정리 L까지 모두 반영) |
 | 미결 카탈로그 (옛) | https://claude.ai/artifact/UEM19aKseUxnixVYkrnAzd | v36 | (파일은 11-28에 지움) | 54592a0 | 파기 승인됨(`del-art-pending-old`). 11-28에 읽으면 404이고 아티팩트 목록에 없음: 지울 것 없음 |
 | 타격 이펙트 시안 | https://claude.ai/artifact/5tZd5Xyp7iiRxCuftpNwL6 | v9 (11-24) | `fxlab.html`, `src/fxlab.mjs` | 37fb302 | 파기 승인됨(`del-art-fxlab`). 11-28에 읽으면 404이고 목록에 없음: 지울 것 없음(파일은 둠) |
 

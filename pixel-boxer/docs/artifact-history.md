@@ -15,5 +15,14 @@
 | 한밤의 링 | (없음) | 정리 승인 뒤 확인하니 이미 지워져 있었다 |
 | 달빛 결투 | (없음) | 정리 승인 뒤 확인하니 이미 지워져 있었다 |
 
+## 2026-11-28 재게시 (d887800: 수정 라운드 1 · 2와 정리 L)
+
+| 이름 | 주소 | 새 판 | 바뀐 파일(`--since`) |
+|---|---|---|---|
+| 한 라운드 스파링 | https://claude.ai/artifact/QSaHbvPFewiH2uLYoWD4t1 | v8 | 24 (`--since 85417ad`): 엔진 · 그림 · 소리 · 대진 규칙 · 음소거 단추 · 잃은 화면 안내 |
+| 모션 카탈로그 | https://claude.ai/artifact/GGHUZQ9rFWLoRojwCzaK3N | v44 | 16 (`--since 54592a0`): 엔진 · 그림 · 설명 글 |
+| 타격음 오디션 | https://claude.ai/artifact/92ZDBLW3TVC2M3XJ6bwgeQ | v2 | 4 (`--since 85417ad`): 소리 · 음소거 단추 |
+| 미결 카탈로그 (새) | https://claude.ai/artifact/HybxKJu7LtBsGHs7M1rYpz | v5 | 95 (`--since e6f0bb4`, 지운 것 null 포함): 11-28 답을 "정해진 것"으로, 새 카드(수정 라운드에서 나온 것), 옛 파일 이름 바뀜 |
+
 아티팩트 목록 전체는 새 세션에서 `Artifact` 도구의 `list`로 확인한다(이 밖에 땀 시안 등 이전 게시본이 있을 수 있다).
 
