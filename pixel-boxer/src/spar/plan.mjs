@@ -11,7 +11,10 @@
      startOf(plan)     -> a bout set up as the round starts: the two men, their grades and loadouts, the health both start with
      replayOf(plan)    -> the round played again from its controls: { bout, events, rails, feet }
    How a round is made (docs/spar.md has it in Korean):
-   - Two men, red (0) and blue (1), each at one of the seven grades, as likely as each other (1 in 7); each carries the
+   - Two men, red (0) and blue (1), each at one of the seven grades, as likely as each other (1 in 7), but never more than
+     two grades apart (SPAR.gap: 1..5, 4명 and 4암 one grade, 5명 and 5암 one; the user's rule, 2026-11-28): a pair further
+     apart is drawn again, both men, on with the same dice, so that every pair the rule lets through is as likely as any
+     other and the same seed is always the same pair; each carries the
      techniques his grade gives him (profile.mjs loadout) and fills his other slots from those his grade opens, the round's
      dice choosing (game/techniques.mjs: a technique added there comes in here). One of them is favoured (the better
      grade; the dice between two of the same); both start with the same health (hpOf), on the HUD from the first frame.
@@ -63,6 +66,7 @@ const clamp = (x, a, b) => (x < a ? a : x > b ? b : x);
      zone       health under which a man is thrown power punches only: the blow that puts him down is then the power
                 button's (a jab takes 3.8 at the most, a counter's gain in it)
      power      newton-seconds, a counter's gain in them, from which a blow counts as a power blow on the rails (rails.mjs)
+     gap        the most grades (1..5: LEVEL[lv].grade) the two men may be apart; a pair further apart is drawn again
      tail       seconds the bout goes on after the knockdown (his fall)
      tilt       degrees the line between them may lie off the picture's width before they walk it back round (the camera
                 does not turn: src/spar.mjs) */
@@ -73,6 +77,7 @@ export const SPAR = {
   tries: 3,
   hp: { rate: { 1: 0.36, 2: 0.6, 3: 0.96, '4m': 1.05, '4a': 1.05, '5m': 1.22, '5a': 1.22 }, apart: 0.14, novice: 0.2, span: [14, 96] },
   zone: 4.2,
+  gap: 2,
   power: POWER,
   tail: 4,
   tilt: 36
@@ -104,23 +109,27 @@ export const hpOf = (favoured, other, target) =>
   Math.round(clamp(SPAR.hp.rate[favoured] * target * (1 + SPAR.hp.apart * Math.max(0, rank(favoured) - rank(other) - 1) + (rank(other) === 1 && rank(favoured) > 1 ? SPAR.hp.novice : 0)), ...SPAR.hp.span));
 
 
-/* ---- the two men */
+/* ---- the two men: drawn as a pair until they are no more than SPAR.gap grades apart (each draw passes 37 times in 49) */
 function menOf(rng) {
-  return [0, 1].map(() => {
-    const grade = LEVELS[Math.floor(rng() * LEVELS.length)],
-      skills = { all: grade },
-      standard = loadout(skills),
-      // (the rest of his slots from what his grade opens, in an order the dice choose)
-      more = Object.keys(TECHNIQUES).filter(id => !standard.includes(id) && opens(skills, id)),
-      order = more.map(id => [rng(), id]).sort((a, b) => a[0] - b[0]).map(x => x[1]),
-      asked = [...standard, ...order];
-    /* (the shoulder roll only with the cross-arm guard, which goes in ahead of it: rolled by a man who does not hold that
-       guard, the engine takes its shape on for the moment, and a lead hook coming as that moment ends throws in the
-       animator, anim/animator.mjs ear with no shape; found by this page, not mended here) */
-    if (asked.includes('rollCounter') && asked.indexOf('crossArm') > asked.indexOf('rollCounter')) asked.splice(asked.indexOf('crossArm'), 1), asked.splice(asked.indexOf('rollCounter'), 0, 'crossArm');
-    const techniques = loadout(skills, asked);
-    return { grade, skills, techniques: techniques.includes('rollCounter') && !techniques.includes('crossArm') ? techniques.filter(id => id !== 'rollCounter') : techniques };
-  });
+  for (;;) {
+    const men = [manOf(rng), manOf(rng)];
+    if (Math.abs(rank(men[0].grade) - rank(men[1].grade)) <= SPAR.gap) return men;
+  }
+}
+function manOf(rng) {
+  const grade = LEVELS[Math.floor(rng() * LEVELS.length)],
+    skills = { all: grade },
+    standard = loadout(skills),
+    // (the rest of his slots from what his grade opens, in an order the dice choose)
+    more = Object.keys(TECHNIQUES).filter(id => !standard.includes(id) && opens(skills, id)),
+    order = more.map(id => [rng(), id]).sort((a, b) => a[0] - b[0]).map(x => x[1]),
+    asked = [...standard, ...order];
+  /* (the shoulder roll only with the cross-arm guard, which goes in ahead of it: rolled by a man who does not hold that
+     guard, the engine takes its shape on for the moment, and a lead hook coming as that moment ends throws in the
+     animator, anim/animator.mjs ear with no shape; found by this page, not mended here) */
+  if (asked.includes('rollCounter') && asked.indexOf('crossArm') > asked.indexOf('rollCounter')) asked.splice(asked.indexOf('crossArm'), 1), asked.splice(asked.indexOf('rollCounter'), 0, 'crossArm');
+  const techniques = loadout(skills, asked);
+  return { grade, skills, techniques: techniques.includes('rollCounter') && !techniques.includes('crossArm') ? techniques.filter(id => id !== 'rollCounter') : techniques };
 }
 
 /* A bout as the round starts: the two men as the plan has them, both with the round's health. */

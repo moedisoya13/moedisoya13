@@ -362,7 +362,7 @@ test('the audition page builds with its modules alone, and the committed page is
     files = JSON.parse(execFileSync(process.execPath, [path.join(root, 'tools/artifact.mjs'), 'sfx.html', 'src/sfx.mjs', out], { cwd: root, encoding: 'utf8' })),
     page = readFileSync(out, 'utf8');
   assert.match(page, /^<title>타격음 오디션<\/title>/);
-  assert.deepEqual(Object.keys(files).sort(), ['src/anim/moves.mjs', 'src/game/audio.mjs', 'src/sfx.mjs']);
+  assert.deepEqual(Object.keys(files).sort(), ['src/anim/moves.mjs', 'src/game/audio.mjs', 'src/mute.mjs', 'src/sfx.mjs']);
   assert.match(page, /<html lang|<main id="sounds"/);
   assert.doesNotMatch(read('sfx.html'), /name="build"/);
 });

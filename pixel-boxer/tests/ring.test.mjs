@@ -36,7 +36,9 @@ test('match: a draw has no winner (a majority draw too), and nobody cheers', () 
 });
 
 test('match: a man who beats the count is not counted on while he gets up, and never to ten', () => {
-  // seed 1000, pros: boxer 1 left on 1 health, so the first clean blow puts him down; he is made to rise at eight, the latest
+  // seed 1000, pros: boxer 1 left on 1 health, so the first clean blow puts him down (onto his back); he is made to rise at
+  // seven, the latest he can start up off his back and still be on his feet by ten (at eight he is up too late: he staggers
+  // and goes down again, the user's answer of 2026-11-28: tests/late.test.mjs)
   const m = createMatch({ seed: 1000, rounds: 1, roundTime: 60 });
   m.bout.fighters[1].hp = 1;
   let counted = [],
@@ -46,16 +48,16 @@ test('match: a man who beats the count is not counted on while he gets up, and n
   while (m.phase !== 'over' && k++ < 60 * 90) {
     stepMatch(m, DT);
     for (const e of m.events) {
-      if (e.type === 'down') (downAt = e.who), (m.count.up = 8);
+      if (e.type === 'down') (downAt = e.who), (m.count.up = 7);
       if (e.type === 'count') counted.push(e.n);
       if (e.type === 'up') upAt = e.n;
     }
     if (downAt !== null && m.phase === 'fight') break;
   }
   assert.equal(downAt, 1, 'he went down');
-  assert.equal(upAt, 8);
+  assert.equal(upAt, 7);
   assert.equal(m.phase, 'fight', 'and fights on');
-  assert.ok(Math.max(...counted) <= 8, 'no number after he started up: ' + counted.join(','));
+  assert.ok(Math.max(...counted) <= 7, 'no number after he started up: ' + counted.join(','));
   const f = m.bout.fighters[1];
   assert.ok(!f.down && !(f.action && MOVES[f.action.name].floor), 'on his feet');
 });

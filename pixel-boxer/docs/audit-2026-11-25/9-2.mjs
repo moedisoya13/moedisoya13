@@ -64,9 +64,9 @@ for (const [name, file, ready] of [['game', 'index.html?seed=3&auto=1', () => gl
   const t = await page.evaluate(() => (globalThis.__bout ? globalThis.__bout.bout.t : globalThis.__spar.bout.t));
   const blank = st.contextLost && after > 0.8 && before < 0.1;
   if (blank) bad++;
-  console.log(`${name}: blank-white share of the canvas before ${before}, 5 s after lose+restore ${after} (events lost ${st.lost}, restored ${st.restored}, isContextLost ${st.contextLost}); bout time now ${t.toFixed(2)} s; console ${msgs.length}: ${msgs.slice(0, 3).join(' | ')} -> ${blank ? 'BLANK' : 'drawn'}`);
+  console.log(`${name}: blank-white share of the canvas before ${before}, 5 s after lose+restore ${after} (events lost ${st.lost}, restored ${st.restored}, isContextLost ${st.contextLost}); bout time now ${t.toFixed(2)} s; console ${msgs.length}: ${msgs.slice(0, 3).join(' | ')} -> ${blank ? 'BLANK' : 'not white (covered or drawn)'}`);
   await page.close();
 }
 await browser.close();
 server.close();
-console.log(bad ? `REPRO: yes ${bad} of 2 pages stay a blank white canvas after a WebGL context loss (restore refused: no preventDefault on webglcontextlost, no rebuild on webglcontextrestored)` : 'REPRO: no both pages draw again after a context loss');
+console.log(bad ? `REPRO: yes ${bad} of 2 pages stay a blank white canvas after a WebGL context loss (restore refused: no preventDefault on webglcontextlost, no rebuild on webglcontextrestored)` : 'REPRO: no neither page is left a blank white canvas after a context loss (the pages do not draw again by themselves: a notice with a reload button covers the picture, src/lost.mjs)');

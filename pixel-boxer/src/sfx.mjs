@@ -7,6 +7,7 @@
    CHANGED: the cards whose sound was made again on 2026-11-28 by the user's answers (sound-breath, -hit, -block, -feet,
    -bell, -crowd, -head-pop, -steps; the struck man's voice, sound-hurt, dropped), marked "바뀜" on the page. */
 import { createAudio, COUNTER_GAIN } from './game/audio.mjs';
+import { muteButton } from './mute.mjs';
 
 const $ = id => document.getElementById(id);
 const audio = createAudio();
@@ -155,4 +156,7 @@ const unlock = () => {
 };
 addEventListener('pointerdown', unlock, { once: true });
 addEventListener('keydown', unlock, { once: true });
-globalThis.__sfx = { audio, at, heard };
+/* (the mute button every page that sounds has, src/mute.mjs: in the header's top right corner, beside the title; it goes up
+   with the page as it scrolls, so that it covers no card) */
+const mute = muteButton(audio, { into: document.querySelector('header'), place: 'right:0;top:0;' });
+globalThis.__sfx = { audio, at, heard, mute };

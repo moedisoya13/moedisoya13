@@ -34,6 +34,7 @@ import { createKnockdown } from './spar/knock.mjs';
 import { arenaOf, loadArena, createArena } from './world/stage.mjs';
 import { ARENAS } from './world/pit.mjs';
 import { watchLost } from './lost.mjs';
+import { muteButton, storedMute } from './mute.mjs';
 
 const DT = 1 / 60;
 const $ = id => document.getElementById(id);
@@ -100,7 +101,8 @@ async function assets() {
 function start(data) {
   data = data || {};
   let wear = WEARS.includes(data.wear) ? data.wear : WEARS.includes(store.get('spar.wear')) ? store.get('spar.wear') : '',
-    sound = !!data.sound;
+    // (the sound: as the page was if the host swapped it in, else as last chosen on any page (src/mute.mjs), else off)
+    sound = 'sound' in data ? !!data.sound : !storedMute(true);
   const arena = ARENAS.includes(data.arena) ? data.arena : arenaOf(store.get('spar.arena')),
     want = Number(data.seed) || seedOfHash();
   assets()
@@ -133,6 +135,19 @@ function run({ manifest, get }, o) {
     arena = null,
     sound = o.sound,
     speed = 1;
+  /* (the mute button every page that sounds has, src/mute.mjs: in the row of buttons under the picture, where the sound's
+     button was, so that it covers neither the picture nor the title; the round starts silent until it is pressed the first
+     time, as before) */
+  const mute = muteButton(audio, {
+    fallback: true,
+    into: $('bar'),
+    place: 'position:relative;flex:none;',
+    onChange: m => {
+      sound = !m;
+      audio.ambience(sound && arena && arena.crowd ? 'pit' : null);
+    }
+  });
+  if (mute.muted !== !o.sound) mute.set(!o.sound, false);
   // (an outfit's mesh, loaded the first time it is worn)
   const partOf = w => (!w ? manifest.boxer : manifest.wear && Object.hasOwn(manifest.wear, w) ? manifest.wear[w] : null);
   async function dressed(w) {
@@ -682,12 +697,6 @@ function run({ manifest, get }, o) {
       speed = speed === 1 ? 0.5 : 1;
       $('speedbtn').textContent = speed === 1 ? '1×' : '½×';
       $('speedbtn').setAttribute('aria-pressed', String(speed !== 1));
-    } else if (what === 'sound') {
-      sound = !sound;
-      if (sound) audio.unlock();
-      audio.ambience(sound && arena && arena.crowd ? 'pit' : null);
-      $('soundbtn').textContent = sound ? '소리 켬' : '소리 끔';
-      $('soundbtn').setAttribute('aria-pressed', String(sound));
     } else if (what === 'close') show('full', false);
   }
   for (const el of document.querySelectorAll('[data-act]')) el.addEventListener('click', () => act(el.dataset.act));
@@ -732,7 +741,6 @@ function run({ manifest, get }, o) {
   const stamp = document.querySelector('meta[name="build"]'),
     [commit, date] = stamp ? String(stamp.content).split(/\s+/) : [];
   $('build').textContent = stamp ? `빌드 ${commit} · ${(date || '').slice(5)}` : '빌드 로컬';
-  if (sound) ($('soundbtn').textContent = '소리 켬'), $('soundbtn').setAttribute('aria-pressed', 'true');
 
   // (the page as it was, if the host swaps a new version in while it is open: the same round comes back)
   try {
@@ -740,7 +748,7 @@ function run({ manifest, get }, o) {
   } catch {
     // (no host to tell)
   }
-  globalThis.__spar = { get plan() { return plan; }, get bout() { return bout; }, get phase() { return phase; }, get k() { return k; }, stats, cam, newRound, replay, tick: ms => frame((clockAt += ms)) };
+  globalThis.__spar = { get plan() { return plan; }, get bout() { return bout; }, get phase() { return phase; }, get k() { return k; }, stats, cam, audio, mute, newRound, replay, tick: ms => frame((clockAt += ms)) };
 
   // (the first arena, unless another has been chosen and come in meanwhile)
   const first = arenaAsk;

@@ -25,6 +25,7 @@ import { createRival, think } from './game/ai.mjs';
 import { createInput } from './game/input.mjs';
 import { createAudio } from './game/audio.mjs';
 import { watchLost } from './lost.mjs';
+import { muteButton } from './mute.mjs';
 
 const DT = 1 / 60;
 const query = new URLSearchParams(location.search);
@@ -80,6 +81,8 @@ function start({ manifest, arena: parts, boxers }) {
   const R = createRenderer(canvas),
     arena = createArena(R, manifest, parts),
     audio = createAudio(),
+    // (the mute button every page that sounds has, src/mute.mjs: top right, under blue's health; over the title and the result)
+    mute = muteButton(audio, { place: 'position:fixed;right:max(16px, env(safe-area-inset-right, 0px));top:calc(40px + env(safe-area-inset-top, 0px));z-index:6;' }),
     input = createInput($('controls')),
     bind = fk(guardPose());
   /* three sets of loose splats: sparks and shadows in the ring's colours, and each boxer's glove streaks in his own; and what
@@ -402,7 +405,7 @@ function start({ manifest, arena: parts, boxers }) {
 
   reset();
   if (query.has('auto')) begin();
-  globalThis.__bout = { shown: [], get bout() { return bout; }, get phase() { return phase; }, get replay() { return replay; }, get ground() { return ground; }, stats, renderer: R, cam, RULES, arena };
+  globalThis.__bout = { shown: [], get bout() { return bout; }, get phase() { return phase; }, get replay() { return replay; }, get ground() { return ground; }, stats, renderer: R, cam, RULES, arena, audio, mute };
   $('loading').remove();
   requestAnimationFrame(frame);
 }

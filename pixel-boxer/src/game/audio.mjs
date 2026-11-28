@@ -143,6 +143,11 @@ export function cuesOf(e, c) {
       if (e.name === 'stomp') cue('step', { who: e.on, v: 3, pit: !!c.pit });
       else cue('graze', { who: e.on });
       break;
+    // (the match's, not the bout's: a man up too late going down again, game/match.mjs; his breath going out of him, as a
+    // knockdown's does; his knee on the canvas is the page's floor)
+    case 'collapse':
+      cue('exhale', { who: e.who });
+      break;
     // (not the bout's: the page says when a man knocked down comes down on the canvas, render/blow.mjs landed)
     case 'floor':
       cue('floor', { who: e.who, pit: !!c.pit });

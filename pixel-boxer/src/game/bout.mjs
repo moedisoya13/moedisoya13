@@ -10,6 +10,8 @@
      step(bout, [mine, his], dt)
      getUp(bout, f)         a man who has beaten the count gets up, where he lies, the way that fits how he lies (anim/
                             animator.mjs: getUp); -> the rise he starts
+     legsGo(f), collapse(bout, f)   up too late to have beaten it (match.mjs): rocked on his feet with nothing of his own,
+                            and then down onto a knee where he stands
        controls: { move: [x, z] (a direction on the canvas, up to 1 long), jab, power (true on the tick pressed; or the
                    name of a punch, which is then that punch: a script's, or a technique's answer, 'hookR' the rear hook,
                    'hookBody' the liver hook; a show-off's trick named there is still the trick),
@@ -1596,7 +1598,7 @@ function taunt(bout, f, who, name) {
 }
 // (between actions: one his dice have queued, or one standing still every so many half beats)
 function idleTaunt(bout, f, who, input) {
-  if (f.down || f.stun > 0 || f.action || f.cover || pressOf(input) || input.cover) return;
+  if (f.down || f.stun > 0 || f.action || f.cover || f.legsGone || pressOf(input) || input.cover) return;
   if (f.tauntNext) return taunt(bout, f, who, f.tauntNext);
   const r = f.animator.rhythm,
     k = Math.floor(r.halves / TAUNT.every);
@@ -2184,6 +2186,25 @@ export function getUp(bout, f) {
   f.kx = f.kz = f.ix = f.iz = f.vx = f.vz = 0;
   f.action = { name, t: 0, id: name + ++f.serial, struck: false, chain: null, from: up ? up.on : 'knee', side: up && up.down === 'R' ? -1 : 1 };
   return f.action;
+}
+
+/* Up too late (match.mjs: a man not on his feet by the time ten would have counted him out; the user's answer of
+   2026-11-28, a-count-ten): his legs are not under him. legsGo rocks him as a blow that stops him does (anim/animator.mjs:
+   WOBBLE, from strike, at its worst, and no blow with it: nothing is thrown at him), and he does nothing of his own while it
+   lasts, no taunt either; whoever steps him gives him where his legs take him. collapse: they go, and he sags where he
+   stands onto his rear knee and glove, as a man dropped to a knee does (moves.mjs: drop), and stays there. */
+export function legsGo(f) {
+  f.legsGone = true;
+  f.cover = false;
+  f.tauntNext = null;
+  f.animator.strike({ J: 0, dir: [0, 0, 0], stun: 1, hp: f.hp });
+}
+export function collapse(bout, f) {
+  begin(f, 'drop', {}, bout);
+  f.kx = f.kz = 0;
+  f.down = 1;
+  f.stun = 0;
+  f.downs = (f.downs || 0) + 1;
 }
 
 export function step(bout, inputs, dt) {

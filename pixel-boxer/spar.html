@@ -42,8 +42,9 @@
   #tag.on { display: block; }
 
   /* the four lanes, along the bottom over the buttons: red's techniques and footwork, blue's footwork and techniques, a block
-     an action, coloured by its kind; the present at the playhead, what is to come (약속) to its right; a tap opens the whole */
-  #rails { position: absolute; left: var(--side); right: var(--side-r); bottom: calc(60px + env(safe-area-inset-bottom, 0px)); background: var(--panel);
+     an action, coloured by its kind; the present at the playhead, what is to come (약속) to its right; a tap opens the whole.
+     Its bottom clears the row of buttons, the mute button's 44 px in it (src/mute.mjs) */
+  #rails { position: absolute; left: var(--side); right: var(--side-r); bottom: calc(68px + env(safe-area-inset-bottom, 0px)); background: var(--panel);
     border: 2px solid var(--line); padding: 4px 6px 6px; display: none; cursor: pointer; }
   #rails.on { display: block; }
   #rails:focus-visible, button:focus-visible, select:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
@@ -102,7 +103,7 @@
 
   #loading { position: fixed; inset: 0; display: grid; place-items: center; z-index: 9; background: var(--ink); color: var(--paper); }
   @media (orientation: landscape) and (max-height: 500px) {
-    #rails { bottom: calc(54px + env(safe-area-inset-bottom, 0px)); padding: 3px 6px 4px; }
+    #rails { bottom: calc(62px + env(safe-area-inset-bottom, 0px)); padding: 3px 6px 4px; }
     #railcv { height: 62px; }
     #legend { display: none; }
     #title { top: calc(48px + env(safe-area-inset-top, 0px)); }
@@ -141,6 +142,7 @@
       <h1>한 라운드 스파링</h1>
       <p>시작을 누를 때마다 새로 짠 약속 대련을 첫 KO까지</p>
       <p>두 선수가 쉬지 않고 주고받고, 올 기술과 풋워크가 아래 네 줄에 미리 보입니다</p>
+      <p>두 선수의 등급은 같거나 많아야 두 단계 차이입니다</p>
     </div>
   </div>
   <div class="sheet" id="result" role="status" aria-live="polite">
@@ -155,7 +157,6 @@
     <button class="go" data-act="start" id="startbtn">시작</button>
     <button data-act="again" id="againbtn" disabled>다시 보기</button>
     <button data-act="speed" id="speedbtn" aria-pressed="false" aria-label="속도">1×</button>
-    <button data-act="sound" id="soundbtn" aria-pressed="false">소리 끔</button>
     <select id="wear" aria-label="옷"><option value="">맨몸</option><option value="training">체육복</option><option value="training-up">후드</option></select>
     <select id="arena" aria-label="경기장"><option value="ring">링</option><option value="underground">지하</option></select>
   </div>

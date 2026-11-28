@@ -9,10 +9,10 @@
      match.phase                       'fight' | 'count' | 'break' (waiting for the corners) | 'over'
      nextRound(match, plans?)          after a break: the plans the corners chose (each may be left as it was)
      match.events                      what happened this step: the bout's, and the match's own (round, down, count, up,
-                                       result)
+                                       stagger, collapse, result)
      match.result                      { winner, how: 'KO' | 'TKO' | 'decision' | 'draw', round, time, cards }
    Fight to the end without a screen: finish(match). */
-import { createBout, step, settle, random, getUp, RULES } from './bout.mjs';
+import { createBout, step, settle, random, getUp, legsGo, collapse, RULES } from './bout.mjs';
 import { createBrain, think, PLANS } from './brain.mjs';
 import { fatigue } from './profile.mjs';
 import { MOVES } from '../anim/moves.mjs';
@@ -23,7 +23,11 @@ export const MATCH = {
   count: 0.6, // seconds of the match a count of one takes
   rise: { health: [18, 48] }, // what a boxer who beats the count has left, from little will to a lot
   between: { stamina: [0.5, 0.8], health: [5, 14] }, // what a minute in the corner gives back, from the least to the most
-  tko: 3 // knockdowns in a round that stop it
+  tko: 3, // knockdowns in a round that stop it
+  /* a man who gets up too late, not on his feet by the time ten would have counted him out (the user's answer of 2026-11-28,
+     a-count-ten: he staggers, goes down again, and that is the knockout): `reel` seconds on his feet, his legs going, as
+     he goes where they take him at `pace` of a walk; then down onto a knee, and the fight waved off `settle` seconds after */
+  late: { reel: 0.8, pace: 0.3, settle: 0.9, reach: 0.6, room: 0.5 } // (reach: about how far that takes him, metres; room: kept off the ropes by)
 };
 
 const DT = 1 / 60;
@@ -41,7 +45,9 @@ export function createMatch(o) {
     round: 1,
     clock: 0, // seconds into the round
     phase: 'fight',
-    count: null, // { who, n, up (the count he will rise at, or none), t, rising (he has beaten it and is getting up) }
+    count: null, // { who, n, up (the count he will rise at, or none), t, rising (he has beaten it and is getting up), late (he
+    //               gets up too late: he will not be on his feet by ten), reel (his legs going: { t, go }), fell (seconds since
+    //               he went down again) }
     stats: [[tally(), tally()]], // a tally a round, a boxer
     cards: [], // [round][judge] = [points for 0, points for 1]
     result: null,
@@ -115,20 +121,51 @@ export function stepMatch(match, dt, inputs) {
       other = bout.fighters[1 - c.who],
       away = [other.x - f.x, other.z - f.z],
       far = Math.hypot(...away) || 1,
-      stand = far < 2.1 ? { move: [away[0] / far, away[1] / far] } : {};
-    step(bout, c.who === 0 ? [{}, stand] : [stand, {}], dt);
+      stand = far < 2.1 ? { move: [away[0] / far, away[1] / far] } : {},
+      // (a man up too late, his legs going: where they take him, a little way)
+      legs = c.reel && !f.down ? { move: [c.reel.go[0] * MATCH.late.pace, c.reel.go[1] * MATCH.late.pace] } : {};
+    step(bout, c.who === 0 ? [legs, stand] : [stand, legs], dt);
     // (once he has beaten the count and is getting up, the referee counts no further: he watches him up onto his feet, and
     // no number is called over a man on his way up, ten least of all)
     if (!c.rising) c.t += dt;
     const n = Math.min(10, Math.floor(c.t / MATCH.count) + 1);
     if (n !== c.n) (c.n = n), match.events.push({ type: 'count', who: c.who, n });
-    if (c.up && n >= c.up && f.down) {
+    if (c.up && !c.rising && n >= c.up && f.down) {
       // up, at the count he had in him (a man doubled up by a body shot keeps what health he still had)
       f.hp = Math.max(f.hp, c.health);
-      if (getUp(bout, f)) c.rising = true;
+      const rise = getUp(bout, f);
+      if (rise) {
+        c.rising = true;
+        // (too late if the rise, begun on this number, would end after the moment ten counts out a man still lying there)
+        c.late = (n - 1) * MATCH.count + MOVES[rise.name].dur > 10 * MATCH.count + 1e-9;
+      }
       match.events.push({ type: 'up', who: c.who, n });
     }
-    if (!f.down && (!f.action || !MOVES[f.action.name].floor)) {
+    const L = MATCH.late,
+      standing = !f.down && (!f.action || !MOVES[f.action.name].floor);
+    if (standing && c.late && !c.reel) {
+      /* up, too late: his legs go under him, a little way back and to one side of the other man; not into the ropes (a man
+         who goes down with them pressed is slid in off them under him, 17 cm: bout.mjs EDGE_SLIDE), but toward the middle
+         of the ring instead if that side would put him within L.room of them */
+      const turn = 0.35 + 0.6 * random(bout),
+        side = random(bout) < 0.5 ? -1 : 1,
+        unit = v => (Math.hypot(...v) > 1e-6 ? [v[0] / Math.hypot(...v), v[1] / Math.hypot(...v)] : [-away[0] / far, -away[1] / far]),
+        turned = (v, a) => [v[0] * Math.cos(a) - v[1] * Math.sin(a), v[0] * Math.sin(a) + v[1] * Math.cos(a)],
+        roomOf = v => RULES.half - Math.max(Math.abs(f.x + v[0] * L.reach), Math.abs(f.z + v[1] * L.reach)),
+        back = [-away[0] / far, -away[1] / far],
+        middle = unit([-f.x, -f.z]),
+        ways = [turned(back, side * turn), turned(back, -side * turn)],
+        best = ways.find(v => roomOf(v) >= L.room) || [turned(middle, side * turn * 0.5), turned(middle, -side * turn * 0.5), middle].reduce((a, v) => (roomOf(v) > roomOf(a) ? v : a));
+      c.reel = { t: 0, go: best };
+      legsGo(f);
+      match.events.push({ type: 'stagger', who: c.who });
+    } else if (c.reel && c.fell === undefined && (c.reel.t += dt) >= L.reel - 1e-9) {
+      collapse(bout, f);
+      c.fell = 0;
+      match.events.push({ type: 'collapse', who: c.who });
+    } else if (c.fell !== undefined) {
+      if ((c.fell += dt) >= L.settle - 1e-9) end(match, 1 - c.who, 'KO');
+    } else if (standing && !c.late) {
       match.phase = 'fight';
       match.count = null;
     } else if (f.down && n >= 10 && c.t >= 10 * MATCH.count) end(match, 1 - c.who, 'KO');

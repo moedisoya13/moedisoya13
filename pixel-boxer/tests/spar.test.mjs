@@ -7,7 +7,8 @@ import { readFileSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { planOf, replayOf, checkOf, SPAR, hpOf } from '../src/spar/plan.mjs';
+import { planOf, planner, replayOf, checkOf, SPAR, hpOf } from '../src/spar/plan.mjs';
+import { LEVEL, LEVELS } from '../src/anim/skill.mjs';
 import { viewsOf, ACTS, WAY, VIEW } from '../src/spar/rails.mjs';
 import { labelOf, shortOf } from '../src/spar/names.mjs';
 import { MOVES } from '../src/anim/moves.mjs';
@@ -29,6 +30,27 @@ test('the same seed gives the same round: the same men, controls, lanes and knoc
   assert.deepEqual(b.rails, a.rails);
   assert.deepEqual(b.feet, a.feet);
   assert.deepEqual({ men: b.men, hp: b.hp, favoured: b.favoured, ko: b.ko, events: b.events }, { men: a.men, hp: a.hp, favoured: a.favoured, ko: a.ko, events: a.events });
+});
+
+/* The two men are never more than two grades apart (the user's rule, 2026-11-28: "최대 두 등급 차이"; 1..5, 4명 · 4암 and
+   5명 · 5암 one grade each): over seeds 1-400, fixed beforehand, every pair within SPAR.gap, the same seed the same pair, and
+   the pairs the rule lets through all drawn (two apart among them). */
+test('the two men of a round are at most two grades apart: seeds 1-400', () => {
+  assert.equal(SPAR.gap, 2);
+  const apart = [0, 0, 0],
+    pairs = new Set();
+  for (let seed = 1; seed <= 400; seed++) {
+    const men = planner(seed).plan.men.map(m => m.grade),
+      d = Math.abs(LEVEL[men[0]].grade - LEVEL[men[1]].grade);
+    assert.ok(d <= 2, `#${seed}: ${men.join(' / ')}, ${d} grades apart`);
+    assert.deepEqual(planner(seed).plan.men.map(m => m.grade), men, `#${seed}: the same pair again`);
+    apart[d]++;
+    pairs.add(men.join('/'));
+  }
+  const allowed = LEVELS.flatMap(a => LEVELS.filter(b => Math.abs(LEVEL[a].grade - LEVEL[b].grade) <= 2).map(b => a + '/' + b));
+  assert.equal(allowed.length, 37);
+  assert.deepEqual([...pairs].sort(), allowed.sort(), 'every pair within two grades is drawn');
+  assert.ok(apart.every(n => n > 0), `0 / 1 / 2 grades apart: ${apart.join(' / ')}`);
 });
 
 test('the round played again from its controls is the round that was arranged: the four lanes block for block, every punch event for event', () => {

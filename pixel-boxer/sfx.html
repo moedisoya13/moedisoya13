@@ -15,8 +15,9 @@
   html, body { margin: 0; background: var(--ink); color: var(--paper); }
   body { font: 400 14px/1.45 ui-monospace, "SF Mono", Menlo, Consolas, "Noto Sans Mono CJK KR", monospace; touch-action: manipulation; overflow-x: hidden; }
   .page { max-width: 1100px; margin: 0 auto; padding: calc(20px + env(safe-area-inset-top, 0px)) var(--side-r) 48px var(--side); display: flex; flex-direction: column; gap: 22px; }
-  header { display: flex; flex-direction: column; gap: 10px; }
-  h1 { margin: 0; font-size: clamp(24px, 6.5vw, 36px); line-height: 1.1; letter-spacing: .04em; font-weight: 700; }
+  header { position: relative; display: flex; flex-direction: column; gap: 10px; }
+  /* (min-height and padding-right: room for the mute button in the corner, src/mute.mjs) */
+  h1 { margin: 0; padding-right: 56px; min-height: 44px; font-size: clamp(24px, 6.5vw, 36px); line-height: 1.1; letter-spacing: .04em; font-weight: 700; }
   h1 em { font-style: normal; color: var(--gold); }
   .lede { margin: 0; color: var(--muted); max-width: 66ch; }
   #state { margin: 0; font-size: 12px; color: var(--gold); }
