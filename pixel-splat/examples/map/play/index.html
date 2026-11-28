@@ -281,12 +281,6 @@ kbd { font: 600 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 
     const f = dirOf(S.facing), c = Math.cos(f), s = Math.sin(f), [fw, sd] = a.advance[k];
     tryMove(fw * c + sd * s, fw * s - sd * c);
   }
-  function entryFor(src, dst, phase) {   // the transition clip from a loop at this phase, if one starts here
-    for (const [name, a] of Object.entries(SP.anims)) {
-      if (a.kind === "transition" && a.source === src && a.target === dst && Math.abs(a.enter - phase) < 1e-6) return name;
-    }
-    return null;
-  }
 
   // ------------------------------------------------------------------ input
   const keys = new Set();
@@ -354,7 +348,17 @@ kbd { font: 600 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 
     if (stick.active) { const m = Math.hypot(stick.dx, stick.dy); if (m > 0.25) return [stick.dx / m, stick.dy / m, Math.min(1, m), m >= RUN_AT]; }
     return [0, 0, 0, false];
   }
-  function requestAction() { if (SP && S.anim !== "onetwo") S.queue = "onetwo"; }
+  // J: one queued one-two at most.  During a one-two a press counts only once its cross is out (frame
+  // chain_from on): it plays the next one-two straight from this one's last frame (both are the guard); earlier
+  // presses are dropped, so mashing J does not stack punches.  On the way into a one-two (a quick stop) J is dropped.
+  function requestAction() {
+    if (!SP) return;
+    const a = SP.anims[S.anim];
+    if (S.anim === "onetwo") { if (S.k >= (a.chain_from || a.frames[0].length)) S.queue = "onetwo"; return; }
+    if (a.kind === "transition" && a.target === "onetwo") return;
+    S.queue = "onetwo";
+  }
+  const quickInto = (src) => Object.values(SP.anims).some((q) => q.kind === "transition" && q.source === src && q.target === "onetwo");
 
   // ------------------------------------------------------------------ update (one call per displayed frame)
   function turnTowards(dt) {           // facings change one step (45 deg) at a time, 50 ms apart
@@ -365,9 +369,19 @@ kbd { font: 600 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 
     S.facing = (S.facing + (d <= n / 2 ? 1 : n - 1)) % n;
     S.turnT = 0.05;
   }
+  // Turning: the 8 facings change 45 deg per 50 ms, so a reversal takes 0.2 s.  Meanwhile the figure must not
+  // walk backwards or sideways: the gait's speed is scaled by cos(angle between where it goes and where it
+  // faces, less the 22.5 deg the 8 facings cannot avoid), and by 0 past 112.5 deg: on a reversal it stands for
+  // about 0.1 s while it turns its back (its legs stop with it: the gait follows the ground covered), then
+  // moves off at 38 % (90 deg off), 92 % (45 deg off), full speed once it faces the way
+  const TURN_FREE = 22.5;
+  function turnScale(dx, dy) {
+    const off = Math.abs(((Math.atan2(dy, dx) - dirOf(S.facing)) * 180 / Math.PI % 360 + 540) % 360 - 180);
+    return Math.max(0, Math.cos(Math.max(0, off - TURN_FREE) * Math.PI / 180));
+  }
   function gaitStep(name, dt, ix, iy) {   // walk / run loops: the cycle advances with the ground covered
     const a = SP.anims[name];
-    const step = a.speed * S.sc * dt;
+    const step = a.speed * S.sc * turnScale(ix, iy) * dt;
     const moved = tryMove(ix * step, iy * step);
     S.phase += moved / a.stride_m;
     return moved;
@@ -376,7 +390,7 @@ kbd { font: 600 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 
     const a = SP.anims[S.anim];
     const [ix, iy, mag, run] = inputVector();
     if (mag > 0) S.want = ((Math.round(Math.atan2(iy, ix) * 180 / Math.PI / SP.step) % SP.nf) + SP.nf) % SP.nf;
-    if (a.kind !== "action") turnTowards(dt);   // (a punch keeps its direction)
+    if (a.kind !== "action" && a.target !== "onetwo") turnTowards(dt);   // (a punch, and the stop into it, keep their direction)
     const moving = mag > 0 && !S.queue;
     // Speed scale: how far the stick is pushed (keys: 1); kept when the stick is let go, so the stop that
     // follows runs at the speed the figure had.  A gait at scale s covers ground s times slower and so plays
@@ -389,13 +403,18 @@ kbd { font: 600 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 
       S.t += dt * rate;
       if (!clipFrames(a)) return;
       const n = a.frames[0].length, over = S.t - n / FPS;   // clip time past where the next frame would be
-      if (a.kind === "action") { playLoop("idle", 1, over); return; }
+      if (a.kind === "action") {
+        if (S.queue === "onetwo") { S.queue = null; play("onetwo", 0); S.t = over; }   // a chained one-two
+        else playLoop("idle", 1, over);
+        return;
+      }
       const tgt = SP.anims[a.target];
       if (tgt.kind === "gait") {      // carry on from the phase the clip ended at, this very frame
         enterGait(a.target, a.exit);
         // its next frame is due one frame after the clip's last one: (over + 1/60) of clip time, in real seconds
         gaitStep(a.target, Math.max(0, (over + 1 / FPS) / rate), dx, dy);
-      } else playLoop(a.target, a.exit + 1, over);
+      } else if (tgt.kind === "action") { play(a.target, a.exit + 1); S.t = (a.exit + 1) / FPS + over; }   // (a quick stop)
+      else playLoop(a.target, a.exit + 1, over);
       return;
     }
     if (S.anim === "idle") {
@@ -405,29 +424,37 @@ kbd { font: 600 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 
       return;
     }
     // walk or run
-    const goal = !moving ? "idle" : run ? "run" : "walk";
-    if (goal !== S.anim) {
-      // a transition starts on the display frame after the one that showed its entry frame (phase 0 or 0.5):
+    // J while walking or running: a quick stop straight into the one-two (if the build has them)
+    const goal = S.queue === "onetwo" && quickInto(S.anim) ? "onetwo" : !moving ? "idle" : run ? "run" : "walk";
+    const next = goal === "idle" && S.anim === "run" ? "walk" : goal;       // run -> walk -> idle
+    const ways = goal === S.anim ? [] : Object.entries(SP.anims).filter(([, q]) => q.kind === "transition" &&
+                                                                         q.source === S.anim && q.target === next);
+    if (ways.length) {
+      // a transition starts on the display frame after the one that showed its entry frame (phase 0, 0.5 ...):
       // its frame 0 is the pose one frame after the entry, so the cut is one frame, and its root motion takes
       // over from the gait's at the entry pose (the gait moves the figure only up to there this frame)
-      const next = goal === "idle" && S.anim === "run" ? "walk" : goal;       // run -> walk -> idle
-      const n = a.frames[0].length, vb = gaitPos(n), va = vb + a.speed * S.sc * dt / a.stride_m * n;
+      const n = a.frames[0].length, vb = gaitPos(n), va = vb + a.speed * S.sc * turnScale(dx, dy) * dt / a.stride_m * n;
       const db = shownAt(vb), da = shownAt(va);
-      for (const at of [0, 0.5]) {
-        const name = entryFor(S.anim, next, at);
-        if (!name) continue;
-        const e = Math.round(at * n), E = db + (((e - db) % n) + n) % n;   // the entry frame, at or after the one shown
-        if (E >= da) continue;          // not passed this frame
-        const go = (E - vb) / n * a.stride_m;   // to the entry pose (a hair back if the gait is a little past it)
+      let best = null;
+      for (const [name, q] of ways) {
+        const e = Math.round(q.enter * n), E = db + (((e - db) % n) + n) % n;   // its entry frame, at or after the one shown
+        if (E < da && (!best || E < best[1])) best = [name, E];               // passed this frame: the first one
+      }
+      if (best) {
+        const [name, E] = best, go = (E - vb) / n * a.stride_m;   // to the entry pose (a hair back if a little past it)
         tryMove(dx * go, dy * go);
+        if (goal === "onetwo") S.queue = null;
         startTransition(name, Math.max(0, va - E - 1) / FPS);
         return;
       }
     }
     const moved = gaitStep(S.anim, dt, dx, dy);
-    if (goal !== S.anim && moved < 1e-6) {    // blocked: leave from the nearest entry now
-      const name = entryFor(S.anim, goal === "idle" && S.anim === "run" ? "walk" : goal, Math.round(S.phase * 2) % 2 * 0.5);
-      if (name) startTransition(name);
+    if (ways.length && moved < 1e-6 && turnScale(dx, dy) > 0) {    // blocked: leave from the nearest entry now
+      const n = a.frames[0].length, g = gaitShown(n);
+      const dist = (q) => Math.min(((Math.round(q.enter * n) - g) % n + n) % n, ((g - Math.round(q.enter * n)) % n + n) % n);
+      const [name] = ways.reduce((p, w) => (dist(w[1]) < dist(p[1]) ? w : p));
+      if (goal === "onetwo") S.queue = null;
+      startTransition(name);
     }
   }
 

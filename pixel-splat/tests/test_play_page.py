@@ -73,6 +73,8 @@ def synthetic_sprites(m, one_frame=False, lean=0.0):
             "onetwo": ("action", 1 if one_frame else 12),
             "start": ("transition", 12), "stopA": ("transition", 12), "stopB": ("transition", 14),
             "w2r_0": ("transition", 3), "w2r_5": ("transition", 3), "r2w_0": ("transition", 3), "r2w_5": ("transition", 3)}
+    spec.update({f"qw{j}": ("transition", 4) for j in range(4)})  # quick stops into the one-two (J while moving)
+    spec.update({f"qr{j}": ("transition", 4) for j in range(8)})
     frames, anims = [], {}
     for ai, (name, (kind, n)) in enumerate(spec.items()):
         per = []
@@ -88,7 +90,12 @@ def synthetic_sprites(m, one_frame=False, lean=0.0):
             a.update(stride_m=1.12, speed=1.4, frames_per_cycle=n)
         if name == "run":
             a.update(stride_m=2.5, speed=3.75, frames_per_cycle=n)
-        if kind == "transition":
+        if name == "onetwo":
+            a.update(chain_from=8 if n > 8 else n)
+        if name[0] == "q":
+            a.update(source="walk" if name[1] == "w" else "run", target="onetwo", exit=5,
+                     enter=int(name[2]) / (4 if name[1] == "w" else 8), advance=[[0.01, 0.0]] * n)
+        if kind == "transition" and name[0] != "q":
             src, tgt, enter, ex = dict(start=("idle", "walk", 0, 0.5), stopA=("walk", "idle", 0.0, 0),
                                        stopB=("walk", "idle", 0.5, 0), w2r_0=("walk", "run", 0.0, 0.4125),
                                        w2r_5=("walk", "run", 0.5, 0.9), r2w_0=("run", "walk", 0.0, 0.4),
@@ -523,6 +530,71 @@ def test_cmd_lets_go_of_held_keys(site):
     assert a["anim"] == "idle" and (a["x"], a["z"]) == (b["x"], b["z"]) == (c["x"], c["z"]) and c["anim"] == "idle"
 
 
+def test_j_while_moving_goes_through_a_quick_stop_into_the_one_two(site):
+    """J while running (or walking): no stop and no guard bounce - the gait waits for the next quick-stop entry
+    (run: every 1/8 cycle = 5 frames, walk: 1/4 = 12) and that clip hands over to the one-two at its exit frame + 1."""
+    url, out, _ = site
+    anims = json.loads((out / "assets" / "manifest.json").read_text())["sprites"]["anims"]
+    for keys, wait in ((["ShiftLeft", "KeyD"], 5), (["KeyD"], 12)):
+        res = drive(url, [[{"op": "teleport", "x": -5.4, "z": 3.8, "facing": 0}, ticks(3)]
+                          + [{"op": "down", "code": k} for k in keys] + [ticks(80), {"op": "press", "code": "KeyJ"}, ticks(30)]],
+                    manual=True)[0]
+        assert res["errors"] == []
+        before, after = res["results"][-2], res["results"][-1]
+        gait = before[-1][0]
+        assert gait == ("run" if len(keys) == 2 else "walk")
+        seq = [r[0] for r in after]
+        q = next(i for i, a in enumerate(seq) if a[0] == "q")
+        assert q <= wait and set(seq[:q]) == {gait}, seq  # the gait went on to the entry, nothing else
+        t = anims[seq[q]]
+        prev = after[q - 1] if q else before[-1]
+        assert t["source"] == gait and prev[2] == round(t["enter"] * len(anims[gait]["frames"][0])) and after[q][1] == 0
+        o = seq.index("onetwo")
+        assert set(seq[q:o]) == {seq[q]} and after[o][1] == t["exit"] + 1, (seq, after[o])
+
+
+def test_j_late_in_a_one_two_chains_one_more_and_no_more(site):
+    """J during a one-two: before its cross is out (frame chain_from) the press is dropped; after it, one press -
+    or several - queue exactly one follow-up, which starts on the display frame after the last one."""
+    url, out, _ = site
+    ot = json.loads((out / "assets" / "manifest.json").read_text())["sprites"]["anims"]["onetwo"]
+    assert ot["chain_from"] == 8
+    res = drive(url, [[{"op": "teleport", "x": 1.0, "z": 3.0, "facing": 0}, ticks(3), {"op": "press", "code": "KeyJ"},
+                       ticks(4), {"op": "press", "code": "KeyJ"}, ticks(6), {"op": "press", "code": "KeyJ"}, ticks(1),
+                       {"op": "press", "code": "KeyJ"}, ticks(40)]], manual=True)[0]
+    assert res["errors"] == []
+    recs = flat(res["results"])
+    starts = [i for i, r in enumerate(recs) if r[0] == "onetwo" and r[1] == 0 and (i == 0 or recs[i - 1][:2] != r[:2])]
+    assert len(starts) == 2, [r[:2] for r in recs]  # the early press dropped, the two late ones = one follow-up
+    assert recs[starts[1] - 1][:2] == ["onetwo", 11]  # straight from the last frame, no idle between
+    assert recs[-1][0] == "idle"
+
+
+def test_a_reversal_does_not_walk_backwards(site):
+    """D then A (walking, and running): the body turns 180 deg in 4 steps of 45 deg (0.2 s).  While it faces more
+    than 90 deg away from where it moves, it must not move (it used to walk backwards: 10 frames walking, about
+    0.6 m running); it then sets off the other way."""
+    url = site[0]
+    for keys in (["KeyD"], ["ShiftLeft", "KeyD"]):
+        other = [k if k != "KeyD" else "KeyA" for k in keys]
+        res = drive(url, [[{"op": "teleport", "x": -1.0, "z": 3.8, "facing": 0}, ticks(3)]
+                          + [{"op": "down", "code": k} for k in keys] + [ticks(60), {"op": "up", "code": "KeyD"},
+                                                                          {"op": "down", "code": "KeyA"}, ticks(60)]],
+                    manual=True)[0]
+        assert res["errors"] == []
+        recs = res["results"][-1]
+        back = 0.0
+        for a, b in zip(recs, recs[1:]):
+            dx, dz = b[3] - a[3], b[4] - a[4]
+            if math.hypot(dx, dz) < 1e-9:
+                continue
+            f = math.radians(b[6])
+            if dx * math.cos(f) + dz * math.sin(f) < -1e-6 * math.hypot(dx, dz):  # more than 90 deg off: its back that way
+                back += math.hypot(dx, dz)
+        assert back < 0.005, (keys, back)
+        assert recs[-1][3] < recs[0][3] - 0.3 and recs[-1][6] == 180  # it did turn and go the other way
+
+
 LEDGE = {"name": "ledgetest", "size": [8, 8], "grid": {"minor": 1.0, "major": 5.0},
          "elements": [{"type": "plateau", "at": [0.0, 1.0], "size": [3, 1.5], "height": 1.0}],
          "demo": {"stand": {"at": [0.0, -2.0], "facing": 90}}}
@@ -707,3 +779,47 @@ def test_real_build_cuts_are_one_frame_and_root_motion_continuous(real):
             seen.add(b[0])
     assert seen & {"stopA", "stopB"} and seen & {"w2r_0", "w2r_5"} and seen & {"r2w_0", "r2w_5"}, seen
 
+
+@pytest.mark.slow
+def test_real_build_j_while_running_punches_within_a_third_of_a_second(real):
+    """J while running / walking: from the key press to the first display frame whose lead (left) hand is 5 cm or
+    more ahead of its guard position (the jab reaching out; poses from moves.py).  Run: <= 0.35 s, walk: <= 0.45 s
+    (quick stops every 1/8 run cycle, every 1/4 walk cycle).  Then a press late in the one-two chains the next one:
+    its first frame follows the last with a small joint jump."""
+    import moves as mv  # noqa: PLC0415
+
+    clip = ROOT / "out" / "onetwo4" / "5m" / "clip.npz"
+    if not clip.exists():
+        pytest.skip("needs out/onetwo4/5m/clip.npz")
+    m = mv.Moves(str(clip))
+    loops, ot, T = m.loops(), m.onetwo(), m.transitions()
+    hand = mv.rig.SKELETON.index["handL"]
+    guard = float(ot[0].mats()[hand, 2, 3]) * mv.M
+
+    def pose(r):  # the pose a display frame showed
+        if r[0] in ("walk", "run"):
+            return loops[r[0]][r[2]]
+        if r[0] == "idle":
+            return loops["idle"][r[1]]
+        return ot[r[1]] if r[0] == "onetwo" else T[r[0]]["frames"][r[1]]
+    out = {}
+    for keys, bound, t0 in ((["ShiftLeft", "KeyD"], 0.35, 90), (["KeyD"], 0.45, 60)):  # (t0: the start / w2r are over)
+        worst = 0
+        for wait in range(t0, t0 + 24, 3):  # J at 8 points of the gait cycle
+            res = drive(real, [[{"op": "teleport", "x": -6.0, "z": 4.4, "facing": 0}, ticks(3)]
+                               + [{"op": "down", "code": k} for k in keys]
+                               + [ticks(wait), {"op": "press", "code": "KeyJ"}, ticks(40)]], (1280, 800), manual=True)[0]
+            assert res["errors"] == []
+            after = res["results"][-1]
+            reach = next(i for i, r in enumerate(after) if float(pose(r).mats()[hand, 2, 3]) * mv.M >= guard + 0.05)
+            worst = max(worst, (reach + 1) / 60)
+            assert not any(r[0].startswith(("stop", "r2w")) for r in after)
+        out[keys[-1] if len(keys) == 1 else "run"] = worst
+        assert worst <= bound, (keys, worst)
+    print("J -> jab reaching out, worst of 8 phases:", out)
+    res = drive(real, [[{"op": "teleport", "x": -1.0, "z": 4.4, "facing": 0}, ticks(3), {"op": "press", "code": "KeyJ"},
+                        ticks(100), {"op": "press", "code": "KeyJ"}, ticks(80)]], (1280, 800), manual=True)[0]
+    recs = flat(res["results"])
+    i = next(i for i, r in enumerate(recs) if r[0] == "onetwo" and r[1] == 0 and i > 10)
+    assert recs[i - 1][:2] == ["onetwo", len(ot) - 1]
+    assert mv.jump_deg(ot[-1], ot[0])[0] < 2.5
