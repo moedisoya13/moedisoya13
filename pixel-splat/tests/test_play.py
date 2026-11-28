@@ -183,6 +183,53 @@ def test_check_finds_a_consistent_export_and_the_broken_ones(tiny_export, tmp_pa
     assert any("terrain.png missing" in p for p in problems) and any("frame 1 lies outside" in p for p in problems)
 
 
+def test_atlas_pages_hold_every_frame_once_within_the_page_size(tiny_export, tmp_path):
+    """pack_atlas_pages: frames of mixed sizes on pages no larger than asked (each decoded on its own on a phone),
+    no two rectangles overlapping, every frame's pixels where its rectangle says; check() reads the paged manifest
+    and finds a frame pointing at a page that is not there."""
+    import shutil
+
+    rng = np.random.default_rng(5)
+    frames = []
+    for k in range(300):
+        h, w = int(rng.integers(5, 40)), int(rng.integers(3, 30))
+        rgba = rng.integers(0, 256, (h, w, 4), dtype=np.uint8)
+        frames.append(dict(rgba=rgba, data=rng.integers(0, 256, (h, w, 4), dtype=np.uint8), ox=0, oy=0))
+    pages, rects = play.pack_atlas_pages(frames, 128, 96)
+    assert len(pages) >= 4 and all(c.shape[0] <= 96 and c.shape[1] == 128 and c.shape == d.shape for c, d in pages)
+    taken = [np.zeros(c.shape[:2], int) for c, _ in pages]
+    for f, (x, y, w, h, p) in zip(frames, rects):
+        taken[p][y:y + h, x:x + w] += 1
+        np.testing.assert_array_equal(pages[p][0][y:y + h, x:x + w], f["rgba"])
+        np.testing.assert_array_equal(pages[p][1][y:y + h, x:x + w], f["data"])
+    assert max(t.max() for t in taken) == 1
+    with pytest.raises(RuntimeError):
+        play.pack_atlas_pages([dict(rgba=np.zeros((100, 4, 4), np.uint8), data=np.zeros((100, 4, 4), np.uint8))], 128, 96)
+    # the tiny export as pages
+    out, _, _ = tiny_export
+    paged = tmp_path / "paged"
+    shutil.copytree(out, paged)
+    m = json.loads((paged / "assets" / "manifest.json").read_text())
+    S = m["sprites"]
+    small = [dict(rgba=np.zeros((5, 4, 4), np.uint8), data=np.zeros((5, 4, 4), np.uint8))] * len(S["frames"])
+    pg, rc = play.pack_atlas_pages(small, 16, 8)
+    S["pages"] = []
+    for p, (c, d) in enumerate(pg):
+        play.save_rgba(c, str(paged / "assets" / f"sprites_{p}.png"))
+        play.save_rgba(d, str(paged / "assets" / f"sprites_data_{p}.png"))
+        S["pages"].append(dict(color=f"sprites_{p}.png", data=f"sprites_data_{p}.png", size=[c.shape[1], c.shape[0]]))
+    S["frames"] = [r[:4] + [0, 0, r[4]] for r in rc]
+    del S["color"], S["data"]
+    m["files"] = play.asset_sizes(str(paged / "assets"), m)
+    (paged / "assets" / "manifest.json").write_text(json.dumps(m))
+    assert play.check(str(paged)) == [] and len(S["pages"]) == 1 and "sprites_0.png" in m["files"]
+    S["frames"][1][6] = 3
+    m["files"]["level.png"] += 1
+    (paged / "assets" / "manifest.json").write_text(json.dumps(m))
+    problems = play.check(str(paged))
+    assert any("no atlas page 3" in p for p in problems) and any("level.png" in p for p in problems), problems
+
+
 PLAY = ROOT / "out" / "play4"
 
 
@@ -225,4 +272,4 @@ def test_page_template_follows_the_hosting_rules():
     assert "100vh" not in html and "height: 100%" in html
     assert "max(16px, env(safe-area-inset-left, 0px))" in html and "max(16px, env(safe-area-inset-right, 0px))" in html
     assert "prefers-reduced-motion" in html and "color-scheme: dark" in html and ":focus-visible" in html
-    assert len(html.encode()) < 48_000  # (42 KB with the registration, frame-timing and test hooks of audit 3)
+    assert len(html.encode()) < 64_000  # (59 KB: + the strip-by-strip atlas loader, the screen fit and the stick of play5c)
