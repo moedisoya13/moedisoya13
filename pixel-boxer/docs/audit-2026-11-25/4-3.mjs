@@ -22,5 +22,5 @@ const runs = [];
 for (const k of c.cases) { const l = runs[runs.length - 1]; if (l && l.who === k.who && k.t - l.to < 0.05) (l.to = k.t), (l.most = Math.max(l.most, k.value)); else runs.push({ who: k.who, from: k.t, to: k.t, most: k.value }); }
 console.log(`frames broken: red (5m) ${by[0]}, blue (3) ${by[1]}; of them away from the ropes (|x|,|z| < 2.3 m): red ${mid[0]}, blue ${mid[1]}`);
 console.log('stretches (each is already 0.3 s past the start of the lean):', runs.map(r => `${r.who ? 'blue' : 'red'} ${r.from}-${r.to}s ${r.most.toFixed(1)}cm`).join('; '));
-console.log(`worst ${c.worst.value.toFixed(1)} cm at ${c.worst.t} s, ${c.worst.who ? 'blue' : 'red'}, ${c.worst.doing}`);
+console.log(c.worst ? `worst ${c.worst.value.toFixed(1)} cm at ${c.worst.t} s, ${c.worst.who ? 'blue' : 'red'}, ${c.worst.doing}` : 'worst: none');
 console.log(by[0] > 20 ? `REPRO: yes held check "standing where he would topple" broken ${c.bad} frames (${runs.length} stretches) in 40 s, worst ${c.worst.value.toFixed(1)} cm, mostly the 5m` : `REPRO: no (${c.bad})`);

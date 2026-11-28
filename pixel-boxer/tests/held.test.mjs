@@ -8,7 +8,11 @@
      a-reel-g       a reeling man does not come down faster than he can fall (anim/animator.mjs: the hips carrying what he
                     cannot do as asked, his hands' last wrists with them, tried again until it is so)
      a-dark-line    the cross-arm guard put up fresh turns aside a little: a punch met on its rear glove, in the freshest half
-                    of his grade's window (game/bout.mjs: guardOf, rear; CROSS_PARRY) */
+                    of his grade's window (game/bout.mjs: guardOf, rear; CROSS_PARRY)
+     a-topple       a legend going somewhere at speed does not stand on one foot with his weight outside it, and (a-single-frames)
+                    a 5암 walking in or out as he throws keeps his rear thigh within the hip: the foot he stands on is dragged
+                    after him once his hip has gone out of its leg's reach, and the one stepping comes down within it
+                    (anim/animator.mjs: outOfReach; seeded repros docs/audit-2026-11-25/4-3.mjs, 4-5.mjs) */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { auditor } from '../src/audit.mjs';
@@ -104,4 +108,45 @@ test('a-dark-line: the cross-arm guard put up fresh turns aside a little, on its
     clean = row('4m', null, 'jab'),
     n = s => s.split('P').length - 1;
   assert.ok(n(pro) > 0 && n(pro) < n(clean), `3 with the cross-arm guard ${pro}, 4명 ${clean}`);
+});
+
+/* A man of `lv` with the other man 1.25 m ahead (src/footwork.mjs: AWAY), sent at full stick where `me` says, the loop fought
+   three times over, covering up when `cover` says and throwing what `press` says: the held checks broken, by name. */
+function going(lv, { me, press = [], cover = null, loop }) {
+  const e = { id: `${lv} going`, loop, me, cover, press, setup: b => (b.fighters[0].skills = { all: lv }) },
+    bout = freshBout(e),
+    a = auditor();
+  a.begin(e);
+  for (let tick = 0; tick < Math.round(e.loop / DT) * 3; tick++) {
+    step(bout, drive(e, bout, tick * DT, DT), DT);
+    bout.fighters[0].hp = bout.fighters[1].hp = 1000;
+    a.frame(bout, tick);
+  }
+  const out = {};
+  for (const [check, c] of Object.entries(a.result().found)) if (c.bad) out[check] = `${c.bad} frames, worst ${c.worst.value.toFixed(1)} at ${c.worst.t} s (${c.worst.doing})`;
+  return out;
+}
+const TOPPLE = 'standing where he would topple (cm outside his feet, held over 0.3 s)',
+  THIGH = 'thigh behind the pelvis';
+
+test('a-topple: a legend going round a man at full speed stands nowhere he would topple', () => {
+  /* (from his guard, covered up, out round him to `to` as he lets the cover go, covered up again and back. Before the fix,
+     the 5명: 11, 18, 6, 10 and 9 frames past the 0.3 s, 23 to 32 cm outside the foot he stood on, out to either side, off at
+     either angle and back at one; the 5암's rear thigh 38 degrees out behind him off at one angle, 35 being the most) */
+  for (const lv of ['5m', '5a'])
+    for (const to of [[0, 1.2], [0, -1.2], [-1.2, 0], [-0.8, 0.9], [-0.8, -0.9], [-1, 0.6]]) {
+      const broken = going(lv, { me: t => (t < 0.5 || t >= 1.4 ? HOME : to), loop: 2.4, cover: t => t < 0.5 || (t >= 1.2 && t < 1.4) });
+      assert.deepEqual([broken[TOPPLE], broken[THIGH]], [undefined, undefined], `${lv} to ${to}: ${JSON.stringify(broken)}`);
+    }
+});
+
+test('a-single-frames: a 5암 walking in or out as he throws keeps his rear thigh within the hip', () => {
+  /* (walking in from 1.25 m off to all but on top of him, or out from there, a cross, a one-two or a cross and a cross. Before
+     the fix: walking in, 14 and 27 frames past the 35 degrees the hip lets the thigh go out behind, 43 at the most; walking
+     out, 1, 3 and 1, 39 at the most) */
+  for (const [from, to] of [[[-1.2, 0], [0.1, 0]], [[0.1, 0], [-1.0, 0]]])
+    for (const press of [[[0.5, 'power'], [1.2, 'power']], [[0.4, 'jab'], [0.6, 'power'], [1.1, 'jab'], [1.3, 'power']], [[0.5, 'power'], [1.0, 'power']]]) {
+      const broken = going('5a', { me: t => (t < 0.2 ? from : to), press, loop: 2.0 });
+      assert.equal(broken[THIGH], undefined, `from ${from} to ${to}, ${JSON.stringify(press)}: ${broken[THIGH]}`);
+    }
 });

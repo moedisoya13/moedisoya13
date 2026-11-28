@@ -297,6 +297,20 @@ const BALL = { L: ballOf(GUARD.feet.L.at, GUARD.feet.L.yaw), R: ballOf(GUARD.fee
    straightened, a leg in the air stays as it hangs. */
 const KNEE = { span: 24, shift: 0.5, air: [0.03, 0.06] };
 const LEGS = { L: M.sub(TPOSE.LeftLeg, TPOSE.Hips), R: M.sub(TPOSE.RightLeg, TPOSE.Hips) };
+/* How far a leg reaches, hip to ankle: its whole length, which the solver gets an ankle sent there to within a centimetre of
+   (rig/solve.mjs: the last 2 cm of a leg's reach are approached softly, never hit). outOfReach(hip, ankle): how far the
+   ankle is out past where the leg gets down to it from the hip, across the canvas ([x, z]), or null if it is not (or the
+   hips are too high for any foot to reach, where no foot put anywhere else would help). */
+const LEG_REACH = LEN.thigh + LEN.shin;
+function outOfReach(hip, ankle) {
+  const dy = hip[1] - ankle[1];
+  if (dy >= LEG_REACH) return null;
+  const most = Math.sqrt(LEG_REACH * LEG_REACH - dy * dy),
+    ox = ankle[0] - hip[0],
+    oz = ankle[2] - hip[2],
+    l = Math.hypot(ox, oz);
+  return l > most ? [ox * (1 - most / l), oz * (1 - most / l)] : null;
+}
 // how far the hip is from the ankle with the knee bent so many degrees from straight, and back
 const legSpan = flex => Math.sqrt(LEN.thigh ** 2 + LEN.shin ** 2 - 2 * LEN.thigh * LEN.shin * Math.cos(Math.PI - (clamp(flex, 0.5, 150) * Math.PI) / 180));
 const legFlex = d => 180 - (Math.acos(clamp((LEN.thigh ** 2 + LEN.shin ** 2 - d * d) / (2 * LEN.thigh * LEN.shin), -1, 1)) * 180) / Math.PI;
@@ -531,7 +545,9 @@ export function createAnimator(seed) {
     carry = {}; // what is still owed to the move before: { x, v } a channel, sprung to nothing
   for (const ch of CHANNELS) (shown[ch] = 0), (speed[ch] = 0), (carry[ch] = { x: 0, v: 0 });
   const roll = dice((seed || 0) + 1); // his own dice: the fidgets, the flourishes, the lurch of a man with no beat
-  let sunk = 0, // how far the hips are down for the spread of the feet
+  let reachFrom = null, // where each hip was last frame, in his own space, as it was drawn (a legend's feet are kept in reach of it)
+    heldUp = 0, // how far his hips were held up last frame over where his legs put them, not to fall faster than he can (FALL)
+    sunk = 0, // how far the hips are down for the spread of the feet
     feetLive = 1, // how lively his feet are, followed: a foot in the air is not snapped down by a move starting
     height = null, // his centre of mass's height as drawn, and how fast it is changing: { y, v, want } (FALL)
     fall = null, // his body while he is knocked down (phys/fall.mjs)
@@ -2631,7 +2647,8 @@ export function createAnimator(seed) {
       if (punchMove && form && form.drop && dropFor !== id) (dropFor = id), (dropAt = clock), (dropHalf = halves);
       const dropped = punchMove && form && form.drop && halves === dropHalf ? clamp(1 - (clock - dropAt) / (2 / 60), 0, 1) : 1;
       let dip = 0;
-      const elev = { L: 0, R: 0 };
+      const elev = { L: 0, R: 0 },
+        floorNow = !!(action && MOVES[action.name].floor);
       for (const side of ['L', 'R']) {
         const gf = GUARD.feet[side],
           k = side === 'L' ? 'lf' : 'rf',
@@ -2644,7 +2661,14 @@ export function createAnimator(seed) {
         if (sf) (at = sf.at), (lift = sf.lift), (pitch = sf.pitch);
         else if (stepping) {
           // where it will come down, as a spot on the canvas: carried back with the canvas for the time still to go
-          const land = landing(side),
+          // (a legend's within reach of his leg, below: a long step of his comes down short, not on a leg that cannot get there)
+          let land = landing(side);
+          if (st.legend && reachFrom && !floorNow) {
+            const back = M.app(M.ry(gf.yaw + c[k + 'w']), FOOT.ball),
+              by = outOfReach(reachFrom[side], footPose({ at: [land[0] - back[0], gf.at[1], land[2] - back[2]], yaw: gf.yaw + c[k + 'w'], pitch: gf.pitch + c[k + 'p'] }).ankle);
+            if (by) land = [land[0] - by[0], land[1], land[2] - by[1]];
+          }
+          const
             left = ((1 - u) * cycle) / 2,
             f = feet[side],
             // (a legend's dash is one step: the foot comes down under where the dash will have taken him, slowing as it does)
@@ -2734,6 +2758,26 @@ export function createAnimator(seed) {
       const kf = st.legend ? { L: c.lkf - legend.k.L * legend.air.L, R: c.rkf - legend.k.R * legend.air.R } : { L: c.lkf, R: c.rkf };
       if (globalThis.__dbg) globalThis.__dbg.push({ kf: { ...kf }, hy: c.hy, lean: c.lean, yaw: c.yaw, elev: { ...elev }, sunk, hz: c.hz, sh: view.shift ? [view.shift.off, view.shift.shell, view.shift.t] : null });
       if (kf.L || kf.R) hips = bend(hips, spine, feet, kf, elev);
+      /* A legend going somewhere stands on one foot at a time for longer than anyone (his travelling beat is slowed for the U
+         of each step, legend.mjs), and the body went on so far from the foot he stood on that his leg no longer reached it:
+         it hung off a straight leg above the canvas, holding nothing up, and the foot coming down hung short of it as well,
+         so the last foot down and the next one up were never on the canvas together, and he went from one foot to the other
+         with his weight between them (a 5명 going round a man at full speed: 40 cm outside the foot he stood on for longer
+         than 0.3 s, docs/audit-2026-11-25/4-3.mjs). Now the foot he stands on, the other one up, is dragged after him, its
+         ball along the canvas, once his hip has gone out of its reach (as a foot left behind by a shove is: STRIDE, above),
+         and the one stepping comes down within reach (above). His hips for it: as they are now, and as far up again as they
+         were held up last frame (FALL), which is where they will be drawn. (Going somewhere, faster than walking: standing,
+         the hips driven up or on by a punch, the feet stay where they are.) */
+      {
+        const R = M.euler(spine.Hips),
+          up = M.add(hips, [0, Math.max(0, heldUp), 0]);
+        reachFrom = { L: M.add(up, M.app(R, LEGS.L)), R: M.add(up, M.app(R, LEGS.R)) };
+        const side = swing.side === 'L' ? 'R' : swing.side === 'R' ? 'L' : null;
+        if (st.legend && side && speedNow > 0.5 && !floorNow && !shifting && !(side === 'L' && (view.pinned || stomp))) {
+          const by = outOfReach(reachFrom[side], footPose(feet[side]).ankle);
+          if (by) for (const p of [feet[side].at, planted[side], drawn[side]]) (p[0] -= by[0]), (p[2] -= by[1]);
+        }
+      }
       /* the hands go where the head goes: a guard is held to the face, not to the room (but only so far where a blow throws
          the head, SNAP: the gloves are on the arms, which are not thrown with it, and are knocked about by it on their own) */
       const head = Math.abs(snap.hp) + Math.abs(snap.hw) + Math.abs(snap.hr) > 0.01 ? headOf(hips, trunk(Object.assign({}, c, { hp: c.hp - snap.hp * SNAP, hw: c.hw - snap.hw * SNAP, hr: c.hr - snap.hr * SNAP }), gaze)) : headOf(hips, spine),
@@ -3271,6 +3315,7 @@ export function createAnimator(seed) {
             }
           }
         }
+        heldUp = pose.root ? pose.root[1] + TPOSE.Hips[1] - hips[1] : 0;
       }
       if (rising && action && rising.id === id && action.t < UNLIE) pose = between(rising.pose, pose, smooth(action.t / UNLIE));
       /* (the bones turned part of the way from how he lay can put a foot or a hand through the canvas: the canvas holds him up,
