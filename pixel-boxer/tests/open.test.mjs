@@ -10,7 +10,7 @@ import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
-import { GROUPS, CARDS, QUESTIONS, DECIDED_LIST, STORE, SEND, MODELS, question, live, counts, starRest, answersText } from '../src/open.data.mjs';
+import { GROUPS, CARDS, QUESTIONS, DECIDED_LIST, ANSWERS_1128, STORE, SEND, MODELS, question, live, counts, starRest, answersText } from '../src/open.data.mjs';
 import { GROUPS as CLIPS } from '../src/open.clips.mjs';
 import { ITEMS } from '../src/open.old.data.mjs';
 import { CLIPS as OLD_CLIPS } from '../src/clips.data.mjs';
@@ -34,9 +34,15 @@ test('ids are unique and every card is in a group', () => {
 
 test('★ names an option, and a card with no ★ says why', () => {
   for (const q of QUESTIONS) if (q.star) assert.ok(q.opts.some((o) => o[0] === q.star), `${q.id}: ★ ${q.star} is not an option`);
-  const tempo = CARDS.find((c) => c.id === 'spar-tempo');
-  assert.equal(tempo.star, '', 'spar-tempo has no ★ until the clips are measured');
-  assert.match(tempo.why, /★ 없음/);
+  // (spar-tempo had no ★ until the clips were measured; answered on 11-28, it is decided as picked, not ★)
+  const tempo = DECIDED_LIST.find((d) => d.id === 'spar-tempo');
+  assert.ok(tempo && !CARDS.some((c) => c.id === 'spar-tempo'), 'spar-tempo is decided, not open');
+  assert.match(tempo.said, /엔진 전체에서 줄임/);
+  // (a new card with no ★ says why)
+  const body = CARDS.find((c) => c.id === 'body-count');
+  assert.equal(body.star, '');
+  assert.match(body.why, /★ 없음/);
+  for (const c of CARDS.filter((x) => x.group === 'round' && x.kind !== 'note')) assert.ok(c.star || /★ 없음/.test(c.why), `${c.id}: no ★ and no reason`);
 });
 
 test('every follow-up is reachable: opened by values its parent has, and opened only by them', () => {
@@ -49,10 +55,12 @@ test('every follow-up is reachable: opened by values its parent has, and opened 
     const other = parent.opts.find((o) => !q.when.includes(o[0]));
     if (other) assert.equal(live(q.id, { [parent.id]: other[0] }), false, `${q.id} opens on ${other[0]}`);
   }
-  // (the brief's two of arm-way, and every sound layer's “how”)
-  assert.deepEqual(question('arm-way.also').when, ['B']);
-  assert.deepEqual(question('arm-way.when').when, ['A']);
+  // (the sound layer still open asks “how”, and a fixer's values open a memo on 바꿈; arm-way, answered, took its follow-up with it)
+  assert.deepEqual(question('sound-mix.how').when, ['fix']);
   for (const c of CARDS.filter((x) => /^sound-(breath|hit|block|hurt|feet|bell|crowd|mix)$/.test(x.id))) assert.deepEqual(question(`${c.id}.how`).when, ['fix']);
+  assert.deepEqual(question('late-rise.how').when, ['change']);
+  assert.equal(question('arm-way.also'), undefined);
+  assert.match(DECIDED_LIST.find((d) => d.id === 'arm-way').said, /그릴 때만 앞으로 · .*: 예/);
 });
 
 test('every comparison a card names is recorded or registered', () => {
@@ -85,41 +93,70 @@ test('every old item still open is carried, and none decided is', () => {
   }
 });
 
+test('every card answered on 11-28 is decided with the pick and memo as sent, and none of them is still open', () => {
+  const { picks, notes } = ANSWERS_1128,
+    open = new Set(QUESTIONS.map((q) => q.id)),
+    decided = new Map(DECIDED_LIST.map((d) => [d.id, d]));
+  // (the 제출 of 11-28: 135 picks and 10 memos, docs/answers-2026-11-28.md)
+  assert.equal(Object.keys(picks).length, 135);
+  assert.equal(Object.keys(notes).length, 10);
+  for (const id of [...Object.keys(picks), ...Object.keys(notes)]) {
+    assert.ok(!open.has(id), `${id} was answered and is still asked`);
+    const top = id.split('.')[0];
+    assert.ok(decided.has(top), `${top} is not in 정해진 것`);
+    const d = decided.get(top);
+    assert.equal(d.at, '2026-11-28');
+    assert.equal(d.how, 'page');
+    if (notes[id]) assert.ok(d.memo.includes(notes[id]), `${id}: its memo as written`);
+  }
+  // (the pick by its labels; every fix says what came of it)
+  assert.match(decided.get('a-dark-line').said, /크로스암 가드에 패리를 조금/);
+  assert.match(decided.get('l-spar').said, /도발이 1프레임 만에 끊김 · .*시계가 계속 감/);
+  assert.match(decided.get('sound-hit').said, /^고침 · .*더 낮게 · 다른 소리로$/);
+  for (const [id, v] of Object.entries(picks)) if (!id.includes('.') && v === 'fix') assert.ok(decided.get(id).done, `${id}: fixed, but what came of it is not said`);
+  // (what is left to ask: the fixers' values and what was not fixed, the three not answered, the free memo under a new id)
+  for (const id of ['l-sfx', 'l-open', 'sound-mix', 'free-2', 'pull-test-60', 'hitstop-count', 'late-rise', 'late-rise-test', 'attack-values', 'body-count', 'spar-shift-early', 'drag-speed']) assert.ok(open.has(id), id);
+  assert.ok(!open.has('free'), 'the old free memo stays with its answer');
+});
+
 test('nothing counts as picked until picked; the stars button picks only when pressed', () => {
   const n = counts({}, {});
   assert.equal(n.picked, 0);
   assert.equal(n.memos, 0);
-  assert.ok(n.of > 80);
+  assert.equal(n.of, QUESTIONS.filter((q) => !q.parent && q.opts.length).length);
+  assert.ok(n.of >= 10);
   assert.equal(answersText({}, {}), '');
-  const starred = starRest('plan', {});
-  assert.ok(Object.keys(starred).length > 30);
+  const starred = starRest('round', {}),
+    stars = QUESTIONS.filter((q) => !q.parent && q.star && CARDS.find((c) => c.id === q.card).group === 'round');
+  assert.ok(stars.length >= 8);
+  assert.equal(Object.keys(starred).length, stars.length);
   for (const [k, v] of Object.entries(starred)) assert.equal(v, question(k).star, `${k}: picked ${v}, not its ★`);
-  for (const k of Object.keys(starred)) assert.equal(CARDS.find((c) => c.id === question(k).card).group, 'plan');
-  // (an answer already given stays; a question with no ★ is left alone; a follow-up opened by a ★ is picked if it has one)
-  const kept = starRest('now', { 'arm-way': 'A', 'ring-lean': 'now' });
-  assert.equal(kept['arm-way'], 'A');
-  assert.equal(kept['ring-lean'], 'now');
-  assert.equal(kept['spar-tempo'], undefined);
-  assert.equal(kept['arm-way.when'], undefined, 'arm-way.when has no ★');
-  assert.equal(kept['pit-crowd-pop'], 'fade');
+  for (const k of Object.keys(starred)) assert.equal(CARDS.find((c) => c.id === question(k).card).group, 'round');
+  // (an answer already given stays; a question with no ★ is left alone; a follow-up opened by an answer is picked only if it has a ★)
+  const kept = starRest('round', { 'late-rise': 'change', 'hitstop-count': 'count' });
+  assert.equal(kept['late-rise'], 'change');
+  assert.equal(kept['hitstop-count'], 'count');
+  assert.equal(kept['body-count'], undefined);
+  assert.equal(kept['late-rise.how'], undefined, 'late-rise.how has no ★');
+  assert.equal(kept['drag-speed'], 'keep');
 });
 
 test('the answers as text hold every pick and memo of an open question', () => {
-  const picks = { 'arm-way': 'B', 'arm-way.also': 'yes', 'sound-hit': 'fix', 'sound-hit.how': 'louder,shorter', 'fx-ground-shake': 'shake', 'cleanup-fx-sweat': 'approve', 'limit-u-45': 'retry' },
-    notes = { 'arm-way': '팔뚝\n둘째 줄', 'stage-order.how': '닫힌 질문의 메모', free: '자유 메모', 'wave-speed': '파도 메모' };
+  const picks = { 'pull-test-60': 'rate', 'l-sfx': 'sfx-1,sfx-p1', 'sound-mix': 'fix', 'sound-mix.how': 'louder,shorter', 'hitstop-count': 'skip', 'limit-fall-5d': 'retry', 'late-rise': 'keep' },
+    notes = { 'pull-test-60': '첫 줄\n둘째 줄', 'late-rise.how': '닫힌 질문의 메모', 'free-2': '자유 메모', 'drag-speed': '끌기 메모' };
   const text = answersText(picks, notes, '머리');
   assert.match(text, /^머리\n/);
   for (const [k, v] of Object.entries(picks)) for (const x of v.split(',')) assert.match(text, new RegExp(`${k.replace(/\./g, '\\.')}: .*${x}`), `${k} ${x}`);
-  assert.match(text, /arm-way: B \(그릴 때만 앞으로\) · 메모: 팔뚝 \/ 둘째 줄/);
-  assert.match(text, /free: 메모: 자유 메모/);
-  assert.match(text, /wave-speed: 메모: 파도 메모/);
+  assert.match(text, /pull-test-60: rate \(넓은 시드의 비율 시험\) · 메모: 첫 줄 \/ 둘째 줄/);
+  assert.match(text, /free-2: 메모: 자유 메모/);
+  assert.match(text, /drag-speed: 메모: 끌기 메모/);
   assert.doesNotMatch(text, /닫힌 질문/, 'a memo on a follow-up that is not open');
-  assert.ok(text.indexOf('## 지금 정할 것') < text.indexOf('## 기획의 기본값'));
+  assert.ok(text.indexOf('## 수정 라운드에서 나온 것') < text.indexOf('## 카탈로그 점검에서 찾은 것'));
   // (a follow-up whose parent changed is no longer sent)
-  assert.doesNotMatch(answersText({ 'arm-way': 'A', 'arm-way.also': 'yes' }, {}), /arm-way\.also/);
+  assert.doesNotMatch(answersText({ 'sound-mix': 'good', 'sound-mix.how': 'louder' }, {}), /sound-mix\.how/);
   const n = counts(picks, notes);
-  assert.equal(n.picked, 5);
-  assert.equal(n.follow, 2);
+  assert.equal(n.picked, 6);
+  assert.equal(n.follow, 1);
   assert.equal(n.memos, 3);
 });
 

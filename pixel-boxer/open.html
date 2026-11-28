@@ -186,6 +186,10 @@
   .decided summary { cursor: pointer; font: 400 22px/1.2 var(--display); }
   .decided ul { margin: 8px 0 0; padding-left: 18px; font-size: 13.5px; color: var(--muted); display: grid; gap: 3px; }
   .decided li b { color: var(--ink); font-weight: 600; }
+  .decided h3 { margin: 16px 0 0; font: 600 15px/1.3 var(--body); color: var(--ink); }
+  .decided h3 span { color: var(--muted); font-weight: 400; }
+  .decided li em { display: block; font-style: normal; color: var(--ink); opacity: 0.85; margin: 1px 0 4px; overflow-wrap: anywhere; }
+  .decided li { overflow-wrap: anywhere; }
   footer { font-size: 12.5px; color: var(--muted); display: grid; gap: 4px; background: var(--bg); }
   [hidden] { display: none !important; }
   @media (max-width: 420px) { .item { padding: 12px 10px; } .cmp { padding: 6px; } .follow { margin-left: 2px; padding-left: 9px; } .group h2 { font-size: 23px; } }
@@ -196,10 +200,10 @@
 <canvas id="view" aria-hidden="true"></canvas>
 <main class="wrap">
   <header>
-    <div class="eyebrow">Pixel Boxer · 미결 · 2026-11-25</div>
+    <div class="eyebrow">Pixel Boxer · 미결 · 2026-11-28</div>
     <h1>미결 <em>카탈로그</em> · 프로 복서</h1>
     <p class="lede">아직 정하지 않은 것을 모두 모았습니다. 카드마다 <b>고르기 그리고/또는 메모</b> — 누르거나 쓰는 <b>즉시 저장</b>되고, 고른 답에 따라 <b>같은 카드 안에 다음 질문</b>이 열립니다. 다 되면 위 막대의 <b>‘제출’</b>: 받는 곳(이 페이지를 지켜보는 세션 / 새 세션)이 받을 수 있는지 누르기 전에 막대 아래에 나오고, 한 번 누르면 안 되는 곳은 건너뛰어 다른 곳으로, 둘 다 안 되면 답을 복사해 드립니다.</p>
-    <p class="lede"><b style="color:var(--star)">★</b>는 기본안일 뿐 — 고르지 않은 것을 ★로 읽지 않습니다. 묶음마다 ‘남은 것을 모두 ★로’ 단추가 있습니다(누를 때만 고름). 비교는 <b>같은 너비 · 같은 시계 · 같은 장면</b>으로 나란히, ◀ ▶ 한 프레임, ½× · ¼×, ‘크게’로 한 빌드만. 이미 정해진 것은 맨 아래 목록에만 있습니다.</p>
+    <p class="lede"><b style="color:var(--star)">★</b>는 기본안일 뿐 — 고르지 않은 것을 ★로 읽지 않습니다. 묶음마다 ‘남은 것을 모두 ★로’ 단추가 있습니다(누를 때만 고름). 비교는 <b>같은 너비 · 같은 시계 · 같은 장면</b>으로 나란히, ◀ ▶ 한 프레임, ½× · ¼×, ‘크게’로 한 빌드만. 이미 정해진 것은 맨 아래 목록에만 있습니다 — 11-28에 답하신 131장도 거기로 옮겼고, 고른 것 · 메모와 함께 수정 라운드에서 고친 결과(재현의 끝 줄 전 → 후)를 적었습니다.</p>
     <nav class="toc" id="toc" aria-label="차례"></nav>
   </header>
 

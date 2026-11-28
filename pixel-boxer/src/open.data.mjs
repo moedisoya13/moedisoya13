@@ -1,8 +1,9 @@
 /* What the open-questions catalogue holds (open.html, src/open.mjs; docs/open-catalog.md): every decision still open, as
    cards in five groups, and how an answer is read and sent. Nothing here knows the page: node reads it too
    (tests/open.test.mjs).
-     GROUPS     the seven groups, in order: { id, title, note } (audit: what the 11-25 self-audit found; look: the 11-26 look at
-                each catalogue, one card a page with several picks)
+     GROUPS     the groups that still hold an open card, in order: { id, title, note } (round: what the fix rounds of 11-28
+                left to decide; look: the 11-26 look at each catalogue, one card a page with several picks); GROUP_LIST has
+                every group, the answered ones only heading their part of DECIDED_LIST
      CARDS      the cards, in order. A card is one question (its id is the answer's key) or a note (kind: 'note', no question):
                 { id, group, title, state (what it is now; `code` and **strong** marks), more (the long text, folded), list
                 (lines), links ([{ href, say }]), clips (a group of src/open.clips.mjs: the builds side by side), old (true: the
@@ -11,7 +12,8 @@
                 (true: several values), follow ({ 'value[,value]': [question] }: opened on the same card by that answer; a
                 question { id, title, note, opts, star, multi, memo }) }. Carried items keep the old ids and option ids.
      QUESTIONS  every question, follow-ups with their parent: { id, card, parent, when, opts, star, multi, memo, title }
-     DECIDED_LIST  what was decided: this page's own answered cards (DECIDED_NEW), then the old catalogue's DECIDED and its db; shown at the bottom
+     DECIDED_LIST  what was decided, shown at the bottom: the cards answered on 11-28 (ANSWERS_1128: the picks and memos as sent;
+                DONE: what the fix rounds did), the chat of 11-28, this page's earlier DECIDED_NEW, the old catalogue's DECIDED and its db
      STORE, SEND, MODELS, EFFORTS  where the answers are kept and where 제출 sends them
    The answers: picks { question id: value ('a,b' for several) }, notes { question id: text }. A question counts only once
    picked: ★ is the default the page recommends, never an answer. */
@@ -46,15 +48,20 @@ export function asLD(s) {
     .replace(/(^|[\s,(])암(은|는|과|와|의|에)/g, (_, b, j) => b + swap('D', j));
 }
 
-export const GROUPS = [
+/* Every group a card has ever had, in the page's order; GROUPS (below, with CARDS) is the ones that still hold an open card.
+   A group whose cards were all answered stays here only to head its part of 정해진 것. */
+const GROUP_LIST = [
+  { id: 'round', title: '수정 라운드에서 나온 것', note: '11-28 수정 라운드(고치는 사람마다 한 묶음, 패키지 A~L)에서 <b>고친 사람이 대신 고른 값</b>과 <b>고치지 못한 것</b>입니다. 11-28에 답하신 카드 131장은 고친 결과(재현 스크립트의 끝 줄 전 → 후)와 함께 맨 아래 <b>정해진 것</b>으로 옮겼습니다. 라운드의 요약은 <code>docs/pending.md</code> 끝.' },
   { id: 'audit', title: '점검에서 찾은 것', note: '11-25 자체 점검(에이전트 10회)에서 나온 것 가운데 <b>조정자가 본 저장소(37419ff)에서 직접 다시 돌려 재현한 것만</b>, 겹치는 것을 합쳐 심각도 순으로. 재현 스크립트는 <code>docs/audit-2026-11-25/</code>, 전체 목록은 <code>docs/audit-2026-11-25.md</code>. 아직 아무것도 고치지 않았습니다.' },
-  { id: 'look', title: '카탈로그 점검에서 찾은 것', note: '11-26 카탈로그별 점검(에이전트 4회, 페이지마다 하나): 결함 25건 · 개선 23건, <b>모두 조정자가 다시 돌려 확인</b>. 카탈로그마다 한 장 — <b>고칠 것을 여럿 고르세요</b>(고르지 않은 것은 그대로). 전체 목록 <code>docs/look-2026-11-26.md</code>, 재현 <code>docs/look-2026-11-26/</code>.' },
-  { id: 'now', title: '지금 정할 것', note: '11-25에 새로 생긴 것입니다. 비교 영상은 같은 너비 · 같은 시계 · 같은 장면입니다.' },
+  { id: 'look', title: '카탈로그 점검에서 찾은 것', note: '11-26 카탈로그별 점검(에이전트 4회, 페이지마다 하나): 결함 25건 · 개선 23건, <b>모두 조정자가 다시 돌려 확인</b>. 카탈로그마다 한 장 — <b>고칠 것을 여럿 고르세요</b>(고르지 않은 것은 그대로). 11-28에 아무것도 고르지 않으신 두 장이 남았습니다(고칠 것 없음으로 읽지 않고 다시 여쭙니다; 모션 카탈로그 · 스파링은 답하셔서 맨 아래로). 수치는 11-28에 지금 코드에서 다시 잰 값. 전체 목록 <code>docs/look-2026-11-26.md</code>, 재현 <code>docs/look-2026-11-26/</code>.' },
+  { id: 'now', title: '지금 정할 것', note: '11-25에 새로 생긴 것 가운데 소리의 전체 믹스만 남았습니다(나머지는 11-28에 답하셔서 맨 아래로).' },
   { id: 'plan', title: '기획의 기본값', note: '옛 미결 카탈로그에서 아직 답이 없는 것(옛 5부 · 1부 · 2부). 옛 카탈로그의 카드와 녹화는 그대로 돌아갑니다.' },
   { id: 'limits', title: '엔진 한계: 받아들일지', note: '대부분 “수용(README의 알려진 한계에 남김) / 다시 시도 / 목표를 고침”입니다.' },
   { id: 'dispose', title: '파기 승인', note: '<b>승인 전에는 아무것도 지우지 않습니다.</b> 카드마다 지울 것을 적었습니다. 고르지 않은 것은 보류로 둡니다.' },
   { id: 'free', title: '자유 메모', note: '' }
 ];
+const ROUND_PART = '11-28 채팅 (브리핑에 대한 답)',
+  BEFORE_PART = '그 전 (옛 카탈로그 · 대화)';
 
 const YESNO = [['yes', '예'], ['no', '아니오']];
 const KEEP = (star) => [['keep', '그대로', ''], ...star];
@@ -100,7 +107,7 @@ const NEW = [
     group: 'now',
     kind: 'note',
     title: '새 소리를 듣고 (층마다 한 장)',
-    state: '**아무도 들어 본 적 없습니다.** 잰 값(오프라인 렌더)뿐이고, 귀로 고칠 것은 들으시는 분이 정합니다. 2026-11-28에 고르신 대로 다시 만들었고, 아래 카드의 값은 다시 만든 소리를 잰 것입니다(괄호 안이 전). 말 풀이: 크기 LUFS는 귀로 느끼는 소리 크기의 단위(0에 가까울수록 큼), 무게중심은 소리 에너지가 모인 가운데 높이(높을수록 밝고 날카롭게 들림). 모두 합성(파일 없음), `src/game/audio.mjs`. 오디션 페이지에서 소리마다 단추 · 세기 · 목소리 · 장소 · 느리게 · 시연 다섯을 들을 수 있습니다.',
+    state: '**아무도 들어 본 적 없습니다.** 잰 값(오프라인 렌더)뿐이고, 귀로 고칠 것은 들으시는 분이 정합니다. 2026-11-28에 고르신 대로 다시 만들었습니다(층마다 고른 것과 다시 만든 소리를 잰 값은 맨 아래 정해진 것에). 남은 것은 아래 전체 믹스 한 장입니다. 말 풀이: 크기 LUFS는 귀로 느끼는 소리 크기의 단위(0에 가까울수록 큼), 무게중심은 소리 에너지가 모인 가운데 높이(높을수록 밝고 날카롭게 들림). 모두 합성(파일 없음), `src/game/audio.mjs`. 오디션 페이지에서 소리마다 단추 · 세기 · 목소리 · 장소 · 느리게 · 시연 다섯을 들을 수 있습니다.',
     links: [AUDITION]
   },
   sound('sound-breath', '호흡 “쉭”', '주먹마다 입으로 내뿜는 숨 “훅”(11-28에 바꿈: 전에는 이 사이로 “쉭”). 종류 · 선수 · 피로에 따라 다름. 길이는 전과 같음(59~105 ms). 소리의 무게중심 잽 4.2 · 스트레이트 3.6 · 훅 3.3 · 지친 숨 2.2 kHz(전 6.7 · 5.8 · 5.5 · 5.1), 2 kHz 위 에너지 75 · 66 · 63 · 37%(전 92~100%).'),
@@ -431,24 +438,24 @@ const AUDIT = [
 const lookCard = (id, title, state, opts, why) => ({ id, group: 'look', title, state, opts, multi: true, star: '', why, more: `고르는 값은 찾은 것의 id입니다. 재현 · 근거: \`node docs/look-2026-11-26/<id>.mjs <pixel-boxer>\`(몇은 \`.cjs\`; 근거가 다른 스크립트에 있는 것은 \`docs/look-2026-11-26.md\`의 표에). 결함(S)은 \`REPRO: yes\`, 개선(P)은 \`EVIDENCE: …\`를 찍습니다. 각 줄의 설명: ${opts.map((o) => `**${o[0]}** ${o[2]}`).join(' · ')}.` });
 const LOOK = [
   lookCard('l-sfx', '타격음 오디션: 고칠 것 고르기',
-    '결함 7(S3 2 · S4 5), 개선 9(P1 3). 가장 큰 것: 휴대폰 스피커(300 Hz 아래를 깎은 흉내)로 들으면 **쓰러지는 소리가 28.7 dB 줄어 잽의 숨보다 작고**, 몸통 타격도 14.6 dB 줄어듭니다. 페이지의 "크기" 숫자는 36쌍 중 25쌍이 실제 음량과 거꾸로입니다.',
-    [['sfx-1', 'S3 · 공 · 함성 · 승패가 고른 선수 쪽으로 쏠림', '±5.9 dB, 게임은 가운데 · 작음'],
-     ['sfx-6', 'S3 · "크기" 숫자가 음량과 거꾸로', '25/36쌍 · 작음'],
-     ['sfx-2', 'S4 · 세기 슬라이더가 일부 구간에서 그대로', '카운터 95~140 등 · 작음'],
-     ['sfx-3', 'S4 · 느리게(¼)에서도 KO 공이 울림', '게임 리플레이엔 없음 · 작음'],
-     ['sfx-4', 'S4 · 어퍼컷 카드 글에 "흡"이 빠짐', '글만'],
-     ['sfx-7', 'S4 · 헐떡임이 게임보다 두 배 빠름', '0.37 대 0.75초 · 작음'],
-     ['sfx-8', 'S4 · 카드에 적힌 타격음 수치가 실제와 다름', 'J40: 적힌 −14.9, 잰 −27.9 dBFS · 글만'],
-     ['sfx-p1', 'P1 · 휴대폰 스피커에서도 들리게', '타격 · 쓰러짐에 중음 층 + 페이지에 "휴대폰 스피커로" 토글 · 중'],
-     ['sfx-p2', 'P1 · 조작 줄과 음량계를 화면에 붙임', '지금 읽는 칸이 1,743 px 아래 · 작음'],
-     ['sfx-p3', 'P1 · 피로 조절기', '실제 숨의 중간값 피로 0.61, 카드는 거의 0 · 작음'],
-     ['sfx-p4', 'P2 · 의도와 어긋난 크기 바로잡기', '쳐내기 −8 LU, 숄더롤 +6 LU 등 · 중'],
-     ['sfx-p5', 'P2 · A/B 이어 듣기와 반복', '작음'],
-     ['sfx-p6', 'P2 · 카드가 없는 게임 소리 7종 추가', '실제 소리의 8.4% · 작음'],
-     ['sfx-p7', 'P2 · ¼에서 낮은 쿵이 들리지 않는 대역으로', '40 Hz 아래 77~91% · 작음'],
+    '결함 7(S3 2 · S4 5), 개선 9(P1 3). **11-28에 소리를 다시 만든 뒤 지금 코드에서 다시 잼**(괄호 안이 11-26; 없어진 카드 이름만 바꾼 스크립트 사본으로). 결함 셋은 이미 없어졌습니다: sfx-7(헐떡임 카드를 뺌), sfx-4 · sfx-8(카드 글을 고침). 가장 큰 것: 휴대폰 스피커(300 Hz 아래를 깎은 흉내)로 들으면 **쓰러지는 소리가 29.8 dB(28.7) 줄어 잽의 숨보다 작고, 몸통 타격은 27.2 dB(14.6) 줄어듭니다** — 타격을 더 낮게 다시 만들어 더 나빠졌습니다. 페이지의 "크기" 숫자는 36쌍 중 27쌍(25)이 실제 음량과 거꾸로입니다.',
+    [['sfx-1', 'S3 · 공 · 함성 · 승패가 고른 선수 쪽으로 쏠림', '±5.9 dB 그대로, 게임은 가운데 · 작음'],
+     ['sfx-6', 'S3 · "크기" 숫자가 음량과 거꾸로', '27/36쌍(25) · 작음'],
+     ['sfx-2', 'S4 · 세기 슬라이더가 일부 구간에서 그대로', '카운터 95~140 그대로(“헉” · “욱” 카드는 뺌) · 작음'],
+     ['sfx-3', 'S4 · 느리게(¼)에서도 KO 공이 울림', '공 −19.9 LUFS(−17.2), 게임 리플레이엔 없음 · 작음'],
+     ['sfx-4', 'S4 · 어퍼컷 카드 글에 "흡"이 빠짐', '11-28에 글을 고침(“뒷손이라 흡도”) — 고를 것 없음'],
+     ['sfx-7', 'S4 · 헐떡임이 게임보다 두 배 빠름', '11-28에 헐떡임을 뺌(`sound-hurt`) — 고를 것 없음'],
+     ['sfx-8', 'S4 · 카드에 적힌 타격음 수치가 실제와 다름', '11-28에 소리 카드의 글을 다시 잰 값으로 고침 — 고를 것 없음'],
+     ['sfx-p1', 'P1 · 휴대폰 스피커에서도 들리게', '쓰러짐 −29.8 dB · 몸통 −27.2 dB; 타격 · 쓰러짐에 중음 층 + 페이지에 "휴대폰 스피커로" 토글 · 중'],
+     ['sfx-p2', 'P1 · 조작 줄과 음량계를 화면에 붙임', '지금 읽는 칸이 2,142 px 아래(1,743) · 작음'],
+     ['sfx-p3', 'P1 · 피로 조절기', '실제 숨의 중간값 피로 0.70(0.61), 카드는 거의 0 · 작음'],
+     ['sfx-p4', 'P2 · 의도와 어긋난 크기 바로잡기', '쳐내기 −8.3 LU, 숄더롤 +6.2 LU 등(거의 그대로) · 중'],
+     ['sfx-p5', 'P2 · A/B 이어 듣기와 반복', '글러브 · 팔뚝 막기의 거리 0.465(0.081: 이제 훨씬 다르게 들림) · 작음'],
+     ['sfx-p6', 'P2 · 카드가 없는 게임 소리 추가', '8종, 실제 소리의 8.5%(7종 8.4%) · 작음'],
+     ['sfx-p7', 'P2 · ¼에서 낮은 쿵이 들리지 않는 대역으로', '40 Hz 아래 몸통 99% · 쓰러짐 97%(77~91%) · 작음'],
      ['sfx-p8', 'P3 · 실제 공방 10초 듣기', '중'],
-     ['sfx-p9', 'P3 · 토글 단추를 크게', '35 → 44 px · 작음']],
-    '고칠 것을 직접 고르세요. 권하는 묶음은 결함 7개 전부(모두 작음) + sfx-p1 · p2 · p3.'),
+     ['sfx-p9', 'P3 · 토글 단추를 크게', '35 → 44 px(음소거 단추는 11-28에 44 px로 들어감) · 작음']],
+    '고칠 것을 직접 고르세요. 권하는 묶음은 남은 결함 넷(sfx-1 · 6 · 2 · 3, 모두 작음) + sfx-p1 · p2 · p3.'),
   lookCard('l-catalog', '모션 카탈로그: 고칠 것 고르기',
     '결함 7(S3 2 · S4 5), 개선 4(P1 3). 가장 큰 것: V의 "바뀜" 15줄은 "맞은 사람이 휘청임"이라고 하는데 **그 카드들에서 아무도 휘청이지 않고**(13줄은 1 cm 미만), 휴대폰에서 첫 카드가 8.4화면 아래 · 열린 줄만 81화면입니다.',
     [['catalog-1', 'S3 · V "바뀜" 15줄의 설명이 카드와 다름', '노트 · 표시 고침, 열린 줄 58 → 약 46 · 작음'],
@@ -475,21 +482,137 @@ const LOOK = [
      ['spar-p3', 'P2 · 판마다 다른 첫 수', '58명 모두 가드로 시작, 39명이 잽 · 작음~중']],
     '고칠 것을 직접 고르세요. 권하는 묶음은 spar-1 · 4 · 5(작음) + spar-p1. spar-2 · 3은 중간 크기라 따로 판단.'),
   lookCard('l-open', '미결 카탈로그 (이 페이지): 고칠 것 고르기',
-    '결함 6(S3 4 · S4 2), 개선 7(P1 3). 가장 큰 것: **제출을 댓글로 보내면 ★대로만 골라도 끝의 29개(파기 승인 전부 · 자유 메모)와 안내 줄이 잘립니다**(답은 저장소에 모두 남고 세션은 거기서 읽음). 휴대폰에서 페이지가 약 9만 px이고, 답해도 짧아지지 않습니다.',
-    [['open-1', 'S3 · 댓글 제출이 끝의 답과 안내 줄을 자름', '안내 줄은 따로, 줄 단위로 자름 · 작음'],
-     ['open-3', 'S3 · ★끼리 어긋남: a-screen-ai(바로) 대 stage-order(Z에서), 순서에 수정 라운드가 없음', '데이터만 · 작음'],
-     ['open-4', 'S3 · spar-tempo 영상은 처음 1.6초만 같은 장면, 아래 수치가 요약과 반대', '글(작음) 또는 다시 녹화(중)'],
-     ['open-6', 'S3 · del-session이 "이 작업 세션"이라고만 씀', '이전 세션 id를 적음 · 글만'],
-     ['open-2', 'S4 · 휴대폰에서 차례로 가면 묶음 제목이 위 막대에 가림', '작음'],
-     ['open-5', 'S4 · 파기 카드 둘의 ★ 보류 이유가 이미 정해진 일', '작음'],
-     ['open-p1', 'P1 · "안 고른 것만" 보기 · 답한 카드 접기 · 묶음별 다음', '9만 → 2.7만 px · 중'],
-     ['open-p2', 'P1 · 위 막대를 한 줄로', '지금 화면의 26% · 작음~중'],
-     ['open-p3', 'P1 · 제출 글을 짧게(★대로는 묶어서)', '7.5 → 4.6 KB · 작음'],
-     ['open-p4', 'P2 · 비교 영상: 지금과 ★를 나란히, 번갈아 보기', '작음~중'],
-     ['open-p5', 'P2 · 영상을 못 틀면 그렇다고 말함(+ MP4)', '작음 / 중'],
-     ['open-p6', 'P2 · "모두 ★로"에 되돌리기, 파기 묶음엔 없애기', '작음'],
+    '결함 6(S3 4 · S4 2), 개선 7(P1 3). **11-28에 답하신 카드를 맨 아래로 옮긴 이 판에서 다시 잼**(괄호 안이 11-26). 결함 다섯은 이제 고를 것이 없습니다: open-1은 지금 잘리지 않고(★대로 665 B), open-3 · 4 · 5 · 6은 그 카드에 답하셔서 카드가 없습니다. 휴대폰에서 페이지는 **13,363 px**(89,867)이고, 남은 결함은 묶음 제목이 위 막대에 가리는 것 하나입니다.',
+    [['open-1', 'S3 · 댓글 제출이 끝의 답과 안내 줄을 자름', '지금은 잘리지 않음(★대로 10개 · 665 B); 답이 길면 다시 생길 수 있음 · 작음'],
+     ['open-3', 'S3 · ★끼리 어긋남: a-screen-ai 대 stage-order', '두 카드에 답하셔서 없어짐(순서는 수정 라운드 → a-screen-ai → N2 …) — 고를 것 없음'],
+     ['open-4', 'S3 · spar-tempo 영상은 처음 1.6초만 같은 장면', '카드에 답하셔서 없어짐 — 고를 것 없음'],
+     ['open-6', 'S3 · del-session이 "이 작업 세션"이라고만 씀', '카드에 답하셔서 없어짐(옛 세션은 이미 없음) — 고를 것 없음'],
+     ['open-2', 'S4 · 휴대폰에서 차례로 가면 묶음 제목이 위 막대에 가림', '4번 중 3번(6번 중 5번) · 작음'],
+     ['open-5', 'S4 · 파기 카드 둘의 ★ 보류 이유가 이미 정해진 일', '카드에 답하셔서 없어짐 — 고를 것 없음'],
+     ['open-p1', 'P1 · "안 고른 것만" 보기 · 답한 카드 접기 · 묶음별 다음', '13,363 px(89,867); 접으면 7,051 · 중'],
+     ['open-p2', 'P1 · 위 막대를 한 줄로', '지금 222 px, 화면의 26% · 작음~중'],
+     ['open-p3', 'P1 · 제출 글을 짧게(★대로는 묶어서)', '지금 ★대로 435 B(현실적인 답 7.5 KB였음) · 작음'],
+     ['open-p4', 'P2 · 비교 영상: 지금과 ★를 나란히, 번갈아 보기', '지금 열린 카드에는 비교 영상이 없음 · 작음~중'],
+     ['open-p5', 'P2 · 영상을 못 틀면 그렇다고 말함(+ MP4)', '지금 열린 카드에는 영상이 없음 · 작음 / 중'],
+     ['open-p6', 'P2 · "모두 ★로"에 되돌리기, 파기 묶음엔 없애기', '한 번에 최대 10개(44) · 작음'],
      ['open-p7', 'P3 · 초록 띠에 값 대신 이름', '작음']],
-    '고칠 것을 직접 고르세요. 권하는 묶음은 결함 6개 전부 + open-p1 · p2 · p3.')
+    '고칠 것을 직접 고르세요. 권하는 묶음은 open-2(작음) + open-p1 · p2.')
+];
+
+/* ---- the fix rounds of 11-28 (packages A-L; the reports were the session's, the gist is here): a value the fixer chose for
+   want of an answer, and what could not be fixed */
+const ROUND = [
+  {
+    id: 'pull-test-60',
+    group: 'round',
+    title: '시험 60(당기기 맞받기)이 실패로 남음',
+    state: '`tests/body.test.mjs`의 시합 시험 하나가 실패합니다: 시드 1~10의 한 라운드 시합 열 판에서 당기기(풀백) 10번 · 맞받기 8번 · 맞힌 것 **5번 이상**을 요구하는데 지금 **11 · 9 · 4**입니다. 11-28에 `pull-test`를 “합계 기준 그대로”로 고르셨고, 그 합계가 지금 4입니다. 기술이 약해진 것은 아닙니다: 기술 하나하나를 보는 시험 넷은 모두 통과하고, 맞받기 가운데 스트레이트는 거의 다 맞습니다(몸통 훅은 상대 팔꿈치에 막힘).',
+    list: ['커밋마다 같은 시험(당기기 · 맞받기 · 맞힘): 수정 라운드 전 11 · 10 · 6(통과), 1차 합침 14 · 11 · 6(통과), 물리(D) 뒤 10 · 9 · 4(실패), 자세(K) 뒤 11 · 9 · 6(통과), 지금(선수 AI(H)까지) 11 · 9 · 4(실패)', '열 판에 맞받기가 9~11번뿐이고 한 번 맞을 확률이 반쯤이라 맞힌 수는 4~6 사이를 오갑니다(9번에 55%면 4 이하가 나올 확률 약 40%). 엔진의 어떤 변경이든 시합의 길을 바꾸면 이 시험은 통과와 실패를 오갑니다', '판단에만 쓴 넓은 쓸기(시드 11~60, 50판): 10판에 당기기 16 · 맞받기 12.2 · 맞힘 9 — 통과하던 커밋보다 오히려 많음'],
+    more: '원인 분석: 수정 라운드의 패키지 H(커밋마다 따로 작업 폴더를 만들어 같은 시험을 돌림)와 F1. 시험 · 시드 · 기준은 그대로 두었습니다(결과를 보고 시드를 고르거나 기준을 낮추지 않는다는 규칙).',
+    opts: [['fail', '실패로 둠', '알려진 한계로 적고 시험은 그대로(전체 시험에 실패 하나가 늘 남음)'], ['rate', '넓은 시드의 비율 시험', '미리 정한 더 넓은 범위(예: 시드 1~40, 정한 뒤에 돌림)에서 비율(맞받기 가운데 맞힌 몫 등)로 잼. 시험의 설계가 바뀜'], ['other', '다른 방법', '메모에']],
+    star: 'rate',
+    why: '작은 표본의 흔들림을 재는 시험이라 어느 변경에도 뒤집힙니다. 범위를 미리 정해 두면 결과를 보고 고르는 것이 아닙니다.'
+  },
+  {
+    id: 'hitstop-count',
+    group: 'round',
+    title: '타격 순간 멈춘 프레임을 “넘어질 자세 0.3초”에 셀지',
+    state: '물리 점검은 무게중심이 디딘 발 밖으로 6 cm 넘게, **0.3초 넘게** 머물면 “넘어질 자세”로 셉니다. 주먹이 닿는 순간 시합이 아주 잠깐 멈추는데(히트스톱), 그 멈춘 프레임도 지금은 0.3초 안에 셉니다. 멈춘 동안에는 몸이 움직이지 않으니 그 시간에 넘어지지는 않습니다.',
+    list: ['5L의 남은 구간(G가 고친 뒤): 23프레임 가운데 8프레임이 멈춘 프레임 — 빼면 15프레임으로 기준 안', '지금(K 뒤) 재현 `4-3`은 0. 시합 30판 쓸기에는 38프레임(8판)이 남았고, 그 가운데 멈춘 프레임의 몫은 재지 않았습니다. 스파링 50판(11-28)에는 177프레임(31판)', '점검을 바꾸는 일이라 아무도 손대지 않음(물리(D) 때부터 열린 질문; 11-28 채팅 3-5에서 설명드림)'],
+    opts: [['skip', '안 셈', '멈춘 프레임은 0.3초에서 뺌(몸이 멈춰 있으므로). 점검 한 곳'], ['count', '셈', '지금대로']],
+    star: 'skip',
+    why: '멈춘 시간에는 몸이 움직이지 않아 넘어질 수 없습니다. 실제로 서 있는 시간만 재는 것이 점검의 뜻에 맞습니다.'
+  },
+  {
+    id: 'late-rise',
+    group: 'round',
+    title: '늦게 일어선 선수: 고친 사람이 고른 값',
+    state: '11-28 채팅의 답(“일어선 후 비틀대며 다시 쓰러집니다”)대로, 늦게 일어선 선수는 다 선 뒤 비틀대다 다시 쓰러지고 KO가 됩니다(패키지 I). 대본으로 본 것: 체력 1인 선수가 8에 등으로 일어나면 전에는 다운 6.43초 뒤 싸움을 이어 갔고, 지금은 다 서고 휘청임 0.8초 → 무릎 다운 → 0.9초 뒤 KO. 아래 값은 정하신 것이 없어 고친 사람이 골랐습니다.',
+    list: ['**늦음의 기준**: 기상이 “10이 끝나는 때”(카운트 6.0초)보다 늦게 끝나면. 실제 규칙처럼 “10을 부르는 때”(5.4초)로 하면 7에 등 · 옆으로 일어나는 것(5.9~6.0초)도 늦음이 됨. 지금은 누운 자세에서 8에 일어나기 시작하면 언제나 늦고, 7은 언제나 제때, 무릎 다운은 8도 제때', '**휘청임**: 0.8초, 세기는 가장 크게, 걸음 빠르기의 30%로 상대 반대쪽 옆으로(0.5 m 남짓; 그쪽이 로프 가까이면 링 가운데 쪽으로)', '**다시 쓰러지는 모양**: 무릎 다운(물리 점검이 된 동작). 앞 · 뒤로 몸이 넘어가는 쓰러짐은 주먹 없는 낙하가 점검되지 않은 경우라 쓰지 않음', '**KO까지**: 다시 쓰러진 뒤 0.9초. 그동안 숫자를 더 부르지 않음(“10”을 부르고 KO할지는 정하지 않음). 다시 쓰러짐은 라운드의 다운 수(판정 · TKO 셈)에 넣지 않음', '시합 42판(일곱 등급): 기상 31번 가운데 늦은 것 1번 — 드묾. 균형 수치는 거의 그대로'],
+    opts: [['keep', '그대로', ''], ['change', '바꿈', '메모에 무엇을']],
+    star: 'keep',
+    why: '말씀하신 모습(비틀대다 다시 쓰러짐)을 가장 작게 만든 값이고, 물리 점검이 된 동작만 씁니다.',
+    follow: { change: [{ id: 'late-rise.how', title: '무엇을 어떻게?', note: '메모로 적어 주세요(예: 기준을 “10을 부르는 때”로, 휘청임을 더 길게, 앞으로 쓰러지게, “10”을 부르고 KO).', opts: [] }] }
+  },
+  {
+    id: 'late-rise-test',
+    group: 'round',
+    title: '시험 하나를 “8에 일어나도 싸움을 잇는다”에서 7로 바꾼 것',
+    state: '패키지 A가 넣은 시험(`tests/ring.test.mjs`: 시드 1000, 체력 1인 선수를 **8에** 일어나게 하면 싸움을 이어 감)이 11-28의 답(“늦게 일어서면 다시 쓰러져 KO”)과 맞서게 되어, I가 일어나는 수를 **7**(등에서 제때 설 수 있는 가장 늦은 수)로 바꿨습니다. 단언은 그대로(싸움을 이어 감, 서 있음)이고 숫자 단언은 “8 이하” → “7 이하”로 더 엄해졌습니다. 8의 경우는 새 시험(`tests/late.test.mjs`)이 KO로 맡습니다.',
+    opts: [['accept', '받아들임', '지금대로'], ['other', '다르게', '메모에']],
+    star: 'accept',
+    why: '느슨하게 한 것이 아니라, 바뀐 규칙에 맞춰 같은 뜻(제때 일어난 선수는 싸움을 이어 감)을 지킨 것입니다.'
+  },
+  {
+    id: 'attack-values',
+    group: 'round',
+    title: '공격 흐름: 고친 사람이 고른 값',
+    state: '11-28 채팅의 답(“공격 흐름 상향”)대로 올렸습니다(패키지 H). 같은 능력치 24판(`tools/balance.mjs`): KO 3 → **10**, 맞힘 43 → **47%**, 다운 26 → 39(수정 라운드 전 KO 11 · 49%). 자유 메모(“밀착해있는 시간이 너무 깁니다”)대로 붙어 있는 시간은 늘리지 않았습니다: 두 사람 중심이 0.9 m 안인 시간 4.0 → 4.2%(수정 라운드 전 8.2%).',
+    list: ['**콤비네이션 중에는 들어간 자리에 머묾**: 주먹 사이에 걸어 나가지 않고, 상대가 **0.95 m**보다 가까워질 때만 물러남(안쪽 훅이 닿는 0.9 m 바로 밖). 콤비네이션 중 물러나던 프레임 34.7 → 5.0%', '**다친 상대에게는 머리로**: 콤비네이션의 주먹을 바디로 돌리던 것을 상대가 다친 정도만큼 머리로(값 1 = 다친 만큼 전부)', '맞춘 것이 아닌지 보려고 미리 정한 둘째 묶음(다른 24판): KO 2 → 8, 맞힘 43.6 → 46.0%, 0.9 m 안 3.9%. 남는 흠: 한 번에 가장 길게 0.9 m 안에 있은 시간 1.6 → 3.0초', '더 세게 · 덜은 이 두 값으로 조절합니다(덤빔 · 쉼 · 작전 거리는 그대로)'],
+    opts: [['keep', '그대로', ''], ['more', '더 공격적으로', '메모에 얼마나'], ['less', '덜', '메모에 얼마나']],
+    star: 'keep',
+    why: 'KO가 수정 라운드 전 수준(11)에 가깝고, 붙어 있는 시간은 늘지 않았습니다.'
+  },
+  {
+    id: 'body-count',
+    group: 'round',
+    title: '몸통에 맞아 쓰러지면 언제나 카운트를 이기는 규칙',
+    state: '시합 엔진은 몸통에 맞아 쓰러진 선수를 **언제나** 일으킵니다(카운트 8; 머리 다운은 의지 주사위로 4~8, 못 이기면 KO). 수정 라운드 전 KO가 줄어든 뿌리의 하나였습니다: 다치면 가드를 더 들고, 가드를 든 상대에게는 바디를 더 던져, 다친 선수일수록 바디에 쓰러지고 일어났습니다(24판의 다운 26 가운데 바디 19). 공격 흐름을 올린 뒤에는 39 가운데 15.',
+    list: ['실제 복싱에서는 몸통(간) 다운으로 카운트아웃되는 일이 있습니다', '바꾸면 KO가 더 늘고 균형 수치가 다시 움직입니다(재지 않음)'],
+    opts: [['keep', '그대로', '몸통 다운은 늘 일어남'], ['dice', '주사위대로', '몸통 다운도 머리 다운처럼 의지 주사위로(못 이기면 KO)'], ['later', 'X 단계에서', '능력치 범위 · 블록 지구력과 함께']],
+    star: '',
+    why: '★ 없음 — 균형의 방향(KO를 더 늘릴지)은 정하실 일입니다. 공격 흐름을 올린 뒤 KO는 이미 24판에 10입니다.'
+  },
+  {
+    id: 'limit-cross-arm-hand',
+    group: 'round',
+    title: '4D 크로스암 가드: 손이 한 프레임에 다른 팔뚝을 지나감',
+    state: '실제 시합의 “자기 글러브가 다른 팔에” 위반의 대부분이 이것입니다(시합 30판에서 16프레임 · 7판, 최악 8.8 cm; 스파링 50판에서 128프레임 · 37판). 4D가 크로스를 칠 때 배 앞을 가로지르던 앞손이 턱으로 올라가는 길과 뒷손 팔뚝이 나가는 길이 엇갈리고, 해머(뒷손으로 내려치는 막기) 직후의 앞손 훅도 낮아진 뒷팔을 초속 10 m로 가로지릅니다. 손이 한 프레임에 10~18 cm 움직여, 계산기가 비켜 줄 수 있는 빠르기(한 프레임 3.7 cm, 점검이 묶음)로는 막을 수 없습니다(패키지 K).',
+    list: ['해 본 것(모두 되돌림): 한 프레임 앞을 내다보고 비키기(효과 없음), 자기 주먹을 비킬 때만 두 배 빠르게(대본 3프레임 4.7~4.9 → 2.4~3.1 cm, 다른 시드에 새 위반), 뒷손으로 칠 때 앞팔을 붙잡아 둠(그 장면을 재현하지 못함)', '고치려면 계산기가 아니라 **동작의 길**을 바꿔야 함: 크로스암에서 앞손이 뒷팔 밑으로 나오게, 또는 해머 뒤 뒷손이 먼저 올라간 뒤 앞손을 냄'],
+    opts: [['p', 'P 단계에서 길을 다시 짬', '크로스암 세우기 단계(P)에서 함께'], ['now', '따로 먼저', '다음 단계 전에'], ['accept', '받아들임', '알려진 한계로']],
+    star: 'p',
+    why: 'P가 크로스암 가드를 다시 세우는 단계라, 손이 나오는 길도 거기서 함께 짜면 한 번에 끝납니다.'
+  },
+  {
+    id: 'limit-shins',
+    group: 'round',
+    title: '호프 피벗에서 두 사람의 정강이가 겹침',
+    state: '두 사람 겹침 위반은 K가 팔꿈치를 상대 몸 밖으로 돌게 해 16 → 7프레임(시합 30판)으로 줄였고, 남은 7 가운데 **6이 정강이끼리**입니다(뛰어 도는 호프 피벗에서 발이 상대 발 자리에 내림). 팔이 아니라 발 자리의 일입니다.',
+    list: ['남은 팔 1프레임: 크로스를 거둘 때 팔꿈치가 한 프레임에 8 cm 뛰어듦', '0.62 m에서 5L의 잽처럼, 어깨가 허락하는 팔꿈치 자리 어디에도 상대 가슴 밖이 없는 경우는 남음(주먹이 몸에 막혀 짧아지게 하려면 맞음 판정을 바꿔야 함)'],
+    opts: [['r', 'R 단계에서', '풋워크와 횡 이동 단계(R)에서 발 자리와 함께'], ['accept', '받아들임', '알려진 한계로']],
+    star: 'r',
+    why: '발이 내리는 자리는 R(풋워크)이 다시 짭니다.'
+  },
+  {
+    id: 'limit-fall-5d',
+    group: 'round',
+    title: '5D 가드에서 “중력보다 빨리 떨어짐” 1.51 g',
+    state: '시합 30판에서 한 프레임(시드 13, 5D의 가드) 무게중심이 1.51 g로 떨어집니다(점검 기준 1.5 g). 뿌리는 무게중심 높이를 맞출 때 허용하는 오차(0.2 mm)라, 세 프레임으로 재는 점검에 최대 0.29 g가 더해질 수 있습니다. 디딘 발 끌기(`drag-speed`)가 엉덩이 길을 조금 바꿔 0.01 g 넘었습니다(그 순간부터 끌기를 끄면 1.43 g).',
+    list: ['해 본 것(K): 오차를 0.1 mm로 좁히면 이 위반은 0이 되지만, 카탈로그의 실신 쓰러짐이 바뀌어 지키는 점검 둘이 새로 깨짐(무릎이 반대로 −52°, 무릎 뒤집힘 41°) → 되돌림', '같은 쓸기의 다른 둘(5D 휘청임 1.50 g, 3단계)은 끌기 탓이 아님. 스파링 50판(11-28)에는 7프레임(7판, 최악 1.56 g)'],
+    opts: [['accept', '받아들임', '알려진 한계로'], ['retry', '다시 시도', '높이 맞춤과 실신 쓰러짐을 함께 고치는 단계를 따로']],
+    star: 'accept',
+    why: '기준을 0.01 g 넘는 한 프레임이고 화면에서는 보이지 않습니다. 고치는 길은 실신 쓰러짐을 건드립니다.'
+  },
+  {
+    id: 'spar-shift-early',
+    group: 'round',
+    title: '스파링: 시드 2가 3초 만에 다운',
+    state: '대진 규칙(두 등급 차이까지)으로 새로 뽑힌 시드 2(4L 대 5L)에서 5L이 **3.02초**에 시프트 훅을 간에 173 N·s로 넣어 다운됩니다(간에 70 N·s가 넘으면 체력과 상관없이 쓰러짐). 안무가는 시프트를 “라운드 끝 무렵, **또는 상대가 가드를 0.3초 넘게 들고 있을 때**” 쓰게 해서 라운드 처음에도 나갈 수 있습니다. 규칙 전에는 시드 1~50에 이 경우가 없었을 뿐입니다(패키지 J). 스파링이 겨누는 다운 시각은 46~60초입니다.',
+    list: ['11-28에 다시 잰 50판(지금 코드): 첫 다운 3.0 / 52.9 / 68.2초, 40~70초 안 46판. 3초는 #2 하나, 그다음이 37.4초', '라운드 끝 무렵에는 리버 훅과 시프트를 함께 씀(목표 시간의 90%부터)'],
+    opts: [['late', '끝 무렵에만', '가드 조건을 빼고 리버 훅처럼 목표 시간의 90%부터'], ['after', '처음 몇 초는 막음', '가드 조건은 두되 라운드 처음 20초는 시프트 없음(다른 초는 메모에)'], ['keep', '그대로', '']],
+    star: 'late',
+    why: '라운드를 끝내는 한 방은 감독이 목표 시간에 맞추는 일이고, 다른 마무리 기술(리버 훅)과 같은 규칙이면 읽기 쉽습니다.'
+  },
+  {
+    id: 'drag-speed',
+    group: 'round',
+    title: '디딘 발을 끌어오는 조건 “초속 0.5 m 넘게”',
+    state: '5L이 무게중심을 발 밖에 둔 채 한 발로 서던 것(`a-topple`)은, 너무 긴 걸음에서 디딘 발을 바닥을 따라 끌어오게 해 고쳤습니다(G가 5L · 5D만, K가 모든 등급으로). 끌어오는 것은 **몸이 초속 0.5 m보다 빠르게 움직일 때만**이고, 이 값은 G가 골랐습니다: 서서 치는 동작(안쪽 어퍼)에서 발이 3 cm 튀는 것을 막으려고.',
+    list: ['재현 `4-3`: 79프레임(최악 35.7 cm) → 0. 시합 30판의 넘어질 자세 107 → 38프레임(K)', 'K가 정한 것: 레전드가 아닌 사람이 대시를 밀어내는 발은 끌지 않음(바닥을 떠나는 발이라). 내딛는 발을 다리가 닿는 곳에 내리는 것은 레전드만(모든 등급으로 넓히면 넉다운 시험 하나가 깨짐)', '남은 것: 1등급이 상대에게서 곧장 뒤로 빠르게 물러날 때 5프레임 40 cm(보폭이 긴 다른 원인)'],
+    opts: [['keep', '그대로', ''], ['change', '바꿈', '메모에']],
+    star: 'keep',
+    why: '걷기보다 빠를 때만 끌어서 걷기 · 서서 치기의 발은 그대로이고, 시험이 깨지지 않습니다.'
+  }
 ];
 
 /* ---- what was decided on this page's own cards (moved out of the groups once answered) */
@@ -649,12 +772,150 @@ const DISPOSE = [
   }
 ];
 
+// (the memo of 11-28 went with `free`; a new id, so the old memo kept in the db is not shown or sent again)
 const FREE = [
-  { id: 'free', group: 'free', title: '그 밖에 하실 말씀', state: '위 카드에 없는 것 — 화면 · 조작 · 소리 · 링 · 이 페이지 무엇이든. 번호 목록으로 쓰시면 한 줄씩 지시로 읽습니다.', opts: [] }
+  { id: 'free', group: 'free', title: '그 밖에 하실 말씀', state: '위 카드에 없는 것 — 화면 · 조작 · 소리 · 링 · 이 페이지 무엇이든. 번호 목록으로 쓰시면 한 줄씩 지시로 읽습니다.', opts: [] },
+  { id: 'free-2', group: 'free', title: '그 밖에 하실 말씀', state: '위 카드에 없는 것 — 화면 · 조작 · 소리 · 링 · 이 페이지 무엇이든. 번호 목록으로 쓰시면 한 줄씩 지시로 읽습니다. (11-28의 메모 “밀착이 너무 깁니다”는 맨 아래 정해진 것에, 고친 결과와 함께.)', opts: [] }
 ];
 
-const order = (g) => [...AUDIT, ...LOOK, ...NEW, ...CARRY, ...LIMITS, ...DISPOSE, ...FREE].filter((c) => c.group === g);
-export const CARDS = GROUPS.flatMap((g) => order(g.id));
+/* ---- answered on this page: the 제출 of 2026-11-28 02:02 UTC (db picks/open, version 315; docs/answers-2026-11-28.md), the
+   picks and memos as they were sent. An answered card leaves its group for 정해진 것, with what the fix rounds of 11-28 did
+   about it (DONE: the packages' reports, the repro's last line before → after; docs/pending.md "수정 라운드"). */
+const PICKS_1128 = {
+  'a-catalog-scroll': 'fix', 'a-catalog-text': 'fix', 'a-corner': 'fix', 'a-count-ten': 'fix', 'a-cover-punch': 'fix', 'a-dark-line': 'parry',
+  'a-dispose-list': 'fix', 'a-draw-winner': 'fix', 'a-fall-edge': 'fix', 'a-frame-meter': 'fix', 'a-gl-lost': 'reload', 'a-guard-flicker': 'fix',
+  'a-hidden-sound': 'fix', 'a-history': 'fix', 'a-hood-face': 'fix', 'a-hurt-blind': 'fix', 'a-idle': 'later', 'a-ko-bell': 'fix', 'a-ko-thud': 'fix',
+  'a-murmur-cut': 'fix', 'a-mute': 'fix', 'a-novice': 'later', 'a-pit-foot': 'fix', 'a-pit-hud': 'fix', 'a-pit-outline': 'fix', 'a-pit-spark': 'fix',
+  'a-reel-g': 'fix', 'a-replay-silent': 'fix', 'a-ropes-stuck': 'fix', 'a-screen-ai': 'soon', 'a-since': 'fix', 'a-single-frames': 'fix',
+  'a-spar-docs': 'fix', 'a-spar-link': 'fix', 'a-spar-pinned': 'later', 'a-spar-race': 'fix', 'a-standoff': 'fix', 'a-topple': 'fix',
+  'arm-way': 'B', 'arm-way.also': 'yes', 'bearing-dark-side': 'yes', 'bearing-hud': 'none', 'bearing-names': 'hands', 'bearing-pinned': 'pinned',
+  'bearing-side': 'ninety', 'bearing-wave-speed': 'walk', 'block-fire-wait': 'retry', 'block-return': 'all-from-3', 'body-impulse': 'accept',
+  'cd-backstep-kind': 'basic', 'cd-dash-cadence': 'keep', 'cd-hook-cross': 'fix', 'cd-lead-upper': 'all', 'cd-package': 'fold', 'cd-six-beats': 'first',
+  'cd-slip-choice': 'read', 'chain-row': 'add', 'cleanup-fx-sweat': 'approve', 'cleanup-fx-versions': 'approve', 'cleanup-fxlab-now': 'approve',
+  'cleanup-limp-out': 'hold', 'combo-lean-side': 'with-hook', 'combo-loadout': 'basic', 'combo-tempo': 'faster', 'cross-arm-gaps': 'accept',
+  'del-art-fxlab': 'approve', 'del-art-pending-old': 'approve', 'del-code-pending-old': 'approve', 'del-ref-video': 'approve', 'del-session': 'approve',
+  'faint-hook-twist': 'accept', 'faint-upper-card': 'retry', 'fall-unscripted': 'own-stage', 'fix-taunt-text': 'fix', 'fx-brilliant-game': 'slow',
+  'fx-defence-amount': 'lines', 'fx-defence-evade': 'wind-line', 'fx-ground-shake': 'shake', 'fx-parry-white': 'remove', 'impl-final-integration': 'after-decisions',
+  'inside-rule': 'low', 'jump-watch': 'ratchet', 'l-catalog': 'catalog-2', 'l-spar': 'spar-1,spar-4', 'limit-u-45': 'accept', 'limit-y-arm': 'accept',
+  'limit-y-elbow': 'accept', 'limit-y-jab': 'accept', 'liver-hook-power': 'land', 'liver-waist-way': 'toward', 'loadout-default': 'keep',
+  'loadout-slots': 'keep', 'low2-block': 'accept', 'parrydown-5l-jab': 'keep', 'parrydown-timing': 'legend-early', 'pit-crowd-face': 'face',
+  'pit-crowd-pop': 'fade', 'pit-lean': 'add', 'pit-near-wall': 'hide', 'pivot-kind': 'technique', 'pull-counter-slow': 'accept', 'pull-cross-power': 'accept',
+  'pull-test': 'sum', 'ring-lean': 'more', 'ring-rope-legs': 'legs', 'roll-counter-weak': 'accept', 'shell-shape': 'drop', 'shift-angle': 'retry',
+  'shift-order': 'keep', 'showoff-jerk': 'retry', 'shrug-view': 'turn', 'sound-bell': 'fix', 'sound-block': 'fix', 'sound-block.how': 'lower,other',
+  'sound-breath': 'fix', 'sound-breath.how': 'other', 'sound-crowd': 'fix', 'sound-feet': 'fix', 'sound-feet.how': 'quieter,other', 'sound-head-pop': 'bright',
+  'sound-hit': 'fix', 'sound-hit.how': 'lower,other', 'sound-hurt': 'drop', 'sound-steps': 'bounce', 'source-a-script': 'no', 'spar-evade': 'more',
+  'spar-finish': 'heavy', 'spar-tempo': 'engine', 'stage-order': 'asis', 'twist-chin': 'chin32', 'waist-bound': 'speed', 'waist-combo-coil': 'keep',
+  'waist-counter-gain': 'one', 'wave-speed': 'retry', 'weave-low-grades': 'accept'
+};
+const NOTES_1128 = {
+  'a-novice': '등급 내 고정 능력치가 아닌 성장을 통해 파워 & 스피드가 올라가는 구조로 극복 가능 / 등급은 스타일에 가깝습니다.',
+  'a-ropes-stuck': 'Rope-a-dope 테크닉을 추가, 끝에서 회복하며 머무를 때는 이것을 씁니다. 아닐 때는 체력이 있는 한 pivot 하여 돌아 나옵니다.',
+  'a-spar-pinned': '스파링 페이지는 양측에 같거나 한 등급 차이인 대진만 잡습니다.',
+  'free': '복서끼리 밀착해있는 시간이 너무 깁니다. 일정 거리를 두고 공방을 하도록 / 거리를 재고 유지하면서 주고 받도록.',
+  'fx-parry-white': '부딪힌 주먹끼리 스파크.',
+  'ring-lean': '로프 physics 자연스럽게.',
+  'shift-order': 'Pivoting(90도) 포함 모션 재구축.',
+  'shrug-view': '양손을 벌릴 때 어깨도 두 번 으쓱.',
+  'sound-crowd.how': '더 사실적으로.',
+  'twist-chin': '턱이 돌아가고 전신이 굳어진 뒤 통나무처럼 (현재와) 반대 방향으로 서서히 쓰러집니다.'
+};
+export const ANSWERS_1128 = { picks: PICKS_1128, notes: NOTES_1128 };
+// (what came of each answer; a group's default where every card of it came to the same)
+const DONE = {
+  'a-fall-edge': '**고침**(B): 쓰러진 몸의 관절을 벽 · 로프 · 기둥 패드 안쪽으로 옮김. 6-1 yes(누운 270프레임 중 255에서 벽돌 안) → no(0) · 6-2 yes(머리가 로프 밖 0.49 m) → no · 6-1-shot yes → no',
+  'a-standoff': '**고침**(A): 쉼이 끝나면 거리와 상관없이 한 번 굴려, 치기로 하면 걸어 들어가 침. 2-1 yes(7/7라운드 주먹 0) → no · 1-3 yes → no(모든 라운드에 주먹)',
+  'a-ropes-stuck': '**고침**(A; 메모의 로프어도프 기술은 아직, 순서의 끝): 로프를 등지면 상대를 돌아 넓은 쪽으로, 체력 30 이상이면 그 등급의 피벗으로 돌아 나옴. 6-5 yes(한 번에 최장 29.1초) → no(0.4초) · 3-2 yes(구석 16.4초) → no(0초)',
+  'a-guard-flicker': '**고침**(A): 가드를 0.35~0.85초씩 들거나 내림. 1-1 yes(초당 18.5번, 패리 70%) → no(초당 1.9번, 패리 46% · 들고 있을 때 49%)',
+  'a-screen-ai': '**남음**: 수정 라운드 뒤 바로 할 첫 단계(`docs/handoff.md` §4의 순서 맨 앞). 지금도 어느 페이지도 시합 엔진을 그리지 않음',
+  'a-draw-winner': '**고침**(A): 판정 셋 가운데 둘이 같은 사람이어야 승, 아니면 무승부이고 승자 없음. 2-2 yes(4/4) → no',
+  'a-count-ten': '**고침**(A, 그 뒤 I): 일어나기 시작하면 더 세지 않음; 10이 끝날 때까지 다 서지 못하는 늦은 기상은 비틀대다 다시 쓰러져 KO(11-28 채팅의 답). 2-3 yes(5번 중 1번 10까지 셈) → no(10까지 센 것 0). 고친 사람이 고른 값은 위 `late-rise`',
+  'a-hurt-blind': '**고침**(A): 자기 체력 60% 아래부터 덜 덤비고 더 멀리 · 가드를 더. 3-3 yes(5,400걸음 모두 같음) → no(1,721걸음이 다름)',
+  'a-dark-line': '**고침**(D, 고르신 대로 패리를 조금): 크로스암 가드를 갓 올렸을 때 턱의 뒷손 글러브에 맞은 주먹만, 그 등급 패리 시간의 앞 절반 안에서 받아넘김. 1-4 yes → no(크로스암 패리 12 → 30). 그래서 D 줄이 오르는지는 표본이 작아(2판 · 6판) 판단하지 못함',
+  'a-novice': '**남음**: X 단계에서(메모대로 등급 안의 성장으로)',
+  'a-cover-punch': '**고침**(D): 곧은 주먹의 팔꿈치도 어깨가 허락하는 자리에. 4-1 yes(회전 한계를 78.7° 넘음, 9프레임) → no(0)',
+  'a-topple': '**고침**(G가 5L · 5D, K가 모든 등급): 너무 긴 걸음에서 디딘 발을 바닥을 따라 끌어옴. 4-3 yes(79프레임, 최악 35.7 cm) → no(0). 고친 사람이 고른 값과 남은 질문: 위 `drag-speed` · `hitstop-count`',
+  'a-corner': '**고침**(B): 서 있는 몸은 코너 패드에 들지 않게. 6-3 yes(패드 안 144/150프레임) → no(0/150) · 4-2 yes(로프 밖 7.7 cm) → no(2.8 cm)',
+  'a-pit-foot': '**고침**(B): 지하 벽을 2.76 → 2.9 m로(다시 구움). 6-4 yes(10.4 cm) → no(0)',
+  'a-pit-outline': '**고침**(B): 빛 표시는 뼈 없는 층에서만. 5-2 yes(391픽셀) → no(0)',
+  'a-hood-face': '**고침**(B): 후드를 뒤로 · 얼굴 구멍을 넓혀 다시 구움. 5-4 yes(얼굴 픽셀 중간값 1) → no(18)',
+  'a-ko-thud': '**고침**(C): 다운 타격은 적어도 강타만큼 무겁게. 7-1 yes → no(다운 J40의 길이 139 → 779 ms)',
+  'a-ko-bell': '**고침**(C): KO 공은 다운 리플레이가 끝난 뒤에. 7-2 yes(리플레이 위에서 울림) → no(리플레이 끝 +2.8초; 원래 스크립트는 리플레이 끝에서 기록을 멈춰 끝 줄을 못 내므로 이어서 기록하는 사본으로 잼)',
+  'a-hidden-sound': '**고침**(C): 페이지를 숨기면 소리를 멈추고 보이면 다시. 7-5 yes → no · 9-3 yes → no',
+  'a-spar-link': '**고침**(E1). 8-1 yes(#5 대신 #7을 짬) → no',
+  'a-spar-pinned': '**남음**(나중에). 대진 규칙은 메모의 “같거나 한 등급”이 아니라 11-28 채팅의 답 “두 등급 차이까지”로 넣음(J). 8-2는 여전히 yes(#35, 같은 등급끼리에서 한 사람이 3.37초)',
+  'a-spar-race': '**고침**(E1): 마지막으로 고른 장소 · 옷만 받음. 9-1 yes(4/4) → no(0/4)',
+  'a-gl-lost': '**고침**(E1, 고르신 대로 다시 불러오기 단추만). 9-2 yes(흰 화면 95% · 87%) → no(0.1% · 0%). 그림은 저절로 다시 그려지지 않음(안내 글과 스크립트의 글도 그렇게 고침: J)',
+  'a-frame-meter': '**고침**(E1): 표시는 그림과 그림 사이의 간격(그리기 포함). 9-4 yes(표시 11.4 ms 대 실제 1,117 ms) → no(1.0배)',
+  'a-catalog-scroll': '**고침**(E1). 10-1 yes(390 폭에서 450 px) → no(390)',
+  'a-idle': '**남음**: 나중에(R 풋워크 단계와 함께)',
+  'a-reel-g': '**고침**(D): 무게중심 높이를 맞출 때 지난 손목 자리도 같이 올림. 4-4 yes(2.6 g) → no(휘청임 0프레임)',
+  'a-single-frames': '**일부**(A · G · K). 4-5 yes(네 가지) → no(): 머리에 글러브(A의 가드 고침) · 허벅지가 골반 뒤로(G) 고침, 두 사람 겹침은 줄임(시합 30판 16 → 7프레임, 그 가운데 6이 정강이). **다른 팔에 글러브는 못 고침**(4D 크로스암의 손이 한 프레임에 다른 팔뚝을 지나감). 재현의 시드에서는 없지만 30판 쓸기에는 남음: 위 `limit-cross-arm-hand` · `limit-shins` · `limit-fall-5d`',
+  'a-pit-hud': '**고침**(B): 가까운 관중을 숨기고 글자 아래 어두운 띠. 5-1 yes(글자 아래 관중 30/30) → no(0/30; 관중을 찾는 법을 새 색에 맞춘 사본으로 잼)',
+  'a-pit-spark': '**고침**(B): 지하의 팔레트에 캔버스의 두 파랑. 5-3 yes(66 중 45가 콘크리트색) → no(0/66)',
+  'a-replay-silent': '**고침**(C): 리플레이가 숨 · 바람 소리도 지님. 7-3 yes(첫 소리 0.52초) → no(0.00초)',
+  'a-murmur-cut': '**고침**(C). 7-4 yes(−14.6 dB에서 끊김) → no(−88.7 dB까지 줄어듦)',
+  'a-mute': '**고침**(C: 끄면 예약된 소리까지 버림, J: 게임 · 스파링 · 오디션에 같은 음소거 단추, 고른 것은 페이지를 오가도 그대로). 7-6 yes → no',
+  'a-spar-docs': '**고침**(E2, 그리고 L이 11-28 HEAD에서 다시 잼): `docs/spar.md`의 수치. 8-3 · 8-4는 옛 문서의 숫자를 코드에 박아 둔 스크립트라 글을 고쳐도 yes로 남음',
+  'a-dispose-list': '**고침**(E2): §7과 파기 카드를 실제 파일대로 바로잡은 뒤 승인된 것만 지움. 10-2는 지우기 전의 상태를 재는 스크립트라 지운 뒤에는 끝 줄을 낼 수 없음',
+  'a-since': '**고침**(E2). 10-3 yes(3/3) → no',
+  'a-catalog-text': '**고침**(E2 · J): 멱살 잡고 어퍼의 시간, 첫머리의 “6차 J·K”. 10-4 yes(2) → no',
+  'a-history': '**고침**(E2). 10-5 yes(6 중 1) → no',
+  'l-catalog': '**고침**(E1): 기막힌 수비의 카운터로 쓰러뜨린 카드는 ¼ 리플레이를 빼고 다운 리플레이만. catalog-2 yes → no',
+  'l-spar': '**spar-1 고침**(E1: 도발 중에는 발을 멈춤; H: 4D · 5D의 도발을 라운드의 약 5%로) spar-1 yes(44번 중 43번이 2프레임 이하) → no(0). **spar-4 고침**(E1: 페이지의 시계가 다운 시각에 멈춤, 시험 `tests/pages.test.mjs`) — 스크립트 spar-4는 페이지가 아니라 시합 엔진의 시계를 재서 yes로 남음',
+  'arm-way': '**고침**(B, 그릴 때만 앞으로: `ARM_PULL` 0.04). A(자세를 고침)는 고르신 대로 다음에 동작을 손볼 때 같이(남음)',
+  'sound-breath': '**고침**(C): 입으로 내뿜는 “훅”. 무게중심 잽 6.7 → 4.2 kHz, 지친 숨 5.1 → 2.2 kHz',
+  'sound-hit': '**고침**(C): 공명 저역 통과의 짧은 “텁” + 더 낮은 쿵 · 서브. 쿵(J 85) 머리 118→50 → 90→43 Hz',
+  'sound-block': '**고침**(C): 막기는 낮은 “퍽”, 쳐내기는 “탁”. 무게중심 글러브 391 → 163 Hz',
+  'sound-hurt': '**뺌**(C): “욱” · “헉” · 헐떡임을 지움(다운의 긴 숨은 남김)',
+  'sound-feet': '**고침**(C): 발바닥 “툭”, 끄는 대시, 둔한 쓰러짐. 발걸음 −66.4 → −73.1 LUFS',
+  'sound-bell': '**고침**(C): 놋쇠 공. 들리는 길이 1번 1.25 → 1.78초',
+  'sound-crowd': '**고침**(C): 여러 무리의 목소리 · 올라가는 “와!” · 박수, 말소리처럼 오르내리는 웅성거림',
+  'sound-head-pop': '**고침**(C): 밝은 소리 10~20 → 35~45 ms',
+  'sound-steps': '**고침**(C): 제자리 바운스에도 작은 발소리(40초 시합에서 초당 1.3)',
+  'ring-lean': '**고침**(B): 기댐 한도 16 → 34, 로프 그림의 휨 0.14 → 0.35. 기댐 6.6° → 13.3°, 놓은 로프가 멎기까지 1.28 → 0.52초',
+  'ring-rope-legs': '**고침**(B): 무릎도 맨 아래 로프를 휨(0 → 9.8 cm). 밀어내는 힘은 전처럼 몸통 · 머리만',
+  'pit-near-wall': '**고침**(B): 카메라 쪽 52° 안의 벽 · 통을 그리지 않음(60°까지 흐리게)',
+  'pit-crowd-face': '**고침**(B): 눈 · 입 두 점(관중 점 4,828 → 5,586)',
+  'pit-crowd-pop': '**고침**(B): 사람마다 서서히 나타나고 사라짐',
+  'pit-lean': '**일부**(B, 가장 작은 쪽): 지하 기댐 0 → 5.9°. 벽이 낮고 등에서 20 cm라 “벽 쪽으로 젖힘”이지 등을 대는 모습은 아님',
+  'spar-tempo': '**남음**: 순서의 끝(“스파링 템포 · 마무리 · 회피”)',
+  'spar-finish': '**남음**: 같은 차례. 11-28에 다시 잰 값은 `docs/spar.md`',
+  'spar-evade': '**남음**: 같은 차례',
+  'stage-order': '**정함**: 수정 라운드 뒤 `a-screen-ai` → N2 → P → Q → R → S(메모 `shift-order`: 90도 피벗을 포함해 모션을 다시 짬) → X → 콤보 C1~C4 → N3 · R2 → N4 · V2 → Z → 스파링 템포 · 마무리 · 회피, 로프어도프',
+  'pull-test': '**정함**(합계 기준 그대로). 그 합계 시험이 지금 실패합니다: 위 `pull-test-60`',
+  'shift-order': '**정함**: 메모대로 S 단계에서 90도 피벗을 포함해 모션을 다시 짬(아직 하지 않음)',
+  'impl-final-integration': '**정함**: Z에서(아직 하지 않음)',
+  'shell-shape': '**정함**(낮춰 적음): README의 목표를 낮춰 적는 일은 아직 하지 않음',
+  'fix-taunt-text': '**고침**(E2): 손짓은 세 번, 풍차는 두 주먹이 반 바퀴 어긋나게. 10-4의 도발 줄 yes → no',
+  'cleanup-fx-versions': '**지움**(E2): 옛 카탈로그 데이터의 `VERSIONS` · `MIST` · `FX_SCENES`, 옛 카탈로그 파일과 함께',
+  'cleanup-fx-sweat': '**지움**(E2): `src/render/fx.mjs`의 `sweat()` 하나(부르는 곳 0 확인)',
+  'cleanup-limp-out': '**보류**: 그대로 둠',
+  'cleanup-fxlab-now': '**확인만**(E2): “지금” 열은 이미 없었음(지울 것 없음)',
+  'del-session': '**지울 것 없음**: 옛 세션은 이미 없음(조회 “not found”). 지금 일하는 세션은 보관하지 않음',
+  'del-art-pending-old': '**지울 것 없음**: 읽으면 404이고 아티팩트 목록에 없음(이미 지워졌거나 이 계정에서 열 수 없음)',
+  'del-art-fxlab': '**지울 것 없음**: 읽으면 404이고 아티팩트 목록에 없음',
+  'del-code-pending-old': '**지움**(E2): 이 페이지가 쓰던 것은 먼저 `src/open.old.mjs` · `src/open.old.data.mjs` · `tests/open-old.test.mjs`로 옮김',
+  'del-ref-video': '**지움**(E2): `docs/ref/ground-shake-*` 12개와 그것을 부르던 옛 카드',
+  'free': '**고침**(A, 그 뒤 H): 콤비네이션 사이에는 상대 잽 바로 밖(1.22 m)에서 기다리고 들어가 침. 같은 능력치 24판에서 두 사람 중심이 0.9 m 안인 시간 8.2% → 4.0%(A) → 4.2%(H가 공격 흐름을 올린 뒤에도 늘리지 않음)'
+};
+const doneOf = (c) => DONE[c.id] || (c.group === 'plan' ? '**정함**: 그 단계에서 구현합니다(아직 하지 않음)' : c.group === 'limits' ? (PICKS_1128[c.id] === 'accept' ? '**받아들임**: 알려진 한계로 둠' : '**남음**: 다시 시도할 단계를 아직 열지 않음') : '');
+// (11-28, the chat after the 제출: the briefing's answers, as the user wrote them, and what came of them)
+const CHAT_1128 = [
+  { id: 'chat-2-1', title: '시험 60(당기기 카운터)', said: '“2-1. 원인 분석.”', done: '**분석함**(H): 기술이 약해진 것이 아니라 작은 표본이 기준선 위에 걸쳐 있음. 시험 · 시드는 그대로 → 위 `pull-test-60`' },
+  { id: 'chat-3-1', title: '공격 흐름', said: '“3-1. 공격 흐름 상향”', done: '**고침**(H): 같은 능력치 24판 KO 3 → 10, 맞힘 43 → 47%, 두 사람이 0.9 m 안인 시간 4.0 → 4.2%(붙는 시간은 늘리지 않음) → 위 `attack-values` · `body-count`' },
+  { id: 'chat-3-2', title: 'KO 처리', said: '“3-2. KO 처리: 일어선 후 비틀대며 다시 쓰러집니다.”', done: '**고침**(I): 8에 등으로 일어나면 다 선 뒤 0.8초 휘청이고 무릎 다운, 0.9초 뒤 KO(전: 싸움을 이어 감) → 위 `late-rise` · `late-rise-test`' },
+  { id: 'chat-3-3', title: '도발의 양', said: '“3-3. 도발은 5% 수준으로”', done: '**고침**(H): 스파링 4D · 5D가 도발하는 시간 17.1 · 15.6% → 5.4 · 4.9%(정한 열 판). 시드 1~50(11-28, 합친 코드)에서는 6.9 · 5.7%(전 18.6 · 17.9%). 시합 엔진은 원래 1.4 · 1.0%' },
+  { id: 'chat-3-4', title: '스파링 대진', said: '“3-4. 최대 두 등급 차이로 규칙 정비”', done: '**고침**(J): 숫자 등급 차이가 2를 넘으면 두 사람을 다시 뽑음. 시드 1~1000에서 세 등급 이상 차이 0 → 위 `spar-shift-early`' },
+  { id: 'chat-3-5', title: '멈춘 프레임', said: '“3-5. 설명 요청.”', done: '**설명함**(채팅) → 위 `hitstop-count`에서 정하실 일' },
+  { id: 'chat-4', title: '남은 모션 문제', said: '“4. 전체 개선 요청.”', done: '**일부**(K): 다리 고침을 모든 등급으로(4-3 no(0)), 두 사람 겹침 16 → 7프레임; 다른 팔의 글러브 · 정강이 · 5D 낙하는 못 함 → 위 `limit-…` 셋' },
+  { id: 'chat-5', title: '정리', said: '“5. 개선 및 미결 카탈로그 갱신.”', done: '**고침**(J · L): 남은 글, 음소거 단추, `docs/spar.md` 재측정, 이 페이지(답한 카드를 여기로, 새 카드), 인계 문서. 아티팩트 다시 게시는 조정자' },
+  { id: 'chat-6', title: '진행', said: '“6. 순차적 진행.”', done: '**정함**: 위 `stage-order`의 순서대로 한 번에 하나씩' }
+];
+
+const order = (g) => [...ROUND, ...AUDIT, ...LOOK, ...NEW, ...CARRY, ...LIMITS, ...DISPOSE, ...FREE].filter((c) => c.group === g);
+const answered = (c) => c.id in PICKS_1128 || c.id in NOTES_1128 || c.id === 'a-about';
+export const CARDS = GROUP_LIST.flatMap((g) => order(g.id).filter((c) => !answered(c)));
+export const GROUPS = GROUP_LIST.filter((g) => CARDS.some((c) => c.group === g.id));
 
 // every question, follow-ups with their parent and the answers that open them
 export const QUESTIONS = [];
@@ -667,12 +928,28 @@ for (const c of CARDS) {
 const BY = Object.fromEntries(QUESTIONS.map((q) => [q.id, q]));
 export const question = (id) => BY[id];
 
-// what was decided before this page: the old data's decided and the three answered in the old page's db
-export const DECIDED_LIST = [...DECIDED_NEW, ...ITEMS.filter((i) => !isOpen(i)).map((i) => {
-  const d = i.decided || { choice: OLD_DB[i.id], at: '2026-11-25', how: 'db' },
-    o = i.options.find((x) => x.id === d.choice);
-  return { id: i.id, title: asLD(i.title).replace(/`/g, ''), said: `${o ? asLD(o.name).replace(/`/g, '') : d.choice}${d.note ? ` (${d.note})` : ''}`, at: d.at, how: d.how };
-})];
+/* What was decided: { id, title, said (the pick, by its labels; a follow-up after it), memo (as written), done (what came of
+   it), part (the heading it is listed under), at, how ('page' this page, 'chat' the conversation, 'db' the old page) }:
+   this page's cards answered on 11-28, group by group; the chat of 11-28; then what was decided before (this page's own
+   DECIDED_NEW, the old data's decided and the three answered in the old page's db). */
+const names = (opts, v) => String(v).split(',').filter(Boolean).map((x) => { const o = (opts || []).find((p) => p[0] === x); return o ? o[1] : x; }).join(' · ');
+function decidedOf(c) {
+  const pick = PICKS_1128[c.id],
+    follows = Object.values(c.follow || {}).flat().filter((f) => f.id in PICKS_1128 || f.id in NOTES_1128),
+    said = [pick ? names(c.opts, pick) : '(메모만)', ...follows.filter((f) => PICKS_1128[f.id]).map((f) => `${f.title.replace(/\?$/, '')}: ${names(f.opts, PICKS_1128[f.id])}`)].join(' · '),
+    memo = [NOTES_1128[c.id], ...follows.filter((f) => NOTES_1128[f.id]).map((f) => NOTES_1128[f.id])].filter(Boolean).join(' / ');
+  return { id: c.id, title: c.title, said, memo, done: doneOf(c), part: GROUP_LIST.find((g) => g.id === c.group).title, at: '2026-11-28', how: 'page' };
+}
+export const DECIDED_LIST = [
+  ...GROUP_LIST.flatMap((g) => order(g.id).filter((c) => answered(c) && c.kind !== 'note').map(decidedOf)),
+  ...CHAT_1128.map((d) => Object.assign({ memo: '', part: ROUND_PART, at: '2026-11-28', how: 'chat' }, d)),
+  ...DECIDED_NEW.map((d) => Object.assign({ memo: '', done: '', part: BEFORE_PART }, d)),
+  ...ITEMS.filter((i) => !isOpen(i)).map((i) => {
+    const d = i.decided || { choice: OLD_DB[i.id], at: '2026-11-25', how: 'db' },
+      o = i.options.find((x) => x.id === d.choice);
+    return { id: i.id, title: asLD(i.title).replace(/`/g, ''), said: `${o ? asLD(o.name).replace(/`/g, '') : d.choice}${d.note ? ` (${d.note})` : ''}`, memo: '', done: '', part: BEFORE_PART, at: d.at, how: d.how };
+  })
+];
 
 /* ---- the answers */
 const values = (v) => (v ? String(v).split(',').filter(Boolean) : []);

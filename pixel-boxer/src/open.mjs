@@ -74,7 +74,15 @@ $('#items').outerHTML = GROUPS.map((g, i) => {
   const cs = CARDS.filter((c) => c.group === g.id);
   return `<div class="group" id="g-${g.id}"><h2><span class="no">${NO[i + 1]}</span>${esc(g.title)}</h2>${hasStars(g.id) ? `<button type="button" class="stars" data-stars="${g.id}">이 묶음의 남은 것을 모두 ★로</button>` : ''}</div>${g.note ? `<p class="groupnote">${g.note}</p>` : ''}${cs.map(cardHtml).join('')}`;
 }).join('');
-$('#decided').innerHTML = `<summary>정해진 것 (${DECIDED_LIST.length})</summary><ul>${DECIDED_LIST.map((d) => `<li><b>${fmt(d.title)}</b> — ${fmt(d.said)} <span>· ${esc(d.at)} · ${d.how === 'chat' ? '대화로' : d.how === 'db' ? '옛 페이지에서' : '권장대로 만듦'}</span></li>`).join('')}</ul>`;
+// (what was decided, part by part: the pick as given, the memo as written, what came of it)
+const HOW = { page: '이 페이지에서', chat: '대화로', db: '옛 페이지에서' };
+const parts = [...new Set(DECIDED_LIST.map((d) => d.part))];
+$('#decided').innerHTML = `<summary>정해진 것 (${DECIDED_LIST.length})</summary>${parts
+  .map((p) => {
+    const ds = DECIDED_LIST.filter((d) => d.part === p);
+    return `<h3>${esc(p)} <span>${ds.length}</span></h3><ul>${ds.map((d) => `<li id="d-${esc(d.id)}"><b>${fmt(d.title)}</b> — ${fmt(d.said)}${d.memo ? ` · 메모 “${esc(d.memo)}”` : ''} <span>· ${esc(d.at)} · ${HOW[d.how] || '권장대로 만듦'}</span>${d.done ? `<em>${fmt(d.done)}</em>` : ''}</li>`).join('')}</ul>`;
+  })
+  .join('')}`;
 function toc() {
   const picks = state.picks;
   $('#toc').innerHTML = GROUPS.map((g) => {
