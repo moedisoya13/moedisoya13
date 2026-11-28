@@ -29,7 +29,7 @@ for (let f = 0; f < 24; f++) {
   n += live;
   for (let i = 0; i < live; i++) { const p = Math.round(fx.rows[i * 12 + 9]); used.set(p, (used.get(p) || 0) + 1); }
 }
-const hex = v => '#' + v.toString(16).padStart(6, '0');
+const hex = v => v === undefined ? 'none' : '#' + v.toString(16).padStart(6, '0');
 let changed = 0;
 for (const [p, k] of [...used].sort((a, b) => a[0] - b[0])) {
   const differs = ringFloor[p] !== pitFloor[p];
