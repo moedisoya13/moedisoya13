@@ -111,14 +111,23 @@ def test_transitions_have_no_pops_and_planted_feet_do_not_slide(mv):
     own = max(moves.seq_max_jump(loops[k], loop=True)[0] for k in ("walk", "run"))
     for name, t in T.items():
         fr = t["frames"]
-        assert moves.seq_max_jump(fr)[0] <= own + 0.5, name  # no faster than the loops themselves
-        assert moves.foot_slide(fr, t["advance"]) < 2.0, name  # mm per frame (an art pixel is 29 mm)
         src, tgt = t["source"], t["target"]
+        # no faster than the loops themselves (a quick stop: or than the stretch of the one-two it plays into)
+        lim = own if tgt != "onetwo" else max(own, max(moves.jump_deg(ot[i], ot[i + 1])[0]
+                                                       for i in range(t["exit"] - len(fr), t["exit"])))
+        assert moves.seq_max_jump(fr)[0] <= lim + 0.5, name
+        assert moves.foot_slide(fr, t["advance"]) < 2.0, name  # mm per frame (an art pixel is 29 mm)
         # the cut into the clip and out of it
         first = loops[src][int(round(t["enter"] * len(loops[src])))] if src != "idle" else loops["idle"][0]
         assert moves.jump_deg(first, fr[0])[0] <= own + 0.5, name
         if tgt == "idle":
             nxt = loops["idle"][(t["exit"] + 1) % len(loops["idle"])]
+        elif tgt == "onetwo":  # the one-two goes on from the frame after the clip's last: the jump is its own step
+            nxt = ot[t["exit"] + 1]
+            assert moves.jump_deg(fr[-1], nxt)[0] <= moves.jump_deg(ot[t["exit"]], nxt)[0] + 0.5, name
+            fw = np.asarray(t["advance"])[:, 0]  # m per frame: never back more than 1.1 cm, at rest at the end
+            assert fw.min() > -0.011 and abs(fw[-1]) < 0.005, (name, np.round(fw * 100, 1))
+            continue
         else:
             n = len(loops[tgt])
             nxt = loops[tgt][int(math.floor((t["exit"] * n + 1e-6))) % n]

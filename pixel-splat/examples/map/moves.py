@@ -14,6 +14,13 @@ two frames that are (nearly) the same pose, or a rendered transition clip:
             through and lands in front)
     w2r_0 / w2r_5, r2w_0 / r2w_5   walk <-> run at phase 0 / 0.5 (the two loops share their phase: 0 = left
             foot down)
+    qw0..qw3 / qr0..qr7   quick stop into the one-two (J while walking / running), entered at walk phase j/4 /
+            run phase j/8.  The one-two plays in time from its frame QUICK_INTO - QUICK_ARMS (skipping its guard
+            bounce); the upper body cross-fades into it over QUICK_ARMS frames (the jab starts reaching out the
+            frame after), the legs over QUICK_LEGS frames from the first phase where the foot that is down can
+            become the guard's (quick_leg_start; until then the legs walk / run on).  The page then plays the
+            one-two on from the clip's last frame.  Root motion: from the planted feet; what no foot holds slows
+            from the gait's speed to 0 with the legs' weight (a run's flight does not carry full speed into the punch)
 
 A transition cross-fades the two moves (each keeps playing in time; local joint rotations slerped, the
 pelvis lerped, weight = smootherstep), then (1) moves the body over the ground by what the planted feet
@@ -44,6 +51,15 @@ M = motion.M_PER_UNIT  # metres per world unit
 WALK_FRAMES = int(round(motion.WALK_PERIOD * FPS))  # 48
 RUN_FRAMES = int(round(motion.RUN_PERIOD * FPS))  # 40
 IDLE_FRAMES = 120  # 2 s, one breath
+QUICK_PHASES = dict(walk=4, run=8)  # quick stops at phase j / this: at most 12 (walk) / 5 (run) frames to wait
+QUICK_ARMS = 14  # frames: the upper body's cross-fade into the one-two
+QUICK_LEGS = 16  # frames: the legs' (and the root's)
+QUICK_INTO = 40  # the one-two frame the upper body reaches (its jab starts reaching out at frame 41)
+LEGS = ("pelvis", "thighL", "shinL", "footL", "toeL", "thighR", "shinR", "footR", "toeR")
+# gait phases (sixteenths) where the legs may start settling into the guard: the foot that is down is (or is about to
+# be) the front one; from the others the planted foot would have to end up in front, and the body would go BACK
+# (moves.py quick-scan measures every sixteenth: travel, slowest frame, foot slide)
+QUICK_LEG_START = dict(walk=(0, 9, 10, 11, 12, 15), run=tuple(range(3, 14)))
 ONETWO_EASE = 30  # last frames of the one-two eased back onto the idle pose
 WALK_SPEED = motion.STRIDE * M / motion.WALK_PERIOD  # 1.4 m/s
 RUN_SPEED = motion.RUN_STRIDE * M / motion.RUN_PERIOD  # 3.75 m/s
@@ -113,8 +129,15 @@ class Moves:
                     run=[run_frame(i / RUN_FRAMES) for i in range(RUN_FRAMES)])
 
     # -- transitions: (frames, advance [fwd, side] m per frame, entry / exit phase)
+    def chain_from(self) -> int:
+        """The first one-two frame after its cross (the rear, right hand) is furthest forward: a J from here on is
+        kept and plays the next one-two when this one ends (earlier presses are dropped)."""
+        reach = [float(f.mats()[rig.SKELETON.index["handR"], 2, 3]) for f in self.onetwo()]
+        return int(np.argmax(reach)) + 1
+
     def transitions(self) -> Dict[str, dict]:
         T = {}
+        ot = self.onetwo()
         n = 24  # idle -> walk: the guard breaks into a walk that starts with the rear (right) foot
         T["start"] = transition(lambda t: self.idle_frame(int(round(t * FPS))), lambda t: walk_frame(t * FPS / WALK_FRAMES), n)
         T["start"].update(source="idle", target="walk", enter=0, exit=n / WALK_FRAMES)
@@ -127,6 +150,14 @@ class Moves:
             k = "0" if ph == 0 else "5"
             T["w2r_" + k] = gait_transition(ph, n, to_run=True)
             T["r2w_" + k] = gait_transition(ph, n, to_run=False)
+        for gait in ("walk", "run"):
+            for j in range(QUICK_PHASES[gait]):
+                ph = j / QUICK_PHASES[gait]
+                for late in range(4):  # (the legs one frame later, if their feet would slide)
+                    t = quick_stop(gait, ph, ot, quick_leg_start(gait, ph) + late)
+                    if foot_slide(t["frames"], t["advance"]) <= 2.0:
+                        break
+                T[f"q{gait[0]}{j}"] = t
         return T
 
 
@@ -149,7 +180,7 @@ def feet_xz(f: Frame) -> np.ndarray:
     return np.stack([st[1]["ankle"], st[-1]["ankle"]])
 
 
-def _settle(frames: List[Frame], prev: Frame, speed0: float = 0.0) -> Tuple[List[Frame], np.ndarray]:
+def _settle(frames: List[Frame], prev: Frame, speed0: float = 0.0, free: Optional[Sequence[float]] = None) -> Tuple[List[Frame], np.ndarray]:
     """Root motion from the planted feet, then pin them (``speed0``: m/s before the first frame).  Returns the frames and the per-frame advance of the
     anchor over the ground, [forward, side] in metres (side = the figure's left)."""
     out, adv = [], []
@@ -163,6 +194,8 @@ def _settle(frames: List[Frame], prev: Frame, speed0: float = 0.0) -> Tuple[List
         c = np.clip(f.contact, 0.0, 1.0)
         # the planted feet stay put; what is not held by a foot (flight, a foot only half down) keeps its speed
         held = -((cur - last) * c[:, None]).sum(0)
+        if free is not None:  # what no foot holds moves at this speed (m/s, straight ahead) instead of keeping its own
+            d_last = np.array([0.0, 0.0, free[i] / FPS / M])
         d = (held + max(0.0, 1.0 - c.sum()) * d_last) / max(c.sum(), 1.0)
         d_last = d
         d[1] = 0.0
@@ -203,7 +236,7 @@ def _settle(frames: List[Frame], prev: Frame, speed0: float = 0.0) -> Tuple[List
     return out, np.array(adv)
 
 
-def transition(src: Callable[[float], Frame], tgt: Callable[[float], Frame], n: int) -> dict:
+def transition(src: Callable[[float], Frame], tgt: Callable[[float], Frame], n: int, speed0: float = 0.0) -> dict:
     """``src`` / ``tgt``: time (s) -> Frame, time 0 = the source frame the page showed last.  Frame i is at time
     (i + 1) / FPS with weight smootherstep((i + 1) / n) of the target: the last frame IS the target then."""
     raw = []
@@ -212,8 +245,36 @@ def transition(src: Callable[[float], Frame], tgt: Callable[[float], Frame], n: 
         f = blend(a, b, motion.smootherstep((i + 1) / n))
         f.contact = np.minimum(a.contact, b.contact)  # down only where both moves have the foot down
         raw.append(f)
-    frames, adv = _settle(raw, src(0.0))
+    frames, adv = _settle(raw, src(0.0), speed0)
     return dict(frames=frames, advance=adv)
+
+
+def quick_leg_start(gait: str, phase: float) -> int:
+    """Frames from phase to the first phase at or after it where the legs may start settling (QUICK_LEG_START)."""
+    n = WALK_FRAMES if gait == "walk" else RUN_FRAMES
+    best = min(((s / 16 - phase) % 1.0) for s in QUICK_LEG_START[gait])
+    return int(math.ceil(best * n - 1e-9))
+
+
+def quick_stop(gait: str, phase: float, ot: List[Frame], leg_start: Optional[int] = None) -> dict:
+    """J while walking / running: the gait at phase -> the one-two (see the module notes)."""
+    loop, nl, v = (walk_frame, WALK_FRAMES, WALK_SPEED) if gait == "walk" else (run_frame, RUN_FRAMES, RUN_SPEED)
+    l0 = quick_leg_start(gait, phase) if leg_start is None else leg_start
+    n, s0 = max(QUICK_ARMS, l0 + QUICK_LEGS), QUICK_INTO - QUICK_ARMS
+    legs = [b in LEGS for b in BODY]
+    raw, free = [], []
+    for i in range(n):
+        a, b = loop(phase + (i + 1) / nl), ot[s0 + i + 1]
+        wu, wl = motion.smootherstep((i + 1) / QUICK_ARMS), motion.smootherstep((i + 1 - l0) / QUICK_LEGS)
+        qa = mat_to_quat(np.stack([a.rots[k] for k in BODY]))
+        qb = mat_to_quat(np.stack([b.rots[k] for k in BODY]))
+        R = [quat_to_mat(slerp(qa[k], qb[k], wl if legs[k] else wu)) for k in range(len(BODY))]
+        f = Frame({k: R[i_] for i_, k in enumerate(BODY)}, a.root + (b.root - a.root) * wl,
+                  a.contact if wl <= 0 else np.minimum(a.contact, b.contact))
+        raw.append(f)
+        free.append(v * (1.0 - wl))
+    frames, adv = _settle(raw, loop(phase), v, free)
+    return dict(frames=frames, advance=adv, source=gait, target="onetwo", enter=phase, exit=s0 + n)
 
 
 def gait_transition(phase: float, n: int, to_run: bool) -> dict:
@@ -289,6 +350,8 @@ def report(onetwo: str) -> Dict[str, dict]:
             enter = jump_deg(loops[src][int(round(t["enter"] * len(loops[src]))) % len(loops[src])], fr[0])
         if tgt == "idle":
             leave = jump_deg(fr[-1], loops["idle"][(t["exit"] + 1) % IDLE_FRAMES])
+        elif tgt == "onetwo":
+            leave = jump_deg(fr[-1], ot[t["exit"] + 1])
         else:
             n = len(loops[tgt])
             leave = jump_deg(fr[-1], loops[tgt][int(math.floor(t["exit"] * n + 1)) % n])
@@ -304,10 +367,20 @@ if __name__ == "__main__":
     import json
 
     ap = argparse.ArgumentParser(description="pose jumps at the play page's cuts and inside its clips")
-    ap.add_argument("cmd", choices=["report"])
+    ap.add_argument("cmd", choices=["report", "quick-scan"])
     ap.add_argument("--onetwo", default=str(HERE.parents[1] / "out" / "onetwo4" / "5m" / "clip.npz"))
     ap.add_argument("-o", "--out", default=None, help="write the table as JSON here")
     a = ap.parse_args()
+    if a.cmd == "quick-scan":  # quick stops with the legs settling at once, from every sixteenth of each gait
+        ot_ = Moves(a.onetwo).onetwo()
+        for g in ("walk", "run"):
+            for s in range(16):
+                t = quick_stop(g, s / 16, ot_, leg_start=0)
+                adv = np.asarray(t["advance"])
+                print(f"{g} {s:2d}/16 travel {adv[:, 0].sum():6.3f} m ahead {adv[:, 1].sum():6.3f} m left, slowest frame "
+                      f"{adv[:, 0].min() * 100:5.1f} cm, foot slide {foot_slide(t['frames'], adv):4.1f} mm/frame"
+                      + ("   <- leg start" if s in QUICK_LEG_START[g] else ""))
+        raise SystemExit(0)
     rep = report(a.onetwo)
     for k, v in rep.items():
         print(f"{k:28s} {v['deg']:6.2f} deg  {v['joint']:10s} " + " ".join(f"{x}={y}" for x, y in v.items() if x not in ("deg", "joint")))

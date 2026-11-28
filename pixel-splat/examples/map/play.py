@@ -304,7 +304,8 @@ def sprite_sequences(onetwo: str, max_frames: int = 0):
             meta.update(kind="gait", stride_m=round(stride, 5), speed=round(stride * mv.FPS / len(frames), 5),
                         frames_per_cycle=len(frames))
         seqs.append((name, frames, meta))
-    seqs.append(("onetwo", m.onetwo(), dict(kind="action", fps=mv.FPS, source=onetwo, then="idle")))
+    seqs.append(("onetwo", m.onetwo(), dict(kind="action", fps=mv.FPS, source=onetwo, then="idle",
+                                            chain_from=m.chain_from())))
     for name, t in m.transitions().items():
         meta = dict(kind="transition", fps=mv.FPS, source=t["source"], target=t["target"], enter=t["enter"],
                     exit=t["exit"], advance=[[round(float(a), 6), round(float(b), 6)] for a, b in t["advance"]])
