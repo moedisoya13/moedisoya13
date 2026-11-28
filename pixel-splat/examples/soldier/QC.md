@@ -19,8 +19,9 @@
 python examples/soldier/qc.py check out/onetwo3/5m/clip.npz --source <카탈로그 폴더>/1-2@5m.json -o out/qc/onetwo_5m
 # 영상 모션캡처 데모: 원본 = truth.npz
 python examples/soldier/qc.py check out/mocap/demo_run/clip.npz --source out/mocap/demo_run/truth.npz -o out/qc/mocap_run
-# 리그 자체의 걷기 루프
+# 리그 자체의 걷기 루프 (--period 0.8 = 플레이 페이지의 1.4 m/s), 달리기 루프
 python examples/soldier/qc.py walk -o out/qc/walk_loop
+python examples/soldier/qc.py run -o out/qc3/run
 # 위 전부 (복싱 5개, 모캡 데모 2개, 걷기) → out/qc/summary_ko.txt, out/qc/table.json
 python examples/soldier/qc.py all --sources <카탈로그 폴더>
 ```
@@ -106,6 +107,9 @@ python examples/soldier/qc.py all --sources <카탈로그 폴더>
 | 모캡 달리기 truth / 옮긴 것 | 34 / 34 | 32 / 32 | 0 / 0 | 32 / 27 | 16 / 3+0 | — |
 | 모캡 점프 truth / 옮긴 것 | 0 / 0 | 22 / 23 | 1 / 1 | 20 / 37 | 35 / 10+16 (팔 비틀림 3–7도) | — |
 | 리그 걷기 루프 | 88 | 102 / 132 | 0 | 58 | 47 (반 걸음마다 같은 곳) | — |
+| 리그 걷기 루프, 고친 뒤 (1.1 s / 0.8 s 주기) | 76 / 60 | 110 / 132, 90 / 96 | 0 | **8 / 8** (최악 4.2 / 5.3 cm) | 7 / 11 | — |
+| 리그 달리기 루프 (새로, 0.667 s) | 48 (+체공 32) | 45 / 48 | 0 | 11 (최악 6.4 cm) | 14 | — |
+| 가드 숨쉬기 (새로, 2 s) | 0 (두 발) | 0 | 0 | 0 | 0 | — |
 
 읽는 법과 판단:
 
@@ -135,6 +139,8 @@ python examples/soldier/qc.py all --sources <카탈로그 폴더>
 - **리그 걷기 루프**: 반 걸음마다(28, 61, 94, 127프레임) 골반이 2.7 mm 툭 떨어지는 꺾임이 있고(이때 위아래 가속이 −1 g → +0.8 g),
   한 발로 서기 시작할 때 몸이 빨라집니다(실제 걷기는 그때 느려짐). 그래서 ZMP가 한 발 시작마다 발 뒤 40 cm로 나갑니다.
   XCoM은 걸음마다 앞으로 나갔다가 다음 발을 디디며 돌아오는 정상 모양입니다.
+  **→ 고쳤습니다**(soldier README "걷기 균형"): 골반 높이는 다리가 닿는 한계 아래의 매끄러운 사인파(±0.45 g 이내), 앞뒤·옆 위치는
+  팔다리까지 넣은 ZMP가 디딘 발 위를 뒤꿈치에서 발볼로 구르도록 풀어서 정합니다. 남은 ZMP 밖 8프레임은 뒤꿈치가 드는 순간 발볼 앞 4–5 cm.
 
 ## 이 검사가 틀릴 수 있는 곳
 

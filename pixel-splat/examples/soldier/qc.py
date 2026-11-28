@@ -396,6 +396,28 @@ def walk_clip(fps: float = 60.0, period: float = 1.1, cycles: float = 2.0) -> Cl
                           meta=dict(name="walk_loop", period=period))
 
 
+def run_clip(fps: float = 60.0, period: Optional[float] = None, cycles: float = 2.0) -> Clip:
+    """The rig's own run loop (``motion.run_gait_rots``) travelling forward at its own speed."""
+    import motion
+    period = period or motion.RUN_PERIOD
+    frames, roots, contact = [], [], []
+    for i in range(int(round(cycles * period * fps))):
+        ph = i / fps / period
+        info: dict = {}
+        rots, root = motion.run_gait_rots(rig.SKELETON, ph % 1.0, motion.RUN_STRIDE * ph, info=info)
+        frames.append(rots)
+        roots.append(root)
+        contact.append([info["L"]["contact"] is not None, info["R"]["contact"] is not None])
+    contact = np.array(contact, np.float32)
+    return Clip.from_rots(fps, frames, np.array(roots), contact=contact, flight=~contact.any(1),
+                          meta=dict(name="run_loop", period=period))
+
+
+def frames_clip(fps: float, frames: Sequence[Tuple[Dict[str, np.ndarray], np.ndarray]], name: str) -> Clip:
+    """A clip of given (rots, root) frames (the idle loop, a transition ...)."""
+    return Clip.from_rots(fps, [r for r, _ in frames], np.array([q for _, q in frames]), meta=dict(name=name))
+
+
 # ---------------------------------------------------------------- signal tools
 def sg_window(fps: float) -> int:
     w = int(round(SG_SECONDS * fps))
@@ -1414,6 +1436,11 @@ def main(argv=None):
     w.add_argument("--fps", type=float, default=60.0)
     w.add_argument("--period", type=float, default=1.1, help="seconds per cycle (synth.walk's default)")
     w.add_argument("--no-plots", action="store_true")
+    r = sub.add_parser("run", help="the rig's own run loop (motion.run_gait_rots)")
+    r.add_argument("-o", "--out")
+    r.add_argument("--fps", type=float, default=60.0)
+    r.add_argument("--period", type=float, default=None, help="seconds per cycle (default motion.RUN_PERIOD)")
+    r.add_argument("--no-plots", action="store_true")
     al = sub.add_parser("all", help="the boxing imports, the walk loop and the mocap demos, into one folder")
     al.add_argument("--sources", required=True, help="folder with the catalogue's 1-2@5m.json, inout@1.json, ...")
     al.add_argument("--project-out", default=str(HERE.parents[1] / "out"), help="the project's out/ (clips are read from it)")
@@ -1424,6 +1451,8 @@ def main(argv=None):
         run_all(a.sources, a.project_out, a.out, not a.no_plots)
     elif a.cmd == "check":
         check(a.clip, a.source, a.out, a.name or os.path.basename(os.path.dirname(os.path.abspath(a.clip))), not a.no_plots)
+    elif a.cmd == "run":
+        check(None, None, a.out, "run_loop", not a.no_plots, clip_obj=run_clip(a.fps, a.period))
     else:
         check(None, None, a.out, "walk_loop", not a.no_plots, clip_obj=walk_clip(a.fps, a.period))
 
