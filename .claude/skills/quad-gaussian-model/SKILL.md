@@ -117,7 +117,7 @@ nohup python template/soldier.py bake -o out/fig --splats 60000 --res 320 --view
 | 펀치에 맞춘 주먹, 팔꿈치 빼기 | `arms.py`의 상수(`PUNCH_MIN` `CLOSE_S` `HOLD` `OPEN` / `ARM_BALLS` `CLEAR_MARGIN` `SMOOTH_S` `HAND_TURN_MOST`; CLI `--hand-turn-max` `--wrist-range`), 손목 한계 묶음 `rig.LIMIT_SETS` | 규칙과 잰 값은 [`motion.md`](references/motion.md). 형태가 아니라 모션이므로 굽지 않고 retarget·렌더만 다시 |
 | **옷·갑옷·소품** | `costume.py`의 `layers()` `paint()` `MAT` | 뼈마다 `{층 이름: 거리}`. 아래 "복식의 규칙" |
 | 늘어지는 천·깃털·꼬리 | `rig.py` 보조 뼈(`GORES` `CAPE` `PLUME`, `make_skeleton`) + `motion.drive_helpers` + `costume.BONES` | 뼈 구조가 바뀌므로 sculpt·bake 다시. 안 쓰는 보조 뼈는 층을 안 주면 splat이 없다 |
-| 걸음걸이 | `motion.py` `STRIDE` `STANCE` `PITCH_*` `SWING_LIFT` | 발 경로를 월드 좌표로 먼저 정하고 골반 높이는 발에서 역산 → [`motion.md`](references/motion.md) |
+| 걸음걸이 | `motion.py` `WALK_PERIOD` `STRIDE` `WALK_NORM` `RUN_NORM` `Gait` | 디딘 발은 월드에 고정, 뜬 다리는 사람의 관절 곡선, 골반 높이는 받친 무릎에서 → [`motion.md`](references/motion.md) |
 | 화면 틀·조명 방향 | `soldier.py` `CENTER` `EXTENT` `HERO_AZ` | 깃털·무기로 키가 커지면 `EXTENT`를 늘린다 |
 | 룩(대비·rim·bloom) | `look.py`, `pixelsplat/shade.py` `stylized()` | 형태와 무관: 굽지 않고 렌더만 다시 |
 | 관통 검사 대상 | `costume.py` `CLASH_PAIRS` `THROUGH` `COVERS` | 새 옷 조각을 여기에 올려야 `verify`가 본다 |

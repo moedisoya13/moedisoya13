@@ -4,14 +4,16 @@ Sprites cannot be blended at run time, so every change of move the page can make
 two frames that are (nearly) the same pose, or a rendered transition clip:
 
     idle    a breathing guard loop (``motion.guard_idle_rots``) around the first pose of the one-two
-    walk    ``motion.walk_rots`` on the spot, one cycle = 48 frames = 0.8 s = 1.12 m at 1.4 m/s
+    walk    ``motion.walk_rots`` on the spot, one cycle = 60 frames = 1.0 s = 1.4 m at 1.4 m/s (120 steps a minute)
     run     ``motion.run_gait_rots`` on the spot, one cycle = 40 frames = 0.667 s = 2.5 m at 3.75 m/s
     onetwo  the imported clip (wrist range "human"), 144 frames; it starts on the idle's pose and its last
             0.5 s ease back onto it, so it begins and ends where the idle is
-    start   idle -> walk (from idle frame 0, ends at walk phase 0.5)
+    start   idle -> walk: the hips first slide over the front (left) foot while the walk waits at its phase 0, then
+            the rear (right) foot steps off - it carries no weight from then on (0.6 s, ends at walk phase 0.4)
     stopA / stopB   walk -> idle, entered at walk phase 0 (left foot just down in front: the guard's own
             foot order) or 0.5 (right foot in front: the walk carries on one step so the left foot comes
-            through and lands in front)
+            through and lands in front).  The rear foot, about to push off, is not pinned (the front one carries the body);
+            elbows fold first and the shoulders follow (``ARM_TIMING``), so the arms bend into the guard, not reach out
     w2r_0 / w2r_5, r2w_0 / r2w_5   walk <-> run at phase 0 / 0.5 (the two loops share their phase: 0 = left
             foot down)
     qw0..qw3 / qr0..qr7   quick stop into the one-two (J while walking / running), entered at walk phase j/4 /
@@ -48,7 +50,7 @@ from clip import Clip, geodesic_deg, mat_to_quat, quat_to_mat, slerp  # noqa: E4
 
 FPS = 60.0
 M = motion.M_PER_UNIT  # metres per world unit
-WALK_FRAMES = int(round(motion.WALK_PERIOD * FPS))  # 48
+WALK_FRAMES = int(round(motion.WALK_PERIOD * FPS))  # 60
 RUN_FRAMES = int(round(motion.RUN_PERIOD * FPS))  # 40
 IDLE_FRAMES = 120  # 2 s, one breath
 QUICK_PHASES = dict(walk=4, run=8)  # quick stops at phase j / this: at most 12 (walk) / 5 (run) frames to wait
@@ -64,8 +66,13 @@ ONETWO_EASE = 30  # last frames of the one-two eased back onto the idle pose
 WALK_SPEED = motion.STRIDE * M / motion.WALK_PERIOD  # 1.4 m/s
 RUN_SPEED = motion.RUN_STRIDE * M / motion.RUN_PERIOD  # 3.75 m/s
 BODY = [b for b in rig.GEOMETRY_BONES if b in rig.SKELETON.index]
+START_FRAMES = 36  # idle -> walk, in all (0.6 s)
+START_SHIFT = 12  # ... of which the weight shift onto the front foot before the walk's clock starts (0.2 s)
+START_SWAY = 0.035  # world units the hips move towards the front (left) foot for it
+START_DIP = 0.006  # ... and down (the knees give a little as the weight comes onto one leg)
 CONTACT_ON = 0.5  # a foot whose contact weight is above this is pinned
-RELEASE_FRAMES = 6  # a foot that lifts off eases out of its pin over this many frames
+PIN_FOLLOW = 0.3  # fraction of a pinned foot's offset from its pose the root takes up each frame
+RELEASE_FRAMES = 0  # a foot that lifts off eases out of its pin over this many frames
 
 
 class Frame:
@@ -114,6 +121,18 @@ class Moves:
         rots, root = motion.guard_idle_rots(self.guard.rots, self.guard.root, (i % IDLE_FRAMES) / IDLE_FRAMES)
         return Frame(rots, root, [1.0, 1.0])
 
+    def shifted_idle(self, i: int, u: float) -> Frame:
+        """Idle frame i with the hips moved ``u`` (0..1, eased) of the way over the front (left) foot, feet kept."""
+        f = self.idle_frame(i)
+        s = motion.smootherstep(u)
+        if s <= 0:
+            return f
+        st = motion.leg_state(f.rots, f.root)
+        rots = {b: r.copy() for b, r in f.rots.items()}
+        root = f.root + np.array([START_SWAY * s, -START_DIP * s, 0.0])
+        motion.pin_legs(rots, root, st)
+        return Frame(rots, root, f.contact)
+
     def onetwo(self) -> List[Frame]:
         c, n = self.clip, len(self.clip)
         out = []
@@ -138,15 +157,21 @@ class Moves:
     def transitions(self) -> Dict[str, dict]:
         T = {}
         ot = self.onetwo()
-        n = 24  # idle -> walk: the guard breaks into a walk that starts with the rear (right) foot
-        T["start"] = transition(lambda t: self.idle_frame(int(round(t * FPS))), lambda t: walk_frame(t * FPS / WALK_FRAMES), n)
-        T["start"].update(source="idle", target="walk", enter=0, exit=n / WALK_FRAMES)
-        for name, ph, n in (("stopA", 0.0, 24), ("stopB", 0.5, 30)):
+        # idle -> walk: the guard first shifts its weight onto the front (left) foot - the hips slide over it while
+        # the walk waits at its phase 0 (both feet down) - then breaks into a walk whose first step is the rear
+        # (right) foot's
+        n, k = START_FRAMES, START_SHIFT
+        T["start"] = transition(lambda t: self.shifted_idle(int(round(t * FPS)), min(1.0, t * FPS / k)),
+                                lambda t: walk_frame(max(0.0, t * FPS - k) / WALK_FRAMES), n, timing=ARM_TIMING,
+                                start=k // 2, lift={1: k})
+        T["start"].update(source="idle", target="walk", enter=0, exit=(n - k) / WALK_FRAMES)
+        for name, ph, n, rear in (("stopA", 0.0, 24, 1), ("stopB", 0.5, 30, 0)):
+            # (the rear foot is about to push off: it is not held to the floor, the front one carries the body)
             T[name] = transition(lambda t, ph=ph: walk_frame(ph + t * FPS / WALK_FRAMES),
-                                 lambda t: self.idle_frame(int(round(t * FPS))), n)
+                                 lambda t: self.idle_frame(int(round(t * FPS))), n, timing=ARM_TIMING, lift={rear: 0})
             T[name].update(source="walk", target="idle", enter=ph, exit=n % IDLE_FRAMES)  # exit: idle frame shown last
         for ph in (0.0, 0.5):
-            n = 20
+            n = 22  # (frames: the clip ends at the target loop's speed)
             k = "0" if ph == 0 else "5"
             T["w2r_" + k] = gait_transition(ph, n, to_run=True)
             T["r2w_" + k] = gait_transition(ph, n, to_run=False)
@@ -180,45 +205,100 @@ def feet_xz(f: Frame) -> np.ndarray:
     return np.stack([st[1]["ankle"], st[-1]["ankle"]])
 
 
-def _settle(frames: List[Frame], prev: Frame, speed0: float = 0.0, free: Optional[Sequence[float]] = None) -> Tuple[List[Frame], np.ndarray]:
+def foot_pivots(f: Frame):
+    """Per foot (L, R): the point a planted foot turns about - the ball when its heel is up, the heel when its toes
+    are up, else the ankle - as (world position on the spot, that point on the rest foot, the foot's world rotation)."""
+    st = motion.leg_state(f.rots, f.root)
+    out = []
+    for s in (1, -1):
+        W, a = st[s]["W_foot"], st[s]["ankle"]
+        v = W @ (rig.TOE[s] - rig.HEEL[s])
+        down = math.degrees(math.atan2(-v[1], math.hypot(v[0], v[2]))) - math.degrees(
+            math.atan2(-(rig.TOE[s] - rig.HEEL[s])[1], (rig.TOE[s] - rig.HEEL[s])[2]))  # pitch, toes down +
+        rest = rig.TOE[s] if down > 0.5 else rig.HEEL[s] if down < -0.5 else rig.ANKLE[s]
+        out.append((a + W @ (rest - rig.ANKLE[s]), rest, W))
+    return out
+
+
+def foot_points(f: Frame):
+    """(pivots as ``foot_pivots``, [per foot {rest point: world position} of its heel, ankle and ball])."""
+    piv = foot_pivots(f)
+    pts = []
+    for k, s in ((0, 1), (1, -1)):
+        p0, rest, W = piv[k]
+        a0 = p0 - W @ (rest - rig.ANKLE[s])
+        pts.append({tuple(np.round(q, 6)): a0 + W @ (q - rig.ANKLE[s]) for q in (rig.HEEL[s], rig.ANKLE[s], rig.TOE[s])})
+    return piv, pts
+
+
+def _settle(frames: List[Frame], prev: Frame, speed0: float = 0.0, free: Optional[Sequence[float]] = None,
+            speed: Optional[Sequence[float]] = None) -> Tuple[List[Frame], np.ndarray]:
     """Root motion from the planted feet, then pin them (``speed0``: m/s before the first frame).  Returns the frames and the per-frame advance of the
-    anchor over the ground, [forward, side] in metres (side = the figure's left)."""
+    anchor over the ground, [forward, side] in metres (side = the figure's left).  ``speed`` (m/s per frame): the forward
+    travel is this instead of what the feet say - the pins then keep the planted feet where they are (as far as the
+    legs reach).  A planted foot is held at the point it turns about (``foot_pivots``), and the root follows a pin
+    that is off its pose a little each frame (PIN_FOLLOW), so the pin need not drag the foot later."""
     out, adv = [], []
     anchor = np.zeros(3)  # in rig units (x = left, z = forward), y unused
-    last = feet_xz(prev)
-    pinned: Dict[int, np.ndarray] = {}  # foot -> world position
-    release: Dict[int, list] = {}  # foot -> [world position it was let go at, frames since]
+    last = foot_points(prev)[1]
+    pinned: Dict[int, dict] = {}  # foot -> {rest point: world position} of its heel, ankle and ball as placed
+    last_key: Dict[int, tuple] = {}  # foot -> the rest point it turned about last
+    release: Dict[int, list] = {}  # foot -> [world ankle position it was let go at, frames since]
     d_last = np.array([0.0, 0.0, speed0 / FPS / M])
     for i, f in enumerate(frames):
-        cur = feet_xz(f)
+        piv, pts = foot_points(f)
+        cur = np.stack([p for p, _, _ in piv])  # (a foot rolling over its heel or ball holds that point, not its ankle)
+        moved = np.stack([pts[k][tuple(np.round(piv[k][1], 6))] - last[k][tuple(np.round(piv[k][1], 6))] for k in range(2)])
+        ank = feet_xz(f)
         c = np.clip(f.contact, 0.0, 1.0)
+        ch = c
         # the planted feet stay put; what is not held by a foot (flight, a foot only half down) keeps its speed
-        held = -((cur - last) * c[:, None]).sum(0)
+        held = -(moved * ch[:, None]).sum(0)
+        # where a pinned foot is not where the pose (and the root motion so far) puts it - two planted feet that the
+        # blend pulls apart - the root follows the pin a little each frame, so the pin need not drag the foot later
+        for k in range(2):
+            if ch[k] > CONTACT_ON and k in pinned:
+                key = tuple(np.round(piv[k][1], 6))
+                if key in pinned[k]:
+                    off = pinned[k][key] - (cur[k] + anchor - moved[k])
+                    held = held + PIN_FOLLOW * np.array([off[0], 0.0, off[2]]) * ch[k]
         if free is not None:  # what no foot holds moves at this speed (m/s, straight ahead) instead of keeping its own
             d_last = np.array([0.0, 0.0, free[i] / FPS / M])
-        d = (held + max(0.0, 1.0 - c.sum()) * d_last) / max(c.sum(), 1.0)
+        d = (held + max(0.0, 1.0 - ch.sum()) * d_last) / max(ch.sum(), 1.0)
+        if speed is not None:
+            d[2] = speed[i] / FPS / M
         d_last = d
         d[1] = 0.0
         anchor = anchor + d
-        last = cur
+        last = pts
         adv.append([d[2] * M, d[0] * M])
         pins = {}
         st = motion.leg_state(f.rots, f.root)
         ease = ((i + 1) / len(frames)) ** 3  # a pin gives way to the pose, slowly, so the clip ends ON its target
         for k, s in ((0, 1), (1, -1)):
             if c[k] > CONTACT_ON:
-                if k not in pinned:
-                    pinned[k] = cur[k] + anchor
-                pinned[k] = pinned[k] + ease * (cur[k] + anchor - pinned[k])
+                _, rest, W = piv[k]
+                key = tuple(np.round(rest, 6))
+                if k not in pinned:  # world positions of the foot's heel, ankle and ball as placed
+                    pinned[k] = {}
+                if key not in pinned[k]:  # (first frame down: where the pose has it)
+                    pinned[k][key] = cur[k] + anchor
+                target = pinned[k][key] + ease * (cur[k] + anchor - pinned[k][key])
                 p = dict(st[s])
-                local = pinned[k] - anchor
-                p["ankle"] = np.array([local[0], cur[k][1], local[2]])  # keep the pose's own heel/toe height
+                local = target - anchor
+                # the pivot where it was pinned (at the pose's own height), the foot turned as the pose has it
+                p["ankle"] = np.array([local[0], cur[k][1], local[2]]) + W @ (rig.ANKLE[s] - rest)
                 pins[s] = p
+                last_key[k] = key
+                placed = p["ankle"] + anchor  # the next frame may turn about another point of this foot
+                pinned[k] = {tuple(np.round(q, 6)): placed + W @ (q - rig.ANKLE[s]) for q in (rig.HEEL[s], rig.ANKLE[s], rig.TOE[s])}
             else:
-                if k in pinned:
-                    release[k] = [pinned.pop(k), 0]
+                if k in pinned:  # (let go about the point it last turned about)
+                    pos = pinned.pop(k)[last_key[k]]
+                    if RELEASE_FRAMES > 0:
+                        release[k] = [pos, 0, last_key[k]]
                 if k in release:  # a foot that lifts off leaves its pin over a few frames, not at once
-                    pos, age = release[k]
+                    pos, age, key = release[k]
                     age += 1
                     alpha = 1.0 - motion.smootherstep(age / RELEASE_FRAMES)
                     if alpha <= 0:
@@ -226,8 +306,10 @@ def _settle(frames: List[Frame], prev: Frame, speed0: float = 0.0, free: Optiona
                     else:
                         release[k][1] = age
                         p = dict(st[s])
-                        local = pos - anchor
-                        p["ankle"] = cur[k] + alpha * (np.array([local[0], cur[k][1], local[2]]) - cur[k])
+                        local, here = pos - anchor, pts[k][key]
+                        W = piv[k][2]
+                        target = here + alpha * (np.array([local[0], here[1], local[2]]) - here)
+                        p["ankle"] = target + W @ (rig.ANKLE[s] - np.array(key))
                         pins[s] = p
         rots = {k: v.copy() for k, v in f.rots.items()}
         if pins:
@@ -236,14 +318,41 @@ def _settle(frames: List[Frame], prev: Frame, speed0: float = 0.0, free: Optiona
     return out, np.array(adv)
 
 
-def transition(src: Callable[[float], Frame], tgt: Callable[[float], Frame], n: int, speed0: float = 0.0) -> dict:
+# per bone, the stretch of a transition (fractions of it) over which it turns to the target: the elbows fold
+# first and the shoulders follow, so an arm that swings into the guard (or out of it) bends on the way instead
+# of reaching out straight in front
+ARM_TIMING = {"forearm": (0.0, 0.7), "hand": (0.0, 0.7), "upperarm": (0.25, 1.0), "clav": (0.15, 1.0)}
+
+
+def blend_timed(a: Frame, b: Frame, u: float, timing: Dict[str, Tuple[float, float]]) -> Frame:
+    """``blend`` with each bone's weight smootherstep over its own stretch of the transition (u = 0..1 of it)."""
+    w = []
+    for k in BODY:
+        lo, hi = next((v for p, v in timing.items() if k.startswith(p)), (0.0, 1.0))
+        w.append(motion.smootherstep((u - lo) / (hi - lo)))
+    qa = mat_to_quat(np.stack([a.rots[k] for k in BODY]))
+    qb = mat_to_quat(np.stack([b.rots[k] for k in BODY]))
+    R = [quat_to_mat(slerp(qa[i], qb[i], w[i])) for i in range(len(BODY))]
+    wr = motion.smootherstep(u)
+    return Frame({k: R[i] for i, k in enumerate(BODY)}, a.root + (b.root - a.root) * wr, a.contact + (b.contact - a.contact) * wr)
+
+
+def transition(src: Callable[[float], Frame], tgt: Callable[[float], Frame], n: int, speed0: float = 0.0,
+               timing: Optional[Dict[str, Tuple[float, float]]] = None, start: int = 0,
+               lift: Optional[Dict[int, int]] = None) -> dict:
     """``src`` / ``tgt``: time (s) -> Frame, time 0 = the source frame the page showed last.  Frame i is at time
-    (i + 1) / FPS with weight smootherstep((i + 1) / n) of the target: the last frame IS the target then."""
+    (i + 1) / FPS with weight smootherstep((i + 1 - start) / (n - start)) of the target: the last frame IS the target
+    then.  ``timing``: per-bone stretches (``ARM_TIMING``); ``start``: frames before the blend begins; ``lift``: {foot
+    (0 = L, 1 = R): frame from which it is off the floor}."""
     raw = []
     for i in range(n):
         a, b = src((i + 1) / FPS), tgt((i + 1) / FPS)
-        f = blend(a, b, motion.smootherstep((i + 1) / n))
+        u = max(0.0, (i + 1 - start) / (n - start))
+        f = blend_timed(a, b, u, timing) if timing else blend(a, b, motion.smootherstep(u))
         f.contact = np.minimum(a.contact, b.contact)  # down only where both moves have the foot down
+        for k, at in (lift or {}).items():  # a foot that steps off at frame ``at`` (it carries no weight from there)
+            if i >= at:
+                f.contact[k] = 0.0
         raw.append(f)
     frames, adv = _settle(raw, src(0.0), speed0)
     return dict(frames=frames, advance=adv)
@@ -278,18 +387,21 @@ def quick_stop(gait: str, phase: float, ot: List[Frame], leg_start: Optional[int
 
 
 def gait_transition(phase: float, n: int, to_run: bool) -> dict:
-    """walk <-> run sharing one phase, which advances at the blended cadence."""
-    raw, ph = [], phase
+    """walk <-> run sharing one phase, which advances at the blended cadence; the root motion is the planted feet's,
+    and with no foot down it is the blended stride's speed, not the last one kept (so the clip ends at the target
+    loop's speed: no step)."""
+    raw, ph, speed, held = [], phase, [], []
     for i in range(n):
         w = motion.smootherstep((i + 1) / n)
         wr = w if to_run else 1 - w  # weight of the run
         ph += ((1 - wr) / WALK_FRAMES + wr / RUN_FRAMES)
         a, b = walk_frame(ph), run_frame(ph)
         f = blend(a, b, wr)
-        f.contact = np.minimum(a.contact, b.contact)
+        f.contact = np.minimum(a.contact, b.contact)  # down where both gaits have the foot down
         raw.append(f)
+        speed.append((1 - wr) * WALK_SPEED + wr * RUN_SPEED)
     prev = walk_frame(phase) if to_run else run_frame(phase)
-    frames, adv = _settle(raw, prev, WALK_SPEED if to_run else RUN_SPEED)
+    frames, adv = _settle(raw, prev, WALK_SPEED if to_run else RUN_SPEED, free=speed)
     return dict(frames=frames, advance=adv, source="walk" if to_run else "run", target="run" if to_run else "walk",
                 enter=phase, exit=ph % 1.0)
 
@@ -313,17 +425,20 @@ def seq_max_jump(frames: Sequence[Frame], loop: bool = False) -> Tuple[float, st
 
 
 def foot_slide(frames: Sequence[Frame], adv: np.ndarray) -> float:
-    """Largest per-frame world movement (mm) of a foot that is down in both frames (the anchor moves by adv)."""
+    """Largest per-frame world movement (mm) of a planted foot that is down in both frames - of the point it turns
+    about (heel, ankle or ball: a foot rolling over its ball moves its ankle, not its ball) - the anchor moves by adv."""
     worst, anchor = 0.0, np.zeros(3)
     prev = None
     for f, a in zip(frames, adv):
         anchor = anchor + np.array([a[1], 0.0, a[0]]) / M
-        w = feet_xz(f) + anchor
+        piv, pts = foot_points(f)
+        pts = [{q: v + anchor for q, v in d.items()} for d in pts]
         if prev is not None:
             for k in range(2):
                 if f.contact[k] > CONTACT_ON and prev[1][k] > CONTACT_ON:
-                    worst = max(worst, float(np.linalg.norm((w[k] - prev[0][k])[[0, 2]])) * M * 1000)
-        prev = (w, f.contact)
+                    key = tuple(np.round(piv[k][1], 6))
+                    worst = max(worst, float(np.linalg.norm((pts[k][key] - prev[0][k][key])[[0, 2]])) * M * 1000)
+        prev = (pts, f.contact)
     return worst
 
 

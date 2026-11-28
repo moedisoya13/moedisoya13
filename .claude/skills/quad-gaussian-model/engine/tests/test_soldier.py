@@ -126,17 +126,24 @@ def test_planted_feet_do_not_slide(sc):
     assert rep["max_reach"] < 1.0  # the IK never runs out of leg (that would drag the foot)
     assert rep["limit_violations"] == 0
     assert -0.004 < rep["ground_stance_min"] and rep["ground_stance_max"] < 0.004
-    assert rep["ground_swing_min"] > -0.002  # the swinging foot clears the ground
-    assert rep["landing_speed"] < 0.02 * rep["body_speed"]  # it lands (and lifts off) at rest
-    assert rep["liftoff_speed"] < 0.02 * rep["body_speed"]
+    # the swinging foot clears the ground (but for its toe tips at toe-off: a foot that leaves the floor pitched
+    # past what its toes bend dips them up to ~6 mm for a frame or two - a fifth of an art pixel)
+    assert rep["ground_swing_min"] > -0.007
+    # it is set down still coming down (as a heel strikes), barely moving forward; it lifts off turning on its ball
+    assert rep["landing_speed_horizontal"] < 0.25 * rep["body_speed"] and rep["landing_speed"] < 0.6 * rep["body_speed"]
     assert rep["mid_swing_speed"] > rep["body_speed"]
 
 
 def test_loops_are_seamless():
-    for rep in (soldier.loop_report(steps=96), soldier.loop_report(lambda ph: motion.turn_pose(SKEL, ph)[0], steps=96)):
-        assert rep["seam_position"] < 1e-5  # pose(1) == pose(0)
-        assert rep["kink"] < 0.4  # velocity is continuous everywhere (0.25 = smooth, 1 = a jump) ...
-        assert rep["seam_kink"] < 0.4  # ... and across the seam
+    rep = soldier.loop_report(lambda ph: motion.turn_pose(SKEL, ph)[0], steps=96)
+    assert rep["seam_position"] < 1e-5  # pose(1) == pose(0)
+    assert rep["kink"] < 0.4  # velocity is continuous everywhere (0.25 = smooth, 1 = a jump in velocity) ...
+    assert rep["seam_kink"] < 0.4  # ... and across the seam
+    # the walk: a foot is set down and leaves the floor with some speed (heel strike, toe-off), so its velocity may
+    # change at once there (a kink ~1-1.5); a jump in POSITION would score ~4 and more
+    rep = soldier.loop_report(steps=96)
+    assert rep["seam_position"] < 1e-5
+    assert rep["kink"] < 1.6 and rep["seam_kink"] < 1.6
 
 
 def test_walk_travels_one_stride_per_cycle():

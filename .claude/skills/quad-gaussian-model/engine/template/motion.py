@@ -1,16 +1,18 @@
-"""Soldier motion: walk loop, turntable demo, standing pose, and the drive of the costume helper bones.
+"""Soldier motion: walk and run loops, guard idle, turntable demo, standing pose, and the drive of the costume
+helper bones.
 
 Every ``*_rots`` function returns ``(rots, root)``: a dict of local 3x3 rotations per bone (what
 ``Skeleton.world_mats`` takes) and the root offset.  ``*_pose`` returns ``(mats, root)`` like the Nike
 example's ``walk_pose``, ready for ``pose_splats``.
 
-Walk loop - what keeps the feet honest:
-  * the foot path is written in WORLD space: a planted foot is a fixed point (heel first, then the
-    whole sole, then the toe hinge) and its heading never changes - the pelvis may turn above it;
-  * the swinging foot eases in and out, so it lifts off and lands with zero world speed;
-  * two-bone IK puts the knee; the pelvis height is DERIVED from the feet (the highest it can be with
-    both legs still a little bent), so the legs never run out of length - the one thing that could
-    drag a planted foot - and the up/down bob of the walk falls out by itself.
+Walk and run (``Gait``) - built to look like people and to keep the feet honest:
+  * a planted foot is a fixed point in the WORLD (heel first, then the whole sole, then the ball) and its
+    heading never changes - the pelvis may turn above it;
+  * a swinging leg follows the normative (average human) hip / knee / ankle curves from its hip, bent in
+    joint angles onto where its foot leaves the floor and where it lands;
+  * the pelvis height is the one at which the leg that holds the body bends its knee as the normative curve
+    says (a smooth curve under that), so the legs never run out of length; its forward and sideways travel
+    keeps the whole body's ZMP on the planted foot (``_balance_loop``).
 Pass ``advance = STRIDE * phase`` to really travel; ``advance = 0`` walks on the spot (treadmill).
 """
 from __future__ import annotations
@@ -30,21 +32,30 @@ from pixelsplat.skin import Skeleton, rot_x  # noqa: E402
 TAU = 2 * math.pi
 H = rig.H
 
+# ---------------------------------------------------------------- units
+G_ACC = 9.81
+M_PER_UNIT = 1.75 / H  # metres per world unit (1.80 units = a 1.75 m man)
+
 # ---------------------------------------------------------------- walk parameters
-STRIDE = 0.64 * H  # distance one foot travels per cycle (two steps)
+# Cadence and stride of a 1.75 m man walking at 1.4 m/s: about 112 steps a minute, a 1.49 m stride (normative
+# walking data, e.g. Perry & Burnfield 2010: ~110-120 steps/min, stride ~0.8-0.85 x height at this speed).
+WALK_PERIOD = 60 / 60  # seconds per cycle (two steps) - 60 frames at 60 fps
+WALK_SPEED_MS = 1.4
+STRIDE = WALK_SPEED_MS * WALK_PERIOD / M_PER_UNIT  # distance one foot travels per cycle (two steps), world units
 STANCE = 0.62  # fraction of the cycle a foot is on the ground
 SPEED = STRIDE  # world units per cycle (the name the Nike example uses)
-HEEL_ROCK = 0.16  # part of the stance spent rolling from the heel onto the sole
-HEEL_OFF = 0.40  # part of the stance after which the heel lifts
-PITCH_STRIKE = -14.0  # foot pitch at heel strike (toes up), degrees
-PITCH_OFF = 38.0  # foot pitch at toe-off (heel up)
-SWING_LIFT = 0.038 * H  # extra ankle height in mid swing
-SWING_HOLD = 0.20  # part of the swing the foot keeps its toe-off pitch before it swings through
-ROOT_CAP = 0.012 * H  # the pelvis never rides higher than this far below standing height (knees stay soft)
+HEEL_ROCK = 0.16  # part of the stance spent rolling from the heel onto the sole (foot flat at ~10 % of the cycle)
+HEEL_OFF = 0.30 / STANCE  # part of the stance after which the heel lifts (at ~30 % of the cycle: terminal stance)
+PITCH_STRIKE = -16.0  # foot pitch at heel strike (toes up), degrees
+PITCH_OFF = 50.0  # foot pitch at toe-off (heel up; the toes stay flat on the floor, bent at the ball)
+WALK_PUSH = 0.30  # from this leg phase on the heel rises as far as the knee curve needs (terminal stance, push-off)
+HEEL_RISE = 2.0  # the heel's rise goes as u^HEEL_RISE over heel-off -> toe-off (slow, then fast)
+ROOT_CAP = 0.012 * H  # (root_height, the old rule) the pelvis never rides higher than this far below standing
 ROOT_SOFT = 0.004 * H  # how softly the pelvis height blends between "left leg limits" and "right leg limits"
-ROOT_SWAY = 0.012 * H  # sideways shift towards the planted leg
-MID_STANCE = STANCE / 2  # phase at which the left foot is under the hip
-MAX_REACH = 0.995  # legs never straighten further than this fraction of their length
+ROOT_SWAY = 0.012 * H  # sideways shift towards the planted leg (the unbalanced rule)
+WALK_UNDER = 0.42  # part of the stance at which the ankle passes under the body (it lands nearer than it leaves)
+MID_STANCE = WALK_UNDER * STANCE  # phase at which the left foot is under the hip
+MAX_REACH = 0.995  # (root_height) legs never straighten further than this fraction of their length
 
 
 def smoothstep(x):
@@ -78,38 +89,6 @@ def soft_max(values, k=1.0):
 def _about(pivot_rest, pivot_world, pitch, point_rest):
     """Where ``point_rest`` of the foot ends up when the foot is pitched about a fixed pivot."""
     return pivot_world + rot_x(pitch) @ (point_rest - pivot_rest)
-
-
-def foot_path(psi: float, s: int) -> Dict[str, object]:
-    """One foot over leg phase psi in [0,1), in the PLANT frame: a world-fixed frame whose origin is
-    the foot's rest position while it is planted (z forward).  psi = 0 is heel strike.
-
-    Returns ankle position (relative to the rest ankle), foot pitch, toe-hinge angle (both degrees,
-    + = toes down), and which point is pinned to the ground: "heel", "sole", "toe" or None (swing)."""
-    psi = psi % 1.0
-    A0, T0, Hc = rig.ANKLE[s], rig.TOE[s], rig.HEEL[s]
-    if psi < STANCE:
-        t = psi / STANCE
-        if t < HEEL_ROCK:
-            pitch = PITCH_STRIKE * (1 - smootherstep(t / HEEL_ROCK))
-            return dict(ankle=_about(Hc, Hc, pitch, A0) - A0, pitch=pitch, toe=0.0, contact="heel")
-        if t < HEEL_OFF:
-            return dict(ankle=np.zeros(3), pitch=0.0, toe=0.0, contact="sole")
-        pitch = PITCH_OFF * smootherstep((t - HEEL_OFF) / (1 - HEEL_OFF))
-        return dict(ankle=_about(T0, T0, pitch, A0) - A0, pitch=pitch, toe=-pitch, contact="toe")
-    t = (psi - STANCE) / (1 - STANCE)
-    start = _about(T0, T0, PITCH_OFF, A0) - A0  # where toe-off left the ankle
-    end = _about(Hc, Hc, PITCH_STRIKE, A0) - A0 + np.array([0.0, 0.0, STRIDE])  # next heel strike, one stride on
-    ankle = start + (end - start) * smootherstep(t)  # zero world speed at both ends
-    ankle[1] += SWING_LIFT * math.sin(math.pi * t) ** 2
-    pitch = PITCH_OFF + (PITCH_STRIKE - PITCH_OFF) * smootherstep((t - SWING_HOLD) / (1 - SWING_HOLD))
-    toe = -PITCH_OFF * (1 - smoothstep(t / 0.70))  # toes straighten out during the swing (slowly: the shoe is long)
-    return dict(ankle=ankle, pitch=pitch, toe=toe, contact=None)
-
-
-def plant_shift(psi: float) -> float:
-    """z of the plant frame's origin relative to the body, for a body that advances STRIDE per cycle."""
-    return STRIDE * (MID_STANCE - (psi % 1.0))
 
 
 def _basis(d, hinge):
@@ -174,8 +153,6 @@ def _pelvis_world(R_pelvis, root):
 #     x'' = (y'' + g) / y * (x - p)            p = the ZMP, 0 factor in flight (ballistic)
 # solved once per loop on a periodic grid (a linear system); the pelvis offset that puts the centre of
 # mass on that path is found by a few fixed-point steps.  The masses are de Leva's (as in qc.py).
-G_ACC = 9.81
-M_PER_UNIT = 1.75 / H  # metres per world unit (1.80 units = a 1.75 m man)
 _DE_LEVA_TRUNK_MM = (145.7, 215.5, 170.7)  # low, middle, upper trunk (de Leva 1996, males)
 
 
@@ -252,6 +229,17 @@ def zmp_follow(p: np.ndarray, c: np.ndarray, dt: float, travel: float) -> np.nda
     return xr + travel * t
 
 
+def zmp_follow_flight(p: np.ndarray, c: np.ndarray, dt: float, flight: np.ndarray, acc: np.ndarray) -> np.ndarray:
+    """``zmp_follow`` (no travel) where, at the ``flight`` samples, nothing pushes: there the correction cancels the
+    body's own horizontal acceleration ``acc`` instead (a body in the air keeps its speed)."""
+    N = len(p)
+    D2 = (np.roll(np.eye(N), 1, 1) + np.roll(np.eye(N), -1, 1) - 2 * np.eye(N)) / dt ** 2
+    M = D2 - np.diag(np.where(flight, 0.0, c))
+    rhs = np.where(flight, -np.asarray(acc), -np.asarray(c) * np.asarray(p))
+    M[0] += 1e-9  # (a pure-flight-free system is regular; with flight rows the mean is fixed by the stance rows)
+    return np.linalg.lstsq(M, rhs, rcond=None)[0]
+
+
 def periodic_d2(y: np.ndarray, dt: float) -> np.ndarray:
     return (np.roll(y, -1) - 2 * y + np.roll(y, 1)) / dt ** 2
 
@@ -289,31 +277,61 @@ def fourier_eval(coef: np.ndarray, harmonics, phase, deriv: int = 0) -> float:
 
 
 def smooth_below(limit: np.ndarray, harmonics, margin: float = 0.0, acc_max: Optional[float] = None,
-                 period: float = 1.0) -> np.ndarray:
-    """The highest smooth periodic curve (a Fourier series with these harmonics, highest on average) that
-    stays below ``limit`` (sampled at i / N) everywhere.  A pelvis that rides exactly on its leg-reach limit
-    follows the limit's corners (where the limiting leg changes) - a kink the eye sees and the vertical
-    acceleration shows (-1 g -> +0.8 g within 5 frames); this one rounds them off from below."""
-    from scipy.optimize import linprog
+                 period: float = 1.0, acc_min: Optional[float] = None, smooth: float = 2e-7) -> np.ndarray:
+    """A smooth periodic curve (a Fourier series with these harmonics) that stays below ``limit`` (sampled at i / N;
+    inf / nan = no limit at that sample) everywhere and keeps as close under it as its smoothness allows.  A
+    pelvis that rides exactly on its leg-reach limit follows the limit's corners (where the limiting leg changes) -
+    a kink the eye sees and the vertical acceleration shows; this one rounds them off from below.  ``acc_max``
+    bounds the vertical acceleration (world units / s^2) both ways, or only upwards when ``acc_min`` (a negative
+    number: how fast it may fall) is given too.  With no limit in a stretch (a run's flight) the curve is the
+    arc that falls at ``acc_min`` (a ballistic one) between its ends.
+
+    Solved as a small quadratic programme: squared gap under the limit + ``smooth`` x squared curvature (per
+    cycle^2), under the linear bounds.  (The highest curve - maximum mean - is not unique: any shape with the same
+    mean that fits is as good, and a solver then returns an arbitrary one; the walk's pelvis jumped between them.)"""
+    from scipy.optimize import linprog, minimize
 
     N = len(limit)
     ph = np.arange(N) / N
     A = _fourier_basis(ph, harmonics)
-    A_ub, b_ub = [A], [np.asarray(limit) - margin]
-    if acc_max is not None:  # |d2y/dt2| <= acc_max (world units / s^2) at every sample: linear in the coefficients
-        D = np.zeros_like(A)
-        for j, k in enumerate(harmonics):
-            w = TAU * k
-            D[:, 1 + 2 * j] = -w * w * np.cos(w * ph)
-            D[:, 2 + 2 * j] = -w * w * np.sin(w * ph)
-        D /= period ** 2
-        A_ub += [D, -D]
-        b_ub += [np.full(N, acc_max), np.full(N, acc_max)]
-    res = linprog(-A.mean(0), A_ub=np.concatenate(A_ub), b_ub=np.concatenate(b_ub),
-                  bounds=[(None, None)] * A.shape[1], method="highs")
+    lim = np.asarray(limit, np.float64)
+    ok = np.isfinite(lim)
+    D = np.zeros_like(A)  # d2/dphase2
+    for j, k in enumerate(harmonics):
+        w = TAU * k
+        D[:, 1 + 2 * j] = -w * w * np.cos(w * ph)
+        D[:, 2 + 2 * j] = -w * w * np.sin(w * ph)
+    A_ub, b_ub = [A[ok]], [lim[ok] - margin]
+    if acc_max is not None:  # acc_min <= d2y/dt2 <= acc_max at every sample: linear in the coefficients
+        Dt = D / period ** 2
+        lo = -acc_max if acc_min is None else acc_min
+        hi = np.full(N, float(acc_max))
+        if acc_min is not None:  # in flight it cannot be pushed up at all: it falls at least at FLIGHT_FALL x acc_min
+            hi[~ok] = FLIGHT_FALL * acc_min
+        A_ub += [Dt, -Dt]
+        b_ub += [hi, np.full(N, -lo)]
+    G, g = np.concatenate(A_ub), np.concatenate(b_ub)
+    # a feasible start: the highest curve (linear programme), then the quadratic one from there
+    res = linprog(-A[ok].mean(0), A_ub=G, b_ub=g, bounds=[(None, None)] * A.shape[1], method="highs")
     if not res.success:
         raise RuntimeError(f"smooth_below: {res.message}")
-    return res.x
+    Aok, target = A[ok], lim[ok] - margin
+    H = 2 * (Aok.T @ Aok + smooth * D.T @ D)
+    f = -2 * Aok.T @ target
+    if acc_min is not None and not ok.all():  # where nothing holds it up (flight) it falls: d2y/dt2 = acc_min
+        Df = D[~ok] / period ** 2
+        wf = 1e-4
+        H += 2 * wf * Df.T @ Df
+        f += -2 * wf * Df.T @ np.full(int((~ok).sum()), acc_min)
+
+    def obj(c):
+        return 0.5 * c @ H @ c + f @ c, H @ c + f
+
+    q = minimize(obj, res.x, jac=True, method="SLSQP",
+                 constraints=[dict(type="ineq", fun=lambda c: g - G @ c, jac=lambda c: -G)],
+                 options=dict(maxiter=300, ftol=1e-14))
+    x = q.x if q.success and np.all(G @ q.x <= g + 1e-7) else res.x
+    return x
 
 
 def leg_limits(R_pelvis, root_xz, ankles, reach: float = MAX_REACH) -> Dict[int, float]:
@@ -337,40 +355,371 @@ def stand_rots(arm_out: float = 10.0, elbow: float = 8.0) -> Tuple[Dict[str, np.
     return rots, np.zeros(3)
 
 
-def _walk_core(phase: float, advance: float = 0.0, dz: float = 0.0, height: Optional[float] = None,
-               info: Optional[dict] = None, helpers: bool = True, dx: Optional[float] = None):
-    """The walk pose with the pelvis ``dz`` ahead of its even glide, ``dx`` to the side (None = the old
-    sway, ROOT_SWAY) and at ``height`` (None = the old rule: as high as both legs allow, ``root_height``).
-    ``walk_rots`` passes the balanced values."""
-    c1 = math.cos(TAU * phase)  # +1 when the left heel strikes (left leg forward)
-    over = math.cos(TAU * (phase - MID_STANCE))  # +1 when the body is over the left foot
-    bob = math.cos(2 * TAU * (phase - MID_STANCE))  # +1 over either foot, -1 with both feet down
-    yaw_p = -5.0 * c1  # the hip of the leading leg comes forward
-    R_pelvis = rig.euler(pitch=2.0, yaw=yaw_p, roll=3.0 * over)  # the swing side of the pelvis drops
-    # feet first (world space), then the pelvis height they allow
+# ---------------------------------------------------------------- the gaits' legs: normative joint curves
+# The walk and the run are built the same way.  A foot that is down is a fixed point in the WORLD (heel, then the
+# whole sole, then the ball: its heading never changes - the pelvis may turn above it); the pelvis height is
+# chosen so that the leg that holds the body bends its knee as people do (the normative knee curve below, never
+# straighter); a swinging leg follows the normative hip and knee curves (forward kinematics from its hip) and its
+# foot the normative ankle curve, bent onto the exact place and speed it leaves the floor at and lands on by a
+# smooth correction (``_quintic``: position, speed and acceleration match at both ends).  The curves are
+# APPROXIMATE means read off published gait data (README "걷기·달리기 QC"): walking ~1.4 m/s - Perry & Burnfield
+# (2010), Winter (2009), Kadaba et al. (1990); running ~3.5-4 m/s - Novacheck (1998), Dugan & Bhat (2005).
+# Key points: (percent of the leg's cycle, 0 = its foot touches down; degrees).  hip = thigh against the pelvis,
+# flexion +; knee = flexion +; ankle = dorsiflexion (toes up) +.
+WALK_NORM = dict(
+    hip=((0, 30), (12, 26), (30, 10), (50, -8), (56, -10), (62, -2), (75, 22), (87, 33), (100, 30)),
+    knee=((0, 4), (15, 18), (40, 5), (50, 8), (62, 40), (72, 62), (85, 38), (95, 6), (100, 4)),
+    ankle=((0, 0), (8, -6), (30, 5), (48, 10), (55, 5), (63, -17), (72, -8), (85, 0), (100, 0)))
+RUN_NORM = dict(
+    hip=((0, 38), (15, 28), (36, -5), (42, -8), (55, 10), (70, 35), (82, 47), (92, 42), (100, 38)),
+    knee=((0, 20), (13, 42), (36, 20), (45, 30), (65, 95), (80, 60), (92, 25), (100, 20)),
+    ankle=((0, 3), (15, 20), (36, -15), (42, -20), (55, -5), (70, 8), (85, 8), (100, 3)))
+
+
+class Curve:
+    """A periodic curve through (percent, value) key points: a periodic cubic spline over phase [0, 1)."""
+
+    def __init__(self, keys):
+        from scipy.interpolate import CubicSpline
+
+        self.keys = tuple(keys)
+        self._cs = CubicSpline(np.array([k[0] for k in keys], float) / 100.0, np.array([k[1] for k in keys], float),
+                               bc_type="periodic")
+
+    def __call__(self, psi: float) -> float:
+        return float(self._cs(psi % 1.0))
+
+
+def _quintic(t: float, p0, v0, a0, p1, v1, a1):
+    """The quintic through (p0, v0, a0) at t = 0 and (p1, v1, a1) at t = 1 (value, slope, curvature in t)."""
+    t2, t3 = t * t, t * t * t
+    t4, t5 = t3 * t, t3 * t2
+    return (p0 * (1 - 10 * t3 + 15 * t4 - 6 * t5) + v0 * (t - 6 * t3 + 8 * t4 - 3 * t5)
+            + a0 * 0.5 * (t2 - 3 * t3 + 3 * t4 - t5) + p1 * (10 * t3 - 15 * t4 + 6 * t5)
+            + v1 * (-4 * t3 + 7 * t4 - 3 * t5) + a1 * 0.5 * (t3 - 2 * t4 + t5))
+
+
+def _d012(f, x: float, e: float = 1e-3):
+    """Value, first and second derivative of f at x (central differences; f may return arrays)."""
+    a, b, c = f(x - e), f(x), f(x + e)
+    return b, (c - a) / (2 * e), (c - 2 * b + a) / (e * e)
+
+
+def _d012_side(f, x: float, side: int, e: float = 1e-3):
+    """Value, first and second derivative of f at x from one side only (side -1: samples at x, x-e, x-2e; +1: x,
+    x+e, x+2e) - for a function that is only valid (or only smooth) on that side."""
+    a, b, c = f(x), f(x + side * e), f(x + 2 * side * e)
+    return a, side * (-3 * a + 4 * b - c) / (2 * e), (a - 2 * b + c) / (e * e)
+
+
+def knee_reach(knee_deg: float) -> float:
+    """Hip-to-ankle distance as a fraction of the leg's length with the knee bent ``knee_deg``."""
+    l1, l2 = rig.THIGH_LEN, rig.SHIN_LEN
+    return math.sqrt(l1 * l1 + l2 * l2 + 2 * l1 * l2 * math.cos(math.radians(knee_deg))) / (l1 + l2)
+
+
+def const_track(dx: float = 0.0, h: float = 0.0, dz: float = 0.0):
+    return lambda q: (dx, h, dz)
+
+
+def balance_track(b: dict):
+    """phase -> (dx, height, dz) of the pelvis along a balanced loop (``_balance_loop``'s result)."""
+    return lambda q: (fourier_eval(b["dx"], b["dx_h"], q), fourier_eval(b["h"], b["h_h"], q),
+                      fourier_eval(b["dz"], b["dz_h"], q))
+
+
+ANKLE_DORSI = 15.0  # a planted foot's ankle never bends further up than this (the rig allows 20)
+ANKLE_PLANTAR = 40.0  # ... nor further down while it pushes off (normative toe-off: ~15-20)
+PUSH_PITCH_MAX = 70.0  # a foot on its ball pitches no further
+SWING_CLEAR = 0.012 * H  # extra ankle height in mid swing over the normative curves, so the toes clear the floor
+TOE_BEND = 59.0  # the toes bend at most this far (the rig allows 60)
+TO_ACC = 0.0  # ... and this fraction of its acceleration difference
+LAND_DAMPING = 0.02  # (a nearly straight knee cannot be asked for much: the inverse is damped this much)
+LAND_AT_REST = True  # a foot lands with no speed at all (False: it may still be coming down)
+PITCH_CARRY = 200.0  # degrees per cycle: at most this much of the foot's turning speed at toe-off is carried into the swing
+TO_CARRY = 1e9  # degrees per cycle: at most this much of a leg's speed difference at toe-off is carried into the swing
+HIP_EXTENSION = 17.0  # a swinging thigh goes no further back than this behind the pelvis (the rig allows 20)
+
+
+def _toe_flat(pitch: float) -> float:
+    """Toe hinge of a foot pitched ``pitch`` on its ball: the toes flat on the floor, eased onto the hinge's limit
+    (a foot pitched further - the last frame or two before it leaves - dips its toe tips a few mm)."""
+    return -_soft_clamp(pitch, -1e9, TOE_BEND, 3.0)
+
+
+class Gait:
+    """One gait's feet and legs over a leg phase psi in [0, 1) (0 = touchdown), in the foot's PLANT frame: a
+    world-fixed frame whose origin is where that foot's rest position stands while it is down (z forward).
+
+    period, speed_ms   seconds per cycle (two steps) and metres per second -> ``stride`` (world units per cycle)
+    stance             fraction of the cycle a foot is down
+    strike             foot pitch at touchdown (degrees, toes up -); it rolls flat by ``rock`` x the stance
+    heel_off           part of the stance after which the heel lifts; the foot pitches to ``pitch_off`` at toe-off
+                       about the ball (pitch ~ u^3: the heel rises slowly, then fast - it leaves the floor moving)
+    under              part of the stance at which the ankle is under the body's even glide
+    narrow             feet this much nearer the midline than the hips (world units)
+    tilt               the pelvis's forward tilt (degrees): thigh against the world = hip curve - tilt
+    hold               leg phase up to which a planted leg holds the body up (its knee follows the knee curve)
+    pelvis             phase -> pelvis rotation"""
+
+    def __init__(self, name, period, speed_ms, stance, strike, rock, heel_off, pitch_off, under, narrow, tilt, norm,
+                 hold, pelvis, toe_relax=0.5, blend=0.35, rise=3.0, push=1.0, pitch_blend=0.12, knee_min=0.0, push_knee=90.0):
+        self.name, self.period, self.speed_ms, self.stance = name, period, speed_ms, stance
+        self.stride = speed_ms * period / M_PER_UNIT
+        self.strike, self.rock, self.heel_off, self.pitch_off = strike, rock, heel_off, pitch_off
+        self.under, self.narrow, self.tilt, self.hold, self.pelvis = under, narrow, tilt, hold, pelvis
+        self.toe_relax, self.blend, self.rise, self.push, self.pitch_blend = toe_relax, blend, rise, push, pitch_blend
+        self.push_knee = push_knee  # (holding_limits) the knee bend a leg pushing off is held to at most
+        self.knee_min = knee_min  # the leg that holds the body keeps at least this bend (a straight knee is IK's singular point)
+        self.norm = norm
+        self.hip, self.knee, self.ankle = Curve(norm["hip"]), Curve(norm["knee"]), Curve(norm["ankle"])
+
+    def origin_z(self, psi: float) -> float:
+        """z of the plant frame's origin relative to the body's even glide (unwrapped psi: a swing that started
+        in this cycle is still measured from the plant it left)."""
+        return self.stride * (self.under * self.stance - psi)
+
+    def _design_pitch(self, psi: float) -> float:
+        t = psi / self.stance
+        if t < self.rock:
+            return self.strike * (1 - smootherstep(t / self.rock))
+        if t < self.heel_off:
+            return 0.0
+        u = (t - self.heel_off) / (1 - self.heel_off)
+        return self.pitch_off * (smootherstep(u) if self.rise == 0 else u ** self.rise)
+
+    def push_target(self, psi: float) -> float:
+        """The knee bend a leg that pushes off is held to: the knee curve, no straighter than ``knee_min`` and (eased)
+        no more bent than ``push_knee`` - the rest of its bend comes in the swing."""
+        k = soft_max([self.knee(psi), self.knee_min], 1.0)
+        return soft_min([k, self.push_knee], 2.0)
+
+    def _push_pitch(self, s: int, psi: float, track) -> float:
+        """The pitch about the ball that bends the knee as the knee curve says, for the hip where ``track`` has it."""
+        A0, T0 = rig.ANKLE[s], rig.TOE[s]
+        H = self.hip_plant(s, psi, track)
+        d = knee_reach(self.push_target(psi)) * (rig.THIGH_LEN + rig.SHIN_LEN)
+
+        def f(p):
+            return float(np.linalg.norm(H - _about(T0, T0, p, A0))) - d
+
+        lo, hi = 0.0, PUSH_PITCH_MAX
+        if f(lo) <= 0.0:
+            return lo
+        if f(hi) >= 0.0:
+            return hi
+        from scipy.optimize import brentq
+
+        return brentq(f, lo, hi, xtol=1e-9)
+
+    def _pitch(self, s: int, psi: float, track) -> float:
+        """Foot pitch while it is down (and its continuation past toe-off): the designed roll, and from ``push`` x
+        the stance on, blended into the pitch at which the knee follows the knee curve (push-off: the heel rises
+        as far as the knee bending says)."""
+        p = self._design_pitch(psi)
+        if track is None or psi < self.heel_off * self.stance:
+            return p
+        if psi > self.push * self.stance:
+            w = smootherstep((psi / self.stance - self.push) / (1.0 - self.push))
+            p += w * (self._push_pitch(s, psi, track) - p)
+        # the ankle stays inside what it can do: dorsiflexion <= ANKLE_DORSI, plantarflexion <= ANKLE_PLANTAR (eased)
+        pl = self.plantar(s, psi, p, track)
+        w = smootherstep((psi / self.stance - self.heel_off) / 0.1)  # (eased in as the heel starts to lift)
+        return p + w * (_soft_clamp(pl, -ANKLE_DORSI, ANKLE_PLANTAR, 4.0) - pl)
+
+    def plantar(self, s: int, psi: float, p: float, track) -> float:
+        """Plantarflexion (degrees, + = toes down against the shank) of a foot pitched ``p`` about its ball."""
+        H = self.hip_plant(s, psi, track)
+        A = _about(rig.TOE[s], rig.TOE[s], p, rig.ANKLE[s])
+        a = self.leg_angles(np.array([A[1] - H[1], A[2] - H[2]]))
+        return p + (a[0] - a[1])
+
+    def _stance_ankle(self, s: int, psi: float, track) -> np.ndarray:
+        """Absolute plant-frame ankle of a foot that is down (the toe formula carries on past toe-off)."""
+        A0, T0, Hc = rig.ANKLE[s], rig.TOE[s], rig.HEEL[s]
+        t, p = psi / self.stance, self._pitch(s, psi, track)
+        if t < self.rock:
+            return _about(Hc, Hc, p, A0)
+        if t < self.heel_off:
+            return A0.copy()
+        return _about(T0, T0, p, A0)
+
+    def hip_plant(self, s: int, psi: float, track) -> np.ndarray:
+        q = psi - (0.0 if s > 0 else 0.5)  # the body's phase
+        dx, h, dz = track(q)
+        hip = self.pelvis(q) @ (rig.HIP[s] - rig.PELVIS) + rig.PELVIS + np.array([dx, h, dz])
+        return hip - np.array([-s * self.narrow, 0.0, self.origin_z(psi)])
+
+    def norm_angles(self, psi: float) -> np.ndarray:
+        """[thigh against the world, knee] (degrees) on the normative curves."""
+        return np.array([self.hip(psi) - self.tilt, self.knee(psi)])
+
+    @staticmethod
+    def leg_angles(rel) -> np.ndarray:
+        """[thigh against the world, knee] (degrees) of a leg whose ankle is ``rel`` (y, z) from its hip."""
+        l1, l2 = rig.THIGH_LEN, rig.SHIN_LEN
+        d = min(math.hypot(rel[0], rel[1]), (l1 + l2) * 0.999999)
+        phi = math.atan2(rel[1], -rel[0])  # the hip-ankle line, forward of straight down
+        beta = math.acos(max(-1.0, min(1.0, (l1 * l1 + d * d - l2 * l2) / (2 * l1 * d))))
+        inner = math.acos(max(-1.0, min(1.0, (l1 * l1 + l2 * l2 - d * d) / (2 * l1 * l2))))
+        return np.degrees([phi + beta, math.pi - inner])
+
+    @staticmethod
+    def leg_point(ang) -> np.ndarray:
+        """(y, z) of the ankle from the hip for [thigh, knee] angles (degrees)."""
+        a, k = math.radians(ang[0]), math.radians(ang[1])
+        l1, l2 = rig.THIGH_LEN, rig.SHIN_LEN
+        return np.array([-l1 * math.cos(a) - l2 * math.cos(a - k), l1 * math.sin(a) + l2 * math.sin(a - k)])
+
+    def strike_ankle(self, s: int) -> np.ndarray:
+        A0, Hc = rig.ANKLE[s], rig.HEEL[s]
+        return _about(Hc, Hc, self.strike, A0) + np.array([0.0, 0.0, self.stride])
+
+    def _swing_ends(self, s: int, track):
+        """What a swing has to join, in joint angles [thigh against the world, knee]: at toe-off the leg's own
+        angles with their speed and acceleration (the foot rolling over its ball); at touchdown the angles that
+        put the ankle on its next plant and the speeds that keep it AT REST there while the hip moves on (a
+        damped inverse of the leg's Jacobian: a nearly straight knee cannot be asked for much)."""
+        st = self.stance
+
+        def rel(ankle, x):
+            h = self.hip_plant(s, x, track)
+            return self.leg_angles(np.array([ankle[1] - h[1], ankle[2] - h[2]]))
+
+        a0 = _d012_side(lambda x: rel(self._stance_ankle(s, x, track), x), st, -1)  # (the stance side only)
+        land = self.strike_ankle(s)
+        a1 = rel(land, 1.0)
+        _, hv, _ = _d012(lambda x: self.hip_plant(s, x, track)[1:], 1.0)
+        e = 1e-3
+        J = np.stack([(self.leg_point(a1 + e * np.eye(2)[k]) - self.leg_point(a1 - e * np.eye(2)[k])) / (2 * e)
+                      for k in range(2)], 1)
+        n1 = _d012(self.norm_angles, 1.0)
+        # the smallest change of the normative joint speeds that stops the ankle's FORWARD travel; downwards it may
+        # still be moving as it meets the floor (the foot is set down, it does not slide)
+        if LAND_AT_REST:  # the ankle comes to rest: a damped inverse of the Jacobian (a straight knee gives little)
+            lam = LAND_DAMPING * float(np.trace(J.T @ J))
+            w1 = n1[1] + np.linalg.solve(J.T @ J + lam * np.eye(2), J.T @ (-hv - J @ n1[1]))
+        else:
+            Jz = J[1]
+            w1 = n1[1] + Jz * (-hv[1] - Jz @ n1[1]) / float(Jz @ Jz)
+        return a0, _d012(self.norm_angles, st), a1, w1, n1
+
+    def swing_angles(self, s: int, psi: float, track, ends=None) -> np.ndarray:
+        """[thigh, knee] of a swinging leg: the normative curves plus corrections in joint angles (so the leg never
+        overreaches): the difference in angle at toe-off and at touchdown faded across the swing, and the
+        difference in speed (and acceleration) faded out over the first / last ``self.blend`` of it.  The knee is
+        kept a little bent."""
+        st, D, W = self.stance, 1.0 - self.stance, self.blend
+        a0, n0, a1, w1, n1 = self._swing_ends(s, track) if ends is None else ends
+        t = (psi - st) / D
+        ang = self.norm_angles(psi) + _quintic(t, 0.0, 0.0, 0.0, a1 - n1[0], 0.0, 0.0)
+        if t < W:  # (a foot that leaves the floor jerks the leg's speeds: only so much of a difference is carried on)
+            dv = np.clip(a0[1] - n0[1], -TO_CARRY, TO_CARRY)
+            ang += _quintic(t / W, a0[0] - n0[0], dv * D * W, (a0[2] - n0[2]) * (D * W) ** 2 * TO_ACC, 0.0, 0.0, 0.0)
+        if t > 1.0 - W:
+            ang += _quintic((t - 1.0 + W) / W, 0.0, 0.0, 0.0, 0.0, (w1 - n1[1]) * D * W, 0.0)
+        ang[1] = 0.5 + soft_pos(ang[1] - 0.5, 3.0)
+        lo = min(-HIP_EXTENSION - self.tilt, a0[0][0] - 6.0)  # (never at toe-off itself: the leg leaves as it is)
+        ang[0] = lo + soft_pos(ang[0] - lo, 4.0)
+        return ang
+
+    def foot(self, s: int, psi: float, track) -> Dict[str, object]:
+        """Ankle (offset from the rest ankle, plant frame), foot pitch, toe-hinge angle (degrees, + = toes down)
+        and which point is pinned to the floor: "heel", "sole", "toe" or None (swing)."""
+        psi = psi % 1.0
+        A0 = rig.ANKLE[s]
+        st = self.stance
+        if psi < st:
+            t, p = psi / st, self._pitch(s, psi, track)
+            contact = "heel" if t < self.rock else "sole" if t < self.heel_off else "toe"
+            return dict(ankle=self._stance_ankle(s, psi, track) - A0, pitch=p, toe=_toe_flat(p) if contact == "toe" else 0.0,
+                        contact=contact)
+        D, W = 1.0 - st, self.blend
+        t = (psi - st) / D
+        ends = self._swing_ends(s, track)
+
+        def base_pitch(x):  # the normative ankle angle under the leg's own shank
+            ang = self.swing_angles(s, x, track, ends)
+            return -(ang[0] - ang[1]) - self.ankle(x)
+
+        ang = self.swing_angles(s, psi, track, ends)
+        y, z = self.hip_plant(s, psi, track)[1:] + self.leg_point(ang)
+        y += SWING_CLEAR * math.sin(math.pi * t ** 0.5) ** 2  # (the curves are a mean; this foot is a little bigger)
+        # the foot's pitch joins the one it leaves the floor with (value, speed, acceleration) and lands with (value,
+        # at rest)
+        r0, q0 = _d012_side(lambda x: self._pitch(s, x, track), st, -1), _d012_side(base_pitch, st, 1)
+        q1 = _d012_side(base_pitch, 1.0, -1)
+        pitch = base_pitch(psi) + _quintic(t, r0[0] - q0[0], 0.0, 0.0, self.strike - q1[0], 0.0, 0.0)
+        Wp = self.pitch_blend  # (shorter: a foot leaving the floor turns fast, and it should not carry that on)
+        if t < Wp:
+            pitch += _quintic(t / Wp, 0.0, float(np.clip(r0[1] - q0[1], -PITCH_CARRY, PITCH_CARRY)) * D * Wp, 0.0,
+                              0.0, 0.0, 0.0)
+        if t > 1.0 - W:
+            pitch += _quintic((t - 1.0 + W) / W, 0.0, 0.0, 0.0, 0.0, -q1[1] * D * W, 0.0)
+        # the toes straighten out from flat-on-the-floor (cubic: leaving at the speed the foot was turning)
+        uu = t / self.toe_relax
+        toe = 0.0
+        if uu < 1.0:
+            t0, t1 = _toe_flat(r0[0]), _toe_flat(r0[0] + 1e-3)
+            rate = q0[1] + float(np.clip(r0[1] - q0[1], -PITCH_CARRY, PITCH_CARRY))  # (the swing's own start)
+            m0 = (t1 - t0) / 1e-3 * rate * D * self.toe_relax
+            toe = t0 * (2 * uu ** 3 - 3 * uu ** 2 + 1) + m0 * (uu ** 3 - 2 * uu ** 2 + uu)
+        return dict(ankle=np.array([0.0, y - A0[1], z - A0[2]]), pitch=float(pitch), toe=toe, contact=None)
+
+    def holding_limits(self, samples, free_reach: Optional[float] = None) -> np.ndarray:
+        """Per sample (an ``info`` of the core): the highest pelvis offset at which the leg that holds the body
+        (leg phase < ``hold``) bends its knee no less than the knee curve says with its foot as designed (the
+        push-off pitch follows the hip; the hip must not follow it), and a leg that pushes off can still bend its
+        knee as the curve says with its heel up as far as it goes.  ``free_reach``: any other planted leg reaches
+        its ankle with this fraction of its length (None: no limit).  inf where no foot is down."""
+        out = []
+        for info in samples:
+            Rp, rxz, ank = info["_limits"]
+            best = math.inf
+            for side, s in rig.SIDES:
+                if info[side]["contact"] is None:
+                    continue
+                psi = info[side]["psi"]
+                if psi > self.push * self.stance:
+                    a = info[side]["origin"] + _about(rig.TOE[s], rig.TOE[s], PUSH_PITCH_MAX - 5.0, rig.ANKLE[s])
+                    best = min(best, leg_limits(Rp, rxz, {s: a}, knee_reach(self.push_target(psi)))[s])
+                if psi >= self.hold and free_reach is None:
+                    continue
+                r = knee_reach(soft_max([self.knee(psi), self.knee_min], 1.0)) if psi < self.hold else free_reach
+                a = info[side]["origin"] + self._stance_ankle(s, psi, None)
+                best = min(best, leg_limits(Rp, rxz, {s: a}, r)[s])
+            out.append(best)
+        return np.array(out)
+
+
+def _place_feet(g: Gait, phase: float, advance: float, track):
     feet, ankles = {}, {}
     for side, s in rig.SIDES:
         psi = (phase + (0.0 if s > 0 else 0.5)) % 1.0
-        f = foot_path(psi, s)
-        origin = np.array([0.0, 0.0, advance + plant_shift(psi)])  # plant frame -> world
+        f = g.foot(s, psi, track)
+        origin = np.array([-s * g.narrow, 0.0, advance + g.origin_z(psi)])  # plant frame -> world
         feet[s], ankles[s] = (psi, f, origin), rig.ANKLE[s] + origin + f["ankle"]
-    sway = ROOT_SWAY * over if dx is None else dx
-    if height is None:
-        height = root_height(R_pelvis, (sway, advance + dz), ankles)
-    root = np.array([sway, height, advance + dz])
-    rots = {"pelvis": R_pelvis}
-    # trunk: counter-turn at the waist turntable, shoulders stay level, head keeps looking ahead
-    chest_yaw = 4.0 * c1  # world heading of the chest
-    rots["chest"] = rig.local_rot("chest", pitch=2.5 + 1.0 * bob, yaw=chest_yaw - yaw_p, roll=-2.4 * over)
-    rots["neck"] = rig.local_rot("neck", pitch=-3.0 - 1.0 * bob, roll=-0.4 * over)
-    rots["head"] = rig.local_rot("head", pitch=-1.5, yaw=-chest_yaw)
-    # legs: two-bone IK onto the ankles
+    return feet, ankles
+
+
+def _soft_clamp(x: float, lo: float, hi: float, eps: float) -> float:
+    """x kept inside [lo, hi], bending smoothly onto the bound over the last ``eps`` (degrees)."""
+    x = lo + soft_pos(x - lo, eps)
+    return hi - soft_pos(hi - x, eps)
+
+
+def _legs(rots, R_pelvis, root, feet, ankles, fwd, info):
+    """Two-bone IK onto the ankles; feet turned by their world pitch (a swinging foot eased inside its range)."""
     to_world = _pelvis_world(R_pelvis, root)
-    fwd = rig.euler(yaw=0.5 * yaw_p) @ np.array([0.0, 0.0, 1.0])  # knees point between hips and feet
     for side, s in rig.SIDES:
         psi, f, origin = feet[s]
         W_thigh, W_shin, reach = leg_ik(to_world(rig.HIP[s]), ankles[s], fwd, s)
-        W_foot = rot_x(f["pitch"])  # pure pitch in the world: the foot's heading never changes
+        pitch = f["pitch"]
+        if f["contact"] is None:  # in the air the ankle keeps inside its range, eased (no stop at the limit)
+            (lo, hi), _, _ = rig.limits("foot" + side)
+            local = rig.joint_angles("foot" + side, W_shin.T @ rot_x(pitch))[0]
+            pitch += _soft_clamp(local, lo + 2.0, hi - 2.0, 6.0) - local
+        W_foot = rot_x(pitch)  # pure pitch in the world: the foot's heading never changes
         rots["thigh" + side] = R_pelvis.T @ W_thigh
         rots["shin" + side] = W_thigh.T @ W_shin
         rots["foot" + side] = W_shin.T @ W_foot
@@ -378,12 +727,56 @@ def _walk_core(phase: float, advance: float = 0.0, dz: float = 0.0, height: Opti
         if info is not None:
             info[side] = dict(psi=psi, contact=f["contact"], ankle=ankles[s], reach=reach, pitch=f["pitch"],
                               origin=origin)
-    # arms: swing against the legs (left arm is back when the left leg is forward)
+
+
+# ---------------------------------------------------------------- the walk
+WALK_TILT = 2.0  # the pelvis's forward tilt while walking (degrees)
+
+
+def _walk_pelvis(phase: float) -> np.ndarray:
+    c1 = math.cos(TAU * phase)  # +1 when the left heel strikes (left leg forward)
+    over = math.cos(TAU * (phase - MID_STANCE))  # +1 when the body is over the left foot
+    return rig.euler(pitch=WALK_TILT, yaw=-5.0 * c1, roll=4.0 * over)  # the leading hip comes forward; the swing side drops
+
+
+WALK = Gait("walk", WALK_PERIOD, WALK_SPEED_MS, STANCE, PITCH_STRIKE, HEEL_ROCK, HEEL_OFF, PITCH_OFF, WALK_UNDER, 0.0,
+            WALK_TILT, WALK_NORM, hold=0.5, pelvis=_walk_pelvis, rise=HEEL_RISE,
+            push=WALK_PUSH / STANCE, knee_min=10.0, push_knee=20.0)
+
+
+def _walk_core(phase: float, advance: float = 0.0, dz: float = 0.0, height: Optional[float] = None,
+               info: Optional[dict] = None, helpers: bool = True, dx: Optional[float] = None, track=None):
+    """The walk pose with the pelvis ``dz`` ahead of its even glide, ``dx`` to the side (None = the old
+    sway, ROOT_SWAY) and at ``height`` (None = the old rule: as high as both legs allow, ``root_height``).
+    ``track`` (phase -> (dx, height, dz)) is where the pelvis is at the other phases: a swinging leg hangs from
+    its hip.  ``walk_rots`` passes the balanced values."""
+    c1 = math.cos(TAU * phase)  # +1 when the left heel strikes (left leg forward)
+    over = math.cos(TAU * (phase - MID_STANCE))  # +1 when the body is over the left foot
+    bob = math.cos(2 * TAU * (phase - MID_STANCE))  # +1 over either foot, -1 with both feet down
+    yaw_p = -5.0 * c1
+    R_pelvis = _walk_pelvis(phase)
+    sway = ROOT_SWAY * over if dx is None else dx
+    if track is None:
+        track = const_track(sway, -0.02 * H if height is None else height, dz)
+    feet, ankles = _place_feet(WALK, phase, advance, track)
+    if height is None:
+        height = root_height(R_pelvis, (sway, advance + dz), ankles)
+    root = np.array([sway, height, advance + dz])
+    rots = {"pelvis": R_pelvis}
+    # trunk: counter-turn at the waist turntable, shoulders stay level, head keeps looking ahead
+    chest_yaw = 3.0 * c1  # world heading of the chest
+    rots["chest"] = rig.local_rot("chest", pitch=2.5 + 1.0 * bob, yaw=chest_yaw - yaw_p, roll=-2.4 * over)
+    rots["neck"] = rig.local_rot("neck", pitch=-3.0 - 1.0 * bob, roll=-0.4 * over)
+    rots["head"] = rig.local_rot("head", pitch=-1.5, yaw=-chest_yaw)
+    fwd = rig.euler(yaw=0.5 * yaw_p) @ np.array([0.0, 0.0, 1.0])  # knees point between hips and feet
+    _legs(rots, R_pelvis, root, feet, ankles, fwd, info)
+    # arms swing against the legs (left arm back when the left leg is forward): shoulder ~18 deg back to ~12
+    # forward, elbow ~17 -> 38 deg bent (more when the arm is in front)
     for side, s in rig.SIDES:
         sw = c1 * s
         rots["clav" + side] = rig.local_rot("clav" + side, yaw=-s * 2.0 * sw)
-        rots["upperarm" + side] = rig.local_rot("upperarm" + side, pitch=-3.0 + 21.0 * sw, roll=s * 9.0)
-        rots["forearm" + side] = rig.local_rot("forearm" + side, pitch=-(19.0 - 11.0 * sw), yaw=s * 8.0)
+        rots["upperarm" + side] = rig.local_rot("upperarm" + side, pitch=3.0 + 15.0 * sw, roll=s * 9.0)
+        rots["forearm" + side] = rig.local_rot("forearm" + side, pitch=-(27.5 - 10.5 * sw), yaw=s * 8.0)
         rots["hand" + side] = rig.local_rot("hand" + side, pitch=-6.0)
     if info is not None:
         info["_limits"] = (R_pelvis, (sway, advance + dz), ankles)
@@ -392,13 +785,15 @@ def _walk_core(phase: float, advance: float = 0.0, dz: float = 0.0, height: Opti
     return rots, root
 
 
-WALK_PERIOD = 0.8  # seconds per cycle the walk is balanced for (the play page: STRIDE 1.12 m at 1.4 m/s)
+# the walk's balanced pelvis track (see "balance of a gait" above)
 _WALK_DZ_H = (2, 4, 6, 8)  # harmonics of the forward offset (it repeats every step: even only)
 _WALK_DX_H = (1, 3, 5)  # ... of the sideways sway (it changes sides every step: odd only)
 ZMP_INSET = 0.008 * H  # the floor pushes a little inside the ankle line (the arch side), world units
-_WALK_H_H = (2, 4, 6)  # ... and of the pelvis height
-WALK_REACH = 0.99  # the pelvis stays low enough for the legs to reach with this fraction of their length
-WALK_PELVIS_ACC = 0.45 * G_ACC / M_PER_UNIT  # ... and never rises or sinks faster than this (world units / s^2)
+ZMP_SHIFT = 0.02  # ... and the whole track sits this far forward (world units): see README "걷기·달리기 QC"
+ZMP_FROM, ZMP_TO, ZMP_EASE = 0.25, 1.3, 3.0  # the walk's ZMP rolls from this far from heel to ball (fractions) to this far (under the toes)
+_WALK_H_H = (2, 4, 6, 8, 10, 12)  # ... and of the pelvis height
+WALK_REACH = 0.999  # a planted leg that does not hold the body may straighten to this fraction of its length
+WALK_PELVIS_ACC = 0.6 * G_ACC / M_PER_UNIT  # the pelvis never rises or sinks faster than this (world units / s^2)
 
 
 def walk_zmp_ref(phase: float) -> np.ndarray:
@@ -406,80 +801,98 @@ def walk_zmp_ref(phase: float) -> np.ndarray:
     rolling from a quarter of the way from heel to ball, to the ball; in double support from the trailing
     ball to the leading foot."""
     d = STANCE - 0.5  # double support at the start of each half cycle
+    S = WALK.stride
 
     def foot(origin, s, u):
         heel, ball = origin + rig.HEEL[s][2], origin + rig.TOE[s][2]
-        return np.array([rig.ANKLE[s][0] - s * ZMP_INSET, heel + (0.25 + 0.75 * u) * (ball - heel)])
+        return np.array([rig.ANKLE[s][0] - s * ZMP_INSET, heel + (ZMP_FROM + (ZMP_TO - ZMP_FROM) * (1 - (1 - u) ** ZMP_EASE)) * (ball - heel) + ZMP_SHIFT])
 
     ph = phase % 1.0
-    cyc = STRIDE * math.floor(phase)
-    zL = STRIDE * MID_STANCE + cyc
+    cyc = S * math.floor(phase)
+    zL = S * MID_STANCE + cyc
     if ph < d:  # right ball -> left foot
-        return foot(STRIDE * (MID_STANCE - 0.5) + cyc, -1, 1.0) * (1 - ph / d) + foot(zL, 1, 0.0) * (ph / d)
+        return foot(S * (MID_STANCE - 0.5) + cyc, -1, 1.0) * (1 - ph / d) + foot(zL, 1, 0.0) * (ph / d)
     if ph < 0.5:
         return foot(zL, 1, (ph - d) / (0.5 - d))
-    zR = STRIDE * (MID_STANCE + 0.5) + cyc
+    zR = S * (MID_STANCE + 0.5) + cyc
     if ph < 0.5 + d:
         u = (ph - 0.5) / d
         return foot(zL, 1, 1.0) * (1 - u) + foot(zR, -1, 0.0) * u
     return foot(zR, -1, (ph - 0.5 - d) / (0.5 - d))
 
 
-def _balance_loop(core, zmp_ref, travel: float, period: float, dz_h, h_h, n: int = 120, rounds: int = 6,
-                  height_fn=None, reach: float = MAX_REACH, height_margin: float = 0.0005 * H, dx_h=(1, 3, 5),
-                  relax: float = 1.0, height_acc: Optional[float] = None):
+def _balance_loop(core, zmp_ref, travel: float, period: float, dz_h, h_h, height_fn, h0: float, n: int = 120,
+                  rounds: int = 6, dx_h=(1, 3, 5), relax: float = 1.0):
     """Shared by the walk and the run: the pelvis's forward offset (Fourier coefficients over the phase) that
-    puts the centre of mass on the balanced path, and the pelvis height (coefficients) - the smooth curve
-    under the legs' reach (``height_fn`` = None) or ``height_fn(limits)`` for a designed one."""
+    puts the centre of mass on the balanced path, its sideways sway likewise, and its height
+    (``height_fn(phases, infos)`` -> coefficients).  Each round poses the loop on the previous round's track."""
     ph = np.arange(n) / n
     dt = period / n
     dz = np.zeros(n)
     dx = np.zeros(n)
-    hgt = [None] * n
-    out = {}
-    for _ in range(rounds):
-        com, lim = np.zeros((n, 3)), np.zeros(n)
+    hgt = np.full(n, float(h0))
+    out: dict = dict(dz_h=dz_h, h_h=h_h, dx_h=dx_h)
+    track = const_track(0.0, float(h0), 0.0)
+    for r in range(rounds):
+        com = np.zeros((n, 3))
         seg = np.zeros((n, len(_COM[0]), 3))
+        infos = []
         for i, f in enumerate(ph):
             info: dict = {}
-            rots, root = core(f, travel * f, dz[i], hgt[i], info=info, helpers=False, dx=dx[i])
+            rots, root = core(f, travel * f, dz[i], hgt[i], info=info, helpers=False, dx=dx[i], track=track)
             mats = rig.SKELETON.world_mats(rots, root_offset=root)
             com[i] = com_of(mats)
             seg[i] = mass_points(mats)
-            Rp, rxz, ank = info["_limits"]
-            lim[i] = min(leg_limits(Rp, rxz, ank, reach).values())
+            infos.append(info)
         y = (com[:, 1] - rig.GROUND) * M_PER_UNIT
         c = (periodic_d2(y, dt) + G_ACC) / y
         c = np.maximum(c, 0.0)
+        flight = np.array([all(inf[sd]["contact"] is None for sd in ("L", "R")) for inf in infos])
+        c[flight] = 0.0  # flight: nothing pushes
         p = np.array([zmp_ref(f) for f in ph])
         # the whole body moved by d(t) moves the ZMP by d - (y / (y'' + g)) d'': the correction that puts the
         # multi-body ZMP (swinging limbs included, not just the centre of mass) on the reference
         z0 = multibody_zmp(seg, dt, travel=travel)
-        err = zmp_follow(p[:, 1] - z0[:, 1], c, dt, 0.0)
-        err_x = zmp_follow(p[:, 0] - z0[:, 0], c, dt, 0.0)
+        if flight.any():  # in the air the centre of mass keeps its speed: its own acceleration is taken out
+            cz = (com - np.outer(travel * ph, [0.0, 0.0, 1.0])) * M_PER_UNIT
+            err = zmp_follow_flight(p[:, 1] - z0[:, 1], c, dt, flight, periodic_d2(cz[:, 2], dt) / M_PER_UNIT)
+            err_x = zmp_follow_flight(p[:, 0] - z0[:, 0], c, dt, flight, periodic_d2(cz[:, 0], dt) / M_PER_UNIT)
+        else:
+            err = zmp_follow(p[:, 1] - z0[:, 1], c, dt, 0.0)
+            err_x = zmp_follow(p[:, 0] - z0[:, 0], c, dt, 0.0)
+        if DEBUG_BALANCE:
+            print("round", float(np.abs(err).max()), float(np.abs(err_x).max()), float(np.ptp(hgt)))
         out["dz"] = fourier_fit(dz + relax * err, dz_h)
         dz = _fourier_basis(ph, dz_h) @ out["dz"]
         out["dx"] = fourier_fit(dx + relax * err_x, dx_h)
         dx = _fourier_basis(ph, dx_h) @ out["dx"]
-        if height_fn is None:
-            out["h"] = smooth_below(np.minimum(lim, -ROOT_CAP), h_h, height_margin, height_acc, period)
-        else:
-            out["h"] = height_fn(ph, lim)
-        hgt = list(_fourier_basis(ph, h_h) @ out["h"])
-    out.update(dz_h=dz_h, h_h=h_h, dx_h=dx_h, period=period, travel=travel, n=n,
-               com_err=float(max(np.abs(err).max(), np.abs(err_x).max())))
+        # the height for the new forward / sideways offsets (a planted ankle does not depend on them)
+        for i, inf in enumerate(infos):
+            Rp, _, ank = inf["_limits"]
+            inf["_limits"] = (Rp, (dx[i], travel * ph[i] + dz[i]), ank)
+        h_new = height_fn(ph, infos)
+        out["h"] = h_new if "h" not in out or r == rounds - 1 else 0.5 * (out["h"] + h_new)
+        hgt = _fourier_basis(ph, h_h) @ out["h"]
+        track = balance_track(out)
+    out.update(period=period, travel=travel, n=n, com_err=float(max(np.abs(err).max(), np.abs(err_x).max())))
     return out
 
 
 _BALANCE_CACHE: Dict[tuple, dict] = {}
+DEBUG_BALANCE = False
 
 
 def walk_balance(period: float = WALK_PERIOD) -> dict:
-    """The walk's balanced pelvis track (computed once per period, about a second)."""
+    """The walk's balanced pelvis track (computed once per period, a few seconds): its height is the highest smooth
+    curve at which the leg that holds the body bends its knee as the knee curve says (never straighter)."""
     key = ("walk", round(float(period), 6), STRIDE, STANCE)
     if key not in _BALANCE_CACHE:
-        _BALANCE_CACHE[key] = _balance_loop(_walk_core, walk_zmp_ref, STRIDE, period, _WALK_DZ_H, _WALK_H_H,
-                                            reach=WALK_REACH, dx_h=_WALK_DX_H, height_acc=WALK_PELVIS_ACC)
+        def height(ph, infos):
+            lim = WALK.holding_limits(infos, None)
+            return smooth_below(lim, _WALK_H_H, 0.0005 * H, WALK_PELVIS_ACC, period)
+
+        _BALANCE_CACHE[key] = _balance_loop(_walk_core, walk_zmp_ref, STRIDE, period, _WALK_DZ_H, _WALK_H_H, height,
+                                            -0.02 * H, dx_h=_WALK_DX_H, rounds=10, relax=0.4)
     return _BALANCE_CACHE[key]
 
 
@@ -487,12 +900,11 @@ def walk_rots(skel: Skeleton, phase: float, advance: float = 0.0, info: Optional
     """Local rotations + root offset for walk phase in [0,1).  ``info`` (optional dict) receives the
     world targets of both feet and the leg reach, for tests.  The pelvis follows ``walk_balance``: it
     slows while it rises over the planted leg and gains speed again as it falls onto the next one, and its
-    height is a smooth curve under what the legs reach (README "걷기 균형")."""
+    height lets the holding knee bend as a person's does (README "걷기 균형", "걷기·달리기 QC")."""
     b = walk_balance()
-    dz = fourier_eval(b["dz"], b["dz_h"], phase)
-    h = fourier_eval(b["h"], b["h_h"], phase)
-    dx = fourier_eval(b["dx"], b["dx_h"], phase)
-    return _walk_core(phase, advance, dz, h, info, dx=dx)
+    tr = balance_track(b)
+    dx, h, dz = tr(phase)
+    return _walk_core(phase, advance, dz, h, info, dx=dx, track=tr)
 
 
 def walk_pose(skel: Skeleton, phase: float, advance: float = 0.0):
@@ -501,60 +913,42 @@ def walk_pose(skel: Skeleton, phase: float, advance: float = 0.0):
     return skel.world_mats(rots, root_offset=root), root
 
 
-# ---------------------------------------------------------------- run loop (a jog with a flight phase)
-# Built like the walk: feet first, in WORLD space (a planted foot is a fixed point - it lands near flat,
-# rolls onto the ball and pushes off; the swinging foot leaves and lands with zero world speed, its heel
-# kicked up behind on the way), legs by two-bone IK, the pelvis's height designed (ballistic in flight,
-# dipping in stance) and its forward / sideways travel balanced like the walk's (``_balance_loop``: in flight
-# nothing pushes, so the body glides; in stance the floor pushes through the planted foot).
-RUN_PERIOD = 40 / 60  # seconds per cycle (two steps): 90 steps a minute per leg, 180 in all
+# ---------------------------------------------------------------- run loop (a run with a flight phase)
+# Built like the walk (``Gait``): a planted foot lands on the outer heel / midfoot, rolls flat and pushes off
+# from the ball; the swinging leg follows the normative running curves; the pelvis height lets the stance knee
+# bend as a runner's does (~20 deg at touchdown, ~42 at mid-stance) and in flight it is the highest arc that
+# falls no faster than RUN_BOUNCE x gravity - a ballistic arc; forward / sideways travel balanced like the walk's.
+RUN_PERIOD = 40 / 60  # seconds per cycle (two steps): 180 steps a minute
 RUN_SPEED_MS = 3.75  # metres per second
 RUN_STRIDE = RUN_SPEED_MS * RUN_PERIOD / M_PER_UNIT  # world units per cycle (2.5 m)
-RUN_STANCE = 0.27  # fraction of the cycle a foot is down (0.18 s); each step has 0.23 x 0.667 s = 0.15 s of flight
-RUN_MID = RUN_STANCE / 2
-RUN_STRIKE = -7.0  # foot pitch at touchdown (degrees, toes up a little: lands on the outer heel / midfoot)
-RUN_ROLL = 0.22  # part of the stance spent rolling flat
-RUN_HEEL_OFF = 0.25  # part of the stance after which the heel lifts
-RUN_PITCH_OFF = 42  # foot pitch at toe-off
-RUN_LIFT = 0.13 * H  # extra ankle height at the top of the heel kick
+RUN_STANCE = 0.35  # fraction of the cycle a foot is down (0.233 s); each step has 0.15 x 0.667 s = 0.1 s of flight
+RUN_UNDER = 0.42  # the ankle passes under the body's glide at this part of the stance (lands closer than it leaves)
+RUN_MID = RUN_UNDER * RUN_STANCE
+RUN_STRIKE = -10.0  # foot pitch at touchdown (degrees, toes up: lands on the outer heel / midfoot)
+RUN_ROLL = 0.18  # part of the stance spent rolling flat
+RUN_HEEL_OFF = 0.30  # part of the stance after which the heel lifts
+RUN_PITCH_OFF = 60.0  # foot pitch at toe-off (as designed: from RUN_PUSH on the knee curve decides it)
+RUN_PUSH = 0.6  # from this part of the stance on, the heel rises as far as the knee curve needs (push-off)
 RUN_NARROW = 0.018 * H  # runners put their feet nearer the midline than walkers
-RUN_BOUNCE = 0.6  # the pelvis's up-and-down as a fraction of a free fall's (see run_height_shape)
-RUN_REACH = 0.985  # the pelvis stays low enough for the stance leg to keep a little bend
+RUN_TILT = 8.0  # the pelvis's forward tilt
+FLIGHT_FALL = 0.7  # (smooth_below) in flight the pelvis falls at least this fraction of RUN_BOUNCE x g
+RUN_BOUNCE = 0.9  # in flight the pelvis falls at most this fraction of g (the legs swing up and down under it)
+RUN_PELVIS_UP = 2.5 * G_ACC / M_PER_UNIT  # ... and is pushed up at most this hard in stance (world units / s^2)
+RUN_REACH = 0.999
 _RUN_DZ_H = (2, 4, 6, 8)
 _RUN_DX_H = (1, 3, 5)
 _RUN_H_H = (2, 4, 6, 8, 10, 12)
 
 
-def run_foot_path(psi: float, s: int) -> Dict[str, object]:
-    """One foot of the run over leg phase psi in [0,1) (0 = touchdown), in its plant frame (see ``foot_path``)."""
-    psi = psi % 1.0
-    A0, T0, Hc = rig.ANKLE[s], rig.TOE[s], rig.HEEL[s]
-    if psi < RUN_STANCE:
-        t = psi / RUN_STANCE
-        if t < RUN_ROLL:
-            pitch = RUN_STRIKE * (1 - smootherstep(t / RUN_ROLL))
-            return dict(ankle=_about(Hc, Hc, pitch, A0) - A0, pitch=pitch, toe=0.0, contact="heel")
-        if t < RUN_HEEL_OFF:
-            return dict(ankle=np.zeros(3), pitch=0.0, toe=0.0, contact="sole")
-        pitch = RUN_PITCH_OFF * smootherstep((t - RUN_HEEL_OFF) / (1 - RUN_HEEL_OFF))
-        return dict(ankle=_about(T0, T0, pitch, A0) - A0, pitch=pitch, toe=-pitch, contact="toe")
-    t = (psi - RUN_STANCE) / (1 - RUN_STANCE)
-    start = _about(T0, T0, RUN_PITCH_OFF, A0) - A0
-    end = _about(Hc, Hc, RUN_STRIKE, A0) - A0 + np.array([0.0, 0.0, RUN_STRIDE])
-    ankle = start + (end - start) * smoothstep(t)
-    # up and down in one arch (the foot leaves and lands moving: a runner's foot is not set down gently).  A
-    # foot that came down early would hang at the landing spot far ahead of a body in flight and pull the
-    # whole loop's pelvis down to reach it
-    ankle[1] += RUN_LIFT * math.sin(math.pi * t ** 1.3)
-    pitch = RUN_PITCH_OFF + (RUN_STRIKE - RUN_PITCH_OFF) * smootherstep((t - 0.12) / 0.80)
-    toe = -RUN_PITCH_OFF * (1 - smootherstep(t / 0.5))
-    return dict(ankle=ankle, pitch=pitch, toe=toe, contact=None)
+def _run_pelvis(phase: float) -> np.ndarray:
+    c1 = math.cos(TAU * phase)
+    over = math.cos(TAU * (phase - RUN_MID))
+    return rig.euler(pitch=RUN_TILT, yaw=-8.0 * c1, roll=4.0 * over)
 
 
-def _soft_clamp(x: float, lo: float, hi: float, eps: float) -> float:
-    """x kept inside [lo, hi], bending smoothly onto the bound over the last ``eps`` (degrees)."""
-    x = lo + soft_pos(x - lo, eps)
-    return hi - soft_pos(hi - x, eps)
+RUN = Gait("run", RUN_PERIOD, RUN_SPEED_MS, RUN_STANCE, RUN_STRIKE, RUN_ROLL, RUN_HEEL_OFF, RUN_PITCH_OFF, RUN_UNDER,
+           RUN_NARROW, RUN_TILT, RUN_NORM, hold=RUN_STANCE, pelvis=_run_pelvis, toe_relax=0.4,
+           rise=2.0, push=RUN_PUSH)
 
 
 def run_zmp_ref(phase: float) -> np.ndarray:
@@ -567,55 +961,36 @@ def run_zmp_ref(phase: float) -> np.ndarray:
             origin = RUN_STRIDE * (RUN_MID + start) + cyc
             heel, ball = origin + rig.HEEL[s][2], origin + rig.TOE[s][2]
             return np.array([rig.ANKLE[s][0] - s * (RUN_NARROW + ZMP_INSET),
-                             heel + (0.35 + 0.65 * u / RUN_STANCE) * (ball - heel)])
+                             heel + (0.35 + 0.85 * (1 - (1 - u / RUN_STANCE) ** 2)) * (ball - heel)])
     return np.array([0.0, RUN_STRIDE * phase])  # flight: not used (nothing pushes)
 
 
 def _run_core(phase: float, advance: float = 0.0, dz: float = 0.0, height: Optional[float] = None,
-              info: Optional[dict] = None, helpers: bool = True, dx: Optional[float] = None):
+              info: Optional[dict] = None, helpers: bool = True, dx: Optional[float] = None, track=None):
     c1 = math.cos(TAU * phase)  # +1 when the left foot touches down (left leg forward)
     over = math.cos(TAU * (phase - RUN_MID))
     bob = math.cos(2 * TAU * (phase - RUN_MID))
     yaw_p = -8.0 * c1
-    R_pelvis = rig.euler(pitch=8.0, yaw=yaw_p, roll=4.0 * over)
-    feet, ankles = {}, {}
-    for side, s in rig.SIDES:
-        psi = (phase + (0.0 if s > 0 else 0.5)) % 1.0
-        f = run_foot_path(psi, s)
-        origin = np.array([-s * RUN_NARROW, 0.0, advance + RUN_STRIDE * (RUN_MID - psi)])
-        feet[s], ankles[s] = (psi, f, origin), rig.ANKLE[s] + origin + f["ankle"]
+    R_pelvis = _run_pelvis(phase)
     sway = 0.0 if dx is None else dx
+    if track is None:
+        track = const_track(sway, -0.05 * H if height is None else height, dz)
+    feet, ankles = _place_feet(RUN, phase, advance, track)
     if height is None:
         height = root_height(R_pelvis, (sway, advance + dz), ankles)
     root = np.array([sway, height, advance + dz])
     rots = {"pelvis": R_pelvis}
     chest_yaw = 9.0 * c1  # the shoulders turn against the hips
-    rots["chest"] = rig.local_rot("chest", pitch=7.0 + 1.5 * bob, yaw=chest_yaw - yaw_p, roll=-2.5 * over)
-    rots["neck"] = rig.local_rot("neck", pitch=-5.0 - 1.5 * bob, roll=-0.5 * over)
-    rots["head"] = rig.local_rot("head", pitch=-7.0, yaw=-chest_yaw)
-    to_world = _pelvis_world(R_pelvis, root)
+    rots["chest"] = rig.local_rot("chest", pitch=3.5 + 1.5 * bob, yaw=chest_yaw - yaw_p, roll=-2.5 * over)
+    rots["neck"] = rig.local_rot("neck", pitch=-4.0 - 1.5 * bob, roll=-0.5 * over)
+    rots["head"] = rig.local_rot("head", pitch=-4.0, yaw=-chest_yaw)
     fwd = rig.euler(yaw=0.5 * yaw_p) @ np.array([0.0, 0.0, 1.0])
-    for side, s in rig.SIDES:
-        psi, f, origin = feet[s]
-        W_thigh, W_shin, reach = leg_ik(to_world(rig.HIP[s]), ankles[s], fwd, s)
-        pitch = f["pitch"]
-        if f["contact"] is None:  # in the air the ankle keeps inside its range, eased (no stop at the limit)
-            (lo, hi), _, _ = rig.limits("foot" + side)
-            local = rig.joint_angles("foot" + side, W_shin.T @ rot_x(pitch))[0]
-            pitch += _soft_clamp(local, lo + 2.0, hi - 2.0, 6.0) - local
-        W_foot = rot_x(pitch)
-        rots["thigh" + side] = R_pelvis.T @ W_thigh
-        rots["shin" + side] = W_thigh.T @ W_shin
-        rots["foot" + side] = W_shin.T @ W_foot
-        rots["toe" + side] = rig.local_rot("toe" + side, pitch=f["toe"])
-        if info is not None:
-            info[side] = dict(psi=psi, contact=f["contact"], ankle=ankles[s], reach=reach, pitch=f["pitch"],
-                              origin=origin)
-    for side, s in rig.SIDES:  # arms pump against the legs, elbows near a right angle
+    _legs(rots, R_pelvis, root, feet, ankles, fwd, info)
+    for side, s in rig.SIDES:  # arms pump against the legs, driven back more than forward, elbows near a right angle
         sw = c1 * s
         rots["clav" + side] = rig.local_rot("clav" + side, yaw=-s * 4.0 * sw)
-        rots["upperarm" + side] = rig.local_rot("upperarm" + side, pitch=-6.0 + 38.0 * sw, roll=s * 10.0)
-        rots["forearm" + side] = rig.local_rot("forearm" + side, pitch=-(86.0 - 16.0 * sw), yaw=s * 10.0)
+        rots["upperarm" + side] = rig.local_rot("upperarm" + side, pitch=12.5 + 27.5 * sw, roll=s * 10.0)
+        rots["forearm" + side] = rig.local_rot("forearm" + side, pitch=-(85.0 - 12.0 * sw), yaw=s * 10.0)
         rots["hand" + side] = rig.local_rot("hand" + side, pitch=-10.0)
     if info is not None:
         info["_limits"] = (R_pelvis, (sway, advance + dz), ankles)
@@ -624,30 +999,16 @@ def _run_core(phase: float, advance: float = 0.0, dz: float = 0.0, height: Optio
     return rots, root
 
 
-def run_height_shape(phase) -> np.ndarray:
-    """The pelvis's up-and-down per step, world units, 0 at touchdown: a dip while a foot is down, a free-fall
-    parabola in flight (it leaves and lands at the speed gravity gives a flight of that length)."""
-    tc, tf = RUN_STANCE * RUN_PERIOD, (0.5 - RUN_STANCE) * RUN_PERIOD
-    g = RUN_BOUNCE * G_ACC  # the pelvis bounces less than the centre of mass: the legs swing up and down under it
-    vy = g * tf / 2
-    u = np.asarray(phase, np.float64) % 0.5 * RUN_PERIOD
-    st = -(vy * tc / math.pi) * np.sin(math.pi * np.minimum(u, tc) / tc)
-    fl = vy * (u - tc) - 0.5 * g * (u - tc) ** 2
-    return np.where(u < tc, st, fl) / M_PER_UNIT
-
-
-def _run_height(ph, lim):
-    shape = run_height_shape(ph)
-    base = float(np.min(lim - shape)) - 0.002 * H
-    return fourier_fit(base + shape, _RUN_H_H)
-
-
 def run_balance() -> dict:
     key = ("run", RUN_PERIOD, RUN_STRIDE, RUN_STANCE)
     if key not in _BALANCE_CACHE:
-        _BALANCE_CACHE[key] = _balance_loop(_run_core, run_zmp_ref, RUN_STRIDE, RUN_PERIOD, _RUN_DZ_H, _RUN_H_H,
-                                            height_fn=_run_height, reach=RUN_REACH, dx_h=_RUN_DX_H, rounds=12,
-                                            relax=0.6)
+        def height(ph, infos):
+            lim = RUN.holding_limits(infos, None)
+            return smooth_below(lim, _RUN_H_H, 0.0005 * H, RUN_PELVIS_UP, RUN_PERIOD,
+                                acc_min=-RUN_BOUNCE * G_ACC / M_PER_UNIT)
+
+        _BALANCE_CACHE[key] = _balance_loop(_run_core, run_zmp_ref, RUN_STRIDE, RUN_PERIOD, _RUN_DZ_H, _RUN_H_H, height,
+                                            -0.05 * H, dx_h=_RUN_DX_H, rounds=16, relax=0.25)
     return _BALANCE_CACHE[key]
 
 
@@ -655,8 +1016,9 @@ def run_gait_rots(skel: Skeleton, phase: float, advance: float = 0.0, info: Opti
     """The run loop (3.75 m/s at RUN_PERIOD; ``advance = RUN_STRIDE * phase`` to travel, 0 = on the spot).
     Not the same as ``run_rots`` (a synthetic sprint for testing the costume, no foot planting)."""
     b = run_balance()
-    return _run_core(phase, advance, fourier_eval(b["dz"], b["dz_h"], phase), fourier_eval(b["h"], b["h_h"], phase),
-                     info, dx=fourier_eval(b["dx"], b["dx_h"], phase))
+    tr = balance_track(b)
+    dx, h, dz = tr(phase)
+    return _run_core(phase, advance, dz, h, info, dx=dx, track=tr)
 
 
 def run_gait_pose(skel: Skeleton, phase: float, advance: float = 0.0):

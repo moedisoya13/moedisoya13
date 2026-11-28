@@ -50,11 +50,13 @@ def test_walk_keeps_its_guarantees_and_is_balanced():
     # the pelvis: a smooth curve (no half-step kink), within the vertical acceleration it was given
     b = motion.walk_balance()
     acc = [abs(motion.fourier_eval(b["h"], b["h_h"], f, 2)) / motion.WALK_PERIOD ** 2 * M for f in np.arange(0, 1, 0.005)]
-    assert max(acc) <= 0.45 * 9.81 * 1.01  # (the bound holds at the 120 samples it was solved on)
-    # qc at the page's speed: the floor can push every frame (ZMP on the feet), no jerk spikes worth a degree and a half
+    assert max(acc) <= motion.WALK_PELVIS_ACC * M * 1.02  # (the bound holds at the 120 samples it was solved on)
+    # qc at the page's speed: the floor can push every frame (ZMP on the feet).  Jerk spikes: the foot now leaves the
+    # floor turning fast and is set down still coming down (toe-off and heel strike, both feet, two cycles) - the
+    # old walk's feet left and landed at rest (11 spikes) and looked it (README "걷기·달리기 QC")
     rep = qc.evaluate(qc.from_clip(qc.walk_clip(60, motion.WALK_PERIOD), "walk"))
     z = rep["balance"]["_zmp"]
-    assert rep["balance"]["zmp"]["out"] <= 10 and np.nanmin(z) > -0.06 and rep["jerk"]["n_spikes"] <= 12
+    assert rep["balance"]["zmp"]["out"] <= 10 and np.nanmin(z) > -0.06 and rep["jerk"]["n_spikes"] <= 30
     # and at synth.walk's slower 1.1 s: much better than before the fix (58 frames out, worst far outside)
     rep = qc.evaluate(qc.from_clip(qc.walk_clip(60, 1.1), "walk"))
     assert rep["balance"]["zmp"]["out"] <= 12
@@ -71,7 +73,7 @@ def test_run_loop_plants_its_feet_flies_and_stays_in_range():
         rots, _ = motion.run_gait_rots(SKEL, k / 80, 0.0, info)
         assert not rig.check_limits(rots), k
         flight += info["L"]["contact"] is None and info["R"]["contact"] is None
-    assert 0.3 < flight / 80 < 0.55  # two flights a cycle
+    assert 0.25 < flight / 80 < 0.55  # two flights a cycle (0.1 s each at 3.75 m/s)
     assert motion.RUN_STRIDE * M / motion.RUN_PERIOD == pytest.approx(3.75)
     rep = qc.evaluate(qc.from_clip(qc.run_clip(60), "run"))
     assert rep["balance"]["zmp"]["out"] <= 12

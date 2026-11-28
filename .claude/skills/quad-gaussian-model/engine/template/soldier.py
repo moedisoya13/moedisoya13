@@ -734,7 +734,9 @@ def foot_report(sc: Optional[Sculpt] = None, steps: int = 400) -> Dict[str, floa
             mats = SKEL.world_mats(rots, root_offset=root)
             reach = max(reach, info["L"]["reach"], info["R"]["reach"])
             f = motion.foot_world(SKEL, mats, s)
-            rec[s].append((info[side]["contact"], f))
+            # (a foot pitched past what its toes bend - motion.TOE_BEND, eased over 3 deg - tips them: the ball stays put)
+            c = info[side]["contact"]
+            rec[s].append(("toe_up" if c == "toe" and info[side]["pitch"] > motion.TOE_BEND - 3.0 else c, f))
             if sc is not None:
                 Mf, Mt = mats[SKEL.index["foot" + side]], mats[SKEL.index["toe" + side]]
                 y = min(float((foot_v[s][0] @ Mf[:, :3].T + Mf[:, 3])[:, 1].min()),
@@ -745,7 +747,7 @@ def foot_report(sc: Optional[Sculpt] = None, steps: int = 400) -> Dict[str, floa
     slide = head = 0.0
     for s in (1, -1):
         for contacts, key in ((("heel", "sole"), "heel"),  # the heel pivot: from heel strike until the heel lifts
-                              (("sole", "toe"), "toe"),  # the toe hinge: from foot-flat until toe-off
+                              (("sole", "toe", "toe_up"), "toe"),  # the toe hinge: from foot-flat until toe-off
                               (("sole",), "ankle"), (("toe",), "toe_tip")):
             pts = np.array([f[key] for c, f in rec[s] if c in contacts])
             slide = max(slide, float(np.abs(pts - pts.mean(0)).max()))
@@ -759,12 +761,13 @@ def foot_report(sc: Optional[Sculpt] = None, steps: int = 400) -> Dict[str, floa
                    swing_clearance_max=float(sw.max()))
     eps = 1e-4
 
-    def speed(ph0, ph1):
+    def speed(ph0, ph1, axes=(0, 1, 2)):
         a, b = (motion.foot_world(SKEL, motion.walk_pose(SKEL, ph, motion.STRIDE * ph)[0], 1) for ph in (ph0, ph1))
-        return max(float(np.linalg.norm(b[k] - a[k])) for k in ("ankle", "heel", "toe")) / (ph1 - ph0)
+        return max(float(np.linalg.norm((b[k] - a[k])[list(axes)])) for k in ("ankle", "heel", "toe")) / (ph1 - ph0)
 
     mid = motion.STANCE + 0.5 * (1 - motion.STANCE)
-    out.update(landing_speed=speed(1.0 - eps, 1.0), liftoff_speed=speed(motion.STANCE, motion.STANCE + eps),
+    out.update(landing_speed=speed(1.0 - eps, 1.0), landing_speed_horizontal=speed(1.0 - eps, 1.0, (0, 2)),
+               liftoff_speed=speed(motion.STANCE, motion.STANCE + eps),
                mid_swing_speed=speed(mid - eps, mid + eps), body_speed=motion.STRIDE)
     return out
 

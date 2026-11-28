@@ -19,7 +19,7 @@
 python examples/soldier/qc.py check out/onetwo3/5m/clip.npz --source <카탈로그 폴더>/1-2@5m.json -o out/qc/onetwo_5m
 # 영상 모션캡처 데모: 원본 = truth.npz
 python examples/soldier/qc.py check out/mocap/demo_run/clip.npz --source out/mocap/demo_run/truth.npz -o out/qc/mocap_run
-# 리그 자체의 걷기 루프 (--period 0.8 = 플레이 페이지의 1.4 m/s), 달리기 루프
+# 리그 자체의 걷기 루프 (기본 주기 = motion.WALK_PERIOD 1.0 s = 플레이 페이지의 1.4 m/s), 달리기 루프
 python examples/soldier/qc.py walk -o out/qc/walk_loop
 python examples/soldier/qc.py run -o out/qc3/run
 # 위 전부 (복싱 5개, 모캡 데모 2개, 걷기) → out/qc/summary_ko.txt, out/qc/table.json
@@ -109,6 +109,8 @@ python examples/soldier/qc.py all --sources <카탈로그 폴더>
 | 리그 걷기 루프 | 88 | 102 / 132 | 0 | 58 | 47 (반 걸음마다 같은 곳) | — |
 | 리그 걷기 루프, 고친 뒤 (1.1 s / 0.8 s 주기) | 76 / 60 | 110 / 132, 90 / 96 | 0 | **8 / 8** (최악 4.2 / 5.3 cm) | 7 / 11 | — |
 | 리그 달리기 루프 (새로, 0.667 s) | 48 (+체공 32) | 45 / 48 | 0 | 11 (최악 6.4 cm) | 14 | — |
+| 리그 걷기 루프, 사람 관절 곡선으로 다시 (1.0 s = 분당 120걸음, 1.4 m/s) | 85 | — | 0 | **0** (최악 1.9 cm) | 27 | — |
+| 리그 달리기 루프, 다시 (0.667 s, 디딤 35 %) | 56 (+체공 24) | — | 0 | 7 (최악 8.0 cm) | 20 | — |
 | 가드 숨쉬기 (새로, 2 s) | 0 (두 발) | 0 | 0 | 0 | 0 | — |
 
 읽는 법과 판단:
@@ -142,6 +144,12 @@ python examples/soldier/qc.py all --sources <카탈로그 폴더>
   **→ 고쳤습니다**(soldier README "걷기 균형"): 골반 높이는 다리가 닿는 한계 아래의 매끄러운 사인파(±0.45 g 이내), 앞뒤·옆 위치는
   팔다리까지 넣은 ZMP가 디딘 발 위를 뒤꿈치에서 발볼로 구르도록 풀어서 정합니다. 남은 ZMP 밖 8프레임은 뒤꿈치가 드는 순간 발볼 앞 4–5 cm.
 
+- **걷기·달리기를 사람의 측정값과 비교**(2026-11-28, soldier README "걷기·달리기 QC", 그림·GIF는 `out/motion5/`): 이 문서의 검사는
+  "물리적으로 가능한가"만 봅니다. "사람처럼 보이나"는 관절 각도를 걷는·달리는 사람의 평균 곡선[^norm]과 겹쳐 봐야 드러났습니다
+  — 예전 걷기는 무릎이 내내 20–60° 굽은 종종걸음(분당 150걸음), 달리기는 허벅지를 82°까지 드는 주저앉은 자세였습니다.
+  다시 만든 뒤 ZMP는 좋아졌고(걷기 밖 0프레임), 튐은 늘었습니다(걷기 11 → 27: 발이 멈춘 채가 아니라 발볼로 돌며 떠나고 내려오며
+  닿으므로 그 순간 발·정강이 속도가 바뀝니다. 한 프레임만 벗어난 튐이 아니라 속도의 꺾임입니다).
+
 ## 이 검사가 틀릴 수 있는 곳
 
 - 디딘 발 판정은 1.5 cm 경계에 민감합니다. 발이 그 근처에 떠 있는 클립(5a 62–70프레임)은 원본과 옮긴 것이 다르게 판정됩니다.
@@ -172,3 +180,6 @@ python examples/soldier/qc.py all --sources <카탈로그 폴더>
     됩니다. 평균·표준편차와 달리 큰 튐 몇 개에 휘둘리지 않습니다.
 [^nj]: **매끄러움 지수(정규화 저크, Hogan & Sternad 2009)**: 저크를 동작 시간과 거리로 나눠 단위를 없앤 값. 낮을수록 매끄럽습니다.
     이론상 가장 매끄러운 한 번의 동작이 18.97, 사인파 반 주기가 7.75입니다.
+[^norm]: **정규(normative) 보행 자료**: 건강한 성인 여러 명의 걷기·달리기를 재서 낸 관절 각도의 평균 곡선과 그 퍼짐. 여기서는
+    Perry & Burnfield(2010), Winter(2009), Kadaba 외(1990), Novacheck(1998), Dugan & Bhat(2005)의 그림·본문에서 읽은 대략값을 썼습니다
+    (`motion.WALK_NORM`, `motion.RUN_NORM`; 숫자를 하나하나 디지털화한 것이 아니므로 ±몇 도의 오차가 있습니다).

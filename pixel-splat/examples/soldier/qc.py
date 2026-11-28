@@ -1434,7 +1434,8 @@ def main(argv=None):
     w = sub.add_parser("walk", help="the rig's own walk loop (motion.walk_rots)")
     w.add_argument("-o", "--out")
     w.add_argument("--fps", type=float, default=60.0)
-    w.add_argument("--period", type=float, default=1.1, help="seconds per cycle (synth.walk's default)")
+    w.add_argument("--period", type=float, default=None, help="seconds per cycle (default motion.WALK_PERIOD: the "
+                   "period the walk is balanced for, 1.4 m/s; synth.walk plays it at 1.1)")
     w.add_argument("--no-plots", action="store_true")
     r = sub.add_parser("run", help="the rig's own run loop (motion.run_gait_rots)")
     r.add_argument("-o", "--out")
@@ -1454,7 +1455,8 @@ def main(argv=None):
     elif a.cmd == "run":
         check(None, None, a.out, "run_loop", not a.no_plots, clip_obj=run_clip(a.fps, a.period))
     else:
-        check(None, None, a.out, "walk_loop", not a.no_plots, clip_obj=walk_clip(a.fps, a.period))
+        import motion  # noqa: PLC0415
+        check(None, None, a.out, "walk_loop", not a.no_plots, clip_obj=walk_clip(a.fps, a.period or motion.WALK_PERIOD))
 
 
 if __name__ == "__main__":
