@@ -545,7 +545,7 @@ export function createAnimator(seed) {
     carry = {}; // what is still owed to the move before: { x, v } a channel, sprung to nothing
   for (const ch of CHANNELS) (shown[ch] = 0), (speed[ch] = 0), (carry[ch] = { x: 0, v: 0 });
   const roll = dice((seed || 0) + 1); // his own dice: the fidgets, the flourishes, the lurch of a man with no beat
-  let reachFrom = null, // where each hip was last frame, in his own space, as it was drawn (a legend's feet are kept in reach of it)
+  let reachFrom = null, // where each hip was last frame, in his own space, as it was drawn (his feet are kept in reach of it)
     heldUp = 0, // how far his hips were held up last frame over where his legs put them, not to fall faster than he can (FALL)
     sunk = 0, // how far the hips are down for the spread of the feet
     feetLive = 1, // how lively his feet are, followed: a foot in the air is not snapped down by a move starting
@@ -2767,13 +2767,21 @@ export function createAnimator(seed) {
          ball along the canvas, once his hip has gone out of its reach (as a foot left behind by a shove is: STRIDE, above),
          and the one stepping comes down within reach (above). His hips for it: as they are now, and as far up again as they
          were held up last frame (FALL), which is where they will be drawn. (Going somewhere, faster than walking: standing,
-         the hips driven up or on by a punch, the feet stay where they are.) */
+         the hips driven up or on by a punch, the feet stay where they are.)
+         The foot he stands on is dragged so at every grade, not only a legend's: anyone's leg can be left out of reach of
+         his hips, going somewhere fast, reeling or covered up and moving (a 4명 reeling, a 3 in his guard or throwing an
+         uppercut on the move, a 5명 covered up: 107 frames in 19 of 30 seeded matches standing where he would topple,
+         fought the way docs/audit-2026-11-25/4-3.mjs fights them; 38 in 8 after). The step coming down within reach is
+         still a legend's only: at every grade it brought the rear foot of a man caught coming in, stepping through, down
+         where it left his ankles 1.01 m apart as he lay (tests/fall.test.mjs holds them to 1 m). Nor is the foot a man who
+         is not a legend pushes a dash off dragged: it leaves the canvas (dragged, a 4명's dash came down 1.5 g,
+         src/audit.mjs); a legend's dash is his own (legend.mjs). */
       {
         const R = M.euler(spine.Hips),
           up = M.add(hips, [0, Math.max(0, heldUp), 0]);
         reachFrom = { L: M.add(up, M.app(R, LEGS.L)), R: M.add(up, M.app(R, LEGS.R)) };
         const side = swing.side === 'L' ? 'R' : swing.side === 'R' ? 'L' : null;
-        if (st.legend && side && speedNow > 0.5 && !floorNow && !shifting && !(side === 'L' && (view.pinned || stomp))) {
+        if (side && speedNow > 0.5 && (st.legend || !dashing) && !floorNow && !shifting && !(side === 'L' && (view.pinned || stomp))) {
           const by = outOfReach(reachFrom[side], footPose(feet[side]).ankle);
           if (by) for (const p of [feet[side].at, planted[side], drawn[side]]) (p[0] -= by[0]), (p[2] -= by[1]);
         }
@@ -3240,7 +3248,8 @@ export function createAnimator(seed) {
            and how far put down in the room, say which hand gives way: solve.mjs) */
         hands[side] = { at, toward: M.lerp(way, elbow[side] || [0, 0, 0], keep), round: { was: !mine && slack[side] ? null : round[side], most: (poled ? ROUND : 1200) * dt }, shoulder: { was: arm[side], most: 900 * dt }, last: wrist[side], punch: !!mine && (action.chain.phase === 'coil' || action.chain.phase === 'throw') && !(pullIn(action) > 0 && action.chain.t < action.chain.wait), locked: !!mine && mine.arm === 'swing', chest: clamp(c[k + 'c'], 0, 1), room: clamp(c[k + 'g'], 0, 1), apart: { was: apart[side], most: APART * dt }, soft: !mine && homing[side] ? HOME.soft * smooth(homeFor / HOME.ramp) : 0, stay: !mine && homing[side] };
       }
-      let stance = { hips, spine, feet, hands, stretch: 1 + c.st },
+      // (and the other man, whom his elbows are kept out of: rig/solve.mjs HIM)
+      let stance = { hips, spine, feet, hands, stretch: 1 + c.st, foe: view.foe && view.foe.body ? view.foe.body : null },
         // (getting up, while the rise is still being blended out of how he lay: its own stance, and how far it has gone)
         unlying = null;
       if (rising && action && rising.id === id) {

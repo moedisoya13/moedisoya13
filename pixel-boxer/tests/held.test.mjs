@@ -12,7 +12,10 @@
      a-topple       a legend going somewhere at speed does not stand on one foot with his weight outside it, and (a-single-frames)
                     a 5암 walking in or out as he throws keeps his rear thigh within the hip: the foot he stands on is dragged
                     after him once his hip has gone out of its leg's reach, and the one stepping comes down within it
-                    (anim/animator.mjs: outOfReach; seeded repros docs/audit-2026-11-25/4-3.mjs, 4-5.mjs) */
+                    (anim/animator.mjs: outOfReach; seeded repros docs/audit-2026-11-25/4-3.mjs, 4-5.mjs); and the foot he
+                    stands on so at every grade (the second fix round of 2026-11-28)
+     a-single-frames (the two men inside each other) a straight punch thrown from right up close keeps its elbow out of the
+                    other man's trunk, shoulders and elbows, as far round as the shoulder lets it go (rig/solve.mjs: HIM) */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { auditor } from '../src/audit.mjs';
@@ -149,4 +152,41 @@ test('a-single-frames: a 5암 walking in or out as he throws keeps his rear thig
       const broken = going('5a', { me: t => (t < 0.2 ? from : to), press, loop: 2.0 });
       assert.equal(broken[THIGH], undefined, `from ${from} to ${to}, ${JSON.stringify(press)}: ${broken[THIGH]}`);
     }
+});
+
+test('a-topple: a man of any grade going round a man at full speed is not left on a foot his leg no longer reaches', () => {
+  /* (the legend's case above, at the grades below a legend: from his guard, or covered up, out round him and back. Before the
+     foot he stands on was dragged after him at every grade: a 3 off at one angle, 2 frames past the 0.3 s, 6.9 cm outside
+     the foot he stood on, covered up or not; a 4명 the same way, 1 frame, 7.3 cm. A beginner going straight back out from
+     him at full speed is not held here: his slow beginner's beat and long stride still leave him 5 frames 40 cm outside the
+     foot he stands on, his leg reaching it all the while, which is another thing than this, and still open) */
+  for (const lv of ['2', '3', '4m', '4a'])
+    for (const to of [[0, 1.2], [0, -1.2], [-1.2, 0], [-0.8, 0.9], [-0.8, -0.9], [-1, 0.6]])
+      for (const covered of [true, false]) {
+        const broken = going(lv, { me: t => (t < 0.5 || t >= 1.4 ? HOME : to), loop: 2.4, cover: covered ? t => t < 0.5 || (t >= 1.2 && t < 1.4) : null });
+        assert.equal(broken[TOPPLE], undefined, `${lv} to ${to}${covered ? ', covered' : ''}: ${broken[TOPPLE]}`);
+      }
+});
+
+test('a-single-frames: a straight punch thrown from right up close as the other man throws keeps its elbow out of him', () => {
+  /* (a 2 or a 3 0.62 m from him, jabbing or throwing his cross as the other man's hook, cross or uppercut comes, a little
+     before or after; the elbow, the shoulder and the trunk of either man in the other's, as the audit holds them, 5 cm.
+     Before the elbow was kept out: a 2's jab, its elbow 5.4 cm into the other man's shoulder as his hook came, 2 frames) */
+  for (const lv of ['2', '3'])
+    for (const mine of ['jab', 'power'])
+      for (const his of ['hook', 'cross', 'upper'])
+        for (const dt of [0, 0.1]) {
+          const e = { id: `${lv} ${mine} ${his} ${dt}`, loop: 1.2, me: () => HOME, him: () => [HOME[0] + 0.62, HOME[1]], press: [[0.5, mine]], against: THROW[his].map(([t, b]) => [0.8 + dt + t, b]), setup: b => (b.fighters[0].skills = { all: lv }) },
+            bout = freshBout(e),
+            a = auditor();
+          a.begin(e);
+          for (let tick = 0; tick < Math.round(e.loop / DT); tick++) {
+            step(bout, drive(e, bout, tick * DT, DT), DT);
+            bout.fighters[0].hp = bout.fighters[1].hp = 1000;
+            a.frame(bout, tick);
+          }
+          const c = a.result().found['the two men inside each other'],
+            arms = c ? c.cases.filter(k => /Arm/.test(k.who)) : [];
+          assert.deepEqual(arms, [], e.id);
+        }
 });

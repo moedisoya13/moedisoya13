@@ -20,7 +20,9 @@
                          glove is put off his own head and trunk from so far short of touching, by degrees, not only once
                          it is in them; left out, 0), stay (a hand the shoulder cannot put where it is sent by any way
                          round is left where it is sent, not put out toward where a guard holds it) } },
-       stretch }
+       stretch,
+       foe: [[joint, [x, y, z]], ...] (the other man's joints, where he will be drawn this frame, in this man's space: each
+            elbow is kept out of his trunk, shoulders and elbows, HIM; left out, there is no other man) }
    solve(stance) -> { root, rot: { Joint: 3x3 local }, stretch, at: { Joint: where it is, in his space }, head (the middle
                       of the head), round: { L, R }, arms: { L, R } (each upper arm's way as the chest sees it, mirrored
                       onto the left: what the shoulder's swing limit reads), knees: { L, R } (each knee round its leg, as
@@ -39,7 +41,8 @@
    ankle would go past its range; the knee points the way the pelvis lets it and never under the canvas; the elbow is put
    where the shoulder lets the upper arm point and turn (body.mjs: SHOULDER), off the canvas, and goes round the arm and swings
    no faster than it can, and where no elbow will do the hand goes less far; a glove stays out of his own head and
-   trunk and on top of the canvas, and out of his other arm (the hand not punching gives way, a little at a time). Each of
+   trunk and on top of the canvas, and out of his other arm (the hand not punching gives way, a little at a time); and,
+   last of all, the elbow goes round the arm out of the other man, where it may (HIM). Each of
    these moves a joint round the circle a limb's middle joint can be anywhere on, or moves the end of the limb, as little as
    it takes. */
 import * as M from './m3.mjs';
@@ -101,8 +104,19 @@ const KEEP = {
   hipBehind: RANGE.hipBehind - 3,
   head: RADIUS.glove + RADIUS.head - 0.08,
   trunk: RADIUS.glove + RADIUS.Chest - 0.07 + 0.01,
-  arm: 0 // how far (metres) a glove may be into his other arm, past touching with its padding squashed (body.mjs: ARM)
+  arm: 0, // how far (metres) a glove may be into his other arm, past touching with its padding squashed (body.mjs: ARM)
+  him: 0.03 // how far an elbow may be into the other man (HIM)
 };
+/* The other man's body that an elbow is kept out of (stance.foe: his joints where he will be drawn this frame, in this man's
+   space, as game/bout.mjs reads them for a slowed arm), and how thick each is (body.mjs: RADIUS): his trunk, his shoulders
+   and his elbows. A straight punch thrown from right up close goes to the head over the chest, its elbow driven through
+   where the chest is (a jab from 0.64 m, 10.8 cm in it; a cross's elbow, thrown or on its way back, 6 to 9 cm in his elbow
+   or shoulder: 30 seeded matches fought the way docs/audit-2026-11-25/4-5.mjs fights them). It is the last of an arm's
+   rules (solve: rulesFor), so it gives way to the shoulder's range and to how fast the elbow may go round the arm and the
+   upper arm swing: where none of the elbows those allow is out of him, it is let be. Where the elbow is round the arm does
+   not move the wrist, so a punch goes where it went. KEEP.him: how far into them it may be (the audit lets one man be 5 cm
+   in the other). */
+const HIM = { Chest: RADIUS.Chest, Hips: RADIUS.Hips, LeftArm: RADIUS.Arm, RightArm: RADIUS.Arm, LeftForeArm: RADIUS.ForeArm, RightForeArm: RADIUS.ForeArm };
 
 /* The middle joint of a two-bone limb. A target past the limb's length is brought back onto it, but softly: the last few
    centimetres of reach are approached, never hit, so a fully thrown punch does not lock the elbow with a click (a leg's
@@ -260,7 +274,9 @@ export function solve(stance) {
     place(name, e.length === 9 ? e : M.euler(e));
   }
   const head = M.add(P.Head, M.app(G.Head, HEAD)),
-    chestUp = col(G.Chest, 1);
+    chestUp = col(G.Chest, 1),
+    // (the other man's trunk, shoulders and elbows, which each elbow is kept out of: HIM)
+    foe = (stance.foe || []).filter(([j]) => HIM[j]).map(([j, c]) => [c, HIM[j]]);
 
   /* ---- an arm: the bones run along their own X, outward, and the elbow folds about their Y. extra: how far its hand is put
      off where it is sent (to keep a glove out of the other arm, below), or nothing. A hand the shoulder cannot put where it is
@@ -293,7 +309,8 @@ export function solve(stance) {
       },
       // and how fast it lets it swing: so far from where it was last frame
       swing = elbow => !hand.shoulder || !hand.shoulder.was || Math.acos(clamp(dot(seen(elbow), hand.shoulder.was), -1, 1)) * DEG <= hand.shoulder.most,
-      onTop = elbow => elbow[1] >= RADIUS.ForeArm;
+      onTop = elbow => elbow[1] >= RADIUS.ForeArm,
+      clearOf = elbow => foe.every(([c, r]) => dist(elbow, c) >= RADIUS.ForeArm + r - KEEP.him);
     /* (a hand cannot be put far behind the chest's plane: the shoulder does not go there. A target that is, as a hook
        thrown by a body turned past what it was aimed at would ask, is brought round in front to where it can be reached) */
     const again = how && how !== 'try' ? how : null,
@@ -331,7 +348,9 @@ export function solve(stance) {
          its elbow up there and its hand drawn down onto his chest in the wind-up, turned the upper arm 79 degrees past
          what it can turn in a seeded match, docs/audit-2026-11-25/4-1.mjs. Where the elbow is round the arm does not move
          the wrist, so the punch goes where it went) */
-      return hand.punch ? [onTop, ball(wrist), rate] : [onTop, ball(wrist), rate, swing];
+      /* (and, last of all, the elbow out of the other man, as far round as it may go in the frame: HIM) */
+      const rules = hand.punch ? [onTop, ball(wrist), rate] : [onTop, ball(wrist), rate, swing];
+      return foe.length ? [...rules, clearOf] : rules;
     };
     // (of two ways round that will do, the one nearer where the elbow was round the arm last frame)
     const nearer = wrist => (hand.round && hand.round.was !== null && hand.round.was !== undefined ? elbow => {
