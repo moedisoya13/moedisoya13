@@ -1073,3 +1073,27 @@ V로 넘기는 것(점검이 잰 것): **대본 밖의 쓰러짐은 이 고침 �
 - 조정자가 v3에서 만든 카드의 잘못 둘이 나옴: `a-screen-ai`의 ★가 `stage-order`의 ★와 어긋남(open-3), `del-session`이 어느 세션인지 id가 없음(open-6; 뜻은 이전 세션 `session_01Juyi5CipAWs3ncaLCG6BsY`). 고치지 않고 카드로 올려 사용자가 정하게 함.
 - 미결 카탈로그에 묶음 "카탈로그 점검에서 찾은 것"을 더함: 카탈로그마다 한 장(`l-sfx` · `l-catalog` · `l-spar` · `l-open`), 찾은 것의 id를 여럿 고름, ★ 없음(권하는 묶음은 카드의 이유에). 48장을 따로 만들지 않은 것은 페이지 길이(open-p1) 때문.
 - 게시(2026-11-26): 미결 카탈로그 (새) **v4**(e6f0bb4; 1파일 `src/open.data.mjs`). 390 폭에서 열어 오류 0 · 가로 스크롤 없음 확인.
+
+
+## 사용자 답: 미결 카탈로그 v4 제출 (2026-11-28 02:02 UTC, "제출" → 댓글로 이 세션을 깨움)
+
+전체 표(카드 id · 제목 · 고른 것 · 메모 원문)는 `docs/answers-2026-11-28.md`. 원문은 아티팩트 db `picks/open`(version 315). 133장 중 130장에 답, **답 없음 3장**: `l-sfx`, `l-open`, `sound-mix`. 사용자는 "기획의 기본값" · "엔진 한계" · "파기 승인"에서 "★ 나머지 모두"를 눌렀고(기록 `stars`) 그 뒤 몇 장은 직접 바꿈.
+
+**점검에서 찾은 것(`a-…`)**: 고침 = `a-fall-edge` `a-standoff` `a-ropes-stuck` `a-guard-flicker` `a-draw-winner` `a-count-ten` `a-hurt-blind` `a-cover-punch` `a-topple` `a-corner` `a-pit-foot` `a-pit-outline` `a-hood-face` `a-ko-thud` `a-ko-bell` `a-hidden-sound` `a-spar-link` `a-spar-race` `a-frame-meter` `a-catalog-scroll` `a-reel-g` `a-single-frames` `a-pit-hud` `a-pit-spark` `a-replay-silent` `a-murmur-cut` `a-mute` `a-spar-docs` `a-dispose-list` `a-since` `a-catalog-text` `a-history`. 나머지: `a-screen-ai` = soon(수정 라운드 뒤 바로), `a-dark-line` = parry(크로스암 가드에 패리를 조금), `a-gl-lost` = reload(다시 불러오기 단추만), `a-novice` = later(X 단계), `a-spar-pinned` = later, `a-idle` = later.
+- 메모 `a-ropes-stuck`: "Rope-a-dope 테크닉을 추가, 끝에서 회복하며 머무를 때는 이것을 씁니다. 아닐 때는 체력이 있는 한 pivot 하여 돌아 나옵니다."
+- 메모 `a-novice`: "등급 내 고정 능력치가 아닌 성장을 통해 파워 & 스피드가 올라가는 구조로 극복 가능 / 등급은 스타일에 가깝습니다."
+- 메모 `a-spar-pinned`: "스파링 페이지는 양측에 같거나 한 등급 차이인 대진만 잡습니다."
+
+**카탈로그 점검**: `l-catalog` = `catalog-2`(out-counter: 쓰러지는 도중 ¼ 리플레이), `l-spar` = `spar-1`(4D · 5D 도발이 1프레임에 끊김, S2) + `spar-4`(결과 화면 아래 시계). `l-sfx` · `l-open`은 아무것도 고르지 않음(고칠 것 없음으로 읽지 말고 다시 묻는다).
+
+**지금 정할 것**: `arm-way` B(그릴 때만 앞으로) + `arm-way.also` yes; 소리: 숨 · 타격 · 막기 · 발소리 · 종 · 관중은 고침(숨 = 다른 소리로; 타격 · 막기 = 더 낮게 + 다른 소리로; 발소리 = 더 작게 + 다른 소리로; 관중 메모 "더 사실적으로."), 아파하는 소리 `sound-hurt` = 뺌, `sound-head-pop` = 더 밝고 길게, `sound-steps` = 바운스에도, `sound-mix` 답 없음; `ring-lean` more(크게) 메모 "로프 physics 자연스럽게."; `ring-rope-legs` 다리도 닿게; `pit-near-wall` 가까운 쪽을 숨김; `pit-crowd-face` 간단한 얼굴; `pit-crowd-pop` 서서히; `pit-lean` 넣음; `spar-tempo` 엔진 전체에서 줄임; `spar-finish` 마무리는 강타로; `spar-evade` 피하기를 늘림; **`stage-order` asis(이 순서대로)**.
+
+**기획의 기본값**: ★대로 일괄 선택(방어 이펙트 선과 파문만 · 바람 선 · 패리 흰 불꽃 없앰 메모 "부딪힌 주먹끼리 스파크." · 브릴리언트 아주 짧은 슬로 · 땅 흔들림 픽셀 진동 · 피벗 = 고르는 기술 · 블록 되받기 3단계부터 모두 · 소스 A 대본 만들지 않음 · …; 전부 `docs/answers-2026-11-28.md`). 직접 고른 것: `twist-chin` = 턱 32°, 닿는 때 1.0초까지 늦춤, 메모 "턱이 돌아가고 전신이 굳어진 뒤 통나무처럼 (현재와) 반대 방향으로 서서히 쓰러집니다."; `shrug-view` = 이 카드만 카메라를 돌린다, 메모 "양손을 벌릴 때 어깨도 두 번 으쓱."; `waist-bound` = 허리 속도를 목표까지 올린다; `shift-order` keep, 메모 "Pivoting(90도) 포함 모션 재구축."; `bearing-side` 90°까지; `impl-final-integration` = 결정 뒤에 한 번에.
+
+**엔진 한계**: 수용 = `faint-hook-twist` `weave-low-grades` `body-impulse` `cross-arm-gaps` `roll-counter-weak` `pull-counter-slow` `limit-y-elbow` `limit-y-jab` `limit-y-arm` `limit-u-45`; **다시 시도 = `wave-speed` `faint-upper-card` `block-fire-wait` `shift-angle` `showoff-jerk`**; `shell-shape` = 낮춰 적음(drop); `fix-taunt-text` = 고침.
+
+**파기 승인**: 승인 = `cleanup-fx-versions` `cleanup-fx-sweat` `cleanup-fxlab-now`(눌렀다 풀었다 하다 마지막이 승인) `del-session` `del-art-pending-old` `del-art-fxlab` `del-code-pending-old` `del-ref-video`; **보류 = `cleanup-limp-out`**. 그러나 `a-dispose-list`(§7의 목록이 6군데 틀림; `del-code-pending-old`는 그대로 지우면 `open.html`이 깨짐)에 "고침"이라고 답했고 `del-session`은 카드에 id가 없었음(open-6) → **승인받은 것이라도 §7을 먼저 바로잡고, 대상을 다시 확인한 뒤에만 지운다.**
+
+**자유 메모(`free`)**: "복서끼리 밀착해있는 시간이 너무 깁니다. 일정 거리를 두고 공방을 하도록 / 거리를 재고 유지하면서 주고 받도록." — 새 요구(거리 유지); `a-standoff` · `spar-tempo` · AI(`brain.mjs`)와 이어짐.
+
+- **아직 아무것도 고치지 않았고 아무것도 지우지 않았다.** 다음: 답을 한국어로 확인 보고(충돌 · 모호한 것 표시) → `stage-order` 순서와 `a-…` 고침의 일정 → 사용자의 확인을 받을 것만 묻고 시작.
