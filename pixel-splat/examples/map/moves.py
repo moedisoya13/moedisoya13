@@ -162,7 +162,7 @@ class Moves:
         # (right) foot's
         n, k = START_FRAMES, START_SHIFT
         T["start"] = transition(lambda t: self.shifted_idle(int(round(t * FPS)), min(1.0, t * FPS / k)),
-                                lambda t: walk_frame(max(0.0, t * FPS - k) / WALK_FRAMES), n, timing=ARM_TIMING,
+                                lambda t: walk_frame(max(0.0, t * FPS - k) / WALK_FRAMES), n, timing=ARM_TIMING_START,
                                 start=k // 2, lift={1: k})
         T["start"].update(source="idle", target="walk", enter=0, exit=(n - k) / WALK_FRAMES)
         for name, ph, n, rear in (("stopA", 0.0, 24, 1), ("stopB", 0.5, 30, 0)):
@@ -322,6 +322,8 @@ def _settle(frames: List[Frame], prev: Frame, speed0: float = 0.0, free: Optiona
 # first and the shoulders follow, so an arm that swings into the guard (or out of it) bends on the way instead
 # of reaching out straight in front
 ARM_TIMING = {"forearm": (0.0, 0.7), "hand": (0.0, 0.7), "upperarm": (0.25, 1.0), "clav": (0.15, 1.0)}
+# ... and out of the guard into a walk the other way round: the shoulders drop the fists first, the elbows open after
+ARM_TIMING_START = {"upperarm": (0.0, 0.7), "clav": (0.0, 0.85), "forearm": (0.3, 1.0), "hand": (0.3, 1.0)}
 
 
 def blend_timed(a: Frame, b: Frame, u: float, timing: Dict[str, Tuple[float, float]]) -> Frame:
